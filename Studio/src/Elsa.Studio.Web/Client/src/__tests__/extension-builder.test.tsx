@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
+import { derivePackageId, ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
 import type { ExtensionRepositorySummary, ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
 import type { ElsaStudioModuleApi } from "../sdk";
 
@@ -10,6 +10,7 @@ describe("extension builder page", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    window.localStorage?.clear();
   });
 
   it("gates interactive builder surfaces with ExtensionBuilderCapabilities", async () => {
@@ -25,6 +26,83 @@ describe("extension builder page", () => {
     expect(container.textContent).not.toContain("Attach server-local");
 
     await unmount();
+  });
+
+  it("defaults to a simplified single-step extension flow", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi(), { advanced: false });
+
+    await waitForText(container, "Team Extensions");
+
+    // Simplified vocabulary and a single create affordance.
+    expect(container.textContent).toContain("Extensions");
+    expect(container.querySelector("[aria-label='Extension name']")).not.toBeNull();
+
+    // Advanced-only surfaces are hidden.
+    expect(container.querySelector("[aria-label='Server-local repository path']")).toBeNull();
+    expect(container.querySelector("[aria-label='Clone repository URL']")).toBeNull();
+    expect(container.querySelector("[aria-label='Working branch']")).toBeNull();
+    expect(container.querySelector("[aria-label='Project name']")).toBeNull();
+    expect(container.querySelector("[aria-label='Build command']")).toBeNull();
+    expect(container.querySelector("[aria-label='Build target path']")).toBeNull();
+    expect(hasTab(container, "Runtime")).toBe(false);
+    expect(hasTab(container, "Source")).toBe(false);
+
+    // Pack is the prominent action.
+    expect(buttonContaining(container, "Pack")).not.toBeNull();
+
+    await unmount();
+  });
+
+  it("reveals the full workbench when advanced mode is enabled", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi(), { advanced: false });
+    await waitForText(container, "Team Extensions");
+
+    expect(container.querySelector("[aria-label='Build command']")).toBeNull();
+
+    await enableAdvanced(container);
+
+    expect(container.querySelector("[aria-label='Server-local repository path']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Clone repository URL']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Build command']")).not.toBeNull();
+    expect(container.querySelector("[aria-label='Project name']")).not.toBeNull();
+    expect(hasTab(container, "Runtime")).toBe(true);
+    expect(hasTab(container, "Source")).toBe(true);
+
+    await unmount();
+  });
+
+  it("creates an extension in a single step (repository, working copy, and project)", async () => {
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/workspaces")) return managedWorkspace();
+      if (url.endsWith("/working-copies/select")) return workingCopySummary();
+      if (url.endsWith("/projects")) return { ...project(), id: "proj-new", workspaceId: "ws-managed" };
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }), { advanced: false });
+    await waitForText(container, "Team Extensions");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Extension name']"), "Acme Orders");
+    await clickButton(container, "New extension");
+    await waitForText(container, "Created extension Acme Orders.");
+
+    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces", { displayName: "Acme Orders" });
+    expect(postJson).toHaveBeenCalledWith(
+      "/_elsa/extension-builder/workspaces/ws-managed/working-copies/select",
+      expect.objectContaining({ allowProtectedBranchEdit: false })
+    );
+    expect(postJson).toHaveBeenCalledWith(
+      "/_elsa/extension-builder/workspaces/ws-managed/projects",
+      expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" })
+    );
+
+    await unmount();
+  });
+
+  it("derives a clean package id from an extension name", () => {
+    expect(derivePackageId("Acme Orders")).toBe("Acme.Orders");
+    expect(derivePackageId("acme-orders.api")).toBe("Acme.Orders.Api");
+    expect(derivePackageId("123")).toBe("");
   });
 
   it("renders owner-scoped workspaces, templates, files, build status, and runtime state", async () => {
@@ -734,7 +812,17 @@ async function defaultPostJson(url: string): Promise<unknown> {
   return {};
 }
 
-async function renderExtensionBuilderPage(api: ElsaStudioModuleApi) {
+const ADVANCED_PREFERENCE_KEY = "elsa.extensionBuilder.advanced";
+
+// Most of this suite exercises the full (advanced) workbench. Default render to advanced mode so
+// those surfaces are present; simple-mode tests opt out with { advanced: false }.
+async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { advanced?: boolean }) {
+  if (options?.advanced === false) {
+    window.localStorage?.removeItem(ADVANCED_PREFERENCE_KEY);
+  } else {
+    window.localStorage?.setItem(ADVANCED_PREFERENCE_KEY, "true");
+  }
+
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -799,6 +887,17 @@ async function selectValue(element: HTMLSelectElement, value: string) {
     const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
     setter?.call(element, value);
     element.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
+async function enableAdvanced(container: Element) {
+  const toggle = await waitForElement<HTMLInputElement>(container, "[aria-label='Advanced mode']");
+  flushSync(() => {
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(toggle), "checked")?.set;
+    setter?.call(toggle, true);
+    toggle.dispatchEvent(new Event("click", { bubbles: true }));
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await flushPromises();
 }
@@ -1124,6 +1223,11 @@ function rejectedPromotion(category: string | number) {
     status: "Rejected",
     rejectionReason: category
   };
+}
+
+function hasTab(container: Element, text: string) {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>("[role='tab']"))
+    .some(candidate => candidate.textContent?.trim() === text);
 }
 
 function buttonContaining(container: Element, text: string) {

@@ -116,6 +116,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [buildCommand, setBuildCommand] = useState<RepositoryBuildCommand>("Build");
   const [buildTargetPath, setBuildTargetPath] = useState("");
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
+  const [advanced, setAdvanced] = useState(readAdvancedPreference);
+  const [extensionName, setExtensionName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
   const [serverLocalPath, setServerLocalPath] = useState("");
   const [serverLocalName, setServerLocalName] = useState("");
@@ -168,6 +170,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [api]);
 
   useEffect(() => {
+    writeAdvancedPreference(advanced);
+    if (!advanced) setActiveInspectorTab("build");
+  }, [advanced]);
+
+  useEffect(() => {
     if (projectTemplates.length === 0 || projectDraft.templateId) return;
     const primary = projectTemplates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? projectTemplates[0];
     setProjectDraft(current => ({
@@ -181,10 +188,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   useEffect(() => {
     if (templates.length === 0) return;
-    if (templateDraft.templateId && templates.some(template => template.id === templateDraft.templateId)) return;
+    const current = templates.find(template => template.id === templateDraft.templateId) ?? null;
+    // Simple mode only offers Item-scope (file) templates, so keep the draft on one to avoid
+    // showing one template while applying another.
+    const draftValid = current && (advanced || current.scope === "Item");
+    if (draftValid) return;
     const initialTemplate = templates.find(template => template.scope === "Item") ?? templates.find(template => template.scope !== "Project") ?? templates[0];
     setTemplateDraft(createTemplateApplicationDraft(initialTemplate));
-  }, [templates, templateDraft.templateId]);
+  }, [templates, templateDraft.templateId, advanced]);
 
   useEffect(() => {
     if (!selectedWorkspace) return;
@@ -550,10 +561,43 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       }),
       `Created project ${projectDraft.name.trim()}.`
     );
+    await finishProjectCreation(project);
+  }
+
+  async function finishProjectCreation(project: ExtensionProject | null, workspaceId?: string) {
+    if (!project) return;
+    if (workspaceId) setSelectedWorkspaceId(workspaceId);
+    if (await refreshWorkspacesSafely({ preserveSelection: true })) {
+      setSelectedProjectId(project.id);
+    }
+  }
+
+  async function handleCreateExtension() {
+    const name = extensionName.trim();
+    if (!name) {
+      setError("Extension name is required.");
+      return;
+    }
+    const template = projectTemplates.find(item => item.primary || /elsa/i.test(`${item.name} ${item.id}`)) ?? projectTemplates[0];
+    if (!template) {
+      setError("No project template is available to create an extension.");
+      return;
+    }
+    const packageId = derivePackageId(name) || defaultPackageId(template);
+    const packageVersion = template.defaultPackageVersion || "1.0.0";
+    const branchName = (workingBranchName || defaultWorkingBranchName).trim();
+
+    let createdWorkspaceId = "";
+    const project = await runOperation(async () => {
+      const workspace = await createWorkspace(context, { name });
+      createdWorkspaceId = workspace.id;
+      await selectWorkingCopy(context, workspace.id, { sessionId, branchName, allowProtectedBranchEdit: false });
+      return createProject(context, workspace.id, { templateId: template.id, name, packageId, packageVersion });
+    }, `Created extension ${name}.`);
+
     if (project) {
-      if (await refreshWorkspacesSafely({ preserveSelection: true })) {
-        setSelectedProjectId(project.id);
-      }
+      setExtensionName("");
+      await finishProjectCreation(project, createdWorkspaceId || undefined);
     }
   }
 
@@ -775,7 +819,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
-  async function handleSubmitBuild() {
+  async function handleSubmitBuild(commandOverride?: RepositoryBuildCommand) {
     if (!selectedWorkspace || !selectedProject) return;
     if (editorDirty) {
       setError("Save or discard file changes before building.");
@@ -783,7 +827,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
 
     const requestedRevision = selectedProject.currentRevision ?? null;
-    const command = buildCommand || "Build";
+    const command = commandOverride || buildCommand || "Build";
     const targetPath = buildTargetPath.trim() || selectedSolutionPath || null;
     const build = await runOperation(
       () => submitBuild(context, selectedWorkspace.id, selectedProject.id, { projectId: selectedProject.id, revision: requestedRevision, command, targetPath }),
@@ -954,10 +998,16 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       <div className="section-header modules-header">
         <div>
           <h2>Extension Builder</h2>
-          <p>{selectedRepository ? `${selectedRepository.name}: ${selectedRepository.projectCount} project(s), ${formatRemoteState(selectedRepository.remoteState)}${selectedRepository.activeBranch ? ` on ${selectedRepository.activeBranch}` : ""}.` : "Select, create, or clone a Git-backed repository to start building extensions."}</p>
+          <p>{advanced
+            ? (selectedRepository ? `${selectedRepository.name}: ${selectedRepository.projectCount} project(s), ${formatRemoteState(selectedRepository.remoteState)}${selectedRepository.activeBranch ? ` on ${selectedRepository.activeBranch}` : ""}.` : "Select, create, or clone a Git-backed repository to start building extensions.")
+            : (selectedProject ? `Editing ${selectedProject.name} — edit, pack, and publish your NuGet package.` : "Create an extension to build a class library and pack it as a NuGet package.")}</p>
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
+            <label className="extension-builder-advanced-toggle">
+              <input type="checkbox" aria-label="Advanced mode" checked={advanced} disabled={operationBusy} onChange={event => setAdvanced(event.target.checked)} />
+              <span>Advanced</span>
+            </label>
             <button type="button" className="studio-button" onClick={() => bootstrap()} disabled={state === "loading" || operationBusy}>
               <RefreshCcw size={15} />
               Refresh
@@ -970,21 +1020,25 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
-        <SummaryItem label="Repositories" value={repositories.length || workspaces.length} />
+        <SummaryItem label="Extensions" value={repositories.length || workspaces.length} />
         <SummaryItem label="Projects" value={repositories.reduce((count, repository) => count + repository.projectCount, 0) || workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
         <SummaryItem label="Build" value={activeBuild?.status ?? selectedProject?.latestBuildStatus ?? "none"} />
-        <SummaryItem label="Remote" value={selectedRepository ? formatRemoteState(selectedRepository.remoteState) : "unknown"} />
-        <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} />
+        {advanced ? <SummaryItem label="Remote" value={selectedRepository ? formatRemoteState(selectedRepository.remoteState) : "unknown"} /> : null}
+        {advanced ? <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} /> : null}
       </div>
 
       {!hasRepositoryRows ? (
-        <EmptyState icon={<Boxes size={22} />}>No Extension Builder repositories are available for this owner.</EmptyState>
+        <EmptyState icon={<Boxes size={22} />}>No extensions yet. Create one to start building a NuGet package.</EmptyState>
       ) : null}
 
       <div className="extension-builder-workbench">
         <WorkspaceBrowser
           capabilities={capabilities!}
+          advanced={advanced}
           templates={projectTemplates}
+          extensionName={extensionName}
+          onExtensionNameChange={setExtensionName}
+          onCreateExtension={handleCreateExtension}
           repositories={repositories}
           workspaces={workspaces}
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
@@ -1025,6 +1079,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
         <ProjectWorkspace
           capabilities={capabilities!}
+          advanced={advanced}
           workspace={selectedWorkspace}
           project={selectedProject}
           templates={templates}
@@ -1058,6 +1113,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
         <BuildRuntimeInspector
           capabilities={capabilities!}
+          advanced={advanced}
           project={selectedProject}
           activeTab={activeInspectorTab}
           onSelectTab={tab => setActiveInspectorTab(tab as InspectorTab)}
@@ -1105,7 +1161,11 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
 function WorkspaceBrowser({
   capabilities,
+  advanced,
   templates,
+  extensionName,
+  onExtensionNameChange,
+  onCreateExtension,
   repositories,
   workspaces,
   selectedWorkspaceId,
@@ -1138,7 +1198,11 @@ function WorkspaceBrowser({
   onDeleteProject
 }: {
   capabilities: ExtensionBuilderCapabilities;
+  advanced: boolean;
   templates: ExtensionTemplate[];
+  extensionName: string;
+  onExtensionNameChange(value: string): void;
+  onCreateExtension(): void;
   repositories: ExtensionRepositorySummary[];
   workspaces: ExtensionWorkspace[];
   selectedWorkspaceId: string;
@@ -1191,56 +1255,69 @@ function WorkspaceBrowser({
   return (
     <aside className="modules-source-nav extension-builder-browser" aria-label="Extension Builder repositories">
       <div className="modules-source-nav-heading">
-        <span>Repositories</span>
+        <span>{advanced ? "Repositories" : "Extensions"}</span>
         <strong>{repositoryRows.length}</strong>
       </div>
-      <details className="extension-builder-create">
-        <summary>New or Clone</summary>
-        <label>
-          <span>Repository name</span>
-          <input aria-label="Repository name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
-        </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
-          <FolderPlus size={15} />
-          Create managed repo
-        </button>
-        <label>
-          <span>Server path</span>
-          <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
-        </label>
-        <label>
-          <span>Server name</span>
-          <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
-        </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
-          <FolderPlus size={15} />
-          Attach server-local
-        </button>
-        <label>
-          <span>Clone URL</span>
-          <input aria-label="Clone repository URL" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
-        </label>
-        <label>
-          <span>Clone name</span>
-          <input aria-label="Clone repository name" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
-        </label>
-        <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>
-          <FolderGit2 size={15} />
-          Clone from Git
-        </button>
-      </details>
+      {advanced ? (
+        <details className="extension-builder-create">
+          <summary>New or Clone</summary>
+          <label>
+            <span>Repository name</span>
+            <input aria-label="Repository name" value={workspaceName} disabled={busy || !canCreate} onChange={event => onWorkspaceNameChange(event.target.value)} />
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !canCreate} title={canCreate ? "Create managed repository" : "Requires canCreateWorkspace"} onClick={onCreateWorkspace}>
+            <FolderPlus size={15} />
+            Create managed repo
+          </button>
+          <label>
+            <span>Server path</span>
+            <input aria-label="Server-local repository path" value={serverLocalPath} disabled={busy || !canCreate} onChange={event => onServerLocalPathChange(event.target.value)} />
+          </label>
+          <label>
+            <span>Server name</span>
+            <input aria-label="Server-local repository name" value={serverLocalName} disabled={busy || !canCreate} onChange={event => onServerLocalNameChange(event.target.value)} />
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !canCreate || !serverLocalPath.trim()} title={canCreate ? "Attach server-local repository" : "Requires canCreateWorkspace"} onClick={onAttachServerLocalRepository}>
+            <FolderPlus size={15} />
+            Attach server-local
+          </button>
+          <label>
+            <span>Clone URL</span>
+            <input aria-label="Clone repository URL" value={cloneRepositoryUrl} disabled={busy || !canCreate} onChange={event => onCloneRepositoryUrlChange(event.target.value)} />
+          </label>
+          <label>
+            <span>Clone name</span>
+            <input aria-label="Clone repository name" value={cloneRepositoryName} disabled={busy || !canCreate} onChange={event => onCloneRepositoryNameChange(event.target.value)} />
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !canCreate || !cloneRepositoryUrl.trim()} title={canCreate ? "Clone from Git" : "Requires canCreateWorkspace"} onClick={onCloneRepository}>
+            <FolderGit2 size={15} />
+            Clone from Git
+          </button>
+        </details>
+      ) : (
+        <div className="extension-builder-create extension-builder-new-extension">
+          <label>
+            <span>Extension name</span>
+            <input aria-label="Extension name" placeholder="Acme Orders" value={extensionName} disabled={busy || !canCreate} onChange={event => onExtensionNameChange(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && extensionName.trim()) onCreateExtension(); }} />
+          </label>
+          <button type="button" className="studio-button studio-button-primary" disabled={busy || !canCreate || !extensionName.trim()} title={canCreate ? "Create a new extension" : "Requires canCreateWorkspace"} onClick={onCreateExtension}>
+            <FolderPlus size={15} />
+            New extension
+          </button>
+        </div>
+      )}
       {repositoryRows.map(repository => (
         <button key={repository.id} type="button" className={repository.id === selectedWorkspaceId ? "modules-source-button active" : "modules-source-button"} onClick={() => onSelectWorkspace(repository.id)}>
           <span>
             <strong>{repository.name}</strong>
             <small>{repository.owner ?? "current owner"} · {repository.projectCount} project(s)</small>
-            <small>{repository.activeBranch ?? "no branch"} · {formatRemoteState(repository.remoteState)}{repository.isDirty ? " · dirty" : ""}</small>
+            {advanced ? <small>{repository.activeBranch ?? "no branch"} · {formatRemoteState(repository.remoteState)}{repository.isDirty ? " · dirty" : ""}</small> : null}
           </span>
-          <em>{repository.attentionCount}</em>
+          {advanced ? <em>{repository.attentionCount}</em> : null}
         </button>
       ))}
 
-      {selectedRepository ? (
+      {advanced && selectedRepository ? (
         <details className="extension-builder-create">
           <summary>Working copy</summary>
           <label>
@@ -1269,7 +1346,7 @@ function WorkspaceBrowser({
         ))}
       </div>
 
-      {selectedWorkspace ? (
+      {advanced && selectedWorkspace ? (
         <details className="extension-builder-create">
           <summary>Add project</summary>
           <label>
@@ -1312,6 +1389,7 @@ function WorkspaceBrowser({
 
 function ProjectWorkspace({
   capabilities,
+  advanced,
   workspace,
   project,
   templates,
@@ -1343,6 +1421,7 @@ function ProjectWorkspace({
   onSubmitBuild
 }: {
   capabilities: ExtensionBuilderCapabilities;
+  advanced: boolean;
   workspace: ExtensionWorkspace | null;
   project: ExtensionProject | null;
   templates: ExtensionTemplate[];
@@ -1371,10 +1450,11 @@ function ProjectWorkspace({
   onCloseEditorTab(path: string): void;
   onEditorTextChange(value: string): void;
   onSaveFile(): void;
-  onSubmitBuild(): void;
+  onSubmitBuild(command?: RepositoryBuildCommand): void;
 }) {
   const canEdit = capabilities.canEditFiles;
-  const selectedTemplate = templates.find(template => template.id === templateDraft.templateId) ?? templates[0] ?? null;
+  const availableTemplates = advanced ? templates : templates.filter(template => template.scope === "Item");
+  const selectedTemplate = availableTemplates.find(template => template.id === templateDraft.templateId) ?? availableTemplates[0] ?? null;
 
   if (!workspace) {
     return (
@@ -1404,10 +1484,17 @@ function ProjectWorkspace({
               <Save size={15} />
               Save
             </button>
-            <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
-              <Play size={15} />
-              Build
-            </button>
+            {advanced ? (
+              <button type="button" className="studio-button" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities.canBuild ? "Requires canBuild" : undefined} onClick={() => onSubmitBuild()}>
+                <Play size={15} />
+                Build
+              </button>
+            ) : (
+              <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={editorDirty ? "Save file changes before packing" : !capabilities.canBuild ? "Requires canBuild" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
+                <PackageCheck size={15} />
+                Pack
+              </button>
+            )}
           </StudioToolbarGroup>
         </StudioToolbar>
       </div>
@@ -1434,22 +1521,24 @@ function ProjectWorkspace({
               <FilePlus2 size={14} />
             </button>
           </div>
-          {templates.length > 0 ? (
+          {availableTemplates.length > 0 ? (
             <details className="extension-builder-template-apply">
-              <summary>Apply template</summary>
+              <summary>{advanced ? "Apply template" : "New file from template"}</summary>
               <label>
                 <span>Template</span>
                 <select aria-label="Repository template" value={selectedTemplate?.id ?? ""} disabled={busy || !canEdit} onChange={event => {
-                  const template = templates.find(item => item.id === event.target.value);
+                  const template = availableTemplates.find(item => item.id === event.target.value);
                   if (template) onTemplateDraftChange(createTemplateApplicationDraft(template, templateDraft));
                 }}>
-                  {templates.map(template => <option key={template.id} value={template.id}>{template.name} · {template.scope}</option>)}
+                  {availableTemplates.map(template => <option key={template.id} value={template.id}>{advanced ? `${template.name} · ${template.scope}` : template.name}</option>)}
                 </select>
               </label>
-              <label>
-                <span>Target path</span>
-                <input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} />
-              </label>
+              {advanced ? (
+                <label>
+                  <span>Target path</span>
+                  <input aria-label="Template target path" placeholder={defaultTemplateTargetPath(selectedTemplate)} value={templateDraft.targetPath} disabled={busy || !canEdit} onChange={event => onTemplateDraftChange({ ...templateDraft, targetPath: event.target.value })} />
+                </label>
+              ) : null}
               {selectedTemplate?.parameters.map(parameter => (
                 <label key={parameter.name}>
                   <span>{parameter.displayName}</span>
@@ -1537,6 +1626,7 @@ function ProjectWorkspace({
 
 function BuildRuntimeInspector({
   capabilities,
+  advanced,
   project,
   activeTab,
   onSelectTab,
@@ -1574,6 +1664,7 @@ function BuildRuntimeInspector({
   onDiagnosticSelect
 }: {
   capabilities: ExtensionBuilderCapabilities;
+  advanced: boolean;
   project: ExtensionProject | null;
   activeTab: InspectorTab;
   onSelectTab(tab: string): void;
@@ -1593,7 +1684,7 @@ function BuildRuntimeInspector({
   canPromote: boolean;
   onBuildCommandChange(value: RepositoryBuildCommand): void;
   onBuildTargetPathChange(value: string): void;
-  onSubmitBuild(): void;
+  onSubmitBuild(command?: RepositoryBuildCommand): void;
   onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
   onSelectSourceDiff(path: string, staged: boolean): void;
@@ -1619,10 +1710,11 @@ function BuildRuntimeInspector({
         </div>
         {activeBuild ? <StatusChip tone={buildTone(activeBuild.status)}>{activeBuild.status}</StatusChip> : null}
       </div>
-      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={onSelectTab} />
+      {advanced ? <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={onSelectTab} /> : null}
 
-      {activeTab === "build" ? (
+      {!advanced || activeTab === "build" ? (
         <BuildPanel
+          advanced={advanced}
           activeBuild={activeBuild}
           buildHistory={buildHistory}
           buildLog={buildLog}
@@ -1640,7 +1732,7 @@ function BuildRuntimeInspector({
         />
       ) : null}
 
-      {activeTab === "source" ? (
+      {advanced && activeTab === "source" ? (
         <SourceControlPanel
           status={sourceControlStatus}
           diff={sourceControlDiff}
@@ -1657,7 +1749,7 @@ function BuildRuntimeInspector({
         />
       ) : null}
 
-      {activeTab === "promote" ? (
+      {advanced && activeTab === "promote" ? (
         <PromotePanel
           capabilities={capabilities}
           activeBuild={activeBuild}
@@ -1670,7 +1762,7 @@ function BuildRuntimeInspector({
         />
       ) : null}
 
-      {activeTab === "runtime" ? (
+      {advanced && activeTab === "runtime" ? (
         <RuntimePanel
           capabilities={capabilities}
           runtimeStatus={runtimeStatus}
@@ -1685,6 +1777,7 @@ function BuildRuntimeInspector({
 }
 
 function BuildPanel({
+  advanced,
   activeBuild,
   buildHistory,
   buildLog,
@@ -1700,6 +1793,7 @@ function BuildPanel({
   onSelectBuild,
   onDiagnosticSelect
 }: {
+  advanced: boolean;
   activeBuild: BuildResult | null;
   buildHistory: BuildResult[];
   buildLog: string;
@@ -1710,7 +1804,7 @@ function BuildPanel({
   capabilities: ExtensionBuilderCapabilities;
   onBuildCommandChange(value: RepositoryBuildCommand): void;
   onBuildTargetPathChange(value: string): void;
-  onSubmitBuild(): void;
+  onSubmitBuild(command?: RepositoryBuildCommand): void;
   onPromoteArtifact(artifact: BuildArtifact): void;
   onSelectBuild(build: BuildResult): void;
   onDiagnosticSelect(diagnostic: BuildDiagnostic): void;
@@ -1718,23 +1812,32 @@ function BuildPanel({
   return (
     <div className="modules-inspector-section">
       <h4>Run</h4>
-      <label>
-        <span>Command</span>
-        <select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
-          <option value="Restore">Restore</option>
-          <option value="Build">Build</option>
-          <option value="Test">Test</option>
-          <option value="Pack">Pack</option>
-        </select>
-      </label>
-      <label>
-        <span>Target path</span>
-        <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
-      </label>
-      <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : undefined} onClick={onSubmitBuild}>
-        <Play size={15} />
-        Run command
-      </button>
+      {advanced ? (
+        <>
+          <label>
+            <span>Command</span>
+            <select aria-label="Build command" value={buildCommand} disabled={busy || !capabilities.canBuild} onChange={event => onBuildCommandChange(event.target.value as RepositoryBuildCommand)}>
+              <option value="Restore">Restore</option>
+              <option value="Build">Build</option>
+              <option value="Test">Test</option>
+              <option value="Pack">Pack</option>
+            </select>
+          </label>
+          <label>
+            <span>Target path</span>
+            <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
+          </label>
+          <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : undefined} onClick={() => onSubmitBuild()}>
+            <Play size={15} />
+            Run command
+          </button>
+        </>
+      ) : (
+        <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
+          <PackageCheck size={15} />
+          Pack NuGet package
+        </button>
+      )}
       <h4>Build status</h4>
       {activeBuild ? (
         <dl className="modules-metadata">
@@ -2193,6 +2296,15 @@ function defaultPackageId(template: ExtensionTemplate) {
   return /generic/i.test(`${template.name} ${template.id}`) ? "Company.Extensions.Generic" : "Company.Extensions.ElsaActivity";
 }
 
+export function derivePackageId(name: string) {
+  const segments = name
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map(segment => segment.charAt(0).toUpperCase() + segment.slice(1));
+  const id = segments.join(".");
+  return /^[A-Za-z]/.test(id) ? id : "";
+}
+
 function fileSortKey(file: RepositoryFileSummary) {
   return `${file.type === "folder" ? "0" : "1"}:${file.path}`;
 }
@@ -2212,6 +2324,24 @@ function isBuildSucceeded(build: BuildResult | null) {
 
 function isProtectedBranchName(value: string) {
   return value.toLowerCase() === "main" || value.toLowerCase() === "master";
+}
+
+const ADVANCED_PREFERENCE_KEY = "elsa.extensionBuilder.advanced";
+
+function readAdvancedPreference() {
+  try {
+    return window.localStorage.getItem(ADVANCED_PREFERENCE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeAdvancedPreference(value: boolean) {
+  try {
+    window.localStorage.setItem(ADVANCED_PREFERENCE_KEY, value ? "true" : "false");
+  } catch {
+    // Ignore persistence failures (private mode, disabled storage); the toggle still works in-session.
+  }
 }
 
 function getExtensionBuilderSessionId() {
