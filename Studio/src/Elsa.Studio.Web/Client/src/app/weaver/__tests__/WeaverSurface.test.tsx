@@ -91,6 +91,51 @@ describe("WeaverSurface", () => {
 
     unmount();
   });
+
+  it("only offers autonomy modes up to the deployment ceiling", async () => {
+    const api = readyApi();
+    const client = readyClient();
+    // Lower the ceiling so Full auto must not be offered.
+    client.bootstrap = vi.fn(async () => ({
+      ...(await readyClient().bootstrap()),
+      policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "auto-read-only", allowedAutonomyModes: ["manual", "auto-read-only"] }
+    })) as AgentClient["bootstrap"];
+
+    const { container, unmount } = render(
+      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} />
+    );
+    await flushPromises();
+
+    const options = [...container.querySelectorAll(".weaver-auto-apply option")].map(option => (option as HTMLOptionElement).value);
+    expect(options).toEqual(["manual", "auto-read-only"]);
+
+    unmount();
+  });
+
+  it("forwards the selected autonomy mode when the session is created", async () => {
+    const api = readyApi();
+    const client = readyClient(); // ceiling is full-auto
+    const subscribeStream = vi.fn(() => ({ close: () => {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+
+    const { container, unmount } = render(
+      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />
+    );
+    await flushPromises();
+
+    const select = container.querySelector<HTMLSelectElement>(".weaver-auto-apply select")!;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")!.set!;
+    flushSync(() => {
+      setter.call(select, "full-auto");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    typeAndSend(container, "Add an activity");
+    await flushPromises();
+
+    expect(client.createSession).toHaveBeenCalledWith(expect.objectContaining({ autonomyMode: "full-auto" }));
+
+    unmount();
+  });
 });
 
 function typeAndSend(container: HTMLElement, value: string) {
@@ -128,7 +173,7 @@ function readyClient(): AgentClient {
       modes: ["troubleshoot"],
       capabilities: [{ id: "weaver.test", displayName: "Weaver test", description: "", kind: "answer", risk: "read-only", surfaces: ["*"], requiredPermissions: [] }],
       provider: { providerId: "github-copilot", isAvailable: true, status: "ok", providerKind: "provider-sdk-binding", supportedOperations: ["chat"], riskProfile: "read-only", metadata: {} },
-      policy: { contextVisibility: true, requiresApprovalForMutations: true }
+      policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "full-auto", allowedAutonomyModes: ["manual", "auto-read-only", "full-auto"] }
     })),
     createSession: vi.fn(async () => ({ sessionId: "agt_1", status: "active", contextAttachments: [] })),
     sendMessage: vi.fn(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" })),

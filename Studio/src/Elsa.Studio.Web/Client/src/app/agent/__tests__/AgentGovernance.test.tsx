@@ -51,7 +51,7 @@ function disabledClient(): AgentClient {
       modes: [],
       capabilities: [],
       provider: undefined,
-      policy: { contextVisibility: true, requiresApprovalForMutations: true }
+      policy: { contextVisibility: true, defaultAutonomyMode: "auto-read-only", maxAutonomyMode: "auto-read-only", allowedAutonomyModes: ["manual", "auto-read-only"] }
     })),
     createSession: vi.fn(),
     sendMessage: vi.fn(),

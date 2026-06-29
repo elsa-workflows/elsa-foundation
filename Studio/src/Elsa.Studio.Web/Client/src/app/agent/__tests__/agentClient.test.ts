@@ -89,6 +89,58 @@ describe("agent client", () => {
     expect((attachment.references as Record<string, string>).revision).toBe("rev-7");
   });
 
+  it("maps the autonomy policy and forwards the requested mode", async () => {
+    const context = stubContext();
+    context.http.getJson = vi.fn(async () => ({
+      data: {
+        enabled: true,
+        capabilities: [],
+        provider: { providerId: "deterministic-test", isAvailable: true, status: "available" },
+        policy: {
+          contextVisibility: true,
+          defaultAutonomyMode: "auto-read-only",
+          maxAutonomyMode: "auto-read-only",
+          allowedAutonomyModes: ["manual", "auto-read-only"]
+        }
+      }
+    }));
+    const client = createAgentClient(context);
+
+    const bootstrap = await client.bootstrap();
+    expect(bootstrap.policy).toMatchObject({
+      defaultAutonomyMode: "auto-read-only",
+      maxAutonomyMode: "auto-read-only",
+      allowedAutonomyModes: ["manual", "auto-read-only"]
+    });
+
+    await client.createSession({
+      mode: "build",
+      autonomyMode: "full-auto",
+      activeSurface: { route: "/workflows/order" },
+      clientContext: { studioVersion: "1.0.0", sdkVersion: "1.0.0", moduleIds: [] }
+    });
+
+    // The client forwards the requested mode verbatim; the server is the authoritative ceiling.
+    expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/sessions", expect.objectContaining({ autonomyMode: "full-auto" }));
+  });
+
+  it("derives allowed autonomy modes from the ceiling when the backend omits them", async () => {
+    const context = stubContext();
+    context.http.getJson = vi.fn(async () => ({
+      data: {
+        enabled: true,
+        capabilities: [],
+        provider: { providerId: "deterministic-test", isAvailable: true, status: "available" },
+        policy: { contextVisibility: true, maxAutonomyMode: "full-auto" }
+      }
+    }));
+
+    const bootstrap = await createAgentClient(context).bootstrap();
+
+    expect(bootstrap.policy.allowedAutonomyModes).toEqual(["manual", "auto-read-only", "full-auto"]);
+    expect(bootstrap.policy.defaultAutonomyMode).toBe("full-auto");
+  });
+
   it("surfaces wrapped feedback errors", async () => {
     const context = stubContext();
     context.http.postJson = vi.fn(async url => {

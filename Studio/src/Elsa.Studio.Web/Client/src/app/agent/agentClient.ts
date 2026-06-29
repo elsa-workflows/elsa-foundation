@@ -1,6 +1,7 @@
 import type { StudioEndpointContext } from "../../sdk";
 import type {
   AgentActionProposal,
+  AgentAutonomyMode,
   AgentBootstrapResponse,
   AgentProviderStatus,
   AgentProviderDiagnostics,
@@ -34,6 +35,7 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       return mapSession(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentSession>>("/_elsa/agent/sessions", {
         conversationId: request.activeSurface.resourceId ?? request.activeSurface.route,
         mode: request.mode,
+        autonomyMode: request.autonomyMode,
         activeSurface: request.activeSurface,
         clientContext: request.clientContext,
         metadata: {
@@ -209,8 +211,40 @@ function mapBootstrap(response: BackendAgentBootstrapResponse): AgentBootstrapRe
     modes: readStringArray(response, "modes") as AgentBootstrapResponse["modes"] ?? ["explain", "troubleshoot", "build"],
     capabilities: capabilities.map(mapCapability),
     provider,
-    policy: readField(response, "policy") as AgentBootstrapResponse["policy"] ?? { contextVisibility: true, requiresApprovalForMutations: true }
+    policy: mapPolicy(readRecord(response, "policy"))
   };
+}
+
+const DEFAULT_AUTONOMY_MODE: AgentAutonomyMode = "auto-read-only";
+const AUTONOMY_MODES: AgentAutonomyMode[] = ["manual", "auto-read-only", "full-auto"];
+
+function mapPolicy(policy: Record<string, unknown> | undefined): AgentBootstrapResponse["policy"] {
+  const maxAutonomyMode = mapAutonomyMode(readField(policy, "maxAutonomyMode")) ?? DEFAULT_AUTONOMY_MODE;
+  const defaultAutonomyMode = clampAutonomyMode(mapAutonomyMode(readField(policy, "defaultAutonomyMode")) ?? maxAutonomyMode, maxAutonomyMode);
+  const allowed = readStringArray(policy, "allowedAutonomyModes")
+    ?.map(mapAutonomyMode)
+    .filter((mode): mode is AgentAutonomyMode => mode !== undefined);
+  return {
+    ...(policy as AgentBootstrapResponse["policy"]),
+    contextVisibility: readBoolean(policy, "contextVisibility") ?? true,
+    defaultAutonomyMode,
+    maxAutonomyMode,
+    allowedAutonomyModes: allowed?.length ? allowed : allowedModesUpTo(maxAutonomyMode),
+    retentionLabel: readString(policy, "retentionLabel")
+  };
+}
+
+function mapAutonomyMode(value: unknown): AgentAutonomyMode | undefined {
+  const normalized = normalizeEnum(value);
+  return AUTONOMY_MODES.includes(normalized as AgentAutonomyMode) ? normalized as AgentAutonomyMode : undefined;
+}
+
+function clampAutonomyMode(requested: AgentAutonomyMode, ceiling: AgentAutonomyMode): AgentAutonomyMode {
+  return AUTONOMY_MODES.indexOf(requested) <= AUTONOMY_MODES.indexOf(ceiling) ? requested : ceiling;
+}
+
+function allowedModesUpTo(ceiling: AgentAutonomyMode): AgentAutonomyMode[] {
+  return AUTONOMY_MODES.slice(0, AUTONOMY_MODES.indexOf(ceiling) + 1);
 }
 
 function mapCapability(capability: Record<string, unknown>): AgentBootstrapResponse["capabilities"][number] {
