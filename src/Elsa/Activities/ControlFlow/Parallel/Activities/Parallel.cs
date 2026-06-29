@@ -47,8 +47,8 @@ namespace Elsa.Activities.Parallel.Activities;
 /// ever reach the threshold; otherwise it defers. With the default (all-branches) threshold a single faulted
 /// branch therefore faults the composite; a configured threshold low enough to be met by the non-faulted
 /// branches still completes. The faulted branch keeps its own blocking incident regardless. The flowchart
-/// fork/join (<c>ParallelJoinFlowchartPolicy</c>) retains the original "faulted branch is not counted"
-/// limitation; aligning it is tracked separately.
+/// fork/join (<c>Flowchart</c> / <c>ParallelJoinFlowchartPolicy</c>) is fault-aware too: a faulted inbound
+/// branch faults the flowchart deterministically rather than hanging the join.
 /// </para>
 /// <para>
 /// The runtime activity class references only the runtime contract surface; the design-side

@@ -51,6 +51,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 **Known implementations (shipped):**
 - `Elsa.Activities.ControlFlow` — `Parallel` *(fault-aware fork/join: faults the composite once the join's success threshold is unreachable, #308)*
+- `Elsa.Activities.Flowchart` — `Flowchart` *(fault-aware fork/join: faults the flowchart when an inbound branch of an all-inbound join faults, #308)*
 
 ---
 
