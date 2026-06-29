@@ -109,7 +109,7 @@ public sealed class RuntimeVariableScopeFactory
     }
 
     private static IVariable ToVariable(VariableDefinition definition) =>
-        new RuntimeScopedVariable(definition.Name, definition.ReferenceKey, definition.Default?.Value);
+        new RuntimeScopedVariableModel(definition.Name, definition.ReferenceKey, definition.Default?.Value);
 
     private static readonly IReadOnlyDictionary<string, IVariable> EmptyVariables =
         new Dictionary<string, IVariable>(StringComparer.Ordinal);
@@ -121,31 +121,5 @@ public sealed class RuntimeVariableScopeFactory
     {
         [JsonPropertyName("variables")]
         public IReadOnlyCollection<VariableDefinition>? Variables { get; init; }
-    }
-
-    /// <summary>
-    /// Minimal <see cref="IVariable"/> for a runtime scope declaration. Carries the declaration's
-    /// name, reference key (as the memory block id), and default value without depending on the
-    /// activity authoring stack.
-    /// </summary>
-    private sealed class RuntimeScopedVariable(string name, string referenceKey, object? defaultValue) : IVariable
-    {
-        public string Id { get; set; } = referenceKey;
-        public string Name { get; set; } = name;
-        public object? DefaultValue { get; set; } = defaultValue;
-        public Type? StorageDriverType { get; set; }
-
-        public IMemoryBlock Declare() => new RuntimeScopedVariableBlock(DefaultValue);
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
-            DefaultValue is T typed ? typed : default;
-
-        public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-    }
-
-    private sealed class RuntimeScopedVariableBlock(object? value) : IMemoryBlock
-    {
-        public object? Value { get; set; } = value;
-        public object? Metadata { get; set; }
     }
 }
