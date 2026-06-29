@@ -500,7 +500,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PropagatesConstructionFailureWithoutChangingRunningState()
+    public async Task HandleAsync_RecordsFaultedStateWhenActivityConstructionFails()
     {
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
@@ -508,13 +508,47 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         await using var provider = NewProvider(factory);
         var handler = NewHandler(provider);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(NewInvokeWorkItem(NewIdentity())).AsTask());
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        Assert.Equal("missing constructor", exception.Message);
         var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
         Assert.NotNull(state);
-        Assert.Equal(ActivityExecutionStatus.Running, state.Status);
-        Assert.Null(state.CompletedAt);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityConstructionFailed", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(1, state.FaultCount);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
+        Assert.Equal("missing constructor", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityConstructionFailed", message => Assert.Equal("missing constructor", message));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenArgumentBindingThrows()
+    {
+        // Models the #313/#316 binder InvalidOperationException: the argument binder runs inside
+        // activityFactory.Create, so a typed-binding failure must fault the activity with a blocking incident
+        // rather than escaping the fault boundary and stalling the run silently at Running (#317).
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var factory = new ThrowingActivityFactory(new InvalidOperationException("cannot bind argument 'Value'"));
+        await using var provider = NewProvider(factory, includeInspection: true);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityConstructionFailed", state.SubStatus);
+        await AssertIncidentRecordedAsync("ActivityConstructionFailed", message => Assert.Contains("cannot bind argument", message));
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
+        Assert.Equal("ActivityConstructionFailed", projection.SubStatus);
+        var incident = Assert.Single(projection.Incidents);
+        Assert.Equal("ActivityConstructionFailed", incident.FailureType);
+        Assert.True(incident.IsBlocking);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 

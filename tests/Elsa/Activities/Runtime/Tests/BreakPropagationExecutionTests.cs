@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
@@ -15,6 +17,7 @@ using ForActivity = Elsa.Activities.For.Activities.For;
 using WhileActivity = Elsa.Activities.While.Activities.While;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 using IfActivity = Elsa.Activities.If.Activities.If;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -73,6 +76,63 @@ public sealed class BreakPropagationExecutionTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task For_FlowchartBodyWithBreak_EndsLoopEarly_AndBubblesBreak()
+    {
+        // For [0,3) with a Flowchart body of node-a -> node-break. The Flowchart runs node-a, routes to the
+        // Break leaf, which ends the Flowchart with a Break outcome (#304); the For sees that and ends after
+        // one pass — so node-a runs once (not three times).
+        await using var harness = NewHarness("actexec-for", "actexec-flowchart", "actexec-a", "actexec-break");
+
+        var body = NewFlowchartNode("node-flowchart",
+            children: [WorkflowExecutionHarness.NewProbeNode("node-a"), NewClrLeafNode("node-break", typeof(Break))],
+            connections: [NewConnection("node-a", "node-break")],
+            startNodeId: "node-a");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            NewForNode("node-for", start: 0, end: 3, body: body)));
+
+        Assert.Single(run.States("node-a")); // one pass only — the loop broke, it did not run 3 times.
+        run.AssertOutcomes("node-flowchart", ActivityOutcomes.Break); // Flowchart bubbled Break up.
+        run.AssertOutcomes("node-for", ActivityOutcomes.Done);         // For ended cleanly.
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
+    public async Task For_FlowchartDiamondBodyWithBreakOnOneFork_EndsLoopEarly_AndJoinTargetNeverRuns()
+    {
+        // For [0,3) with a diamond Flowchart body: node-a forks to node-keep and node-break, both feeding the
+        // implicit join node-d. The Break fork ends the whole Flowchart — the sibling fork's path and the
+        // pending join are canceled — so the reconverged node-d after the join never runs and the For ends
+        // after one pass. Covers the fork/join interaction: a Break short-circuits routing before the join.
+        await using var harness = NewHarness("actexec-for", "actexec-flowchart", "actexec-a", "actexec-keep", "actexec-break");
+
+        var body = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-a"),
+                WorkflowExecutionHarness.NewProbeNode("node-keep"),
+                NewClrLeafNode("node-break", typeof(Break)),
+                WorkflowExecutionHarness.NewProbeNode("node-d")
+            ],
+            connections:
+            [
+                NewConnection("node-a", "node-keep"),
+                NewConnection("node-a", "node-break"),
+                NewConnection("node-keep", "node-d"),
+                NewConnection("node-break", "node-d")
+            ],
+            startNodeId: "node-a");
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            NewForNode("node-for", start: 0, end: 3, body: body)));
+
+        run.AssertDidNotRun("node-d"); // the join after the broken fork never fired, regardless of fork order.
+        run.AssertOutcomes("node-flowchart", ActivityOutcomes.Break); // Flowchart bubbled Break up.
+        run.AssertOutcomes("node-for", ActivityOutcomes.Done);         // For ended cleanly after one pass.
+        run.AssertWorkflowCompleted();
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         BaseHarness().Build(activityExecutionIds);
 
@@ -89,6 +149,9 @@ public sealed class BreakPropagationExecutionTests
             // SerializationFeature. The probe leaf supplies the marker steps.
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+            // ActivitiesFlowchartFeature wires the Flowchart execution engine and its policies for the
+            // Flowchart-body Break cases (#304); harmless for the linear/branch cases above.
+            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
             .WithProbeLeaf();
 
     private static ExecutableNode NewForNode(string nodeId, int start, int end, ExecutableNode body) =>
@@ -123,6 +186,24 @@ public sealed class BreakPropagationExecutionTests
                 WhileActivity.StructureKind,
                 WhileActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { body = body.ExecutableNodeId })));
+
+    private static ExecutableNode NewFlowchartNode(
+        string nodeId,
+        IReadOnlyList<ExecutableNode> children,
+        IReadOnlyCollection<FlowchartConnection> connections,
+        string startNodeId) =>
+        NewClrCompositeNode(
+            nodeId,
+            typeof(FlowchartActivity),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartStructure(connections, startNodeId))));
+
+    private static FlowchartConnection NewConnection(string sourceNodeId, string targetNodeId, string? sourcePort = null) =>
+        new(new FlowchartEndpoint(sourceNodeId, sourcePort), new FlowchartEndpoint(targetNodeId));
 
     private static ExecutableNode NewSequenceNode(string nodeId, IReadOnlyList<ExecutableNode> activities) =>
         NewClrCompositeNode(

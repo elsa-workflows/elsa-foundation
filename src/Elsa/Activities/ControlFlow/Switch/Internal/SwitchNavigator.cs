@@ -45,9 +45,7 @@ internal sealed class SwitchNavigator
 
         var structure = ReadStructure(executableNode);
 
-        var duplicateMatch = structure.Cases
-            .GroupBy(@case => @case.Match, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        var duplicateMatch = SwitchCaseRules.DuplicateMatches(structure.Cases.Select(@case => @case.Match)).FirstOrDefault();
         if (duplicateMatch is not null)
             throw new SwitchExecutionException($"Switch executable node '{executableNode.ExecutableNodeId}' structure contains duplicate case '{duplicateMatch}'.");
 

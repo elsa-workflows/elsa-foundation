@@ -26,9 +26,9 @@ namespace Elsa.Activities.Primitives.Activities;
 /// (stops and does not run later steps), <c>If</c> (the taken branch's <c>Break</c> becomes the <c>If</c>
 /// outcome instead of True/False), and <c>Switch</c> (the selected case's <c>Break</c> becomes the
 /// <c>Switch</c> outcome instead of the match outcome). Each completes itself with <c>Break</c> so the
-/// outcome bubbles to the nearest enclosing loop. <b>Flowchart propagation is not yet implemented</b>
-/// (it requires graph routing) and is tracked as a follow-up: a <c>Break</c> reached inside a Flowchart
-/// loop body does not yet bubble out of the Flowchart.
+/// outcome bubbles to the nearest enclosing loop. <c>Flowchart</c> (#304) also propagates: when any path
+/// reaches a <c>Break</c>, the Flowchart ends — it cancels any other in-flight paths (e.g. sibling parallel
+/// fork branches) and completes itself with <c>Break</c> so the outcome bubbles to the enclosing loop.
 /// </para>
 /// </remarks>
 public sealed class Break : CodeActivity

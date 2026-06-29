@@ -51,6 +51,17 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authoredStructure = ReadAuthoredStructure(activity);
+
+        // Backstop: reject duplicate case match values at compile time. The design-time
+        // SwitchDuplicateCaseValidator already surfaces these as Draft validation errors (which the
+        // promotion gate blocks on), so a sanctioned publish never reaches here with duplicates; this
+        // guards paths that bypass Draft validation by turning a duplicate into a compile-time
+        // WorkflowExecutableCompilationException (the compiler wraps ArgumentException) before it can reach
+        // an executable structure.
+        var duplicateMatch = SwitchCaseRules.DuplicateMatches(authoredStructure.Cases.Select(@case => @case.Match)).FirstOrDefault();
+        if (duplicateMatch is not null)
+            throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares duplicate case match value '{duplicateMatch}'. Each Switch case must have a unique match value.");
+
         var executableStructure = new SwitchExecutableStructure(
             authoredStructure.Cases
                 .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId))
@@ -72,12 +83,6 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
         return slot?.Activities.FirstOrDefault();
     }
 
-    private static SwitchAuthoredStructure ReadAuthoredStructure(ActivityNode activity)
-    {
-        if (activity.Structure is null)
-            return new SwitchAuthoredStructure();
-
-        return activity.Structure.Payload.Deserialize<SwitchAuthoredStructure>(SerializerOptions)
-               ?? new SwitchAuthoredStructure();
-    }
+    private static SwitchAuthoredStructure ReadAuthoredStructure(ActivityNode activity) =>
+        SwitchAuthoredStructureReader.Read(activity);
 }

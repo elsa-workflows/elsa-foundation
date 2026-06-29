@@ -178,33 +178,54 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             await activityFaultIncidentRecorder.CommitAsync(ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", []), cancellationToken);
             return;
         }
-        var valueSnapshots = ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()).ToList();
+        var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
+        IActivity activity;
+        SimpleActivityExecutionContext context;
+        try
+        {
+            valueSnapshots.AddRange(ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()));
 
-        var activity = await activityFactory.Create(
-            executableNode.DescriptorType,
-            executableNode.DescriptorPayload,
-            inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            ActivityOutputPublisher.BuildOutputArguments(executableNode),
-            cancellationToken);
+            // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
+            // inside the same fault boundary as input materialization (#317). Previously this step sat between
+            // the two materialization try/catch blocks, so a binder/constructor throw (e.g. a typed-binding
+            // InvalidOperationException) escaped to the scheduler loop and left the run silently at Running with
+            // no incident. Recording it as a blocking incident faults the activity and surfaces a queryable cause.
+            activity = await activityFactory.Create(
+                executableNode.DescriptorType,
+                executableNode.DescriptorPayload,
+                inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
+                ActivityOutputPublisher.BuildOutputArguments(executableNode),
+                cancellationToken);
 
-        activity.NodeId = executableNode.ExecutableNodeId;
-        activity.Id = invokePayload.ActivityExecutionId;
+            activity.NodeId = executableNode.ExecutableNodeId;
+            activity.Id = invokePayload.ActivityExecutionId;
 
-        var context = new SimpleActivityExecutionContext(
-            serviceProvider,
-            activity,
-            cancellationToken,
-            workItem.WorkflowExecutionId,
-            invokePayload.PinnedExecutable,
-            workItem,
-            executableNode,
-            state,
-            variableScope);
-        RuntimeActivityInputMemory.Seed(context, inputs);
+            context = new SimpleActivityExecutionContext(
+                serviceProvider,
+                activity,
+                cancellationToken,
+                workItem.WorkflowExecutionId,
+                invokePayload.PinnedExecutable,
+                workItem,
+                executableNode,
+                state,
+                variableScope);
+            RuntimeActivityInputMemory.Seed(context, inputs);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await activityFaultIncidentRecorder.CommitAsync(ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, "ActivityConstructionFailed", valueSnapshots), cancellationToken);
+            return;
+        }
 
         ActivityExecutionState? completedState = null;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         (IRuntimeExecutionIdGenerator IdGenerator, IReadOnlyCollection<RuntimeChildActivityScheduleRequest> Requests)? pendingChildScheduling = null;
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> pendingChildSchedulingDurableValueChanges = [];
         var finishWorkflowRequested = false;
         IReadOnlyCollection<string> finishWorkflowOutcomeNames = [];
         var correlationIdAssignmentRequested = false;
@@ -264,30 +285,36 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
 
+                // The workflow-scope variable write-back (#286) and SetOutput durable values (#260) the activity
+                // produced before suspending/handing off. Folded into the continuation's checkpoint below so they
+                // commit atomically with it rather than out-of-band (#310). Empty unless the activity actually
+                // mutated a variable / set an output.
+                var suspendDurableValueChanges = CombineDurableValueChanges(workflowVariableWriteBackChanges, workflowOutputChanges);
+
                 if (bookmarkRequests.Count > 0)
                 {
-                    // A suspending activity does not reach the completion checkpoint, so flush any workflow-scope
-                    // write-back and SetOutput durable values here (both no-ops unless the activity actually
-                    // mutated a variable / set an output before suspending).
-                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
-                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowOutputChanges, cancellationToken);
-                    await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, cancellationToken);
+                    // A suspending activity does not reach the completion checkpoint; carry any write-back on the
+                    // bookmark work item so the downstream WorkflowCreateBookmarkSchedulerWorkHandler commits it
+                    // atomically in the bookmark-created checkpoint (#310).
+                    await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, suspendDurableValueChanges, cancellationToken);
                     return;
                 }
 
                 if (childScheduleRequests.Count > 0)
                 {
                     var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
-                    // A child-scheduling activity (e.g. a composite) does not reach the completion checkpoint
-                    // either; flush any workflow-scope write-back and SetOutput durable values here (normally no-ops).
-                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
-                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowOutputChanges, cancellationToken);
                     if (inspectionAccumulator is null)
                     {
+                        // No checkpoint on this path (the child work is enqueued directly), so flush the write-back
+                        // here. This mirrors the completion non-inspection path, which likewise saves durable
+                        // values then enqueues sequentially — there is no transactional unit to fold into.
+                        await SaveDurableValueChangesAsync(durableValueStateStore, suspendDurableValueChanges, cancellationToken);
                         await EnqueueChildActivityScheduleWorkAsync(schedulerWorkQueue, idGenerator, workItem, invokePayload, childScheduleRequests, cancellationToken);
                         return;
                     }
 
+                    // The child-scheduling checkpoint commits the write-back in its durable-value change set below.
+                    pendingChildSchedulingDurableValueChanges = suspendDurableValueChanges;
                     pendingChildScheduling = (idGenerator, childScheduleRequests);
                 }
                 else
@@ -338,7 +365,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         if (pendingChildScheduling is { } childScheduling)
         {
-            await CommitChildSchedulingActivityAsync(checkpointCommitter, inspectionAccumulator!, childScheduling.IdGenerator, workItem, invokePayload, state, childScheduling.Requests, valueSnapshots, cancellationToken);
+            await CommitChildSchedulingActivityAsync(checkpointCommitter, inspectionAccumulator!, childScheduling.IdGenerator, workItem, invokePayload, state, childScheduling.Requests, valueSnapshots, pendingChildSchedulingDurableValueChanges, cancellationToken);
             return;
         }
 
@@ -389,9 +416,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
     }
 
-    // Persists durable-value upserts directly to the store, used on the continuation paths (bookmark /
-    // child-scheduling) that suspend or hand off before reaching the completion checkpoint. Empty input is a
-    // no-op, so the dirty-tracked workflow-variable write-back writes nothing unless a variable actually changed.
+    // Concatenates the workflow-scope variable write-back and the SetOutput durable-value changes into the single
+    // set the suspend paths fold into their continuation checkpoint (#310). Returns either input untouched when
+    // the other is empty so the common no-mutation case allocates nothing.
+    private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> CombineDurableValueChanges(
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> variableWriteBackChanges,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> outputChanges)
+    {
+        if (outputChanges.Count == 0)
+            return variableWriteBackChanges;
+        if (variableWriteBackChanges.Count == 0)
+            return outputChanges;
+
+        return variableWriteBackChanges.Concat(outputChanges).ToArray();
+    }
+
+    // Persists durable-value upserts directly to the store, used on the non-inspection child-scheduling path that
+    // enqueues continuation work without a checkpoint. Empty input is a no-op, so the dirty-tracked workflow-variable
+    // write-back writes nothing unless a variable actually changed.
     private static async ValueTask SaveDurableValueChangesAsync(
         IDurableValueStateStore durableValueStateStore,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> changes,
@@ -469,6 +511,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeInvokeActivityCommandPayload invokePayload,
         IReadOnlyCollection<ActivityBookmarkRequest> bookmarkRequests,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
     {
         var requests = bookmarkRequests.ToArray();
@@ -491,7 +534,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 expiresAt: request.ExpiresAt,
                 reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
                 metadata: request.Metadata,
-                valueSnapshots: index == 0 ? valueSnapshots : []);
+                valueSnapshots: index == 0 ? valueSnapshots : [],
+                // Carry the suspend-path write-back on the first bookmark only; the downstream handler commits it
+                // atomically in that bookmark-created checkpoint (#310). The changes are idempotent upserts.
+                durableValueChanges: index == 0 ? durableValueChanges : []);
 
             var workItem = new RuntimeSchedulerWorkItem(
                 workItemId: $"{invokeWorkItem.WorkItemId}:create-bookmark:{request.BookmarkId}",
@@ -520,6 +566,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
@@ -558,7 +605,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 scheduler: null,
                 activityExecutions: [],
                 bookmarks: [],
-                durableValues: [],
+                // The suspend-path write-back (#286/#260) commits in the same transactional unit as the
+                // child-scheduling checkpoint (#310), so it is durable iff the continuation work is enqueued.
+                durableValues: durableValueChanges,
                 incidents: [],
                 operational: [],
                 activityExecutionInspections:
