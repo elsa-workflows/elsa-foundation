@@ -20,7 +20,8 @@ public sealed class WorkflowApplyGraphOperationsTool(
     IWorkflowGraphOperationBatchRiskClassifier riskClassifier,
     IWorkflowChangeProposalService proposalService) : IAgentTool
 {
-    public const string ToolName = "workflow.apply_graph_operations";
+    // Harness tool names must match ^[a-zA-Z0-9_-]+$ (GitHub Copilot + Anthropic reject dots), so no '.' separators.
+    public const string ToolName = "workflow_apply_graph_operations";
 
     // Web defaults (camelCase, case-insensitive) plus string enum names, matching how a provider emits a batch.
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)

@@ -13,7 +13,8 @@ namespace Elsa.Agent.Workflows.Tools;
 /// </summary>
 public sealed class WorkflowReadGraphTool : IAgentTool
 {
-    public const string ToolName = "workflow.read_graph";
+    // Harness tool names must match ^[a-zA-Z0-9_-]+$ (GitHub Copilot + Anthropic reject dots), so no '.' separators.
+    public const string ToolName = "workflow_read_graph";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
