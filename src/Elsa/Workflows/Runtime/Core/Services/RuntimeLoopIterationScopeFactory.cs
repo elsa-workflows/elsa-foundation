@@ -13,16 +13,20 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Why iterations do not collide.</b> Each produced scope reuses the loop owner's executable node id
-/// as its <see cref="VariableScope.ScopeId"/> (so the same reference keys resolve every pass) but is
-/// keyed by the engine <c>IterationId</c> as its <see cref="VariableScope.ExecutionId"/>. The item value
-/// lives in that per-iteration scope's own value store, so pass <c>N</c> and pass <c>N+1</c> are distinct
-/// <see cref="VariableScope"/> instances and one pass's current item can never overwrite or be read as
-/// another's — exactly the per-execution isolation <see cref="VariableScope.ExecutionId"/> documents for
-/// container scopes, applied to a loop body. The loop owner is responsible for assigning a distinct
-/// <see cref="LoopIterationScopeRequest.IterationId"/> per pass (the value it also threads through
-/// <see cref="ActivitySchedulingProvenance.IterationId"/> when scheduling the body), so the body
-/// activity's <see cref="ActivityExecutionState.IterationId"/> and the scope agree.
+/// <b>Why iterations do not collide.</b> Each pass calls <see cref="BuildIterationScope"/> to allocate a
+/// <em>distinct</em> <see cref="VariableScope"/> instance with its own private value store. That instance
+/// separation is what isolates passes: the current item lives in one pass's value store and is
+/// unreachable from another's, so pass <c>N</c> and pass <c>N+1</c> never overwrite or read each other's
+/// item. Every produced scope reuses the loop owner's executable node id as its
+/// <see cref="VariableScope.ScopeId"/> so the same reference keys resolve every pass. The engine
+/// <c>IterationId</c> is recorded as the scope's <see cref="VariableScope.ExecutionId"/> for
+/// correlation/inspection and to agree with the body execution's
+/// <see cref="ActivityExecutionState.IterationId"/> — it is inert descriptive metadata, <b>not</b> the
+/// isolation key, and scope resolution never reads it. Do not reuse one scope instance per
+/// <c>IterationId</c>: per-instance allocation, not the id, is what keeps passes apart. The loop owner is
+/// responsible for assigning a distinct <see cref="LoopIterationScopeRequest.IterationId"/> per pass (the
+/// value it also threads through <see cref="ActivitySchedulingProvenance.IterationId"/> when scheduling
+/// the body).
 /// </para>
 /// <para>
 /// <b>Contract for #264–#267.</b> A loop activity, for each pass: (1) chooses a distinct
@@ -42,8 +46,9 @@ public sealed class RuntimeLoopIterationScopeFactory
     /// Produces the iteration scope for one loop pass: an innermost <see cref="VariableScope"/> declaring
     /// the current item (and optional index), chained to <paramref name="parent"/> (the loop body's
     /// enclosing visible scope, or <c>null</c> when the loop has no enclosing container/workflow scope).
-    /// The returned scope's <see cref="VariableScope.ExecutionId"/> is the request's iteration id, which
-    /// isolates this pass's values from every other pass of the same loop.
+    /// Each call returns a fresh scope instance with its own value store; that instance separation is what
+    /// isolates this pass's values from every other pass of the same loop. The returned scope's
+    /// <see cref="VariableScope.ExecutionId"/> carries the request's iteration id for correlation only.
     /// </summary>
     public VariableScope BuildIterationScope(LoopIterationScopeRequest request, VariableScope? parent = null)
     {
@@ -55,7 +60,7 @@ public sealed class RuntimeLoopIterationScopeFactory
 
         var variables = new Dictionary<string, IVariable>(StringComparer.Ordinal)
         {
-            [request.ItemReferenceKey] = new LoopIterationVariable(request.ItemName, request.ItemReferenceKey)
+            [request.ItemReferenceKey] = new RuntimeScopedVariableModel(request.ItemName, request.ItemReferenceKey)
         };
         var values = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -69,7 +74,7 @@ public sealed class RuntimeLoopIterationScopeFactory
             if (StringComparer.Ordinal.Equals(request.IndexReferenceKey, request.ItemReferenceKey))
                 throw new ArgumentException("Loop iteration item and index cannot share a reference key.", nameof(request));
 
-            variables[request.IndexReferenceKey] = new LoopIterationVariable(request.IndexName, request.IndexReferenceKey);
+            variables[request.IndexReferenceKey] = new RuntimeScopedVariableModel(request.IndexName, request.IndexReferenceKey);
             values[request.IndexReferenceKey] = request.Index;
         }
 
@@ -79,31 +84,5 @@ public sealed class RuntimeLoopIterationScopeFactory
             parent: parent,
             executionId: request.IterationId,
             initialValues: values);
-    }
-
-    /// <summary>
-    /// Minimal <see cref="IVariable"/> for a loop iteration declaration. Carries the declaration's bare
-    /// name and reference key (as the memory block id) without depending on the activity authoring stack,
-    /// mirroring the runtime-scoped variable the container-scope factory emits.
-    /// </summary>
-    private sealed class LoopIterationVariable(string name, string referenceKey) : IVariable
-    {
-        public string Id { get; set; } = referenceKey;
-        public string Name { get; set; } = name;
-        public object? DefaultValue { get; set; }
-        public Type? StorageDriverType { get; set; }
-
-        public IMemoryBlock Declare() => new LoopIterationVariableBlock(DefaultValue);
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
-            DefaultValue is T typed ? typed : default;
-
-        public T? Get<T>(IExpressionExecutionContext context) => DefaultValue is T typed ? typed : default;
-    }
-
-    private sealed class LoopIterationVariableBlock(object? value) : IMemoryBlock
-    {
-        public object? Value { get; set; } = value;
-        public object? Metadata { get; set; }
     }
 }
