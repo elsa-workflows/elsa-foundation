@@ -11,6 +11,11 @@ selection compares them ordinally against the value, so a null value never equal
 selected branch that is empty (or an absent default) finalizes the composite directly with the matching
 outcome without scheduling a child.
 
+Case match values must be unique. `SwitchStructureHandler.CompileExecutableStructure` rejects duplicate
+match values at compile time (surfacing a `WorkflowExecutableCompilationException` before publish), so
+duplicates never reach a published, executable structure; the runtime `SwitchNavigator` keeps its own
+duplicate guard as a defense-in-depth backstop.
+
 The runtime activity class (`Activities/Switch.cs`) references only the runtime contract surface. The
 design-side `SwitchStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
 module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references

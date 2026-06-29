@@ -51,6 +51,18 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authoredStructure = ReadAuthoredStructure(activity);
+
+        // Reject duplicate case match values at compile time (gates §E2.2 / §2.21 / §2.23). The runtime
+        // SwitchNavigator only catches this when the workflow executes; surfacing it here turns it into a
+        // compile-time WorkflowExecutableCompilationException (the compiler wraps ArgumentException) so
+        // duplicates never reach a published, executable structure. Ordinal comparison mirrors the runtime
+        // case-matching in SwitchNavigator.
+        var duplicateMatch = authoredStructure.Cases
+            .GroupBy(@case => @case.Match, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        if (duplicateMatch is not null)
+            throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares duplicate case match value '{duplicateMatch}'. Each Switch case must have a unique match value.");
+
         var executableStructure = new SwitchExecutableStructure(
             authoredStructure.Cases
                 .Select(@case => new SwitchExecutableCase(@case.Match, @case.Activity?.NodeId))
