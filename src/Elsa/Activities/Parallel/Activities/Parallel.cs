@@ -38,6 +38,14 @@ namespace Elsa.Activities.Parallel.Activities;
 /// and never overwrite each other.
 /// </para>
 /// <para>
+/// <b>Faulted branches are not counted (known limitation, #308).</b> The join counts only branch children
+/// that reach <c>Completed</c>; a branch that <b>faults</b> is never counted. With the default (all-branches)
+/// threshold, one faulted branch leaves the join unsatisfied, so the <c>Parallel</c> composite stays
+/// <c>Running</c> indefinitely (there is no composite incident or timeout). This mirrors the existing
+/// flowchart fork/join contract and is a documented limitation, not a bug; fault-aware join is tracked in
+/// #308. A configured threshold low enough to be met by the non-faulted branches still completes.
+/// </para>
+/// <para>
 /// The runtime activity class references only the runtime contract surface; the design-side
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </para>
@@ -58,8 +66,9 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler
         var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
         var branches = navigator.RunnableBranches;
 
-        // No runnable branch (or a zero threshold) short-circuits straight to Done without forking.
-        if (branches.Count == 0 || navigator.EffectiveThreshold == 0)
+        // No runnable branch short-circuits straight to Done without forking. (When there are no runnable
+        // branches the effective threshold is 0; with any runnable branch it is at least 1.)
+        if (branches.Count == 0)
         {
             runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
             return;

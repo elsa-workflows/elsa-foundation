@@ -21,6 +21,12 @@ carrying a mutable counter across the per-completion re-construction. The engine
 never double-completes. If a branch runs `Finish`, the engine ends the run terminally and cancels the
 remaining queued sibling branches (#293).
 
+**Faulted branches are not counted (known limitation, #308).** The join counts only branch children that
+reach `Completed`; a branch that **faults** is never counted. With the default (all-branches) threshold,
+one faulted branch leaves the join unsatisfied, so the `Parallel` composite stays `Running` indefinitely
+(there is no composite incident or timeout). This mirrors the existing flowchart fork/join contract and is a
+documented limitation, not a bug; fault-aware join is tracked in #308.
+
 The runtime activity class (`Activities/Parallel.cs`) references only the runtime contract surface. The
 design-side `ParallelStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
 module bridges both `.Core` sub-domains; `Elsa.Workflows.Runtime.*` never references

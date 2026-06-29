@@ -38,8 +38,9 @@ internal sealed class ParallelNavigator
         var runnableCount = branches.Count(branch => branch.Node is not null);
 
         // A null/out-of-range threshold means "all runnable branches"; clamp a configured threshold into
-        // 1..runnableCount so a misconfigured value can never deadlock the join.
-        EffectiveThreshold = threshold is { } configured && configured >= 1 && configured < runnableCount
+        // 1..runnableCount so a misconfigured value can never deadlock the join. (A threshold >= runnableCount
+        // collapses to "all", which is exactly the runnableCount fallback.)
+        EffectiveThreshold = threshold is { } configured && configured >= 1 && configured <= runnableCount
             ? configured
             : runnableCount;
     }
