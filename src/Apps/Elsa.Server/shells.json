@@ -13,6 +13,7 @@
           "ActivitiesIf": {},
           "ActivitiesSequence": {},
           "ActivitiesSwitch": {},
+          "ActivitiesWhile": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
