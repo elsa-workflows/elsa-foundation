@@ -8,6 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@elsa-workflows/studio-code-editor": "workspace:*",
     "@xyflow/react": "^12.10.2"
   },
   "devDependencies": {}
