@@ -8,6 +8,7 @@ import type {
 } from "../../sdk";
 
 export type AgentProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
+export type AgentAutonomyMode = "manual" | "auto-read-only" | "full-auto";
 export type AgentProviderKind = "provider-sdk-binding" | "agent-harness-provider" | string;
 export type AgentProviderOperation = "chat" | "streaming" | "tool-approval" | "run-status" | "artifacts" | "skills" | "memory" | "file-upload" | string;
 export type AgentProviderRiskProfile = "read-only" | "review-required" | "sandboxed-execution" | "privileged-execution" | string;
@@ -31,7 +32,12 @@ export interface AgentBootstrapResponse {
   provider?: AgentProviderDiagnostics;
   policy: {
     contextVisibility: boolean;
-    requiresApprovalForMutations: boolean;
+    /** The autonomy mode the deployment defaults a new session to. */
+    defaultAutonomyMode: AgentAutonomyMode;
+    /** The autonomy ceiling: a session may request any mode up to (and including) this one. */
+    maxAutonomyMode: AgentAutonomyMode;
+    /** The modes the client may offer, derived from the ceiling (most restrictive first). */
+    allowedAutonomyModes: AgentAutonomyMode[];
     retentionLabel?: string;
     actorId?: string;
     permissions?: string[];
@@ -54,6 +60,8 @@ export interface AgentProviderDiagnostics {
 
 export interface AgentCreateSessionRequest {
   mode: StudioAgentMode;
+  /** The autonomy mode to request; the server clamps it to the deployment ceiling. Omit to take the default. */
+  autonomyMode?: AgentAutonomyMode;
   activeSurface: StudioAgentSurface;
   clientContext: {
     studioVersion: string;

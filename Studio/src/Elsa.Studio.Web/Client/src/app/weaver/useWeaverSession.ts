@@ -14,6 +14,7 @@ import {
 import type {
   AgentActionProposal,
   AgentActionProposalPayload,
+  AgentAutonomyMode,
   AgentBootstrapResponse,
   AgentMessageViewModel,
   AgentPlanStep,
@@ -23,7 +24,10 @@ import type {
 } from "../agent/agentTypes";
 
 export type WeaverChatState = "idle" | "streaming";
-export type WeaverAutoApplyMode = "manual" | "auto-read-only" | "full-auto";
+// The Weaver "auto-apply" control selects the session's server-side autonomy mode.
+export type WeaverAutoApplyMode = AgentAutonomyMode;
+
+const ALL_AUTONOMY_MODES: readonly WeaverAutoApplyMode[] = ["manual", "auto-read-only", "full-auto"];
 
 export type WeaverTimelineEntry =
   | { id: string; kind: "step"; stepIndex: number; status: "running" | "completed" }
@@ -58,6 +62,7 @@ export interface UseWeaverSession {
   followups: WeaverFollowup[];
   pendingProposalIds: ReadonlySet<string>;
   autoApplyMode: WeaverAutoApplyMode;
+  allowedAutoApplyModes: readonly WeaverAutoApplyMode[];
   promptStarters: ReturnType<typeof getActivePromptStarters>;
   capabilities: ReturnType<typeof getActiveAgentCapabilities>;
   activeProvider: AgentProviderDiagnostics | undefined;
@@ -74,6 +79,13 @@ export interface UseWeaverSession {
 }
 
 const ASSISTANT_PLACEHOLDER = "Awaiting assistant response…";
+
+const DISABLED_POLICY: AgentBootstrapResponse["policy"] = {
+  contextVisibility: true,
+  defaultAutonomyMode: "auto-read-only",
+  maxAutonomyMode: "auto-read-only",
+  allowedAutonomyModes: ["manual", "auto-read-only"]
+};
 
 export function useWeaverSession({ api, surface, client, subscribeStream = subscribeAgentSessionStream }: UseWeaverSessionOptions): UseWeaverSession {
   const [bootstrap, setBootstrap] = useState<AgentBootstrapResponse | null>(null);
@@ -115,6 +127,16 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const promptStarters = useMemo(() => getActivePromptStarters(api, surface, capabilities, contributionFilter), [api, surface, capabilities, contributionFilter]);
   const activeProvider = useMemo(() => bootstrap?.provider, [bootstrap]);
   const ready = useMemo(() => bootstrap?.enabled === true && bootstrap.providerStatus !== "unavailable" && capabilities.length > 0, [bootstrap, capabilities]);
+  // The deployment ceiling determines which autonomy modes the dock may offer.
+  const allowedAutoApplyModes = useMemo<readonly WeaverAutoApplyMode[]>(
+    () => bootstrap?.policy.allowedAutonomyModes?.length ? bootstrap.policy.allowedAutonomyModes : ALL_AUTONOMY_MODES,
+    [bootstrap]);
+  const allowedAutoApplyModesRef = useRef(allowedAutoApplyModes);
+  allowedAutoApplyModesRef.current = allowedAutoApplyModes;
+  // Belt-and-suspenders: never let a requested mode exceed the ceiling, even if the UI offered it.
+  const selectAutoApplyMode = useCallback((mode: WeaverAutoApplyMode) => {
+    setAutoApplyMode(current => allowedAutoApplyModesRef.current.includes(mode) ? mode : current);
+  }, []);
 
   useEffect(() => () => streamRef.current?.close(), []);
 
@@ -123,10 +145,15 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     void (async () => {
       try {
         const result = await agentClient.bootstrap();
-        if (!disposed) setBootstrap(result);
+        if (!disposed) {
+          setBootstrap(result);
+          // Adopt the deployment's default autonomy mode (already clamped to its ceiling server-side).
+          // The dropdown is disabled until ready, so this can't clobber a user's choice.
+          setAutoApplyMode(result.policy.defaultAutonomyMode);
+        }
       } catch (e) {
         if (!disposed) {
-          setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], provider: undefined, policy: { contextVisibility: true, requiresApprovalForMutations: true } });
+          setBootstrap({ enabled: false, providerStatus: "unavailable", modes: [], capabilities: [], provider: undefined, policy: DISABLED_POLICY });
           setError(getAgentErrorMessage(e));
         }
       }
@@ -138,6 +165,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (sessionIdRef.current) return sessionIdRef.current;
     const response = await agentClient.createSession({
       mode,
+      autonomyMode: autoApplyModeRef.current,
       activeSurface: surface,
       clientContext: { studioVersion: api.host.hostVersion, sdkVersion: api.host.sdkVersion, moduleIds: [] }
     });
@@ -405,6 +433,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     followups,
     pendingProposalIds,
     autoApplyMode,
+    allowedAutoApplyModes,
     promptStarters,
     capabilities,
     activeProvider,
@@ -417,7 +446,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     applyWorkflowBatch: item => void applyWorkflowBatch(item),
     undoWorkflowBatch: item => void undoWorkflowBatch(item),
     submitFeedback,
-    setAutoApplyMode
+    setAutoApplyMode: selectAutoApplyMode
   };
 }
 

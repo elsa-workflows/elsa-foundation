@@ -82,7 +82,7 @@ export function WeaverSurface({
               disabled={!session.ready}
               onChange={event => session.setAutoApplyMode(event.target.value as WeaverAutoApplyMode)}
             >
-              {(Object.keys(AUTO_APPLY_LABELS) as WeaverAutoApplyMode[]).map(mode => (
+              {session.allowedAutoApplyModes.map(mode => (
                 <option key={mode} value={mode}>{AUTO_APPLY_LABELS[mode]}</option>
               ))}
             </select>
