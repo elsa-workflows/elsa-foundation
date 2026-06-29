@@ -1,5 +1,5 @@
 using System.Globalization;
-using Elsa.Expressions.Core.Models;
+using System.Text.Json;
 using Elsa.Activities.For.Exceptions;
 using Elsa.Activities.For.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -8,7 +8,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Activities.For.Activities;
 
@@ -53,8 +52,6 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
 
     /// <summary>The reference key / authored name of the per-iteration current-index variable.</summary>
     public const string IndexVariableName = "index";
-
-    private static readonly RuntimeLoopIterationScopeFactory IterationScopeFactory = new();
 
     /// <summary>The first index (inclusive). Defaults to <c>0</c> when unbound.</summary>
     public InputArgument<int> Start { get; set; } = null!;
@@ -117,21 +114,14 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     {
         var ownerNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
         var iterationId = FormatIterationId(index);
+        var indexJson = JsonSerializer.Serialize(index);
 
-        // ADR 0028: allocate a fresh per-iteration scope (distinct value store) exposing the current
-        // index, and thread the same IterationId through scheduling provenance so the body execution's
-        // iteration identity agrees with its scope. One scope instance per pass is what isolates passes;
-        // the id is inert correlation metadata.
-        IterationScopeFactory.BuildIterationScope(
-            new LoopIterationScopeRequest(
-                OwnerNodeId: ownerNodeId,
-                IterationId: iterationId,
-                ItemReferenceKey: IndexVariableName,
-                ItemName: IndexVariableName,
-                Item: index,
-                Index: index),
-            parent: EnclosingScope(runtimeContext));
-
+        // ADR 0028 / #259: publish this pass's iteration variable in the body child's scheduling
+        // provenance. The runtime (RuntimeContainerScopeService) reads these keys to layer a fresh
+        // per-iteration variable scope — exposing the current index under `index` — as the innermost
+        // scope on top of the body's enclosing container chain, so the body's input expressions resolve
+        // the index through the real evaluation path. The IterationId (which encodes the index) is the
+        // body execution's iteration identity and agrees with that scope's execution id.
         var provenance = ActivitySchedulingProvenance.From(
             runtimeContext.WorkflowExecutionId,
             parentActivityExecutionId: runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
@@ -145,7 +135,11 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             {
                 ["for.parentActivityExecutionId"] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 ["for.targetNodeId"] = body.ExecutableNodeId,
-                ["for.iterationIndex"] = iterationId
+                [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
+                // For exposes a single counter; the current item and the zero-based index are the same
+                // value, surfaced under one variable name.
+                [RuntimeMetadataKeys.LoopIterationItemName] = IndexVariableName,
+                [RuntimeMetadataKeys.LoopIterationItemValue] = indexJson
             });
 
         runtimeContext.ScheduleChildActivity(
@@ -154,9 +148,6 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
             metadata: provenance.Metadata,
             schedulingProvenance: provenance);
     }
-
-    private static VariableScope? EnclosingScope(IRuntimeActivityExecutionContext runtimeContext) =>
-        runtimeContext is SimpleActivityExecutionContext simpleContext ? simpleContext.VariableScope : null;
 
     private static ForRange ResolveRange(IActivityExecutionContext context)
     {
