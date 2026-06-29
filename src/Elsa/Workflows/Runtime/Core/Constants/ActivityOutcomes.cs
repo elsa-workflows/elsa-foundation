@@ -13,4 +13,10 @@ public static class ActivityOutcomes
     /// Emitted by boolean branch activities (e.g. <c>If</c>) when the evaluated condition is false.
     /// </summary>
     public const string False = "False";
+
+    /// <summary>
+    /// Emitted by multi-way branch activities (e.g. <c>Switch</c>) when no case matches the evaluated
+    /// value and the default branch is taken.
+    /// </summary>
+    public const string Default = "Default";
 }
