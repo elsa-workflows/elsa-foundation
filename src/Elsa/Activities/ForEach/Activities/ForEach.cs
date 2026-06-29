@@ -87,6 +87,15 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         if (navigator.Body is null || !navigator.IsBody(context.CompletedChildExecutableNodeId))
             throw new ForEachExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the ForEach body.");
 
+        // Early exit (#299): a body that completes with a Break outcome ends the loop now instead of
+        // advancing to the next item. Recognized by outcome name so ForEach takes no dependency on the
+        // (separate) Break activity module — mirroring For/While/Do.
+        if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
+            return ValueTask.CompletedTask;
+        }
+
         var completedIndex = ResolveCompletedIndex(runtimeContext, context.CompletedChildIterationId);
         var items = MaterializeItems(context.ParentContext.Get(Collection));
         var nextIndex = completedIndex + 1;

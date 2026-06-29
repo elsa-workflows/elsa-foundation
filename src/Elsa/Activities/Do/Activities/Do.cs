@@ -61,8 +61,8 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
     public const string StructureKind = "elsa.do.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    /// <summary>The outcome a body emits to break out of the loop early; matched by name.</summary>
-    public const string BreakOutcome = "Break";
+    /// <summary>The outcome a body emits to break out of the loop early (#299); matched by name.</summary>
+    public const string BreakOutcome = ActivityOutcomes.Break;
 
     /// <summary>The boolean condition evaluated after each pass; the body repeats while it holds.</summary>
     public InputArgument<bool> Condition { get; set; } = null!;

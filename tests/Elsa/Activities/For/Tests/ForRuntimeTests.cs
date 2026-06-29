@@ -110,6 +110,20 @@ public sealed class ForRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task BodyBreak_EndsLoopEarly_AfterASinglePass()
+    {
+        // Bound is 5 passes, but the body breaks on its first pass: exactly one body pass (< 5) runs and
+        // the loop completes. Only one body id is needed because no further pass is scheduled.
+        await using var harness = NewHarness("actexec-for", "actexec-body-0");
+
+        var run = await harness.RunAsync(NewExecutable(start: 0, end: 5, step: 1, breakOnEntry: true));
+
+        Assert.Single(run.States("node-body"));
+        run.AssertOutcomes("node-for", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesForFeature().ConfigureServices(services))
@@ -117,11 +131,16 @@ public sealed class ForRuntimeTests
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
-    private static WorkflowExecutable NewExecutable(int start, int end, int step, bool endInclusive = false, bool includeBody = true)
+    private static WorkflowExecutable NewExecutable(int start, int end, int step, bool endInclusive = false, bool includeBody = true, bool breakOnEntry = false)
     {
         var childSlots = new List<ExecutableChildSlot>();
         if (includeBody)
-            childSlots.Add(new ExecutableChildSlot(ForActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body")]));
+        {
+            // A body that completes with the Break outcome models a Break leaf placed in the loop body
+            // (#299); the loop recognizes it by name and ends early.
+            var bodyOutcomes = breakOnEntry ? new[] { ActivityOutcomes.Break } : null;
+            childSlots.Add(new ExecutableChildSlot(ForActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body", bodyOutcomes)]));
+        }
 
         var root = new ExecutableNode(
             executableNodeId: "node-for",

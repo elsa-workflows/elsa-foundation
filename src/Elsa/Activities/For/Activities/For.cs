@@ -47,8 +47,8 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     public const string StructureKind = "elsa.for.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    /// <summary>The outcome a body emits to break out of the loop early (#261); matched by name.</summary>
-    public const string BreakOutcome = "Break";
+    /// <summary>The outcome a body emits to break out of the loop early (#261/#299); matched by name.</summary>
+    public const string BreakOutcome = ActivityOutcomes.Break;
 
     /// <summary>The reference key / authored name of the per-iteration current-index variable.</summary>
     public const string IndexVariableName = "index";

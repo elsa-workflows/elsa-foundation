@@ -83,6 +83,20 @@ public sealed class DoRuntimeTests
         Assert.Equal(expectedPasses, iterationIds.Distinct().Count());
     }
 
+    [Fact]
+    public async Task BodyBreak_EndsLoopEarly_EvenWhileTheConditionStillHolds()
+    {
+        // The condition would hold for three passes, but the body breaks on its first pass: exactly one
+        // body pass (< 3) runs and the loop completes early, without re-checking the condition.
+        await using var harness = NewHarness(holdEvaluations: 3, "actexec-do", "actexec-body-0");
+
+        var run = await harness.RunAsync(NewExecutable(breakOnEntry: true));
+
+        Assert.Single(run.States("node-body"));
+        run.AssertOutcomes("node-do", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
     private static string[] ActivityExecutionIds(string composite, string bodyPrefix, int passes)
     {
         var ids = new List<string> { composite };
@@ -99,8 +113,11 @@ public sealed class DoRuntimeTests
             .ConfigureServices(services => services.AddSingleton<IExpressionEvaluator>(new CountingConditionEvaluator(holdEvaluations)))
             .Build(activityExecutionIds);
 
-    private static WorkflowExecutable NewExecutable()
+    private static WorkflowExecutable NewExecutable(bool breakOnEntry = false)
     {
+        // A body that completes with the Break outcome models a Break leaf placed in the loop body (#299);
+        // the loop recognizes it by name and ends early instead of re-checking the condition.
+        var bodyOutcomes = breakOnEntry ? new[] { ActivityOutcomes.Break } : null;
         var root = new ExecutableNode(
             executableNodeId: "node-do",
             authoredActivityId: "authored-do",
@@ -118,7 +135,7 @@ public sealed class DoRuntimeTests
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(DoActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body")])],
+            childSlots: [new ExecutableChildSlot(DoActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode("node-body", bodyOutcomes)])],
             structure: new ExecutableActivityStructure(
                 DoActivity.StructureKind,
                 DoActivity.StructureSchemaVersion,
