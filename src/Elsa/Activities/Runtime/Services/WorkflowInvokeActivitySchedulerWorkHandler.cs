@@ -178,29 +178,49 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             await activityFaultIncidentRecorder.CommitAsync(ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", []), cancellationToken);
             return;
         }
-        var valueSnapshots = ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()).ToList();
+        var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
+        IActivity activity;
+        SimpleActivityExecutionContext context;
+        try
+        {
+            valueSnapshots.AddRange(ActivityOutputPublisher.BuildInputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, inputs, _timeProvider.GetUtcNow()));
 
-        var activity = await activityFactory.Create(
-            executableNode.DescriptorType,
-            executableNode.DescriptorPayload,
-            inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            ActivityOutputPublisher.BuildOutputArguments(executableNode),
-            cancellationToken);
+            // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
+            // inside the same fault boundary as input materialization (#317). Previously this step sat between
+            // the two materialization try/catch blocks, so a binder/constructor throw (e.g. a typed-binding
+            // InvalidOperationException) escaped to the scheduler loop and left the run silently at Running with
+            // no incident. Recording it as a blocking incident faults the activity and surfaces a queryable cause.
+            activity = await activityFactory.Create(
+                executableNode.DescriptorType,
+                executableNode.DescriptorPayload,
+                inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
+                ActivityOutputPublisher.BuildOutputArguments(executableNode),
+                cancellationToken);
 
-        activity.NodeId = executableNode.ExecutableNodeId;
-        activity.Id = invokePayload.ActivityExecutionId;
+            activity.NodeId = executableNode.ExecutableNodeId;
+            activity.Id = invokePayload.ActivityExecutionId;
 
-        var context = new SimpleActivityExecutionContext(
-            serviceProvider,
-            activity,
-            cancellationToken,
-            workItem.WorkflowExecutionId,
-            invokePayload.PinnedExecutable,
-            workItem,
-            executableNode,
-            state,
-            variableScope);
-        RuntimeActivityInputMemory.Seed(context, inputs);
+            context = new SimpleActivityExecutionContext(
+                serviceProvider,
+                activity,
+                cancellationToken,
+                workItem.WorkflowExecutionId,
+                invokePayload.PinnedExecutable,
+                workItem,
+                executableNode,
+                state,
+                variableScope);
+            RuntimeActivityInputMemory.Seed(context, inputs);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await activityFaultIncidentRecorder.CommitAsync(ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, "ActivityConstructionFailed", valueSnapshots), cancellationToken);
+            return;
+        }
 
         ActivityExecutionState? completedState = null;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
