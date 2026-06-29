@@ -26,6 +26,7 @@
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
           "ActivitiesSwitch": {},
+          "ActivitiesWhile": {},
           "ActivitiesCompositionRuntime": {},
           "ActivitiesDesignReconciliation": {},
           "ClrActivityReconciliation": {

@@ -19,6 +19,7 @@
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <Project Path="src/Elsa/Activities/Switch/Elsa.Activities.Switch.csproj" />
+    <Project Path="src/Elsa/Activities/While/Elsa.Activities.While.csproj" />
   </Folder>
   <Folder Name="/src/elsa/Activities/Composition/">
     <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
@@ -226,6 +227,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Switch/">
     <Project Path="tests/Elsa/Activities/Switch/Tests/Elsa.Activities.Switch.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/While/">
+    <Project Path="tests/Elsa/Activities/While/Tests/Elsa.Activities.While.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Testing/">
     <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
