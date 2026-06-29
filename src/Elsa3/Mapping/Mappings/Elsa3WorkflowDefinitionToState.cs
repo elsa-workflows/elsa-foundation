@@ -45,10 +45,10 @@ public sealed class Elsa3WorkflowDefinitionToState(
 
     private VariableDefinition MapVariable(Elsa3Variable source)
     {
-        var varType = TypeInformation.FromType(wellKnownTypeRegistry.GetTypeOrDefault(source.TypeName));
+        var varType = TypeReferenceFactory.FromClrType(wellKnownTypeRegistry.GetTypeOrDefault(source.TypeName), wellKnownTypeRegistry.GetAliasOrDefault);
 
         var storageDriverType = !string.IsNullOrWhiteSpace(source.StorageDriverTypeName)
-            ? TypeInformation.FromType(wellKnownTypeRegistry.GetTypeOrDefault(source.StorageDriverTypeName))
+            ? wellKnownTypeRegistry.GetAliasOrDefault(wellKnownTypeRegistry.GetTypeOrDefault(source.StorageDriverTypeName))
             : null;
 
         return new VariableDefinition(source.Id, source.Name, varType, storageDriverType, new ArgumentValue(source.Value));

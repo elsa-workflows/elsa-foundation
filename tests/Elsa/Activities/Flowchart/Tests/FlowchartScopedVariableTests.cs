@@ -27,7 +27,7 @@ public sealed class FlowchartScopedVariableTests
     }
 
     private static VariableDefinition Counter() =>
-        new("var-counter", "Counter", Primitives.Models.TypeInformation.String, null, null);
+        new("var-counter", "Counter", new Primitives.Models.TypeReference("String"), null, null);
 
     private static ActivityNode FlowchartNode(string nodeId, IReadOnlyCollection<VariableDefinition> variables, params ActivityNode[] children) =>
         new(

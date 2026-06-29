@@ -77,13 +77,13 @@ internal static class UpdateDraftTestKit
             Outputs: outputs ?? []);
 
     public static VariableDefinition Variable(string referenceKey, string name, Type? type = null) =>
-        new(referenceKey, name, TypeInformation.FromType(type ?? typeof(string)), null, null);
+        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, null);
 
     public static InputDefinition Input(string referenceKey, string name, Type? type = null) =>
-        new(referenceKey, name, TypeInformation.FromType(type ?? typeof(string)), null, name, null);
+        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null);
 
     public static OutputDefinition Output(string referenceKey, string name, Type? type = null) =>
-        new(referenceKey, name, TypeInformation.FromType(type ?? typeof(string)), null, name, null);
+        new(referenceKey, name, new TypeReference((type ?? typeof(string)).Name), null, name, null);
 
     public static ArgumentState Arg(string referenceKey, string? value = null) =>
         new(referenceKey, new ArgumentValue(value), null, null, null, null);

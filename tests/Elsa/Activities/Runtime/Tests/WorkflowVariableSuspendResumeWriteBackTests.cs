@@ -260,7 +260,7 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
             {
                 variables = new[]
                 {
-                    new VariableDefinition(VariableReferenceKey, VariableName, TypeInformation.Integer, null, new ArgumentValue(0, "Literal"))
+                    new VariableDefinition(VariableReferenceKey, VariableName, new TypeReference("Int32"), null, new ArgumentValue(0, "Literal"))
                 }
             },
             new JsonSerializerOptions(JsonSerializerDefaults.Web));

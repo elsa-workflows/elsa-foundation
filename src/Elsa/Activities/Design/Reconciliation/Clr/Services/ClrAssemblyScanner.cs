@@ -115,7 +115,7 @@ public sealed class ClrAssemblyScanner(
                 inputs.Add(new InputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeInformation(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
@@ -125,7 +125,7 @@ public sealed class ClrAssemblyScanner(
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeInformation(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
@@ -176,8 +176,14 @@ public sealed class ClrAssemblyScanner(
         return null;
     }
 
-    private static TypeInformation ToTypeInformation(Type? valueType) =>
-        valueType is null ? TypeInformation.Object : TypeInformation.FromType(valueType);
+    // Reflection-only path: types come from a MetadataLoadContext, so the runtime well-known type
+    // registry can't resolve them. The framework primitive aliases are the simple CLR type names
+    // (e.g. string→"String", int→"Int32"), so we use Type.Name as the element alias here — the same
+    // bare aliases DefaultVariableTypeDescriptorProvider seeds into the registry.
+    private static TypeReference ToTypeReference(Type? valueType) =>
+        valueType is null
+            ? new TypeReference("Object")
+            : TypeReferenceFactory.FromClrType(valueType, t => t.Name);
 
     private static Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {

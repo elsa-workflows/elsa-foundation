@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -20,7 +22,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 public sealed class WorkflowExecutableCompiler(
     IWorkflowDefinitionVersionStore workflowVersions,
     IActivityDefinitionVersionStore activityVersions,
-    IActivityStructureService activityStructureService)
+    IActivityStructureService activityStructureService,
+    IWellKnownTypeRegistry wellKnownTypeRegistry)
     : IWorkflowExecutableCompiler
 {
     private const string LiteralExpressionType = "Literal";
@@ -156,7 +159,7 @@ public sealed class WorkflowExecutableCompiler(
             ? null
             : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
 
-    private static RuntimeInputBinding CompileInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileLiteralInput(nodeId, inputDefinition, value);
@@ -174,12 +177,12 @@ public sealed class WorkflowExecutableCompiler(
     /// the registered <c>VariableExpressionHandler</c>, which resolves it through the visible scope
     /// chain at execution time (ADR 0027).
     /// </summary>
-    private static RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
         var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
         var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
 
-        var inputType = inputDefinition.Type.LoadType();
+        var inputType = ResolveInputType(inputDefinition);
         var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
 
         return new RuntimeInputBinding(
@@ -200,9 +203,9 @@ public sealed class WorkflowExecutableCompiler(
 
     private sealed record VariableReferencePayload(string referenceKey, string? declaringScopeId);
 
-    private static RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
-        var inputType = inputDefinition.Type.LoadType();
+        var inputType = ResolveInputType(inputDefinition);
         object? converted;
         try
         {
@@ -222,7 +225,7 @@ public sealed class WorkflowExecutableCompiler(
             metadata: BuildInputMetadata(inputType, inputDefinition));
     }
 
-    private static RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    private RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
     {
         if (string.IsNullOrWhiteSpace(value.ExpressionType))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
@@ -231,7 +234,7 @@ public sealed class WorkflowExecutableCompiler(
         if (string.IsNullOrWhiteSpace(expressionText))
             throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
 
-        var inputType = inputDefinition.Type.LoadType();
+        var inputType = ResolveInputType(inputDefinition);
         var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
 
         return new RuntimeInputBinding(
@@ -240,6 +243,13 @@ public sealed class WorkflowExecutableCompiler(
             expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
             metadata: BuildInputMetadata(inputType, inputDefinition));
     }
+
+    // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
+    // well-known type registry, mirroring VariableMapper's resolution (FR-007). Unknown alias → object.
+    private Type ResolveInputType(InputDefinition inputDefinition) =>
+        TypeReferenceFactory.Resolve(
+            inputDefinition.Type,
+            alias => wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
 
     private static string? ExtractExpressionText(object? value)
     {

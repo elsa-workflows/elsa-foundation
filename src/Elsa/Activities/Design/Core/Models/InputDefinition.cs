@@ -10,8 +10,8 @@ namespace Elsa.Activities.Design.Core.Models;
 public sealed record InputDefinition(
     string ReferenceKey,
     string Name,
-    TypeInformation Type,
-    TypeInformation? StorageDriverType,
+    TypeReference Type,
+    string? StorageDriverType,
     string DisplayName,
     string? Category,
     bool? IsBrowsable = null,

@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>
 
 </Project>

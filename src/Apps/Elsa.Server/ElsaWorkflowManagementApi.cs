@@ -692,41 +692,21 @@ internal static class ElsaWorkflowManagementApi
         yield return new ExpressionDescriptorResponse("Input", "Input", null);
     }
 
-    private static string GetTypeName(TypeInformation type) => type.GetTypeFullName();
+    // The authored type is now a rename-proof alias (TypeReference); the descriptor response reports the alias.
+    private static string GetTypeName(TypeReference type) => type.Alias;
 
     private static int ParseMajorVersion(string version) =>
         int.TryParse(version.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(), out var major)
             ? major
             : 1;
 
-    private static string InferUiHint(TypeInformation type)
-    {
-        var typeName = GetTypeName(type);
-        if (string.Equals(typeName, typeof(bool).FullName, StringComparison.Ordinal))
-            return "checkbox";
+    private static string InferUiHint(TypeReference type) =>
+        string.Equals(type.Alias, "Boolean", StringComparison.Ordinal) ? "checkbox" : "singleline";
 
-        return "singleline";
-    }
-
-    private static IDictionary<string, object>? GetUiSpecifications(TypeInformation type, ILogger logger)
-    {
-        try
-        {
-            var loadedType = type.LoadType();
-            if (!loadedType.IsEnum)
-                return null;
-
-            return new Dictionary<string, object>
-            {
-                ["options"] = Enum.GetNames(loadedType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
-            };
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not load UI specifications for type {TypeName}.", type.TypeName);
-            return null;
-        }
-    }
+    // Enum option inference previously loaded the CLR type from a decomposed TypeInformation. With the
+    // alias-only authored model there is no static CLR type to reflect over here; enum-aware default
+    // editors are surfaced through the type-descriptor catalog (defaultEditor) instead (spec FR-015).
+    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger) => null;
 
     private static bool IsContainerDesignFacet(Elsa.Activities.Design.Core.Models.ActivityDesignFacet facet) =>
         facet.Kind.Contains("structure", StringComparison.OrdinalIgnoreCase);

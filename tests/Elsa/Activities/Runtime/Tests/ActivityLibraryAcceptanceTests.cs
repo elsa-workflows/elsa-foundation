@@ -284,8 +284,8 @@ public sealed class ActivityLibraryAcceptanceTests
             activities = children.Select(child => child.ExecutableNodeId).ToArray(),
             variables = new[]
             {
-                new VariableDefinition("var-count", "count", TypeInformation.Integer, null, new ArgumentValue(0, "Literal")),
-                new VariableDefinition("var-result", "result", TypeInformation.String, null, new ArgumentValue("none", "Literal"))
+                new VariableDefinition("var-count", "count", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal")),
+                new VariableDefinition("var-result", "result", new TypeReference("String"), null, new ArgumentValue("none", "Literal"))
             }
         };
 

@@ -199,7 +199,7 @@ public sealed class WhileRealExpressionRuntimeTests
                     new VariableDefinition(
                         ReferenceKey: $"var-{workflowVariableName}",
                         Name: workflowVariableName,
-                        TypeInformation: Elsa.Primitives.Models.TypeInformation.Integer,
+                        Type: new Elsa.Primitives.Models.TypeReference("Int32"),
                         StorageDriverType: null,
                         Default: new ArgumentValue(0, "Literal"))
                 }

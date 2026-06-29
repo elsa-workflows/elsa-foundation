@@ -25,6 +25,7 @@
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Activities/Design/Core/" />
   <Folder Name="/src/elsa/Activities/Design/Persistence/">
     <Project Path="src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
   </Folder>
@@ -81,6 +82,7 @@
     <Project Path="src/Elsa/Expressions/Elsa.Expressions.csproj" />
     <Project Path="src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Expressions/Core/" />
   <Folder Name="/src/elsa/Expressions/JavaScript/">
     <Project Path="src/Elsa/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
@@ -156,6 +158,8 @@
   <Folder Name="/src/elsa/Secrets/Persistence/Groundwork/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>
+  <Folder Name="/src/elsa/Serialization/Core/" />
+  <Folder Name="/src/elsa/Serialization/SystemText/" />
   <Folder Name="/src/elsa/Tasks/">
     <Project Path="src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <Project Path="src/Elsa/Tasks/Elsa.Tasks.csproj" />
@@ -256,6 +260,10 @@
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Expressions/" />
+  <Folder Name="/tests/Elsa/Expressions/Tests/">
+    <Project Path="tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Identity/">
     <Project Path="tests/Elsa/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
   </Folder>
@@ -277,6 +285,10 @@
   </Folder>
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Serialization/" />
+  <Folder Name="/tests/Elsa/Serialization/Tests/">
+    <Project Path="tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">

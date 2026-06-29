@@ -44,11 +44,10 @@ public sealed class WorkflowVariablesDeclarationContributor(IOptions<JavaScriptD
 
         foreach (var variable in variables.Where(x => VariableNameValidator.IsValidVariableName(x.Name)))
         {
-            var variableType = variable.TypeInformation;
             result.Properties.Add(new JavaScriptPropertyDeclaration
             {
                 Name = variable.Name,
-                Type = variableType.TypeName
+                Type = variable.Type.Alias
             });
         }
 

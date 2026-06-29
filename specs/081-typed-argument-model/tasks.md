@@ -23,7 +23,7 @@ description: "Task list for Typed Argument Model + Type Descriptor Registry (Bac
 
 **Purpose**: confirm unknowns the plan deferred, before any dependent edit.
 
-- [ ] T001 [P] Confirm the test projects and their conventions for `Elsa.Expressions` and `Elsa.Serialization` (paths, xUnit, assertion style); note them at the top of `tasks.md` notes. Reference existing `tests/Elsa/Activities/Design/Tests` as the convention baseline.
+- [X] T001 [P] Confirm the test projects and their conventions for `Elsa.Expressions` and `Elsa.Serialization` (paths, xUnit, assertion style); note them at the top of `tasks.md` notes. Reference existing `tests/Elsa/Activities/Design/Tests` as the convention baseline. **Created** `tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj` and `tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj` (xUnit, built-in `Assert`, no FluentAssertions; `Unit/` folder; modeled on the Activities.Design.Tests csproj). Both added to `Elsa.Server.slnx`.
 - [ ] T002 [P] Investigation (research D6): determine the exact host project + route group that must serve `GET /_elsa/workflow-management/descriptors/variables` — compare the `descriptors/activities` mapping in `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs` against an `Elsa.Activities.Design.Api` endpoint group. Record the chosen host/route in `research.md` (D6).
 - [ ] T003 [P] Investigation (research D10): catalog every use site of `src/Elsa/Expressions/Core/Models/VariableDescriptor.cs`; decide whether `TypeDescriptor` folds it in or coexists. Record the decision + impacted files in `research.md` (D10).
 
@@ -33,12 +33,12 @@ description: "Task list for Typed Argument Model + Type Descriptor Registry (Bac
 
 **Purpose**: shared value objects + contracts every story depends on. ⚠️ No story work begins until this phase is complete.
 
-- [ ] T004 [P] Create `CollectionKind` enum (`Single|Array|List|HashSet`) in `src/Elsa/Primitives/Primitives/Models/CollectionKind.cs`.
-- [ ] T005 [P] Create `TypeReference` sealed record `{ string Alias, CollectionKind CollectionKind = Single }` in `src/Elsa/Primitives/Primitives/Models/TypeReference.cs`.
-- [ ] T006 [P] Create `TypeDescriptor` shared shape record `{ string Alias, Type ClrType, string DisplayName, string Category, string DefaultEditor }` in `src/Elsa/Expressions/Core/Models/TypeDescriptor.cs`.
-- [ ] T007 [P] Create `IVariableTypeDescriptorProvider` contract (`IEnumerable<TypeDescriptor> GetDescriptors()`) in `src/Elsa/Expressions/Core/Contracts/IVariableTypeDescriptorProvider.cs`.
-- [ ] T008 [P] Create `IVariableTypeDescriptorCatalog` contract (union + grouped-by-category) in `src/Elsa/Expressions/Core/Contracts/IVariableTypeDescriptorCatalog.cs`.
-- [ ] T009 [P] Create domain exceptions `DuplicateTypeAliasException` and `ReservedAliasNamespaceException` in `src/Elsa/Serialization/Core/` (each carrying the offending alias).
+- [X] T004 [P] Create `CollectionKind` enum (`Single|Array|List|HashSet`) in `src/Elsa/Primitives/Primitives/Models/CollectionKind.cs`.
+- [X] T005 [P] Create `TypeReference` sealed record `{ string Alias, CollectionKind CollectionKind = Single }` in `src/Elsa/Primitives/Primitives/Models/TypeReference.cs`. (Also added `TypeReferenceFactory` in the same folder — the shared CLR↔TypeReference helper, see T016/scanner.)
+- [X] T006 [P] Create `TypeDescriptor` shared shape record `{ string Alias, Type ClrType, string DisplayName, string Category, string DefaultEditor }` in `src/Elsa/Expressions/Core/Models/TypeDescriptor.cs`.
+- [X] T007 [P] Create `IVariableTypeDescriptorProvider` contract (`IEnumerable<TypeDescriptor> GetDescriptors()`) in `src/Elsa/Expressions/Core/Contracts/IVariableTypeDescriptorProvider.cs`.
+- [X] T008 [P] Create `IVariableTypeDescriptorCatalog` contract (union + grouped-by-category) in `src/Elsa/Expressions/Core/Contracts/IVariableTypeDescriptorCatalog.cs`.
+- [X] T009 [P] Create domain exceptions `DuplicateTypeAliasException` and `ReservedAliasNamespaceException` in `src/Elsa/Serialization/Core/Exceptions/` (each carrying the offending alias).
 
 **Checkpoint**: value objects + contracts compile; stories can begin.
 
@@ -52,23 +52,23 @@ description: "Task list for Typed Argument Model + Type Descriptor Registry (Bac
 
 ### Tests for User Story 1 (write first; must fail before impl)
 
-- [ ] T010 [P] [US1] `VariableMapperTests` covering all 12 alias×kind combinations + unknown-alias→`object` fallback, in the Expressions test project `Unit/VariableMapperTests.cs`.
-- [ ] T011 [P] [US1] Serialization round-trip tests for `VariableDefinition`/`InputDefinition`/`OutputDefinition` asserting the emitted JSON has `alias`+`collectionKind` and **no** `typeName`/`namespace`/`assemblyName`/`assemblyVersion`, in the relevant test project(s).
-- [ ] T012 [P] [US1] `TypeJsonConverterTests` extending coverage to `HashSet<>` read/write parity, in the Serialization test project `Unit/TypeJsonConverterTests.cs`.
+- [X] T010 [P] [US1] `VariableMapperTests` covering all 12 alias×kind combinations + unknown-alias→`object` fallback, in the Expressions test project `Unit/VariableMapperTests.cs`.
+- [X] T011 [P] [US1] Serialization round-trip tests for `VariableDefinition`/`InputDefinition`/`OutputDefinition` asserting the emitted JSON has `alias`+`collectionKind` and **no** `typeName`/`namespace`/`assemblyName`/`assemblyVersion`, in the relevant test project(s).
+- [X] T012 [P] [US1] `TypeJsonConverterTests` extending coverage to `HashSet<>` read/write parity, in the Serialization test project `Unit/TypeJsonConverterTests.cs`.
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Change `VariableDefinition`: replace `TypeInformation TypeInformation` with `TypeReference Type`; change `StorageDriverType` to `string?` (bare alias). File: `src/Elsa/Expressions/Core/Models/VariableDefinition.cs`.
-- [ ] T014 [P] [US1] Change `InputDefinition`: `Type` → `TypeReference`; `StorageDriverType` → `string?`. File: `src/Elsa/Activities/Design/Core/Models/InputDefinition.cs`.
-- [ ] T015 [P] [US1] Change `OutputDefinition`: `Type` → `TypeReference`; `StorageDriverType` → `string?`. File: `src/Elsa/Activities/Design/Core/Models/OutputDefinition.cs`.
-- [ ] T016 [US1] Rewrite `VariableMapper.Map(VariableDefinition)`: resolve `Type.Alias` via `IWellKnownTypeRegistry`; close by `CollectionKind` (`Single→T`, `Array→MakeArrayType`, `List→List<T>`, `HashSet→HashSet<T>`); resolve `StorageDriverType` alias; unknown alias → `object` + warning (alias preserved on the record). File: `src/Elsa/Expressions/Services/VariableMapper.cs`.
-- [ ] T017 [US1] Rewrite `VariableMapper.Map(IVariable)`: decompose the variable's value type into `(alias, CollectionKind)` (array/`List<>`/`HashSet<>`/scalar). Same file.
-- [ ] T018 [US1] Add `HashSet<>` read+write to `TypeJsonConverter` (compiled-Type path parity, FR-008). File: `src/Elsa/Serialization/SystemText/JsonConverters/TypeJsonConverter.cs`.
-- [ ] T019 [US1] Implement `public sealed DefaultVariableTypeDescriptorProvider` returning framework primitive `TypeDescriptor`s (`String/Int32/Boolean/DateTime/Guid/Object/…` with displayName, category="Primitives", defaultEditor). File: `src/Elsa/Expressions/Services/DefaultVariableTypeDescriptorProvider.cs`.
-- [ ] T020 [US1] Implement `public sealed SeedWellKnownTypesStartupTask` seeding `IWellKnownTypeRegistry` with each provider's `(Alias, ClrType)` (single registration site). File: `src/Elsa/Serialization/SystemText/Startup/SeedWellKnownTypesStartupTask.cs`.
-- [ ] T021 [US1] Register the framework provider in `ExpressionsFeature.ConfigureServices` and the seed task in `SerializationFeature.ConfigureServices`. Files: `src/Elsa/Expressions/ExpressionsFeature.cs`, `src/Elsa/Serialization/SystemText/SerializationFeature.cs`.
-- [ ] T022 [US1] Verify/adjust `VariableConverter` (delegates to mapper) for the new model. File: `src/Elsa/Expressions/JsonConverters/VariableConverter.cs`.
-- [ ] T023 [US1] Feature registration test (§2.23.1): `ExpressionsFeature`/`SerializationFeature` resolve the new provider + seed task. File: `*FeatureRegistrationTests.cs` in the matching test projects.
+- [X] T013 [US1] Change `VariableDefinition`: replace `TypeInformation TypeInformation` with `TypeReference Type`; change `StorageDriverType` to `string?` (bare alias). File: `src/Elsa/Expressions/Core/Models/VariableDefinition.cs`.
+- [X] T014 [P] [US1] Change `InputDefinition`: `Type` → `TypeReference`; `StorageDriverType` → `string?`. File: `src/Elsa/Activities/Design/Core/Models/InputDefinition.cs`.
+- [X] T015 [P] [US1] Change `OutputDefinition`: `Type` → `TypeReference`; `StorageDriverType` → `string?`. File: `src/Elsa/Activities/Design/Core/Models/OutputDefinition.cs`.
+- [X] T016 [US1] Rewrite `VariableMapper.Map(VariableDefinition)`: resolve `Type.Alias` via `IWellKnownTypeRegistry`; close by `CollectionKind` (`Single→T`, `Array→MakeArrayType`, `List→List<T>`, `HashSet→HashSet<T>`); resolve `StorageDriverType` alias; unknown alias → `object` + warning (alias preserved on the record). File: `src/Elsa/Expressions/Services/VariableMapper.cs`.
+- [X] T017 [US1] Rewrite `VariableMapper.Map(IVariable)`: decompose the variable's value type into `(alias, CollectionKind)` (array/`List<>`/`HashSet<>`/scalar). Same file.
+- [X] T018 [US1] Add `HashSet<>` read+write to `TypeJsonConverter` (compiled-Type path parity, FR-008). File: `src/Elsa/Serialization/SystemText/JsonConverters/TypeJsonConverter.cs`.
+- [X] T019 [US1] Implement `public sealed DefaultVariableTypeDescriptorProvider` returning framework primitive `TypeDescriptor`s (`String/Int32/Boolean/DateTime/Guid/Object/…` with displayName, category="Primitives", defaultEditor). File: `src/Elsa/Expressions/Services/DefaultVariableTypeDescriptorProvider.cs`.
+- [X] T020 [US1] Implement `public sealed SeedWellKnownTypesStartupTask` seeding `IWellKnownTypeRegistry` with each provider's `(Alias, ClrType)` (single registration site). File: `src/Elsa/Serialization/SystemText/Startup/SeedWellKnownTypesStartupTask.cs`.
+- [X] T021 [US1] Register the framework provider in `ExpressionsFeature.ConfigureServices` and the seed task in `SerializationFeature.ConfigureServices`. Files: `src/Elsa/Expressions/ExpressionsFeature.cs`, `src/Elsa/Serialization/SystemText/SerializationFeature.cs`.
+- [X] T022 [US1] Verify/adjust `VariableConverter` (delegates to mapper) for the new model. File: `src/Elsa/Expressions/JsonConverters/VariableConverter.cs`. (No change needed — it delegates fully to `IVariableMapper`; confirmed it compiles and round-trips after the mapper rewrite.)
+- [X] T023 [US1] Feature registration test (§2.23.1): `ExpressionsFeature`/`SerializationFeature` resolve the new provider + seed task. File: `*FeatureRegistrationTests.cs` in the matching test projects.
 
 **Checkpoint**: typed arguments round-trip and resolve with framework primitives — MVP complete and independently testable.
 

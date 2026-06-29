@@ -52,7 +52,7 @@ Leave `InputDefinition`/`OutputDefinition` as standalone records with their exis
 
 **Rationale**: The grounding pass confirmed **no `descriptors/variables` endpoint exists today** — the studio falls back to a hardcoded well-known list. Creating it lights up the real, module-contributed dropdown and the type-aware default editor. The existing `Secrets` descriptors endpoint (registry → response) is the precedent.
 
-**Open item for `/speckit.tasks`**: confirm the exact host project/route group (`Activities.Design.Api` vs the `ElsaWorkflowManagementApi` group that maps `descriptors/activities`). The studio expects `/_elsa/workflow-management/descriptors/variables`.
+**Resolved (T002)**: host is `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs` (the only place mapping `descriptors/*` for workflow-management). The `descriptors/variables` route is added there, served from `IVariableTypeDescriptorCatalog`. The studio's expected path `/_elsa/workflow-management/descriptors/variables` matches this group's prefix.
 
 ## D7 — Registry hardening (fail-fast + reserved namespace + graceful unknown)
 
@@ -84,6 +84,8 @@ Leave `InputDefinition`/`OutputDefinition` as standalone records with their exis
 **Decision**: Introduce `TypeDescriptor { string Alias, Type ClrType, string DisplayName, string Category, string DefaultEditor }` as the shared provider shape. Relate the existing `VariableDescriptor(Type, Category, Description)` to it (either fold its use sites onto `TypeDescriptor` or keep `VariableDescriptor` as a derived projection). Final reconciliation decided in `/speckit.tasks` after auditing `VariableDescriptor` use sites.
 
 **Rationale**: The existing `VariableDescriptor` carries `Type` + `Category` but lacks `Alias`, `DisplayName`, and `DefaultEditor`. The new descriptor must be alias-keyed and presentation-complete to satisfy FR-015/FR-016. Avoid a premature destructive rename until use sites are catalogued.
+
+**Resolved (T003)**: `VariableDescriptor` use sites are the **Liquid** expression feature only (`LiquidExpressionsFeature`, `ConfigureLiquidEngineOptions`, `ConfigureLiquidEngine`) — it registers variable *types* with the Liquid engine, a different consumer from the picker. **Decision: keep `VariableDescriptor` as-is and add `TypeDescriptor` as a separate new record.** No fold, no Liquid changes. T030 reduces to "confirm no overlap" — the two coexist.
 
 ## Resolved unknowns
 

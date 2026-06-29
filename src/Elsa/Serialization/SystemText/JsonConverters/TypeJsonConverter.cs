@@ -31,12 +31,20 @@ public sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegist
             return elementType.MakeArrayType();
         }
 
-        // Handle collection types.
+        // Handle list types.
         if (typeAlias.StartsWith("List<") && typeAlias.EndsWith(">"))
         {
             var elementTypeAlias = typeAlias[5..^1];
             var elementType = wellKnownTypeRegistry.TryGetType(elementTypeAlias, out var t) ? t : Type.GetType(elementTypeAlias)!;
             return typeof(List<>).MakeGenericType(elementType);
+        }
+
+        // Handle hash set types.
+        if (typeAlias.StartsWith("HashSet<") && typeAlias.EndsWith(">"))
+        {
+            var elementTypeAlias = typeAlias[8..^1];
+            var elementType = wellKnownTypeRegistry.TryGetType(elementTypeAlias, out var t) ? t : Type.GetType(elementTypeAlias)!;
+            return typeof(HashSet<>).MakeGenericType(elementType);
         }
 
         return wellKnownTypeRegistry.TryGetType(typeAlias, out var type) ? type : Type.GetType(typeAlias);
@@ -54,6 +62,20 @@ public sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegist
                 : elementType.GetSimpleAssemblyQualifiedName();
 
             writer.WriteStringValue($"{elementTypeAlias}[]");
+            return;
+        }
+
+        // Handle hash set types (checked before the general enumerable case below, since HashSet<T>
+        // is itself an IEnumerable<T> and would otherwise be written as List<>).
+        if (value is { IsGenericType: true, GenericTypeArguments.Length: 1 }
+            && value.GetGenericTypeDefinition() == typeof(HashSet<>))
+        {
+            var elementType = value.GenericTypeArguments.First();
+            var elementTypeAlias = wellKnownTypeRegistry.TryGetAlias(elementType, out var hashSetElementAlias)
+                ? hashSetElementAlias
+                : elementType.GetSimpleAssemblyQualifiedName();
+
+            writer.WriteStringValue($"HashSet<{elementTypeAlias}>");
             return;
         }
 

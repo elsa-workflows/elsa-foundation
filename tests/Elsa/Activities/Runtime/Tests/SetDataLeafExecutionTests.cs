@@ -167,8 +167,8 @@ public sealed class SetDataLeafExecutionTests
             activities = children.Select(child => child.ExecutableNodeId).ToArray(),
             variables = new[]
             {
-                new VariableDefinition("var-first", "first", TypeInformation.String, null, new ArgumentValue("unset", "Literal")),
-                new VariableDefinition("var-second", "second", TypeInformation.String, null, new ArgumentValue("unset", "Literal"))
+                new VariableDefinition("var-first", "first", new TypeReference("String"), null, new ArgumentValue("unset", "Literal")),
+                new VariableDefinition("var-second", "second", new TypeReference("String"), null, new ArgumentValue("unset", "Literal"))
             }
         };
 
