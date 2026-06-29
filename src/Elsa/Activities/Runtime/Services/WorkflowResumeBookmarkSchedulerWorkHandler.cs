@@ -148,7 +148,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
+            await RecordResumeFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
         var valueSnapshots = BuildInputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, inputs, _timeProvider.GetUtcNow()).ToList();
@@ -178,7 +178,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         catch (Exception exception)
         {
             valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
-            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted", valueSnapshots), cancellationToken);
+            await RecordResumeFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
             return;
         }
 
@@ -407,6 +407,32 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
 
         return snapshot;
+    }
+
+    // Records a resume-time fault incident and, like the invoke path, rides a child-fault parent-evaluation
+    // work item along when the faulted activity has a parent fork/join, so a branch that suspends then faults
+    // on resume still resolves its parent's join deterministically (#308).
+    private async ValueTask RecordResumeFaultAsync(
+        IServiceProvider serviceProvider,
+        ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState state,
+        Exception exception,
+        string subStatus,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        CancellationToken cancellationToken)
+    {
+        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, subStatus, valueSnapshots);
+        var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, resumePayload.ActivityExecutionId, subStatus);
+        var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+            activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);
+
+        await activityFaultIncidentRecorder.CommitAsync(
+            parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+            cancellationToken);
     }
 
     private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(

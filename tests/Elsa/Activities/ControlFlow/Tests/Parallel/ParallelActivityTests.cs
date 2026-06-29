@@ -14,8 +14,9 @@ namespace Elsa.Activities.Parallel.Tests;
 
 /// <summary>
 /// Unit coverage for the <c>Parallel</c> composite against the <see cref="SimpleActivityExecutionContext"/>.
-/// Fork behavior (Execute) and join behavior (OnChildCompletedAsync) are asserted directly; the join's
-/// completed-branch count is fed by an in-memory <see cref="IActivityExecutionStateStore"/> stub.
+/// Fork behavior (Execute) and the fault-aware join (OnChildCompletedAsync / OnChildFaultedAsync) are asserted
+/// directly; the join's per-branch terminal counts are fed by an in-memory
+/// <see cref="IActivityExecutionStateStore"/> stub.
 /// </summary>
 public sealed class ParallelActivityTests : IDisposable
 {
@@ -139,6 +140,55 @@ public sealed class ParallelActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildFaulted_FaultsComposite_WhenJoinNoLongerSatisfiable()
+    {
+        var context = NewContext();
+        // Default threshold = all 3 branches; one faulted branch makes the success threshold unreachable, so
+        // the join faults the composite (the throw is recorded by the engine as a composite incident).
+        _store.SeedFaultedBranch("node-a");
+
+        await Assert.ThrowsAsync<ParallelExecutionException>(() => FaultAsync(context, "node-a").AsTask());
+    }
+
+    [Fact]
+    public async Task OnChildFaulted_Defers_WhenJoinStillReachable()
+    {
+        var context = NewContext(threshold: 2);
+        // Threshold 2 of 3: one faulted branch still leaves two branches that can satisfy the join, so defer.
+        _store.SeedFaultedBranch("node-a");
+
+        await FaultAsync(context, "node-a");
+
+        Assert.True(context.CompositeCompletionDeferred);
+        Assert.False(context.CompositeCompletionRequested);
+    }
+
+    [Fact]
+    public async Task OnChildCompleted_CompletesAtThreshold_DespiteFaultedBranch()
+    {
+        var context = NewContext(threshold: 2);
+        // One branch faulted but the other two succeeded: the threshold is met, so the composite completes.
+        _store.SeedFaultedBranch("node-a");
+        _store.SeedCompletedBranch("node-b");
+        _store.SeedCompletedBranch("node-c");
+
+        await CompleteAsync(context, "node-c");
+
+        Assert.True(context.CompositeCompletionRequested);
+        Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
+    }
+
+    [Fact]
+    public async Task OnChildFaulted_Throws_WhenFaultedChildIsNotABranch()
+    {
+        var context = NewContext();
+
+        await Assert.ThrowsAsync<ParallelExecutionException>(() => ((ParallelActivity)context.Activity)
+            .OnChildFaultedAsync(new ActivityChildFaultedContext(context, "actexec-x", "node-other", "incident-1"))
+            .AsTask());
+    }
+
+    [Fact]
     public async Task Execute_Throws_WhenRuntimeContextIsMissing()
     {
         await Assert.ThrowsAsync<ParallelExecutionException>(() => ((IActivity)new ParallelActivity())
@@ -152,6 +202,10 @@ public sealed class ParallelActivityTests : IDisposable
     private static ValueTask CompleteAsync(SimpleActivityExecutionContext context, string completedNodeId) =>
         ((ParallelActivity)context.Activity).OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, $"actexec-{completedNodeId}", completedNodeId, [ActivityOutcomes.Done]));
+
+    private static ValueTask FaultAsync(SimpleActivityExecutionContext context, string faultedNodeId) =>
+        ((ParallelActivity)context.Activity).OnChildFaultedAsync(
+            new ActivityChildFaultedContext(context, $"actexec-{faultedNodeId}", faultedNodeId, "incident-1"));
 
     private SimpleActivityExecutionContext NewContext(bool includeBranches = true, int? threshold = null) =>
         new(
@@ -244,11 +298,15 @@ public sealed class ParallelActivityTests : IDisposable
     {
         private readonly List<ActivityExecutionState> _states = [];
 
-        public void SeedCompletedBranch(string executableNodeId)
+        public void SeedCompletedBranch(string executableNodeId) => SeedBranch(executableNodeId, ActivityExecutionStatus.Completed);
+
+        public void SeedFaultedBranch(string executableNodeId) => SeedBranch(executableNodeId, ActivityExecutionStatus.Faulted);
+
+        private void SeedBranch(string executableNodeId, ActivityExecutionStatus status)
         {
             _states.Add(new ActivityExecutionState(
                 Execution: new ActivityExecution($"actexec-{executableNodeId}-{_states.Count}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
-                Status: ActivityExecutionStatus.Completed,
+                Status: status,
                 SubStatus: null,
                 ScheduledAt: DateTimeOffset.UnixEpoch,
                 StartedAt: DateTimeOffset.UnixEpoch,

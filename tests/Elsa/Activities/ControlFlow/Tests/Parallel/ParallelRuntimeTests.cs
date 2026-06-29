@@ -141,12 +141,68 @@ public sealed class ParallelRuntimeTests
         Assert.DoesNotContain(run.States(ParallelNodeId), state => state.Status == ActivityExecutionStatus.Completed);
     }
 
+    [Fact]
+    public async Task FaultedBranch_FaultsTheComposite_InsteadOfHanging()
+    {
+        // Default (all-branches) threshold with one faulting branch: the join can never be satisfied, so the
+        // composite must fault deterministically (surfacing an incident) rather than hang Running forever (#308).
+        await using var harness = NewFaultAwareHarness("actexec-parallel", "actexec-a", "actexec-b", "actexec-c");
+
+        var run = await harness.RunAsync(NewExecutableWithFaultingBranch(ThreeBranches));
+
+        // The faulting branch faulted and recorded its own incident; the probe branches still ran.
+        var faultedBranch = run.State("node-a");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faultedBranch.Status);
+        Assert.NotEmpty(faultedBranch.IncidentIds);
+        run.AssertRan("node-b", "node-c");
+
+        // The composite faulted (with a composite incident) and never completed — no longer stuck Running.
+        var parallel = run.State(ParallelNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, parallel.Status);
+        Assert.NotEmpty(parallel.IncidentIds);
+        Assert.DoesNotContain(run.States(ParallelNodeId), state => state.Status == ActivityExecutionStatus.Completed);
+    }
+
+    [Fact]
+    public async Task Threshold_MetBySuccessfulBranches_CompletesDespiteFaultedBranch()
+    {
+        // Threshold = 2 of 3 with one faulting branch: the two probe branches satisfy the join, so the composite
+        // completes Done even though one branch faulted (#308). The faulted branch keeps its own incident.
+        await using var harness = NewFaultAwareHarness("actexec-parallel", "actexec-a", "actexec-b", "actexec-c");
+
+        var run = await harness.RunAsync(NewExecutableWithFaultingBranch(ThreeBranches, threshold: 2));
+
+        Assert.Single(run.States(ParallelNodeId), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.DoesNotContain(run.States(ParallelNodeId), state => state.Status == ActivityExecutionStatus.Faulted);
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-a").Status);
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithConstructor<ParallelConstructor>()
             .WithProbeLeaf()
             .Build(activityExecutionIds);
+
+    private static WorkflowExecutionHarness NewFaultAwareHarness(params string[] activityExecutionIds) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithConstructor<ParallelConstructor>()
+            .WithProbeLeaf()
+            .WithFaultingLeaf()
+            .Build(activityExecutionIds);
+
+    private static WorkflowExecutable NewExecutableWithFaultingBranch((string Name, string Node)[] branches, int? threshold = null)
+    {
+        // The first branch faults during execution; the remaining branches are probes.
+        var childSlots = branches
+            .Select((branch, index) => new ExecutableChildSlot(
+                ParallelActivity.BranchSlotName(branch.Name),
+                [index == 0 ? WorkflowExecutionHarness.NewFaultingNode(branch.Node) : WorkflowExecutionHarness.NewProbeNode(branch.Node)]))
+            .ToList();
+
+        return WorkflowExecutionHarness.NewExecutable(NewParallelRoot(childSlots, branches, threshold));
+    }
 
     private static WorkflowExecutable NewExecutable((string Name, string Node)[] branches, int? threshold = null)
     {

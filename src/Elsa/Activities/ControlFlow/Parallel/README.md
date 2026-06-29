@@ -21,11 +21,17 @@ carrying a mutable counter across the per-completion re-construction. The engine
 never double-completes. If a branch runs `Finish`, the engine ends the run terminally and cancels the
 remaining queued sibling branches (#293).
 
-**Faulted branches are not counted (known limitation, #308).** The join counts only branch children that
-reach `Completed`; a branch that **faults** is never counted. With the default (all-branches) threshold,
-one faulted branch leaves the join unsatisfied, so the `Parallel` composite stays `Running` indefinitely
-(there is no composite incident or timeout). This mirrors the existing flowchart fork/join contract and is a
-documented limitation, not a bug; fault-aware join is tracked in #308.
+**Fault-aware join (#308).** Branch faults are propagated to the composite through
+`IActivityChildFaultHandler`: when a branch faults, the engine rides a child-fault parent-evaluation work
+item on the branch's fault incident, so `Parallel` re-evaluates its join deterministically instead of hanging.
+The join counts each branch by terminal disposition and completes with `Done` once enough branches reach
+`Completed` to meet the threshold; it **faults the composite** (surfacing a composite incident) once too many
+branches reach a terminal non-success state (`Faulted`/`Cancelled`) for the remaining branches to reach the
+threshold; otherwise it defers. With the default (all-branches) threshold a single faulted branch therefore
+faults the composite; a configured threshold low enough to be met by the non-faulted branches still completes.
+The faulted branch keeps its own blocking incident regardless. The flowchart fork/join
+(`ParallelJoinFlowchartPolicy`) retains the original "faulted branch is not counted" limitation; aligning it
+is tracked separately.
 
 The runtime activity class (`Activities/Parallel.cs`) references only the runtime contract surface. The
 design-side `ParallelStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity
