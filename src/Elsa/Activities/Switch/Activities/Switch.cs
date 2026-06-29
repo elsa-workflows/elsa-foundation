@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Exceptions;
 using Elsa.Activities.Switch.Internal;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Switch.Activities;
@@ -63,7 +64,19 @@ public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = SwitchNavigator.From(runtimeContext.ExecutableNode);
+
+        // Validate the completed child is one of this Switch's branches before deciding the outcome.
         var outcome = navigator.OutcomeFor(context.CompletedChildExecutableNodeId);
+
+        // Break propagation (#299): when the selected case (or default) branch completes with a Break
+        // outcome, Switch completes with Break (instead of the case's match outcome) so it bubbles up to the
+        // nearest enclosing loop (which ends early). Matched by name so Switch takes no dependency on the
+        // (separate) Break activity module.
+        if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
+            return ValueTask.CompletedTask;
+        }
 
         runtimeContext.CompleteCompositeActivity([outcome]);
         return ValueTask.CompletedTask;

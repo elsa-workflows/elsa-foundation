@@ -88,6 +88,22 @@ public sealed class CodeIoLeafRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task Break_RunsToCompletion_AndEmitsBreakOutcome()
+    {
+        // The Break leaf (#299) is constructed by the production ClrActivityConstructor and emits the
+        // Break outcome (not the default Done); the enclosing loop reads that outcome to end early. Run on
+        // its own here it completes the run, with Break recorded as its completion outcome.
+        await using var harness = NewHarness("actexec-1");
+
+        var node = NewClrLeafNode("node-break", typeof(Break), inputBindings: new Dictionary<string, RuntimeInputBinding>());
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
+
+        run.AssertOutcomes("node-break", ActivityOutcomes.Break);
+        run.AssertWorkflowCompleted();
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             // ClrActivityConstructor (registered by ActivitiesPrimitivesFeature) depends on IPayloadSerializer,

@@ -42,6 +42,17 @@ public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = SequenceNavigator.From(runtimeContext.ExecutableNode);
+
+        // Break propagation (#299): a child that completes with a Break outcome stops the sequence — later
+        // steps do not run — and the sequence itself completes with Break, so the outcome bubbles up to the
+        // nearest enclosing loop (which ends early). Matched by name so Sequence takes no dependency on the
+        // (separate) Break activity module.
+        if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
+            return ValueTask.CompletedTask;
+        }
+
         var nextChild = navigator.SelectAfter(context.CompletedChildExecutableNodeId);
 
         if (nextChild is null)

@@ -94,6 +94,21 @@ public sealed class SequenceActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompletedAsync_ChildBreaks_StopsSequenceAndPropagatesBreak()
+    {
+        // A Break from a child mid-sequence stops the sequence: later steps are not scheduled and the
+        // sequence completes with Break so the outcome bubbles to the enclosing loop (#299).
+        var context = NewContext(NewSequenceNode([NewNode("node-a"), NewNode("node-b"), NewNode("node-c")]));
+        var sequence = new SequenceActivity();
+
+        await sequence.OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-a", "node-a", [ActivityOutcomes.Break]));
+
+        Assert.Empty(context.GetChildActivityScheduleRequests());
+        Assert.True(context.CompositeCompletionRequested);
+        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+    }
+
+    [Fact]
     public async Task OnChildCompletedAsync_ThrowsWhenCompletedChildIsUnknown()
     {
         var context = NewContext(NewSequenceNode([NewNode("node-a")]));

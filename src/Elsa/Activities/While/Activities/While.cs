@@ -72,6 +72,15 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
 
+        // Early exit (#299): a body that completes with a Break outcome ends the loop now, before the
+        // condition is re-evaluated. Recognized by outcome name so While takes no dependency on the
+        // (separate) Break activity module — mirroring For/ForEach/Do.
+        if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
+            return ValueTask.CompletedTask;
+        }
+
         // The runtime re-materializes this composite's inputs for every child-completion evaluation, so
         // this read reflects any state the body mutated this pass: the condition is re-evaluated before
         // the next pass.

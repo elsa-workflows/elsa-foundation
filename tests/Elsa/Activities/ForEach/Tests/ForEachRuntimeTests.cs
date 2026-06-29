@@ -81,6 +81,20 @@ public sealed class ForEachRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task BodyBreak_EndsLoopEarly_AfterTheFirstItem()
+    {
+        // Collection has three items, but the body breaks on the first: exactly one body pass (< 3) runs
+        // and the loop completes without advancing to the remaining items.
+        await using var harness = NewHarness("actexec-foreach", "actexec-body-0");
+
+        var run = await harness.RunAsync(NewExecutable(["a", "b", "c"], breakOnEntry: true));
+
+        Assert.Single(run.States(BodyNodeId));
+        run.AssertOutcomes(ForEachNodeId, ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesForEachFeature().ConfigureServices(services))
@@ -88,8 +102,11 @@ public sealed class ForEachRuntimeTests
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
-    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string>? collection)
+    private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string>? collection, bool breakOnEntry = false)
     {
+        // A body that completes with the Break outcome models a Break leaf placed in the loop body (#299);
+        // the loop recognizes it by name and ends early instead of advancing to the next item.
+        var bodyOutcomes = breakOnEntry ? new[] { ActivityOutcomes.Break } : null;
         var root = new ExecutableNode(
             executableNodeId: ForEachNodeId,
             authoredActivityId: "authored-foreach",
@@ -107,7 +124,7 @@ public sealed class ForEachRuntimeTests
             },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode(BodyNodeId)])],
+            childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [WorkflowExecutionHarness.NewProbeNode(BodyNodeId, bodyOutcomes)])],
             structure: new ExecutableActivityStructure(
                 ForEachActivity.StructureKind,
                 ForEachActivity.StructureSchemaVersion,
