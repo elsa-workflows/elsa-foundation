@@ -17,4 +17,11 @@
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The Unified provider project lives under this domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Unified/**/*" />
+    <EmbeddedResource Remove="Unified/**/*" />
+    <None Remove="Unified/**/*" />
+  </ItemGroup>
+
 </Project>

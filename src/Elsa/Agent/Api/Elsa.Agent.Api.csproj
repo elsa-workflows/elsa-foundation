@@ -21,7 +21,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
-		<ProjectReference Include="..\Abstractions\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
 	</ItemGroup>
 
 </Project>

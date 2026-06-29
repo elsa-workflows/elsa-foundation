@@ -8,7 +8,8 @@ public sealed class ArchitectureGuardTests
 {
     private static readonly string[] AllowedCorePackageReferences =
     [
-        "Microsoft.Extensions.Primitives"
+        "Microsoft.Extensions.Primitives",
+        "Microsoft.Extensions.Options"
     ];
 
     private static readonly HashSet<(string Project, string Reference)> DeferredRuntimeDesignReferences =
@@ -218,11 +219,23 @@ public sealed class ArchitectureGuardTests
     private static IEnumerable<ProjectInfo> ProjectFiles()
     {
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "src"), "*.csproj", SearchOption.AllDirectories))
-            yield return ProjectInfo.From(RepoRoot, file);
+        {
+            var project = ProjectInfo.From(RepoRoot, file);
+            if (IsGeneratedScratchProject(project))
+                continue;
+
+            yield return project;
+        }
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, "tests"), "*.csproj", SearchOption.AllDirectories))
             yield return ProjectInfo.From(RepoRoot, file);
     }
+
+    // The extension-builder feature writes runtime-generated scratch projects under guid-named
+    // project/snapshot folders (gitignored, never part of the solution). Exclude them from the
+    // domain-tree convention checks so generated artifacts are not enshrined in the slnx.
+    private static bool IsGeneratedScratchProject(ProjectInfo project) =>
+        project.RelativePath.Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {
@@ -257,8 +270,19 @@ public sealed class ArchitectureGuardTests
     {
         var document = XDocument.Load(project.FullPath);
         return document.Descendants("PackageReference")
+            .Where(x => !IsBuildTimeOnlyReference(x))
             .Select(x => x.Attribute("Include")?.Value)
             .OfType<string>();
+    }
+
+    private static bool IsBuildTimeOnlyReference(XElement reference)
+    {
+        var attribute = reference.Attribute("PrivateAssets")?.Value;
+        if (string.Equals(attribute, "all", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var child = reference.Elements("PrivateAssets").FirstOrDefault()?.Value;
+        return string.Equals(child, "all", StringComparison.OrdinalIgnoreCase);
     }
 
     private static JsonObject ReadDefaultShellFeatures(string path)
@@ -521,19 +545,19 @@ public sealed class ArchitectureGuardTests
     private static string ExpectedProjectPath(ProjectInfo project)
     {
         if (project.Name == "Elsa.Server")
-            return "src/apps/Elsa.Server/Elsa.Server.csproj";
+            return "src/Apps/Elsa.Server/Elsa.Server.csproj";
 
         if (project.Name == "Elsa.Architecture.Tests")
             return "tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj";
 
         if (project.Name == "Elsa.Primitives")
-            return "src/elsa/Primitives/Primitives/Elsa.Primitives.csproj";
+            return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
 
         if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
-            return $"src/elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+            return $"src/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("src/", StringComparison.Ordinal))
-            return $"src/elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+            return $"src/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/", StringComparison.Ordinal))
             return $"tests/Elsa/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
@@ -544,7 +568,7 @@ public sealed class ArchitectureGuardTests
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Server")
-            return "/src/apps/";
+            return "/src/Apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
         var lastProjectSegment = project.Name.Split('.')[^1];

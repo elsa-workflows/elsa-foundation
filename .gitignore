@@ -17,6 +17,8 @@
 *.sln.docstates
 *.env
 **/extension-builder/*
+# Runtime-generated extension-builder scratch projects (guid-named project/snapshot dirs).
+**/extension-builder/projects/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
