@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <!-- Expose the internal counted-loop range arithmetic (ForRange) to focused unit tests (§2.23). -->
-    <InternalsVisibleTo Include="Elsa.Activities.For.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.ControlFlow.Tests" />
   </ItemGroup>
 
   <ItemGroup>

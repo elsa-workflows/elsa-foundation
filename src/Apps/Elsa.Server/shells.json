@@ -9,15 +9,9 @@
           "ActivitiesDesignReconciliation": {},
           "ActivitiesPrimitives": {},
           "ActivitiesRuntime": {},
-          "ActivitiesDo": {},
+          "ActivitiesControlFlow": {},
           "ActivitiesFlowchart": {},
-          "ActivitiesFor": {},
-          "ActivitiesForEach": {},
-          "ActivitiesIf": {},
-          "ActivitiesParallel": {},
           "ActivitiesSequence": {},
-          "ActivitiesSwitch": {},
-          "ActivitiesWhile": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
