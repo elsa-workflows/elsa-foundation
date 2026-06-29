@@ -195,6 +195,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         ActivityExecutionState? completedState = null;
         (IRuntimeExecutionIdGenerator IdGenerator, IReadOnlyCollection<RuntimeChildActivityScheduleRequest> Requests)? pendingChildScheduling = null;
+        var finishWorkflowRequested = false;
+        IReadOnlyCollection<string> finishWorkflowOutcomeNames = [];
+        var correlationIdAssignmentRequested = false;
+        string? requestedCorrelationId = null;
         try
         {
             if (!await activity.CanExecuteAsync(context))
@@ -210,10 +214,21 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 // and resume restores them (ADR 0027).
                 await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
 
+                // Control-leaf intents (Finish/Complete, Correlate): captured here and drained below so the
+                // engine ends the run or persists the new correlation id rather than the activity having to
+                // reach into workflow-level state directly.
+                finishWorkflowRequested = context.FinishWorkflowRequested;
+                finishWorkflowOutcomeNames = context.FinishWorkflowOutcomeNames;
+                correlationIdAssignmentRequested = context.CorrelationIdAssignmentRequested;
+                requestedCorrelationId = context.RequestedCorrelationId;
+
                 var bookmarkRequests = context.GetBookmarkRequests();
                 var childScheduleRequests = context.GetChildActivityScheduleRequests();
                 if (context.CompositeCompletionRequested && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request composite completion and schedule child activities in the same execution.");
+
+                if (finishWorkflowRequested && childScheduleRequests.Count > 0)
+                    throw new InvalidOperationException("Activity cannot both request workflow completion and schedule child activities in the same execution.");
 
                 if (bookmarkRequests.Count > 0 && childScheduleRequests.Count > 0)
                     throw new InvalidOperationException("Activity cannot both request durable bookmarks and schedule child activities in the same execution.");
@@ -248,7 +263,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
                     var outcomeNames = context.CompositeCompletionRequested
                         ? NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
-                        : NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
+                        : finishWorkflowRequested
+                            ? NormalizeOutcomeNames(finishWorkflowOutcomeNames, defaultToDone: true)
+                            : NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
                     completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
 
                     // A completing container's scope is no longer live for runtime expressions; its
@@ -288,6 +305,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (completedState is null)
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' did not produce a completion or child scheduling result for activity execution '{invokePayload.ActivityExecutionId}'.");
 
+        // Resolve a workflow-execution state change requested by a control-leaf intent (Finish ends the run;
+        // Correlate updates the correlation id). Both fold into the same activity-completed commit so the
+        // workflow state is persisted atomically with the activity completion.
+        var occurredAt = _timeProvider.GetUtcNow();
+        var workflowExecutionStateChange = await BuildControlLeafWorkflowExecutionStateChangeAsync(
+            serviceProvider, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId, occurredAt, cancellationToken);
+
         if (inspectionAccumulator is null)
         {
             foreach (var change in durableValueChanges)
@@ -298,12 +322,56 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 await durableValueStateStore.SaveAsync(change.State, cancellationToken);
             }
 
+            if (workflowExecutionStateChange is not null)
+                await serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(workflowExecutionStateChange.State, cancellationToken);
+
             await activityExecutionStateStore.SaveAsync(completedState, cancellationToken);
-            await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken);
+
+            // A Finish leaf ends the whole run: the activity is recorded and the workflow state is marked
+            // completed above, but no further completion-propagation work is scheduled.
+            if (!finishWorkflowRequested)
+                await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken);
             return;
         }
 
-        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, cancellationToken);
+        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeStateChange<WorkflowExecutionState>?> BuildControlLeafWorkflowExecutionStateChangeAsync(
+        IServiceProvider serviceProvider,
+        RuntimeSchedulerWorkItem workItem,
+        bool finishWorkflowRequested,
+        bool correlationIdAssignmentRequested,
+        string? requestedCorrelationId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        if (!finishWorkflowRequested && !correlationIdAssignmentRequested)
+            return null;
+
+        var workflowExecutionStateStore = serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+        var workflowState = await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        if (workflowState is null)
+            throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references missing workflow execution '{workItem.WorkflowExecutionId}'.");
+
+        var updatedState = workflowState with
+        {
+            CorrelationId = correlationIdAssignmentRequested ? requestedCorrelationId : workflowState.CorrelationId,
+            Status = finishWorkflowRequested ? WorkflowExecutionStatus.Completed : workflowState.Status,
+            SubStatus = finishWorkflowRequested ? null : workflowState.SubStatus,
+            CompletedAt = finishWorkflowRequested ? occurredAt : workflowState.CompletedAt,
+            UpdatedAt = occurredAt
+        };
+
+        return new RuntimeStateChange<WorkflowExecutionState>(
+            StateId: updatedState.WorkflowExecutionId,
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: updatedState,
+            Metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
+                [RuntimeMetadataKeys.CheckpointReason] = finishWorkflowRequested ? "WorkflowFinish" : "WorkflowCorrelation"
+            });
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(
@@ -524,10 +592,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<string> outcomeNames,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
+        RuntimeStateChange<WorkflowExecutionState>? workflowExecutionStateChange,
+        bool finishWorkflowRequested,
+        DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
-        var occurredAt = _timeProvider.GetUtcNow();
-        var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:activity-completed:{invokePayload.ActivityExecutionId}";
+        // A Finish leaf records the activity completion and a terminal WorkflowCompleted checkpoint; no
+        // completion-propagation work follows, because the whole run ends here.
+        var checkpointName = finishWorkflowRequested ? RuntimeCheckpointNames.WorkflowCompleted : RuntimeCheckpointNames.ActivityCompleted;
+        var checkpointId = $"checkpoint:{invokeWorkItem.WorkItemId}:{(finishWorkflowRequested ? "workflow-completed" : "activity-completed")}:{invokePayload.ActivityExecutionId}";
         var metadata = new Dictionary<string, string>
         {
             [RuntimeMetadataKeys.SchedulerWorkItemId] = invokeWorkItem.WorkItemId,
@@ -550,16 +623,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             cancellationToken: cancellationToken);
         var completionWorkItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
         var commit = new RuntimeCheckpointCommit(
-            CommitId: $"commit:{invokeWorkItem.WorkItemId}:activity-completed:{invokePayload.ActivityExecutionId}",
+            CommitId: $"commit:{invokeWorkItem.WorkItemId}:{(finishWorkflowRequested ? "workflow-completed" : "activity-completed")}:{invokePayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: checkpointId,
-                Name: RuntimeCheckpointNames.ActivityCompleted,
+                Name: checkpointName,
                 WorkflowExecutionId: invokeWorkItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: [invokePayload.ActivityExecutionId],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: workflowExecutionStateChange,
                 scheduler: null,
                 activityExecutions:
                 [
@@ -581,7 +654,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         State: inspection,
                         Metadata: metadata)
                 ]),
-            PostCommitIntents: [NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)],
+            PostCommitIntents: finishWorkflowRequested
+                ? []
+                : [NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
