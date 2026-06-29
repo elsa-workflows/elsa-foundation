@@ -13,6 +13,7 @@ using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -54,6 +55,30 @@ public sealed class SeededVariableEndToEndExecutionTests
         var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(view.WorkflowExecutionId);
         Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
         Assert.Equal("Hello", probe.LastValue);
+    }
+
+    [Fact]
+    public async Task ExecuteWorkflow_ReadOnlyActivity_DoesNotWriteBackTheUnchangedWorkflowVariable()
+    {
+        // Write-amplification guard (#286): the probe reads `variables.greeting` but never mutates it, so the
+        // dirty-tracked write-back must emit nothing — only the single start-time seed durable value for the
+        // variable should exist after the run, not a per-activity rewrite.
+        var probe = new SeededInputProbe();
+        await using var provider = BuildServiceProvider(probe);
+        var executable = NewExecutableWithGreetingVariable();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+
+        var handler = new ExecuteWorkflowRequestHandler(
+            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowExecutableStore>());
+
+        var view = await handler.Handle(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
+
+        var durableValues = await provider.GetRequiredService<IDurableValueStateStore>().ListAsync(view.WorkflowExecutionId);
+        var variableValues = durableValues.Where(value => value.Metadata.ContainsKey(RuntimeMetadataKeys.VariableName)).ToList();
+        var seed = Assert.Single(variableValues); // start seed only; no read-only write-back
+        Assert.Equal("greeting", seed.Metadata[RuntimeMetadataKeys.VariableName]);
+        Assert.Equal("Hello", seed.InlineValue!.Value.GetString());
     }
 
     [Fact]

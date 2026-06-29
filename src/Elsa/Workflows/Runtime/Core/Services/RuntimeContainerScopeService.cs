@@ -235,37 +235,63 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
     }
 
     /// <summary>
-    /// Captures the workflow scope's current variable values from <paramref name="scope"/>'s visible chain
-    /// (#286) — the scope whose identity is the root activity node id, <paramref name="rootNodeId"/> — and
-    /// returns the durable-value write-back changes that persist them, keyed by authored variable name so
+    /// Captures mid-run mutations of the workflow scope's variables from <paramref name="scope"/>'s visible
+    /// chain (#286) — the scope whose identity is the root activity node id, <paramref name="rootNodeId"/> —
+    /// and returns the durable-value write-back changes that persist them, keyed by authored variable name so
     /// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/> re-projects them next
-    /// materialization. Returns an empty collection when no such scope is present or it holds no values.
-    /// Unlike container scopes (which persist to their owning execution's snapshot), the workflow scope
-    /// persists to durable-value state, mirroring how the start-time seed lives there; the caller commits the
-    /// returned changes so the write-back shares the activity's checkpoint boundary.
+    /// materialization. Only variables whose current value differs from <paramref name="sourceValuesByName"/>
+    /// (the projection the scope was sourced from) are emitted, so a read-only activity over a workflow that
+    /// declares variables produces no write — mirroring the dirty-tracking guard
+    /// <see cref="CaptureScopeMutation"/> applies to container scopes. Returns an empty collection when no such
+    /// scope is present or nothing changed. Unlike container scopes (which persist to their owning execution's
+    /// snapshot), the workflow scope persists to durable-value state, mirroring how the start-time seed lives
+    /// there; the caller folds the returned changes into the activity-completion checkpoint.
     /// </summary>
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildWorkflowScopeWriteBackChanges(
         VariableScope? scope,
         string workflowExecutionId,
         string rootNodeId,
+        IReadOnlyDictionary<string, object?> sourceValuesByName,
         DateTimeOffset capturedAt)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(rootNodeId);
+        ArgumentNullException.ThrowIfNull(sourceValuesByName);
 
         for (var current = scope; current is not null; current = current.Parent)
         {
             if (!StringComparer.Ordinal.Equals(current.ScopeId, rootNodeId))
                 continue;
 
-            var valuesByName = ProjectScopeValuesByName(current);
-            return valuesByName.Count == 0
+            var changed = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var (name, value) in ProjectScopeValuesByName(current))
+            {
+                // Emit only variables whose value actually changed from the start-of-activity projection. The
+                // scope is seeded from JSON-encoded projection values and a mutation replaces them with a CLR
+                // value, so compare on the canonical JSON form (the same shape the write-back persists).
+                var hadSource = sourceValuesByName.TryGetValue(name, out var sourceValue);
+                if (!hadSource || !SerializedValuesEqual(sourceValue, value))
+                    changed[name] = value;
+            }
+
+            return changed.Count == 0
                 ? []
-                : RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges(workflowExecutionId, valuesByName, capturedAt);
+                : RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges(workflowExecutionId, changed, capturedAt);
         }
 
         return [];
     }
+
+    private static bool SerializedValuesEqual(object? left, object? right) =>
+        StringComparer.Ordinal.Equals(SerializeForComparison(left), SerializeForComparison(right));
+
+    private static string SerializeForComparison(object? value) =>
+        value switch
+        {
+            null => "null",
+            JsonElement json => json.GetRawText(),
+            _ => JsonSerializer.Serialize(value, value.GetType())
+        };
 
     /// <summary>
     /// Maps a scope's current values (reference-key addressed) onto the authored variable names its

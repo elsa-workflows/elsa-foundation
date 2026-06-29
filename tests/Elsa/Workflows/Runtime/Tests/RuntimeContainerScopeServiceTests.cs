@@ -294,17 +294,17 @@ public sealed class RuntimeContainerScopeServiceTests
     }
 
     [Fact]
-    public async Task BuildWorkflowScopeWriteBackChanges_captures_root_scope_mutations_keyed_by_name()
+    public async Task BuildWorkflowScopeWriteBackChanges_captures_only_changed_root_scope_values_keyed_by_name()
     {
         var executable = Executable(ContainerNode("container", variables: [("var-counter", "counter")]));
         await _store.SaveAsync(NewState("actexec-container", "container", parentActivityExecutionId: null));
         var childState = NewState("actexec-child", "child", parentActivityExecutionId: "actexec-container");
-        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, childState,
-            workflowVariableValues: new Dictionary<string, object?> { ["counter"] = 1 });
+        var source = new Dictionary<string, object?> { ["counter"] = 1 };
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, childState, workflowVariableValues: source);
         // A descendant assigns the workflow variable by name through the visible chain.
         scope!.TrySetValueByName("counter", 9);
 
-        var changes = _service.BuildWorkflowScopeWriteBackChanges(scope, WorkflowExecutionId, rootNodeId: "container", _now);
+        var changes = _service.BuildWorkflowScopeWriteBackChanges(scope, WorkflowExecutionId, rootNodeId: "container", source, _now);
 
         var change = Assert.Single(changes);
         Assert.Equal("counter", change.State!.Metadata[RuntimeMetadataKeys.VariableName]);
@@ -312,11 +312,26 @@ public sealed class RuntimeContainerScopeServiceTests
     }
 
     [Fact]
+    public async Task BuildWorkflowScopeWriteBackChanges_is_empty_when_no_value_changed()
+    {
+        // Dirty-tracking guard (#286): a read-only activity over a workflow that declares variables leaves the
+        // scope at its sourced values, so the write-back emits nothing even though the scope holds values.
+        var executable = Executable(ContainerNode("container", variables: [("var-counter", "counter")]));
+        await _store.SaveAsync(NewState("actexec-container", "container", parentActivityExecutionId: null));
+        var childState = NewState("actexec-child", "child", parentActivityExecutionId: "actexec-container");
+        var source = new Dictionary<string, object?> { ["counter"] = 1 };
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, childState, workflowVariableValues: source);
+
+        Assert.Empty(_service.BuildWorkflowScopeWriteBackChanges(scope, WorkflowExecutionId, rootNodeId: "container", source, _now));
+    }
+
+    [Fact]
     public void BuildWorkflowScopeWriteBackChanges_is_empty_when_no_root_scope_is_present()
     {
         var scope = new VariableScope("container", VariableMap(("var-counter", "counter", 0)), executionId: "actexec-container");
 
-        Assert.Empty(_service.BuildWorkflowScopeWriteBackChanges(scope, WorkflowExecutionId, rootNodeId: "root-elsewhere", _now));
+        Assert.Empty(_service.BuildWorkflowScopeWriteBackChanges(scope, WorkflowExecutionId, rootNodeId: "root-elsewhere",
+            new Dictionary<string, object?>(), _now));
     }
 
     private static WorkflowExecutable Executable(ExecutableNode root) =>
