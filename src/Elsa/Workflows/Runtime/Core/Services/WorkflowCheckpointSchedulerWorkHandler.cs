@@ -209,13 +209,25 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }));
+            }, priorWorkflowState)));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
+    }
+
+    // Carries the workflow instance name (#260) forward across a checkpoint rebuild. The completion/running
+    // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
+    // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
+    // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
+    private static Dictionary<string, string> PreserveInstanceName(Dictionary<string, string> metadata, WorkflowExecutionState? priorWorkflowState)
+    {
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var instanceName) == true)
+            metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+
+        return metadata;
     }
 
     private static RuntimeStateChange<WorkflowExecutionState> BuildWorkflowCompletedStateChange(
@@ -237,11 +249,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveInstanceName(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }));
+            }, priorWorkflowState)));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }

@@ -29,6 +29,14 @@ public static class RuntimeMetadataKeys
     public const string OutputName = "runtime.outputName";
 
     /// <summary>
+    /// System-metadata key on a workflow execution carrying the workflow instance name (#260). Set by the
+    /// <c>SetName</c> leaf control activity through <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.SetInstanceName"/>;
+    /// the engine folds it into the activity-completed checkpoint's workflow-execution state change, mirroring
+    /// how the correlation id is persisted. Absent when no name has been assigned.
+    /// </summary>
+    public const string InstanceName = "runtime.instanceName";
+
+    /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
     /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
