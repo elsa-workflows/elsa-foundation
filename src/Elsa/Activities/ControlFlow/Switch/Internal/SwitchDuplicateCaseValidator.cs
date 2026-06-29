@@ -15,7 +15,7 @@ namespace Elsa.Activities.Switch.Internal;
 /// <see cref="SwitchStructureHandler"/> and the runtime guard in <see cref="SwitchNavigator"/> remain as
 /// backstops for paths that bypass Draft validation.
 /// </summary>
-public sealed class SwitchDuplicateCaseValidator(IActivityStructureService activityStructureService) : IDraftValidator
+internal sealed class SwitchDuplicateCaseValidator(IActivityStructureService activityStructureService) : IDraftValidator
 {
     public const string ErrorType = "Switch/DuplicateCase";
 
