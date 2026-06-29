@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime;
 using Elsa.Activities.ForEach;
 using Elsa.Activities.If;
 using Elsa.Activities.Primitives.Activities;
@@ -90,6 +91,73 @@ public sealed class ActivityLibraryAcceptanceTests
         Assert.Equal("all-iterated", VariableString(durableValues, "result"));
     }
 
+    [Fact]
+    public async Task IfForEachSetVariable_ComposeAndRunToCompletion_ThroughTheServerRequestHandlerPath()
+    {
+        // Server / end-to-end variant: the same composed If + ForEach + SetVariable workflow is started through the
+        // real ExecuteWorkflowRequestHandler → IWorkflowExecutionStartDispatcher → scheduler-drain path (the same
+        // path SeededVariableEndToEndExecutionTests exercises), not the harness's direct agent enqueue. A true
+        // HTTP-server run is not feasible in this unit-test project, so this uses the request-handler path — the
+        // server-side entrypoint — and asserts the run reaches Completed with the loop's effect observable in the
+        // persisted workflow-scope variables.
+        await using var provider = BuildEndToEndProvider();
+
+        var executable = WrapWithIdentity(NewComposedRoot(["a", "b", "c"]), artifactId: "acceptance-e2e");
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+
+        var handler = new Elsa.Workflows.Runtime.Api.Handlers.ExecuteWorkflowRequestHandler(
+            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowExecutableStore>());
+
+        var view = await handler.Handle(new Elsa.Workflows.Runtime.Api.Requests.ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
+
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(view.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+
+        // The loop's effect is observable end-to-end through the server path: the ForEach-accumulated counter reads
+        // back as 3 and the If Then-branch SetVariable recorded the outcome.
+        var durableValues = await provider.GetRequiredService<IDurableValueStateStore>().ListAsync(view.WorkflowExecutionId);
+        Assert.Equal(3, VariableInt(durableValues, "count"));
+        Assert.Equal("all-iterated", VariableString(durableValues, "result"));
+    }
+
+    private static ServiceProvider BuildEndToEndProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+        services.AddSingleton<IActivityConstructor, SequenceConstructor>();
+        services.AddSingleton<IActivityConstructor, ForEachConstructor>();
+        services.AddSingleton<IActivityConstructor, IfConstructor>();
+        services.AddSingleton<IActivityConstructor, SetVariableConstructor>();
+        new EventsFeature().ConfigureServices(services);
+        new SerializationFeature().ConfigureServices(services);
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        new Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+        new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesForEachFeature().ConfigureServices(services);
+        new ActivitiesIfFeature().ConfigureServices(services);
+        // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
+        services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
+
+        var provider = services.BuildServiceProvider();
+        RunStartupTasks(provider);
+        return provider;
+    }
+
+    private static WorkflowExecutable WrapWithIdentity(ExecutableNode root, string artifactId) =>
+        new(
+            identity: new WorkflowExecutableIdentity(artifactId, $"def-{artifactId}", $"ver-{artifactId}", "1.0.0", $"sha256:{artifactId}"),
+            rootActivity: root,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
+            publishedAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
+            compatibilityMetadata: new Dictionary<string, string>());
+
     private static int VariableInt(IEnumerable<DurableValueState> durableValues, string variableName) =>
         LatestVariable(durableValues, variableName).InlineValue!.Value.GetInt32();
 
@@ -143,7 +211,10 @@ public sealed class ActivityLibraryAcceptanceTests
     /// default 0) and <c>result</c> (String, default "none"), whose children are the seed SetVariable, the
     /// ForEach loop, and the If branch.
     /// </summary>
-    private static WorkflowExecutable NewComposedExecutable(IReadOnlyCollection<string> collection)
+    private static WorkflowExecutable NewComposedExecutable(IReadOnlyCollection<string> collection) =>
+        WorkflowExecutionHarness.NewExecutable(NewComposedRoot(collection));
+
+    private static ExecutableNode NewComposedRoot(IReadOnlyCollection<string> collection)
     {
         // (a) Seed the counter to 0 via SetVariable (literal). The value is bound as System.Object (the
         //     SetVariable.Value contract is InputArgument<object>), matching the production materialization.
@@ -237,7 +308,7 @@ public sealed class ActivityLibraryAcceptanceTests
                 SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
-        return WorkflowExecutionHarness.NewExecutable(root);
+        return root;
     }
 
     private static ExecutableNode SetVariableNode(string nodeId, string variableName, RuntimeInputBinding valueBinding) =>
