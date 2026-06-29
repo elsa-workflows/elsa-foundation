@@ -103,6 +103,64 @@ public sealed class RuntimeContainerScopeServiceTests
     }
 
     [Fact]
+    public async Task BuildScope_resolves_loop_iteration_index_as_an_int_typed_value()
+    {
+        // Regression: ConvertJsonElement's number branch must box an integral JSON value as int (not
+        // double), so the loop owner's published index resolves with its integer runtime type and
+        // BuildIterationScope's `is int` index check succeeds (otherwise the index silently falls to 0).
+        var executable = Executable(ContainerNode("loop", variables: []));
+        var bodyState = LoopBodyState(
+            iterationId: "loop:iteration:2",
+            ownerNodeId: "loop",
+            itemName: "currentItem",
+            itemValueJson: "\"gamma\"",
+            indexName: "currentIndex",
+            indexValueJson: "2");
+
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, bodyState);
+
+        Assert.NotNull(scope);
+        Assert.True(scope!.TryGetValue(new VariableReference("currentIndex", "loop"), out var index));
+        Assert.Equal(2, index);              // value equality
+        Assert.IsType<int>(index);           // and integer runtime type — the fix
+    }
+
+    [Fact]
+    public async Task BuildScope_resolves_an_integer_loop_item_as_an_int_typed_value()
+    {
+        var executable = Executable(ContainerNode("loop", variables: []));
+        var bodyState = LoopBodyState(
+            iterationId: "loop:iteration:0",
+            ownerNodeId: "loop",
+            itemName: "currentItem",
+            itemValueJson: "7");
+
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, bodyState);
+
+        Assert.True(scope!.TryGetValue(new VariableReference("currentItem", "loop"), out var item));
+        Assert.Equal(7, item);
+        Assert.IsType<int>(item);
+    }
+
+    [Fact]
+    public async Task BuildScope_resolves_a_fractional_loop_item_as_a_double()
+    {
+        // The fix must not regress genuine fractional numbers: they still resolve as double.
+        var executable = Executable(ContainerNode("loop", variables: []));
+        var bodyState = LoopBodyState(
+            iterationId: "loop:iteration:0",
+            ownerNodeId: "loop",
+            itemName: "currentItem",
+            itemValueJson: "1.5");
+
+        var scope = await _service.BuildScopeAsync(executable, WorkflowExecutionId, bodyState);
+
+        Assert.True(scope!.TryGetValue(new VariableReference("currentItem", "loop"), out var item));
+        Assert.Equal(1.5d, item);
+        Assert.IsType<double>(item);
+    }
+
+    [Fact]
     public void CaptureScopeMutation_returns_updated_state_when_values_change()
     {
         var containerState = NewState("actexec-container", "container", parentActivityExecutionId: null);
@@ -288,6 +346,62 @@ public sealed class RuntimeContainerScopeServiceTests
             AggregateFaultCount: 0,
             Metadata: metadata);
     }
+    // A loop body's execution state: no parent container scope, but an IterationId plus the loop owner's
+    // per-pass iteration variables published in its scheduling-provenance metadata (the keys
+    // RuntimeContainerScopeService reads to layer the per-iteration scope — ADR 0028 / #259).
+    private static ActivityExecutionState LoopBodyState(
+        string iterationId,
+        string ownerNodeId,
+        string itemName,
+        string itemValueJson,
+        string? indexName = null,
+        string? indexValueJson = null)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
+            [RuntimeMetadataKeys.LoopIterationItemName] = itemName,
+            [RuntimeMetadataKeys.LoopIterationItemValue] = itemValueJson
+        };
+
+        if (indexName is not null)
+        {
+            metadata[RuntimeMetadataKeys.LoopIterationIndexName] = indexName;
+            metadata[RuntimeMetadataKeys.LoopIterationIndexValue] = indexValueJson ?? "0";
+        }
+
+        var provenance = ActivitySchedulingProvenance.From(
+            WorkflowExecutionId,
+            parentActivityExecutionId: null,
+            schedulingActivityExecutionId: null,
+            branchId: null,
+            iterationId: iterationId,
+            executionPathId: null,
+            executionScopeId: null,
+            schedulingCause: null,
+            metadata: metadata);
+
+        return new ActivityExecutionState(
+            Execution: new ActivityExecution("actexec-body", WorkflowExecutionId, "body", "authored-body", "test/activity", "1.0.0"),
+            Status: ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ExecutionSequence: 0,
+            ScheduledAt: DateTimeOffset.UnixEpoch,
+            StartedAt: DateTimeOffset.UnixEpoch,
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: iterationId,
+            Provenance: provenance,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+    }
+
     private static IReadOnlyDictionary<string, IVariable> VariableMap(params (string Key, string Name, object? Value)[] variables) =>
         variables.ToDictionary(
             v => v.Key,
