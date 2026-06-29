@@ -99,7 +99,14 @@ public sealed class WorkflowApplyGraphOperationsTool(
             case JsonElement element:
                 return TryDeserialize(element, out batch);
             default:
-                return TryDeserialize(JsonSerializer.SerializeToElement(value, SerializerOptions), out batch);
+                try
+                {
+                    return TryDeserialize(JsonSerializer.SerializeToElement(value, SerializerOptions), out batch);
+                }
+                catch (NotSupportedException)
+                {
+                    return false;
+                }
         }
     }
 
