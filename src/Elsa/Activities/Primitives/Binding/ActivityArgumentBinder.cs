@@ -1,6 +1,7 @@
 using System.Reflection;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Activities.Primitives.Binding;
 
@@ -40,15 +41,57 @@ public sealed class ActivityArgumentBinder
                 ?? throw new InvalidOperationException(
                     $"Activity '{activity.GetType().Name}' has no {argumentBaseType.Name} property named '{name}'.");
 
-            // FIX: assignability check on the property's declared type, not reference inequality.
-            if (!property.PropertyType.IsInstanceOfType(argument))
-                throw new InvalidOperationException(
-                    $"Argument for property '{name}' is '{argument.GetType().Name}', not assignable to '{property.PropertyType.Name}'.");
+            // The runtime materializer builds the argument as InputArgument<T> from the value's *materialized*
+            // CLR type (e.g. InputArgument<int> for a literal Int32). Generic InputArgument<T> is invariant, so
+            // such an argument is not assignable to a property declared as a wider type — most notably
+            // InputArgument<object> on SetVariable/SetVariables (#313). When the property's generic value type is
+            // assignable from the argument's, re-wrap the argument as the property's declared InputArgument<T>
+            // over the *same* memory block reference, so the seeded value still resolves under the same id.
+            var boundArgument = CoerceToPropertyType((Argument)argument, property.PropertyType, name);
 
             var setter = property.GetSetMethod()
                 ?? throw new InvalidOperationException($"Activity property '{name}' has no public setter.");
 
-            setter.Invoke(activity, [argument]);
+            setter.Invoke(activity, [boundArgument]);
         }
+    }
+
+    /// <summary>
+    /// Returns <paramref name="argument"/> unchanged when it is already assignable to <paramref name="propertyType"/>.
+    /// Otherwise, when both are closed <c>InputArgument&lt;&gt;</c> types and the property's value type is assignable
+    /// from the argument's (a widening such as <c>InputArgument&lt;int&gt;</c> → <c>InputArgument&lt;object&gt;</c>),
+    /// rebuilds the argument as the property's declared type over the same <see cref="IMemoryBlockReference"/> so the
+    /// seeded value continues to resolve. Throws when the types are genuinely incompatible.
+    /// </summary>
+    private static object CoerceToPropertyType(Argument argument, Type propertyType, string name)
+    {
+        if (propertyType.IsInstanceOfType(argument))
+            return argument;
+
+        if (TryGetInputArgumentValueType(propertyType, out var targetValueType)
+            && TryGetInputArgumentValueType(argument.GetType(), out var sourceValueType)
+            && targetValueType.IsAssignableFrom(sourceValueType))
+        {
+            var rebuilt = (Argument)Activator.CreateInstance(propertyType, argument.MemoryBlockReference())!;
+            return rebuilt;
+        }
+
+        throw new InvalidOperationException(
+            $"Argument for property '{name}' is '{argument.GetType().Name}', not assignable to '{propertyType.Name}'.");
+    }
+
+    private static bool TryGetInputArgumentValueType(Type type, out Type valueType)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(InputArgument<>))
+            {
+                valueType = current.GetGenericArguments()[0];
+                return true;
+            }
+        }
+
+        valueType = null!;
+        return false;
     }
 }
