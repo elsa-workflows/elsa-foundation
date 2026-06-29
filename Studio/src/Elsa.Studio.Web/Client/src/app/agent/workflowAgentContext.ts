@@ -1,5 +1,12 @@
 import type { StudioAgentContextProviderContribution, StudioAgentSurface } from "../../sdk";
 
+export interface WorkflowGraphConnection {
+  source: string;
+  target: string;
+  sourcePort?: string;
+  targetPort?: string;
+}
+
 export interface WorkflowAgentContextSnapshot {
   workflowId: string;
   workflowDefinitionId?: string;
@@ -12,7 +19,7 @@ export interface WorkflowAgentContextSnapshot {
   selectedActivityId?: string;
   summary?: string;
   activities?: Array<{ id: string; type: string; displayName?: string }>;
-  connections?: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }>;
+  connections?: WorkflowGraphConnection[];
   diagnostics?: Array<{ severity: string; message: string }>;
 }
 

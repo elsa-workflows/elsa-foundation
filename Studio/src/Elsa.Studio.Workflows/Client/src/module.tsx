@@ -191,12 +191,13 @@ interface WorkflowEdgeActions {
 
 const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
 
+type WorkflowGraphConnection = { source: string; target: string; sourcePort?: string; targetPort?: string };
+
 // Maps an authored node to a non-blocking availability warning (or null when still addable).
 // Provided by the designer so the standalone node renderer can surface badges without prop-drilling.
 type WorkflowNodeAvailabilityLookup = (input: { activityVersionId?: string | null; activityTypeKey?: string | null }) => ActivityAvailabilityDiagnosticEntry | null;
 
 const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeAvailabilityLookup | null>(null);
-
 declare global {
   interface Window {
     __ELSA_STUDIO_WORKFLOW_CONTEXT__?: {
@@ -209,7 +210,7 @@ declare global {
       selectedActivityType?: string | null;
       summary?: string;
       activities?: Array<{ id: string; type: string; displayName?: string }>;
-      connections?: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }>;
+      connections?: WorkflowGraphConnection[];
       diagnostics?: Array<{ severity: string; message: string }>;
     };
   }
@@ -3959,7 +3960,7 @@ function collectWorkflowContextActivities(activity: ActivityNode | null | undefi
 
 function collectWorkflowContextConnections(
   activity: ActivityNode | null | undefined,
-  result: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }> = []
+  result: WorkflowGraphConnection[] = []
 ) {
   if (!activity) return result;
 
