@@ -151,20 +151,41 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed"), cancellationToken);
             return;
         }
-        var valueSnapshots = BuildInputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, inputs, _timeProvider.GetUtcNow()).ToList();
+        var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
+        IActivity activity;
+        SimpleActivityExecutionContext context;
+        try
+        {
+            valueSnapshots.AddRange(BuildInputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, inputs, _timeProvider.GetUtcNow()));
 
-        var activity = await activityFactory.Create(
-            executableNode.DescriptorType,
-            executableNode.DescriptorPayload,
-            inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            BuildOutputArguments(executableNode),
-            cancellationToken);
+            // Activity construction + argument binding (ActivityArgumentBinder, invoked inside Create) runs
+            // inside a fault boundary on the resume path too (#325, sibling of #317). Previously this step sat
+            // between the input-materialization try/catch and the resume-execution try/catch, so a binder/constructor
+            // throw escaped to the scheduler loop and left the run silently at Running with no incident. Recording it
+            // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
+            // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
+            activity = await activityFactory.Create(
+                executableNode.DescriptorType,
+                executableNode.DescriptorPayload,
+                inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
+                BuildOutputArguments(executableNode),
+                cancellationToken);
 
-        activity.NodeId = executableNode.ExecutableNodeId;
-        activity.Id = resumePayload.ActivityExecutionId;
+            activity.NodeId = executableNode.ExecutableNodeId;
+            activity.Id = resumePayload.ActivityExecutionId;
 
-        var context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
-        RuntimeActivityInputMemory.Seed(context, inputs);
+            context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
+            RuntimeActivityInputMemory.Seed(context, inputs);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeConstructionFailed", valueSnapshots), cancellationToken);
+            return;
+        }
 
         try
         {
