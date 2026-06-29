@@ -8,8 +8,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 
 | Spec | Title | Status | Plan verdict | Tasks done | Tasks open | Notes |
 |---|---|---|---|---:|---:|---|
-| [001-activity-identity-catalog](../../specs/001-activity-identity-catalog/spec.md) | Activity Identity & Catalog as Source-of-Truth | Draft | - | 147 | 5 | superseded, deferred, out of scope |
-| [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | deferred |
+| [001-activity-identity-catalog](../../specs/001-activity-identity-catalog/spec.md) | Activity Identity & Catalog as Source-of-Truth | Draft | - | 147 | 5 | - |
+| [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | - |
 | [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
@@ -99,3 +99,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [077-workflow-instance-inspection](../../specs/077-workflow-instance-inspection/spec.md) | Workflow Instance Inspection | Draft | - | 31 | 0 | deferred, out of scope |
 | [078-package-first-module-registry](../../specs/078-package-first-module-registry/spec.md) | Package-First Module Registry | unknown | - | 0 | 0 | - |
 | [079-activity-execution-inspection](../../specs/079-activity-execution-inspection/spec.md) | Activity Execution Inspection | Draft | - | 51 | 0 | deferred, out of scope |
+| [079-secrets-module](../../specs/079-secrets-module/spec.md) | Secrets Module | Draft | - | 64 | 6 | out of scope |
+| [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |

@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 60
+- Discovered feature classes: 71
 
 ## Features
 
@@ -22,10 +22,18 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
 | ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
+| ActivitiesDoFeature | direct IShellFeature | Elsa.Activities.Do | IShellFeature | [ActivitiesDoFeature.cs](../../src/Elsa/Activities/Do/ActivitiesDoFeature.cs) |
 | ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
+| ActivitiesForEachFeature | direct IShellFeature | Elsa.Activities.ForEach | IShellFeature | [ActivitiesForEachFeature.cs](../../src/Elsa/Activities/ForEach/ActivitiesForEachFeature.cs) |
+| ActivitiesForFeature | direct IShellFeature | Elsa.Activities.For | IShellFeature | [ActivitiesForFeature.cs](../../src/Elsa/Activities/For/ActivitiesForFeature.cs) |
+| ActivitiesIfFeature | direct IShellFeature | Elsa.Activities.If | IShellFeature | [ActivitiesIfFeature.cs](../../src/Elsa/Activities/If/ActivitiesIfFeature.cs) |
+| ActivitiesParallelFeature | direct IShellFeature | Elsa.Activities.Parallel | IShellFeature | [ActivitiesParallelFeature.cs](../../src/Elsa/Activities/Parallel/ActivitiesParallelFeature.cs) |
 | ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
+| ActivitiesSwitchFeature | direct IShellFeature | Elsa.Activities.Switch | IShellFeature | [ActivitiesSwitchFeature.cs](../../src/Elsa/Activities/Switch/ActivitiesSwitchFeature.cs) |
+| ActivitiesWhileFeature | direct IShellFeature | Elsa.Activities.While | IShellFeature | [ActivitiesWhileFeature.cs](../../src/Elsa/Activities/While/ActivitiesWhileFeature.cs) |
+| AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
 | AspNetCoreIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IShellFeature | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |
 | Elsa3ImportActivitiesFeature | direct IShellFeature | Elsa3.Activities.Design.Import | IShellFeature | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
@@ -54,6 +62,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
+| SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
+| SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |
 | SerializationFeature | direct IShellFeature | Elsa.Serialization.SystemText | IShellFeature | [SerializationFeature.cs](../../src/Elsa/Serialization/SystemText/SerializationFeature.cs) |
 | SqliteGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite | IShellFeature | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | SqliteGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.Sqlite.Unified | IShellFeature | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite.Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
@@ -68,6 +78,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | JavaScriptRenderingEndpointsFeature | FastEndpoints feature | Elsa.Expressions.JavaScript.Rendering | FastEndpointsFeatureBase | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
 | ModularityApiFeature | FastEndpoints feature | Elsa.Modularity.Api | FastEndpointsFeatureBase | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
 | OpenTelemetryFeature | FastEndpoints feature | Elsa.Diagnostics.OpenTelemetry | FastEndpointsFeatureBase | [OpenTelemetryFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/OpenTelemetryFeature.cs) |
+| SecretsApiFeature | FastEndpoints feature | Elsa.Secrets.Api | FastEndpointsFeatureBase | [SecretsApiFeature.cs](../../src/Elsa/Secrets/Api/Features/SecretsApiFeature.cs) |
 | StructuredLogsFeature | FastEndpoints feature | Elsa.Diagnostics.StructuredLogs | FastEndpointsFeatureBase | [StructuredLogsFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/StructuredLogsFeature.cs) |
 | WorkflowsDesignApiFeature | FastEndpoints feature | Elsa.Workflows.Design.Api | FastEndpointsFeatureBase | [WorkflowsDesignApiFeature.cs](../../src/Elsa/Workflows/Design/Api/WorkflowsDesignApiFeature.cs) |
 | WorkflowsPublishingApiFeature | FastEndpoints feature | Elsa.Workflows.Publishing.Api | FastEndpointsFeatureBase | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
