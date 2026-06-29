@@ -87,20 +87,18 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
         var remaining = request.MaxWorkItems ?? int.MaxValue;
-        var stoppedOnTerminalStatus = false;
 
-        while (remaining > 0)
+        // Once the workflow execution reaches a terminal status (Completed/Faulted/Cancelled), any sibling work
+        // a parallel fork already enqueued must not run: dispatching it would write post-completion state. The
+        // status is read once on entry (covers "already terminal") and re-checked only after a dispatched item
+        // completes — the workflow can only become terminal as a result of work dispatched inside this loop
+        // (Finish/checkpoint/cancel handlers all run as dispatched scheduler work here), so a per-iteration read
+        // would re-load and deserialize the state document needlessly on durable providers. (#293)
+        var stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
+
+        while (remaining > 0 && !stoppedOnTerminalStatus)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            // Once the workflow execution has reached a terminal status (Completed/Faulted/Cancelled), any
-            // sibling work a parallel fork already enqueued must not run: dispatching it would write
-            // post-completion state. Stop before dequeuing and leave the remaining work in the queue. (#293)
-            if (await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken))
-            {
-                stoppedOnTerminalStatus = true;
-                break;
-            }
 
             var nextWorkItem = await PeekAsync(request.WorkflowExecutionId, cancellationToken);
             if (nextWorkItem is null)
@@ -123,12 +121,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
             if (result.Status == RuntimeSchedulerWorkItemResultStatus.Faulted)
                 break;
+
+            // The dispatched item may have committed a terminal status (e.g. the Finish path). Re-check so the
+            // remaining queued siblings are not dequeued on the next iteration.
+            stoppedOnTerminalStatus = await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken);
         }
 
-        // A terminal-status stop only sets the reason when no work in this drain faulted or paused: those
-        // outcomes reflect work that actually ran and take precedence in the inferred stop reason.
+        // The loop only continues past a Completed result, so a terminal stop always coincides with an
+        // all-completed drain; flag it as the stop reason.
         var stopReason = stoppedOnTerminalStatus
-            && results.All(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Completed)
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
             : (RuntimeSchedulerDrainStopReason?)null;
 
