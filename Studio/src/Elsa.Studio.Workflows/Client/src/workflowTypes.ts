@@ -118,6 +118,61 @@ export interface ActivityCatalogItem {
 export type ActivityDescriptor = StudioActivityDescriptor;
 export type ExpressionDescriptor = StudioExpressionDescriptor;
 
+// Activity availability policy stack (mirrors Elsa.Activities.Design.Core.Models).
+// Enum-valued fields arrive as either the numeric or string form depending on backend JSON config,
+// so unions keep `number` alongside the named values; normalize with the helpers in activityAvailability.ts.
+export type ActivityAvailabilityMode = "AllExcept" | "Only";
+
+export interface ActivityAvailabilityRuleSet {
+  activityTypes: string[];
+  sets: string[];
+}
+
+export interface ActivityAvailabilitySettings {
+  scope: string;
+  mode: ActivityAvailabilityMode | number;
+  rules: ActivityAvailabilityRuleSet;
+}
+
+export type ActivityAvailabilityDiagnosticState =
+  | "Available"
+  | "BlockedByHostBaseline"
+  | "HiddenByManagementSettings"
+  | "RemovedFromCatalog"
+  | "UnresolvedReference";
+
+export type ActivityAvailabilityPolicyLayer = "Catalog" | "HostBaseline" | "ManagementSettings";
+
+export type ActivityAvailabilityReferenceKind = "ActivityType" | "ActivitySet";
+
+export interface ActivityAvailabilityDiagnosticEntry {
+  activityDefinitionId?: string | null;
+  activityTypeKey?: string | null;
+  displayName?: string | null;
+  category?: string | null;
+  state: ActivityAvailabilityDiagnosticState | number;
+  layer: ActivityAvailabilityPolicyLayer | number;
+  referenceKind: ActivityAvailabilityReferenceKind | number;
+  referenceName?: string | null;
+  reason: string;
+}
+
+export interface ActivityAvailabilitySetDiagnostic {
+  name: string;
+  activityTypeKeys: string[];
+}
+
+export interface ActivityAvailabilityDiagnostics {
+  items: ActivityAvailabilityDiagnosticEntry[];
+  sets: ActivityAvailabilitySetDiagnostic[];
+}
+
+export interface SaveActivityAvailabilitySettingsRequest {
+  scope?: string;
+  mode: number;
+  rules: ActivityAvailabilityRuleSet;
+}
+
 export interface ActivityDescriptorsResponse {
   items?: ActivityDescriptor[];
   activities?: ActivityDescriptor[];

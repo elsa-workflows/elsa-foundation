@@ -3271,3 +3271,38 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Non-blocking availability warnings: activities hidden/removed by the availability policy
+   remain fully editable, but are flagged so authors know they can't be re-added. */
+.wf-node-availability {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #1f2937;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  z-index: 2;
+}
+
+.wf-node-unavailable {
+  border-color: #f59e0b;
+}
+
+.wf-availability-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent);
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  border-radius: 6px;
+  color: color-mix(in srgb, #b45309 75%, var(--wf-text));
+  font-size: 12px;
+}

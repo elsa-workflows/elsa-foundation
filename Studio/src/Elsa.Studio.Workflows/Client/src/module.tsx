@@ -27,7 +27,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, Copy, Download, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Trash2, Undo2, Workflow as WorkflowIcon, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, Copy, Download, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Trash2, Undo2, Workflow as WorkflowIcon, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioDialogApi, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -37,6 +37,7 @@ import {
   getWorkflowDefinitionVersion,
   getWorkflowInstance,
   listActivities,
+  listActivityAvailabilityDiagnostics,
   listActivityDescriptors,
   listDefinitions,
   listExecutables,
@@ -50,7 +51,8 @@ import {
   startWorkflowDraftTestRun,
   updateDraft
 } from "./api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import type { ActivityAvailabilityDiagnosticEntry, ActivityAvailabilityDiagnostics, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import { findActivityAvailabilityDiagnostic, getAvailabilityStateLabel } from "./activityAvailability";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -84,6 +86,7 @@ import { formatDate, formatDuration, renderActivityIcon, shortTypeName } from ".
 import { WorkflowCodeView } from "./WorkflowCodeView";
 import { WorkflowPropertiesView } from "./WorkflowPropertiesView";
 import { WorkflowExecutionTimeline } from "./WorkflowInstanceTimeline";
+import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
 import {
   applyWorkflowGraphOperationBatch,
   workflowGraphOperationApplyEvent,
@@ -188,6 +191,12 @@ interface WorkflowEdgeActions {
 
 const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
 
+// Maps an authored node to a non-blocking availability warning (or null when still addable).
+// Provided by the designer so the standalone node renderer can surface badges without prop-drilling.
+type WorkflowNodeAvailabilityLookup = (input: { activityVersionId?: string | null; activityTypeKey?: string | null }) => ActivityAvailabilityDiagnosticEntry | null;
+
+const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeAvailabilityLookup | null>(null);
+
 declare global {
   interface Window {
     __ELSA_STUDIO_WORKFLOW_CONTEXT__?: {
@@ -228,7 +237,8 @@ export function register(api: ElsaStudioModuleApi) {
       items: [
         { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
         { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
-        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" }
+        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" },
+        { title: "Activity Availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9" }
       ]
     },
     routes: [
@@ -255,6 +265,12 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
         component: () => <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-activity-availability",
+        path: "/workflows/activity-availability",
+        label: "Activity availability",
+        component: () => <ActivityAvailabilityPage context={api.backend} />
       }
     ]
   });
@@ -1942,6 +1958,7 @@ function WorkflowEditor({
   const [draft, setDraft] = useState<WorkflowDraft | null>(null);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [activityDescriptors, setActivityDescriptors] = useState<StudioActivityDescriptor[]>([]);
+  const [availabilityDiagnostics, setAvailabilityDiagnostics] = useState<ActivityAvailabilityDiagnostics | null>(null);
   const [expressionDescriptors, setExpressionDescriptors] = useState<StudioExpressionDescriptor[]>(fallbackExpressionDescriptors);
   const [descriptorStatus, setDescriptorStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
@@ -1992,6 +2009,10 @@ function WorkflowEditor({
 
   const root = draft?.state.rootActivity ?? null;
   const catalogByVersion = useMemo(() => new Map(catalog.map(activity => [activity.activityVersionId, activity])), [catalog]);
+  const availabilityLookup = useCallback<WorkflowNodeAvailabilityLookup>(
+    input => findActivityAvailabilityDiagnostic([input.activityVersionId, input.activityTypeKey], availabilityDiagnostics),
+    [availabilityDiagnostics]
+  );
   const descriptorsByType = useMemo(() => indexActivityDescriptors(activityDescriptors), [activityDescriptors]);
   const scopeOwner = useMemo(() => resolveScopeOwner(root, frames), [root, frames]);
   const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
@@ -2015,6 +2036,12 @@ function WorkflowEditor({
   const selectedDescriptor = useMemo(
     () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
     [catalogByVersion, descriptorsByType, selectedNode]
+  );
+  const selectedNodeAvailability = useMemo(
+    () => selectedNode
+      ? availabilityLookup({ activityVersionId: selectedNode.activityVersionId, activityTypeKey: catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey })
+      : null,
+    [availabilityLookup, catalogByVersion, selectedNode]
   );
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
   const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
@@ -2152,7 +2179,7 @@ function WorkflowEditor({
   const load = useCallback(async () => {
     setError("");
     setDescriptorStatus("loading");
-    const [nextDetails, nextCatalog, nextDescriptors, nextExpressions] = await Promise.all([
+    const [nextDetails, nextCatalog, nextDescriptors, nextExpressions, nextAvailability] = await Promise.all([
       getDefinition(context, definitionId),
       listActivities(context),
       listActivityDescriptors(context).then(
@@ -2162,6 +2189,11 @@ function WorkflowEditor({
       listExpressionDescriptors(context).then(
         descriptors => ({ ok: true as const, descriptors }),
         () => ({ ok: false as const, descriptors: fallbackExpressionDescriptors })
+      ),
+      // Non-essential: drives only the non-blocking availability warnings, so failure is tolerated.
+      listActivityAvailabilityDiagnostics(context).then(
+        diagnostics => diagnostics,
+        () => null
       )
     ]);
     const nextDraft = nextDetails.draft ?? null;
@@ -2175,6 +2207,7 @@ function WorkflowEditor({
     setDraft(nextDraft);
     setCatalog(nextCatalog.activities ?? []);
     setActivityDescriptors(nextDescriptors.descriptors);
+    setAvailabilityDiagnostics(nextAvailability);
     setExpressionDescriptors(nextExpressions.descriptors.length > 0 ? nextExpressions.descriptors : fallbackExpressionDescriptors);
     setDescriptorStatus(nextDescriptors.ok ? "ready" : "failed");
     setFrames([]);
@@ -3230,6 +3263,12 @@ function WorkflowEditor({
           <dt>Activity version</dt>
           <dd>{selectedNode.activityVersionId}</dd>
         </dl>
+        {selectedNodeAvailability ? (
+          <div className="wf-availability-notice">
+            <AlertTriangle size={14} />
+            <span>No longer available for new use · {getAvailabilityStateLabel(selectedNodeAvailability.state)}</span>
+          </div>
+        ) : null}
         <ActivityPropertiesPanel
           activity={selectedNode}
           descriptor={selectedDescriptor}
@@ -3402,6 +3441,7 @@ function WorkflowEditor({
           </div>
           <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
             <WorkflowEdgeActionsContext.Provider value={edgeActions}>
+              <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -3438,6 +3478,7 @@ function WorkflowEditor({
                 <Controls />
                 <MiniMap pannable zoomable />
               </ReactFlow>
+              </WorkflowNodeAvailabilityContext.Provider>
             </WorkflowEdgeActionsContext.Provider>
             {isFlowchartDesigner && nodes.length === 0 ? (
               <button type="button" className="wf-empty-canvas-add" onClick={() => openEmptyConnectMenu()}>
@@ -3555,12 +3596,19 @@ function WorkflowActivityNode({ data, selected }: NodeProps) {
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
+  const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
+  const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   return (
     <div
-      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
+      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : ""].filter(Boolean).join(" ")}
       data-icon={nodeData.icon ?? "activity"}
     >
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {availability ? (
+        <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
+          <AlertTriangle size={13} />
+        </span>
+      ) : null}
       <div className="wf-node-content">
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
         <span className="wf-node-copy">
