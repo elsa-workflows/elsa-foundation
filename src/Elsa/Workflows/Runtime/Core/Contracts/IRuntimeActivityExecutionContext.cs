@@ -54,4 +54,32 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     bool CorrelationIdAssignmentRequested { get; }
 
     string? RequestedCorrelationId { get; }
+
+    /// <summary>
+    /// Requests that the workflow instance name be set to <paramref name="instanceName"/>. Used by the
+    /// <c>SetName</c> leaf control activity. The engine drains this on the leaf execution path and folds the
+    /// new name into the activity-completed checkpoint's workflow-execution state change (under the
+    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.InstanceName"/> system-metadata
+    /// key), mirroring how <see cref="SetCorrelationId"/> persists the correlation id. A null or blank value
+    /// clears the instance name.
+    /// </summary>
+    void SetInstanceName(string? instanceName);
+
+    bool InstanceNameAssignmentRequested { get; }
+
+    string? RequestedInstanceName { get; }
+
+    /// <summary>
+    /// Requests that the workflow output named <paramref name="outputName"/> be set to
+    /// <paramref name="value"/>. Used by the <c>SetOutput</c> leaf control activity. The engine drains this on
+    /// the leaf execution path and folds the value into the activity-completed checkpoint as an
+    /// <see cref="Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OutputName"/>-tagged durable value
+    /// — the same durable/output channel activity outputs use — so the workflow output is durably persisted.
+    /// A blank name is ignored. A later assignment of the same name overwrites the earlier one.
+    /// </summary>
+    void SetWorkflowOutput(string outputName, object? value);
+
+    bool WorkflowOutputAssignmentRequested { get; }
+
+    IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs { get; }
 }

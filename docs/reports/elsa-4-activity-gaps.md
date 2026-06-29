@@ -35,8 +35,8 @@ These are the highest-priority gaps: without them you cannot author non-trivial 
 | `Parallel` (Fork + Join) | concurrent branches, join/await | ❌ missing (flowchart has fork/join *policies*; no standalone activity) |
 | `Break` / `Complete` / `Finish` | early loop/workflow exit | ❌ missing |
 | `Fault` / `Throw` | raise a fault/incident | ❌ missing |
-| `SetVariable` / `SetVariables` | assign workflow variables | ❌ missing |
-| `SetName` / `SetOutput` | set instance name / workflow output | ❌ missing |
+| `SetVariable` / `SetVariables` | assign workflow variables | ✅ ported (#260, `Elsa.Activities.Primitives`; durable via #286 write-back) |
+| `SetName` / `SetOutput` | set instance name / workflow output | ✅ ported (#260; `SetInstanceName`/`SetWorkflowOutput` runtime intents) |
 | `Correlate` | set correlation id | ❌ missing |
 | `Inline` / `RunInline` | inline C# code activity | ❌ missing |
 | `WriteLines` / `ReadLine` | console I/O primitives | ❌ missing (only single `WriteLine` exists) |

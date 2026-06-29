@@ -209,6 +209,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<string> finishWorkflowOutcomeNames = [];
         var correlationIdAssignmentRequested = false;
         string? requestedCorrelationId = null;
+        var instanceNameAssignmentRequested = false;
+        string? requestedInstanceName = null;
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowOutputChanges = [];
         try
         {
             if (!await activity.CanExecuteAsync(context))
@@ -233,13 +236,22 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 workflowVariableWriteBackChanges = scopeService.BuildWorkflowScopeWriteBackChanges(
                     variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, workflowVariables, _timeProvider.GetUtcNow());
 
-                // Control-leaf intents (Finish/Complete, Correlate): captured here and drained below so the
-                // engine ends the run or persists the new correlation id rather than the activity having to
-                // reach into workflow-level state directly.
+                // Control-leaf intents (Finish/Complete, Correlate, SetName, SetOutput): captured here and
+                // drained below so the engine ends the run or persists the new correlation id / instance name /
+                // workflow output rather than the activity having to reach into workflow-level state directly.
                 finishWorkflowRequested = context.FinishWorkflowRequested;
                 finishWorkflowOutcomeNames = context.FinishWorkflowOutcomeNames;
                 correlationIdAssignmentRequested = context.CorrelationIdAssignmentRequested;
                 requestedCorrelationId = context.RequestedCorrelationId;
+                instanceNameAssignmentRequested = context.InstanceNameAssignmentRequested;
+                requestedInstanceName = context.RequestedInstanceName;
+
+                // SetOutput folds OutputName-tagged durable values into the activity's durable-value change set
+                // (the same durable/output channel activity outputs use), so the named workflow output is
+                // durably persisted on the activity's checkpoint boundary, like the workflow-variable write-back.
+                workflowOutputChanges = context.WorkflowOutputAssignmentRequested
+                    ? RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges(workItem.WorkflowExecutionId, context.RequestedWorkflowOutputs, _timeProvider.GetUtcNow())
+                    : [];
 
                 var bookmarkRequests = context.GetBookmarkRequests();
                 var childScheduleRequests = context.GetChildActivityScheduleRequests();
@@ -255,9 +267,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (bookmarkRequests.Count > 0)
                 {
                     // A suspending activity does not reach the completion checkpoint, so flush any workflow-scope
-                    // write-back here (dirty-tracked, so this is a no-op unless the activity actually mutated a
-                    // variable before suspending).
+                    // write-back and SetOutput durable values here (both no-ops unless the activity actually
+                    // mutated a variable / set an output before suspending).
                     await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
+                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowOutputChanges, cancellationToken);
                     await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, cancellationToken);
                     return;
                 }
@@ -266,8 +279,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 {
                     var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
                     // A child-scheduling activity (e.g. a composite) does not reach the completion checkpoint
-                    // either; flush any workflow-scope write-back here (dirty-tracked, normally a no-op).
+                    // either; flush any workflow-scope write-back and SetOutput durable values here (normally no-ops).
                     await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
+                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowOutputChanges, cancellationToken);
                     if (inspectionAccumulator is null)
                     {
                         await EnqueueChildActivityScheduleWorkAsync(schedulerWorkQueue, idGenerator, workItem, invokePayload, childScheduleRequests, cancellationToken);
@@ -337,12 +351,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (workflowVariableWriteBackChanges.Count > 0)
             durableValueChanges = durableValueChanges.Concat(workflowVariableWriteBackChanges).ToArray();
 
+        // Fold SetOutput's OutputName-tagged durable values (#260) into the same change set, alongside the
+        // workflow-variable write-back, so the named workflow output commits on the activity's checkpoint.
+        if (workflowOutputChanges.Count > 0)
+            durableValueChanges = durableValueChanges.Concat(workflowOutputChanges).ToArray();
+
         // Resolve a workflow-execution state change requested by a control-leaf intent (Finish ends the run;
-        // Correlate updates the correlation id). Both fold into the same activity-completed commit so the
-        // workflow state is persisted atomically with the activity completion.
+        // Correlate updates the correlation id; SetName updates the instance name). All fold into the same
+        // activity-completed commit so the workflow state is persisted atomically with the activity completion.
         var occurredAt = _timeProvider.GetUtcNow();
         var workflowExecutionStateChange = await BuildControlLeafWorkflowExecutionStateChangeAsync(
-            serviceProvider, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId, occurredAt, cancellationToken);
+            serviceProvider, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId,
+            instanceNameAssignmentRequested, requestedInstanceName, occurredAt, cancellationToken);
 
         if (inspectionAccumulator is null)
         {
@@ -392,10 +412,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         bool finishWorkflowRequested,
         bool correlationIdAssignmentRequested,
         string? requestedCorrelationId,
+        bool instanceNameAssignmentRequested,
+        string? requestedInstanceName,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
-        if (!finishWorkflowRequested && !correlationIdAssignmentRequested)
+        if (!finishWorkflowRequested && !correlationIdAssignmentRequested && !instanceNameAssignmentRequested)
             return null;
 
         var workflowExecutionStateStore = serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
@@ -409,7 +431,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             Status = finishWorkflowRequested ? WorkflowExecutionStatus.Completed : workflowState.Status,
             SubStatus = finishWorkflowRequested ? null : workflowState.SubStatus,
             CompletedAt = finishWorkflowRequested ? occurredAt : workflowState.CompletedAt,
-            UpdatedAt = occurredAt
+            UpdatedAt = occurredAt,
+            SystemMetadata = instanceNameAssignmentRequested
+                ? ApplyInstanceName(workflowState.SystemMetadata, requestedInstanceName)
+                : workflowState.SystemMetadata
         };
 
         return new RuntimeStateChange<WorkflowExecutionState>(
@@ -419,8 +444,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             Metadata: new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
-                [RuntimeMetadataKeys.CheckpointReason] = finishWorkflowRequested ? "WorkflowFinish" : "WorkflowCorrelation"
+                [RuntimeMetadataKeys.CheckpointReason] = finishWorkflowRequested
+                    ? "WorkflowFinish"
+                    : correlationIdAssignmentRequested ? "WorkflowCorrelation" : "WorkflowName"
             });
+    }
+
+    // Returns the workflow's system metadata with the instance-name key set (or removed when the name is
+    // cleared). Used by SetName (#260) to fold the instance name into the workflow-execution state change.
+    private static IReadOnlyDictionary<string, string> ApplyInstanceName(IReadOnlyDictionary<string, string> systemMetadata, string? instanceName)
+    {
+        var metadata = systemMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(instanceName))
+            metadata.Remove(RuntimeMetadataKeys.InstanceName);
+        else
+            metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+
+        return metadata;
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(

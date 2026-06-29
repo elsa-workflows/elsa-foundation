@@ -48,6 +48,11 @@ public sealed class SimpleActivityExecutionContext(
     public IReadOnlyCollection<string> FinishWorkflowOutcomeNames => _finishWorkflowOutcomeNames.ToArray();
     public bool CorrelationIdAssignmentRequested { get; private set; }
     public string? RequestedCorrelationId { get; private set; }
+    public bool InstanceNameAssignmentRequested { get; private set; }
+    public string? RequestedInstanceName { get; private set; }
+    private readonly Dictionary<string, object?> _requestedWorkflowOutputs = new(StringComparer.Ordinal);
+    public bool WorkflowOutputAssignmentRequested { get; private set; }
+    public IReadOnlyDictionary<string, object?> RequestedWorkflowOutputs => new Dictionary<string, object?>(_requestedWorkflowOutputs, StringComparer.Ordinal);
 
     public TService GetRequiredService<TService>() where TService : notnull =>
         (TService)GetRequiredService(typeof(TService))!;
@@ -154,6 +159,21 @@ public sealed class SimpleActivityExecutionContext(
     {
         CorrelationIdAssignmentRequested = true;
         RequestedCorrelationId = string.IsNullOrWhiteSpace(correlationId) ? null : correlationId;
+    }
+
+    public void SetInstanceName(string? instanceName)
+    {
+        InstanceNameAssignmentRequested = true;
+        RequestedInstanceName = string.IsNullOrWhiteSpace(instanceName) ? null : instanceName;
+    }
+
+    public void SetWorkflowOutput(string outputName, object? value)
+    {
+        if (string.IsNullOrWhiteSpace(outputName))
+            return;
+
+        WorkflowOutputAssignmentRequested = true;
+        _requestedWorkflowOutputs[outputName] = value;
     }
 
     /// <summary>

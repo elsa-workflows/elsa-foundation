@@ -28,6 +28,7 @@ public static class RuntimeWorkflowStateSeed
     // value-id prefix and the tag; keep these prefixes reserved for the seed to preserve that guarantee.
     public const string VariableValueIdPrefix = "variable:";
     public const string InputValueIdPrefix = "input:";
+    public const string OutputValueIdPrefix = "output:";
     private const string DurableValueIdPrefix = "durable-";
 
     /// <summary>
@@ -74,6 +75,29 @@ public static class RuntimeWorkflowStateSeed
 
         foreach (var (name, value) in variables ?? EmptyValues)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.VariableName, VariableValueIdPrefix, name, value, capturedAt));
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Builds the durable-value changes that persist named workflow outputs assigned by the <c>SetOutput</c>
+    /// leaf control activity (#260). Each output is captured as an inline <c>Instance</c>-lifecycle durable
+    /// value tagged with <see cref="RuntimeMetadataKeys.OutputName"/> under a reserved
+    /// <see cref="OutputValueIdPrefix"/> value id, the same shape an activity-output capture takes, so it is
+    /// durably queryable after the run. A later assignment of the same name upserts the same durable value.
+    /// Null collection is treated as empty.
+    /// </summary>
+    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildWorkflowOutputChanges(
+        string workflowExecutionId,
+        IReadOnlyDictionary<string, object?>? outputs,
+        DateTimeOffset capturedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+
+        var changes = new List<RuntimeStateChange<DurableValueState>>();
+
+        foreach (var (name, value) in outputs ?? EmptyValues)
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.OutputName, OutputValueIdPrefix, name, value, capturedAt));
 
         return changes;
     }
