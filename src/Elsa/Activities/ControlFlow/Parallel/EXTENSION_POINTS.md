@@ -5,6 +5,16 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 - `Parallel.Branch[{name}]` child slots (one per branch, at most one branch activity each)
 - A distinct engine `BranchId` per forked branch (`{compositeExecutionId}:parallel-branch:{branchNodeId}`)
 - A `Done` composite outcome emitted once the join condition (default: all branches; optional threshold) is met
+- A **composite fault** raised once too many branches reach a terminal non-success state for the success
+  threshold to be reachable (fault-aware join, #308)
+
+## Consumed runtime extension points
+
+- `Parallel` implements both `IActivityChildCompletionHandler` and `IActivityChildFaultHandler`
+  (`Elsa.Activities.Runtime.Core`). The runtime invokes the completion handler on each branch completion and
+  the fault handler on each branch fault (the engine propagates branch faults via a child-fault
+  parent-evaluation work item). Both funnel through one fault-aware join decision: complete with `Done` once
+  enough branches succeed, fault the composite once the threshold is unreachable, otherwise defer.
 
 ## Cross-domain contributions
 

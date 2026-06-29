@@ -175,7 +175,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
@@ -218,7 +218,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityConstructionFailed", valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityConstructionFailed", valueSnapshots, cancellationToken);
             return;
         }
 
@@ -359,7 +359,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         catch (Exception exception)
         {
             valueSnapshots.AddRange(ActivityOutputPublisher.BuildOutputValueSnapshots(payloadCapturePolicy, workItem, invokePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityFaulted", valueSnapshots, cancellationToken);
+            await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state, exception, "ActivityFaulted", valueSnapshots, cancellationToken);
             return;
         }
 
@@ -433,20 +433,32 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
     // Records a blocking fault incident for the activity and commits it. Each fault arm in InvokeActivityAsync
     // (input materialization, construction/binding, execution) differs only in its reason and snapshot set;
-    // centralizing the request shape + commit here keeps those arms to one call.
-    private static ValueTask RecordFaultAsync(
+    // centralizing the request shape + commit here keeps those arms to one call. When the faulted activity has a
+    // parent fork/join, it also rides a child-fault parent-evaluation work item along on the incident checkpoint so
+    // the parent can resolve its join deterministically (#308) instead of waiting forever for a completion that
+    // never arrives. Parents that do not implement IActivityChildFaultHandler no-op on that work item, so the fault
+    // remains a plain blocking incident for sequential containers.
+    private async ValueTask RecordFaultAsync(
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
+        IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState state,
         Exception exception,
-        string reason,
+        string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken) =>
-        activityFaultIncidentRecorder.CommitAsync(
-            ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, reason, valueSnapshots),
+        CancellationToken cancellationToken)
+    {
+        var request = ActivityOutputPublisher.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, exception, subStatus, valueSnapshots);
+        var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, invokePayload.ActivityExecutionId, subStatus);
+        var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+            activityExecutionStateStore, _timeProvider, workItem, invokePayload.PinnedExecutable, state, incidentId, cancellationToken);
+
+        await activityFaultIncidentRecorder.CommitAsync(
+            parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
             cancellationToken);
+    }
 
     // Persists durable-value upserts directly to the store, used on the non-inspection child-scheduling path that
     // enqueues continuation work without a checkpoint. Empty input is a no-op, so the dirty-tracked workflow-variable

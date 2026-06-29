@@ -148,7 +148,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
@@ -183,7 +183,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeConstructionFailed", valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeConstructionFailed", valueSnapshots, cancellationToken);
             return;
         }
 
@@ -199,7 +199,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         catch (Exception exception)
         {
             valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
-            await RecordFaultAsync(activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state, exception, "ActivityResumeFaulted", valueSnapshots, cancellationToken);
             return;
         }
 
@@ -433,16 +433,40 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     // Records a blocking fault incident for the resumed activity and commits it. Each fault arm in
     // ResumeActivityAsync (input materialization, construction/binding, resume-method execution) differs only in
     // its reason and snapshot set; centralizing the request shape + commit here keeps those arms to one call.
-    private static ValueTask RecordFaultAsync(
+    // Like the invoke path, it rides a child-fault parent-evaluation work item along when the faulted activity has
+    // a parent fork/join, so a branch that suspends then faults on resume still resolves its parent's join
+    // deterministically (#308).
+    private async ValueTask RecordFaultAsync(
+        IServiceProvider serviceProvider,
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         RuntimeCheckpointCommitter checkpointCommitter,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
         Exception exception,
-        string reason,
+        string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
+    {
+        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, subStatus, valueSnapshots);
+        var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, resumePayload.ActivityExecutionId, subStatus);
+        var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
+        var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+            activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);
+
+        await activityFaultIncidentRecorder.CommitAsync(
+            parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+            cancellationToken);
+    }
+
+    private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState state,
+        Exception exception,
+        string subStatus,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null)
     {
         var activityMetadata = new Dictionary<string, string>
         {
@@ -459,19 +483,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             [RuntimeMetadataKeys.StimulusHash] = resumePayload.StimulusHash
         };
 
-        var request = new ActivityFaultIncidentRecordRequest(
+        return new ActivityFaultIncidentRecordRequest(
             CheckpointCommitter: checkpointCommitter,
             WorkItem: workItem,
             ActivityExecutionId: resumePayload.ActivityExecutionId,
             ExecutableNodeId: resumePayload.ExecutableNodeId,
             State: state,
             Exception: exception,
-            SubStatus: reason,
+            SubStatus: subStatus,
             ActivityMetadata: activityMetadata,
             IncidentMetadata: incidentMetadata,
-            ValueSnapshots: valueSnapshots);
-
-        return activityFaultIncidentRecorder.CommitAsync(request, cancellationToken);
+            ValueSnapshots: valueSnapshots ?? []);
     }
 
     private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
