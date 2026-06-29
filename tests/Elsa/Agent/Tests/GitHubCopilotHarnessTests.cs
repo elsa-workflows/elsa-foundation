@@ -4,6 +4,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot.Options;
 using Elsa.Agent.GitHubCopilot.Services;
+using Elsa.Agent.Workflows.Tools;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -45,13 +46,57 @@ public sealed class GitHubCopilotHarnessTests
         Assert.Contains(events, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content == "done");
     }
 
-    private static GitHubCopilotAgentProvider BuildProvider(out FakeCopilotClientFactory factory)
+    [Fact]
+    public async Task Harness_runs_the_workflow_read_graph_tool_and_feeds_the_graph_back()
+    {
+        var provider = BuildProvider(out var factory, new WorkflowReadGraphTool());
+        var graph = new AgentContextAttachment(
+            "wf-1",
+            "workflow.definition",
+            "wf-1",
+            "Workflow",
+            "workflow.definition",
+            AgentContextSensitivity.Internal,
+            "selection",
+            "Workflow graph.",
+            new { revision = "rev-1", activities = new[] { new { id = "activity-1", type = "Elsa.Workflows.WriteLine", displayName = "Write" } } },
+            new Dictionary<string, string>());
+        var request = new AgentHarnessTurnRequest("session-1", "actor-1", [new(AgentRole.User, "read the graph")], [graph], [new WorkflowReadGraphTool()], AgentPolicy.Default);
+
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in provider.RunTurnAsync(request))
+            events.Add(item);
+
+        // The real read-only workflow tool ran and its serialized graph (real node ids) was fed back to the SDK.
+        Assert.Contains("activity-1", factory.Session.LastToolResult);
+        var started = Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallStarted);
+        Assert.Equal(WorkflowReadGraphTool.ToolName, ((AgentToolCallRequest)started.Payload!).ToolName);
+        Assert.Contains(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted);
+    }
+
+    [Fact]
+    public async Task Harness_surfaces_a_proposal_when_an_auto_invoked_tool_is_mutating()
+    {
+        var provider = BuildProvider(out var factory, new ApplyChangeTool());
+        var request = new AgentHarnessTurnRequest("session-1", "actor-1", [new(AgentRole.User, "apply a change")], [], [new ApplyChangeTool()], AgentPolicy.Default);
+
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in provider.RunTurnAsync(request))
+            events.Add(item);
+
+        // Under the default (review) policy a mutating tool becomes a proposal instead of running inline.
+        Assert.Contains(events, x => x.Kind == AgentStreamEventKind.ProposalCreated);
+        Assert.Contains("awaiting human approval", factory.Session.LastToolResult);
+    }
+
+    private static GitHubCopilotAgentProvider BuildProvider(out FakeCopilotClientFactory factory, params IAgentTool[] tools)
     {
         factory = new FakeCopilotClientFactory();
         var options = new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "test-token" };
         var audit = new InMemoryAgentAuditStore();
         var proposals = new InMemoryAgentProposalService(new NoopAgentActionProposalExecutor(), audit);
-        var invoker = new DefaultAgentToolInvoker(new DefaultAgentToolRegistry([new EchoTool()]), proposals, audit);
+        IAgentTool[] registered = tools.Length == 0 ? [new EchoTool()] : tools;
+        var invoker = new DefaultAgentToolInvoker(new DefaultAgentToolRegistry(registered), proposals, audit);
         return new GitHubCopilotAgentProvider(factory, Options.Create(options), invoker, NullLogger<GitHubCopilotAgentProvider>.Instance);
     }
 
