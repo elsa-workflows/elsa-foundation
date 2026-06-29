@@ -6,8 +6,9 @@ namespace Elsa.Agent.Tests;
 
 public sealed class AgentToolInvokerTests
 {
-    private static readonly AgentPolicy ApprovalPolicy = AgentPolicy.Default; // RequireProposalApproval = true
-    private static readonly AgentPolicy FullAutoPolicy = AgentPolicy.Default with { RequireProposalApproval = false };
+    private static readonly AgentPolicy ManualPolicy = AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.Manual };
+    private static readonly AgentPolicy ApprovalPolicy = AgentPolicy.Default; // AutonomyMode = AutoReadOnly
+    private static readonly AgentPolicy FullAutoPolicy = AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto, MaxAutonomyMode = AgentAutonomyMode.FullAuto };
 
     private readonly InMemoryAgentAuditStore _audit = new();
 
@@ -33,6 +34,16 @@ public sealed class AgentToolInvokerTests
         Assert.NotNull(dispatch.Proposal);
         Assert.Equal(AgentActionProposalStatus.AwaitingApproval, dispatch.Proposal!.Status);
         Assert.NotNull(await proposals.FindAsync(dispatch.Proposal.Id));
+    }
+
+    [Fact]
+    public async Task Mutating_tool_becomes_proposal_under_manual_policy()
+    {
+        var invoker = BuildInvoker(out _, new ApplyChangeTool());
+
+        var dispatch = await invoker.DispatchAsync(AgentTestToolHelpers.Invocation(DeterministicAgentProvider.MutatingToolName), ManualPolicy);
+
+        Assert.Equal(AgentToolDispatchOutcome.ProposalCreated, dispatch.Outcome);
     }
 
     [Fact]

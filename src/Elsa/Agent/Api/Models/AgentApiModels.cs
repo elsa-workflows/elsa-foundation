@@ -21,7 +21,9 @@ public sealed record AgentBootstrapResponse(
 
 public sealed record AgentPolicySummaryResponse(
     bool ContextVisibility,
-    bool RequiresApprovalForMutations,
+    string DefaultAutonomyMode,
+    string MaxAutonomyMode,
+    IReadOnlyCollection<string> AllowedAutonomyModes,
     string? RetentionLabel);
 
 public sealed record AgentCapabilityResponse(
@@ -50,6 +52,14 @@ public sealed class AgentCreateSessionRequest
     public string ConversationId { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
     public string Mode { get; init; } = "explain";
+
+    /// <summary>
+    /// The autonomy mode the client requests for the session (<c>manual</c>, <c>auto-read-only</c>, or
+    /// <c>full-auto</c>). The server clamps this to the deployment ceiling; an unset or unrecognized value
+    /// falls back to the deployment default.
+    /// </summary>
+    public string? AutonomyMode { get; init; }
+
     public AgentSurfaceRequest ActiveSurface { get; init; } = new();
     public AgentClientContextRequest ClientContext { get; init; } = new();
 }
@@ -341,6 +351,23 @@ internal static class AgentApiMapping
         AgentProviderRiskProfile.SandboxedExecution => "sandboxed-execution",
         AgentProviderRiskProfile.PrivilegedExecution => "privileged-execution",
         _ => riskProfile.ToString().ToLowerInvariant()
+    };
+
+    public static string ToContractString(this AgentAutonomyMode mode) => mode switch
+    {
+        AgentAutonomyMode.Manual => "manual",
+        AgentAutonomyMode.AutoReadOnly => "auto-read-only",
+        AgentAutonomyMode.FullAuto => "full-auto",
+        _ => mode.ToString().ToLowerInvariant()
+    };
+
+    /// <summary>Parses a wire autonomy mode (<c>manual</c>/<c>auto-read-only</c>/<c>full-auto</c>); returns null when unset or unrecognized.</summary>
+    public static AgentAutonomyMode? ParseAutonomyMode(string? mode) => mode?.Trim().ToLowerInvariant() switch
+    {
+        "manual" => AgentAutonomyMode.Manual,
+        "auto-read-only" => AgentAutonomyMode.AutoReadOnly,
+        "full-auto" => AgentAutonomyMode.FullAuto,
+        _ => null
     };
 
     public static string ToContractString(this AgentActionProposalStatus status) => status switch
