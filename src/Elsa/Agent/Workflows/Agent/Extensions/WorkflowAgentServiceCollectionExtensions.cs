@@ -2,6 +2,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Services;
+using Elsa.Agent.Workflows.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -24,6 +25,11 @@ public static class WorkflowAgentServiceCollectionExtensions
         services.TryAddScoped<IWorkflowChangeProposalService, DefaultWorkflowChangeProposalService>();
         services.TryAddScoped<IWorkflowGraphOperationBatchRiskClassifier, DefaultWorkflowGraphOperationBatchRiskClassifier>();
         services.TryAddScoped<IWorkflowAuthoringAuditService, DefaultWorkflowAuthoringAuditService>();
+
+        // Workflow authoring tools the agent can call once the provider surfaces tool calls. They are policy-gated
+        // by the tool invoker (read-only runs inline; mutating becomes a proposal).
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowReadGraphTool>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, WorkflowApplyGraphOperationsTool>());
 
         return services;
     }

@@ -135,6 +135,14 @@ public sealed class AgentContextAttachmentRequest
     public string DisplayName { get; init; } = string.Empty;
     public string Sensitivity { get; init; } = "internal";
     public string Summary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional structured body the client supplies inline (e.g. the live workflow graph that Studio
+    /// serializes for a <c>workflow.definition</c> attachment). When omitted the <see cref="Summary"/>
+    /// is used as the attachment content for backwards compatibility.
+    /// </summary>
+    public object? Content { get; init; }
+
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
 }
 
@@ -233,7 +241,7 @@ internal static class AgentApiMapping
             ParseSensitivity(attachment.Sensitivity),
             attachment.References.TryGetValue("scope", out var scope) ? scope : "selection",
             attachment.Summary,
-            attachment.Summary,
+            attachment.Content ?? attachment.Summary,
             attachment.References);
 
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
