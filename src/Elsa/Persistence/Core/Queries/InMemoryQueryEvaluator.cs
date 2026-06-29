@@ -78,10 +78,12 @@ public static class InMemoryQueryEvaluator
 
             case QueryOp.Contains:
                 // Null field yields no match (never throws), mirroring the EF translator's null guard
-                // and LIKE-on-NULL semantics.
+                // and LIKE-on-NULL semantics. Case-insensitivity uses ToLower() to mirror the EF
+                // translator's lower(field) LIKE '%lower(value)%' shape; the StringComparison overload
+                // is avoided because no EF provider can translate it to SQL.
                 if (fieldValue is not string text || comparison.Value is not string substring)
                     return false;
-                return text.Contains(substring, StringComparison.CurrentCultureIgnoreCase);
+                return text.ToLower().Contains(substring.ToLower());
 
             default:
                 throw new NotSupportedException($"Unsupported query operator '{comparison.Operator}'.");
