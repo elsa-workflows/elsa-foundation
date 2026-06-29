@@ -11,7 +11,8 @@ public sealed class ActivityChildCompletedContext
         IActivityExecutionContext parentContext,
         string completedChildActivityExecutionId,
         string completedChildExecutableNodeId,
-        IReadOnlyCollection<string> outcomeNames)
+        IReadOnlyCollection<string> outcomeNames,
+        string? completedChildIterationId = null)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(completedChildActivityExecutionId);
@@ -29,10 +30,20 @@ public sealed class ActivityChildCompletedContext
         CompletedChildActivityExecutionId = completedChildActivityExecutionId;
         CompletedChildExecutableNodeId = completedChildExecutableNodeId;
         OutcomeNames = outcomeSnapshot;
+        CompletedChildIterationId = completedChildIterationId;
     }
 
     public IActivityExecutionContext ParentContext { get; }
     public string CompletedChildActivityExecutionId { get; }
     public string CompletedChildExecutableNodeId { get; }
     public IReadOnlyCollection<string> OutcomeNames { get; }
+
+    /// <summary>
+    /// The engine iteration identity (<c>ActivitySchedulingProvenance.IterationId</c>) the completed
+    /// child execution carried, or <c>null</c> when the child was not scheduled as a loop iteration.
+    /// Counted/collection loop activities (<c>For</c>/<c>ForEach</c>/<c>While</c>/<c>Do</c>, #264–#267)
+    /// read this to recover which pass just completed without holding mutable activity state across the
+    /// stateless child-completion re-construction.
+    /// </summary>
+    public string? CompletedChildIterationId { get; }
 }

@@ -26,11 +26,13 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore activityExecutionStateStore)
 {
     private readonly RuntimeVariableScopeFactory _scopeFactory = new();
+    private readonly RuntimeLoopIterationScopeFactory _iterationScopeFactory = new();
 
     /// <summary>
     /// Builds the innermost visible <see cref="VariableScope"/> for <paramref name="activityState"/>
-    /// by walking its ancestor container executions (nearest first), or <c>null</c> when no enclosing
-    /// container declares variables.
+    /// by walking its ancestor container executions (nearest first), then layering the per-iteration
+    /// loop scope (#259, ADR 0028) on top when the activity was scheduled as a loop body, or <c>null</c>
+    /// when neither contributes any variable.
     /// </summary>
     public async ValueTask<VariableScope?> BuildScopeAsync(
         WorkflowExecutable executable,
@@ -68,13 +70,81 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
             ancestorId = ancestorState.ParentActivityExecutionId;
         }
 
-        if (containerLayers.Count == 0)
+        // Container chain assembled outermost-first (ancestors were collected nearest-first).
+        containerLayers.Reverse();
+        var containerScope = containerLayers.Count == 0 ? null : _scopeFactory.BuildChain(containerLayers);
+
+        // The loop body resolves its current item/index through an innermost iteration scope chained on
+        // top of the enclosing container chain (ADR 0028). The loop owner publishes the iteration values
+        // in the body's scheduling-provenance metadata; this wires #259's factory into the real
+        // evaluation path so input expressions referencing the loop variable resolve end-to-end.
+        return BuildIterationScopeOrDefault(activityState, containerScope);
+    }
+
+    private VariableScope? BuildIterationScopeOrDefault(ActivityExecutionState activityState, VariableScope? containerScope)
+    {
+        var metadata = activityState.Provenance.Metadata;
+        if (!metadata.TryGetValue(RuntimeMetadataKeys.LoopIterationOwnerNodeId, out var ownerNodeId) ||
+            string.IsNullOrEmpty(ownerNodeId) ||
+            !metadata.TryGetValue(RuntimeMetadataKeys.LoopIterationItemName, out var itemName) ||
+            string.IsNullOrEmpty(itemName))
+            return containerScope;
+
+        var iterationId = activityState.IterationId;
+        if (string.IsNullOrEmpty(iterationId))
+            return containerScope;
+
+        var item = DeserializeIterationValue(metadata, RuntimeMetadataKeys.LoopIterationItemValue);
+
+        string? indexName = null;
+        var index = 0;
+        if (metadata.TryGetValue(RuntimeMetadataKeys.LoopIterationIndexName, out var declaredIndexName) &&
+            !string.IsNullOrEmpty(declaredIndexName))
+        {
+            indexName = declaredIndexName;
+            index = DeserializeIterationValue(metadata, RuntimeMetadataKeys.LoopIterationIndexValue) is int parsedIndex ? parsedIndex : 0;
+        }
+
+        return _iterationScopeFactory.BuildIterationScope(
+            new LoopIterationScopeRequest(
+                OwnerNodeId: ownerNodeId,
+                IterationId: iterationId,
+                ItemReferenceKey: itemName,
+                ItemName: itemName,
+                Item: item,
+                Index: index,
+                IndexReferenceKey: indexName,
+                IndexName: indexName),
+            parent: containerScope);
+    }
+
+    private static object? DeserializeIterationValue(IReadOnlyDictionary<string, string> metadata, string key)
+    {
+        if (!metadata.TryGetValue(key, out var serialized) || string.IsNullOrEmpty(serialized))
             return null;
 
-        // Ancestors were collected nearest-first; the chain must be assembled outermost-first.
-        containerLayers.Reverse();
-        return _scopeFactory.BuildChain(containerLayers);
+        try
+        {
+            using var document = JsonDocument.Parse(serialized);
+            return ConvertJsonElement(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return serialized;
+        }
     }
+
+    private static object? ConvertJsonElement(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Null or JsonValueKind.Undefined => null,
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.String => element.GetString(),
+        JsonValueKind.Number => element.TryGetInt32(out var i) ? i
+            : element.TryGetInt64(out var l) ? l
+            : element.GetDouble(),
+        _ => element.Clone()
+    };
 
     /// <summary>
     /// Writes back every container scope in <paramref name="scope"/>'s visible chain whose live

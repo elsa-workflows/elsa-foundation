@@ -184,7 +184,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 context,
                 completedChildActivityExecutionId,
                 completedChildState.Execution.ExecutableNodeId,
-                payload.OutcomeNames);
+                payload.OutcomeNames,
+                completedChildState.IterationId);
 
             await childCompletionHandler.OnChildCompletedAsync(childCompletedContext);
 

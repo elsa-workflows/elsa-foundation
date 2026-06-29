@@ -60,6 +60,26 @@ public static class RuntimeMetadataKeys
     /// <see cref="Elsa.Expressions.Core.Models.VariableScope"/> is marked completed.
     /// </summary>
     public const string ScopedVariableScopeCompleted = "runtime.scopedVariableScopeCompleted";
+
+    /// <summary>
+    /// Set by a loop owner (<c>For</c>/<c>ForEach</c>/<c>While</c>/<c>Do</c>, #264–#267) in the body
+    /// child's scheduling-provenance metadata: the loop owner's executable node id, used as the declaring
+    /// scope id of the per-iteration variable scope (#259, ADR 0028) the runtime layers onto the body.
+    /// </summary>
+    public const string LoopIterationOwnerNodeId = "runtime.loop.iterationOwnerNodeId";
+
+    /// <summary>The authored name / reference key of the loop's per-iteration current-item variable.</summary>
+    public const string LoopIterationItemName = "runtime.loop.iterationItemName";
+
+    /// <summary>The JSON-encoded current-item value the loop publishes for this pass.</summary>
+    public const string LoopIterationItemValue = "runtime.loop.iterationItemValue";
+
+    /// <summary>Optional authored name / reference key of the loop's zero-based iteration-index variable.</summary>
+    public const string LoopIterationIndexName = "runtime.loop.iterationIndexName";
+
+    /// <summary>The JSON-encoded zero-based iteration index the loop publishes for this pass.</summary>
+    public const string LoopIterationIndexValue = "runtime.loop.iterationIndexValue";
+
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
     public const string PinnedArtifactId = "runtime.pinnedArtifactId";
