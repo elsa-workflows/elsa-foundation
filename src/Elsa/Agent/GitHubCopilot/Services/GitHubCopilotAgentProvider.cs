@@ -46,9 +46,12 @@ public sealed class GitHubCopilotAgentProvider(
         return new AgentProviderSession(session.Id, ProviderId, metadata);
     }
 
+    // Single-step entry point used when the host orchestrator drives the loop (i.e. when the provider is consumed as
+    // a plain IAgentProvider). Because this provider also implements IAgentHarness, the orchestrator routes it through
+    // RunTurnAsync instead — so for the default wiring this path (and its prompt-based toolCall protocol) is a
+    // fallback that is not exercised in production today; it keeps the IAgentProvider contract whole and tool-aware.
     public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var message = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
         var readiness = GetReadiness();
         if (!readiness.Available)
         {
@@ -63,7 +66,7 @@ public sealed class GitHubCopilotAgentProvider(
         try
         {
             await client.StartAsync(cancellationToken);
-            session = await client.ResumeSessionAsync(BuildSessionRequest(message.SessionId), cancellationToken);
+            session = await client.ResumeSessionAsync(BuildSessionRequest(context.SessionId), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -71,10 +74,10 @@ public sealed class GitHubCopilotAgentProvider(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to resume GitHub Copilot session {SessionId}; creating a new session.", message.SessionId);
+            logger.LogDebug(ex, "Failed to resume GitHub Copilot session {SessionId}; creating a new session.", context.SessionId);
             try
             {
-                session = await client.CreateSessionAsync(BuildSessionRequest(message.SessionId), cancellationToken);
+                session = await client.CreateSessionAsync(BuildSessionRequest(context.SessionId), cancellationToken);
             }
             catch (Exception createEx) when (createEx is not OperationCanceledException)
             {
@@ -96,8 +99,8 @@ public sealed class GitHubCopilotAgentProvider(
 
         await using (session)
         {
-            await foreach (var item in session.SendAsync(BuildPrompt(message), cancellationToken))
-                yield return MapStreamEvent(item);
+            await foreach (var item in session.SendAsync(BuildTurnPrompt(context), cancellationToken))
+                yield return MapStreamEvent(item, context);
         }
     }
 
@@ -384,14 +387,48 @@ public sealed class GitHubCopilotAgentProvider(
 
     private static bool IsValidPort(int port) => port is > 0 and <= 65535;
 
+    // Prompt used when the SDK owns the loop (harness path): the SDK invokes tools natively, so the prompt only
+    // needs the context attachments and the workflow authoring response contract.
     private string BuildPrompt(AgentProviderMessage message)
     {
         if (message.Context.Count == 0)
             return message.Content;
 
         var builder = new StringBuilder();
+        AppendContextAttachments(builder, message.Context);
+        AppendWorkflowAuthoringContract(builder, message.Context);
+        builder.AppendLine("User request:");
+        builder.Append(message.Content);
+        return builder.ToString();
+    }
+
+    // Prompt used on the single-step ContinueTurnAsync path, where the host orchestrator drives the loop. The SDK
+    // does not invoke our tools natively here, so we advertise the tools and a JSON toolCall protocol, fold in any
+    // tool results produced by the previous step, and let the model either call another tool or return a terminal
+    // result. The orchestrator dispatches toolCall requests through the policy-aware IAgentToolInvoker and re-prompts.
+    private string BuildTurnPrompt(AgentTurnContext context)
+    {
+        var content = context.LatestUserMessage?.Content ?? string.Empty;
+        if (context.Context.Count == 0 && context.AvailableTools.Count == 0 && context.PendingToolResults.Count == 0)
+            return content;
+
+        var builder = new StringBuilder();
+        AppendContextAttachments(builder, context.Context);
+        AppendWorkflowAuthoringContract(builder, context.Context);
+        AppendToolProtocol(builder, context.AvailableTools);
+        AppendPendingToolResults(builder, context.PendingToolResults);
+        builder.AppendLine("User request:");
+        builder.Append(content);
+        return builder.ToString();
+    }
+
+    private void AppendContextAttachments(StringBuilder builder, IReadOnlyCollection<AgentContextAttachment> attachments)
+    {
+        if (attachments.Count == 0)
+            return;
+
         builder.AppendLine("Elsa context attachments:");
-        foreach (var attachment in message.Context)
+        foreach (var attachment in attachments)
         {
             builder.Append("- ").Append(attachment.Label)
                 .Append(" [").Append(attachment.Source).Append(']')
@@ -406,34 +443,71 @@ public sealed class GitHubCopilotAgentProvider(
         }
 
         builder.AppendLine();
-        if (message.Context.Any(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase)))
+    }
+
+    private static void AppendWorkflowAuthoringContract(StringBuilder builder, IReadOnlyCollection<AgentContextAttachment> attachments)
+    {
+        if (!attachments.Any(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        builder.AppendLine("Workflow authoring response contract:");
+        builder.AppendLine("Return ordinary explanations as text. For workflow authoring results, return one JSON object with resultKind set to message, clarification, workflowGraphOperationBatch, or error.");
+        builder.AppendLine("Use workflowGraphOperationBatch payloads that match the Elsa workflow graph operation batch contract and schema version.");
+        builder.AppendLine();
+    }
+
+    private static void AppendToolProtocol(StringBuilder builder, IReadOnlyCollection<AgentToolDescriptor> tools)
+    {
+        if (tools.Count == 0)
+            return;
+
+        builder.AppendLine("Available tools:");
+        foreach (var tool in tools)
         {
-            builder.AppendLine("Workflow authoring response contract:");
-            builder.AppendLine("Return ordinary explanations as text. For workflow authoring results, return one JSON object with resultKind set to message, clarification, workflowGraphOperationBatch, or error.");
-            builder.AppendLine("Use workflowGraphOperationBatch payloads that match the Elsa workflow graph operation batch contract and schema version.");
+            builder.Append("- ").Append(tool.Name).Append(": ").Append(tool.Description);
+            if (tool.Mutability == AgentToolMutability.Mutating)
+                builder.Append(" (mutating; routed through Elsa-owned approval)");
             builder.AppendLine();
+            builder.Append("  Parameters JSON schema: ")
+                .AppendLine(string.IsNullOrWhiteSpace(tool.JsonSchema) ? "{}" : tool.JsonSchema);
         }
 
-        builder.AppendLine("User request:");
-        builder.Append(message.Content);
-        return builder.ToString();
+        builder.AppendLine("To call a tool, reply with exactly one JSON object and nothing else:");
+        builder.AppendLine("""{"resultKind":"toolCall","toolCall":{"id":"<unique call id>","name":"<tool name>","arguments":{ ... }}}""");
+        builder.AppendLine("After each tool runs, its result is appended below; you may then call another tool or return a terminal result (message, clarification, workflowGraphOperationBatch, or error).");
+        builder.AppendLine();
+    }
+
+    private static void AppendPendingToolResults(StringBuilder builder, IReadOnlyList<AgentToolResult> results)
+    {
+        if (results.Count == 0)
+            return;
+
+        builder.AppendLine("Results from tools you called:");
+        foreach (var result in results)
+        {
+            builder.Append("- ").Append(result.ToolName).Append(" (").Append(result.ToolCallId).Append("): ")
+                .Append(result.Succeeded ? "success" : "failed").Append(" — ").AppendLine(result.Content);
+        }
+
+        builder.AppendLine();
     }
 
     private bool CanIncludeContent(AgentContextAttachment attachment)
         => attachment.Sensitivity <= AgentContextSensitivity.Internal
            || (options.Value.IncludeSensitiveContextContent && attachment.Sensitivity <= AgentContextSensitivity.Sensitive);
 
-    private AgentStreamEvent MapStreamEvent(GitHubCopilotStreamEvent item)
+    private AgentStreamEvent MapStreamEvent(GitHubCopilotStreamEvent item, AgentTurnContext context)
         => item.Kind switch
         {
             GitHubCopilotStreamEventKind.Started => new(NewId(), AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow),
-            GitHubCopilotStreamEventKind.MessageDelta => TryMapStructuredResult(item.Content, out var result) ? result : new(NewId(), AgentStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
+            GitHubCopilotStreamEventKind.MessageDelta => TryMapStructuredResult(item.Content, context, out var result) ? result : new(NewId(), AgentStreamEventKind.MessageDelta, item.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
             GitHubCopilotStreamEventKind.Completed => new(NewId(), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow),
             GitHubCopilotStreamEventKind.Error => Error(item.ErrorCode ?? "agent.provider.github_copilot.sdk_error", NormalizeMessage(item.ErrorMessage), 502),
             _ => Error("agent.provider.github_copilot.unknown_event", "GitHub Copilot SDK returned an unknown stream event.", 502)
         };
 
-    private bool TryMapStructuredResult(string? content, out AgentStreamEvent result)
+    private bool TryMapStructuredResult(string? content, AgentTurnContext context, out AgentStreamEvent result)
     {
         result = null!;
         if (string.IsNullOrWhiteSpace(content))
@@ -461,10 +535,25 @@ public sealed class GitHubCopilotAgentProvider(
             "message" => new(NewId(), AgentStreamEventKind.MessageDelta, envelope.Message, null, null, DateTimeOffset.UtcNow, AgentResultKind.Message),
             "clarification" when envelope.Clarification is not null => new(NewId(), AgentStreamEventKind.ClarificationRequested, envelope.Clarification.Question, null, null, DateTimeOffset.UtcNow, AgentResultKind.Clarification, envelope.Clarification),
             "workflowGraphOperationBatch" when envelope.WorkflowGraphOperationBatch is not null => new(NewId(), AgentStreamEventKind.WorkflowGraphOperationBatchCreated, envelope.Message ?? "Prepared one workflow graph operation batch.", null, null, DateTimeOffset.UtcNow, AgentResultKind.WorkflowGraphOperationBatch, envelope.WorkflowGraphOperationBatch),
+            "toolCall" when envelope.ToolCall is { } toolCall && !string.IsNullOrWhiteSpace(toolCall.Name) => MapToolCall(toolCall, context),
             "error" => Error(envelope.ErrorCode ?? "agent.provider.github_copilot.result_error", NormalizeMessage(envelope.ErrorMessage), 502),
             _ => Error("agent.provider.github_copilot.unsupported_result", "GitHub Copilot returned an unsupported workflow authoring result.", 502)
         };
         return true;
+    }
+
+    // Maps a model-emitted toolCall envelope to a ToolCallRequested event. The orchestrator owns dispatch: it
+    // resolves the tool from the registry and applies policy, so Risk/RequiresApproval here are advisory hints
+    // derived from the advertised descriptor (mutating tools surface as requiring approval).
+    private static AgentStreamEvent MapToolCall(CopilotToolCall toolCall, AgentTurnContext context)
+    {
+        var toolCallId = string.IsNullOrWhiteSpace(toolCall.Id) ? NewId() : toolCall.Id!;
+        var arguments = toolCall.Arguments is { ValueKind: JsonValueKind.Object } element ? element.GetRawText() : "{}";
+        var descriptor = context.AvailableTools.FirstOrDefault(x => string.Equals(x.Name, toolCall.Name, StringComparison.Ordinal));
+        var risk = descriptor?.Risk ?? AgentRisk.ReviewRequired;
+        var requiresApproval = descriptor?.Mutability == AgentToolMutability.Mutating;
+        return new(NewId(), AgentStreamEventKind.ToolCallRequested, null, toolCallId, null, DateTimeOffset.UtcNow, null,
+            new AgentToolCallRequest(toolCallId, toolCall.Name!, arguments, risk, requiresApproval));
     }
 
     private static string? ExtractJsonObject(string content)
@@ -538,6 +627,9 @@ public sealed class GitHubCopilotAgentProvider(
         string? Message,
         WorkflowClarificationResult? Clarification,
         WorkflowGraphOperationBatch? WorkflowGraphOperationBatch,
+        CopilotToolCall? ToolCall,
         string? ErrorCode,
         string? ErrorMessage);
+
+    private sealed record CopilotToolCall(string? Id, string? Name, JsonElement? Arguments);
 }

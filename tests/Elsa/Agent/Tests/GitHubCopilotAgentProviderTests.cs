@@ -337,6 +337,122 @@ public sealed class GitHubCopilotAgentProviderTests
         Assert.Contains("Elsa-owned proposal approval", result.Message);
     }
 
+    [Fact]
+    public async Task Stream_advertises_available_tools_and_the_tool_call_protocol_in_the_prompt()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
+        var turn = Turn("Read the workflow.", tools: [new EchoTool().Descriptor], pending: []);
+
+        _ = await StreamTurnAsync(turn);
+
+        var prompt = _factory.Client.Session.LastPrompt;
+        Assert.Contains("Available tools:", prompt);
+        Assert.Contains(DeterministicAgentProvider.ReadOnlyToolName, prompt);
+        Assert.Contains("\"resultKind\":\"toolCall\"", prompt);
+    }
+
+    [Fact]
+    public async Task Stream_folds_prior_step_tool_results_into_the_prompt()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.Completed));
+        var pending = new[] { new AgentToolResult("call-1", DeterministicAgentProvider.ReadOnlyToolName, true, "echo:hi") };
+        var turn = Turn("Continue.", tools: [new EchoTool().Descriptor], pending: pending, stepIndex: 1);
+
+        _ = await StreamTurnAsync(turn);
+
+        var prompt = _factory.Client.Session.LastPrompt;
+        Assert.Contains("Results from tools you called:", prompt);
+        Assert.Contains("echo:hi", prompt);
+    }
+
+    [Fact]
+    public async Task Stream_maps_a_tool_call_envelope_to_a_tool_call_request()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.MessageDelta, """
+            {"resultKind":"toolCall","toolCall":{"id":"call-7","name":"echo","arguments":{"text":"hi"}}}
+            """));
+        var turn = Turn("Use the echo tool.", tools: [new EchoTool().Descriptor], pending: []);
+
+        var events = await StreamTurnAsync(turn);
+
+        var toolCall = Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
+        var request = Assert.IsType<AgentToolCallRequest>(toolCall.Payload);
+        Assert.Equal("call-7", request.ToolCallId);
+        Assert.Equal(DeterministicAgentProvider.ReadOnlyToolName, request.ToolName);
+        Assert.Contains("hi", request.Arguments);
+        Assert.Equal(AgentRisk.ReadOnly, request.Risk);
+        Assert.False(request.RequiresApproval);
+    }
+
+    [Fact]
+    public async Task Tool_call_request_marks_mutating_tools_as_requiring_approval()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        _factory.Client.Session.Events.Add(new(GitHubCopilotStreamEventKind.MessageDelta, """
+            {"resultKind":"toolCall","toolCall":{"name":"apply-change","arguments":{"change":"add"}}}
+            """));
+        var turn = Turn("Apply the change.", tools: [new ApplyChangeTool().Descriptor], pending: []);
+
+        var events = await StreamTurnAsync(turn);
+
+        var request = Assert.IsType<AgentToolCallRequest>(Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallRequested).Payload);
+        Assert.Equal(DeterministicAgentProvider.MutatingToolName, request.ToolName);
+        Assert.True(request.RequiresApproval);
+        Assert.False(string.IsNullOrWhiteSpace(request.ToolCallId));
+    }
+
+    [Fact]
+    public async Task Tool_call_turn_surfaces_the_request_then_consumes_the_fed_back_result()
+    {
+        _options.Enabled = true;
+        _options.GitHubToken = "test-token";
+        // Step 0 returns a tool call; once the tool result is folded into the prompt, the model returns a terminal message.
+        _factory.Client.Session.Responder = prompt => prompt.Contains("Results from tools you called:")
+            ? [new(GitHubCopilotStreamEventKind.MessageDelta, """{"resultKind":"message","message":"Done: echo:hi"}""")]
+            : [new(GitHubCopilotStreamEventKind.MessageDelta, """{"resultKind":"toolCall","toolCall":{"id":"call-1","name":"echo","arguments":{"text":"hi"}}}""")];
+
+        var firstStep = await StreamTurnAsync(Turn("Read then answer.", tools: [new EchoTool().Descriptor], pending: []));
+        var request = Assert.IsType<AgentToolCallRequest>(Assert.Single(firstStep, x => x.Kind == AgentStreamEventKind.ToolCallRequested).Payload);
+
+        // Simulate the orchestrator dispatching the tool and feeding its result back on the next step.
+        var pending = new[] { new AgentToolResult(request.ToolCallId, request.ToolName, true, "echo:hi") };
+        var secondStep = await StreamTurnAsync(Turn("Read then answer.", tools: [new EchoTool().Descriptor], pending: pending, stepIndex: 1));
+
+        var message = Assert.Single(secondStep, x => x.Kind == AgentStreamEventKind.MessageDelta);
+        Assert.Equal("Done: echo:hi", message.Content);
+        Assert.DoesNotContain(secondStep, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
+    }
+
+    private static AgentTurnContext Turn(
+        string content,
+        IReadOnlyCollection<AgentToolDescriptor> tools,
+        IReadOnlyList<AgentToolResult> pending,
+        int stepIndex = 0)
+        => new(
+            "session-1",
+            "session-1",
+            [new AgentTurnMessage(AgentRole.User, content)],
+            pending,
+            tools,
+            [],
+            stepIndex,
+            5);
+
+    private async Task<List<AgentStreamEvent>> StreamTurnAsync(AgentTurnContext turn, CancellationToken cancellationToken = default)
+    {
+        var events = new List<AgentStreamEvent>();
+        await foreach (var item in _provider.ContinueTurnAsync(turn, cancellationToken))
+            events.Add(item);
+        return events;
+    }
+
     private async Task<List<AgentStreamEvent>> StreamAsync(AgentProviderMessage message, CancellationToken cancellationToken = default)
     {
         var turn = AgentTurnContext.ForMessage(message.SessionId, message.Content, message.Context);
@@ -450,6 +566,10 @@ public sealed class GitHubCopilotAgentProviderTests
 
         public bool CancellationObserved { get; private set; }
 
+        // When set, computes the events for a given prompt instead of replaying the static Events list. Lets a test
+        // simulate a multi-step turn where each send (prompt) yields a different response.
+        public Func<string, IEnumerable<GitHubCopilotStreamEvent>>? Responder { get; set; }
+
         public async IAsyncEnumerable<GitHubCopilotStreamEvent> SendAsync(string prompt, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             LastPrompt = prompt;
@@ -466,7 +586,7 @@ public sealed class GitHubCopilotAgentProviderTests
                 }
             }
 
-            foreach (var item in Events)
+            foreach (var item in Responder?.Invoke(prompt) ?? Events)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return item;
