@@ -21,8 +21,10 @@ public sealed class SeedWellKnownTypesStartupTask(
 
         foreach (var descriptor in providers.SelectMany(p => p.GetDescriptors()))
         {
-            // In this slice RegisterType still silently overwrites (US3 makes it throw); guard here so
-            // each alias is registered exactly once regardless of provider overlap.
+            // RegisterType now throws on duplicate (US3 fail-fast). This is the single registration site for
+            // framework primitives; dedupe by alias here so identical aliases contributed by overlapping
+            // providers don't trip the throw at startup. (Conflicting cross-provider aliases are surfaced by
+            // the descriptor catalog's own DuplicateTypeAliasException, not silently absorbed here.)
             if (seen.Add(descriptor.Alias))
                 wellKnownTypeRegistry.RegisterType(descriptor.ClrType, descriptor.Alias);
         }

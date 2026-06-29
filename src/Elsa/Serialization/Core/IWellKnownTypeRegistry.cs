@@ -6,8 +6,25 @@ namespace Elsa.Serialization.Core;
 public interface IWellKnownTypeRegistry
 {
     /// <summary>
-    /// Register a type with an alias.
+    /// Registers a type under an alias. Registration is fail-fast.
     /// </summary>
+    /// <remarks>
+    /// The alias is a frozen contract: rename the underlying CLR type freely, but never rename the alias —
+    /// persisted definitions resolve by alias, so changing it breaks every stored reference.
+    /// </remarks>
+    /// <param name="type">The CLR type to register.</param>
+    /// <param name="alias">
+    /// The stable alias. Bare (non-dotted) aliases are reserved for framework primitives; module-contributed
+    /// types must use a dotted alias.
+    /// </param>
+    /// <exception cref="Exceptions.DuplicateTypeAliasException">
+    /// Thrown when the alias is already registered, or when <paramref name="type"/> is already registered under a
+    /// different alias. (Re-registering the identical (type, alias) pair is an idempotent no-op.)
+    /// </exception>
+    /// <exception cref="Exceptions.ReservedAliasNamespaceException">
+    /// Thrown when <paramref name="alias"/> is a bare (non-dotted) alias that is not in the framework-reserved
+    /// primitive set.
+    /// </exception>
     void RegisterType(Type type, string alias);
 
     /// <summary>
