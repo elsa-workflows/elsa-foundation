@@ -60,11 +60,70 @@ public sealed class FinishCorrelateExecutionTests
         Assert.Equal("order-42", run.WorkflowState?.CorrelationId);
     }
 
+    [Fact]
+    public async Task FinishInsideSequence_EndsWorkflow_AndSkipsLaterSiblings()
+    {
+        // Sequence: [Finish, probe-successor]. Finish runs first and ends the whole run; because it skips
+        // completion propagation, the sequence never schedules the successor and the run reaches Completed.
+        await using var harness = WorkflowExecutionHarness.Create()
+            .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+            .WithConstructor<SequenceConstructor>()
+            .WithConstructor<FinishConstructor>()
+            .WithProbeLeaf()
+            .Build("actexec-sequence", "actexec-finish");
+
+        var run = await harness.RunAsync(NewSequenceWithFinishFirst());
+
+        run.AssertCompleted("node-finish");
+        run.AssertDidNotRun("node-successor");
+        run.AssertWorkflowCompleted();
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+    }
+
     private static WorkflowExecutionHarness NewHarness<TConstructor>(params string[] activityExecutionIds)
         where TConstructor : class, IActivityConstructor =>
         WorkflowExecutionHarness.Create()
             .WithConstructor<TConstructor>()
             .Build(activityExecutionIds);
+
+    private static WorkflowExecutable NewSequenceWithFinishFirst()
+    {
+        var finishNode = new ExecutableNode(
+            executableNodeId: "node-finish",
+            authoredActivityId: "authored-finish",
+            activityType: typeof(Finish).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: TestDescriptor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new TestDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+        var successorNode = WorkflowExecutionHarness.NewProbeNode("node-successor");
+        var children = new[] { finishNode, successorNode };
+
+        var sequenceType = typeof(Elsa.Activities.Sequence.Activities.Sequence);
+        var root = new ExecutableNode(
+            executableNodeId: "node-sequence",
+            authoredActivityId: "authored-sequence",
+            activityType: sequenceType.FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: SequenceConstructor.SequenceDescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots:
+            [
+                new ExecutableChildSlot(Elsa.Activities.Sequence.Activities.Sequence.ActivitiesSlotName, children)
+            ],
+            structure: new ExecutableActivityStructure(
+                Elsa.Activities.Sequence.Activities.Sequence.StructureKind,
+                Elsa.Activities.Sequence.Activities.Sequence.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+
+        return WorkflowExecutionHarness.NewExecutable(root);
+    }
 
     private static WorkflowExecutable NewExecutable(string nodeId, Type activityType, string? inputName, string? inputValue)
     {
@@ -125,5 +184,19 @@ public sealed class FinishCorrelateExecutionTests
                 activity.CorrelationId = (InputArgument<string>)correlationInput;
             return new(activity);
         }
+    }
+
+    private sealed record SequenceDescriptor;
+
+    private sealed class SequenceConstructor : IActivityConstructor<SequenceDescriptor>
+    {
+        public static string SequenceDescriptorTypeKey => typeof(SequenceDescriptor).FullName!;
+        public string DescriptorType => SequenceDescriptorTypeKey;
+
+        public ValueTask<IActivity> Construct(JsonElement payload, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
+            new(new Elsa.Activities.Sequence.Activities.Sequence());
+
+        public ValueTask<IActivity> Construct(SequenceDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken) =>
+            new(new Elsa.Activities.Sequence.Activities.Sequence());
     }
 }

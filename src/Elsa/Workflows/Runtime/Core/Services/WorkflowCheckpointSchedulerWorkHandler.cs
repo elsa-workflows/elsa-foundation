@@ -16,21 +16,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly TimeProvider _timeProvider;
 
+    /// <summary>
+    /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
+    /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
+    /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
+    /// behaviour of rebuilding workflow state from the checkpoint payload alone.
+    /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
-        : this(activityExecutionStateStore, checkpointCommitter, inspectionAccumulator, workflowExecutionStateStore: null, timeProvider)
-    {
-    }
-
-    public WorkflowCheckpointSchedulerWorkHandler(
-        IActivityExecutionStateStore activityExecutionStateStore,
-        RuntimeCheckpointCommitter checkpointCommitter,
-        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
