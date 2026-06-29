@@ -154,6 +154,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
+                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
+                workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
                 activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues),
                 variableScope: variableScope);
             inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);

@@ -27,6 +27,23 @@ public static class RuntimeMetadataKeys
     public const string InvokeSchedulerWorkItemId = "runtime.invokeSchedulerWorkItemId";
     public const string InvokeSkipped = "runtime.invokeSkipped";
     public const string OutputName = "runtime.outputName";
+
+    /// <summary>
+    /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
+    /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
+    /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
+    /// <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/>
+    /// to rebuild the <c>variables.*</c> snapshot for input materialization.
+    /// </summary>
+    public const string VariableName = "runtime.variableName";
+
+    /// <summary>
+    /// Metadata key on a durable value carrying a workflow input value. Its presence marks the durable value
+    /// as a persisted workflow input and its value is the input name, mirroring <see cref="OutputName"/>. Read
+    /// by <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeInputBindingStateProjection.ProjectWorkflowInputs"/>
+    /// to rebuild the <c>input.*</c> snapshot for input materialization.
+    /// </summary>
+    public const string InputName = "runtime.inputName";
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>

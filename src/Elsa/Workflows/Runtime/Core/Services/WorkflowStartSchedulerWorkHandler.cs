@@ -60,7 +60,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         var rootActivityWorkItem = NewRootActivityWorkItem(workItem, startPayload.PinnedExecutable, rootActivityId, now, commandMetadata);
         var postCommitIntents = new[] { NewRootActivityPostCommitIntent(workItem, rootActivityWorkItem, rootActivityId, now) };
 
-        var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload.PinnedExecutable, postCommitIntents, now, commandMetadata);
+        var checkpointWorkItem = NewWorkflowStartedCheckpointWorkItem(workItem, startPayload, postCommitIntents, now, commandMetadata);
         await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
     }
 
@@ -145,17 +145,19 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
 
     private RuntimeSchedulerWorkItem NewWorkflowStartedCheckpointWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
-        WorkflowExecutableIdentity pinnedExecutable,
+        WorkflowExecutionStartCommandPayload startPayload,
         IReadOnlyCollection<RuntimePostCommitIntent> postCommitIntents,
         DateTimeOffset now,
         IReadOnlyDictionary<string, string> commandMetadata)
     {
         var payload = new RuntimeCheckpointCommandPayload(
-            pinnedExecutable,
+            startPayload.PinnedExecutable,
             RuntimeCheckpointNames.WorkflowStarted,
             activityExecutionIds: [],
             RuntimeCheckpointCommandPayload.WorkflowStartReason,
-            postCommitIntents);
+            postCommitIntents,
+            seedVariables: startPayload.Variables,
+            seedInputs: startPayload.Inputs);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",

@@ -60,6 +60,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var schedulerWorkQueue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var checkpointCommitter = scope.ServiceProvider.GetRequiredService<RuntimeCheckpointCommitter>();
         var activityFaultIncidentRecorder = scope.ServiceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
+        var activityOutputRegister = scope.ServiceProvider.GetRequiredService<IRuntimeActivityOutputRegister>();
+        var durableValueStateStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
         var payloadCapturePolicy = scope.ServiceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
         var executable = await workflowExecutableStore.FindAsync(resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
@@ -105,7 +107,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, payloadCapturePolicy, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -115,6 +117,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService,
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IRuntimeActivityOutputRegister activityOutputRegister,
+        IDurableValueStateStore durableValueStateStore,
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
@@ -126,7 +130,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         try
         {
-            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, serviceProvider, cancellationToken);
+            var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var resolutionContext = new RuntimeInputBindingResolutionContext(
+                workflowExecutionId: workItem.WorkflowExecutionId,
+                activityExecutionId: resumePayload.ActivityExecutionId,
+                durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
+                activityOutputs: activityOutputRegister,
+                serviceProvider: serviceProvider,
+                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
+                workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
+                activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+            inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
         {
