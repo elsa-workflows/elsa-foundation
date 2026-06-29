@@ -96,7 +96,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { api, container, unmount } = await renderRegisteredRoute();
 
-    await waitForText(container, "No active workflow definitions found.");
+    await waitForText(container, "No active workflow definitions");
     await click(buttonByText(container, "Deleted"));
     await waitForText(container, "Delete permanently");
 
