@@ -256,6 +256,9 @@ function mapContextAttachment(attachment: AgentMessageRequest["contextAttachment
     displayName: attachment.label,
     sensitivity: mapSensitivity(attachment.sensitivity),
     summary: secretRedacted ? "[secret redacted]" : typeof attachment.content === "string" ? attachment.content : attachment.label,
+    // Forward the structured body (e.g. the live workflow graph) so the agent can reason over real
+    // activity ids and connections. Never forward content for secret-redacted attachments.
+    content: secretRedacted ? undefined : content,
     references
   };
 }

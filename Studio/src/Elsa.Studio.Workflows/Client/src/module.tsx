@@ -71,6 +71,7 @@ import {
   updateScopeOwner,
   syncCanvasToScope,
   withFlowchartConnections,
+  flowchartEdges,
   type ScopeFrame,
   type WorkflowEdgeData,
   type WorkflowNodeData
@@ -199,6 +200,7 @@ declare global {
       selectedActivityType?: string | null;
       summary?: string;
       activities?: Array<{ id: string; type: string; displayName?: string }>;
+      connections?: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }>;
       diagnostics?: Array<{ severity: string; message: string }>;
     };
   }
@@ -2035,6 +2037,7 @@ function WorkflowEditor({
       selectedActivityType: selectedDescriptor?.typeName ?? (selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? selectedNode.activityVersionId : null),
       summary: details.definition.name,
       activities: collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion),
+      connections: collectWorkflowContextConnections(draft.state.rootActivity),
       diagnostics: draft.validationErrors.map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." }))
     };
 
@@ -3901,6 +3904,25 @@ function collectWorkflowContextActivities(activity: ActivityNode | null | undefi
 
   for (const slot of getChildSlots(activity)) {
     for (const child of slot.activities) collectWorkflowContextActivities(child, catalogByVersion, result);
+  }
+
+  return result;
+}
+
+function collectWorkflowContextConnections(
+  activity: ActivityNode | null | undefined,
+  result: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }> = []
+) {
+  if (!activity) return result;
+
+  // flowchartEdges decodes the flowchart structure payload into source/target edges; reuse it so the
+  // agent sees the same wiring the designer renders.
+  for (const edge of flowchartEdges(activity)) {
+    result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
+  }
+
+  for (const slot of getChildSlots(activity)) {
+    for (const child of slot.activities) collectWorkflowContextConnections(child, result);
   }
 
   return result;

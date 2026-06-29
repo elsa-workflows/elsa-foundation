@@ -12,7 +12,7 @@ export interface WorkflowAgentContextSnapshot {
   selectedActivityId?: string;
   summary?: string;
   activities?: Array<{ id: string; type: string; displayName?: string }>;
-  connections?: unknown[];
+  connections?: Array<{ source: string; target: string; sourcePort?: string; targetPort?: string }>;
   diagnostics?: Array<{ severity: string; message: string }>;
 }
 
