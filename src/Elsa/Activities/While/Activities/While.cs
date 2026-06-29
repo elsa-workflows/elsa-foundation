@@ -27,6 +27,22 @@ namespace Elsa.Activities.While.Activities;
 /// iteration identity is its per-pass loop state.
 /// </para>
 /// <para>
+/// <b>What the body can change to make the loop terminate.</b> The runtime re-materializes this
+/// composite's inputs before every condition re-evaluation, drawing them from persisted runtime state.
+/// So the condition terminates the loop when it reads state the body actually <em>persists</em> per pass:
+/// an <b>activity output</b> the body produces (e.g. a counter activity whose output the condition
+/// compares), or a <b>container-scoped variable</b> the body mutates (ADR 0027 scope mutations are
+/// written back and re-projected each pass). For example, a body that produces output <c>count</c> with a
+/// condition <c>count &lt; 3</c> runs three times and then stops.
+/// </para>
+/// <para>
+/// <b>Known limitation (#286).</b> A <b>workflow-scope</b> variable mutated mid-run by the body (e.g. via
+/// a SetVariable activity) does <em>not</em> yet flow back into materialization: workflow variables are
+/// seeded at start only, so the condition keeps seeing the start-time value and a <c>While</c> over such a
+/// variable will <b>not</b> terminate until #286 (mid-run workflow-variable write-back) lands. Use an
+/// activity output or a container-scoped variable for the loop condition until then.
+/// </para>
+/// <para>
 /// An unbound or null <see cref="Condition"/> resolves to <c>false</c> (the default of <c>bool</c>),
 /// mirroring <c>If</c>: a <c>While</c> with no condition wired up never runs its body and completes
 /// immediately.

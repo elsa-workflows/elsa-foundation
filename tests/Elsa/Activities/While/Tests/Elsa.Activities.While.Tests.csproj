@@ -21,9 +21,14 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
   </ItemGroup>
 

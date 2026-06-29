@@ -12,6 +12,24 @@ Each pass is scheduled with a distinct engine `IterationId` threaded through the
 `ActivityExecutionState.IterationId`. `While` is a condition-only loop with no current item or index, so
 it declares no per-iteration item variable; the iteration identity is its per-pass loop state.
 
+## What the body can change to make the loop terminate
+
+The runtime re-materializes this composite's inputs before every condition re-evaluation, drawing them
+from persisted runtime state. The condition therefore terminates the loop only when it reads state the
+body actually **persists** each pass:
+
+- an **activity output** the body produces — e.g. a body whose counter activity emits output `count`,
+  with the condition `count < 3`, runs three times and then stops; or
+- a **container-scoped variable** the body mutates — ADR 0027 scope mutations are written back and
+  re-projected into materialization each pass.
+
+**Known limitation (#286):** a **workflow-scope** variable mutated mid-run by the body (e.g. via a
+SetVariable activity) does *not* yet flow back into materialization. Workflow variables are seeded at
+start only (`RuntimeWorkflowStateSeed` — Seam C has no write-back), so the condition keeps seeing the
+start-time value and a `While` whose condition reads such a variable will **not** terminate until #286
+(mid-run workflow-variable write-back) lands. Use an activity output or a container-scoped variable for
+the loop condition until then.
+
 An unbound or null `Condition` resolves to `false` (the default of `bool`), mirroring `If`: a `While`
 with no condition wired up never runs its body and completes immediately.
 

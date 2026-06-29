@@ -23,6 +23,13 @@ namespace Elsa.Activities.While.Tests;
 /// evaluation (the parent composite's inputs are rebuilt each pass). A <see cref="CountingConditionEvaluator"/>
 /// returns <c>true</c> for the first N evaluations and <c>false</c> afterwards, so the body runs exactly N
 /// times before the loop completes — modelling a condition that flips after N passes.
+///
+/// These tests exercise the loop's <em>scheduling and re-evaluation cadence</em> (one condition evaluation
+/// per pass, distinct iteration id per pass, completion when the condition drops). They deliberately do
+/// not prove that a real condition observes per-pass state the body changed — a counting mock cannot
+/// distinguish real observation from a hidden counter. That end-to-end termination guarantee is covered by
+/// <see cref="WhileRealExpressionRuntimeTests"/> using a real JavaScript condition over a persisted body
+/// output.
 /// </summary>
 public sealed class WhileRuntimeTests
 {
