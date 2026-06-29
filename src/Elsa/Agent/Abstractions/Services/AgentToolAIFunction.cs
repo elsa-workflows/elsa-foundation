@@ -29,6 +29,15 @@ public static class AgentToolAIFunctions
     public static IReadOnlyList<AIFunction> CreateAll(IEnumerable<IAgentTool> tools, AgentToolAIFunctionContext context)
         => tools.Select(tool => Create(tool, context)).ToList();
 
+    /// <summary>
+    /// Projects tool descriptors to <b>declaration-only</b> <see cref="AIFunction"/>s — Name/Description/JsonSchema
+    /// with no executable body. Used by orchestrator-driven providers (e.g. the Anthropic provider) that advertise
+    /// tools so the model emits <c>FunctionCallContent</c>, while the host orchestrator owns dispatch through the
+    /// policy-aware invoker. Invoking one directly is a contract violation and throws.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> CreateDeclarations(IEnumerable<AgentToolDescriptor> descriptors)
+        => descriptors.Select(descriptor => (AIFunction)new AgentToolDeclarationAIFunction(descriptor)).ToList();
+
     internal static JsonElement ParseSchema(string? schema)
     {
         if (string.IsNullOrWhiteSpace(schema))
@@ -72,4 +81,17 @@ internal sealed class AgentToolAIFunction(AgentToolDescriptor descriptor, AgentT
         context.OnProposal?.Invoke(proposal);
         return $"A change proposal '{proposal.Id}' was created and is awaiting human approval. It has NOT been applied yet.";
     }
+}
+
+/// <summary>A tool advertised to a model for function-calling but never executed here — the orchestrator runs it.</summary>
+internal sealed class AgentToolDeclarationAIFunction(AgentToolDescriptor descriptor) : AIFunction
+{
+    public override string Name => descriptor.Name;
+
+    public override string Description => descriptor.Description;
+
+    public override JsonElement JsonSchema { get; } = AgentToolAIFunctions.ParseSchema(descriptor.JsonSchema);
+
+    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        => throw new NotSupportedException($"Tool '{descriptor.Name}' is declaration-only; the agent orchestrator dispatches it through the policy-aware invoker.");
 }

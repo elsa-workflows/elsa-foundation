@@ -32,30 +32,6 @@ public sealed class AgentHarnessTests
         Assert.Contains("awaiting human approval", result?.ToString());
     }
 
-    [Fact]
-    public void Claude_provider_advertises_tools_only_and_is_a_harness()
-    {
-        var provider = new ClaudeAgentProvider();
-
-        Assert.Equal(AgentHarnessCapabilities.Tools, provider.Capabilities);
-        Assert.IsAssignableFrom<IAgentHarness>(provider);
-        Assert.IsAssignableFrom<IAgentProvider>(provider);
-    }
-
-    [Fact]
-    public async Task Claude_provider_stub_reports_not_configured()
-    {
-        var provider = new ClaudeAgentProvider();
-        var request = new AgentHarnessTurnRequest("session-1", "actor-1", [new(AgentRole.User, "Hello")], [], [], AgentPolicy.Default);
-
-        var events = new List<AgentStreamEvent>();
-        await foreach (var item in provider.RunTurnAsync(request))
-            events.Add(item);
-
-        var error = Assert.Single(events, x => x.Kind == AgentStreamEventKind.Error);
-        Assert.Equal("agent.provider.claude.not_configured", error.Error?.Code);
-    }
-
     private AgentToolAIFunctionContext Context(AgentPolicy policy, Action<AgentActionProposal>? onProposal = null)
     {
         var tools = new IAgentTool[] { new EchoTool(), new ApplyChangeTool() };

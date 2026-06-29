@@ -52,6 +52,7 @@
   </Folder>
   <Folder Name="/src/elsa/Agent/">
     <Project Path="src\Elsa\Agent\Abstractions\Elsa.Agent.Core.csproj" />
+    <Project Path="src\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
     <Project Path="src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
     <Project Path="src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="src\Elsa\Agent\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
