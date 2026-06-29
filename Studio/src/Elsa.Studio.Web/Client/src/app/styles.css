@@ -1590,6 +1590,37 @@ textarea:focus {
   padding-top: 10px;
 }
 
+.studio-button.studio-button-primary {
+  background: var(--studio-accent);
+  border-color: var(--studio-accent);
+  color: #fff;
+}
+
+.studio-button.studio-button-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  color: #fff;
+}
+
+.extension-builder-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.extension-builder-advanced-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.extension-builder-new-extension {
+  gap: 10px;
+}
+
 .extension-builder-editor {
   min-height: 640px;
 }
