@@ -29,9 +29,9 @@ The join counts each branch by terminal disposition and completes with `Done` on
 branches reach a terminal non-success state (`Faulted`/`Cancelled`) for the remaining branches to reach the
 threshold; otherwise it defers. With the default (all-branches) threshold a single faulted branch therefore
 faults the composite; a configured threshold low enough to be met by the non-faulted branches still completes.
-The faulted branch keeps its own blocking incident regardless. The flowchart fork/join
-(`ParallelJoinFlowchartPolicy`) retains the original "faulted branch is not counted" limitation; aligning it
-is tracked separately.
+The faulted branch keeps its own blocking incident regardless. The flowchart fork/join (`Flowchart` /
+`ParallelJoinFlowchartPolicy`) is fault-aware too: because a flowchart join requires every inbound branch, a
+faulted inbound branch faults the flowchart deterministically rather than leaving the join hanging.
 
 The runtime activity class (`Activities/Parallel.cs`) references only the runtime contract surface. The
 design-side `ParallelStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity

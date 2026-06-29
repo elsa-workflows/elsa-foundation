@@ -42,6 +42,13 @@ This module also exposes these activity-owned contracts:
 - `FlowchartStructure.ConnectionMetadata` optional connection policy metadata
 - `FlowchartStructure.Variables` optional container-scoped variable declarations (ADR 0027)
 
+## Consumed runtime contracts
+
+`Flowchart` implements two runtime parent-callback contracts (`Elsa.Activities.Runtime.Core.Contracts`):
+
+- `IActivityChildCompletionHandler` — invoked when a child completes; routes through `FlowchartExecutionEngine.OnChildCompletedAsync` to follow outbound connections, evaluate implicit/parallel joins, and complete the composite when no active or waiting paths remain.
+- `IActivityChildFaultHandler` — invoked when a child branch faults (#308); routes through `FlowchartExecutionEngine.OnChildFaultedAsync`. Because a flowchart join requires every inbound branch, a faulted inbound branch can never let the join fire, so the flowchart faults deterministically (surfacing a composite incident) instead of hanging — mirroring the `Parallel` fork/join composite. The faulted leaf keeps its own blocking incident.
+
 ## Cross-domain contributions
 
 - `FlowchartStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`) with `SupportsScopedVariables = true` and `ProjectScopedVariables` — a `Flowchart` is a container scope that can own container-scoped variables visible to its descendant activities, using the same generic scope semantics as `Sequence` (ADR 0027).

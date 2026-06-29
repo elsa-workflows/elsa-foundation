@@ -194,6 +194,36 @@ public sealed class FlowchartExecutionEngine(
         await PersistAndMaybeCompleteAsync(context, state);
     }
 
+    /// <summary>
+    /// Handles a terminal fault of one Flowchart child (#308). A faulted child cannot complete, so its execution
+    /// path — and any downstream join that requires it (a Flowchart join needs <em>every</em> inbound branch) —
+    /// can never proceed. Rather than leave the Flowchart Running forever (waiting on a completion that will never
+    /// arrive), the Flowchart faults deterministically:
+    /// it records a <see cref="FlowchartDiagnosticKind.Faulted"/> diagnostic, persists it, then throws so the
+    /// runtime surfaces a composite incident on the Flowchart — mirroring the <c>Parallel</c> fork/join
+    /// composite's default-threshold behavior, where a single faulted branch faults the join. The faulted leaf
+    /// keeps its own blocking incident regardless.
+    /// </summary>
+    public async ValueTask OnChildFaultedAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext faultContext)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(faultContext);
+
+        var graph = FlowchartGraph.From(context.ExecutableNode);
+        var state = LoadState(context.ActivityExecutionState) ?? CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
+
+        var faultedNodeId = faultContext.FaultedChildExecutableNodeId;
+        var faultedChild = state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.NodeId, faultedNodeId));
+        if (faultedChild is not null)
+            state = RemoveActiveChild(state, faultedChild.ExecutionPathId, faultedNodeId);
+
+        var message = $"Flowchart faulted because child node '{faultedNodeId}' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it (a Flowchart join needs every inbound branch) — can no longer proceed.";
+        state = AddDiagnostic(state, FlowchartDiagnosticKind.Faulted, faultedNodeId, null, faultedChild?.ExecutionPathId, faultedChild?.ExecutionScopeId, message);
+        await SaveStateAsync(context, state);
+
+        throw new FlowchartExecutionException(message);
+    }
+
     private async ValueTask PersistAndMaybeCompleteAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
     {
         if (state.ActiveChildren.Count == 0 && state.ExecutionPaths.All(path => path.Status != ExecutionPathStatus.Waiting && path.Status != ExecutionPathStatus.Active))
