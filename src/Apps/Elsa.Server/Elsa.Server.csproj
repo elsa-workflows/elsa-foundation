@@ -56,6 +56,7 @@
 		<ProjectReference Include="..\..\Elsa\Activities\For\Elsa.Activities.For.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\ForEach\Elsa.Activities.ForEach.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\If\Elsa.Activities.If.csproj" />
+		<ProjectReference Include="..\..\Elsa\Activities\Parallel\Elsa.Activities.Parallel.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Switch\Elsa.Activities.Switch.csproj" />

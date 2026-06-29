@@ -25,6 +25,7 @@
           "ActivitiesFor": {},
           "ActivitiesForEach": {},
           "ActivitiesIf": {},
+          "ActivitiesParallel": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
           "ActivitiesSwitch": {},
