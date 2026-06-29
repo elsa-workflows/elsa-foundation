@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\If\Elsa.Activities.If.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\ForEach\Elsa.Activities.ForEach.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\For\Elsa.Activities.For.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\While\Elsa.Activities.While.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Expressions\Elsa.Expressions.csproj" />
