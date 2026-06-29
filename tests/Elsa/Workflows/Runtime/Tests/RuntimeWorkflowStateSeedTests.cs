@@ -49,6 +49,49 @@ public sealed class RuntimeWorkflowStateSeedTests
     }
 
     [Fact]
+    public void BuildVariableWriteBackChanges_ReusesTheSeedValueIdAndTagsAsVariableWithALaterCapture()
+    {
+        // A mid-run write-back (#286) re-emits a variable under the same reserved value id the seed used, so it
+        // upserts the seeded durable value rather than adding a sibling; a later capturedAt then lets the
+        // most-recent-capture-wins projection surface it.
+        var later = _now.AddSeconds(1);
+
+        var changes = RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges(
+            "wfexec-1",
+            variables: new Dictionary<string, object?> { ["counter"] = 3 },
+            capturedAt: later);
+
+        var change = Assert.Single(changes);
+        Assert.Equal(RuntimeStateChangeOperation.Upsert, change.Operation);
+        Assert.Equal("counter", change.State!.Metadata[RuntimeMetadataKeys.VariableName]);
+        Assert.Equal($"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}counter", change.State.ValueId);
+        Assert.Equal(later, change.State.CapturedAt);
+        Assert.Equal(3, change.State.InlineValue!.Value.GetInt32());
+        // Same durable-value state id the start-time seed emits, so the write-back overwrites the seed.
+        var seed = Assert.Single(RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", new Dictionary<string, object?> { ["counter"] = 0 }, null, _now));
+        Assert.Equal(seed.StateId, change.StateId);
+    }
+
+    [Fact]
+    public void BuildVariableWriteBackChanges_TreatsNullCollectionAsEmpty()
+    {
+        Assert.Empty(RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges("wfexec-1", variables: null, capturedAt: _now));
+    }
+
+    [Fact]
+    public void ProjectWorkflowVariables_LetsTheWriteBackWinOverTheSeed()
+    {
+        // The seed and a later write-back share the same value id and variable tag; projection keeps the
+        // most-recent capture, proving the mid-run write-back supersedes the start-time seed.
+        var seed = Assert.Single(RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", new Dictionary<string, object?> { ["counter"] = 0 }, null, _now));
+        var writeBack = Assert.Single(RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges("wfexec-1", new Dictionary<string, object?> { ["counter"] = 3 }, _now.AddSeconds(1)));
+
+        var variables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables([seed.State!, writeBack.State!]);
+
+        Assert.Equal(3, ((JsonElement)Assert.Single(variables).Value!).GetInt32());
+    }
+
+    [Fact]
     public void ProjectWorkflowVariables_ReadsOnlyVariableTaggedDurableValues()
     {
         var durableValues = new[]

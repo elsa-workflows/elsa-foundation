@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -141,20 +142,27 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         CancellationToken cancellationToken)
     {
         var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
-        var variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken);
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        VariableScope? variableScope;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+
+            // Build the scope with the workflow-scope variables anchored from the current durable-value
+            // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
+            // scope for the post-execution write-back below.
+            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+
             var resolutionContext = new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: invokePayload.ActivityExecutionId,
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
-                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
+                workflowVariables: workflowVariables,
                 workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
                 activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues),
                 variableScope: variableScope);
@@ -213,6 +221,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 // container executions' snapshots, so sibling branches and later activities observe them
                 // and resume restores them (ADR 0027).
                 await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
+
+                // Persist any workflow-scope variable assignments as VariableName-tagged durable values (#286),
+                // so later activities re-project the current value through `variables.*` rather than the
+                // start-time seed — making variable-driven While/Do loops terminate and SetVariable durable.
+                // Written directly to durable-value state here (mirroring the container-scope path) so the
+                // write-back survives every continuation path, including bookmark and child-scheduling returns.
+                foreach (var change in scopeService.BuildWorkflowScopeWriteBackChanges(variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, _timeProvider.GetUtcNow()))
+                {
+                    if (change.State is { } durableState)
+                        await durableValueStateStore.SaveAsync(durableState, cancellationToken);
+                }
 
                 // Control-leaf intents (Finish/Complete, Correlate): captured here and drained below so the
                 // engine ends the run or persists the new correlation id rather than the activity having to

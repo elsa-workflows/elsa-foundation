@@ -7,6 +7,8 @@ using Elsa.Activities.Testing;
 using Elsa.Activities.While;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Serialization.SystemText;
@@ -30,9 +32,9 @@ namespace Elsa.Activities.While.Tests;
 /// This proves the loop genuinely observes per-pass state the body changed — the counting-mock runtime
 /// tests cannot distinguish real observation from a hidden counter, so this locks the supported path.
 ///
-/// It also documents the #286 boundary: a condition over a <b>workflow-scope</b> variable the body mutates
-/// does NOT yet terminate (workflow variables are seeded at start only, with no mid-run write-back), so a
-/// bounded run still reports the loop never completing.
+/// It also proves the #286 write-back: a condition over a <b>workflow-scope</b> variable the body mutates
+/// (here via <c>context.SetVariable</c>) now terminates, because the mutation is persisted as a durable value
+/// and re-projected into <c>variables.*</c> each pass.
 /// </summary>
 public sealed class WhileRealExpressionRuntimeTests
 {
@@ -55,14 +57,13 @@ public sealed class WhileRealExpressionRuntimeTests
     }
 
     [Fact]
-    public async Task WorkflowScopeVariableCondition_DoesNotYetTerminate_DocumentingThe286Limitation()
+    public async Task WorkflowScopeVariableCondition_TerminatesAfterTheBodyDrivesItFalse()
     {
-        // The body writes a workflow-scope variable, but Seam C seeds workflow variables at start only with
-        // no mid-run write-back (#286). The JS condition `variables.counter < 3` keeps seeing the start-time
-        // seed, so the loop runs every pass the id budget allows and never satisfies its exit condition. We
-        // hand out a budget of 5 body passes — well past the limit of 3 a terminating loop would stop at —
-        // and assert the budget is fully consumed and the workflow never reaches Completed, locking the
-        // boundary until #286 (mid-run workflow-variable write-back) lands.
+        // #286 write-back: the body mutates a workflow-scope variable (`counter`) via context.SetVariable; the
+        // mutation is persisted as a VariableName-tagged durable value and re-projected into `variables.*` each
+        // pass, so the JS condition `variables.counter < 3` observes the current value and the loop stops at 3.
+        // We hand out a budget of 5 body passes — comfortably past the limit of 3 — so a non-terminating loop
+        // would overshoot; instead it stops at exactly the limit and the workflow completes.
         const int budget = 5;
         const int limit = 3;
         var bodyIds = Enumerable.Range(0, budget).Select(i => $"actexec-body-{i}").ToArray();
@@ -70,11 +71,11 @@ public sealed class WhileRealExpressionRuntimeTests
 
         var run = await harness.RunAsync(NewWorkflowVariableDrivenExecutable(limit));
 
-        // A terminating loop would stop at `limit` (3) passes; instead it consumes the whole budget ...
-        Assert.Equal(budget, run.States("node-body").Count);
-        Assert.True(run.States("node-body").Count > limit, "workflow-scope condition unexpectedly terminated at the limit");
-        // ... and the composite/workflow never completes, because the condition never observes the change.
-        Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        // The loop terminates at the limit (3 passes), not the full budget (5), because the condition now sees
+        // the mutated workflow-scope variable.
+        Assert.Equal(limit, run.States("node-body").Count);
+        run.AssertOutcomes("node-while", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
     }
 
     private static WorkflowExecutionHarness NewHarness(string compositeId, params string[][] bodyIdGroups)
@@ -153,8 +154,9 @@ public sealed class WhileRealExpressionRuntimeTests
     }
 
     /// <summary>
-    /// While(condition = JS `variables.counter &lt; limit`) over a body that mutates the workflow-scope
-    /// variable. Because Seam C has no mid-run write-back (#286), the condition never observes the change.
+    /// While(condition = JS `variables.counter &lt; limit`) over a body that mutates the workflow-scope variable
+    /// via <c>context.SetVariable</c>. The #286 write-back persists the mutation and re-projects it, so the
+    /// condition observes the change and the loop terminates at the limit.
     /// </summary>
     private static WorkflowExecutable NewWorkflowVariableDrivenExecutable(int limit)
     {
@@ -164,7 +166,7 @@ public sealed class WhileRealExpressionRuntimeTests
             activityType: CounterBody.ActivityTypeName,
             activityTypeVersion: "1.0.0",
             descriptorType: CounterBodyConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor("counter")),
+            descriptorPayload: JsonSerializer.SerializeToElement(new CounterBodyDescriptor(VariableName: "counter")),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Next"] = JavaScriptInt("(variables.counter == null ? 0 : variables.counter) + 1")
@@ -183,12 +185,23 @@ public sealed class WhileRealExpressionRuntimeTests
         ExecutableNode body,
         string? workflowVariableName = null)
     {
+        // The compiled root structure carries the workflow's authored variables in the generic `variables`
+        // shape (the same shape Sequence/Flowchart emit and RuntimeVariableScopeFactory reads with Web JSON
+        // options). A null name means no workflow-scope variable is declared.
         object structurePayload = workflowVariableName is null
             ? new { body = "node-body" }
             : new
             {
                 body = "node-body",
-                variables = new[] { new { referenceKey = $"var-{workflowVariableName}", name = workflowVariableName, @default = new { value = 0, type = "Literal" } } }
+                variables = new[]
+                {
+                    new VariableDefinition(
+                        ReferenceKey: $"var-{workflowVariableName}",
+                        Name: workflowVariableName,
+                        TypeInformation: Elsa.Primitives.Models.TypeInformation.Integer,
+                        StorageDriverType: null,
+                        Default: new ArgumentValue(0, "Literal"))
+                }
             };
 
         var root = new ExecutableNode(
@@ -205,7 +218,7 @@ public sealed class WhileRealExpressionRuntimeTests
             structure: new ExecutableActivityStructure(
                 WhileActivity.StructureKind,
                 WhileActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(structurePayload)));
+                JsonSerializer.SerializeToElement(structurePayload, new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 
         return WorkflowExecutionHarness.NewExecutable(root);
     }
@@ -227,20 +240,26 @@ public sealed class WhileRealExpressionRuntimeTests
                 ["referenceKey"] = inputName
             });
 
-    /// <summary>Body activity: emits its <c>Next</c> input as output <c>count</c>, driving the loop condition.</summary>
-    private sealed class CounterBody(InputArgument<int> next, OutputArgument<object?>? count) : CodeActivity(ActivityTypeName)
+    /// <summary>
+    /// Body activity: takes its incremented <c>Next</c> input and either emits it as output <c>count</c>
+    /// (output-driven loop) or assigns it to the named workflow-scope variable via <c>context.SetVariable</c>
+    /// (workflow-variable-driven loop), driving the loop condition either way.
+    /// </summary>
+    private sealed class CounterBody(InputArgument<int> next, OutputArgument<object?>? count, string? variableName) : CodeActivity(ActivityTypeName)
     {
         public const string ActivityTypeName = "test/counter-body";
 
         protected override void Execute(IActivityExecutionContext context)
         {
             var value = context.Get(next);
-            if (count is not null)
+            if (variableName is not null)
+                context.ExpressionExecutionContext.SetVariable(variableName, value);
+            else if (count is not null)
                 context.Set(count, value, "count");
         }
     }
 
-    private sealed record CounterBodyDescriptor(string? OutputName = "count");
+    private sealed record CounterBodyDescriptor(string? OutputName = "count", string? VariableName = null);
 
     private sealed class CounterBodyConstructor : IActivityConstructor<CounterBodyDescriptor>
     {
@@ -267,7 +286,7 @@ public sealed class WhileRealExpressionRuntimeTests
             if (outputs is not null && outputs.TryGetValue("count", out var output))
                 countOutput = (OutputArgument<object?>)output;
 
-            return new(new CounterBody((InputArgument<int>)nextInput, countOutput));
+            return new(new CounterBody((InputArgument<int>)nextInput, countOutput, descriptor.VariableName));
         }
     }
 

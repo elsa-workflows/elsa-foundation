@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,11 +18,14 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// the owning container execution's snapshot.
 /// </summary>
 /// <remarks>
-/// The chain carries only container scopes (reference-key addressed). The workflow scope is kept out
-/// of the chain deliberately: the runtime already owns one workflow-variable store, so adding a
-/// second copy here would be the divergence the consistency requirement forbids. Workflow-scope
-/// references fall through to the existing context variable accessors (the variable handler resolves
-/// them when the scope chain returns no match).
+/// The chain is anchored by the outermost <b>root activity scope</b> — the root node carries the workflow's
+/// variables. It keeps its node-id identity so structured <c>Variable</c> references against the root resolve,
+/// but in this runtime its value store is the seeded durable-value state (Seam C, #254): when the caller
+/// supplies the current <c>variables.*</c> projection, the root scope is restored from that projection each
+/// materialization and its mutations are written back as <c>VariableName</c>-tagged durable values (#286), so
+/// there is no second divergent copy — the scope is a per-materialization view over that one store. Nested
+/// container scopes remain reference-key addressed and persist to their own execution snapshot per concrete
+/// execution (#210).
 /// </remarks>
 public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore activityExecutionStateStore)
 {
@@ -38,12 +42,20 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         WorkflowExecutable executable,
         string workflowExecutionId,
         ActivityExecutionState activityState,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, object?>? workflowVariableValues = null)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(activityState);
 
-        var containerLayers = new List<RuntimeContainerScopeLayer>();
+        // The root activity carries the workflow's variables (#286). When the caller supplies the current
+        // workflow-variable projection, the root scope is sourced from and written back to durable-value state
+        // (so `variables.*` reads see prior mutations and the body's writes persist); callers that pass null
+        // keep the prior behavior of seeding the root from its own ActivityExecutionState snapshot only.
+        var workflowScopeActive = workflowVariableValues is not null;
+        var rootNodeId = executable.RootActivity.ExecutableNodeId;
+
+        var layers = new List<RuntimeContainerScopeLayer>();
         var ancestorId = activityState.ParentActivityExecutionId;
         var visited = new HashSet<string>(StringComparer.Ordinal);
 
@@ -58,11 +70,19 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
                 var declared = _scopeFactory.ProjectDeclaredVariables(ancestorNode);
                 if (declared.Count > 0)
                 {
-                    containerLayers.Add(new RuntimeContainerScopeLayer(
+                    // The root scope keeps its node-id identity (so structured Variable references against the
+                    // root still resolve) but, when the workflow scope is active, draws its values from the
+                    // durable-value projection mapped onto reference keys rather than the local snapshot.
+                    var isWorkflowRoot = StringComparer.Ordinal.Equals(ancestorState.Execution.ExecutableNodeId, rootNodeId);
+                    var values = workflowScopeActive && isWorkflowRoot
+                        ? MapValuesByNameToReferenceKey(declared, workflowVariableValues!)
+                        : ReadSnapshot(ancestorState);
+
+                    layers.Add(new RuntimeContainerScopeLayer(
                         ScopeId: ancestorState.Execution.ExecutableNodeId,
                         ExecutionId: ancestorState.Execution.ActivityExecutionId,
                         Variables: declared,
-                        Values: ReadSnapshot(ancestorState),
+                        Values: values,
                         IsCompleted: IsScopeCompleted(ancestorState)));
                 }
             }
@@ -71,8 +91,9 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         }
 
         // Container chain assembled outermost-first (ancestors were collected nearest-first).
-        containerLayers.Reverse();
-        var containerScope = containerLayers.Count == 0 ? null : _scopeFactory.BuildChain(containerLayers);
+        layers.Reverse();
+
+        var containerScope = layers.Count == 0 ? null : _scopeFactory.BuildChain(layers);
 
         // The loop body resolves its current item/index through an innermost iteration scope chained on
         // top of the enclosing container chain (ADR 0028). The loop owner publishes the iteration values
@@ -188,6 +209,84 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         }
 
         return updated;
+    }
+
+    /// <summary>
+    /// Maps a name-keyed value projection (e.g. the current <c>variables.*</c> durable-value projection) onto
+    /// the reference-key-addressed value store a <see cref="VariableScope"/> expects, using the declared
+    /// variables to translate each authored name to its reference key. Reference keys with no projected value
+    /// are omitted so the scope falls back to the declared default.
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> MapValuesByNameToReferenceKey(
+        IReadOnlyDictionary<string, IVariable> declaredByReferenceKey,
+        IReadOnlyDictionary<string, object?> valuesByName)
+    {
+        if (valuesByName.Count == 0)
+            return EmptyValues;
+
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var (referenceKey, variable) in declaredByReferenceKey)
+        {
+            if (valuesByName.TryGetValue(variable.Name, out var value))
+                result[referenceKey] = value;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Captures the workflow scope's current variable values from <paramref name="scope"/>'s visible chain
+    /// (#286) — the scope whose identity is the root activity node id, <paramref name="rootNodeId"/> — and
+    /// returns the durable-value write-back changes that persist them, keyed by authored variable name so
+    /// <see cref="RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/> re-projects them next
+    /// materialization. Returns an empty collection when no such scope is present or it holds no values.
+    /// Unlike container scopes (which persist to their owning execution's snapshot), the workflow scope
+    /// persists to durable-value state, mirroring how the start-time seed lives there; the caller commits the
+    /// returned changes so the write-back shares the activity's checkpoint boundary.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildWorkflowScopeWriteBackChanges(
+        VariableScope? scope,
+        string workflowExecutionId,
+        string rootNodeId,
+        DateTimeOffset capturedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(rootNodeId);
+
+        for (var current = scope; current is not null; current = current.Parent)
+        {
+            if (!StringComparer.Ordinal.Equals(current.ScopeId, rootNodeId))
+                continue;
+
+            var valuesByName = ProjectScopeValuesByName(current);
+            return valuesByName.Count == 0
+                ? []
+                : RuntimeWorkflowStateSeed.BuildVariableWriteBackChanges(workflowExecutionId, valuesByName, capturedAt);
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Maps a scope's current values (reference-key addressed) onto the authored variable names its
+    /// declarations carry, dropping any reference key with no live value. Translates the scope's reference-key
+    /// value store back into the name-keyed shape durable-value projection expects. Only this scope's own
+    /// declarations are considered (the scope is consulted as the chain head, so its parents are not walked).
+    /// </summary>
+    private static IReadOnlyDictionary<string, object?> ProjectScopeValuesByName(VariableScope scope)
+    {
+        var snapshot = scope.SnapshotValues();
+        if (snapshot.Count == 0)
+            return EmptyValues;
+
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var variable in scope.EnumerateVisibleVariables())
+        {
+            if (snapshot.TryGetValue(variable.Id, out var value))
+                result[variable.Name] = value;
+        }
+
+        return result;
     }
 
     /// <summary>

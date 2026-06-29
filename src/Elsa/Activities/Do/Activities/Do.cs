@@ -43,11 +43,10 @@ namespace Elsa.Activities.Do.Activities;
 /// condition <c>count &lt; 3</c> runs three times and then stops.
 /// </para>
 /// <para>
-/// <b>Known limitation (#286).</b> A <b>workflow-scope</b> variable mutated mid-run by the body (e.g. via
-/// a SetVariable activity) does <em>not</em> yet flow back into materialization: workflow variables are
-/// seeded at start only, so the condition keeps seeing the start-time value and a <c>Do</c> over such a
-/// variable will <b>not</b> terminate until #286 (mid-run workflow-variable write-back) lands. Use an
-/// activity output or a container-scoped variable for the loop condition until then.
+/// A <b>workflow-scope</b> variable mutated mid-run by the body (e.g. via a SetVariable activity) also drives
+/// the condition: the mutation is persisted as a durable value and re-projected into <c>variables.*</c> each
+/// pass (#286 mid-run write-back), so a <c>Do</c> whose condition reads a workflow-scope variable the body
+/// updates terminates just like the activity-output and container-scoped-variable cases.
 /// </para>
 /// <para>
 /// An unbound or null <see cref="Condition"/> resolves to <c>false</c> (the default of <c>bool</c>): a
