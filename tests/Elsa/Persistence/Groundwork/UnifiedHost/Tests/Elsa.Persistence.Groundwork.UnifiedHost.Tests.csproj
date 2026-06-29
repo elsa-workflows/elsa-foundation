@@ -19,8 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite.Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
   </ItemGroup>
 
 </Project>

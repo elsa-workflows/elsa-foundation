@@ -40,10 +40,10 @@
 	</Target>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Elsa\Agent\Abstractions\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-		<ProjectReference Include="..\..\Elsa\Agent\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
@@ -63,10 +63,10 @@
 		<ProjectReference Include="..\..\Elsa\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
-		<ProjectReference Include="..\..\Elsa\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
-		<ProjectReference Include="..\..\Elsa\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-		<ProjectReference Include="..\..\Elsa\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
-		<ProjectReference Include="..\..\Elsa\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
@@ -87,7 +87,7 @@
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite.Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
+		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Primitives\Elsa.Primitives.csproj" />
 		<ProjectReference Include="..\..\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />

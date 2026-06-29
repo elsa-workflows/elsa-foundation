@@ -21,9 +21,9 @@
     <Compile Remove="Sqlite/**/*" />
     <EmbeddedResource Remove="Sqlite/**/*" />
     <None Remove="Sqlite/**/*" />
-    <Compile Remove="Sqlite.Unified/**/*" />
-    <EmbeddedResource Remove="Sqlite.Unified/**/*" />
-    <None Remove="Sqlite.Unified/**/*" />
+    <Compile Remove="Querying/**/*" />
+    <EmbeddedResource Remove="Querying/**/*" />
+    <None Remove="Querying/**/*" />
   </ItemGroup>
 
 </Project>
