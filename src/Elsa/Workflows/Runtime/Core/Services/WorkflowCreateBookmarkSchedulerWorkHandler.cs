@@ -149,7 +149,10 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
                         State: bookmark,
                         Metadata: metadata)
                 ],
-                durableValues: [],
+                // Commit any suspend-path write-back the invoke handler folded into this bookmark's payload
+                // (#310) in the same transactional unit as the bookmark, so the workflow-scope variable
+                // write-back / SetOutput durable values land atomically with the bookmark-created checkpoint.
+                durableValues: payload.DurableValueChanges,
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: inspection is null

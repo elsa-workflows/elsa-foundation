@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
+using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -30,6 +31,7 @@ public class UnifiedGroundworkHostTests
     private static ServiceProvider BuildHost() =>
         new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
+            .AddSingleton<ISystemClock, FakeSystemClock>()
             .AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:")
             .BuildServiceProvider();
 

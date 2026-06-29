@@ -230,6 +230,63 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenActivityConstructionFails()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        var factory = new ThrowingActivityFactory(new InvalidOperationException("missing constructor"));
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(1, state.FaultCount);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
+        Assert.Equal("missing constructor", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityResumeConstructionFailed", message => Assert.Equal("missing constructor", message));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenArgumentBindingThrows()
+    {
+        // Models a binder InvalidOperationException (the #313/#316 class of bug): the argument binder runs inside
+        // activityFactory.Create, so a typed-binding failure on the resume path must fault the activity with a
+        // blocking incident rather than escaping the fault boundary and stalling the run silently at Running (#325).
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        var factory = new ThrowingActivityFactory(new InvalidOperationException("cannot bind argument 'Value'"));
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", state.SubStatus);
+        await AssertIncidentRecordedAsync("ActivityResumeConstructionFailed", message => Assert.Contains("cannot bind argument", message));
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", projection.SubStatus);
+        var incident = Assert.Single(projection.Incidents);
+        Assert.Equal("ActivityResumeConstructionFailed", incident.FailureType);
+        Assert.True(incident.IsBlocking);
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
     public async Task HandleAsync_ConsumesBookmarkAndReenqueuesCompletionWorkForExistingCompletedState()
     {
         var activity = new ResumeTargetActivity();
@@ -643,6 +700,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 outputProducingActivity.Customer = (OutputArgument<object?>)customer;
             return ValueTask.FromResult(activity);
         }
+    }
+
+    private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
+    {
+        public ValueTask<IActivity> Create(
+            string descriptorType,
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken = default) =>
+            throw exception;
     }
 
     private sealed class ResumeTargetActivity : ActivityBase
