@@ -27,7 +27,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, AlertTriangle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, Copy, Download, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Trash2, Undo2, Workflow as WorkflowIcon, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, Copy, Download, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Trash2, Undo2, Workflow as WorkflowIcon, Wrench, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioDialogApi, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -49,9 +49,10 @@ import {
   restoreDefinition,
   runExecutable,
   startWorkflowDraftTestRun,
-  updateDraft
+  updateDraft,
+  useScopedVariableAnalysis
 } from "./api/workflows";
-import type { ActivityAvailabilityDiagnosticEntry, ActivityAvailabilityDiagnostics, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
+import type { ActivityAvailabilityDiagnosticEntry, ActivityAvailabilityDiagnostics, ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, DefinitionListState, IncidentStateSummary, VariableDefinition, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowInstanceDetails, WorkflowInstanceSummary, WorkflowTestRunView } from "./workflowTypes";
 import { findActivityAvailabilityDiagnostic, getAvailabilityStateLabel } from "./activityAvailability";
 import {
   applyRuntimeOverlays,
@@ -59,6 +60,7 @@ import {
   buildUnsupportedActivityCanvas,
   createActivityNode,
   createWorkflowEdge,
+  findNodeScopePath,
   getActivityDesignerSupport,
   getActivityDisplay,
   getActivitySourcePorts,
@@ -84,7 +86,9 @@ import { computeAutoLayout } from "./workflowLayout";
 import { canRedo, canUndo, createHistory, pushSnapshot, redo as redoHistory, undo as undoHistory, type HistoryState } from "./workflowHistory";
 import { formatDate, formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
 import { WorkflowCodeView } from "./WorkflowCodeView";
-import { WorkflowPropertiesView } from "./WorkflowPropertiesView";
+import { ScopedVariablesEditor, WorkflowPropertiesView } from "./WorkflowPropertiesView";
+import { readContainerVariables, shadowingWarningMap, supportsScopedVariables, writeContainerVariables } from "./scopedVariables";
+import { collectVariableRepairItems } from "./validationDiagnostics";
 import { WorkflowExecutionTimeline } from "./WorkflowInstanceTimeline";
 import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
 import {
@@ -2045,6 +2049,9 @@ function WorkflowEditor({
     [availabilityLookup, catalogByVersion, selectedNode]
   );
   const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
+  // Scope-aware variable visibility + shadowing for the selected activity (ADR-0027). Backed by a
+  // pending design endpoint; degrades to status "unavailable" until it ships.
+  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNodeId);
   const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
   const busy = operation !== "idle";
@@ -2988,6 +2995,23 @@ function WorkflowEditor({
     });
   }, []);
 
+  // Navigates the designer to the activity that owns an invalid scoped variable reference so the
+  // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027).
+  const repairVariableReference = useCallback((nodeId: string | null) => {
+    if (!nodeId) return;
+    const currentRoot = draft?.state.rootActivity;
+    if (!currentRoot) return;
+    const path = findNodeScopePath(currentRoot, nodeId, activity => {
+      const item = catalogByVersion.get(activity.activityVersionId);
+      return item ? getActivityDisplay(item) : activity.nodeId;
+    });
+    if (!path) return;
+    setCanvasView("designer");
+    setFrames(path);
+    setSelectedNodeId(nodeId);
+    setInspectorCollapsed(false);
+  }, [draft?.state.rootActivity, catalogByVersion]);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -3283,8 +3307,23 @@ function WorkflowEditor({
           expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
           descriptorStatus={descriptorStatus}
+          visibleVariables={scopedVariableAnalysis.visibleVariables}
+          scopeStatus={scopedVariableAnalysis.status}
           onChange={updateSelectedActivity}
         />
+        {supportsScopedVariables(selectedNode) ? (
+          <div className="wf-container-variables">
+            <ScopedVariablesEditor
+              context={context}
+              variables={readContainerVariables(selectedNode)}
+              title="Container variables"
+              addLabel="Add container variable"
+              emptyLabel="No container variables declared on this activity."
+              warnings={shadowingWarningMap(scopedVariableAnalysis.shadowingWarnings, selectedNode.nodeId)}
+              onChange={next => updateSelectedActivity(writeContainerVariables(selectedNode, next as VariableDefinition[]))}
+            />
+          </div>
+        ) : null}
         {selectedSlots.length > 0 ? (
           <div className="wf-slot-list">
             <span>Embedded slots</span>
@@ -3502,7 +3541,7 @@ function WorkflowEditor({
               />
             ) : null}
           </div>
-          <ValidationPanel draft={draft} />
+          <ValidationPanel draft={draft} onRepair={repairVariableReference} />
           </>
           )}
         </main>
@@ -3812,15 +3851,39 @@ function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: { client
   );
 }
 
-function ValidationPanel({ draft }: { draft: WorkflowDraft }) {
-  if (!draft.validationErrors.length) {
+function ValidationPanel({ draft, onRepair }: { draft: WorkflowDraft; onRepair(nodeId: string | null): void }) {
+  const errors = draft.validationErrors;
+  if (!errors.length) {
     return <div className="wf-validation ok"><Check size={14} /> No validation errors</div>;
   }
 
+  const repairItems = collectVariableRepairItems(errors);
+  const repairByError = new Map(repairItems.map(item => [item.error, item]));
+
   return (
     <div className="wf-validation">
-      <AlertCircle size={14} />
-      {draft.validationErrors.length} validation issue{draft.validationErrors.length === 1 ? "" : "s"}
+      <div className="wf-validation-summary">
+        <AlertCircle size={14} />
+        {errors.length} validation issue{errors.length === 1 ? "" : "s"}
+        {repairItems.length > 0 ? (
+          <span className="wf-validation-variable-count"> · {repairItems.length} invalid variable reference{repairItems.length === 1 ? "" : "s"}</span>
+        ) : null}
+      </div>
+      <ul className="wf-validation-list">
+        {errors.map((error, index) => {
+          const repair = repairByError.get(error);
+          return (
+            <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
+              <span className="wf-validation-message">{error.message ?? "Validation issue."}</span>
+              {repair?.path.nodeId ? (
+                <button type="button" className="wf-validation-repair" onClick={() => onRepair(repair.path.nodeId)}>
+                  <Wrench size={12} /> Repair
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -75,6 +75,38 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   return owner;
 }
 
+// Finds the scope frames that bring `nodeId` into view (i.e. into the resolved scope's primary slot),
+// so a diagnostic can navigate the designer to a node anywhere in the tree. `labelFor` supplies the
+// breadcrumb label for each descended container. Returns null when the node is not reachable through
+// primary slots (matching how the canvas surfaces nodes via resolveScope).
+export function findNodeScopePath(
+  root: ActivityNode | null | undefined,
+  nodeId: string,
+  labelFor: (activity: ActivityNode) => string = activity => activity.nodeId
+): ScopeFrame[] | null {
+  if (!root) return null;
+  // The root scope itself is reached with no frames.
+  if (root.nodeId === nodeId) return [];
+
+  const visit = (owner: ActivityNode, frames: ScopeFrame[]): ScopeFrame[] | null => {
+    const slots = getChildSlots(owner);
+    // A node is "landable" only when it sits in its parent's primary slot (matching how resolveScope
+    // surfaces nodes on the canvas); descent still walks every slot to reach deeper primary slots.
+    if (slots[0]?.activities.some(activity => activity.nodeId === nodeId)) return frames;
+
+    for (const slot of slots) {
+      for (const activity of slot.activities) {
+        const found = visit(activity, [...frames, { ownerNodeId: activity.nodeId, slotId: slot.id, label: labelFor(activity) }]);
+        if (found) return found;
+      }
+    }
+
+    return null;
+  };
+
+  return visit(root, []);
+}
+
 export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[]): CanvasScope | null {
   const owner = resolveScopeOwner(root, frames);
   if (!owner) return null;

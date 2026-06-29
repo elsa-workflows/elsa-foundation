@@ -3,75 +3,96 @@ import {
   createInput,
   createOutput,
   createVariable,
-  defaultStorageDriverTypeName,
-  defaultVariableTypeName,
+  defaultVariableType,
   friendlyTypeLabel,
   generateUniqueName,
+  literalDefault,
   readBooleanField,
   readStringField,
+  readVariableDefault,
+  resolveStorageDriverType,
+  resolveTypeInformation,
   shortenTypeName,
+  typeInformationKey,
   updateInput,
   updateOutput,
-  updateVariable
+  updateVariable,
+  wellKnownVariableTypes
 } from "../workflowProperties";
-import type { WorkflowVariable } from "../workflowTypes";
+import type { VariableDefinition } from "../workflowTypes";
 
 describe("variable shape construction", () => {
-  it("creates a canonical variable with a generated id and the expected keys", () => {
+  it("creates a canonical VariableDefinition with a generated reference key and the expected keys", () => {
     const variable = createVariable({ name: "IsValid" });
 
     expect(Object.keys(variable).sort()).toEqual(
-      ["id", "isArray", "name", "storageDriverTypeName", "typeName", "value"].sort()
+      ["default", "name", "referenceKey", "storageDriverType", "typeInformation"].sort()
     );
-    expect(variable.id).toBeTypeOf("string");
-    expect(variable.id.length).toBeGreaterThan(0);
+    expect(variable.referenceKey).toBeTypeOf("string");
+    expect(variable.referenceKey.length).toBeGreaterThan(0);
     expect(variable.name).toBe("IsValid");
-    expect(variable.typeName).toBe(defaultVariableTypeName);
-    expect(variable.isArray).toBe(false);
-    expect(variable.value).toBeNull();
-    expect(variable.storageDriverTypeName).toBe(defaultStorageDriverTypeName);
+    expect(variable.typeInformation).toEqual(defaultVariableType);
+    expect(variable.storageDriverType).toBeNull();
+    expect(variable.default).toBeNull();
   });
 
-  it("honours an explicit type and storage driver", () => {
-    const variable = createVariable({ name: "Count", typeName: "Int32", storageDriverTypeName: "MemoryStorageDriver" });
-    expect(variable.typeName).toBe("Int32");
-    expect(variable.storageDriverTypeName).toBe("MemoryStorageDriver");
+  it("resolves an explicit type key to its well-known TypeInformation", () => {
+    const variable = createVariable({ name: "Count", typeKey: "Int32" });
+    expect(variable.typeInformation).toEqual(wellKnownVariableTypes.find(type => type.typeName === "Int32"));
+    expect(typeInformationKey(variable.typeInformation)).toBe("System.Int32");
   });
 
-  it("gives each created variable a unique id", () => {
-    expect(createVariable({ name: "a" }).id).not.toBe(createVariable({ name: "b" }).id);
+  it("splits an unknown free-text type into namespace + type name", () => {
+    expect(resolveTypeInformation("My.Custom.Order")).toMatchObject({ typeName: "Order", namespace: "My.Custom" });
+    expect(resolveTypeInformation("Bare")).toMatchObject({ typeName: "Bare", namespace: "" });
   });
 
-  it("matches the canonical Code-tab shape once fully edited", () => {
-    let variable = createVariable({ name: "IsValid", typeName: "Boolean" });
-    variable = updateVariable(variable, { value: "False", storageDriverTypeName: "WorkflowInstanceStorageDriver" });
+  it("gives each created variable a unique reference key", () => {
+    expect(createVariable({ name: "a" }).referenceKey).not.toBe(createVariable({ name: "b" }).referenceKey);
+  });
+
+  it("wraps and reads a literal default value", () => {
+    expect(literalDefault("")).toBeNull();
+    expect(literalDefault("False")).toEqual({ value: "False", expressionType: "Literal" });
+    expect(readVariableDefault({ value: "False", expressionType: "Literal" })).toBe("False");
+    expect(readVariableDefault(null)).toBe("");
+  });
+
+  it("resolves a storage driver key, or null when cleared", () => {
+    expect(resolveStorageDriverType("")).toBeNull();
+    expect(resolveStorageDriverType("Elsa.Storage.MemoryStorageDriver")).toMatchObject({
+      typeName: "MemoryStorageDriver",
+      namespace: "Elsa.Storage"
+    });
+  });
+
+  it("matches the canonical backend shape once fully edited", () => {
+    let variable = createVariable({ name: "IsValid", typeKey: "Boolean" });
+    variable = updateVariable(variable, { default: literalDefault("False") });
 
     expect(variable).toMatchObject({
       name: "IsValid",
-      typeName: "Boolean",
-      isArray: false,
-      value: "False",
-      storageDriverTypeName: "WorkflowInstanceStorageDriver"
+      typeInformation: { typeName: "Boolean", namespace: "System" },
+      default: { value: "False", expressionType: "Literal" }
     });
-    expect(typeof variable.id).toBe("string");
+    expect(typeof variable.referenceKey).toBe("string");
   });
 
   it("preserves unknown fields when editing an existing variable", () => {
     const existing = {
-      id: "abc",
+      referenceKey: "abc",
       name: "Old",
-      typeName: "Boolean",
-      isArray: false,
-      value: "False",
-      storageDriverTypeName: "WorkflowInstanceStorageDriver",
+      typeInformation: resolveTypeInformation("Boolean"),
+      storageDriverType: null,
+      default: null,
       // Field the editor does not know about — must survive the round-trip.
       customMetadata: { tag: "keep-me" }
-    } as unknown as WorkflowVariable;
+    } as unknown as VariableDefinition;
 
     const updated = updateVariable(existing, { name: "New" });
 
     expect(updated.name).toBe("New");
-    expect(updated.id).toBe("abc");
+    expect(updated.referenceKey).toBe("abc");
     expect(updated.customMetadata).toEqual({ tag: "keep-me" });
   });
 });

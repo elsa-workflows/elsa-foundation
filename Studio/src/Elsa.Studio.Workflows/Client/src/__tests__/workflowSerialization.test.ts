@@ -6,7 +6,13 @@ const draft = (): WorkflowDraft => ({
   id: "draft-1",
   definitionId: "def-1",
   state: {
-    variables: [{ name: "count", typeName: "Int32" }],
+    variables: [{
+      referenceKey: "count-ref",
+      name: "count",
+      typeInformation: { typeName: "Int32", namespace: "System", assemblyName: "System.Private.CoreLib", assemblyVersion: "" },
+      storageDriverType: null,
+      default: null
+    }],
     rootActivity: { nodeId: "root", activityVersionId: "v1", inputs: [], outputs: [] },
     inputs: [],
     outputs: []

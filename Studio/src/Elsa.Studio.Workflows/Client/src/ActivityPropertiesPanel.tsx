@@ -10,7 +10,9 @@ import type {
   StudioExpressionEditorDiagnostic,
   StudioExpressionDescriptor
 } from "@elsa-workflows/studio-sdk";
-import type { ActivityNode } from "./workflowTypes";
+import type { ActivityNode, VariableReference, VisibleVariableView } from "./workflowTypes";
+import type { ScopedVariableAnalysisStatus } from "./api/workflows";
+import { makeVariableReference, readVariableReference, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import {
   defaultExpressionDescriptors,
   getLiteralEditorValue,
@@ -21,6 +23,7 @@ import {
 } from "./activityProperties";
 
 const inlineSyntaxEditorIds = new Set(["studio.property.singleline", "studio.property.text-fallback"]);
+const variableSyntax = "Variable";
 
 export interface ActivityPropertiesPanelProps {
   activity: ActivityNode;
@@ -29,6 +32,10 @@ export interface ActivityPropertiesPanelProps {
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
   descriptorStatus: "loading" | "ready" | "failed";
+  // Variables visible from this activity's scope (nearest-scope first) for the Variable picker, plus
+  // the analysis status so the picker can explain an absent backend endpoint instead of showing empty.
+  visibleVariables: VisibleVariableView[];
+  scopeStatus: ScopedVariableAnalysisStatus;
   onChange(activity: ActivityNode): void;
 }
 
@@ -39,6 +46,8 @@ export function ActivityPropertiesPanel({
   expressionEditors,
   expressionDescriptors,
   descriptorStatus,
+  visibleVariables,
+  scopeStatus,
   onChange
 }: ActivityPropertiesPanelProps) {
   if (descriptorStatus === "loading") {
@@ -74,6 +83,8 @@ export function ActivityPropertiesPanel({
               editors={editors}
               expressionEditors={expressionEditors}
               expressionDescriptors={syntaxDescriptors}
+              visibleVariables={visibleVariables}
+              scopeStatus={scopeStatus}
               onChange={onChange}
             />
           ))}
@@ -89,6 +100,8 @@ function PropertyRow({
   editors,
   expressionEditors,
   expressionDescriptors,
+  visibleVariables,
+  scopeStatus,
   onChange
 }: {
   activity: ActivityNode;
@@ -96,6 +109,8 @@ function PropertyRow({
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
+  visibleVariables: VisibleVariableView[];
+  scopeStatus: ScopedVariableAnalysisStatus;
   onChange(activity: ActivityNode): void;
 }) {
   const readOnly = input.isReadOnly === true;
@@ -131,7 +146,15 @@ function PropertyRow({
     if (!wrapped) return;
     onChange(writeInputValue(activity, input, withSyntax(wrapped, nextSyntax)));
   };
-  const valueEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
+  const valueEditor = syntax === variableSyntax && wrapped ? (
+    <VariablePicker
+      value={value}
+      visibleVariables={visibleVariables}
+      scopeStatus={scopeStatus}
+      disabled={readOnly}
+      onChange={setRaw}
+    />
+  ) : InlineExpressionEditorComponent && inlineExpressionContext ? (
     <InlineExpressionEditorComponent
       descriptor={input}
       syntax={syntax}
@@ -408,6 +431,82 @@ function SyntaxPicker({
             );
           })}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Encodes/decodes a picker option as "scopeId::referenceKey" so the same reference key in different
+// declaring scopes stays distinct.
+const variableOptionSeparator = "::";
+
+function normalizeScopeId(scopeId: string | null | undefined): string {
+  return !scopeId || scopeId === WORKFLOW_SCOPE_ID ? WORKFLOW_SCOPE_ID : scopeId;
+}
+
+function variableOptionKey(referenceKey: string, scopeId: string | null | undefined): string {
+  return `${normalizeScopeId(scopeId)}${variableOptionSeparator}${referenceKey}`;
+}
+
+function parseVariableOptionKey(key: string): { scopeId: string; referenceKey: string } | null {
+  const index = key.indexOf(variableOptionSeparator);
+  if (index < 0) return null;
+  const referenceKey = key.slice(index + variableOptionSeparator.length);
+  return referenceKey ? { scopeId: key.slice(0, index), referenceKey } : null;
+}
+
+// Scope-aware variable picker for inputs whose expression syntax is "Variable". Lists only the
+// variables visible from the selected activity (nearest-scope first, supplied by the backend design
+// analysis) and writes a structured VariableReference. An out-of-scope existing reference is shown as
+// a distinct, repairable option rather than silently dropped (ADR-0027 repair surface).
+function VariablePicker({ value, visibleVariables, scopeStatus, disabled, onChange }: {
+  value: unknown;
+  visibleVariables: VisibleVariableView[];
+  scopeStatus: ScopedVariableAnalysisStatus;
+  disabled?: boolean;
+  onChange(value: VariableReference): void;
+}) {
+  const parsed = readVariableReference(value);
+  // After switching syntax to "Variable" the previous literal value is preserved (a bare string).
+  // Only treat the value as an existing reference when it is structured or matches a visible variable,
+  // so arbitrary leftover literal text is not surfaced as a phantom "(not visible)" option.
+  const valueIsStructured = (!!value && typeof value === "object") || (typeof value === "string" && value.trim().startsWith("{"));
+  const current = parsed && (valueIsStructured || visibleVariables.some(variable => variable.referenceKey === parsed.referenceKey))
+    ? parsed
+    : null;
+  const currentKey = current ? variableOptionKey(current.referenceKey, current.declaringScopeId) : "";
+  const currentIsVisible = !!current && visibleVariables.some(
+    variable => variable.referenceKey === current.referenceKey && variable.scopeId === normalizeScopeId(current.declaringScopeId)
+  );
+
+  return (
+    <div className="wf-variable-picker">
+      <select
+        aria-label="Variable reference"
+        value={currentKey}
+        disabled={disabled}
+        onChange={event => {
+          const parsed = parseVariableOptionKey(event.target.value);
+          if (parsed) onChange(makeVariableReference(parsed.referenceKey, parsed.scopeId));
+        }}
+      >
+        <option value="">Select a variable…</option>
+        {current && !currentIsVisible ? (
+          <option value={currentKey}>{current.referenceKey} (not visible from this scope)</option>
+        ) : null}
+        {visibleVariables.map(variable => {
+          const optionKey = variableOptionKey(variable.referenceKey, variable.scopeId);
+          return (
+            <option key={optionKey} value={optionKey}>
+              {variable.name}{variable.isWorkflowScope ? " · workflow" : " · container"}
+            </option>
+          );
+        })}
+      </select>
+      {scopeStatus === "unavailable" ? (
+        <p className="wf-variable-picker-note">Variable scope information is unavailable (pending backend support). Existing references are preserved.</p>
+      ) : scopeStatus === "ready" && visibleVariables.length === 0 ? (
+        <p className="wf-variable-picker-note">No variables are visible here. Declare one on the workflow or a container scope.</p>
       ) : null}
     </div>
   );
