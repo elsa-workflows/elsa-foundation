@@ -53,6 +53,25 @@
   /* One focus-ring recipe for the whole module. */
   --wf-focus-ring: 0 0 0 3px color-mix(in srgb, var(--wf-accent) 40%, transparent);
 
+  /* Map React Flow's canvas chrome (Controls, MiniMap, Background) onto the
+     module tokens so it tracks the host light/dark theme instead of the
+     hardcoded light defaults in @xyflow/react/dist/style.css. */
+  --xy-controls-button-background-color: var(--wf-panel);
+  --xy-controls-button-background-color-hover: var(--wf-panel-muted);
+  --xy-controls-button-color: var(--wf-text);
+  --xy-controls-button-color-hover: var(--wf-accent);
+  --xy-controls-button-border-color: var(--wf-border);
+  --xy-controls-box-shadow: var(--wf-shadow-menu);
+
+  --xy-minimap-background-color: var(--wf-panel);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--wf-canvas) 60%, transparent);
+  --xy-minimap-mask-stroke-color: var(--wf-border);
+  --xy-minimap-node-background-color: var(--wf-border-strong);
+  --xy-minimap-node-stroke-color: var(--wf-border-strong);
+
+  --xy-background-pattern-color: var(--wf-border-strong);
+  --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel) 70%, transparent);
+
   display: flex;
   min-height: 100%;
   flex-direction: column;
