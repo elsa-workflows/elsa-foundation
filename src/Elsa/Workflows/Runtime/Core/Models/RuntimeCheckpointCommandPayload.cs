@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -16,7 +17,9 @@ public sealed class RuntimeCheckpointCommandPayload
         string checkpointName,
         IReadOnlyCollection<string>? activityExecutionIds,
         string reason,
-        IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents = null)
+        IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents = null,
+        IReadOnlyDictionary<string, JsonElement>? seedVariables = null,
+        IReadOnlyDictionary<string, JsonElement>? seedInputs = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -49,6 +52,8 @@ public sealed class RuntimeCheckpointCommandPayload
         ActivityExecutionIds = activityExecutionIdSnapshot;
         Reason = reason;
         PostCommitIntents = postCommitIntentSnapshot;
+        SeedVariables = SnapshotElements(seedVariables);
+        SeedInputs = SnapshotElements(seedInputs);
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -56,6 +61,21 @@ public sealed class RuntimeCheckpointCommandPayload
     public IReadOnlyCollection<string> ActivityExecutionIds { get; }
     public string Reason { get; }
     public IReadOnlyCollection<RuntimePostCommitIntent> PostCommitIntents { get; }
+
+    /// <summary>
+    /// Workflow variable values (name → JSON-encoded value) to persist as durable runtime state when this
+    /// checkpoint commits. Populated only for the workflow-started checkpoint; empty otherwise.
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonElement> SeedVariables { get; }
+
+    /// <summary>
+    /// Workflow input values (name → JSON-encoded value) to persist as durable runtime state when this
+    /// checkpoint commits. Populated only for the workflow-started checkpoint; empty otherwise.
+    /// </summary>
+    public IReadOnlyDictionary<string, JsonElement> SeedInputs { get; }
+
+    private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
+        (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);
 }
 
 internal sealed class RuntimeCheckpointCommandPayloadValidationException(string message, string? paramName)

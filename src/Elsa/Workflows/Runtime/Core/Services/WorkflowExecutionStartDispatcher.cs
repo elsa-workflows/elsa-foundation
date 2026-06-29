@@ -84,7 +84,9 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
         var metadata = CreateDispatchMetadata(request, executable.Identity);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: executable.Identity,
-            requestedArtifactId: request.ArtifactId));
+            requestedArtifactId: request.ArtifactId,
+            variables: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables),
+            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs)));
 
         var command = new WorkflowExecutionCommand(
             CommandId: _idGenerator.NewWorkflowExecutionCommandId(),

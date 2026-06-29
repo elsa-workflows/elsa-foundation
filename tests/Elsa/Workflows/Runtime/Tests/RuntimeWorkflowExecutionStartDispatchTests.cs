@@ -107,6 +107,26 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_CarriesSeededVariablesAndInputsIntoStartPayload()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
+            artifactId: "artifact-1",
+            requestedBy: "test",
+            variables: new Dictionary<string, object?> { ["greeting"] = "Hello" },
+            inputs: new Dictionary<string, object?> { ["name"] = "World" }));
+
+        var envelope = Assert.Single(agentProvider.Agent.Envelopes);
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.Equal("Hello", payload.Variables["greeting"].GetString());
+        Assert.Equal("World", payload.Inputs["name"].GetString());
+    }
+
+    [Fact]
     public async Task DispatchAsync_UsesProvidedWorkflowExecutionIdAndIdempotencyKey()
     {
         var store = new InMemoryWorkflowExecutableStore();

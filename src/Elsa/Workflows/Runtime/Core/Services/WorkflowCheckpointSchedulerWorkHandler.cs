@@ -117,7 +117,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
-                durableValues: [],
+                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt),
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
@@ -127,6 +127,21 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             }));
+    }
+
+    private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCheckpointCommandPayload payload,
+        DateTimeOffset occurredAt)
+    {
+        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0)
+            return [];
+
+        return RuntimeWorkflowStateSeed.BuildSeedChanges(
+            workItem.WorkflowExecutionId,
+            payload.SeedVariables.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
+            payload.SeedInputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
+            occurredAt);
     }
 
     private static void ValidateTerminalCheckpointStatus(

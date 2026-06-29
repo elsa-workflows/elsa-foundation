@@ -151,6 +151,51 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task DrainAsync_SeedsSuppliedVariablesAndInputsAsDurableRuntimeState()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var durableValueStore = new InMemoryDurableValueStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: null,
+            activityExecutionStateStore: new InMemoryActivityExecutionStateStore(),
+            bookmarkStateStore: null,
+            durableValueStateStore: durableValueStore,
+            incidentStateStore: null,
+            operationalStateStore: null,
+            schedulerStateStore: null,
+            activityExecutionInspectionWriter: null);
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var startHandler = NewHandler(store, queue);
+        var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: NewStartPayloadWithSeed(executable.Identity)));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var write = Assert.Single(checkpointWriter.ListCommits());
+        Assert.Equal(RuntimeCheckpointNames.WorkflowStarted, write.Commit.Checkpoint.Name);
+        Assert.Equal(2, write.Commit.StateChanges.DurableValues.Count);
+
+        var durableValues = await durableValueStore.ListAsync("wfexec-1");
+        var variables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+        var inputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
+        Assert.Equal("Hello", ((JsonElement)Assert.Single(variables).Value!).GetString());
+        Assert.Equal("World", ((JsonElement)Assert.Single(inputs).Value!).GetString());
+    }
+
+    private JsonElement NewStartPayloadWithSeed(WorkflowExecutableIdentity identity) =>
+        JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            identity,
+            "artifact-1",
+            variables: WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["greeting"] = "Hello" }),
+            inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(new Dictionary<string, object?> { ["name"] = "World" })));
+
+    [Fact]
     public async Task CheckpointHandler_DoesNotDispatchStartNodeSchedulingWhenWorkflowStartedWriteFails()
     {
         var store = new InMemoryWorkflowExecutableStore();

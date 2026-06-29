@@ -22,6 +22,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
+    private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public WorkflowResumeBookmarkSchedulerWorkHandlerTests()
@@ -345,6 +346,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         services.AddSingleton<IBookmarkStateStore>(_ => _bookmarkStateStore);
         services.AddSingleton(_schedulerWorkQueue);
         services.AddSingleton<IWorkflowSchedulerWorkQueue>(_ => _schedulerWorkQueue);
+        services.AddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
+        services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(_now));
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_checkpointWriter);

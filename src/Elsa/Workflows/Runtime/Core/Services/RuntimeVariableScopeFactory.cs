@@ -56,6 +56,33 @@ public sealed class RuntimeVariableScopeFactory
     }
 
     /// <summary>
+    /// Projects a container/workflow node's declared variables into the name → default-value snapshot the
+    /// runtime seeds as start-time workflow-variable state (Seam C, #254). Reads the same compiled
+    /// <c>variables</c> structure shape as <see cref="ProjectDeclaredVariables"/> but keys by the authored
+    /// variable name (what <c>variables.*</c> expressions reference) and carries only the declared default.
+    /// Returns an empty map when the node declares no variables. Last declaration wins on duplicate names.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?> ProjectDeclaredVariableDefaultsByName(ExecutableNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        var declared = ProjectDeclaredVariables(node);
+        if (declared.Count == 0)
+            return EmptyDefaults;
+
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var variable in declared.Values)
+        {
+            if (string.IsNullOrEmpty(variable.Name))
+                continue;
+
+            result[variable.Name] = variable.DefaultValue;
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Builds the visible <see cref="VariableScope"/> for the innermost layer, chaining each layer to
     /// its parent. Layers must be ordered outermost-first (workflow scope first, nearest container
     /// last). Returns <c>null</c> when no layers are supplied.
@@ -86,6 +113,9 @@ public sealed class RuntimeVariableScopeFactory
 
     private static readonly IReadOnlyDictionary<string, IVariable> EmptyVariables =
         new Dictionary<string, IVariable>(StringComparer.Ordinal);
+
+    private static readonly IReadOnlyDictionary<string, object?> EmptyDefaults =
+        new Dictionary<string, object?>(StringComparer.Ordinal);
 
     private sealed class StructureVariablesProjection
     {
