@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -141,20 +142,28 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         CancellationToken cancellationToken)
     {
         var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
-        var variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken);
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        VariableScope? variableScope;
+        IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+
+            // Build the scope with the workflow-scope variables anchored from the current durable-value
+            // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
+            // scope for the post-execution write-back below.
+            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+
             var resolutionContext = new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: invokePayload.ActivityExecutionId,
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
-                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
+                workflowVariables: workflowVariables,
                 workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
                 activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues),
                 variableScope: variableScope);
@@ -194,6 +203,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeActivityInputMemory.Seed(context, inputs);
 
         ActivityExecutionState? completedState = null;
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         (IRuntimeExecutionIdGenerator IdGenerator, IReadOnlyCollection<RuntimeChildActivityScheduleRequest> Requests)? pendingChildScheduling = null;
         var finishWorkflowRequested = false;
         IReadOnlyCollection<string> finishWorkflowOutcomeNames = [];
@@ -213,6 +223,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 // container executions' snapshots, so sibling branches and later activities observe them
                 // and resume restores them (ADR 0027).
                 await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
+
+                // Capture any workflow-scope variable the activity mutated as VariableName-tagged durable-value
+                // changes (#286), so later activities re-project the current value through `variables.*` rather
+                // than the start-time seed — making variable-driven While/Do loops terminate and SetVariable
+                // durable. Dirty-tracked against the start-of-activity projection: a read-only activity over a
+                // workflow that declares variables produces no change. The changes are folded into the activity
+                // completion below so they commit on the activity's checkpoint boundary rather than out-of-band.
+                workflowVariableWriteBackChanges = scopeService.BuildWorkflowScopeWriteBackChanges(
+                    variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, workflowVariables, _timeProvider.GetUtcNow());
 
                 // Control-leaf intents (Finish/Complete, Correlate): captured here and drained below so the
                 // engine ends the run or persists the new correlation id rather than the activity having to
@@ -235,6 +254,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
                 if (bookmarkRequests.Count > 0)
                 {
+                    // A suspending activity does not reach the completion checkpoint, so flush any workflow-scope
+                    // write-back here (dirty-tracked, so this is a no-op unless the activity actually mutated a
+                    // variable before suspending).
+                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
                     await EnqueueBookmarkCreationWorkAsync(schedulerWorkQueue, workItem, invokePayload, bookmarkRequests, valueSnapshots, cancellationToken);
                     return;
                 }
@@ -242,6 +265,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 if (childScheduleRequests.Count > 0)
                 {
                     var idGenerator = serviceProvider.GetRequiredService<IRuntimeExecutionIdGenerator>();
+                    // A child-scheduling activity (e.g. a composite) does not reach the completion checkpoint
+                    // either; flush any workflow-scope write-back here (dirty-tracked, normally a no-op).
+                    await SaveDurableValueChangesAsync(durableValueStateStore, workflowVariableWriteBackChanges, cancellationToken);
                     if (inspectionAccumulator is null)
                     {
                         await EnqueueChildActivityScheduleWorkAsync(schedulerWorkQueue, idGenerator, workItem, invokePayload, childScheduleRequests, cancellationToken);
@@ -305,6 +331,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (completedState is null)
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' did not produce a completion or child scheduling result for activity execution '{invokePayload.ActivityExecutionId}'.");
 
+        // Fold the workflow-scope variable write-back (#286) into the activity's durable-value change set so it
+        // commits atomically with the completion (checkpoint path) or in the same save sequence (non-inspection
+        // path), rather than out-of-band. Dirty-tracked upstream, so this adds nothing for a read-only activity.
+        if (workflowVariableWriteBackChanges.Count > 0)
+            durableValueChanges = durableValueChanges.Concat(workflowVariableWriteBackChanges).ToArray();
+
         // Resolve a workflow-execution state change requested by a control-leaf intent (Finish ends the run;
         // Correlate updates the correlation id). Both fold into the same activity-completed commit so the
         // workflow state is persisted atomically with the activity completion.
@@ -335,6 +367,23 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
 
         await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
+    }
+
+    // Persists durable-value upserts directly to the store, used on the continuation paths (bookmark /
+    // child-scheduling) that suspend or hand off before reaching the completion checkpoint. Empty input is a
+    // no-op, so the dirty-tracked workflow-variable write-back writes nothing unless a variable actually changed.
+    private static async ValueTask SaveDurableValueChangesAsync(
+        IDurableValueStateStore durableValueStateStore,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> changes,
+        CancellationToken cancellationToken)
+    {
+        foreach (var change in changes)
+        {
+            if (change.Operation != RuntimeStateChangeOperation.Upsert || change.State is null)
+                throw new InvalidOperationException($"Unsupported durable value change '{change.Operation}' while persisting workflow-scope variable write-back.");
+
+            await durableValueStateStore.SaveAsync(change.State, cancellationToken);
+        }
     }
 
     private async ValueTask<RuntimeStateChange<WorkflowExecutionState>?> BuildControlLeafWorkflowExecutionStateChangeAsync(

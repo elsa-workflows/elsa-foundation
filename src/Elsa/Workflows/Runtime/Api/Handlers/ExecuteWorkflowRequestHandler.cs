@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -26,11 +27,21 @@ public sealed class ExecuteWorkflowRequestHandler(
             ? EmptyVariables
             : ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
 
+        // Caller-supplied workflow inputs (#286): threaded into the start dispatch so `input.*` expressions
+        // resolve to them in production. Unlike variables (which carry authored defaults), inputs have no
+        // artifact-side default, so an empty channel simply leaves `input.*` empty.
+        var inputs = ToInputValues(request.Inputs);
+
         var result = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables),
+            new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables, inputs: inputs),
             cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }
+
+    private static IReadOnlyDictionary<string, object?> ToInputValues(IReadOnlyDictionary<string, JsonElement>? inputs) =>
+        inputs is not { Count: > 0 }
+            ? EmptyVariables
+            : inputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyVariables = new Dictionary<string, object?>(StringComparer.Ordinal);
 }
