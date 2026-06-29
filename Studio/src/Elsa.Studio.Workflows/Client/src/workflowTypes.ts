@@ -185,6 +185,70 @@ export interface ExpressionDescriptorsResponse {
   expressionDescriptors?: ExpressionDescriptor[];
 }
 
+// Canonical workflow variable shape (matches the Code-tab JSON the backend round-trips).
+// Unknown fields on existing entries are preserved through edits, so the index signature
+// keeps them addressable without losing the well-known keys.
+export interface WorkflowVariable {
+  id: string;
+  name: string;
+  typeName: string;
+  isArray: boolean;
+  value: string | null;
+  storageDriverTypeName: string | null;
+  [key: string]: unknown;
+}
+
+// Workflow inputs carry the full argument-definition field set plus binding metadata.
+export interface WorkflowInput {
+  name: string;
+  type: string;
+  displayName: string;
+  description: string;
+  category: string;
+  isArray: boolean;
+  uiHint: string;
+  storageDriverType: string | null;
+  defaultValue: string | null;
+  defaultSyntax: string | null;
+  isReadOnly: boolean | null;
+  [key: string]: unknown;
+}
+
+// Outputs are produced by activities, so they have a smaller field set than inputs.
+export interface WorkflowOutput {
+  name: string;
+  type: string;
+  displayName: string;
+  description: string;
+  category: string;
+  isArray: boolean;
+  [key: string]: unknown;
+}
+
+export interface VariableTypeDescriptor {
+  typeName: string;
+  displayName?: string | null;
+  category?: string | null;
+  description?: string | null;
+}
+
+export interface StorageDriverDescriptor {
+  typeName: string;
+  displayName?: string | null;
+  deprecated?: boolean;
+  priority?: number;
+}
+
+export interface VariableTypeDescriptorsResponse {
+  items?: VariableTypeDescriptor[];
+  descriptors?: VariableTypeDescriptor[];
+}
+
+export interface StorageDriverDescriptorsResponse {
+  items?: StorageDriverDescriptor[];
+  descriptors?: StorageDriverDescriptor[];
+}
+
 export interface CreateDefinitionRequest {
   name: string;
   description?: string | null;
