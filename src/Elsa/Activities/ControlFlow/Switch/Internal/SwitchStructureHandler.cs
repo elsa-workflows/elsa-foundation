@@ -52,14 +52,13 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
     {
         var authoredStructure = ReadAuthoredStructure(activity);
 
-        // Reject duplicate case match values at compile time (gates §E2.2 / §2.21 / §2.23). The runtime
-        // SwitchNavigator only catches this when the workflow executes; surfacing it here turns it into a
-        // compile-time WorkflowExecutableCompilationException (the compiler wraps ArgumentException) so
-        // duplicates never reach a published, executable structure. Ordinal comparison mirrors the runtime
-        // case-matching in SwitchNavigator.
-        var duplicateMatch = authoredStructure.Cases
-            .GroupBy(@case => @case.Match, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1)?.Key;
+        // Backstop: reject duplicate case match values at compile time. The design-time
+        // SwitchDuplicateCaseValidator already surfaces these as Draft validation errors (which the
+        // promotion gate blocks on), so a sanctioned publish never reaches here with duplicates; this
+        // guards paths that bypass Draft validation by turning a duplicate into a compile-time
+        // WorkflowExecutableCompilationException (the compiler wraps ArgumentException) before it can reach
+        // an executable structure.
+        var duplicateMatch = SwitchCaseRules.DuplicateMatches(authoredStructure.Cases.Select(@case => @case.Match)).FirstOrDefault();
         if (duplicateMatch is not null)
             throw new ArgumentException($"Switch activity node '{activity.NodeId}' declares duplicate case match value '{duplicateMatch}'. Each Switch case must have a unique match value.");
 
@@ -84,12 +83,6 @@ internal sealed class SwitchStructureHandler : IActivityStructureHandler
         return slot?.Activities.FirstOrDefault();
     }
 
-    private static SwitchAuthoredStructure ReadAuthoredStructure(ActivityNode activity)
-    {
-        if (activity.Structure is null)
-            return new SwitchAuthoredStructure();
-
-        return activity.Structure.Payload.Deserialize<SwitchAuthoredStructure>(SerializerOptions)
-               ?? new SwitchAuthoredStructure();
-    }
+    private static SwitchAuthoredStructure ReadAuthoredStructure(ActivityNode activity) =>
+        SwitchAuthoredStructureReader.Read(activity);
 }
