@@ -66,7 +66,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 serviceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
                 TimeProvider.System,
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>()));
+                serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();

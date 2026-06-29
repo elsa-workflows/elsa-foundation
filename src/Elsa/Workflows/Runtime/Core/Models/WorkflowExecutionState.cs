@@ -26,3 +26,16 @@ public enum WorkflowExecutionStatus
     Faulted,
     Cancelled
 }
+
+public static class WorkflowExecutionStatusExtensions
+{
+    /// <summary>
+    /// Returns <see langword="true"/> when the workflow execution has reached a terminal status
+    /// (<see cref="WorkflowExecutionStatus.Completed"/>, <see cref="WorkflowExecutionStatus.Faulted"/>,
+    /// or <see cref="WorkflowExecutionStatus.Cancelled"/>) after which no further scheduler work may run.
+    /// </summary>
+    public static bool IsTerminal(this WorkflowExecutionStatus status) =>
+        status is WorkflowExecutionStatus.Completed
+            or WorkflowExecutionStatus.Faulted
+            or WorkflowExecutionStatus.Cancelled;
+}

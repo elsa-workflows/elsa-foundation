@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -11,6 +12,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
     private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -50,6 +52,17 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         TimeProvider timeProvider,
         IWorkflowSchedulerPauseGate? pauseGate,
         IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor)
+        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore: null)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        TimeProvider timeProvider,
+        IWorkflowSchedulerPauseGate? pauseGate,
+        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -63,6 +76,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _timeProvider = timeProvider;
         _pauseGate = pauseGate;
         _ambientServicesAccessor = ambientServicesAccessor;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -73,10 +87,20 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
         var remaining = request.MaxWorkItems ?? int.MaxValue;
+        var stoppedOnTerminalStatus = false;
 
         while (remaining > 0)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            // Once the workflow execution has reached a terminal status (Completed/Faulted/Cancelled), any
+            // sibling work a parallel fork already enqueued must not run: dispatching it would write
+            // post-completion state. Stop before dequeuing and leave the remaining work in the queue. (#293)
+            if (await IsWorkflowTerminatedAsync(request.WorkflowExecutionId, cancellationToken))
+            {
+                stoppedOnTerminalStatus = true;
+                break;
+            }
 
             var nextWorkItem = await PeekAsync(request.WorkflowExecutionId, cancellationToken);
             if (nextWorkItem is null)
@@ -101,12 +125,33 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 break;
         }
 
+        // A terminal-status stop only sets the reason when no work in this drain faulted or paused: those
+        // outcomes reflect work that actually ran and take precedence in the inferred stop reason.
+        var stopReason = stoppedOnTerminalStatus
+            && results.All(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Completed)
+            ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
+            : (RuntimeSchedulerDrainStopReason?)null;
+
         return new RuntimeSchedulerDrainResult(
             workflowExecutionId: request.WorkflowExecutionId,
             startedAt: startedAt,
             completedAt: _timeProvider.GetUtcNow(),
-            items: results);
+            items: results,
+            stopReason: stopReason);
     }
+
+    private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var store = ResolveWorkflowExecutionStateStore();
+        if (store is null)
+            return false;
+
+        var state = await store.FindAsync(workflowExecutionId, cancellationToken);
+        return state is not null && state.Status.IsTerminal();
+    }
+
+    private IWorkflowExecutionStateStore? ResolveWorkflowExecutionStateStore() =>
+        _ambientServicesAccessor.Current?.GetService<IWorkflowExecutionStateStore>() ?? _workflowExecutionStateStore;
 
     private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
