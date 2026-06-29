@@ -12,6 +12,7 @@
           "ActivitiesFlowchart": {},
           "ActivitiesIf": {},
           "ActivitiesSequence": {},
+          "ActivitiesSwitch": {},
           "ClrActivityReconciliation": {
             "Options": {
               "FolderPath": ""
