@@ -58,6 +58,7 @@ public sealed class RuntimeSchedulerDrainResult
     public int DrainedCount => Items.Count(item => item.Status is RuntimeSchedulerWorkItemResultStatus.Completed or RuntimeSchedulerWorkItemResultStatus.Faulted);
     public bool StoppedOnFault => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Faulted);
     public bool StoppedOnPause => Items.Any(item => item.Status == RuntimeSchedulerWorkItemResultStatus.Paused);
+    public bool StoppedOnTerminalStatus => StopReason == RuntimeSchedulerDrainStopReason.WorkflowTerminated;
     public IReadOnlyCollection<RuntimeSchedulerWorkItemResult> Items { get; }
     public IReadOnlyCollection<RuntimePostCommitOutboxProcessResult> OutboxDeliveryResults { get; }
     public int OutboxAttemptedCount => OutboxDeliveryResults.Sum(result => result.AttemptedCount);
@@ -83,7 +84,8 @@ public enum RuntimeSchedulerDrainStopReason
     Paused,
     Faulted,
     OutboxDeliveryFailed,
-    CycleCapExhausted
+    CycleCapExhausted,
+    WorkflowTerminated
 }
 
 public sealed class RuntimeSchedulerWorkItemResult
