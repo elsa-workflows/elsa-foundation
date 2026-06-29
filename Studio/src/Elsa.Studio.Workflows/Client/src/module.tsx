@@ -73,6 +73,7 @@ import {
   updateScopeOwner,
   syncCanvasToScope,
   withFlowchartConnections,
+  flowchartEdges,
   type ScopeFrame,
   type WorkflowEdgeData,
   type WorkflowNodeData
@@ -190,12 +191,13 @@ interface WorkflowEdgeActions {
 
 const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeActions | null>(null);
 
+type WorkflowGraphConnection = { source: string; target: string; sourcePort?: string; targetPort?: string };
+
 // Maps an authored node to a non-blocking availability warning (or null when still addable).
 // Provided by the designer so the standalone node renderer can surface badges without prop-drilling.
 type WorkflowNodeAvailabilityLookup = (input: { activityVersionId?: string | null; activityTypeKey?: string | null }) => ActivityAvailabilityDiagnosticEntry | null;
 
 const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeAvailabilityLookup | null>(null);
-
 declare global {
   interface Window {
     __ELSA_STUDIO_WORKFLOW_CONTEXT__?: {
@@ -208,6 +210,7 @@ declare global {
       selectedActivityType?: string | null;
       summary?: string;
       activities?: Array<{ id: string; type: string; displayName?: string }>;
+      connections?: WorkflowGraphConnection[];
       diagnostics?: Array<{ severity: string; message: string }>;
     };
   }
@@ -2062,6 +2065,7 @@ function WorkflowEditor({
       selectedActivityType: selectedDescriptor?.typeName ?? (selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? selectedNode.activityVersionId : null),
       summary: details.definition.name,
       activities: collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion),
+      connections: collectWorkflowContextConnections(draft.state.rootActivity),
       diagnostics: draft.validationErrors.map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." }))
     };
 
@@ -3949,6 +3953,25 @@ function collectWorkflowContextActivities(activity: ActivityNode | null | undefi
 
   for (const slot of getChildSlots(activity)) {
     for (const child of slot.activities) collectWorkflowContextActivities(child, catalogByVersion, result);
+  }
+
+  return result;
+}
+
+function collectWorkflowContextConnections(
+  activity: ActivityNode | null | undefined,
+  result: WorkflowGraphConnection[] = []
+) {
+  if (!activity) return result;
+
+  // flowchartEdges decodes the flowchart structure payload into source/target edges; reuse it so the
+  // agent sees the same wiring the designer renders.
+  for (const edge of flowchartEdges(activity)) {
+    result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
+  }
+
+  for (const slot of getChildSlots(activity)) {
+    for (const child of slot.activities) collectWorkflowContextConnections(child, result);
   }
 
   return result;

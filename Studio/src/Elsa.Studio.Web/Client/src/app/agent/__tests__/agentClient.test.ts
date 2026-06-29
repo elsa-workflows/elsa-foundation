@@ -54,6 +54,41 @@ describe("agent client", () => {
     expect(context.http.postJson).toHaveBeenCalledWith("/_elsa/agent/feedback", { sessionId: "agt_01", messageId: "msg_01", rating: 1, actorId: "studio" });
   });
 
+  it("forwards a structured workflow graph as the attachment content", async () => {
+    const context = stubContext();
+    const client = createAgentClient(context);
+    const graph = {
+      workflowId: "wf-1",
+      revision: "rev-7",
+      activities: [
+        { id: "WriteLine1", type: "Elsa.Workflows.WriteLine", displayName: "Write Line" },
+        { id: "WriteLine2", type: "Elsa.Workflows.WriteLine", displayName: "Write Line" }
+      ],
+      connections: [{ source: "WriteLine1", target: "WriteLine2", sourcePort: "Done" }]
+    };
+
+    await client.sendMessage("agt_01", {
+      message: "Add a third write line after the second.",
+      mode: "build",
+      contextAttachments: [{
+        id: "workflow:wf-1",
+        source: "workflow",
+        sourceId: "wf-1",
+        label: "Hello World",
+        contentType: "workflow.definition",
+        content: graph,
+        sensitivity: "internal",
+        scope: "screen"
+      }]
+    });
+
+    const messageCall = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls.find(call => String(call[0]).endsWith("/messages"));
+    const attachment = (messageCall?.[1] as { contextAttachments: Array<Record<string, unknown>> }).contextAttachments[0];
+    // The live graph must reach the backend's attachment content so the agent sees real node ids.
+    expect(attachment.content).toEqual(graph);
+    expect((attachment.references as Record<string, string>).revision).toBe("rev-7");
+  });
+
   it("surfaces wrapped feedback errors", async () => {
     const context = stubContext();
     context.http.postJson = vi.fn(async url => {
