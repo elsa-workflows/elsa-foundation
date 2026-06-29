@@ -87,6 +87,16 @@ public sealed class AgentTurnContractsTests
         Assert.Single(registry.Descriptors);
     }
 
+    [Fact]
+    public void Tool_registry_rejects_names_harnesses_cannot_accept()
+    {
+        // Dotted names are rejected by GitHub Copilot + Anthropic; fail fast at registration.
+        var ex = Assert.Throws<InvalidOperationException>(() => new DefaultAgentToolRegistry([new StubTool("workflow.read_graph")]));
+
+        Assert.Contains("workflow.read_graph", ex.Message);
+        Assert.Contains("^[a-zA-Z0-9_-]+$", ex.Message);
+    }
+
     private sealed class StubTool(string name) : IAgentTool
     {
         public AgentToolDescriptor Descriptor { get; } = new(
