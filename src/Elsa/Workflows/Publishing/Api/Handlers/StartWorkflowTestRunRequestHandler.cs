@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
@@ -53,6 +54,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             fallbackDefinitionVersionId: request.VersionId,
             now,
             expiresAt,
+            ToInputValues(request.Inputs),
             cancellationToken);
     }
 
@@ -86,6 +88,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             fallbackDefinitionVersionId: sourceDefinitionVersionId,
             now,
             expiresAt,
+            ToInputValues(request.Inputs),
             cancellationToken);
     }
 
@@ -96,6 +99,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         string fallbackDefinitionVersionId,
         DateTimeOffset now,
         DateTimeOffset expiresAt,
+        IReadOnlyDictionary<string, object?> inputs,
         CancellationToken cancellationToken)
     {
         WorkflowExecutable executable;
@@ -158,7 +162,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
                     ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
                 },
-                variables: variables),
+                variables: variables,
+                inputs: inputs),
             executable,
             cancellationToken);
 
@@ -182,6 +187,15 @@ public sealed class StartWorkflowTestRunRequestHandler(
         await testRunStore.SaveAsync(testRun, cancellationToken);
         return WorkflowTestRunView.From(testRun, dispatch.CommandDispatch.Status);
     }
+
+    // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the
+    // compiled executable), inputs have no artifact-side default, so an empty channel leaves `input.*` empty.
+    private static IReadOnlyDictionary<string, object?> ToInputValues(IReadOnlyDictionary<string, JsonElement>? inputs) =>
+        inputs is not { Count: > 0 }
+            ? EmptyInputs
+            : inputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal);
+
+    private static readonly IReadOnlyDictionary<string, object?> EmptyInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
 
     private static WorkflowTestRunStatus MapStatus(WorkflowExecutionCommandDispatchStatus status) =>
         status switch

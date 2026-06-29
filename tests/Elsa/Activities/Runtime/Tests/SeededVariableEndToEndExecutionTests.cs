@@ -56,6 +56,31 @@ public sealed class SeededVariableEndToEndExecutionTests
         Assert.Equal("Hello", probe.LastValue);
     }
 
+    [Fact]
+    public async Task ExecuteWorkflow_ResolvesCallerSuppliedInput_ThroughStartDispatchAndDrain()
+    {
+        // #286 Part B: a caller-supplied workflow input threaded from the ExecuteWorkflow request resolves
+        // `input.name` through the real handler → dispatcher → drain flow (inputs carry no artifact default,
+        // so this is purely caller-supplied).
+        var probe = new SeededInputProbe();
+        await using var provider = BuildServiceProvider(probe);
+        var executable = NewExecutableWithInputBinding();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+
+        var handler = new ExecuteWorkflowRequestHandler(
+            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowExecutableStore>());
+
+        var request = new ExecuteWorkflow(
+            executable.Identity.ArtifactId,
+            new Dictionary<string, JsonElement> { ["name"] = JsonSerializer.SerializeToElement("Ada") });
+        var view = await handler.Handle(request, CancellationToken.None);
+
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(view.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        Assert.Equal("Ada", probe.LastValue);
+    }
+
     private ServiceProvider BuildServiceProvider(SeededInputProbe probe)
     {
         var services = new ServiceCollection();
@@ -133,6 +158,41 @@ public sealed class SeededVariableEndToEndExecutionTests
 
         return new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            rootActivity: node,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: _now,
+            publishedAt: _now,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private WorkflowExecutable NewExecutableWithInputBinding()
+    {
+        // No authored variables: the activity binds its Message input to the JS `input.name` accessor, which
+        // resolves only from caller-supplied inputs (#286 Part B).
+        var node = new ExecutableNode(
+            executableNodeId: "node-start",
+            authoredActivityId: "authored-node-start",
+            activityType: "test/seeded-probe",
+            activityTypeVersion: "1.0.0",
+            descriptorType: SeededInputProbeConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new SeededInputProbeDescriptor("Message")),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["Message"] = new(
+                    inputName: "Message",
+                    source: RuntimeInputBindingSource.Expression,
+                    expression: new RuntimeExpressionBinding("JavaScript", "input.name", new RuntimeValueTypeDescriptor("clr", StringTypeName, null)),
+                    metadata: new Dictionary<string, string>
+                    {
+                        [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = StringTypeName,
+                        ["referenceKey"] = "Message"
+                    })
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+        return new(
+            identity: new WorkflowExecutableIdentity("artifact-input", "definition-input", "version-input", "1.0.0", "sha256:test-input"),
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
