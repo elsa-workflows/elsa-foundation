@@ -103,6 +103,77 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_StopsBeforeDequeuingWorkOnceWorkflowReachesTerminalStatus()
+    {
+        // A parallel fork enqueues several sibling InvokeActivity work items; one of them runs Finish, which
+        // commits a terminal WorkflowCompleted status. The remaining queued siblings must not drain afterwards
+        // and write post-completion state. The drainer reads workflow-execution status before each dequeue. (#293)
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = new RecordingSchedulerWorkHandler();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Completed));
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            pauseGate: null,
+            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
+            workflowStateStore);
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(2));
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(3));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.Equal(0, result.DrainedCount);
+        Assert.False(result.StoppedOnFault);
+        Assert.False(result.StoppedOnPause);
+        Assert.True(result.StoppedOnTerminalStatus);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.WorkflowTerminated, result.StopReason);
+        Assert.Empty(result.Items);
+        Assert.Empty(handler.WorkItemIds);
+        Assert.Collection(
+            remaining,
+            item => Assert.Equal("work-1", item.WorkItemId),
+            item => Assert.Equal("work-2", item.WorkItemId),
+            item => Assert.Equal("work-3", item.WorkItemId));
+    }
+
+    [Fact]
+    public async Task DrainAsync_StopsMidDrainWhenWorkflowReachesTerminalStatus()
+    {
+        // The first dispatched item terminates the workflow (e.g. Finish marks it Completed). The sibling work
+        // queued before the terminal commit must be left untouched on the next loop iteration. (#293)
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
+        var handler = new TerminatingSchedulerWorkHandler(workflowStateStore, terminateOnWorkItemId: "work-1", _now);
+        var drainer = new WorkflowSchedulerDrainer(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            pauseGate: null,
+            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
+            workflowStateStore);
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(2));
+        await queue.EnqueueAsync(NewInvokeActivityWorkItem(3));
+
+        var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        var remaining = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.Equal(1, result.DrainedCount);
+        Assert.True(result.StoppedOnTerminalStatus);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.WorkflowTerminated, result.StopReason);
+        Assert.Equal(["work-1"], handler.WorkItemIds);
+        Assert.Collection(
+            remaining,
+            item => Assert.Equal("work-2", item.WorkItemId),
+            item => Assert.Equal("work-3", item.WorkItemId));
+    }
+
+    [Fact]
     public async Task DrainAsync_DispatchesQueuedWorkAfterPauseHoldIsReleased()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -740,6 +811,21 @@ public sealed class RuntimeSchedulerDrainTests
     private static WorkflowExecutableIdentity NewPinnedExecutable() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
+    private WorkflowExecutionState NewWorkflowState(WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: "wfexec-1",
+            PinnedExecutable: NewPinnedExecutable(),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: status.IsTerminal() ? _now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
     private static RuntimeCheckpointCommandPayload NewCheckpointPayload() =>
         new(
             pinnedExecutable: NewPinnedExecutable(),
@@ -884,6 +970,38 @@ public sealed class RuntimeSchedulerDrainTests
 
             WorkItemIds.Add(workItem.WorkItemId);
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class TerminatingSchedulerWorkHandler(
+        IWorkflowExecutionStateStore workflowStateStore,
+        string terminateOnWorkItemId,
+        DateTimeOffset now) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(TerminatingSchedulerWorkHandler);
+        public List<string> WorkItemIds { get; } = [];
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem)
+        {
+            ArgumentNullException.ThrowIfNull(workItem);
+
+            return true;
+        }
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            WorkItemIds.Add(workItem.WorkItemId);
+
+            if (workItem.WorkItemId != terminateOnWorkItemId)
+                return;
+
+            var state = await workflowStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+            await workflowStateStore.SaveAsync(state! with
+            {
+                Status = WorkflowExecutionStatus.Completed,
+                CompletedAt = now
+            }, cancellationToken);
         }
     }
 
