@@ -313,8 +313,14 @@ public sealed class DefaultWorkflowAgentContextProvider(
 
     public async Task<WorkflowAgentContext> GetContextAsync(WorkflowAgentContextRequest request, CancellationToken cancellationToken = default)
     {
-        var revision = await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken);
-        var activities = Array.Empty<WorkflowAgentActivitySummary>();
+        // When the client supplies the live graph (Studio serializes it into the workflow.definition
+        // attachment), hydrate activities and the base revision from it so the agent and the risk
+        // classifier reason over the real node ids. Otherwise fall back to the empty/seam defaults.
+        var graph = request.Graph;
+        var activities = graph?.Activities ?? (IReadOnlyCollection<WorkflowAgentActivitySummary>)Array.Empty<WorkflowAgentActivitySummary>();
+        var revision = string.IsNullOrWhiteSpace(graph?.Revision)
+            ? await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken)
+            : graph!.Revision!;
         var activityCatalog = await SelectActivityCatalogAsync(request, activities, cancellationToken);
         var diagnostics = CreateDiagnostics(request, activityCatalog);
 
