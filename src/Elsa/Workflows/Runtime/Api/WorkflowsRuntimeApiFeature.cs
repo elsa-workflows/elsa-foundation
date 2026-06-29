@@ -26,6 +26,9 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
     {
         base.ConfigureServices(services);
 
+        // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
+        services.TryAddSingleton(TimeProvider.System);
+
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
