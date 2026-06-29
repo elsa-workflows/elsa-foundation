@@ -123,12 +123,12 @@ description: "Task list for Typed Argument Model + Type Descriptor Registry (Bac
 
 ## Phase 6: Polish & Cross-Cutting (follow-through obligations)
 
-- [ ] T039 [P] Add the `IVariableTypeDescriptorProvider` extension-point entry to the owning project's `EXTENSION_POINTS.md` (format per `src/Elsa/Expressions/EXTENSION_POINTS.md`): kind=Source, signature, register, consumed-by catalog, known impl `DefaultVariableTypeDescriptorProvider`.
-- [ ] T040 [P] Add glossary entries to `docs/glossary/elsa.md`: **type alias**, **collection kind**, **type descriptor catalog**, **argument descriptor** (link to spec + serialization rule).
-- [ ] T041 [P] Add a short note to `docs/serialization.md` that authored-definition type refs are alias-based `{ alias, collectionKind }` (the decomposed `TypeInformation` is compiled-Type-path only).
-- [ ] T042 [P] Add a one-line finding to `docs/reports/unfinished-work.md` noting the studio Phase-2 follow-up (none/free-flow) and the separate runtime-variables-persistence dependency.
-- [ ] T043 Refresh generated maps: run `bash tools/maps/generate-extension-point-map.sh` and `bash tools/maps/generate-architecture-reference-map.sh`; review the findings reports before committing.
-- [ ] T044 Run `quickstart.md` end-to-end verification (build, all new tests green, curl the descriptors endpoint, confirm emitted JSON matches the wire contract).
+- [X] T039 [P] Add the `IVariableTypeDescriptorProvider` extension-point entry to the owning project's `EXTENSION_POINTS.md` (format per `src/Elsa/Expressions/EXTENSION_POINTS.md`): kind=Source, signature, register, consumed-by catalog, known impl `DefaultVariableTypeDescriptorProvider`.
+- [X] T040 [P] Add glossary entries to `docs/glossary/elsa.md`: **type alias**, **collection kind**, **type descriptor catalog**, **argument descriptor** (link to spec + serialization rule).
+- [X] T041 [P] Add a short note to `docs/serialization.md` that authored-definition type refs are alias-based `{ alias, collectionKind }` (the decomposed `TypeInformation` is compiled-Type-path only).
+- [X] T042 [P] Add a one-line finding to `docs/reports/unfinished-work.md` noting the studio Phase-2 follow-up (none/free-flow) and the separate runtime-variables-persistence dependency.
+- [X] T043 Refresh generated maps: run `bash tools/maps/generate-extension-point-map.sh` and `bash tools/maps/generate-architecture-reference-map.sh`; review the findings reports before committing.
+- [X] T044 Run `quickstart.md` end-to-end verification — build green; new tests green (Expressions 39, Serialization 17); the descriptors-endpoint JSON shape is verified by the catalog→wire-DTO projection unit test (live `curl` substituted, per §2.23.6 no integration harness).
 
 ---
 

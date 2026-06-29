@@ -8,7 +8,7 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 
 - Runtime-to-design direct reference signals: 1
 - Design-to-runtime direct reference signals: 1
-- Projects directly referencing both design and runtime projects: 6
+- Projects directly referencing both design and runtime projects: 7
 
 ## Direct Design/Runtime Signals
 
@@ -21,9 +21,10 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 
 | Project | Design references | Runtime references |
 |---|---|---|
+| [Elsa.Activities.ControlFlow](../../src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj) | Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation.Clr](../../src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj) | Elsa.Activities.Design.Reconciliation.Core | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Flowchart](../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Runtime<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Server](../../src/Apps/Elsa.Server/Elsa.Server.csproj) | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Persistence.Groundwork | Elsa.Activities.Composition.Runtime<br>Elsa.Activities.Runtime<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows.Design.Core | Elsa.Workflows.Runtime.Core |
