@@ -29,3 +29,28 @@ internal sealed class FakeConstructorB(string descriptorType) : IActivityConstru
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken) => new((IActivity)new WriteLine());
 }
+
+/// <summary>
+/// Redirects <see cref="Console.Out"/> for the duration of an action and returns what was written.
+/// Shared by the console-parity activity tests (WriteLine/WriteLines). <see cref="Console.SetOut"/> is
+/// process-global, so callers must share the <c>"ConsoleCapture"</c> xUnit collection to serialize.
+/// </summary>
+internal static class ConsoleCapture
+{
+    public static async Task<string> RunAsync(Func<ValueTask> action)
+    {
+        var original = Console.Out;
+        await using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        return writer.ToString();
+    }
+}
