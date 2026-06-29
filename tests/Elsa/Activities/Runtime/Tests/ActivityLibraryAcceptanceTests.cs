@@ -367,6 +367,10 @@ public sealed class ActivityLibraryAcceptanceTests
             var activity = new SetVariable();
             if (inputs is not null && inputs.TryGetValue("Variable", out var variableInput))
                 activity.Variable = (InputArgument<string>)variableInput;
+            // This hand-rolled constructor casts the materialized argument directly, so it requires the Value
+            // binding to be typed as System.Object (hence ObjectTypeName on every Value binding above). Typed
+            // (Int32/String) Value bindings through the *real* ClrActivityConstructor + ActivityArgumentBinder are
+            // covered by SetVariableTypedBindingTests (#313) — that path widens the argument to InputArgument<object>.
             if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
                 activity.Value = (InputArgument<object>)valueInput;
             return new(activity);
