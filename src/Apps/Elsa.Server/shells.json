@@ -11,6 +11,7 @@
           "ActivitiesRuntime": {},
           "ActivitiesFlowchart": {},
           "ActivitiesFor": {},
+          "ActivitiesForEach": {},
           "ActivitiesIf": {},
           "ActivitiesSequence": {},
           "ActivitiesSwitch": {},
