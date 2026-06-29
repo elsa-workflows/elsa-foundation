@@ -2,11 +2,61 @@ using System.Security.Claims;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.Api.Endpoints;
+using Elsa.Agent.Api.Models;
 
 namespace Elsa.Agent.Tests;
 
 public sealed class AgentPolicyTests
 {
+    [Fact]
+    public void Default_policy_gates_mutations_with_auto_read_only_ceiling()
+    {
+        var policy = AgentPolicy.Default;
+
+        Assert.Equal(AgentAutonomyMode.AutoReadOnly, policy.AutonomyMode);
+        Assert.Equal(AgentAutonomyMode.AutoReadOnly, policy.MaxAutonomyMode);
+        Assert.True(policy.RequiresApprovalForMutations);
+        Assert.Equal([AgentAutonomyMode.Manual, AgentAutonomyMode.AutoReadOnly], policy.AllowedAutonomyModes);
+    }
+
+    [Fact]
+    public void Full_auto_does_not_require_approval_for_mutations()
+    {
+        var policy = AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto, MaxAutonomyMode = AgentAutonomyMode.FullAuto };
+
+        Assert.False(policy.RequiresApprovalForMutations);
+        Assert.Equal([AgentAutonomyMode.Manual, AgentAutonomyMode.AutoReadOnly, AgentAutonomyMode.FullAuto], policy.AllowedAutonomyModes);
+    }
+
+    [Theory]
+    [InlineData(AgentAutonomyMode.FullAuto, AgentAutonomyMode.AutoReadOnly, AgentAutonomyMode.AutoReadOnly)] // request above ceiling is clamped down
+    [InlineData(AgentAutonomyMode.Manual, AgentAutonomyMode.AutoReadOnly, AgentAutonomyMode.Manual)] // request below ceiling is honored
+    [InlineData(AgentAutonomyMode.FullAuto, AgentAutonomyMode.FullAuto, AgentAutonomyMode.FullAuto)] // request at ceiling is honored
+    public void Clamp_caps_requested_mode_at_the_ceiling(AgentAutonomyMode requested, AgentAutonomyMode ceiling, AgentAutonomyMode expected)
+    {
+        var policy = AgentPolicy.Default with { MaxAutonomyMode = ceiling };
+
+        Assert.Equal(expected, policy.Clamp(requested));
+    }
+
+    [Theory]
+    [InlineData("manual", AgentAutonomyMode.Manual)]
+    [InlineData("auto-read-only", AgentAutonomyMode.AutoReadOnly)]
+    [InlineData("full-auto", AgentAutonomyMode.FullAuto)]
+    [InlineData("FULL-AUTO", AgentAutonomyMode.FullAuto)]
+    public void Autonomy_mode_round_trips_through_the_wire_contract(string wire, AgentAutonomyMode mode)
+    {
+        Assert.Equal(mode, AgentApiMapping.ParseAutonomyMode(wire));
+        Assert.Equal(wire.ToLowerInvariant(), mode.ToContractString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("nonsense")]
+    public void Unrecognized_autonomy_mode_parses_to_null(string? wire)
+        => Assert.Null(AgentApiMapping.ParseAutonomyMode(wire));
+
     [Fact]
     public async Task Policy_denies_requests_when_agent_is_disabled()
     {

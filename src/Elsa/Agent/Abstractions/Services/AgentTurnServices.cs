@@ -73,7 +73,7 @@ public sealed class DefaultAgentToolInvoker(IAgentToolRegistry registry, IAgentP
         }
 
         var descriptor = tool.Descriptor;
-        var requiresApproval = descriptor.Mutability == AgentToolMutability.Mutating && policy.RequireProposalApproval;
+        var requiresApproval = descriptor.Mutability == AgentToolMutability.Mutating && policy.RequiresApprovalForMutations;
 
         if (requiresApproval)
         {

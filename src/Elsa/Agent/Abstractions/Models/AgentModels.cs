@@ -54,6 +54,22 @@ public enum AgentRisk
     Admin
 }
 
+/// <summary>
+/// How much the agent may do without per-mutation human approval. Ordered from most to least restrictive:
+/// the integer value doubles as the autonomy "level" used when clamping a requested mode to a deployment ceiling.
+/// </summary>
+public enum AgentAutonomyMode
+{
+    /// <summary>Every mutating tool becomes a reviewable proposal; read-only tools still run inline.</summary>
+    Manual = 0,
+
+    /// <summary>Read-only tools run inline; mutating tools become reviewable (and undoable) proposals.</summary>
+    AutoReadOnly = 1,
+
+    /// <summary>Mutating tools run inline without a proposal step.</summary>
+    FullAuto = 2
+}
+
 public enum AgentActionProposalStatus
 {
     Draft,
@@ -158,7 +174,8 @@ public sealed record AgentPolicy(
     bool ContextVisibility,
     AgentContextSensitivity MaxContextSensitivity,
     IReadOnlyCollection<string> AllowedContextKinds,
-    bool RequireProposalApproval,
+    AgentAutonomyMode AutonomyMode,
+    AgentAutonomyMode MaxAutonomyMode,
     IReadOnlyCollection<string> DeniedCapabilityIds,
     string RetentionLabel)
 {
@@ -168,9 +185,20 @@ public sealed record AgentPolicy(
         ContextVisibility: true,
         AgentContextSensitivity.Sensitive,
         ["workflow.definition", "workflow.instance", "workflow.execution", "workflow.diagnostics"],
-        RequireProposalApproval: true,
+        AutonomyMode: AgentAutonomyMode.AutoReadOnly,
+        MaxAutonomyMode: AgentAutonomyMode.AutoReadOnly,
         DeniedCapabilityIds: [],
         RetentionLabel: "Configured by administrator");
+
+    /// <summary>Whether a mutating tool must be routed through a proposal under the effective autonomy mode.</summary>
+    public bool RequiresApprovalForMutations => AutonomyMode != AgentAutonomyMode.FullAuto;
+
+    /// <summary>The autonomy modes a client may request without exceeding <see cref="MaxAutonomyMode"/>, most restrictive first.</summary>
+    public IReadOnlyCollection<AgentAutonomyMode> AllowedAutonomyModes =>
+        Enum.GetValues<AgentAutonomyMode>().Where(mode => mode <= MaxAutonomyMode).ToList();
+
+    /// <summary>Clamps a requested autonomy mode to this policy's <see cref="MaxAutonomyMode"/> ceiling.</summary>
+    public AgentAutonomyMode Clamp(AgentAutonomyMode requested) => requested <= MaxAutonomyMode ? requested : MaxAutonomyMode;
 }
 
 public sealed record AgentCapability(

@@ -47,7 +47,7 @@ internal sealed class CreateSession(
             provider.ProviderId,
             GetMode(req),
             BuildTitle(req),
-            AgentPolicy.Default,
+            BuildPolicy(req),
             BuildMetadata(req)), ct);
 
         _ = await provider.CreateSessionAsync(session, ct);
@@ -83,6 +83,14 @@ internal sealed class CreateSession(
         => request.ActiveSurface.ResourceType == "workflow-definition" && !string.IsNullOrWhiteSpace(request.ActiveSurface.ResourceId)
             ? $"{request.ActiveSurface.ResourceId} workflow"
             : "Studio assistant";
+
+    // The deployment policy is the autonomy ceiling: the client may request a mode but never exceed MaxAutonomyMode.
+    private static AgentPolicy BuildPolicy(AgentCreateSessionRequest request)
+    {
+        var ceiling = AgentPolicy.Default;
+        var requested = AgentApiMapping.ParseAutonomyMode(request.AutonomyMode) ?? ceiling.AutonomyMode;
+        return ceiling with { AutonomyMode = ceiling.Clamp(requested) };
+    }
 
     private static string GetMode(AgentCreateSessionRequest request)
         => request.Metadata.TryGetValue("mode", out var mode) && !string.IsNullOrWhiteSpace(mode) ? mode : request.Mode;
