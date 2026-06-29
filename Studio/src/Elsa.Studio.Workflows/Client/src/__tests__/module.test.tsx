@@ -1136,9 +1136,14 @@ describe("workflows module", () => {
     await waitForText(container, "Definition version");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
-    expect(container.textContent).toContain("Published Run");
-    expect(container.textContent).toContain("Activity history");
+    // Timeline is the default instance tab and lists executed activities.
+    expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");
+    // Run metadata moved to the Details tab.
+    await click(buttonByText(container, "Details"));
+    expect(container.textContent).toContain("Published Run");
+    // Incidents live under the Issues tab.
+    await click(buttonByText(container, "Issues"));
     expect(container.textContent).toContain("No incidents recorded.");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/instances/wfexec-1",
@@ -1210,10 +1215,13 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Definition graph unavailable");
-    expect(container.textContent).toContain("Activity history");
+    // Timeline is the default tab and renders the executed activity.
+    expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");
-    expect(container.textContent).toContain("test-artifact-46792146fbed");
     expect(container.textContent).not.toContain("Request failed with 404");
+    // Artifact metadata lives under the Details tab.
+    await click(buttonByText(container, "Details"));
+    expect(container.textContent).toContain("test-artifact-46792146fbed");
 
     await unmount();
   });

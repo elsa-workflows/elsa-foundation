@@ -27,7 +27,7 @@ import {
   type XYPosition
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Package, Play, Plus, RotateCcw, Save, Search, Sparkles, Terminal, Trash2, X, Zap } from "lucide-react";
+import { AlertCircle, Boxes, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, Copy, Download, GitBranch, GripVertical, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, RotateCcw, Save, Search, SlidersHorizontal, Sparkles, Trash2, Undo2, Workflow as WorkflowIcon, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioAiPromptActionContribution, StudioDialogApi, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
 import {
   createDefinition,
@@ -76,6 +76,13 @@ import {
   type WorkflowNodeData
 } from "./workflowAdapter";
 import { ActivityPropertiesPanel } from "./ActivityPropertiesPanel";
+import { buildExportPayload, downloadWorkflowJson, buildDraftFromJson } from "./workflowSerialization";
+import { computeAutoLayout } from "./workflowLayout";
+import { canRedo, canUndo, createHistory, pushSnapshot, redo as redoHistory, undo as undoHistory, type HistoryState } from "./workflowHistory";
+import { formatDate, formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
+import { WorkflowCodeView } from "./WorkflowCodeView";
+import { WorkflowPropertiesView } from "./WorkflowPropertiesView";
+import { WorkflowExecutionTimeline } from "./WorkflowInstanceTimeline";
 import {
   applyWorkflowGraphOperationBatch,
   workflowGraphOperationApplyEvent,
@@ -122,6 +129,7 @@ const edgeTypes = { workflow: WorkflowFlowEdge };
 const activityDragDataType = "application/x-elsa-activity-version-id";
 const pointerDragThreshold = 6;
 const autosaveDelayMs = 1200;
+const historyCaptureDelayMs = 250;
 const definitionPageSizes = [10, 25, 50];
 const defaultDefinitionPageSize = 10;
 const workflowPaletteWidthStorageKey = "elsa-studio-workflow-palette-width";
@@ -149,6 +157,8 @@ interface ActivityPaletteGroup {
   category: string;
   activities: ActivityCatalogItem[];
 }
+
+type CanvasView = "designer" | "code" | "properties";
 
 type WorkflowEdge = Edge<WorkflowEdgeData>;
 type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "testRunPreparing" | "testRunStarting";
@@ -1303,6 +1313,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
             error=""
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
+            activityCatalog={data.activityCatalog}
             graphNodeIds={data.definitionVersion ? getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
           />
         </div>
@@ -1394,7 +1405,9 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
   );
 }
 
-function WorkflowInstanceInspector({ ai, action, summary, details, state, error, selectedEvidenceId = null, onSelectEvidence, graphNodeIds }: {
+type InstanceInspectorTab = "timeline" | "issues" | "details";
+
+function WorkflowInstanceInspector({ ai, action, summary, details, state, error, selectedEvidenceId = null, onSelectEvidence, graphNodeIds, activityCatalog = [] }: {
   ai: StudioAiContributionApi;
   action: StudioAiPromptActionContribution | undefined;
   summary: WorkflowInstanceSummary | null;
@@ -1404,10 +1417,20 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
   graphNodeIds?: Set<string>;
+  activityCatalog?: ActivityCatalogItem[];
 }) {
+  const [activeTab, setActiveTab] = useState<InstanceInspectorTab>("timeline");
+
   if (!summary) {
-    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect activity history.</div></aside>;
+    return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect its timeline.</div></aside>;
   }
+
+  const incidentCount = details?.incidents.length ?? 0;
+  const tabs: WorkflowEditorPanelTab[] = [
+    { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
+    { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 1, icon: <AlertCircle size={14} />, render: () => null },
+    { id: "details", title: "Details", order: 2, icon: <SlidersHorizontal size={14} />, render: () => null }
+  ];
 
   return (
     <aside className="wf-instance-inspector" aria-label="Workflow run details">
@@ -1422,65 +1445,48 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
           </button>
         ) : null}
       </header>
-      <dl className="wf-instance-meta">
-        <dt>Status</dt>
-        <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
-        <dt>Run Kind</dt>
-        <dd>{formatRunKind(summary.runKind)}</dd>
-        <dt>Artifact</dt>
-        <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
-        <dt>Definition</dt>
-        <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
-        <dt>Created</dt>
-        <dd>{formatDate(summary.createdAt)}</dd>
-        <dt>Started</dt>
-        <dd>{formatDate(summary.startedAt)}</dd>
-        <dt>Completed</dt>
-        <dd>{formatDate(summary.completedAt)}</dd>
-        <dt>Correlation</dt>
-        <dd>{summary.correlationId || "None"}</dd>
-      </dl>
+      <div className="wf-instance-tabs">
+        <PanelTabList label="Workflow run tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
+      </div>
       {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && details ? (
-        <>
-          <WorkflowActivityHistory activities={details.activities} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
-          <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
-          <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} />
-        </>
-      ) : null}
-    </aside>
-  );
-}
-
-function WorkflowActivityHistory({ activities, selectedEvidenceId = null, onSelectEvidence }: {
-  activities: ActivityExecutionStateSummary[];
-  selectedEvidenceId?: string | null;
-  onSelectEvidence?(evidenceId: string): void;
-}) {
-  return (
-    <section className="wf-instance-section">
-      <h4>Activity history</h4>
-      {activities.length === 0 ? <p>No activity executions recorded yet.</p> : null}
-      {activities.length > 0 ? (
-        <div className="wf-instance-activity-list">
-          {activities.map(activity => (
-            <button
-              type="button"
-              className="wf-instance-activity"
-              data-selected={activity.activityExecutionId === selectedEvidenceId}
-              key={activity.activityExecutionId}
-              onClick={() => onSelectEvidence?.(activity.activityExecutionId)}
-            >
-              <span><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></span>
-              <strong>{shortTypeName(activity.activityType) ?? activity.activityType}</strong>
-              <small>{activity.activityExecutionId}</small>
-              <time>{formatDate(activity.scheduledAt)}</time>
-            </button>
-          ))}
+        <div className="wf-instance-tab-content">
+          {activeTab === "timeline" ? (
+            <WorkflowExecutionTimeline
+              activities={details.activities}
+              activityCatalog={activityCatalog}
+              selectedEvidenceId={selectedEvidenceId}
+              onSelectEvidence={onSelectEvidence}
+            />
+          ) : activeTab === "issues" ? (
+            <>
+              <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
+              <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} />
+            </>
+          ) : (
+            <dl className="wf-instance-meta">
+              <dt>Status</dt>
+              <dd><WorkflowStatusBadge status={summary.status} subStatus={summary.subStatus} /></dd>
+              <dt>Run Kind</dt>
+              <dd>{formatRunKind(summary.runKind)}</dd>
+              <dt>Artifact</dt>
+              <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
+              <dt>Definition</dt>
+              <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
+              <dt>Created</dt>
+              <dd>{formatDate(summary.createdAt)}</dd>
+              <dt>Started</dt>
+              <dd>{formatDate(summary.startedAt)}</dd>
+              <dt>Completed</dt>
+              <dd>{formatDate(summary.completedAt)}</dd>
+              <dt>Correlation</dt>
+              <dd>{summary.correlationId || "None"}</dd>
+            </dl>
+          )}
         </div>
       ) : null}
-    </section>
+    </aside>
   );
 }
 
@@ -1836,10 +1842,6 @@ function normalizeDescriptorKey(key: string | null | undefined) {
   return key?.trim().toLowerCase() ?? "";
 }
 
-function shortTypeName(key: string | null | undefined) {
-  return key?.split(".").filter(Boolean).at(-1);
-}
-
 function readStoredNumber(key: string, fallback: number, min: number, max: number) {
   const storage = getLocalStorage();
   if (!storage) return fallback;
@@ -1954,6 +1956,7 @@ function WorkflowEditor({
   const [autosaveEnabled, setAutosaveEnabled] = useState(false);
   const [publishedArtifactId, setPublishedArtifactId] = useState<string | null>(null);
   const [expandedPaletteCategories, setExpandedPaletteCategories] = useState<Set<string>>(() => new Set());
+  const [paletteSearch, setPaletteSearch] = useState("");
   const [paletteWidth, setPaletteWidth] = useState(() => readStoredNumber(workflowPaletteWidthStorageKey, defaultPaletteWidth, minPaletteWidth, maxPaletteWidth));
   const [inspectorWidth, setInspectorWidth] = useState(() => readStoredNumber(workflowInspectorWidthStorageKey, defaultInspectorWidth, minInspectorWidth, maxInspectorWidth));
   const [paletteCollapsed, setPaletteCollapsed] = useState(() => readStoredBoolean(workflowPaletteCollapsedStorageKey, false));
@@ -1961,12 +1964,21 @@ function WorkflowEditor({
   const [maximizedSidePanel, setMaximizedSidePanel] = useState<WorkflowSidePanel | null>(readStoredMaximizedSide);
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const workflowBatchUndoRef = useRef(new Map<string, WorkflowDraft>());
+  // User-facing undo/redo. Snapshots are whole drafts; nodes/edges rebuild from them.
+  // This is intentionally separate from the Weaver token-addressed batch undo above —
+  // both flow through setDraft, so a Weaver change is also a normal undo step here.
+  const historyRef = useRef<HistoryState<WorkflowDraft>>(createHistory());
+  const lastCapturedDraftRef = useRef<WorkflowDraft | null>(null);
+  const lastCapturedSignatureRef = useRef("");
+  const restoringRef = useRef(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
@@ -1984,6 +1996,16 @@ function WorkflowEditor({
   const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
   const scope = useMemo(() => isUnsupportedDesigner ? null : resolveScope(root, frames), [root, frames, isUnsupportedDesigner]);
   const paletteGroups = useMemo(() => groupActivityPalette(catalog), [catalog]);
+  const filteredPaletteGroups = useMemo(() => {
+    const term = paletteSearch.trim().toLowerCase();
+    if (!term) return paletteGroups;
+    const matches = catalog.filter(activity =>
+      getActivityDisplay(activity).toLowerCase().includes(term) ||
+      activity.activityTypeKey.toLowerCase().includes(term) ||
+      (activity.category ?? "").toLowerCase().includes(term) ||
+      (activity.description ?? "").toLowerCase().includes(term));
+    return groupActivityPalette(matches);
+  }, [catalog, paletteSearch, paletteGroups]);
   const selectedNode = useMemo(() => {
     if (isUnsupportedDesigner && scopeOwner?.nodeId === selectedNodeId) return scopeOwner;
     return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
@@ -2142,6 +2164,11 @@ function WorkflowEditor({
     const nextDraft = nextDetails.draft ?? null;
     setDetails(nextDetails);
     lastSavedDraftSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
+    historyRef.current = createHistory();
+    lastCapturedDraftRef.current = nextDraft ? cloneWorkflowDraftForUndo(nextDraft) : null;
+    lastCapturedSignatureRef.current = nextDraft ? getDraftSignature(nextDraft) : "";
+    restoringRef.current = false;
+    setHistoryVersion(0);
     setDraft(nextDraft);
     setCatalog(nextCatalog.activities ?? []);
     setActivityDescriptors(nextDescriptors.descriptors);
@@ -2567,6 +2594,117 @@ function WorkflowEditor({
     return () => window.clearTimeout(timeoutId);
   }, [autosaveEnabled, draft, saveDraft]);
 
+  // Signature-driven history capture: records every committed mutation (palette add, drag,
+  // property edit, auto-layout, code apply, Weaver batch) without touching each handler.
+  useEffect(() => {
+    if (!draft) return;
+    if (restoringRef.current) {
+      restoringRef.current = false;
+      return;
+    }
+    const signature = getDraftSignature(draft);
+    if (signature === lastCapturedSignatureRef.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const previous = lastCapturedDraftRef.current;
+      if (previous) {
+        historyRef.current = pushSnapshot(historyRef.current, previous);
+        setHistoryVersion(version => version + 1);
+      }
+      lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(draft);
+      lastCapturedSignatureRef.current = signature;
+    }, historyCaptureDelayMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [draft]);
+
+  const exportJson = useCallback(() => {
+    if (!draft) return;
+    const name = details?.definition.name;
+    downloadWorkflowJson(buildExportPayload(draft, name), name);
+    setStatus("Exported workflow as JSON.");
+  }, [draft, details]);
+
+  const applyEditedJson = useCallback((text: string): string | null => {
+    if (!draft) return "No draft is loaded.";
+    const result = buildDraftFromJson(text, draft);
+    if (!result.ok) return result.error;
+    setDraft(result.draft);
+    setSelectedNodeId(null);
+    setFrames([]);
+    setStatus("Applied workflow JSON.");
+    return null;
+  }, [draft]);
+
+  // Collapses any pending (debounced-but-not-yet-captured) edit into the history stack so
+  // undo/redo always operate on a consistent baseline.
+  const flushPendingHistory = useCallback(() => {
+    if (!draft) return;
+    const signature = getDraftSignature(draft);
+    if (signature === lastCapturedSignatureRef.current) return;
+    const previous = lastCapturedDraftRef.current;
+    if (previous) historyRef.current = pushSnapshot(historyRef.current, previous);
+    lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(draft);
+    lastCapturedSignatureRef.current = signature;
+  }, [draft]);
+
+  const restoreDraftSnapshot = useCallback((snapshot: WorkflowDraft) => {
+    restoringRef.current = true;
+    lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(snapshot);
+    lastCapturedSignatureRef.current = getDraftSignature(snapshot);
+    setDraft(snapshot);
+    setSelectedNodeId(null);
+    setFrames([]);
+    setHistoryVersion(version => version + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!draft) return;
+    flushPendingHistory();
+    const step = undoHistory(historyRef.current, draft);
+    if (!step) return;
+    historyRef.current = step.history;
+    restoreDraftSnapshot(step.snapshot);
+  }, [draft, flushPendingHistory, restoreDraftSnapshot]);
+
+  const redo = useCallback(() => {
+    if (!draft) return;
+    flushPendingHistory();
+    const step = redoHistory(historyRef.current, draft);
+    if (!step) return;
+    historyRef.current = step.history;
+    restoreDraftSnapshot(step.snapshot);
+  }, [draft, flushPendingHistory, restoreDraftSnapshot]);
+
+  const { canUndoNow, canRedoNow } = useMemo(() => {
+    void historyVersion; // re-evaluate when the history stack mutates
+    const hasPendingEdit = !!draft && !!lastCapturedDraftRef.current && getDraftSignature(draft) !== lastCapturedSignatureRef.current;
+    return {
+      canUndoNow: canUndo(historyRef.current) || hasPendingEdit,
+      canRedoNow: canRedo(historyRef.current) && !hasPendingEdit
+    };
+  }, [draft, historyVersion]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (canvasView !== "designer") return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const key = event.key.toLowerCase();
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if ((key === "z" && event.shiftKey) || key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canvasView, undo, redo]);
+
   const save = async () => {
     if (!draft || busy) return;
     setOperation("saving");
@@ -2657,6 +2795,21 @@ function WorkflowEditor({
   const commitLayout = () => {
     commitCanvas(nodes, edges);
   };
+
+  const canAutoLayout = !isUnsupportedDesigner && nodes.length > 0;
+  const autoLayout = useCallback(() => {
+    if (isUnsupportedDesigner || nodes.length === 0) return;
+    const mode = scope?.slot.mode === "sequence" ? "sequence" : "flowchart";
+    const positions = computeAutoLayout(nodes, edges, mode);
+    const nextNodes = nodes.map(node => {
+      const position = positions.get(node.id);
+      return position ? { ...node, position } : node;
+    });
+    setNodes(nextNodes);
+    commitCanvas(nextNodes, edges);
+    window.requestAnimationFrame(() => reactFlowInstance?.fitView({ padding: 0.2 }));
+    setStatus("Rearranged the canvas.");
+  }, [edges, nodes, scope, isUnsupportedDesigner, commitCanvas, reactFlowInstance]);
 
   const onConnectStart: OnConnectStart = (_event, params) => {
     if (!params.nodeId || params.handleType === "target") {
@@ -2983,12 +3136,31 @@ function WorkflowEditor({
   ].sort(compareWorkflowPanelTabs);
   const activeLeftPanel = leftPanelTabs.find(tab => tab.id === activeLeftPanelId) ?? leftPanelTabs[0];
   const activeRightPanel = rightPanelTabs.find(tab => tab.id === activeRightPanelId) ?? rightPanelTabs[0];
+  const canvasViewTabs: WorkflowEditorPanelTab[] = [
+    { id: "designer", title: "Designer", order: 0, icon: <WorkflowIcon size={14} />, render: () => null },
+    { id: "code", title: "Code", order: 1, icon: <Code2 size={14} />, render: () => null },
+    { id: "properties", title: "Properties", order: 2, icon: <SlidersHorizontal size={14} />, render: () => null }
+  ];
 
   function renderActivitiesPanel() {
+    const searching = paletteSearch.trim().length > 0;
     return (
-      <div className="wf-palette-list" role="tree" aria-label="Available activities">
-        {paletteGroups.map(group => {
-          const expanded = expandedPaletteCategories.has(group.category);
+      <div className="wf-palette-body">
+        <label className="wf-palette-search">
+          <Search size={14} aria-hidden="true" />
+          <input
+            type="search"
+            value={paletteSearch}
+            placeholder="Search activities"
+            aria-label="Search activity palette"
+            onChange={event => setPaletteSearch(event.target.value)}
+          />
+        </label>
+        <div className="wf-palette-list" role="tree" aria-label="Available activities">
+          {filteredPaletteGroups.length === 0 ? (
+            <p className="wf-muted wf-palette-empty">No matching activities.</p>
+          ) : filteredPaletteGroups.map(group => {
+          const expanded = searching || expandedPaletteCategories.has(group.category);
           return (
             <div className="wf-palette-category" key={group.category}>
               <button
@@ -3038,6 +3210,7 @@ function WorkflowEditor({
             </div>
           );
         })}
+        </div>
       </div>
     );
   }
@@ -3087,6 +3260,35 @@ function WorkflowEditor({
         <span className="wf-chip">Draft</span>
         {visibleStatus ? <span className="wf-status"><Check size={13} /> {visibleStatus}</span> : null}
         <div className="wf-editor-actions">
+          <div className="wf-canvas-tools" role="group" aria-label="Canvas tools">
+            <button
+              type="button"
+              className="wf-icon-button"
+              aria-label="Undo"
+              title="Undo (Ctrl+Z)"
+              disabled={!canUndoNow}
+              onClick={undo}>
+              <Undo2 size={16} />
+            </button>
+            <button
+              type="button"
+              className="wf-icon-button"
+              aria-label="Redo"
+              title="Redo (Ctrl+Shift+Z)"
+              disabled={!canRedoNow}
+              onClick={redo}>
+              <Redo2 size={16} />
+            </button>
+            <button
+              type="button"
+              className="wf-icon-button"
+              aria-label="Auto-layout"
+              title="Auto-layout the canvas"
+              disabled={!canAutoLayout}
+              onClick={autoLayout}>
+              <Network size={16} />
+            </button>
+          </div>
           <label className="wf-autosave-toggle">
             <input className="wf-autosave-switch-input" type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
             <span>Autosave</span>
@@ -3097,6 +3299,7 @@ function WorkflowEditor({
           {proposeUpdateAction ? (
             <button type="button" onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}><Sparkles size={15} /> Propose</button>
           ) : null}
+          <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
           <button type="button" disabled={busy} onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
           {renderedTestRun ? (
@@ -3171,6 +3374,20 @@ function WorkflowEditor({
         ) : <div className="wf-side-resize-spacer" />}
 
         <main className="wf-canvas-shell">
+          <div className="wf-canvas-tabs">
+            <PanelTabList
+              label="Editor view tabs"
+              tabs={canvasViewTabs}
+              activeTabId={canvasView}
+              onSelect={tabId => setCanvasView(tabId as CanvasView)}
+            />
+          </div>
+          {canvasView === "code" ? (
+            <WorkflowCodeView draft={draft} onApply={applyEditedJson} />
+          ) : canvasView === "properties" ? (
+            <WorkflowPropertiesView details={details} draft={draft} />
+          ) : (
+          <>
           <div className="wf-breadcrumb">
             <button type="button" onClick={() => { setFrames([]); setSelectedNodeId(null); }}>Root</button>
             {frames.map((frame, index) => (
@@ -3235,6 +3452,8 @@ function WorkflowEditor({
             ) : null}
           </div>
           <ValidationPanel draft={draft} />
+          </>
+          )}
         </main>
 
         {inspectorExpanded && !maximizedSidePanel ? (
@@ -3374,23 +3593,6 @@ function formatNodeSubtitle(nodeData: WorkflowNodeData) {
   const executionType = nodeData.executionType?.trim();
   const parts = [category, executionType].filter((part): part is string => !!part);
   return parts.join(" · ");
-}
-
-function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
-  switch (icon) {
-    case "flowchart":
-      return <GitBranch size={15} />;
-    case "sequence":
-      return <ListTree size={15} />;
-    case "terminal":
-      return <Terminal size={15} />;
-    case "runtime":
-      return <Play size={15} />;
-    case "trigger":
-      return <Zap size={15} />;
-    default:
-      return <Boxes size={15} />;
-  }
 }
 
 function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
@@ -3728,12 +3930,6 @@ function isRejectedTestRun(testRun: WorkflowTestRunView) {
   return testRun.status.toLowerCase() === "rejected";
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
 function formatWorkflowVersionLoadError(error: string) {
   try {
     const payload = JSON.parse(error) as { error?: unknown };
@@ -3767,21 +3963,3 @@ function isNotFoundError(error: unknown, message: string) {
   }
 }
 
-function formatDuration(start?: string | null, end?: string | null) {
-  if (!start || !end) return "";
-
-  const startTime = Date.parse(start);
-  const endTime = Date.parse(end);
-  if (Number.isNaN(startTime) || Number.isNaN(endTime) || endTime < startTime) return "";
-
-  const totalSeconds = Math.round((endTime - startTime) / 1000);
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
