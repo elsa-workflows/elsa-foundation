@@ -1,71 +1,56 @@
 using System.Text.Json;
 using Elsa.Activities.If;
-using Elsa.Activities.Runtime;
-using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Api;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
-using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IfActivity = Elsa.Activities.If.Activities.If;
 
 namespace Elsa.Activities.If.Tests;
 
 /// <summary>
-/// In-process execution coverage for the <c>If</c> composite running through the real workflow agent
-/// (the FlowchartRuntimeFixture pattern). Asserts the matching branch runs, the other does not, and the
-/// composite emits the True/False outcome.
+/// In-process execution coverage for the <c>If</c> composite running through the real workflow agent.
+/// Built on the shared <see cref="WorkflowExecutionHarness"/>: this file only declares the If-specific
+/// activity constructor and graph shape; provider wiring, execution, and assertions come from the harness.
+/// Asserts the matching branch runs, the other does not, and the composite emits the True/False outcome.
 /// </summary>
 public sealed class IfRuntimeTests
 {
-    private readonly DateTimeOffset _now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
-
     [Fact]
     public async Task TrueCondition_RunsThenBranch_AndEmitsTrueOutcome()
     {
-        await using var provider = NewProvider(["actexec-if", "actexec-then"]);
-        var executable = NewExecutable(condition: true);
+        await using var harness = NewHarness("actexec-if", "actexec-then");
 
-        await ExecuteAsync(provider, executable);
+        var run = await harness.RunAsync(NewExecutable(condition: true));
 
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        var ifState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-if");
-        Assert.Equal(ActivityExecutionStatus.Completed, ifState.Status);
-        Assert.Equal([ActivityOutcomes.True], CompletionOutcomes(ifState));
-        Assert.Contains(states, state => state.Execution.ExecutableNodeId == "node-then");
-        Assert.DoesNotContain(states, state => state.Execution.ExecutableNodeId == "node-else");
+        run.AssertOutcomes("node-if", ActivityOutcomes.True);
+        run.AssertRan("node-then");
+        run.AssertDidNotRun("node-else");
     }
 
     [Fact]
     public async Task FalseCondition_RunsElseBranch_AndEmitsFalseOutcome()
     {
-        await using var provider = NewProvider(["actexec-if", "actexec-else"]);
-        var executable = NewExecutable(condition: false);
+        await using var harness = NewHarness("actexec-if", "actexec-else");
 
-        await ExecuteAsync(provider, executable);
+        var run = await harness.RunAsync(NewExecutable(condition: false));
 
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        var ifState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-if");
-        Assert.Equal(ActivityExecutionStatus.Completed, ifState.Status);
-        Assert.Equal([ActivityOutcomes.False], CompletionOutcomes(ifState));
-        Assert.Contains(states, state => state.Execution.ExecutableNodeId == "node-else");
-        Assert.DoesNotContain(states, state => state.Execution.ExecutableNodeId == "node-then");
+        run.AssertOutcomes("node-if", ActivityOutcomes.False);
+        run.AssertRan("node-else");
+        run.AssertDidNotRun("node-then");
     }
 
     [Fact]
     public async Task TerminalBranch_CompletesWorkflow()
     {
-        await using var provider = NewProvider(["actexec-if", "actexec-then"]);
-        var executable = NewExecutable(condition: true);
+        await using var harness = NewHarness("actexec-if", "actexec-then");
 
-        await ExecuteAsync(provider, executable);
+        var run = await harness.RunAsync(NewExecutable(condition: true));
 
-        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
-        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        run.AssertWorkflowCompleted();
     }
 
     [Fact]
@@ -73,54 +58,29 @@ public sealed class IfRuntimeTests
     {
         // Condition selects the Then branch, but its slot is empty: the composite must finalize via
         // CompleteCompositeActivity (True outcome) with no child scheduled, and the run must complete.
-        await using var provider = NewProvider(["actexec-if"]);
-        var executable = NewExecutable(condition: true, includeThen: false);
+        await using var harness = NewHarness("actexec-if");
 
-        await ExecuteAsync(provider, executable);
+        var run = await harness.RunAsync(NewExecutable(condition: true, includeThen: false));
 
-        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        var ifState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-if");
-        Assert.Equal(ActivityExecutionStatus.Completed, ifState.Status);
-        Assert.Equal([ActivityOutcomes.True], CompletionOutcomes(ifState));
-        Assert.DoesNotContain(states, state => state.Execution.ExecutableNodeId == "node-then");
-        Assert.DoesNotContain(states, state => state.Execution.ExecutableNodeId == "node-else");
-
-        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
-        Assert.Equal(WorkflowExecutionStatus.Completed, workflowState?.Status);
+        run.AssertOutcomes("node-if", ActivityOutcomes.True);
+        run.AssertDidNotRun("node-then", "node-else");
+        run.AssertWorkflowCompleted();
     }
 
-    private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IActivityConstructor, IfActivityConstructor>();
-        services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
-        services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        new ActivitiesRuntimeFeature().ConfigureServices(services);
-        new ActivitiesIfFeature().ConfigureServices(services);
+    private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new ActivitiesIfFeature().ConfigureServices(services))
+            .WithConstructor<IfActivityConstructor>()
+            .WithProbeLeaf()
+            .Build(activityExecutionIds);
 
-        return services.BuildServiceProvider();
-    }
-
-    private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
-    {
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
-            .GetAgentAsync(NewActivationRequest("wfexec-1"));
-
-        var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
-
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
-        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
-    }
-
-    private WorkflowExecutable NewExecutable(bool condition, bool includeThen = true, bool includeElse = true)
+    private static WorkflowExecutable NewExecutable(bool condition, bool includeThen = true, bool includeElse = true)
     {
         var childSlots = new List<ExecutableChildSlot>();
         if (includeThen)
-            childSlots.Add(new ExecutableChildSlot(IfActivity.ThenSlotName, [NewProbeNode("node-then")]));
+            childSlots.Add(new ExecutableChildSlot(IfActivity.ThenSlotName, [WorkflowExecutionHarness.NewProbeNode("node-then")]));
         if (includeElse)
-            childSlots.Add(new ExecutableChildSlot(IfActivity.ElseSlotName, [NewProbeNode("node-else")]));
+            childSlots.Add(new ExecutableChildSlot(IfActivity.ElseSlotName, [WorkflowExecutionHarness.NewProbeNode("node-else")]));
 
         var root = new ExecutableNode(
             executableNodeId: "node-if",
@@ -149,64 +109,8 @@ public sealed class IfRuntimeTests
                     @else = includeElse ? "node-else" : null
                 })));
 
-        return new WorkflowExecutable(
-            identity: NewIdentity(),
-            rootActivity: root,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: _now,
-            publishedAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+        return WorkflowExecutionHarness.NewExecutable(root);
     }
-
-    private static IReadOnlyCollection<string> CompletionOutcomes(ActivityExecutionState state) =>
-        state.Metadata.TryGetValue(RuntimeMetadataKeys.CompletionOutcomeNames, out var serialized)
-            ? JsonSerializer.Deserialize<string[]>(serialized) ?? []
-            : [];
-
-    private static ExecutableNode NewProbeNode(string nodeId) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: "test/probe",
-            activityTypeVersion: "1.0.0",
-            descriptorType: ProbeActivityConstructor.DescriptorTypeKey,
-            descriptorPayload: JsonSerializer.SerializeToElement(new ProbeDescriptor([ActivityOutcomes.Done])),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>());
-
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
-        new(
-            workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
-            requestedAt: _now,
-            requestedBy: "if-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
-
-    private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
-    {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
-        var command = new WorkflowExecutionCommand(
-            CommandId: "command-start",
-            WorkflowExecutionId: "wfexec-1",
-            Kind: WorkflowExecutionCommandKind.Start,
-            EnqueuedAt: _now,
-            Payload: JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string>());
-
-        return new WorkflowExecutionCommandEnvelope(
-            envelopeId: "envelope-start",
-            workflowExecutionId: "wfexec-1",
-            command: command,
-            idempotencyKey: "wfexec-1:start:artifact-1",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: _now,
-            sequence: 1,
-            metadata: new Dictionary<string, string>());
-    }
-
-    private static WorkflowExecutableIdentity NewIdentity() =>
-        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
     private sealed class IfActivityConstructor : IActivityConstructor<IfDescriptor>
     {
@@ -234,50 +138,4 @@ public sealed class IfRuntimeTests
     }
 
     private sealed record IfDescriptor;
-
-    private sealed class ProbeActivityConstructor : IActivityConstructor<ProbeDescriptor>
-    {
-        public static string DescriptorTypeKey => typeof(ProbeDescriptor).FullName!;
-        public string DescriptorType => DescriptorTypeKey;
-
-        public ValueTask<IActivity> Construct(
-            JsonElement payload,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken)
-        {
-            var descriptor = payload.Deserialize<ProbeDescriptor>()
-                             ?? throw new InvalidOperationException("Probe descriptor resolved to null.");
-            return Construct(descriptor, inputs, outputs, cancellationToken);
-        }
-
-        public ValueTask<IActivity> Construct(
-            ProbeDescriptor descriptor,
-            IDictionary<string, InputArgument>? inputs,
-            IDictionary<string, OutputArgument>? outputs,
-            CancellationToken cancellationToken) =>
-            new(new ProbeActivity(descriptor.Outcomes));
-    }
-
-    private sealed record ProbeDescriptor(IReadOnlyCollection<string> Outcomes);
-
-    private sealed class ProbeActivity(IReadOnlyCollection<string> outcomes) : CodeActivity("test/probe")
-    {
-        protected override void Execute(IActivityExecutionContext context) =>
-            context.SetOutcomes(outcomes.ToArray());
-    }
-
-    private sealed class DeterministicRuntimeExecutionIdGenerator(IEnumerable<string> activityExecutionIds) : IRuntimeExecutionIdGenerator
-    {
-        private readonly Queue<string> _activityExecutionIds = new(activityExecutionIds);
-
-        public string NewWorkflowExecutionId() => "wfexec-1";
-        public string NewWorkflowExecutionCommandId() => "command-generated";
-        public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-generated";
-
-        public string NewActivityExecutionId() =>
-            _activityExecutionIds.TryDequeue(out var activityExecutionId)
-                ? activityExecutionId
-                : throw new InvalidOperationException("No deterministic activity execution ID is available.");
-    }
 }
