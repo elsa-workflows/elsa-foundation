@@ -21,6 +21,7 @@
           "ActivitiesDesignApi": {},
           "ActivitiesRuntime": {},
           "ActivitiesFlowchart": {},
+          "ActivitiesIf": {},
           "ActivitiesPrimitives": {},
           "ActivitiesSequence": {},
           "ActivitiesCompositionRuntime": {},

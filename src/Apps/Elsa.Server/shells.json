@@ -10,6 +10,7 @@
           "ActivitiesPrimitives": {},
           "ActivitiesRuntime": {},
           "ActivitiesFlowchart": {},
+          "ActivitiesIf": {},
           "ActivitiesSequence": {},
           "ClrActivityReconciliation": {
             "Options": {
