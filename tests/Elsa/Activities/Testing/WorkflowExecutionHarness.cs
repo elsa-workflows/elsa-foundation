@@ -49,7 +49,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// Saves the executable, starts the in-process agent, and drains the scheduler to completion.
     /// Returns a <see cref="WorkflowExecutionRun"/> exposing the persisted activity/workflow state.
     /// </summary>
-    public async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable)
+    public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable) =>
+        RunAsync(executable, allowPendingWorkOnTerminalCompletion: false);
+
+    /// <summary>
+    /// Saves the executable, starts the in-process agent, and drains the scheduler.
+    /// </summary>
+    /// <param name="allowPendingWorkOnTerminalCompletion">
+    /// When <c>false</c> (the default) the run requires the scheduler to drain to an empty queue. When
+    /// <c>true</c>, queued work left behind is tolerated <em>only</em> if the workflow reached a terminal
+    /// status — the #293 contract: a <c>Finish</c> inside a parallel fork terminates the run and the drainer
+    /// intentionally abandons the already-queued sibling work rather than dispatching post-completion state.
+    /// </param>
+    public async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, bool allowPendingWorkOnTerminalCompletion)
     {
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await _provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
@@ -59,13 +71,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}).");
 
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
+        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
+
         var pending = await _provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
             .ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId));
         if (pending.Count != 0)
-            throw new InvalidOperationException($"Scheduler did not drain to completion ({pending.Count} work item(s) remain).");
+        {
+            var terminated = workflowState?.Status is WorkflowExecutionStatus.Completed
+                or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled;
+            if (!allowPendingWorkOnTerminalCompletion || !terminated)
+                throw new InvalidOperationException($"Scheduler did not drain to completion ({pending.Count} work item(s) remain).");
+        }
 
-        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
-        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
         return new WorkflowExecutionRun(states, workflowState);
     }
 
