@@ -16,25 +16,27 @@ import {
   inputDefaultValueKeys,
   inputStorageKeys,
   isPlainRecord,
+  literalDefault,
   readBooleanField,
   readStringField,
+  readVariableDefault,
+  resolveStorageDriverType,
+  resolveTypeInformation,
+  typeInformationKey,
   updateInput,
   updateOutput,
   updateVariable,
-  variableNameKeys,
-  variableStorageKeys,
-  variableTypeKeys,
-  variableValueKeys
+  variableNameKeys
 } from "./workflowProperties";
 import type {
   StorageDriverDescriptor,
+  VariableDefinition,
   VariableTypeDescriptor,
   WorkflowDefinitionDetails,
   WorkflowDefinitionState,
   WorkflowDraft,
   WorkflowInput,
-  WorkflowOutput,
-  WorkflowVariable
+  WorkflowOutput
 } from "./workflowTypes";
 
 type StateProducer = (state: WorkflowDefinitionState) => WorkflowDefinitionState;
@@ -47,7 +49,7 @@ interface PickerOption {
 
 // Loads the Type/Storage picker descriptors once per editor mount. A failed fetch resolves to
 // an empty list, which makes the pickers fall back to free-text inputs (no invented endpoint).
-function useDescriptorOptions(context: StudioEndpointContext) {
+export function useDescriptorOptions(context: StudioEndpointContext) {
   const [variableTypes, setVariableTypes] = useState<VariableTypeDescriptor[] | null>(null);
   const [storageDrivers, setStorageDrivers] = useState<StorageDriverDescriptor[] | null>(null);
 
@@ -205,61 +207,68 @@ function RemoveCell({ label, onRemove }: { label: string; onRemove(): void }) {
   );
 }
 
-function VariablesEditor({ items, typeOptions, storageOptions, onChange }: {
+export function VariablesEditor({ items, typeOptions, storageOptions, title = "Variables", addLabel = "Add variable", emptyLabel = "No variables defined.", warnings, onChange }: {
   items: Record<string, unknown>[];
   typeOptions: PickerOption[] | null;
   storageOptions: PickerOption[] | null;
+  title?: string;
+  addLabel?: string;
+  emptyLabel?: string;
+  warnings?: Map<string, string>;
   onChange(next: unknown[]): void;
 }) {
-  const { add, update, remove } = buildCollectionOps<WorkflowVariable>(items, onChange, {
+  const { add, update, remove } = buildCollectionOps<VariableDefinition>(items, onChange, {
     namePrefix: "Variable",
     nameKeys: variableNameKeys,
-    create: name => createVariable({ name, typeName: pickDefaultType(typeOptions) }),
+    create: name => createVariable({ name, typeKey: pickDefaultType(typeOptions) }),
     patch: updateVariable
   });
 
   return (
     <EditorSection
-      title="Variables"
-      addLabel="Add variable"
-      emptyLabel="No variables defined."
+      title={title}
+      addLabel={addLabel}
+      emptyLabel={emptyLabel}
       headers={["Name", "Type", "Default", "Storage"]}
       isEmpty={items.length === 0}
       onAdd={add}
     >
       {items.map((item, index) => {
+        const variable = item as VariableDefinition;
         const name = readStringField(item, variableNameKeys);
+        const warning = warnings?.get(variable.referenceKey);
         return (
           <tr key={index}>
             <td>
               <input type="text" aria-label="Variable name" value={name} onChange={event => update(index, { name: event.target.value })} />
+              {warning ? <span className="wf-properties-warning" role="note" title={warning}>{warning}</span> : null}
             </td>
             <td>
               <PickerCell
                 ariaLabel="Variable type"
-                value={readStringField(item, variableTypeKeys)}
+                value={typeInformationKey(variable.typeInformation)}
                 options={typeOptions}
                 placeholder="Type"
-                onChange={value => update(index, { typeName: value })}
+                onChange={value => update(index, { typeInformation: resolveTypeInformation(value) })}
               />
             </td>
             <td>
               <input
                 type="text"
                 aria-label="Variable default value"
-                value={readStringField(item, variableValueKeys)}
+                value={readVariableDefault(variable.default)}
                 placeholder="(empty)"
-                onChange={event => update(index, { value: event.target.value === "" ? null : event.target.value })}
+                onChange={event => update(index, { default: literalDefault(event.target.value) })}
               />
             </td>
             <td>
               <PickerCell
                 ariaLabel="Variable storage driver"
-                value={readStringField(item, variableStorageKeys)}
+                value={typeInformationKey(variable.storageDriverType)}
                 options={storageOptions}
                 placeholder="—"
                 allowEmpty
-                onChange={value => update(index, { storageDriverTypeName: value || null })}
+                onChange={value => update(index, { storageDriverType: resolveStorageDriverType(value) })}
               />
             </td>
             <RemoveCell label={`Remove variable ${name || index + 1}`} onRemove={() => remove(index)} />
@@ -396,8 +405,35 @@ function OutputsEditor({ items, typeOptions, onChange }: {
   );
 }
 
-function toRecords(value: unknown[] | undefined): Record<string, unknown>[] {
+export function toRecords(value: unknown[] | undefined): Record<string, unknown>[] {
   return (value ?? []).filter(isPlainRecord);
+}
+
+// Self-contained variable editor (loads its own type/storage descriptors) for use outside the
+// Properties tab — e.g. the container-scoped variables section in the activity inspector. Workflow-
+// and container-scoped declarations share this one editor, differing only by where they are stored.
+export function ScopedVariablesEditor({ context, variables, title, addLabel, emptyLabel, warnings, onChange }: {
+  context: StudioEndpointContext;
+  variables: unknown[] | undefined;
+  title?: string;
+  addLabel?: string;
+  emptyLabel?: string;
+  warnings?: Map<string, string>;
+  onChange(next: unknown[]): void;
+}) {
+  const { typeOptions, storageOptions } = useDescriptorOptions(context);
+  return (
+    <VariablesEditor
+      items={toRecords(variables)}
+      typeOptions={typeOptions}
+      storageOptions={storageOptions}
+      title={title}
+      addLabel={addLabel}
+      emptyLabel={emptyLabel}
+      warnings={warnings}
+      onChange={onChange}
+    />
+  );
 }
 
 export function WorkflowPropertiesView({ details, draft, context, onStateChange }: {
@@ -431,7 +467,7 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange 
         items={variables}
         typeOptions={typeOptions}
         storageOptions={storageOptions}
-        onChange={next => onStateChange(state => ({ ...state, variables: next }))}
+        onChange={next => onStateChange(state => ({ ...state, variables: next as VariableDefinition[] }))}
       />
       <InputsEditor
         items={inputs}

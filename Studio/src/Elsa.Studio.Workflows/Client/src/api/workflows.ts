@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
+import { scopedVariableSignature } from "../scopedVariables";
 import type {
   ActivityAvailabilityDiagnostics,
   ActivityAvailabilitySettings,
@@ -11,6 +13,7 @@ import type {
   DefinitionListState,
   ExpressionDescriptor,
   ExpressionDescriptorsResponse,
+  ScopedVariableAnalysisResponse,
   StorageDriverDescriptor,
   StorageDriverDescriptorsResponse,
   VariableTypeDescriptor,
@@ -19,6 +22,7 @@ import type {
   PublishedWorkflowResponse,
   SaveActivityAvailabilitySettingsRequest,
   StartWorkflowDraftTestRunRequest,
+  WorkflowDefinitionState,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
   WorkflowExecutableRunResponse,
@@ -160,6 +164,67 @@ export async function getDefinition(context: StudioEndpointContext, definitionId
   return details.draft
     ? { ...details, draft: { ...details.draft, state: expandStateFromWire(details.draft.state) } }
     : details;
+}
+
+// Scoped-variable design analysis (elsa-foundation#285): visible variables for the selected activity
+// (nearest-scope first) plus non-blocking shadowing warnings. Sends the live, canonicalized state so
+// unsaved declarations are reflected. The endpoint is a pending backend dependency; callers degrade
+// gracefully (status "unavailable") until it ships — they never fall back to client-side computation.
+export async function analyzeScopedVariables(
+  context: StudioEndpointContext,
+  state: WorkflowDefinitionState,
+  nodeId: string | null
+): Promise<ScopedVariableAnalysisResponse> {
+  const response = await context.http.postJson<ScopedVariableAnalysisResponse>(
+    `${basePath}/design/scoped-variables/analyze`,
+    { state: canonicalizeStateForWire(state), nodeId });
+  return {
+    visibleVariables: Array.isArray(response?.visibleVariables) ? response.visibleVariables : [],
+    shadowingWarnings: Array.isArray(response?.shadowingWarnings) ? response.shadowingWarnings : []
+  };
+}
+
+export type ScopedVariableAnalysisStatus = "loading" | "ready" | "unavailable";
+
+export interface ScopedVariableAnalysis extends ScopedVariableAnalysisResponse {
+  status: ScopedVariableAnalysisStatus;
+}
+
+const emptyAnalysis = (status: ScopedVariableAnalysisStatus): ScopedVariableAnalysis =>
+  ({ visibleVariables: [], shadowingWarnings: [], status });
+
+// Re-runs only when the selected node or a visibility-affecting declaration/structure change occurs
+// (see scopedVariableSignature), not on every keystroke. Uses the imperative load pattern the
+// workflow designer relies on (no QueryClientProvider in that tree). A failed/absent endpoint surfaces
+// as "unavailable" with empty results — callers never fall back to client-side computation.
+export function useScopedVariableAnalysis(
+  context: StudioEndpointContext,
+  state: WorkflowDefinitionState | null | undefined,
+  nodeId: string | null
+): ScopedVariableAnalysis {
+  const signature = useMemo(() => scopedVariableSignature(state), [state]);
+  const [result, setResult] = useState<ScopedVariableAnalysis>(() => emptyAnalysis("loading"));
+
+  useEffect(() => {
+    if (!state) {
+      setResult(emptyAnalysis("unavailable"));
+      return;
+    }
+
+    let cancelled = false;
+    setResult(previous => ({ ...previous, status: "loading" }));
+    analyzeScopedVariables(context, state, nodeId).then(
+      data => { if (!cancelled) setResult({ ...data, status: "ready" }); },
+      () => { if (!cancelled) setResult(emptyAnalysis("unavailable")); }
+    );
+
+    return () => { cancelled = true; };
+    // `signature` captures the visibility-relevant parts of `state`; re-running on the full object
+    // would refetch on every unrelated edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context, nodeId, signature]);
+
+  return result;
 }
 
 export async function getWorkflowDefinitionVersion(context: StudioEndpointContext, versionId: string) {

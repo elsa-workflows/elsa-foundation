@@ -3338,3 +3338,99 @@
   color: var(--warning, #b45309);
   font-size: 12px;
 }
+
+/* Scoped variables (ADR-0027): container declarations, picker, shadowing advisories, repair surface. */
+.wf-container-variables {
+  margin-top: 10px;
+  border-top: 1px solid var(--wf-border);
+  padding-top: 8px;
+}
+
+.wf-properties-warning {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--warning, #b45309);
+}
+
+.wf-variable-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wf-variable-picker select {
+  width: 100%;
+}
+
+.wf-variable-picker-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--wf-muted-fg, #6b7280);
+}
+
+.wf-validation:has(.wf-validation-list) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 6px 12px;
+  max-height: 148px;
+  overflow-y: auto;
+}
+
+.wf-validation-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.wf-validation-variable-count {
+  font-weight: 400;
+  color: var(--wf-muted-fg, #6b7280);
+}
+
+.wf-validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wf-validation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.wf-validation-item.repairable .wf-validation-message {
+  color: var(--warning, #b45309);
+}
+
+.wf-validation-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-validation-repair {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  border: 1px solid var(--wf-border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  background: var(--wf-panel);
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.wf-validation-repair:hover {
+  background: color-mix(in srgb, var(--warning, #d97706) 14%, var(--wf-panel));
+}

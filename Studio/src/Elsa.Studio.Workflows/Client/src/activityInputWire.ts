@@ -23,7 +23,9 @@ interface WrappedInputValue {
 
 interface WireArgumentState {
   referenceKey: string;
-  value: { value: string | null; expressionType: string };
+  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; a Variable
+  // expression keeps its structured VariableReference object so the declaring scope survives the trip.
+  value: { value: unknown; expressionType: string };
 }
 
 export function canonicalizeStateForWire(state: WorkflowDefinitionState): WorkflowDefinitionState {
@@ -68,7 +70,7 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
     if (isWrappedInputValue(value)) {
       collected.push({
         referenceKey: pascalize(key),
-        value: { value: toWireValue(value.expression.value), expressionType: value.expression.type || "Literal" }
+        value: { value: toWireArgumentValue(value.expression), expressionType: value.expression.type || "Literal" }
       });
     } else {
       extras[key] = value;
@@ -112,6 +114,17 @@ function pascalize(value: string): string {
 
 function camelize(value: string): string {
   return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+}
+
+// Serializes an expression's value for the wire. A Variable expression keeps its structured
+// VariableReference object (the backend's VariableReference.TryParse reads `{ referenceKey,
+// declaringScopeId }` from an ArgumentValue.Value object); every other expression serializes to a
+// string per the backend's literal storage.
+function toWireArgumentValue(expression: { type: string; value: unknown }): unknown {
+  if ((expression.type || "Literal") === "Variable" && isRecord(expression.value)) {
+    return expression.value;
+  }
+  return toWireValue(expression.value);
 }
 
 // ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.

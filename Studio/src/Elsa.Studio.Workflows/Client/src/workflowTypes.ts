@@ -56,7 +56,7 @@ export interface WorkflowDraft {
 }
 
 export interface WorkflowDefinitionState {
-  variables?: unknown[];
+  variables?: VariableDefinition[];
   rootActivity?: ActivityNode | null;
   inputs?: unknown[];
   outputs?: unknown[];
@@ -90,6 +90,9 @@ export interface DesignMetadataRecord {
 
 export interface ValidationError {
   path?: string | null;
+  // Backend `ValidationError.Type` (e.g. "Expressions/UnresolvedVariable"); serialized as `type`.
+  // `code` is kept for backward-compatible readers but the backend never populates it.
+  type?: string | null;
   code?: string | null;
   message?: string | null;
   [key: string]: unknown;
@@ -185,17 +188,68 @@ export interface ExpressionDescriptorsResponse {
   expressionDescriptors?: ExpressionDescriptor[];
 }
 
-// Canonical workflow variable shape (matches the Code-tab JSON the backend round-trips).
-// Unknown fields on existing entries are preserved through edits, so the index signature
-// keeps them addressable without losing the well-known keys.
-export interface WorkflowVariable {
-  id: string;
-  name: string;
+// A .NET type identity as the backend serializes it (Elsa.Primitives.Models.TypeInformation).
+// The backend resolves a variable's CLR type from `namespace.typeName` via its well-known type
+// registry, so those two fields carry the meaning; assembly fields round-trip but are not required
+// for resolution of framework types.
+export interface TypeInformation {
   typeName: string;
-  isArray: boolean;
-  value: string | null;
-  storageDriverTypeName: string | null;
+  namespace: string;
+  assemblyName: string;
+  assemblyVersion: string;
   [key: string]: unknown;
+}
+
+// A literal/expression argument value (Elsa.Activities.Design.Core.Models.ArgumentValue).
+export interface ArgumentValue {
+  value: unknown;
+  expressionType: string;
+  [key: string]: unknown;
+}
+
+// Canonical scoped-variable declaration (Elsa.Expressions.Core.Models.VariableDefinition, ADR-0027).
+// `referenceKey` is the stable identity; `name` is display-only. Workflow-scoped declarations live on
+// `WorkflowDefinitionState.variables`; container-scoped declarations live on a container node's
+// `structure.payload.variables` in this exact shape, so both round-trip through the state wire layer
+// unchanged. The index signature preserves unknown fields authored elsewhere through edits.
+export interface VariableDefinition {
+  referenceKey: string;
+  name: string;
+  typeInformation: TypeInformation;
+  storageDriverType?: TypeInformation | null;
+  default?: ArgumentValue | null;
+  [key: string]: unknown;
+}
+
+// A structured reference to a scoped variable from an activity input (ADR-0027). `declaringScopeId`
+// is the declaring container node id, or the workflow-scope sentinel for workflow-scoped variables.
+export interface VariableReference {
+  referenceKey: string;
+  declaringScopeId?: string | null;
+}
+
+// A variable visible from a selected activity, nearest-scope first (backend VisibleVariableView).
+export interface VisibleVariableView {
+  referenceKey: string;
+  name: string;
+  scopeId: string;
+  isWorkflowScope: boolean;
+}
+
+// A non-blocking advisory that a container scope declares a name that shadows a visible ancestor
+// declaration (backend ScopedVariableShadowingWarning). Shadowing is allowed; never an error.
+export interface ScopedVariableShadowingWarning {
+  scopeId: string;
+  shadowedScopeId: string;
+  name: string;
+  referenceKey: string;
+}
+
+// Response of the scoped-variable design endpoint (elsa-foundation#285), wrapping
+// ScopedVariableAuthoringContract.GetVisibleVariables + GetShadowingWarnings.
+export interface ScopedVariableAnalysisResponse {
+  visibleVariables: VisibleVariableView[];
+  shadowingWarnings: ScopedVariableShadowingWarning[];
 }
 
 // Workflow inputs carry the full argument-definition field set plus binding metadata.
