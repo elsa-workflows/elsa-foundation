@@ -21,6 +21,12 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ActivityAvailabilityContracts = Elsa.Activities.Design.Core.Contracts;
+using ActivityAvailabilityModels = Elsa.Activities.Design.Core.Models;
+using ActivityAvailabilityOptionsNs = Elsa.Activities.Design.Core.Options;
+using ActivityAvailabilityStores = Elsa.Activities.Design.Core.Stores;
+using ActivityDesignFilters = Elsa.Activities.Design.Persistence.Core.Filters;
 
 namespace Elsa.Server;
 
@@ -56,6 +62,9 @@ internal static class ElsaWorkflowManagementApi
         group.MapDelete("/executables/{artifactId}/permanent", DeleteExecutablePermanentlyAsync);
         group.MapPost("/executables/{artifactId}/run", RunExecutableAsync);
         group.MapGet("/activities", ListActivitiesAsync);
+        group.MapGet("/activities/availability/settings", GetActivityAvailabilitySettingsAsync);
+        group.MapPut("/activities/availability/settings", SaveActivityAvailabilitySettingsAsync);
+        group.MapGet("/activities/availability/diagnostics", ListActivityAvailabilityDiagnosticsAsync);
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
         group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
 
@@ -271,6 +280,8 @@ internal static class ElsaWorkflowManagementApi
         {
             var versionStore = services.GetRequiredService<IActivityDefinitionVersionStore>();
             var definitionStore = services.GetRequiredService<IActivityDefinitionStore>();
+            var settingsStore = services.GetRequiredService<ActivityAvailabilityStores.IActivityAvailabilitySettingsStore>();
+            var availabilityEvaluator = services.GetRequiredService<ActivityAvailabilityContracts.IActivityAvailabilityEvaluator>();
             var versions = await versionStore.ListAsync(cancellationToken);
 
             foreach (var version in versions)
@@ -279,8 +290,15 @@ internal static class ElsaWorkflowManagementApi
                     version.Definition = await definitionStore.GetAsync(version.DefinitionId, cancellationToken);
             }
 
+            // Apply the design-time availability policy stack so the picker only offers addable activities.
+            var settings = await settingsStore.LoadAsync(ActivityAvailabilityModels.ActivityAvailabilitySettings.HostDefaultScope, cancellationToken);
+            var addableKeys = availabilityEvaluator
+                .FilterAddable(versions.Where(x => x.Definition is not null).Select(x => x.Definition!), settings)
+                .Select(definition => definition.ActivityTypeKey)
+                .ToHashSet(StringComparer.Ordinal);
+
             var response = versions
-                .Where(x => x.Definition is not null)
+                .Where(x => x.Definition is not null && addableKeys.Contains(x.Definition!.ActivityTypeKey))
                 .OrderBy(x => x.Definition!.Category, StringComparer.Ordinal)
                 .ThenBy(x => x.Definition!.DisplayName, StringComparer.Ordinal)
                 .ThenBy(x => x.Id, StringComparer.Ordinal)
@@ -298,6 +316,50 @@ internal static class ElsaWorkflowManagementApi
                 .ToArray();
 
             return Results.Ok(new ActivityCatalogResponse(response));
+        }, cancellationToken);
+
+    private static Task<IResult> GetActivityAvailabilitySettingsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var settingsStore = services.GetRequiredService<ActivityAvailabilityStores.IActivityAvailabilitySettingsStore>();
+            var settings = await settingsStore.LoadAsync(ActivityAvailabilityModels.ActivityAvailabilitySettings.HostDefaultScope, cancellationToken)
+                ?? new ActivityAvailabilityModels.ActivityAvailabilitySettings();
+            return Results.Ok(settings);
+        }, cancellationToken);
+
+    private static Task<IResult> SaveActivityAvailabilitySettingsAsync(IShellRegistry shellRegistry, SaveActivityAvailabilitySettingsRequest request, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var settingsStore = services.GetRequiredService<ActivityAvailabilityStores.IActivityAvailabilitySettingsStore>();
+            var settings = new ActivityAvailabilityModels.ActivityAvailabilitySettings
+            {
+                Scope = string.IsNullOrWhiteSpace(request.Scope)
+                    ? ActivityAvailabilityModels.ActivityAvailabilitySettings.HostDefaultScope
+                    : request.Scope,
+                Mode = request.Mode,
+                Rules = new ActivityAvailabilityOptionsNs.ActivityAvailabilityRuleSet
+                {
+                    ActivityTypes = request.Rules?.ActivityTypes ?? [],
+                    Sets = request.Rules?.Sets ?? []
+                }
+            };
+
+            await settingsStore.SaveAsync(settings, cancellationToken);
+            return Results.Ok(settings);
+        }, cancellationToken);
+
+    private static Task<IResult> ListActivityAvailabilityDiagnosticsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var definitionStore = services.GetRequiredService<IActivityDefinitionStore>();
+            var settingsStore = services.GetRequiredService<ActivityAvailabilityStores.IActivityAvailabilitySettingsStore>();
+            var diagnosticsProjector = services.GetRequiredService<ActivityAvailabilityContracts.IActivityAvailabilityDiagnosticsProjector>();
+            var options = services.GetRequiredService<IOptions<ActivityAvailabilityOptionsNs.ActivityAvailabilityOptions>>();
+
+            var definitions = await definitionStore.ListAsync(new ActivityDesignFilters.ActivityDefinitionFilter(), cancellationToken);
+            var settings = await settingsStore.LoadAsync(ActivityAvailabilityModels.ActivityAvailabilitySettings.HostDefaultScope, cancellationToken);
+            var diagnostics = diagnosticsProjector.Project(definitions, options.Value, settings);
+            return Results.Ok(diagnostics);
         }, cancellationToken);
 
     private static Task<IResult> ListActivityDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
@@ -789,6 +851,13 @@ internal sealed record PromoteDraftResponse(string VersionId);
 internal sealed record WorkflowManagementErrorResponse(string Error);
 
 internal sealed record ActivityCatalogResponse(IReadOnlyList<ActivityCatalogItemResponse> Activities);
+
+internal sealed record SaveActivityAvailabilitySettingsRequest(
+    string? Scope,
+    ActivityAvailabilityModels.ActivityAvailabilityManagementMode Mode,
+    SaveActivityAvailabilityRulesRequest? Rules);
+
+internal sealed record SaveActivityAvailabilityRulesRequest(string[]? ActivityTypes, string[]? Sets);
 
 internal sealed record ActivityCatalogItemResponse(
     string ActivityVersionId,
