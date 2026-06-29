@@ -24,12 +24,15 @@ namespace Elsa.Activities.ForEach.Activities;
 /// body.
 /// </summary>
 /// <remarks>
-/// The current item and index are loop-owned per-pass state built with the shared loop-scope primitive
-/// (<see cref="RuntimeLoopIterationScopeFactory"/>, ADR 0028): for each pass the loop chooses a distinct
-/// <c>IterationId</c>, calls <c>BuildIterationScope</c> once with the item (and optional index) and the
-/// enclosing scope chain as parent, and schedules the body child with that same <c>IterationId</c> in
-/// <see cref="ActivitySchedulingProvenance.IterationId"/> so the body execution's iteration identity
-/// agrees with its scope. The runtime activity references only the runtime contract surface; the
+/// The current item and index are loop-owned per-pass state realized through the shared loop-scope
+/// primitive (<see cref="RuntimeLoopIterationScopeFactory"/>, ADR 0028). For each pass the loop chooses a
+/// distinct <c>IterationId</c> and schedules the body child with that <c>IterationId</c> in
+/// <see cref="ActivitySchedulingProvenance.IterationId"/>, carrying the pass's item/index in the body's
+/// scheduling provenance metadata (the merged <c>RuntimeMetadataKeys.LoopIteration*</c> keys, #296). When the runtime starts the
+/// body it reads that metadata in <c>RuntimeContainerScopeService.BuildScopeAsync</c> and calls
+/// <c>BuildIterationScope</c> to layer a fresh per-pass iteration scope (item + optional index) as the
+/// innermost scope on the body's visible chain, so the body resolves the current item through the real
+/// expression evaluator. The runtime activity references only the runtime contract surface; the
 /// design-side structure handler references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </remarks>
 public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
@@ -38,19 +41,19 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     public const string StructureKind = "elsa.foreach.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    /// <summary>The reference key the current-item variable is addressed by within the iteration scope.</summary>
-    public const string CurrentItemReferenceKey = "foreach.currentItem";
-
-    /// <summary>The bare name body activities use to read the current item.</summary>
+    /// <summary>
+    /// The variable name body activities use to read the current item. Per the merged loop-scope wiring
+    /// (#296), this name doubles as the iteration scope's reference key: a body input bound to a
+    /// <c>Variable</c> expression <c>{ referenceKey: "currentItem", declaringScopeId: &lt;ForEach node id&gt; }</c>
+    /// resolves to the current pass's item.
+    /// </summary>
     public const string CurrentItemVariableName = "currentItem";
 
-    /// <summary>The reference key the iteration-index variable is addressed by within the iteration scope.</summary>
-    public const string CurrentIndexReferenceKey = "foreach.currentIndex";
-
-    /// <summary>The bare name body activities use to read the zero-based iteration index.</summary>
+    /// <summary>
+    /// The variable name body activities use to read the zero-based iteration index (also its reference
+    /// key within the iteration scope). Surfaced only when <see cref="ExposeIndex"/> is <c>true</c>.
+    /// </summary>
     public const string CurrentIndexVariableName = "currentIndex";
-
-    private readonly RuntimeLoopIterationScopeFactory _iterationScopeFactory = new();
 
     /// <summary>The collection iterated over; each item is exposed to the body for one pass.</summary>
     public InputArgument<object> Collection { get; set; } = null!;
@@ -108,33 +111,37 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         var parentActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         var iterationId = IterationId(parentActivityExecutionId, index);
 
-        // ADR 0028 contract step 2: build a fresh per-pass iteration scope carrying this item (and
-        // optional index). A distinct scope instance per pass is what isolates iterations; the
-        // IterationId is recorded as the scope's execution identity for correlation only. The enclosing
-        // visible scope chain is threaded by the runtime; this composite layers the iteration scope on top.
-        _iterationScopeFactory.BuildIterationScope(
-            new LoopIterationScopeRequest(
-                OwnerNodeId: ownerNodeId,
-                IterationId: iterationId,
-                ItemReferenceKey: CurrentItemReferenceKey,
-                ItemName: CurrentItemVariableName,
-                Item: items[index],
-                Index: index,
-                IndexReferenceKey: ExposeIndex ? CurrentIndexReferenceKey : null,
-                IndexName: ExposeIndex ? CurrentIndexVariableName : null),
-            parent: null);
+        // ADR 0028 / #259: publish this pass's iteration variables in the body child's scheduling
+        // provenance metadata, using the merged loop-scope keys (#296). The runtime
+        // (RuntimeContainerScopeService.BuildScopeAsync) reads these back and calls
+        // RuntimeLoopIterationScopeFactory.BuildIterationScope, layering a fresh per-pass iteration scope
+        // as the innermost scope on the body's enclosing container chain, so the body resolves
+        // 'currentItem' (and optionally 'currentIndex') through the real expression evaluator. The item
+        // and index values are JSON-serialized; the index is serialized as a JSON number so the scope
+        // builder's int parse recovers it. A distinct scope per pass (one per IterationId) isolates
+        // iterations; the IterationId is the scope's execution identity for correlation only.
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
+            [RuntimeMetadataKeys.LoopIterationItemName] = CurrentItemVariableName,
+            [RuntimeMetadataKeys.LoopIterationItemValue] = JsonSerializer.Serialize(items[index]),
+            ["foreach.parentActivityExecutionId"] = parentActivityExecutionId,
+            ["foreach.targetNodeId"] = body.ExecutableNodeId,
+            ["foreach.iterationIndex"] = index.ToString(CultureInfo.InvariantCulture)
+        };
 
-        // ADR 0028 contract step 3: schedule the body under that same IterationId so the body execution's
-        // iteration identity agrees with its scope.
+        if (ExposeIndex)
+        {
+            metadata[RuntimeMetadataKeys.LoopIterationIndexName] = CurrentIndexVariableName;
+            metadata[RuntimeMetadataKeys.LoopIterationIndexValue] = JsonSerializer.Serialize(index);
+        }
+
+        // ADR 0028 contract step 3: schedule the body under that same IterationId (also carried in the
+        // provenance metadata) so the body execution's iteration identity agrees with its scope.
         runtimeContext.ScheduleChildActivity(
             body.ExecutableNodeId,
             parentActivityExecutionId,
-            new Dictionary<string, string>
-            {
-                ["foreach.parentActivityExecutionId"] = parentActivityExecutionId,
-                ["foreach.targetNodeId"] = body.ExecutableNodeId,
-                ["foreach.iterationIndex"] = index.ToString(CultureInfo.InvariantCulture)
-            },
+            metadata,
             ActivitySchedulingProvenance.From(
                 runtimeContext.WorkflowExecutionId,
                 parentActivityExecutionId: parentActivityExecutionId,
@@ -143,7 +150,8 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
                 iterationId: iterationId,
                 executionPathId: null,
                 executionScopeId: null,
-                schedulingCause: "foreach.iteration"));
+                schedulingCause: "foreach.iteration",
+                metadata: metadata));
     }
 
     private static int ResolveCompletedIndex(IRuntimeActivityExecutionContext runtimeContext, string? completedChildIterationId)

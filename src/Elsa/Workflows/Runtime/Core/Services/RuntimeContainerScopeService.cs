@@ -140,11 +140,22 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         JsonValueKind.True => true,
         JsonValueKind.False => false,
         JsonValueKind.String => element.GetString(),
-        JsonValueKind.Number => element.TryGetInt32(out var i) ? i
-            : element.TryGetInt64(out var l) ? l
-            : element.GetDouble(),
+        JsonValueKind.Number => ConvertJsonNumber(element),
         _ => element.Clone()
     };
+
+    // Box an integral JSON number as its own integer type rather than letting the conditional operator
+    // widen everything to double: a single ternary over int/long/double infers a `double` common type,
+    // so callers' `is int`/`is long` pattern checks would fail. Explicit returns keep an integer an
+    // integer (int when it fits, else long) and a genuine fractional value a double.
+    private static object ConvertJsonNumber(JsonElement element)
+    {
+        if (element.TryGetInt32(out var i))
+            return i;
+        if (element.TryGetInt64(out var l))
+            return l;
+        return element.GetDouble();
+    }
 
     /// <summary>
     /// Writes back every container scope in <paramref name="scope"/>'s visible chain whose live
