@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Text.Json;
 using Elsa.Activities.ForEach.Exceptions;
 using Elsa.Activities.ForEach.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
@@ -171,9 +172,32 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         collection switch
         {
             null => [],
+            JsonElement element => MaterializeJsonItems(element),
             string => throw new ForEachExecutionException("ForEach collection input must be an enumerable, not a string."),
             IEnumerable enumerable => enumerable.Cast<object?>().ToArray(),
             _ => throw new ForEachExecutionException($"ForEach collection input of type '{collection.GetType().FullName}' is not enumerable.")
+        };
+
+    // A literal/expression collection arrives as a JsonElement (the runtime materializes 'object' inputs
+    // as JSON). Enumerate array elements, unwrapping each to its scalar CLR value so the body observes a
+    // plain item rather than a JsonElement.
+    private static IReadOnlyList<object?> MaterializeJsonItems(JsonElement element) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => [],
+            JsonValueKind.Array => element.EnumerateArray().Select(UnwrapJsonScalar).ToArray(),
+            _ => throw new ForEachExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
+        };
+
+    private static object? UnwrapJsonScalar(JsonElement element) =>
+        element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.TryGetInt64(out var integer) ? integer : element.GetDouble(),
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            _ => element
         };
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
