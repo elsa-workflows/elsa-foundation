@@ -445,3 +445,6 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
+
+# Elsa Copilot local session state (runtime cache, not source)
+**/.elsa/copilot/session-state/
