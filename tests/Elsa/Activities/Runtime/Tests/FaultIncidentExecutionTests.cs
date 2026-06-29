@@ -1,0 +1,187 @@
+using System.Text.Json;
+using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Runtime;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Elsa.Activities.Runtime.Tests;
+
+/// <summary>
+/// End-to-end guard for the <c>Fault</c> leaf activity: running a workflow whose only activity is a
+/// <c>Fault</c> must record a blocking incident through the engine incident model rather than throwing
+/// out to the host. The agent accepts the command, the run does not surface the exception to the caller,
+/// the activity state is Faulted, and an <c>IncidentState</c> is persisted for inspection/intervention.
+/// </summary>
+public sealed class FaultIncidentExecutionTests
+{
+    private readonly DateTimeOffset _now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task FaultActivity_RecordsBlockingIncident_WithoutThrowingToHost()
+    {
+        await using var provider = NewProvider(["actexec-fault"]);
+        var executable = NewExecutable("Boom!");
+
+        // The agent must accept and drain without the FaultActivityException propagating to the caller.
+        await ExecuteAsync(provider, executable);
+
+        var states = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
+        var faultState = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-fault");
+        Assert.Equal(ActivityExecutionStatus.Faulted, faultState.Status);
+        Assert.Equal("ActivityFaulted", faultState.SubStatus);
+
+        var incidents = await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1");
+        var incident = Assert.Single(incidents);
+        Assert.True(incident.IsBlocking);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentSeverity.Error, incident.Severity);
+        Assert.Equal("Boom!", incident.Message);
+        Assert.Equal("node-fault", incident.ExecutableNodeId);
+    }
+
+    [Fact]
+    public async Task FaultActivity_UsesDefaultMessage_WhenNoMessageIsBound()
+    {
+        await using var provider = NewProvider(["actexec-fault"]);
+        var executable = NewExecutable(message: null);
+
+        await ExecuteAsync(provider, executable);
+
+        var incidents = await provider.GetRequiredService<IIncidentStateStore>().ListBlockingAsync("wfexec-1");
+        var incident = Assert.Single(incidents);
+        Assert.Equal("The workflow faulted.", incident.Message);
+    }
+
+    private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IActivityConstructor, FaultActivityConstructor>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+
+        return services.BuildServiceProvider();
+    }
+
+    private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
+    {
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+            .GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
+
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    private WorkflowExecutable NewExecutable(string? message)
+    {
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>();
+        if (message is not null)
+            inputBindings["Message"] = new RuntimeInputBinding(
+                inputName: "Message",
+                source: RuntimeInputBindingSource.Literal,
+                literalValue: JsonSerializer.SerializeToElement(message),
+                metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" });
+
+        var root = new ExecutableNode(
+            executableNodeId: "node-fault",
+            authoredActivityId: "authored-fault",
+            activityType: typeof(Fault).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: FaultActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new FaultDescriptor()),
+            inputBindings: inputBindings,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+        return new WorkflowExecutable(
+            identity: NewIdentity(),
+            rootActivity: root,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: _now,
+            publishedAt: _now,
+            compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+        new(
+            workflowExecutionId: workflowExecutionId,
+            reason: WorkflowExecutionAgentActivationReason.Start,
+            requestedAt: _now,
+            requestedBy: "fault-test",
+            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+
+    private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
+    {
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-start",
+            WorkflowExecutionId: "wfexec-1",
+            Kind: WorkflowExecutionCommandKind.Start,
+            EnqueuedAt: _now,
+            Payload: JsonSerializer.SerializeToElement(payload),
+            Metadata: new Dictionary<string, string>());
+
+        return new WorkflowExecutionCommandEnvelope(
+            envelopeId: "envelope-start",
+            workflowExecutionId: "wfexec-1",
+            command: command,
+            idempotencyKey: "wfexec-1:start:artifact-1",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: _now,
+            sequence: 1,
+            metadata: new Dictionary<string, string>());
+    }
+
+    private static WorkflowExecutableIdentity NewIdentity() =>
+        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+    private sealed class FaultActivityConstructor : IActivityConstructor<FaultDescriptor>
+    {
+        public static string DescriptorTypeKey => typeof(FaultDescriptor).FullName!;
+        public string DescriptorType => DescriptorTypeKey;
+
+        public ValueTask<IActivity> Construct(
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken) =>
+            Construct(new FaultDescriptor(), inputs, outputs, cancellationToken);
+
+        public ValueTask<IActivity> Construct(
+            FaultDescriptor descriptor,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken)
+        {
+            var activity = new Fault();
+            if (inputs is not null && inputs.TryGetValue("Message", out var messageInput))
+                activity.Message = (InputArgument<string>)messageInput;
+            return new(activity);
+        }
+    }
+
+    private sealed record FaultDescriptor;
+
+    private sealed class DeterministicRuntimeExecutionIdGenerator(IEnumerable<string> activityExecutionIds) : IRuntimeExecutionIdGenerator
+    {
+        private readonly Queue<string> _activityExecutionIds = new(activityExecutionIds);
+
+        public string NewWorkflowExecutionId() => "wfexec-1";
+        public string NewWorkflowExecutionCommandId() => "command-generated";
+        public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-generated";
+
+        public string NewActivityExecutionId() =>
+            _activityExecutionIds.TryDequeue(out var activityExecutionId)
+                ? activityExecutionId
+                : throw new InvalidOperationException("No deterministic activity execution ID is available.");
+    }
+}
