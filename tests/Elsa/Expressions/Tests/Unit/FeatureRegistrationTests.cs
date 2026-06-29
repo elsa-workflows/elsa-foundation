@@ -39,6 +39,20 @@ public sealed class FeatureRegistrationTests
     }
 
     [Fact]
+    public void ExpressionsFeature_RegistersVariableTypeDescriptorCatalog()
+    {
+        var services = MinimalServices();
+
+        new ExpressionsFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var catalog = provider.GetRequiredService<IVariableTypeDescriptorCatalog>();
+
+        Assert.IsType<VariableTypeDescriptorCatalog>(catalog);
+        Assert.Contains(catalog.GetDescriptors(), d => d.Alias == "String");
+    }
+
+    [Fact]
     public void SerializationFeature_RegistersSeedWellKnownTypesStartupTask()
     {
         var services = MinimalServices();

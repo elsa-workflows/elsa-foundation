@@ -82,17 +82,17 @@ description: "Task list for Typed Argument Model + Type Descriptor Registry (Bac
 
 ### Tests for User Story 2 (write first)
 
-- [ ] T024 [P] [US2] `VariableTypeDescriptorCatalogTests`: aggregation union across providers, grouping by category, and cross-provider duplicate-alias → `DuplicateTypeAliasException`. File: `Unit/VariableTypeDescriptorCatalogTests.cs`.
-- [ ] T025 [P] [US2] Endpoint/registration test: `descriptors/variables` returns the catalog in the wire-contract shape. File: matching API test project.
+- [X] T024 [P] [US2] `VariableTypeDescriptorCatalogTests`: aggregation union across providers, grouping by category, and cross-provider duplicate-alias → `DuplicateTypeAliasException`. File: `Unit/VariableTypeDescriptorCatalogTests.cs`.
+- [X] T025 [P] [US2] Endpoint/registration test: `descriptors/variables` returns the catalog in the wire-contract shape. The Elsa.Server host has no unit-testable seam (internal static endpoint, full-hosting only — out of scope per §2.23.6), so the catalog→wire-DTO mapping is asserted as a focused unit test (`WireProjection_EmitsAliasDisplayNameCategoryDefaultEditorOnly` in `Unit/VariableTypeDescriptorCatalogTests.cs`) rather than spinning up the server.
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Implement `public sealed VariableTypeDescriptorCatalog : IVariableTypeDescriptorCatalog` — constructor injects `IEnumerable<IVariableTypeDescriptorProvider>`, aggregates once (mirror `ExpressionDescriptorRegistry`), exposes union + grouped view. File: `src/Elsa/Expressions/Services/VariableTypeDescriptorCatalog.cs`.
-- [ ] T027 [US2] Register the catalog as a singleton in `ExpressionsFeature.ConfigureServices`. File: `src/Elsa/Expressions/ExpressionsFeature.cs`.
-- [ ] T028 [US2] Implement the `descriptors/variables` endpoint (mirror `src/Elsa/Secrets/Api/Endpoints/Secrets/Descriptors.cs`), returning `{ descriptors: [...] }` per the wire contract, at the host/route confirmed in T002.
-- [ ] T029 [US2] Wire the endpoint route group + permissions consistent with `descriptors/activities`.
-- [ ] T030 [US2] Apply the T003 decision reconciling `VariableDescriptor` with `TypeDescriptor` (fold or coexist); update use sites.
-- [ ] T031 [US2] Feature registration test (§2.23.1) for the catalog + endpoint wiring.
+- [X] T026 [US2] Implement `public sealed VariableTypeDescriptorCatalog : IVariableTypeDescriptorCatalog` — constructor injects `IEnumerable<IVariableTypeDescriptorProvider>`, aggregates once (mirror `ExpressionDescriptorRegistry`), exposes union + grouped view. File: `src/Elsa/Expressions/Services/VariableTypeDescriptorCatalog.cs`.
+- [X] T027 [US2] Register the catalog as a singleton in `ExpressionsFeature.ConfigureServices`. File: `src/Elsa/Expressions/ExpressionsFeature.cs`.
+- [X] T028 [US2] Implement the `descriptors/variables` endpoint, returning `{ descriptors: [...] }` per the wire contract, in the confirmed host `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs` (mirrors `ListExpressionDescriptorsAsync`; the host uses minimal-API route groups, not FastEndpoints).
+- [X] T029 [US2] Wire the endpoint into the same `/_elsa/workflow-management` route group as `descriptors/activities` (the group carries no per-route permissions in this host).
+- [X] T030 [US2] T003 decision applied: `VariableDescriptor` (Liquid-only, `Elsa.Expressions.Liquid` namespace) and the new `TypeDescriptor` **coexist** — no overlapping use sites, no code change. Verified: `VariableDescriptor` is referenced only by 4 Liquid files; no ambiguous reference with `TypeDescriptor`.
+- [X] T031 [US2] Feature registration test (§2.23.1) for the catalog: `ExpressionsFeature_RegistersVariableTypeDescriptorCatalog` in `Unit/FeatureRegistrationTests.cs`.
 
 **Checkpoint**: the studio (Phase 2) can fetch a real, grouped, module-contributed type list with default-editor hints.
 

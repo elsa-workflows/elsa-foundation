@@ -67,6 +67,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/activities/availability/diagnostics", ListActivityAvailabilityDiagnosticsAsync);
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
         group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
+        group.MapGet("/descriptors/variables", ListVariableDescriptorsAsync);
 
         return endpoints;
     }
@@ -400,6 +401,17 @@ internal static class ElsaWorkflowManagementApi
                 .ToArray();
 
             return Task.FromResult<IResult>(Results.Ok(new ExpressionDescriptorsResponse(response)));
+        }, cancellationToken);
+
+    private static Task<IResult> ListVariableDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services =>
+        {
+            var catalog = services.GetRequiredService<IVariableTypeDescriptorCatalog>();
+            var descriptors = catalog.GetDescriptors()
+                .Select(x => new VariableDescriptorResponse(x.Alias, x.DisplayName, x.Category, x.DefaultEditor))
+                .ToArray();
+
+            return Task.FromResult<IResult>(Results.Ok(new VariableDescriptorsResponse(descriptors)));
         }, cancellationToken);
 
     private static async Task<IResult> LoadDefinitionResultAsync(IServiceProvider services, string definitionId, CancellationToken cancellationToken)
@@ -903,3 +915,7 @@ internal sealed record DescriptorOptionResponse(string Label, object Value);
 internal sealed record ExpressionDescriptorsResponse(IReadOnlyList<ExpressionDescriptorResponse> Items);
 
 internal sealed record ExpressionDescriptorResponse(string Type, string DisplayName, string? Description);
+
+internal sealed record VariableDescriptorsResponse(IReadOnlyList<VariableDescriptorResponse> Descriptors);
+
+internal sealed record VariableDescriptorResponse(string Alias, string DisplayName, string Category, string DefaultEditor);
