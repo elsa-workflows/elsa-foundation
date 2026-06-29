@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import type {
+  ActivityAvailabilityDiagnostics,
+  ActivityAvailabilitySettings,
   ActivityCatalogResponse,
   ActivityDescriptor,
   ActivityDescriptorsResponse,
@@ -11,6 +13,7 @@ import type {
   ExpressionDescriptorsResponse,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
+  SaveActivityAvailabilitySettingsRequest,
   StartWorkflowDraftTestRunRequest,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
@@ -36,7 +39,9 @@ export const workflowKeys = {
   instance: (workflowExecutionId: string) => ["workflows", "instances", workflowExecutionId] as const,
   activities: ["workflows", "activities"] as const,
   activityDescriptors: ["workflows", "activity-descriptors"] as const,
-  expressionDescriptors: ["workflows", "expression-descriptors"] as const
+  expressionDescriptors: ["workflows", "expression-descriptors"] as const,
+  activityAvailabilitySettings: ["workflows", "activity-availability", "settings"] as const,
+  activityAvailabilityDiagnostics: ["workflows", "activity-availability", "diagnostics"] as const
 };
 
 export function useWorkflowDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
@@ -73,6 +78,33 @@ export function useWorkflowActivities(context: StudioEndpointContext) {
     queryKey: workflowKeys.activities,
     queryFn: () => listActivities(context),
     staleTime: 60_000
+  });
+}
+
+export function useActivityAvailabilitySettings(context: StudioEndpointContext) {
+  return useQuery({
+    queryKey: workflowKeys.activityAvailabilitySettings,
+    queryFn: () => getActivityAvailabilitySettings(context)
+  });
+}
+
+export function useActivityAvailabilityDiagnostics(context: StudioEndpointContext) {
+  return useQuery({
+    queryKey: workflowKeys.activityAvailabilityDiagnostics,
+    queryFn: () => listActivityAvailabilityDiagnostics(context)
+  });
+}
+
+export function useSaveActivityAvailabilitySettings(context: StudioEndpointContext) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SaveActivityAvailabilitySettingsRequest) => saveActivityAvailabilitySettings(context, request),
+    onSuccess: () => {
+      // Refresh both the management views and the picker, which now reflects the saved policy.
+      void queryClient.invalidateQueries({ queryKey: workflowKeys.activityAvailabilitySettings });
+      void queryClient.invalidateQueries({ queryKey: workflowKeys.activityAvailabilityDiagnostics });
+      void queryClient.invalidateQueries({ queryKey: workflowKeys.activities });
+    }
   });
 }
 
@@ -207,6 +239,18 @@ export async function getWorkflowInstance(context: StudioEndpointContext, workfl
 
 export async function listActivities(context: StudioEndpointContext) {
   return context.http.getJson<ActivityCatalogResponse>(`${basePath}/activities`);
+}
+
+export async function getActivityAvailabilitySettings(context: StudioEndpointContext) {
+  return context.http.getJson<ActivityAvailabilitySettings>(`${basePath}/activities/availability/settings`);
+}
+
+export async function saveActivityAvailabilitySettings(context: StudioEndpointContext, request: SaveActivityAvailabilitySettingsRequest) {
+  return context.http.putJson<ActivityAvailabilitySettings>(`${basePath}/activities/availability/settings`, request);
+}
+
+export async function listActivityAvailabilityDiagnostics(context: StudioEndpointContext) {
+  return context.http.getJson<ActivityAvailabilityDiagnostics>(`${basePath}/activities/availability/diagnostics`);
 }
 
 export async function listActivityDescriptors(context: StudioEndpointContext): Promise<ActivityDescriptor[]> {
