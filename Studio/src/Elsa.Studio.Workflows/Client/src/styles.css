@@ -3316,14 +3316,14 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #f59e0b;
-  color: #1f2937;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  background: var(--warning, #d97706);
+  color: var(--warning-foreground, #ffffff);
+  box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
   z-index: 2;
 }
 
 .wf-node-unavailable {
-  border-color: #f59e0b;
+  border-color: var(--warning, #d97706);
 }
 
 .wf-availability-notice {
@@ -3332,9 +3332,9 @@
   gap: 8px;
   margin: 8px 0;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent);
-  background: color-mix(in srgb, #f59e0b 14%, transparent);
-  border-radius: 6px;
-  color: color-mix(in srgb, #b45309 75%, var(--wf-text));
+  border: 1px solid color-mix(in srgb, var(--warning, #d97706) 50%, transparent);
+  background: color-mix(in srgb, var(--warning, #d97706) 14%, var(--wf-panel));
+  border-radius: var(--wf-radius);
+  color: var(--warning, #b45309);
   font-size: 12px;
 }
