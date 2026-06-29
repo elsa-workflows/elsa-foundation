@@ -11,6 +11,10 @@ import type {
   DefinitionListState,
   ExpressionDescriptor,
   ExpressionDescriptorsResponse,
+  StorageDriverDescriptor,
+  StorageDriverDescriptorsResponse,
+  VariableTypeDescriptor,
+  VariableTypeDescriptorsResponse,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
   SaveActivityAvailabilitySettingsRequest,
@@ -270,6 +274,31 @@ export async function listExpressionDescriptors(context: StudioEndpointContext):
   if (Array.isArray(response)) return response;
   const descriptors = response.items ?? response.descriptors ?? response.expressionDescriptors ?? [];
   return descriptors.length > 0 ? descriptors : fallbackExpressionDescriptors;
+}
+
+// Variable type descriptors populate the Type picker in the Properties tab. The backend proxies
+// the Elsa `descriptors/variables` endpoint; callers fall back to a free-text input when it 404s.
+export async function listVariableTypeDescriptors(context: StudioEndpointContext): Promise<VariableTypeDescriptor[]> {
+  const response = await getFirstAvailable<VariableTypeDescriptorsResponse | VariableTypeDescriptor[]>(context, [
+    `${basePath}/descriptors/variables`,
+    "/descriptors/variables"
+  ]);
+  const descriptors = Array.isArray(response) ? response : response.items ?? response.descriptors ?? [];
+  return descriptors.filter((descriptor): descriptor is VariableTypeDescriptor => isNonEmptyTypeName(descriptor));
+}
+
+// Storage driver descriptors populate the Storage picker. Same proxy/fallback contract as above.
+export async function listStorageDriverDescriptors(context: StudioEndpointContext): Promise<StorageDriverDescriptor[]> {
+  const response = await getFirstAvailable<StorageDriverDescriptorsResponse | StorageDriverDescriptor[]>(context, [
+    `${basePath}/descriptors/storage-drivers`,
+    "/descriptors/storage-drivers"
+  ]);
+  const descriptors = Array.isArray(response) ? response : response.items ?? response.descriptors ?? [];
+  return descriptors.filter((descriptor): descriptor is StorageDriverDescriptor => isNonEmptyTypeName(descriptor));
+}
+
+function isNonEmptyTypeName(value: unknown): value is { typeName: string } {
+  return !!value && typeof value === "object" && typeof (value as { typeName?: unknown }).typeName === "string" && (value as { typeName: string }).typeName.length > 0;
 }
 
 async function getFirstAvailable<T>(context: StudioEndpointContext, paths: string[]) {

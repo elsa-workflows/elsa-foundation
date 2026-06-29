@@ -2662,6 +2662,12 @@ function WorkflowEditor({
     setStatus("Exported workflow as JSON.");
   }, [draft, details]);
 
+  // Properties-tab edits (variables/inputs/outputs) flow through here. Routing them through
+  // setDraft means autosave and undo/redo pick them up automatically — no separate save path.
+  const updateDraftState = useCallback((producer: (state: WorkflowDraft["state"]) => WorkflowDraft["state"]) => {
+    setDraft(current => current ? { ...current, state: producer(current.state) } : current);
+  }, []);
+
   const applyEditedJson = useCallback((text: string): string | null => {
     if (!draft) return "No draft is loaded.";
     const result = buildDraftFromJson(text, draft);
@@ -3428,7 +3434,7 @@ function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={draft} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <WorkflowPropertiesView details={details} draft={draft} />
+            <WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} />
           ) : (
           <>
           <div className="wf-breadcrumb">
