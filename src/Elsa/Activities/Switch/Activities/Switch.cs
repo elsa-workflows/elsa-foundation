@@ -16,8 +16,9 @@ namespace Elsa.Activities.Switch.Activities;
 /// or <see cref="Workflows.Runtime.Core.Constants.ActivityOutcomes.Default"/> when no case matched.
 /// </summary>
 /// <remarks>
-/// An unbound <see cref="Value"/> resolves to <c>null</c>, which matches a case whose match value is
-/// <c>null</c>/empty if one is declared, otherwise falls through to the default branch.
+/// An unbound or null <see cref="Value"/> takes the <c>Default</c> branch: case match values are
+/// non-nullable strings and selection compares them ordinally against the value, so a null value never
+/// equals any declared case.
 /// </remarks>
 public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
 {

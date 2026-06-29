@@ -71,6 +71,20 @@ public sealed class SwitchRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task NullValue_RunsDefaultBranch_AndEmitsDefaultOutcome()
+    {
+        // A null (or unbound) Value never equals any non-nullable case match value, so selection falls
+        // through to Default. Locks the behavior the README/<remarks> document.
+        await using var harness = NewHarness("actexec-switch", "actexec-default");
+
+        var run = await harness.RunAsync(NewExecutable(value: null));
+
+        run.AssertOutcomes("node-switch", ActivityOutcomes.Default);
+        run.AssertRan("node-default");
+        run.AssertDidNotRun("node-a", "node-b");
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesSwitchFeature().ConfigureServices(services))
@@ -78,7 +92,7 @@ public sealed class SwitchRuntimeTests
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
-    private static WorkflowExecutable NewExecutable(string value, bool includeCaseBranch = true)
+    private static WorkflowExecutable NewExecutable(string? value, bool includeCaseBranch = true)
     {
         var childSlots = new List<ExecutableChildSlot>();
         foreach (var (match, node) in Cases)

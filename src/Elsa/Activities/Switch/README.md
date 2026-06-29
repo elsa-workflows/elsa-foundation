@@ -6,9 +6,10 @@ child slots (`Switch.Case[{match}]`) and the runtime composite-activity seam. Wh
 schedules the `Switch.Default` branch. It completes with the matched case's match value as its outcome,
 or `Default` when no case matched.
 
-An unbound `Value` resolves to `null`, which matches a case whose match value is `null`/empty if one is
-declared, otherwise falls through to the default branch. A selected branch that is empty (or an absent
-default) finalizes the composite directly with the matching outcome without scheduling a child.
+An unbound or null `Value` takes the `Default` branch: case match values are non-nullable strings and
+selection compares them ordinally against the value, so a null value never equals any declared case. A
+selected branch that is empty (or an absent default) finalizes the composite directly with the matching
+outcome without scheduling a child.
 
 The runtime activity class (`Activities/Switch.cs`) references only the runtime contract surface. The
 design-side `SwitchStructureHandler` (`Internal/`) references `Elsa.Workflows.Design.Core`. The activity

@@ -23,9 +23,15 @@ internal sealed class SwitchNavigator
     {
         _cases = cases;
         Default = @default;
-        _casesByNodeId = cases
-            .Where(item => item.Branch is not null)
-            .ToDictionary(item => item.Branch!.ExecutableNodeId, item => item, StringComparer.Ordinal);
+
+        var casesByNodeId = new Dictionary<string, SwitchCase>(StringComparer.Ordinal);
+        foreach (var @case in cases.Where(item => item.Branch is not null))
+        {
+            if (!casesByNodeId.TryAdd(@case.Branch!.ExecutableNodeId, @case))
+                throw new SwitchExecutionException($"Switch structure references branch node '{@case.Branch.ExecutableNodeId}' from more than one case.");
+        }
+
+        _casesByNodeId = casesByNodeId;
     }
 
     public ExecutableNode? Default { get; }

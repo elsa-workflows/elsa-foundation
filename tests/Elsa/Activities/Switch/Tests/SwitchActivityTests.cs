@@ -143,6 +143,25 @@ public sealed class SwitchActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task Execute_Throws_WhenTwoCasesShareTheSameBranchNodeId()
+    {
+        // Distinct case keys both reference branch node 'shared': the navigator must reject this with a
+        // SwitchExecutionException rather than a raw ArgumentException from its node-id lookup.
+        var node = NewNode(
+            "node-switch",
+            activityType: "switch",
+            childSlots:
+            [
+                new ExecutableChildSlot(SwitchActivity.CaseSlotName("a"), [NewNode("shared")]),
+                new ExecutableChildSlot(SwitchActivity.CaseSlotName("b"), [NewNode("shared")])
+            ],
+            structure: NewSwitchStructure(cases: [("a", "shared"), ("b", "shared")], @default: null));
+        var context = NewContext(node, value: "a");
+
+        await Assert.ThrowsAsync<SwitchExecutionException>(() => ExecuteAsync(context).AsTask());
+    }
+
+    [Fact]
     public async Task Execute_Throws_WhenRuntimeContextIsMissing()
     {
         var context = new NonRuntimeActivityExecutionContext(_serviceProvider, new SwitchActivity());
