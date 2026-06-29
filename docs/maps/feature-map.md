@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 71
+- Discovered feature classes: 65
 
 ## Features
 
@@ -21,18 +21,12 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SqliteStructuredLogsPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | EFCoreStructuredLogsPersistenceFeatureBase | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
 | SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
 | ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
+| ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |
-| ActivitiesDoFeature | direct IShellFeature | Elsa.Activities.Do | IShellFeature | [ActivitiesDoFeature.cs](../../src/Elsa/Activities/Do/ActivitiesDoFeature.cs) |
 | ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
-| ActivitiesForEachFeature | direct IShellFeature | Elsa.Activities.ForEach | IShellFeature | [ActivitiesForEachFeature.cs](../../src/Elsa/Activities/ForEach/ActivitiesForEachFeature.cs) |
-| ActivitiesForFeature | direct IShellFeature | Elsa.Activities.For | IShellFeature | [ActivitiesForFeature.cs](../../src/Elsa/Activities/For/ActivitiesForFeature.cs) |
-| ActivitiesIfFeature | direct IShellFeature | Elsa.Activities.If | IShellFeature | [ActivitiesIfFeature.cs](../../src/Elsa/Activities/If/ActivitiesIfFeature.cs) |
-| ActivitiesParallelFeature | direct IShellFeature | Elsa.Activities.Parallel | IShellFeature | [ActivitiesParallelFeature.cs](../../src/Elsa/Activities/Parallel/ActivitiesParallelFeature.cs) |
 | ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
-| ActivitiesSwitchFeature | direct IShellFeature | Elsa.Activities.Switch | IShellFeature | [ActivitiesSwitchFeature.cs](../../src/Elsa/Activities/Switch/ActivitiesSwitchFeature.cs) |
-| ActivitiesWhileFeature | direct IShellFeature | Elsa.Activities.While | IShellFeature | [ActivitiesWhileFeature.cs](../../src/Elsa/Activities/While/ActivitiesWhileFeature.cs) |
 | AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
 | AspNetCoreIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IShellFeature | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
 | ClrActivityReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation.Clr | IShellFeature | [ClrActivityReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/Clr/ClrActivityReconciliationFeature.cs) |

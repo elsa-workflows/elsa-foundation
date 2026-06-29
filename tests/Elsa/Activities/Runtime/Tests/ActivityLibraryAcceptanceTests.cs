@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime;
-using Elsa.Activities.ForEach;
-using Elsa.Activities.If;
+using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -139,8 +138,7 @@ public sealed class ActivityLibraryAcceptanceTests
         new Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
-        new ActivitiesForEachFeature().ConfigureServices(services);
-        new ActivitiesIfFeature().ConfigureServices(services);
+        new ActivitiesControlFlowFeature().ConfigureServices(services);
         // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
         services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
 
@@ -174,8 +172,7 @@ public sealed class ActivityLibraryAcceptanceTests
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesForEachFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesIfFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithConstructor<SequenceConstructor>()
             .WithConstructor<ForEachConstructor>()
             .WithConstructor<IfConstructor>()
