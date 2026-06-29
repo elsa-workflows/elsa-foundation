@@ -101,6 +101,22 @@ public sealed class SwitchActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompleted_SelectedCaseBreaks_CompletesWithBreak_InsteadOfCaseOutcome()
+    {
+        // The selected case branch completes with Break: Switch completes with Break instead of the case's
+        // match outcome so it bubbles to the enclosing loop (#299).
+        var context = NewContext(NewSwitchNode(
+            cases: [("a", NewNode("node-a")), ("b", NewNode("node-b"))],
+            @default: NewNode("node-default")), value: "b");
+
+        await new SwitchActivity().OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "actexec-b", "node-b", [ActivityOutcomes.Break]));
+
+        Assert.True(context.CompositeCompletionRequested);
+        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+    }
+
+    [Fact]
     public async Task OnChildCompleted_Throws_WhenCompletedChildIsNotABranch()
     {
         var context = NewContext(NewSwitchNode(

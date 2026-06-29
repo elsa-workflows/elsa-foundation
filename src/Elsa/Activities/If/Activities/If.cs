@@ -59,7 +59,18 @@ public sealed class If : ActivityBase, IActivityChildCompletionHandler
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = IfNavigator.From(runtimeContext.ExecutableNode);
+
+        // Validate the completed child is one of this If's branches before deciding the outcome.
         var condition = ResolveCompletedBranchCondition(navigator, context.CompletedChildExecutableNodeId);
+
+        // Break propagation (#299): when the taken branch completes with a Break outcome, If completes with
+        // Break (instead of True/False) so the outcome bubbles up to the nearest enclosing loop (which ends
+        // early). Matched by name so If takes no dependency on the (separate) Break activity module.
+        if (context.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Break]);
+            return ValueTask.CompletedTask;
+        }
 
         runtimeContext.CompleteCompositeActivity([Outcome(condition)]);
         return ValueTask.CompletedTask;

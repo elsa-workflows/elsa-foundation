@@ -89,6 +89,20 @@ public sealed class IfActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompleted_TakenBranchBreaks_CompletesWithBreak_InsteadOfTrueOrFalse()
+    {
+        // The taken (Then) branch completes with Break: If completes with Break instead of True so the
+        // outcome bubbles to the enclosing loop (#299).
+        var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
+
+        await new IfActivity().OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "actexec-then", "node-then", [ActivityOutcomes.Break]));
+
+        Assert.True(context.CompositeCompletionRequested);
+        Assert.Equal([ActivityOutcomes.Break], context.CompositeCompletionOutcomeNames);
+    }
+
+    [Fact]
     public async Task OnChildCompleted_Throws_WhenCompletedChildIsNotABranch()
     {
         var context = NewContext(NewIfNode(then: NewNode("node-then"), @else: NewNode("node-else")), condition: true);
