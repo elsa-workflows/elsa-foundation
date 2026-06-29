@@ -91,6 +91,39 @@ import {
 } from "./workflowGraphOperationBatch";
 import "./styles.css";
 
+function WfListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="wf-grid" aria-busy="true" aria-label="Loading">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="wf-skeleton wf-skeleton-row" style={{ width: `${90 - (index % 3) * 12}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function WfEmptyState({ icon, title, description, action }: { icon?: React.ReactNode; title: string; description?: string; action?: React.ReactNode }) {
+  return (
+    <div className="wf-empty-state" role="status">
+      <div className="wf-empty-state-icon" aria-hidden>{icon ?? <Boxes size={22} />}</div>
+      <h3>{title}</h3>
+      {description ? <p>{description}</p> : null}
+      {action ? <div className="wf-empty-state-action">{action}</div> : null}
+    </div>
+  );
+}
+
+function WfErrorCard({ message, title = "Something went wrong" }: { message?: string; title?: string }) {
+  return (
+    <div className="wf-error-card" role="alert">
+      <AlertCircle size={18} />
+      <div className="wf-error-card-body">
+        <strong>{title}</strong>
+        <span>{message || "Please try again, or check that the Elsa server is reachable."}</span>
+      </div>
+    </div>
+  );
+}
+
 const nodeTypes = { workflowActivity: WorkflowActivityNode };
 const edgeTypes = { workflow: WorkflowFlowEdge };
 const activityDragDataType = "application/x-elsa-activity-version-id";
@@ -538,7 +571,7 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
         </div>
       </div>
 
-      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "failed" ? <WfErrorCard message={error} title="Couldn't load workflow definitions" /> : null}
       {state !== "failed" && error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
       {status ? <div className="wf-status-line"><Check size={14} /> {status}</div> : null}
       {selectedDefinitionIds.size > 0 ? (
@@ -547,8 +580,15 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
           <button type="button" onClick={clearSelection}>Clear selection</button>
         </div>
       ) : null}
-      {state === "loading" ? <div className="wf-empty">Loading workflow definitions...</div> : null}
-      {state === "ready" && definitions.length === 0 ? <div className="wf-empty">No {listState} workflow definitions found.</div> : null}
+      {state === "loading" ? <WfListSkeleton /> : null}
+      {state === "ready" && definitions.length === 0 ? (
+        <WfEmptyState
+          icon={<Package size={22} />}
+          title={`No ${listState} workflow definitions`}
+          description="Create a workflow to start designing automation, or adjust your filters to see more."
+          action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
+        />
+      ) : null}
       {state === "ready" && definitions.length > 0 ? (
         <>
           <div className="wf-grid" role="table" aria-label="Workflow definitions">
@@ -843,10 +883,16 @@ function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilter
           <button type="button" onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</button>
         ) : null}
       </div>
-      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "failed" ? <WfErrorCard message={error} /> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
-      {state === "loading" ? <div className="wf-empty">Loading workflow executables...</div> : null}
-      {state === "ready" && visibleExecutables.length === 0 ? <div className="wf-empty">{definitionFilter ? "No workflow executables match this definition filter." : "No workflow executables found. Publish a workflow definition to create one."}</div> : null}
+      {state === "loading" ? <WfListSkeleton /> : null}
+      {state === "ready" && visibleExecutables.length === 0 ? (
+        <WfEmptyState
+          icon={<Play size={22} />}
+          title="No workflow executables"
+          description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
+        />
+      ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
         <div className="wf-grid wf-executable-grid" role="table" aria-label="Workflow executables">
           <div className="wf-grid-head" role="row">
@@ -1122,9 +1168,15 @@ function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: St
           </select>
         </label>
       </div>
-      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {state === "loading" ? <div className="wf-empty">Loading workflow runs...</div> : null}
-      {state === "ready" && instances.length === 0 ? <div className="wf-empty">No workflow runs found. Run a published workflow executable to create history.</div> : null}
+      {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "loading" ? <WfListSkeleton /> : null}
+      {state === "ready" && instances.length === 0 ? (
+        <WfEmptyState
+          icon={<Boxes size={22} />}
+          title="No workflow runs yet"
+          description="Run a published workflow executable to create execution history here."
+        />
+      ) : null}
       {state === "ready" && instances.length > 0 ? (
         <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
@@ -1241,7 +1293,7 @@ function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: 
         ) : null}
       </div>
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
-      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data ? (
         <div className="wf-instance-detail-workbench">
           <WorkflowInstanceCanvas
@@ -1397,7 +1449,7 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
         <PanelTabList label="Workflow run tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
       </div>
       {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
-      {state === "failed" ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+      {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && details ? (
         <div className="wf-instance-tab-content">
           {activeTab === "timeline" ? (
