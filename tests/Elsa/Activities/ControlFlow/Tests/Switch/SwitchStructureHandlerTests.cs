@@ -107,6 +107,18 @@ public sealed class SwitchStructureHandlerTests : IDisposable
     }
 
     [Fact]
+    public void CompileExecutableStructure_RejectsDuplicateCaseMatchValues()
+    {
+        // Duplicate match values must be surfaced before execution (#291). The runtime SwitchNavigator
+        // only rejects them when the workflow runs; compilation rejects them at the design/compile stage
+        // so they never reach a published executable structure.
+        var node = SeedCases("a", "a");
+
+        var exception = Assert.Throws<ArgumentException>(() => _handler.CompileExecutableStructure(node));
+        Assert.Contains("duplicate case match value 'a'", exception.Message);
+    }
+
+    [Fact]
     public void CompileExecutableStructure_OmitsAbsentBranchAndDefault()
     {
         var node = _handler.ReplaceChildren(SeedCases("a"),

@@ -8,6 +8,7 @@ using Elsa.Activities.Switch.Internal;
 using Elsa.Activities.While.Internal;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.ControlFlow;
@@ -37,5 +38,9 @@ public class ActivitiesControlFlowFeature : IShellFeature
         services.AddSingleton<IActivityStructureHandler, WhileStructureHandler>();
         services.AddSingleton<IActivityStructureHandler, DoStructureHandler>();
         services.AddSingleton<IActivityStructureHandler, ParallelStructureHandler>();
+
+        // Activity-owned Draft validator (FR-034): surfaces duplicate Switch case match values as a
+        // design-time validation error. Does not block saving; the promotion gate blocks publish.
+        services.AddScoped<IDraftValidator, SwitchDuplicateCaseValidator>();
     }
 }
