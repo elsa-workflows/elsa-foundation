@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { RefreshCcw } from "lucide-react";
+import { FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
   StudioSettingDescriptor,
@@ -658,18 +658,20 @@ function FeatureCard({
       <button type="button" className="feature-management-feature-button" onClick={onSelect}>
         <span className="feature-management-card-title">
           <strong>{displayName}</strong>
-          {feature.experimental ? <em>Experimental</em> : null}
-          {feature.advanced ? <em>Advanced</em> : null}
+          {feature.experimental ? <FeatureBadge tone="experimental"><FlaskConical size={11} />Experimental</FeatureBadge> : null}
+          {feature.advanced ? <FeatureBadge tone="advanced"><ShieldAlert size={11} />Advanced</FeatureBadge> : null}
         </span>
         {showTechnicalName ? <code>{feature.id}</code> : null}
         {feature.description ? <small>{feature.description}</small> : null}
         <span className="feature-management-card-meta">
-          <span>{feature.sourceKind}</span>
-          {feature.categories.slice(0, 2).map(category => <span key={category}>{category}</span>)}
-          {feature.categories.length > 2 ? <span>+{feature.categories.length - 2}</span> : null}
+          <SourceBadge sourceKind={feature.sourceKind} />
+          <CategoryChips categories={feature.categories} max={2} />
         </span>
       </button>
-      <span className="feature-management-card-count">{feature.settings.length}</span>
+      <span className="feature-management-card-count" title={`${feature.settings.length} setting${feature.settings.length === 1 ? "" : "s"}`}>
+        <Settings2 size={13} />
+        {feature.settings.length}
+      </span>
     </article>
   );
 }
@@ -699,7 +701,12 @@ function FeatureInspector({
     <aside className="feature-management-inspector">
       <div className="feature-management-inspector-heading">
         <div>
-          <span>{feature.sourceKind}</span>
+          <span className="feature-management-inspector-badges">
+            <SourceBadge sourceKind={feature.sourceKind} />
+            <FeatureBadge tone={feature.enabled ? "enabled" : "neutral"}>{feature.enabled ? "Enabled" : "Disabled"}</FeatureBadge>
+            {feature.experimental ? <FeatureBadge tone="experimental"><FlaskConical size={11} />Experimental</FeatureBadge> : null}
+            {feature.advanced ? <FeatureBadge tone="advanced"><ShieldAlert size={11} />Advanced</FeatureBadge> : null}
+          </span>
           <h3>{displayName}</h3>
         </div>
         <button type="button" onClick={() => onToggle(feature)} disabled={disabled}>
@@ -748,7 +755,7 @@ function FeatureInspector({
 }
 
 function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; displayName: string }) {
-  const categories = feature.categories.length > 0 ? feature.categories.join(", ") : "Uncategorized";
+  const source = getSourceMeta(feature.sourceKind);
   const packageName = feature.packageId
     ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
     : "Not package-backed";
@@ -759,19 +766,59 @@ function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; disp
       <dl className="feature-management-detail-list">
         <div><dt>Display name</dt><dd>{displayName}</dd></div>
         <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
-        <div><dt>Status</dt><dd>{feature.enabled ? "Enabled" : "Disabled"}</dd></div>
-        <div><dt>Source</dt><dd>{feature.sourceKind}</dd></div>
-        <div><dt>Categories</dt><dd>{categories}</dd></div>
-        <div><dt>Package</dt><dd>{packageName}</dd></div>
+        <div><dt>Status</dt><dd><FeatureBadge tone={feature.enabled ? "enabled" : "neutral"}>{feature.enabled ? "Enabled" : "Disabled"}</FeatureBadge></dd></div>
+        <div><dt>Source</dt><dd><FeatureBadge tone={source.tone} title={source.title}>{source.label}</FeatureBadge></dd></div>
+        <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
+        <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
         <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
-        <div><dt>Advanced</dt><dd>{feature.advanced ? "Yes" : "No"}</dd></div>
-        <div><dt>Experimental</dt><dd>{feature.experimental ? "Yes" : "No"}</dd></div>
-        {feature.description ? <div><dt>Description</dt><dd>{feature.description}</dd></div> : null}
-        {feature.manifestHash ? <div><dt>Manifest hash</dt><dd>{feature.manifestHash}</dd></div> : null}
-        {feature.manifestPath ? <div><dt>Manifest path</dt><dd>{feature.manifestPath}</dd></div> : null}
+        <div><dt>Advanced</dt><dd>{feature.advanced ? <FeatureBadge tone="advanced">Advanced</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
+        <div><dt>Experimental</dt><dd>{feature.experimental ? <FeatureBadge tone="experimental">Experimental</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
+        {feature.description ? <div className="feature-management-detail-wide"><dt>Description</dt><dd>{feature.description}</dd></div> : null}
+        {feature.manifestHash ? <div className="feature-management-detail-wide"><dt>Manifest hash</dt><dd><code>{feature.manifestHash}</code></dd></div> : null}
+        {feature.manifestPath ? <div className="feature-management-detail-wide"><dt>Manifest path</dt><dd><code>{feature.manifestPath}</code></dd></div> : null}
       </dl>
     </section>
   );
+}
+
+function FeatureBadge({ tone = "neutral", title, children }: { tone?: string; title?: string; children: React.ReactNode }) {
+  return <span className={`feature-management-badge tone-${tone}`} title={title}>{children}</span>;
+}
+
+function SourceBadge({ sourceKind }: { sourceKind: string }) {
+  const source = getSourceMeta(sourceKind);
+  return <FeatureBadge tone={source.tone} title={source.title}>{source.label}</FeatureBadge>;
+}
+
+function CategoryChips({ categories, max }: { categories: string[]; max?: number }) {
+  if (categories.length === 0) {
+    return <span className="feature-management-muted">Uncategorized</span>;
+  }
+
+  const shown = max ? categories.slice(0, max) : categories;
+  const overflow = max ? categories.length - shown.length : 0;
+
+  return (
+    <span className="feature-management-chips">
+      {shown.map(category => <span key={category} className="feature-management-chip">{category}</span>)}
+      {overflow > 0 ? <span className="feature-management-chip feature-management-chip-overflow" title={categories.slice(shown.length).join(", ")}>+{overflow}</span> : null}
+    </span>
+  );
+}
+
+function getSourceMeta(sourceKind: string): { label: string; tone: string; title: string } {
+  switch (normalizeType(sourceKind)) {
+    case "shell":
+      return { label: "Built-in", tone: "neutral", title: "Compiled into the host shell." };
+    case "runtime":
+      return { label: "Runtime", tone: "info", title: "Discovered at runtime from loaded assemblies." };
+    case "manifest":
+      return { label: "Package", tone: "violet", title: "Provided by an installed package manifest." };
+    case "manifest-error":
+      return { label: "Package error", tone: "danger", title: "The package manifest could not be read." };
+    default:
+      return { label: sourceKind || "Unknown", tone: "neutral", title: sourceKind };
+  }
 }
 
 function FeatureSettingsSummary({ feature }: { feature: DraftFeature }) {
