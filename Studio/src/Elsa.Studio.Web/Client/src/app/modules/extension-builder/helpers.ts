@@ -158,6 +158,25 @@ export function writeAdvancedPreference(value: boolean) {
   }
 }
 
+export const AUTO_SAVE_PREFERENCE_KEY = "elsa.extensionBuilder.autoSave";
+
+export function readAutoSavePreference() {
+  try {
+    // Auto-save is on by default; only an explicit "false" turns it off.
+    return window.localStorage.getItem(AUTO_SAVE_PREFERENCE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+export function writeAutoSavePreference(value: boolean) {
+  try {
+    window.localStorage.setItem(AUTO_SAVE_PREFERENCE_KEY, value ? "true" : "false");
+  } catch {
+    // Ignore persistence failures; the toggle still works in-session.
+  }
+}
+
 export function getExtensionBuilderSessionId() {
   const key = "elsa-extension-builder-session-id";
   try {

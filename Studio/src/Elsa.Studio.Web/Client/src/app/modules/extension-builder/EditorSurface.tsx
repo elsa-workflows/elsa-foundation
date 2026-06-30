@@ -23,6 +23,7 @@ export function EditorSurface({
   activeFilePath,
   editorText,
   editorDirty,
+  autoSaving,
   lineHint,
   diagnostics,
   onSelectEditorTab,
@@ -36,6 +37,7 @@ export function EditorSurface({
   activeFilePath: string;
   editorText: string;
   editorDirty: boolean;
+  autoSaving: boolean;
   lineHint: string | null;
   diagnostics: BuildDiagnostic[];
   onSelectEditorTab(path: string): void;
@@ -66,7 +68,7 @@ export function EditorSurface({
       ) : null}
       <div className="extension-builder-editor-status">
         <span>{activeFilePath ? <code>{activeFilePath}</code> : "No file selected"}</span>
-        {activeFilePath ? (editorDirty ? <StatusChip tone="warning">unsaved</StatusChip> : <StatusChip tone="success">saved</StatusChip>) : null}
+        {activeFilePath ? (autoSaving ? <StatusChip tone="accent">Saving…</StatusChip> : editorDirty ? <StatusChip tone="warning">unsaved</StatusChip> : <StatusChip tone="success">saved</StatusChip>) : null}
         {lineHint ? <StatusChip tone="accent">{lineHint}</StatusChip> : null}
       </div>
       {activeDocument ? (

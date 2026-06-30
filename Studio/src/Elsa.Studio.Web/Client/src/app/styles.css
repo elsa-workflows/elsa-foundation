@@ -3404,3 +3404,20 @@ textarea:focus {
   border-top: 0;
   padding: 12px 14px;
 }
+
+.extension-builder-autosave-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.extension-builder-autosave-toggle input {
+  width: 15px;
+  height: 15px;
+}

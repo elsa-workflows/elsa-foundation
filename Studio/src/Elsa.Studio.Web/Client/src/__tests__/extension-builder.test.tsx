@@ -554,6 +554,109 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("blocks navigation and keeps the edit when an auto-save flush fails", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") throw new Error("Request failed with 503.");
+      if (String(url).includes("/log")) return new Response("", { status: 200, headers: { "content-type": "text/plain" } });
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await waitFor(() => editor.value.includes("HelloActivity"), "Expected editor content to load.");
+    await fill(editor, `${editor.value}\n// will fail to save`);
+
+    // The flush fails, so going back must NOT proceed (no silent data loss).
+    await clickButton(container, "Solutions");
+    await flushPromises();
+
+    expect(container.textContent).toContain("503");
+    expect(container.querySelector(".extension-builder-solution-card")).toBeNull(); // still in the workspace
+    expect(container.querySelector("[aria-label='Project file editor']")).not.toBeNull();
+
+    await unmount();
+  });
+
+  it("keeps Save available as a force-save when the file is clean", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    expect(buttonContaining(container, "Save")?.disabled).toBe(false);
+
+    await unmount();
+  });
+
+  it("auto-saves the active file after a debounce when auto-save is on", async () => {
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await waitFor(() => editor.value.includes("HelloActivity"), "Expected editor content to load.");
+    expect((container.querySelector("[aria-label='Auto-save']") as HTMLInputElement | null)?.checked).toBe(true);
+
+    await fill(editor, `${editor.value}\n// auto`);
+    // No manual Save; wait out the ~1s debounce and let the write settle.
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
+      expect.objectContaining({ method: "PUT" })
+    );
+
+    await unmount();
+  });
+
+  it("flushes a pending edit when navigating away with auto-save on", async () => {
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await waitFor(() => editor.value.includes("HelloActivity"), "Expected editor content to load.");
+    await fill(editor, `${editor.value}\n// nav`);
+
+    // Navigate back without waiting for the debounce: the edit is flushed (not discarded).
+    await clickButton(container, "Solutions");
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
+      expect.objectContaining({ method: "PUT" })
+    );
+    await waitForText(container, "Team Extensions");
+
+    await unmount();
+  });
+
+  it("does not auto-save when the toggle is turned off", async () => {
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    const toggle = await waitForElement<HTMLInputElement>(container, "[aria-label='Auto-save']");
+    await setChecked(toggle, false);
+    expect(window.localStorage?.getItem("elsa.extensionBuilder.autoSave")).toBe("false");
+
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await waitFor(() => editor.value.includes("HelloActivity"), "Expected editor content to load.");
+    await fill(editor, `${editor.value}\n// no-auto`);
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await flushPromises();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
   it("saves file edits, builds, promotes, and refreshes loaded runtime status through canonical endpoints", async () => {
     const postJson = vi.fn(async (url: string) => {
       if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
@@ -998,6 +1101,16 @@ async function enableAdvanced(container: Element) {
     setter?.call(toggle, true);
     toggle.dispatchEvent(new Event("click", { bubbles: true }));
     toggle.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
+async function setChecked(element: HTMLInputElement, value: boolean) {
+  flushSync(() => {
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "checked")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("click", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await flushPromises();
 }
