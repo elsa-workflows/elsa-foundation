@@ -50,5 +50,11 @@ public class ActivitiesRuntimeFeature : IShellFeature
         // IActivityConstructor.
         services.AddScoped<IStartupTask, ActivityConstructorsStartupTask>();
         services.AddEventHandler<OnActivityConstructorsInitializing, RegisterActivityConstructors>();
+
+        // Startup pass (FR-004b / research D8 revised): register the CLR types reachable through framework
+        // activity inputs/outputs under the shared TypeAliasConvention, so the alias the reflection-only CLR
+        // scanner emits for a complex- or enum-typed input resolves back to its real CLR type at compile time
+        // instead of falling back to object.
+        services.AddScoped<IStartupTask, RegisterActivityIoTypesStartupTask>();
     }
 }

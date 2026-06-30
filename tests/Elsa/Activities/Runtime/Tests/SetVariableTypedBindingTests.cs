@@ -64,9 +64,9 @@ public sealed class SetVariableTypedBindingTests
             children: [setCount, setLabel, mirror],
             variables:
             [
-                new VariableDefinition("var-count", "count", TypeInformation.Integer, null, new ArgumentValue(0, "Literal")),
-                new VariableDefinition("var-label", "label", TypeInformation.String, null, new ArgumentValue("none", "Literal")),
-                new VariableDefinition("var-mirror", "mirror", TypeInformation.Integer, null, new ArgumentValue(0, "Literal"))
+                new VariableDefinition("var-count", "count", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal")),
+                new VariableDefinition("var-label", "label", new TypeReference("String"), null, new ArgumentValue("none", "Literal")),
+                new VariableDefinition("var-mirror", "mirror", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal"))
             ])));
 
         // The whole run drains to Completed rather than stalling at Running (the #313 symptom).

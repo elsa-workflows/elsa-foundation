@@ -26,7 +26,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class WorkflowExecutableCompilerTests
 {
-    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
+    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
 
@@ -240,7 +240,8 @@ public sealed class WorkflowExecutableCompilerTests
         var compiler = new WorkflowExecutableCompiler(
             new ThrowingVersionStore(),
             new FakeActivityVersionStore([_writeLineActivity]),
-            _activityStructureService);
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "draft:snapshot-1",
@@ -275,7 +276,7 @@ public sealed class WorkflowExecutableCompilerTests
         var counter = new Elsa.Expressions.Core.Models.VariableDefinition(
             ReferenceKey: "var-counter",
             Name: "Counter",
-            TypeInformation: TypeInformation.String,
+            Type: new TypeReference("String"),
             StorageDriverType: null,
             Default: new ArgumentValue("0", "Literal"));
         var compiler = Compiler(WorkflowVersion(SequenceNode(
@@ -305,7 +306,8 @@ public sealed class WorkflowExecutableCompilerTests
         new(
             new FakeVersionStore(workflowVersion),
             new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
-            _activityStructureService);
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")
@@ -341,7 +343,7 @@ public sealed class WorkflowExecutableCompilerTests
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
         new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
 
-    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
+    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey, IReadOnlyCollection<InputDefinition>? inputs = null) =>

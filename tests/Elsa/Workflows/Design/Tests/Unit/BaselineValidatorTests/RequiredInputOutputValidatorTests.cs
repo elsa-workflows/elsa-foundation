@@ -131,7 +131,7 @@ public sealed class RequiredInputOutputValidatorTests
     private static InputDefinition RequiredInput(string referenceKey) => new(
         ReferenceKey: referenceKey,
         Name: referenceKey,
-        Type: TypeInformation.String,
+        Type: new TypeReference("String"),
         StorageDriverType: null,
         DisplayName: referenceKey,
         Category: null,
@@ -140,7 +140,7 @@ public sealed class RequiredInputOutputValidatorTests
     private static OutputDefinition RequiredOutput(string referenceKey) => new(
         ReferenceKey: referenceKey,
         Name: referenceKey,
-        Type: TypeInformation.String,
+        Type: new TypeReference("String"),
         StorageDriverType: null,
         DisplayName: referenceKey,
         Category: null,

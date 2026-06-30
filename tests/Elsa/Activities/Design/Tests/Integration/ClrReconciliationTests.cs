@@ -35,11 +35,13 @@ public sealed class ClrReconciliationTests
 
         Assert.Equal("2.1.0", VersionFor<UnannotatedFixtureActivity>(store));
         Assert.Equal("3.0.0", VersionFor<VersionedFixtureActivity>(store));
-        Assert.Equal(2, store.Versions.Count);
+        // The fixture assembly carries three activities: UnannotatedFixtureActivity, VersionedFixtureActivity,
+        // and ComplexInputFixtureActivity (the latter added for the alias-only I/O-type characterization test).
+        Assert.Equal(3, store.Versions.Count);
 
         // Re-run: same content + same versions → zero new rows (SC-003 idempotency, DuplicateHandling.Skip).
         await reconciler.Reconcile(CancellationToken.None);
-        Assert.Equal(2, store.Versions.Count);
+        Assert.Equal(3, store.Versions.Count);
     }
 
     [Fact]
@@ -48,16 +50,16 @@ public sealed class ClrReconciliationTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         var store = new InMemoryReconcilerHarness.CatalogStore();
 
-        // First pass via the real CLR source persists 2.1.0 + 3.0.0.
+        // First pass via the real CLR source persists 2.1.0 + 3.0.0 + the complex-input fixture (three rows).
         await InMemoryReconcilerHarness.BuildReconciler(store, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
-        Assert.Equal(2, store.Versions.Count);
+        Assert.Equal(3, store.Versions.Count);
 
         // Author bumps the versioned activity to 4.0.0 (new content + new version). The reconciler
         // matches the existing definition by ActivityTypeKey and appends the new version row.
         var bumped = StubSource("4.0.0");
         await InMemoryReconcilerHarness.BuildReconciler(store, bumped).Reconcile(CancellationToken.None);
 
-        Assert.Equal(3, store.Versions.Count);
+        Assert.Equal(4, store.Versions.Count);
         var versioned = store.Definitions.Single(d => d.ActivityTypeKey == typeof(VersionedFixtureActivity).FullName);
         var versionsForVersioned = store.Versions.Where(v => v.DefinitionId == versioned.Id).Select(v => v.Version).OrderBy(v => v).ToList();
         Assert.Equal(new List<string> { "3.0.0", "4.0.0" }, versionsForVersioned);

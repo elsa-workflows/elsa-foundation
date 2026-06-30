@@ -55,8 +55,7 @@ internal sealed class WorkflowVariableFunctionDeclarationContributor(IOptions<Ja
         foreach (var variable in designContext.GetVariableDefinitions())
         {
             var pascalName = variable.Name.Pascalize();
-            var variableType = variable.TypeInformation;
-            var typeAlias = options.Value.GetTypeAliasOrDefault(variableType.GetTypeFullName());
+            var typeAlias = options.Value.GetTypeAliasOrDefault(variable.Type.Alias);
 
             var setVariableFunctionName = string.Format(WorkflowFunctionNames.SetNamedVariableFunctionFormat, pascalName);
             var setVariableDeclaration = new JavaScriptFunctionDeclaration(

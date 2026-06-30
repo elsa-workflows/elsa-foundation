@@ -34,7 +34,7 @@ public sealed class VariableDefaultValueFormatter : IVariableDefaultValueFormatt
         // Memory-like types are preserved via TypeDescriptor
         if (IsMemoryLike(sourceType))
         {
-            var sourceTypeConverter = TypeDescriptor.GetConverter(underlyingSourceType);
+            var sourceTypeConverter = System.ComponentModel.TypeDescriptor.GetConverter(underlyingSourceType);
             if (sourceTypeConverter.CanConvertTo(typeof(string)))
                 return new((string?)sourceTypeConverter.ConvertTo(value, typeof(string)));
 
@@ -48,7 +48,7 @@ public sealed class VariableDefaultValueFormatter : IVariableDefaultValueFormatt
             return new(JsonSerializer.Serialize(value));
         }
 
-        var converter = TypeDescriptor.GetConverter(underlyingSourceType);
+        var converter = System.ComponentModel.TypeDescriptor.GetConverter(underlyingSourceType);
 
         if (converter.CanConvertTo(typeof(string)))
             return new((string?)converter.ConvertTo(value, typeof(string)));

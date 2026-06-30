@@ -376,7 +376,7 @@ public sealed class RuntimeContainerScopeServiceTests
                     new
                     {
                         variables = variables.Select(v => new VariableDefinition(
-                            v.ReferenceKey, v.Name, TypeInformation.String, null, new ArgumentValue("default", "Literal"))).ToArray()
+                            v.ReferenceKey, v.Name, new TypeReference("String"), null, new ArgumentValue("default", "Literal"))).ToArray()
                     },
                     new JsonSerializerOptions(JsonSerializerDefaults.Web))));
 

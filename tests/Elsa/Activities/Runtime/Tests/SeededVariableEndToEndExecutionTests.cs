@@ -151,7 +151,7 @@ public sealed class SeededVariableEndToEndExecutionTests
                     new VariableDefinition(
                         ReferenceKey: "var-greeting",
                         Name: "greeting",
-                        TypeInformation: Elsa.Primitives.Models.TypeInformation.String,
+                        Type: new Elsa.Primitives.Models.TypeReference("String"),
                         StorageDriverType: null,
                         Default: new ArgumentValue("Hello", "Literal"))
                 }

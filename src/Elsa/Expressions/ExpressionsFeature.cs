@@ -30,6 +30,8 @@ public class ExpressionsFeature : IShellFeature
             {
                 o.Arguments = EvaluatorOptions.Arguments;
             })
+            .AddSingleton<IVariableTypeDescriptorProvider, DefaultVariableTypeDescriptorProvider>()
+            .AddSingleton<IVariableTypeDescriptorCatalog, VariableTypeDescriptorCatalog>()
             .AddSingleton<IVariableDefaultValueFormatter, VariableDefaultValueFormatter>()
             .AddSingleton<IVariableMapper, VariableMapper>()
             .AddScoped<IExpressionEvaluator, ExpressionEvaluator>()

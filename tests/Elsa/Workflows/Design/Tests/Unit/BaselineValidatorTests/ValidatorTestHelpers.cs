@@ -97,7 +97,7 @@ internal static class ValidatorTestHelpers
     public static VariableDefinition Variable(string referenceKey, string name) => new(
         ReferenceKey: referenceKey,
         Name: name,
-        TypeInformation: Primitives.Models.TypeInformation.String,
+        Type: new Primitives.Models.TypeReference("String"),
         StorageDriverType: null,
         Default: null
     );

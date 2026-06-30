@@ -11,8 +11,8 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
     public InputDefinition MapInput(Elsa3WorkflowArgumentDefinition input) => new(
        input.Name,
        input.Name,
-       MapTypeInfo(input.Type) ?? throw new ArgumentException("Input object does not have the required 'type' property"),
-       MapTypeInfo(input.StorageDriverType),
+       MapTypeReference(input.Type) ?? throw new ArgumentException("Input object does not have the required 'type' property"),
+       MapAlias(input.StorageDriverType),
        $"{input.DisplayName}",
        input.Category,
        Description: input.Description,
@@ -22,20 +22,29 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
     public OutputDefinition MapOutput(Elsa3WorkflowArgumentDefinition input) => new(
        input.Name,
        input.Name,
-       MapTypeInfo(input.Type) ?? throw new ArgumentException("Input object does not have the required 'type' property"),
-       MapTypeInfo(input.StorageDriverType),
+       MapTypeReference(input.Type) ?? throw new ArgumentException("Input object does not have the required 'type' property"),
+       MapAlias(input.StorageDriverType),
        $"{input.DisplayName}",
        input.Category,
        Description: input.Description,
        UiHint: input.UiHint
    );
 
-    private TypeInformation? MapTypeInfo(string? value)
+    private TypeReference? MapTypeReference(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var type = wellKnownTypeRegistry.GetTypeOrDefault(value);
-        return TypeInformation.FromType(type);
+        var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);
+        return TypeReferenceFactory.FromClrType(type, wellKnownTypeRegistry.GetAliasOrDefault);
+    }
+
+    private string? MapAlias(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);
+        return wellKnownTypeRegistry.GetAliasOrDefault(type);
     }
 }
