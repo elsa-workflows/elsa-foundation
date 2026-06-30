@@ -102,6 +102,26 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("creates a file with a path separator as a slash-delimited URL, not an encoded segment", async () => {
+    // The backend file routes are catch-all and do not decode "%2F"; encoding the whole path would
+    // create a file literally named "Activities%2FHelloWorld.cs" (and 404 on read).
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='New file path']"), "Activities/HelloWorld.cs");
+    await clickButton(container, "Create file");
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloWorld.cs",
+      expect.objectContaining({ method: "PUT" })
+    );
+
+    await unmount();
+  });
+
   it("creates an extension in a single step (repository, working copy, and project)", async () => {
     const postJson = vi.fn(async (url: string, body: unknown) => {
       if (url.endsWith("/workspaces")) return managedWorkspace();
@@ -198,7 +218,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
-        if (url.endsWith("Activities%2FHelloActivity.cs")) throw new Error("Request failed with 404.");
+        if (url.endsWith("Activities/HelloActivity.cs")) throw new Error("Request failed with 404.");
         if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
         return {};
       }
@@ -412,7 +432,7 @@ describe("extension builder page", () => {
     });
     const getJson = vi.fn(async (url: string) => {
       if (url.endsWith("/source-control/status")) return applied ? sourceControlStatus({ unstaged: [generatedFile.path] }) : sourceControlStatus();
-      if (url.endsWith("src%2FGenerated%2FGeneratedActivity.cs")) return {
+      if (url.endsWith("src/Generated/GeneratedActivity.cs")) return {
         ...generatedFile,
         content: "namespace Company.Extensions.Generated;\n\npublic sealed class GeneratedActivity\n{\n}"
       };
@@ -502,7 +522,7 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/push", {});
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/pull", {});
-    expect(getJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/diff/src%2FStatus.cs?staged=true");
+    expect(getJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
 
     await unmount();
   });
@@ -530,7 +550,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Save");
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities%2FHelloActivity.cs",
+      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
       expect.objectContaining({ method: "PUT" })
     );
 
@@ -642,7 +662,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
         if (url.includes("/builds/build-failed")) return failedBuild([activeFileDiagnostic, otherFileDiagnostic]);
-        if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
+        if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
         if (url.includes("/projects/proj-1")) return { ...project(), builds: [failedBuild([activeFileDiagnostic, otherFileDiagnostic])] };
         return {};
       }
@@ -706,7 +726,7 @@ describe("extension builder page", () => {
         ];
         if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), state: 0, history: [{ version: "1.0.0", state: 0, available: true }] };
         if (url.includes("/builds/build-1")) return succeededBuild({ status: 2 });
-        if (url.endsWith("Activities%2FHelloActivity.cs")) return { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" };
+        if (url.endsWith("Activities/HelloActivity.cs")) return { path: "Activities/HelloActivity.cs", kind: 2, content: "public sealed class HelloActivity { }" };
         if (url.includes("/projects/proj-1")) return { ...project(), latestBuildStatus: 2, runtimeStatus: 0, builds: [succeededBuild({ status: 2 })] };
         return {};
       }
@@ -737,7 +757,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return { ...loadedRuntime(), features: null };
         if (url.includes("/builds/build-1")) return succeededBuild();
-        if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
+        if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
         if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
         return {};
       }
@@ -763,7 +783,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return loadedRuntime();
-        if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
+        if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
         if (url.includes("/projects/proj-1")) return { ...project(), currentSourceRevisionId: "rev-2", builds: [succeededBuild({ sourceRevisionId: "rev-1" })] };
         return {};
       }
@@ -798,7 +818,7 @@ describe("extension builder page", () => {
         if (url.endsWith("/source-control/status")) return sourceControlStatus();
         if (url.endsWith("/files")) return projectFiles();
         if (url.endsWith("/runtime-status")) return failedRuntime({ features: [] });
-        if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
+        if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
         if (url.includes(`/projects/${selectedProject.id}`)) return { ...selectedProject, builds: [succeededBuild()] };
         return {};
       }
@@ -854,7 +874,7 @@ async function defaultGetJson(url: string): Promise<unknown> {
   if (url.endsWith("/files")) return projectFiles();
   if (url.endsWith("/runtime-status")) return loadedRuntime();
   if (url.includes("/builds/build-1")) return succeededBuild();
-  if (url.endsWith("Activities%2FHelloActivity.cs")) return repositoryFile();
+  if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
   if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
   return {};
 }

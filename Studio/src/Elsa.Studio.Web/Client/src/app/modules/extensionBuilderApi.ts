@@ -877,7 +877,11 @@ function segment(value: string) {
 }
 
 function filePath(path: string) {
-  return encodeURIComponent(path);
+  // Encode each path segment but preserve the "/" separators: the backend file routes are
+  // catch-all ({**path}) and do not decode "%2F", so encoding the whole path collapses a nested
+  // path into a single literal segment (e.g. "Activities%2FHello.cs"), which 404s on read and
+  // creates a file with a "%2F" in its name on write.
+  return path.split("/").map(encodeURIComponent).join("/");
 }
 
 interface RawExtensionWorkspace {

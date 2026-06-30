@@ -135,6 +135,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const projectDetailsRequestId = useRef(0);
   const runtimeStatusRequestId = useRef(0);
   const selectedIds = useRef({ workspaceId: "", projectId: "" });
+  const hydratedSelectionKey = useRef("");
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
   const selectedRepository = repositories.find(repository => repository.id === selectedWorkspaceId) ?? repositories.find(repository => repository.id === selectedWorkspace?.id) ?? repositories[0] ?? null;
   const selectedProject = selectedWorkspace?.projects.find(project => project.id === selectedProjectId) ?? selectedWorkspace?.projects[0] ?? null;
@@ -216,25 +217,20 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   }, [selectedRepository?.id, selectedRepository?.activeBranch, defaultWorkingBranchName, workingBranchName]);
 
   useEffect(() => {
-    if (!selectedWorkspace) {
-      projectDetailsRequestId.current += 1;
-      setFiles([]);
-      setSolutions([]);
-      setSelectedSolutionPath("");
-      setEditorTabs([]);
-      setSourceControlStatus(null);
-      setSourceControlDiff(null);
-      setCommitMessage("");
-      setActiveFilePath("");
-      setEditorText("");
-      setSavedEditorText("");
-      setActiveBuild(null);
-      setBuildHistory([]);
-      setBuildLog("");
-      runtimeStatusRequestId.current += 1;
-      setRuntimeStatus(null);
+    // Only hydrate solution/project details once the user has opened a solution. On the home view
+    // the editor, file tree, build and runtime state are not shown, so prefetching them eagerly
+    // for the auto-selected workspace would waste several backend round trips per page load.
+    if (!inWorkspace || !selectedWorkspace) {
       return;
     }
+
+    // Hydrate once per selection. `inWorkspace` is a dependency so opening a solution triggers the
+    // load, but re-entering a solution that is already loaded must not refetch and reset the editor.
+    const selectionKey = `${selectedWorkspace.id}::${selectedProject?.id ?? ""}::${selectedSolutionPath}`;
+    if (hydratedSelectionKey.current === selectionKey) {
+      return;
+    }
+    hydratedSelectionKey.current = selectionKey;
 
     if (!selectedProject) {
       projectDetailsRequestId.current += 1;
@@ -249,7 +245,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     }
 
     void loadProjectDetails(selectedWorkspace.id, selectedProject.id, selectedSolutionPath || null);
-  }, [selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
+  }, [inWorkspace, selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
 
   useEffect(() => {
     clearBuildPoll();

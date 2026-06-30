@@ -1775,23 +1775,50 @@ textarea:focus {
   border-bottom: 1px solid var(--studio-border);
 }
 
-.extension-builder-editor-tabs button {
+.extension-builder-editor-tab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   max-width: 220px;
   min-height: 32px;
-  border: 0;
   border-right: 1px solid var(--studio-border);
   background: var(--studio-surface-muted);
   color: var(--studio-text-muted);
-  cursor: pointer;
-  font-size: var(--studio-label-size);
-  padding: 0 8px;
 }
 
-.extension-builder-editor-tabs button.active {
+.extension-builder-editor-tab.active {
   background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.extension-builder-editor-tab-select {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  padding: 0 4px 0 8px;
+}
+
+.extension-builder-editor-tab-close {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.extension-builder-editor-tab-close:hover {
+  background: color-mix(in srgb, var(--studio-text-muted) 18%, transparent);
   color: var(--studio-text);
 }
 
@@ -1799,11 +1826,6 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.extension-builder-editor-tabs em {
-  color: var(--studio-text-muted);
-  font-style: normal;
 }
 
 .extension-builder-code-panel .studio-code-editor {

@@ -20,13 +20,6 @@ export interface EditorTab {
   savedContent: string;
 }
 
-export const inspectorTabs = [
-  { id: "build", label: "Build" },
-  { id: "source", label: "Source" },
-  { id: "promote", label: "Promote" },
-  { id: "runtime", label: "Runtime" }
-];
-
 export const dockTabs: { id: InspectorTab; label: string }[] = [
   { id: "build", label: "Build output" },
   { id: "source", label: "Source control" },

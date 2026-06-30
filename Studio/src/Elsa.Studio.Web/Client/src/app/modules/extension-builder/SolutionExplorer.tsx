@@ -97,9 +97,11 @@ export function SolutionExplorer({
       </div>
 
       <div className="extension-builder-explorer-scroll">
-        {projects.length > 1 ? (
-          <div className="extension-builder-explorer-section">
-            <span className="extension-builder-explorer-label">Projects</span>
+        <div className="extension-builder-explorer-section">
+          <span className="extension-builder-explorer-label">Projects</span>
+          {projects.length === 0 ? (
+            <p className="modules-muted">{advanced ? "No projects yet. Add one below." : "No projects yet. Add a project in advanced mode to build a package."}</p>
+          ) : (
             <div className="extension-builder-project-switch">
               {projects.map(item => (
                 <button key={item.id} type="button" className={item.id === selectedProjectId ? "active" : ""} onClick={() => onSelectProject(item.id)}>
@@ -108,8 +110,8 @@ export function SolutionExplorer({
                 </button>
               ))}
             </div>
-          </div>
-        ) : null}
+          )}
+        </div>
 
         {solutions.length > 1 ? (
           <label className="extension-builder-solution-picker">

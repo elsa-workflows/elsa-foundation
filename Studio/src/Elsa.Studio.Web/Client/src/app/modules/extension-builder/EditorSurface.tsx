@@ -55,13 +55,12 @@ export function EditorSurface({
       {editorTabs.length > 0 ? (
         <div className="extension-builder-editor-tabs" role="tablist" aria-label="Open repository files">
           {editorTabs.map(tab => (
-            <button key={tab.path} type="button" role="tab" aria-selected={tab.path === activeFilePath} className={tab.path === activeFilePath ? "active" : ""} title={tab.path} onClick={() => onSelectEditorTab(tab.path)}>
-              <span>{fileName(tab.path)}{tab.content !== tab.savedContent ? " ●" : ""}</span>
-              <em aria-label={`Close ${tab.path}`} onClick={event => {
-                event.stopPropagation();
-                onCloseEditorTab(tab.path);
-              }}>×</em>
-            </button>
+            <div key={tab.path} className={tab.path === activeFilePath ? "extension-builder-editor-tab active" : "extension-builder-editor-tab"}>
+              <button type="button" role="tab" aria-selected={tab.path === activeFilePath} className="extension-builder-editor-tab-select" title={tab.path} onClick={() => onSelectEditorTab(tab.path)}>
+                <span>{fileName(tab.path)}{tab.content !== tab.savedContent ? " ●" : ""}</span>
+              </button>
+              <button type="button" className="extension-builder-editor-tab-close" aria-label={`Close ${tab.path}`} onClick={() => onCloseEditorTab(tab.path)}>×</button>
+            </div>
           ))}
         </div>
       ) : null}
