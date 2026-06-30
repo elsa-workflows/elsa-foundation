@@ -3,6 +3,7 @@ import {
   camelize,
   defaultCollectionItem,
   describeCollectionType,
+  formatTypeName,
   isRepeaterOptOut,
   makeCollectionElementDescriptor,
   moveCollectionItem,
@@ -69,6 +70,39 @@ describe("activity property values", () => {
     expect(nestedActivities[0].text).toBe("Updated");
     expect((updated.structure?.payload.activities as ActivityNode[])[0]).toBe(left);
     expect(root).not.toBe(updated);
+  });
+});
+
+describe("formatTypeName", () => {
+  it("shortens namespaced and nested type names", () => {
+    expect(formatTypeName("System.String")).toBe("String");
+    expect(formatTypeName("MyApp.Outer+Inner")).toBe("Inner");
+  });
+
+  it("strips the assembly-qualified tail instead of leaking its fragments", () => {
+    // The naive "text after the last dot" returned "0, Culture=neutral, PublicKeyToken=…" here.
+    expect(formatTypeName("System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e"))
+      .toBe("String");
+  });
+
+  it("rebuilds generics as friendly labels", () => {
+    expect(formatTypeName("System.Collections.Generic.ICollection`1[[System.String, System.Private.CoreLib]], System.Private.CoreLib"))
+      .toBe("ICollection<String>");
+    expect(formatTypeName("System.Collections.Generic.ICollection`1[System.Int32]")).toBe("ICollection<Int32>");
+    expect(formatTypeName("System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[System.Int32, mscorlib]]"))
+      .toBe("Dictionary<String, Int32>");
+  });
+
+  it("renders arrays, including arrays of generics", () => {
+    expect(formatTypeName("System.Int32[]")).toBe("Int32[]");
+    expect(formatTypeName("System.Int32[][], mscorlib")).toBe("Int32[][]");
+    expect(formatTypeName("System.Collections.Generic.List`1[[System.Int32, mscorlib]][], mscorlib"))
+      .toBe("List<Int32>[]");
+  });
+
+  it("handles bare arity and falls back to the raw value when unparseable", () => {
+    expect(formatTypeName("System.Collections.Generic.ICollection`1")).toBe("ICollection");
+    expect(formatTypeName("")).toBe("");
   });
 });
 

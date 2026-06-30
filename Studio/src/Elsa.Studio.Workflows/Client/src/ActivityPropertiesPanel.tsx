@@ -17,6 +17,7 @@ import {
   defaultCollectionItem,
   defaultExpressionDescriptors,
   describeCollectionType,
+  formatTypeName,
   getLiteralEditorValue,
   isRepeaterOptOut,
   makeCollectionElementDescriptor,
@@ -747,10 +748,6 @@ function groupInputs(inputs: StudioActivityInputDescriptor[]) {
   }
 
   return [...groups.entries()].map(([category, groupedInputs]) => ({ category, inputs: groupedInputs }));
-}
-
-function formatTypeName(typeName: string) {
-  return typeName.split(".").filter(Boolean).at(-1) ?? typeName;
 }
 
 function isSingleLineTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {

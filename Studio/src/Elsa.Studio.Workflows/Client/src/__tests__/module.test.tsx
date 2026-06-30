@@ -679,6 +679,11 @@ describe("workflows module", () => {
       .find(node => node.textContent?.includes("Write Lines")) ?? null);
     await waitForText(container, "Lines");
 
+    // The type badge shows a friendly label for the assembly-qualified generic collection type rather
+    // than leaking an assembly-qualifier fragment ("0, Culture=neutral, PublicKeyToken=…").
+    const typeBadge = container.querySelector(".wf-property-row-header span");
+    expect(typeBadge?.textContent).toBe("ICollection<String>");
+
     // The collection input renders the repeater (not a single text box) and starts empty.
     const repeater = container.querySelector(".wf-collection-editor");
     expect(repeater).toBeTruthy();

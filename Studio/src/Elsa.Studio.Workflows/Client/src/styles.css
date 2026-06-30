@@ -3,6 +3,10 @@
   --wf-panel: var(--card, #ffffff);
   --wf-panel-muted: var(--muted, #f8fafc);
   --wf-canvas: color-mix(in srgb, var(--background, #ffffff) 88%, var(--muted, #f8fafc));
+  /* Field surfaces: --wf-surface is the raised control/panel tone, --wf-bg the recessed page tone.
+     Inputs blend the two into a subtly recessed "well" that stays distinct from the panel in both themes. */
+  --wf-surface: var(--card, #ffffff);
+  --wf-bg: var(--background, #ffffff);
   --wf-border: color-mix(in srgb, var(--border, #d9e2ec) 88%, transparent);
   --wf-border-strong: color-mix(in srgb, var(--border, #d9e2ec) 70%, var(--foreground, #0f172a));
   --wf-text: var(--foreground, #0f172a);

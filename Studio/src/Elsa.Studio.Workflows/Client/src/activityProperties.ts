@@ -209,3 +209,97 @@ function isWrappedInputValue(value: unknown): value is WrappedActivityInputValue
     typeof expression === "object" &&
     typeof (expression as Record<string, unknown>).type === "string";
 }
+
+// --- friendly type-name formatting (type badge) ----------------------------
+//
+// Render a .NET type name as a short, friendly label. Backend type names can be assembly-qualified and
+// generic (e.g. "...ICollection`1[[System.String, System.Private.CoreLib, Version=8.0.0.0,
+// Culture=neutral, PublicKeyToken=…]], System.Private.CoreLib, …"). A naive "text after the last dot"
+// leaks fragments like "0, Culture=neutral, PublicKeyToken=…" into the UI, so parse the structure
+// instead: drop assembly qualifiers, shorten namespaces, and rebuild generics/arrays as
+// "ICollection<String>" / "Int32[]". Co-located with describeCollectionType, the other place that
+// decodes generic type-name syntax in this module.
+export function formatTypeName(typeName: string): string {
+  return parseClrTypeName(typeName?.trim() ?? "") || typeName;
+}
+
+function parseClrTypeName(text: string): string {
+  if (!text) return "";
+  const core = stripAssemblyQualifier(text);
+  if (!core) return "";
+
+  // Trailing "[]" pairs are always array markers — a generic's brackets are never empty — so a greedy
+  // match of them at the very end is safe even when the base type is itself generic (List`1[…][]).
+  const array = /^(.*)((?:\[\])+)$/.exec(core);
+  if (array) return `${parseClrTypeName(array[1])}${array[2]}`;
+
+  const backtick = core.indexOf("`");
+  if (backtick >= 0) {
+    const name = simpleTypeName(core.slice(0, backtick));
+    const args = parseGenericArguments(core.slice(backtick));
+    return args.length > 0 ? `${name}<${args.join(", ")}>` : name;
+  }
+
+  return simpleTypeName(core);
+}
+
+// Cut the assembly-qualified tail: the first comma at bracket depth 0 (", System.Private.CoreLib, …").
+function stripAssemblyQualifier(text: string): string {
+  let depth = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "[") depth++;
+    else if (char === "]") depth--;
+    else if (char === "," && depth === 0) return text.slice(0, index).trim();
+  }
+  return text.trim();
+}
+
+// "System.Collections.Generic.ICollection" -> "ICollection"; also drops nested-type "+" prefixes.
+function simpleTypeName(text: string): string {
+  const segment = text.split(".").filter(Boolean).at(-1) ?? text;
+  return segment.split("+").filter(Boolean).at(-1) ?? segment;
+}
+
+// Parse "`N[[Arg1, Asm…],[Arg2, Asm…]]" (or the short "`N[Arg1,Arg2]") into friendly argument labels.
+function parseGenericArguments(genericPart: string): string[] {
+  const open = genericPart.indexOf("[");
+  if (open < 0) return [];
+  const inner = innerBracketContent(genericPart, open);
+  if (inner == null) return [];
+  return splitTopLevel(inner)
+    .map(arg => {
+      const trimmed = arg.trim();
+      const unwrapped = trimmed.startsWith("[") ? innerBracketContent(trimmed, 0) ?? trimmed : trimmed;
+      return parseClrTypeName(unwrapped);
+    })
+    .filter(Boolean);
+}
+
+// Content between the bracket at `open` and its matching close, or null when unbalanced.
+function innerBracketContent(text: string, open: number): string | null {
+  let depth = 0;
+  for (let index = open; index < text.length; index++) {
+    if (text[index] === "[") depth++;
+    else if (text[index] === "]" && --depth === 0) return text.slice(open + 1, index);
+  }
+  return null;
+}
+
+// Split on commas at bracket depth 0 (keeps assembly-qualified args like "[String, Asm]" intact).
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "[") depth++;
+    else if (char === "]") depth--;
+    else if (char === "," && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts.map(part => part.trim()).filter(Boolean);
+}
