@@ -1,8 +1,9 @@
+using CShells.Features;
 using Elsa.Modularity.Core.Contracts;
 
 namespace Elsa.Modularity.Nuplane.Services;
 
-public sealed class RuntimeFeatureCatalogRefresher(IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog) : IRuntimeFeatureCatalogRefresher
+public sealed class RuntimeFeatureCatalogRefresher(IRuntimeFeatureCatalog runtimeFeatureCatalog) : IRuntimeFeatureCatalogRefresher
 {
     public async Task<int> RefreshAsync(CancellationToken cancellationToken = default)
     {

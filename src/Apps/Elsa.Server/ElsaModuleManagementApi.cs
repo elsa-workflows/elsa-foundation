@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Nuplane;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
@@ -715,40 +716,30 @@ internal sealed record ModuleManagementPackageManifest(string Kind, string Path,
 {
     public static ModuleManagementPackageManifest? Read(string installPath)
     {
-        if (string.IsNullOrWhiteSpace(installPath) || !Directory.Exists(installPath))
+        if (string.IsNullOrWhiteSpace(installPath))
             return null;
 
-        try
-        {
-            var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
-            if (File.Exists(elsaManifestPath))
-                return ReadJsonManifest(elsaManifestPath);
+        var manifestBytes = PackageContent.TryReadFile(installPath, "elsa-package.json")
+            ?? PackageContent.TryReadFile(installPath, "build/elsa-package.json");
+        if (manifestBytes is not null)
+            return ReadJsonManifest(manifestBytes);
 
-            var buildManifestPath = System.IO.Path.Combine(installPath, "build", "elsa-package.json");
-            if (File.Exists(buildManifestPath))
-                return ReadJsonManifest(buildManifestPath);
-
-            var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
-            return nuspecPath is null
-                ? null
-                : new("nuspec", nuspecPath, null, File.ReadAllText(nuspecPath));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new("manifest-error", installPath, null, ex.Message);
-        }
+        var nuspec = PackageContent.TryFindByExtension(installPath, ".nuspec");
+        return nuspec is null
+            ? null
+            : new("nuspec", nuspec.Name, null, Encoding.UTF8.GetString(nuspec.Content));
     }
 
-    private static ModuleManagementPackageManifest ReadJsonManifest(string path)
+    private static ModuleManagementPackageManifest ReadJsonManifest(byte[] bytes)
     {
-        var text = File.ReadAllText(path);
+        var text = Encoding.UTF8.GetString(bytes);
         try
         {
-            return new("elsa-package", path, JsonNode.Parse(text), null);
+            return new("elsa-package", "elsa-package.json", JsonNode.Parse(text), null);
         }
         catch (JsonException)
         {
-            return new("elsa-package", path, null, text);
+            return new("elsa-package", "elsa-package.json", null, text);
         }
     }
 }
@@ -757,42 +748,33 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
 {
     public static IReadOnlyList<ModuleManagementPackageDependency> Read(string installPath)
     {
-        if (string.IsNullOrWhiteSpace(installPath) || !Directory.Exists(installPath))
+        if (string.IsNullOrWhiteSpace(installPath))
             return [];
 
-        try
-        {
-            var dependencies = new List<ModuleManagementPackageDependency>();
-            var elsaManifestPath = System.IO.Path.Combine(installPath, "elsa-package.json");
-            if (File.Exists(elsaManifestPath))
-                dependencies.AddRange(ReadElsaPackageDependencies(elsaManifestPath));
+        var dependencies = new List<ModuleManagementPackageDependency>();
 
-            var buildManifestPath = System.IO.Path.Combine(installPath, "build", "elsa-package.json");
-            if (File.Exists(buildManifestPath))
-                dependencies.AddRange(ReadElsaPackageDependencies(buildManifestPath));
+        var elsaManifest = PackageContent.TryReadFile(installPath, "elsa-package.json")
+            ?? PackageContent.TryReadFile(installPath, "build/elsa-package.json");
+        if (elsaManifest is not null)
+            dependencies.AddRange(ReadElsaPackageDependencies(elsaManifest));
 
-            var nuspecPath = Directory.EnumerateFiles(installPath, "*.nuspec", SearchOption.TopDirectoryOnly).FirstOrDefault();
-            if (nuspecPath is not null)
-                dependencies.AddRange(ReadNuspecDependencies(nuspecPath));
+        var nuspec = PackageContent.TryFindByExtension(installPath, ".nuspec");
+        if (nuspec is not null)
+            dependencies.AddRange(ReadNuspecDependencies(nuspec.Content));
 
-            return dependencies
-                .GroupBy(x => (x.Id, x.VersionRange, x.Group, x.Source))
-                .Select(x => x.First())
-                .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(x => x.VersionRange, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
+        return dependencies
+            .GroupBy(x => (x.Id, x.VersionRange, x.Group, x.Source))
+            .Select(x => x.First())
+            .OrderBy(x => x.Id, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(x => x.VersionRange, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
-    private static IReadOnlyList<ModuleManagementPackageDependency> ReadElsaPackageDependencies(string path)
+    private static IReadOnlyList<ModuleManagementPackageDependency> ReadElsaPackageDependencies(byte[] bytes)
     {
         try
         {
-            var manifest = JsonNode.Parse(File.ReadAllText(path))?.AsObject();
+            var manifest = JsonNode.Parse(Encoding.UTF8.GetString(bytes))?.AsObject();
             if (manifest?["dependencies"] is not JsonArray dependencies)
                 return [];
 
@@ -802,7 +784,7 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
                 .Cast<ModuleManagementPackageDependency>()
                 .ToArray();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
             return [];
         }
@@ -830,11 +812,12 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
             "elsa-package");
     }
 
-    private static IReadOnlyList<ModuleManagementPackageDependency> ReadNuspecDependencies(string path)
+    private static IReadOnlyList<ModuleManagementPackageDependency> ReadNuspecDependencies(byte[] bytes)
     {
         try
         {
-            var document = XDocument.Load(path);
+            using var stream = new MemoryStream(bytes);
+            var document = XDocument.Load(stream);
             return document.Descendants()
                 .Where(x => x.Name.LocalName == "dependency")
                 .Select(dependency =>
@@ -850,7 +833,7 @@ internal sealed record ModuleManagementPackageDependency(string Id, string Versi
                 .Cast<ModuleManagementPackageDependency>()
                 .ToArray();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        catch (System.Xml.XmlException)
         {
             return [];
         }
