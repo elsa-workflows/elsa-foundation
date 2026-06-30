@@ -4,11 +4,11 @@ using Elsa.Modularity.Core.Models;
 
 namespace Elsa.Modularity.Nuplane.Services;
 
-public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog) : IFeatureCatalogContributor
+public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalog runtimeFeatureCatalog) : IFeatureCatalogContributor
 {
     public async Task ContributeAsync(FeatureCatalogContributionContext context, CancellationToken cancellationToken = default)
     {
-        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        var snapshot = await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken);
         foreach (var descriptor in snapshot.FeatureDescriptors)
         {
             var featureName = descriptor.Id;

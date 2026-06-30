@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using System.IO.Compression;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Design.Persistence.Groundwork;
@@ -12,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
+using Nuplane;
 using Nuplane.Admin;
 
 namespace Elsa.Server;
@@ -69,7 +69,7 @@ internal static class ElsaDemoApi
     private static IResult GetPackageEvents(DemoPackageEventStore events, long? afterSequence) =>
         Results.Ok(events.GetEvents(afterSequence));
 
-    private static async Task<IResult> ReloadShellsAsync(IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog, IShellRegistry shellRegistry, CancellationToken cancellationToken)
+    private static async Task<IResult> ReloadShellsAsync(IRuntimeFeatureCatalog runtimeFeatureCatalog, IShellRegistry shellRegistry, CancellationToken cancellationToken)
     {
         var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
         var featureDescriptorCount = snapshot.FeatureDescriptors.Count;
@@ -95,7 +95,7 @@ internal static class ElsaDemoApi
     }
 
     private static async Task<IResult> ListFeaturesAsync(
-        IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog,
+        IRuntimeFeatureCatalog runtimeFeatureCatalog,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
         CancellationToken cancellationToken)
@@ -117,7 +117,7 @@ internal static class ElsaDemoApi
             });
         }
 
-        var snapshot = await runtimeFeatureCatalog.RefreshAsync(cancellationToken);
+        var snapshot = await runtimeFeatureCatalog.GetSnapshotAsync(cancellationToken);
         foreach (var descriptor in snapshot.FeatureDescriptors)
         {
             var featureName = descriptor.Id;
@@ -213,7 +213,7 @@ internal static class ElsaDemoApi
         Results.Ok(ClearPackageDropFolder(environment));
 
     private static async Task<IResult> ResetDemoAsync(
-        IRuntimeFeatureCatalogAccessor runtimeFeatureCatalog,
+        IRuntimeFeatureCatalog runtimeFeatureCatalog,
         IShellRegistry shellRegistry,
         INuplaneAdminOperations nuplaneAdmin,
         IWebHostEnvironment environment,
@@ -520,36 +520,33 @@ internal static class ElsaDemoApi
 
     private static DemoPackageManifestReadResult ReadPackageManifest(DemoPackageSummary package, IWebHostEnvironment environment)
     {
+        var archivePath = ResolvePackageArchivePath(package, environment);
+        if (archivePath is null)
+            return DemoPackageManifestReadResult.Missing("Could not locate the package archive.");
+
+        // Nuplane owns the .nupkg/extracted-dir layout; we only choose which relative manifest paths to try.
+        var path = "elsa-package.json";
+        var bytes = PackageContent.TryReadFile(archivePath, path);
+        if (bytes is null)
+        {
+            path = "build/elsa-package.json";
+            bytes = PackageContent.TryReadFile(archivePath, path);
+        }
+
+        if (bytes is null)
+            return DemoPackageManifestReadResult.Missing("Package manifest not found.");
+
         try
         {
-            var archivePath = ResolvePackageArchivePath(package, environment);
-            if (archivePath is null)
-                return DemoPackageManifestReadResult.Missing("Could not locate the package archive.");
-
-            using var stream = File.OpenRead(archivePath);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
-            var entries = archive.Entries
-                .Where(x => IsPackageManifestPath(x.FullName))
-                .ToArray();
-            var selected = entries.FirstOrDefault(x => IsRootPackageManifestPath(x.FullName))
-                ?? entries.FirstOrDefault(x => IsFallbackPackageManifestPath(x.FullName));
-
-            if (selected is null)
-                return DemoPackageManifestReadResult.Missing("Package manifest not found.");
-
-            using var manifestStream = selected.Open();
-            using var memory = new MemoryStream();
-            manifestStream.CopyTo(memory);
-            var bytes = memory.ToArray();
             var json = System.Text.Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF');
             var manifest = JsonSerializer.Deserialize<DemoPackageManifest>(json, DemoPackageManifestJsonOptions);
             if (manifest is null)
                 return DemoPackageManifestReadResult.Missing("Package manifest was empty.");
 
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            return DemoPackageManifestReadResult.Found(NormalizePackagePath(selected.FullName), hash, manifest);
+            return DemoPackageManifestReadResult.Found(path, hash, manifest);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
+        catch (JsonException ex)
         {
             return DemoPackageManifestReadResult.Missing(ex.Message);
         }
@@ -577,17 +574,6 @@ internal static class ElsaDemoApi
                 || Path.GetFileName(path).StartsWith($"{package.Id}.", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsPackageManifestPath(string path) =>
-        IsRootPackageManifestPath(path) || IsFallbackPackageManifestPath(path);
-
-    private static bool IsRootPackageManifestPath(string path) =>
-        string.Equals(NormalizePackagePath(path), "elsa-package.json", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsFallbackPackageManifestPath(string path) =>
-        string.Equals(NormalizePackagePath(path), "build/elsa-package.json", StringComparison.OrdinalIgnoreCase);
-
-    private static string NormalizePackagePath(string path) =>
-        path.Replace('\\', '/').TrimStart('/');
 
     private static IReadOnlyList<DemoFeatureSettingResponse> MapManifestSettings(IReadOnlyList<DemoPackageFeatureSettingManifest>? settings) =>
         settings?

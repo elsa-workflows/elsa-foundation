@@ -99,7 +99,6 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
-builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
@@ -121,6 +120,18 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
+
+            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
+            // and enablable via shell configuration.
+            typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
+            typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
+
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
