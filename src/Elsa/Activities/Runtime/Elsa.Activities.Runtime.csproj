@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Expose the internal RegisterActivityIoTypesStartupTask test seam (baseline assembly source) to unit tests (§2.23). -->
+    <!-- Expose the internal RegisterActivityTypesStartupTask test seam (baseline assembly source) to unit tests (§2.23). -->
     <InternalsVisibleTo Include="Elsa.Activities.Design.Tests" />
   </ItemGroup>
 

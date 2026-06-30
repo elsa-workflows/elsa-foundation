@@ -80,8 +80,8 @@ public sealed class HashMismatchTests
             DisplayName: null,
             Category: "Acme",
             Description: description,
-            DescriptorType: typeof(TypeInformation).FullName!,
-            Descriptor: TypeInformation.Object,
+            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            Descriptor: new ClrActivityDescriptor("Object"),
             Inputs: [],
             Outputs: [],
             DesignFacets: []);

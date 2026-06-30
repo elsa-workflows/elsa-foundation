@@ -15,7 +15,7 @@ namespace Elsa.Activities.Runtime.Tests.Integration;
 /// End-to-end proof that closes the one assumption the unit tests cannot: that the
 /// <see cref="IFeatureAssemblyProvider"/> seam (how Nuplane surfaces dynamically-loaded extension-builder
 /// package assemblies, which live in a custom PackageAssemblyLoadContext — NOT the default AppDomain) is
-/// actually reachable from a composed shell's DI scope, where <c>RegisterActivityIoTypesStartupTask</c> runs.
+/// actually reachable from a composed shell's DI scope, where <c>RegisterActivityTypesStartupTask</c> runs.
 ///
 /// It boots a REAL CShells shell (Serialization → the well-known type registry + primitive seed; Tasks → the
 /// shell-tasks initializer that replays IStartupTask on activation; Events → the event bus the runtime feature
@@ -60,7 +60,7 @@ public sealed class ShellScopedActivityIoTypeRegistrationTests
         Assert.Contains(provider, shellServices.GetServices<IFeatureAssemblyProvider>());
 
         // (2) The startup pass ran in shell scope and actually consulted the provider.
-        Assert.True(provider.WasInvoked, "RegisterActivityIoTypesStartupTask did not consult IFeatureAssemblyProvider in shell scope.");
+        Assert.True(provider.WasInvoked, "RegisterActivityTypesStartupTask did not consult IFeatureAssemblyProvider in shell scope.");
 
         // (3) End-to-end: the provider-surfaced activity's complex/enum I/O element types resolved to their real
         //     CLR types via the shell's well-known type registry — not object.

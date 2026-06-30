@@ -67,7 +67,7 @@ public sealed class VersionStringSurfaceTests
         var version = new ActivityDefinitionVersion(AuthorVersion, definition.Id)
         {
             Definition = definition,
-            DescriptorType = typeof(TypeInformation).FullName!,
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
         };
 
         return (version, definition);

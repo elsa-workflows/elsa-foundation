@@ -29,13 +29,13 @@ public sealed class ActivityIoTypeRegistrationTests
     // Builds the startup task. With no baseAssemblies override the public (DI) constructor is used, which scans
     // the host AppDomain; supply baseAssemblies to substitute the runtime-loaded source (e.g. exclude it) so the
     // IFeatureAssemblyProvider path can be exercised in isolation.
-    private static RegisterActivityIoTypesStartupTask CreateTask(
+    private static RegisterActivityTypesStartupTask CreateTask(
         IWellKnownTypeRegistry registry,
         IEnumerable<IFeatureAssemblyProvider>? providers = null,
         Func<IEnumerable<Assembly>>? baseAssemblies = null) =>
         baseAssemblies is null
-            ? new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityIoTypesStartupTask>.Instance)
-            : new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityIoTypesStartupTask>.Instance, baseAssemblies);
+            ? new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance)
+            : new(registry, providers ?? [], EmptyServiceProvider, NullLogger<RegisterActivityTypesStartupTask>.Instance, baseAssemblies);
 
     // Mirrors WorkflowExecutableCompiler.ResolveInputType: close the authored (alias, kind) into a CLR type via
     // the registry, unknown alias → object.

@@ -11,12 +11,18 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Activities.Runtime.Tasks;
 
 /// <summary>
-/// Startup pass (FR-004b, research D8 revised) that registers the CLR types reachable through activity
-/// inputs/outputs into the runtime <see cref="IWellKnownTypeRegistry"/> under the shared
-/// <see cref="TypeAliasConvention"/>. This is what makes a complex- or enum-typed activity input resolve to
-/// its real CLR type at compile time instead of falling back to <c>object</c>: the reflection-only CLR scanner
-/// emits <c>CanonicalAlias(type)</c> for each input/output element type, and this pass registers that same
-/// alias↔type pair so the alias resolves.
+/// Startup pass (FR-004b, research D8 revised) that registers — into the runtime
+/// <see cref="IWellKnownTypeRegistry"/> under the shared <see cref="TypeAliasConvention"/> — the CLR types
+/// reachable from the loaded activities:
+/// <list type="bullet">
+///   <item>the <see cref="IActivity"/> implementation <b>itself</b>, so the CLR activity constructor resolves
+///   the descriptor's stable alias back to the real activity type at construction time (no
+///   <c>Assembly.Load(name, version)</c>);</item>
+///   <item>each activity input/output <b>element type</b>, so a complex- or enum-typed input resolves to its
+///   real CLR type at compile time instead of falling back to <c>object</c>.</item>
+/// </list>
+/// In both cases the reflection-only CLR scanner emits <c>CanonicalAlias(type)</c> and this pass registers
+/// that same alias↔type pair, so the two sides cannot drift.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,8 +32,8 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// dynamically-loaded / externally-uploaded extension-builder activities whose assemblies are loaded into the
 /// runtime on a shell (re)load but are not guaranteed to appear in <see cref="AppDomain.CurrentDomain"/>. This
 /// task re-runs on every shell (re)build (it is an <see cref="IStartupTask"/>, replayed by the shell-tasks
-/// initializer), so when an extension-builder activity package becomes available its I/O element types are
-/// picked up the next time the shell composes.
+/// initializer), so when an extension-builder activity package becomes available both the activity type and its
+/// I/O element types are picked up the next time the shell composes.
 /// </para>
 /// <para>
 /// Idempotent and fail-fast-tolerant: <see cref="IWellKnownTypeRegistry.RegisterType"/> throws on a genuine
@@ -36,30 +42,30 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// primitive seed, or the same assembly appearing in both sources) never throws.
 /// </para>
 /// </remarks>
-public sealed class RegisterActivityIoTypesStartupTask : IStartupTask
+public sealed class RegisterActivityTypesStartupTask : IStartupTask
 {
     private readonly IWellKnownTypeRegistry _wellKnownTypeRegistry;
     private readonly IReadOnlyCollection<IFeatureAssemblyProvider> _assemblyProviders;
     private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<RegisterActivityIoTypesStartupTask> _logger;
+    private readonly ILogger<RegisterActivityTypesStartupTask> _logger;
     private readonly Func<IEnumerable<Assembly>> _baseAssembliesFactory;
 
-    public RegisterActivityIoTypesStartupTask(
+    public RegisterActivityTypesStartupTask(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IEnumerable<IFeatureAssemblyProvider> assemblyProviders,
         IServiceProvider serviceProvider,
-        ILogger<RegisterActivityIoTypesStartupTask> logger)
+        ILogger<RegisterActivityTypesStartupTask> logger)
         : this(wellKnownTypeRegistry, assemblyProviders, serviceProvider, logger, static () => AppDomain.CurrentDomain.GetAssemblies())
     {
     }
 
     // Test seam: lets a unit test substitute the baseline (runtime-loaded) assembly source so the
     // IFeatureAssemblyProvider path can be exercised in isolation from the host AppDomain.
-    internal RegisterActivityIoTypesStartupTask(
+    internal RegisterActivityTypesStartupTask(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IEnumerable<IFeatureAssemblyProvider> assemblyProviders,
         IServiceProvider serviceProvider,
-        ILogger<RegisterActivityIoTypesStartupTask> logger,
+        ILogger<RegisterActivityTypesStartupTask> logger,
         Func<IEnumerable<Assembly>> baseAssembliesFactory)
     {
         _wellKnownTypeRegistry = wellKnownTypeRegistry;
@@ -73,8 +79,8 @@ public sealed class RegisterActivityIoTypesStartupTask : IStartupTask
     {
         var assemblies = await CollectAssembliesAsync(cancellationToken);
 
-        foreach (var elementType in EnumerateActivityIoElementTypes(assemblies))
-            TryRegister(elementType);
+        foreach (var type in EnumerateRegistrableTypes(assemblies))
+            TryRegister(type);
     }
 
     // Baseline (runtime-loaded) assemblies unioned with the assemblies surfaced by every registered
@@ -106,10 +112,13 @@ public sealed class RegisterActivityIoTypesStartupTask : IStartupTask
         return assemblies;
     }
 
-    private IEnumerable<Type> EnumerateActivityIoElementTypes(IEnumerable<Assembly> assemblies)
+    private IEnumerable<Type> EnumerateRegistrableTypes(IEnumerable<Assembly> assemblies)
     {
         foreach (var activityType in EnumerateActivityTypes(assemblies))
         {
+            // The activity CLR type itself — the CLR construction descriptor resolves its stable alias here.
+            yield return activityType;
+
             PropertyInfo[] properties;
             try
             {
@@ -192,12 +201,12 @@ public sealed class RegisterActivityIoTypesStartupTask : IStartupTask
         catch (DuplicateTypeAliasException ex)
         {
             // A race with another contributor registered the same alias/type first; tolerate it.
-            _logger.LogDebug(ex, "Activity I/O type '{Type}' alias '{Alias}' was already registered.", elementType.FullName, alias);
+            _logger.LogDebug(ex, "Activity type '{Type}' alias '{Alias}' was already registered.", elementType.FullName, alias);
         }
         catch (ReservedAliasNamespaceException ex)
         {
             // Should not happen: convention only yields bare aliases for reserved primitives. Log and skip.
-            _logger.LogWarning(ex, "Activity I/O type '{Type}' produced reserved bare alias '{Alias}'; skipping.", elementType.FullName, alias);
+            _logger.LogWarning(ex, "Activity type '{Type}' produced reserved bare alias '{Alias}'; skipping.", elementType.FullName, alias);
         }
     }
 

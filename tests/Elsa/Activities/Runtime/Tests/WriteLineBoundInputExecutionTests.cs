@@ -33,13 +33,13 @@ public sealed class WriteLineBoundInputExecutionTests
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
         var registry = new ActivityConstructorRegistry();
-        registry.Add(new ClrActivityConstructor(serviceProvider, new ActivityArgumentBinder(), serializer));
+        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLine)));
         var factory = new ActivityFactory(registry);
 
         var textArgument = new InputArgument<string>(new MemoryBlockReference("write-hello:Text"));
         var activity = await factory.Create(
-            typeof(TypeInformation).FullName!,
-            serializer.SerializeToElement(TypeInformation.FromType(typeof(WriteLine))),
+            ClrConstruction.DescriptorType,
+            ClrConstruction.Payload(serializer, typeof(WriteLine)),
             new Dictionary<string, InputArgument> { ["Text"] = textArgument },
             outputs: null);
 

@@ -7,7 +7,7 @@ Runtime-side composition for activity construction. Hosts the activity factory, 
 - **`IActivityFactory`** → `ActivityFactory` — kind-agnostic construction dispatcher. Resolves the descriptor's kind via the resolver registry, asks the resolver for the CLR type, activates via `ActivatorUtilities`. Throws `ActivityResolutionException` for unknown kinds (Elsa §E2.6.1 domain-failure path).
 - **`IActivityImplementationResolverRegistry`** → `ActivityImplementationResolverRegistry` — kind→resolver dispatch table for runtime. Singleton; populated at startup.
 - **`IImplementationDescriptorRegistry`** → `Elsa.Activities.Design.Core.Models.ImplementationDescriptorRegistry` — kind→CLR descriptor type for persistence-side deserialisation. Singleton; populated at startup.
-- **`ClrActivityImplementationResolver`** — owns the `"Clr"` kind. Resolves `ClrImplementationDescriptor` to a live `Type` via `TypeInformation.LoadType()`.
+- **`ClrActivityImplementationResolver`** — owns the `"Clr"` kind. Resolves the CLR descriptor to a live `Type` by looking up its stable alias in `IWellKnownTypeRegistry` (no assembly name/version).
 
 ## Cross-domain contributions
 

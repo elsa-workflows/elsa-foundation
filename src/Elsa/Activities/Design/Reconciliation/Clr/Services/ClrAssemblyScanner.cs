@@ -139,8 +139,8 @@ public sealed class ClrAssemblyScanner(
             DisplayName: null,
             Category: category,
             Description: null,
-            DescriptorType: typeof(TypeInformation).FullName!,
-            Descriptor: TypeInformation.FromType(type),
+            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,
             DesignFacets: []);

@@ -51,12 +51,13 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.AddScoped<IStartupTask, ActivityConstructorsStartupTask>();
         services.AddEventHandler<OnActivityConstructorsInitializing, RegisterActivityConstructors>();
 
-        // Startup pass (FR-004b / research D8 revised): register the CLR types reachable through activity
-        // inputs/outputs under the shared TypeAliasConvention, so the alias the reflection-only CLR scanner
-        // emits for a complex- or enum-typed input resolves back to its real CLR type at compile time instead
-        // of falling back to object. Sources both the runtime-loaded assemblies and the registered
-        // IFeatureAssemblyProvider set, so dynamically-loaded extension-builder activities are covered once
-        // their package is loaded; the pass re-runs on each shell (re)build.
-        services.AddScoped<IStartupTask, RegisterActivityIoTypesStartupTask>();
+        // Startup pass (FR-004b / research D8 revised): register the activity CLR types — the activity types
+        // themselves AND their input/output element types — under the shared TypeAliasConvention. This lets the
+        // CLR construction descriptor resolve an activity's stable alias back to its real type (no
+        // Assembly.Load(name, version)), and a complex- or enum-typed input resolve to its real CLR type at
+        // compile time instead of falling back to object. Sources both the runtime-loaded assemblies and the
+        // registered IFeatureAssemblyProvider set, so dynamically-loaded extension-builder activities are covered
+        // once their package is loaded; the pass re-runs on each shell (re)build.
+        services.AddScoped<IStartupTask, RegisterActivityTypesStartupTask>();
     }
 }

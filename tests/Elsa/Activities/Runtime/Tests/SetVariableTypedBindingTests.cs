@@ -140,9 +140,9 @@ public sealed class SetVariableTypedBindingTests
             activityType: typeof(Elsa.Activities.Primitives.Activities.SetVariable).FullName!,
             activityTypeVersion: "1.0.0",
             // The real CLR descriptor — construction flows through ClrActivityConstructor + ActivityArgumentBinder.
-            descriptorType: typeof(TypeInformation).FullName!,
+            descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: JsonSerializer.SerializeToElement(
-                TypeInformation.FromType(typeof(Elsa.Activities.Primitives.Activities.SetVariable))),
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Primitives.Activities.SetVariable)))),
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 // Variable name is itself a typed String binding; Value is the typed binding under test.

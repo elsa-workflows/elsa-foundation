@@ -53,7 +53,7 @@ public sealed class ClrAssemblyScannerTests
     public void NonActivityAssembly_IsSilentlySkipped()
     {
         // Elsa.Primitives carries no IActivity implementations.
-        using var folder = TempAssemblyFolder.WithCopyOf(typeof(TypeInformation).Assembly);
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ClrActivityDescriptor).Assembly);
 
         Assert.Empty(CreateScanner().Scan(folder.Path));
     }

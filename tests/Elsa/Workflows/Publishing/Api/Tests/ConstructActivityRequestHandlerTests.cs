@@ -19,13 +19,13 @@ public sealed class ConstructActivityRequestHandlerTests
     public async Task PassesTheRowsDescriptorTypeAndOpaquePayloadToTheFactory()
     {
         var payload = JsonSerializer.SerializeToElement(new { TypeName = "WriteLine" });
-        var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.TypeInformation", payload: payload);
+        var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.ClrActivityDescriptor", payload: payload);
         var factory = new FakeActivityFactory(new StubActivity());
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), factory);
 
         await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 
-        Assert.Equal("Elsa.Primitives.Models.TypeInformation", factory.LastDescriptorType);
+        Assert.Equal("Elsa.Primitives.Models.ClrActivityDescriptor", factory.LastDescriptorType);
         Assert.Equal("WriteLine", factory.LastPayload.GetProperty("TypeName").GetString());
         // Construct-only: no author values are bound yet.
         Assert.Null(factory.LastInputs);

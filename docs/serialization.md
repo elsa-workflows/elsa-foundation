@@ -29,12 +29,14 @@ Anything persisted or handed across a component boundary as JSON:
 Inject `IPayloadSerializer` and use `Serialize` / `SerializeToElement` / `Deserialize<T>` rather than
 touching `JsonSerializer` directly.
 
-**Authored argument types are alias-based.** A workflow Variable/Input/Output persists its type as a
-`TypeReference { Alias, CollectionKind }` (plain data, serialized natively) — not a decomposed
-`TypeInformation` (namespace/assembly/version). The alias resolves to a CLR type via
-`IWellKnownTypeRegistry`. The decomposed `TypeInformation` / assembly-qualified-name encoding survives
-only on the **compiled-Type** path (`TypeJsonConverter`, for arbitrary activity property signatures),
-which is not the authored path and is not migrated to alias-only.
+**Type identity is alias-based, everywhere.** A workflow Variable/Input/Output persists its type as a
+`TypeReference { Alias, CollectionKind }` (plain data, serialized natively); the compiled-Type path
+(`TypeJsonConverter`) is alias-only too; and a CLR activity's construction descriptor is a
+`ClrActivityDescriptor { TypeAlias }`. Every alias resolves to a CLR type via `IWellKnownTypeRegistry`
+under the shared `TypeAliasConvention` (a reserved bare alias for BCL primitives, otherwise the dotted
+`Type.FullName`). No persisted shape carries an assembly name or version — the former decomposed
+`TypeInformation` (namespace/assembly/version) has been removed, so a package bump never breaks
+resolution or construction.
 
 ## Sanctioned exceptions
 
