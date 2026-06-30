@@ -161,6 +161,19 @@ interface CreateWorkflowDraft {
   rootActivityVersionId?: string | null;
 }
 
+const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
+  {
+    value: "flowchart",
+    label: "Flowchart",
+    hint: "Free-form activities with explicit connections between ports."
+  },
+  {
+    value: "sequence",
+    label: "Sequence",
+    hint: "Activities run top-to-bottom in the order you place them."
+  }
+];
+
 interface ActivityPaletteGroup {
   category: string;
   activities: ActivityCatalogItem[];
@@ -697,8 +710,6 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
       {createDraft ? (
         <CreateWorkflowDialog
           draft={createDraft}
-          activities={catalog}
-          catalogState={catalogState}
           creating={creating}
           suggestMetadataAction={suggestMetadataAction}
           onSuggestMetadata={suggestMetadataAction ? () => dispatchAiAction(ai, suggestMetadataAction, { draft: createDraft, activities: catalog }) : undefined}
@@ -711,10 +722,8 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   );
 }
 
-function CreateWorkflowDialog({ draft, activities, catalogState, creating, suggestMetadataAction, onSuggestMetadata, onChange, onClose, onSubmit }: {
+function CreateWorkflowDialog({ draft, creating, suggestMetadataAction, onSuggestMetadata, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
-  activities: ActivityCatalogItem[];
-  catalogState: "idle" | "loading" | "ready" | "failed";
   creating: boolean;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
   onSuggestMetadata?: () => void;
@@ -722,23 +731,6 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
   onClose(): void;
   onSubmit(): void;
 }) {
-  const groupedActivities = useMemo(() => groupCreateRootActivities(activities), [activities]);
-  const selectedRootValue = getSelectedRootValue(draft, activities);
-
-  const changeRootActivity = (value: string) => {
-    if (value.startsWith("kind:")) {
-      onChange({ ...draft, rootKind: value.slice(5) as CreateWorkflowKind, rootActivityVersionId: null });
-      return;
-    }
-
-    const selectedActivity = activities.find(activity => activity.activityVersionId === value);
-    onChange({
-      ...draft,
-      rootKind: getRootKind(selectedActivity) ?? draft.rootKind,
-      rootActivityVersionId: value
-    });
-  };
-
   return (
     <div className="wf-dialog-backdrop" role="presentation">
       <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
@@ -774,32 +766,28 @@ function CreateWorkflowDialog({ draft, activities, catalogState, creating, sugge
               onChange={event => onChange({ ...draft, description: event.target.value })}
             />
           </label>
-          <label className="wf-form-field">
-            <span>Root activity</span>
-            <select
-              aria-label="Root activity"
-              value={selectedRootValue}
-              onChange={event => changeRootActivity(event.target.value)}
-              disabled={catalogState === "loading"}
-            >
-              <optgroup label="Composite roots">
-                {groupedActivities.compositeRoots.map(activity => (
-                  <option key={activity.value} value={activity.value}>{activity.label}</option>
-                ))}
-              </optgroup>
-              {groupedActivities.otherCategories.map(category => (
-                <optgroup key={category.name} label={category.name}>
-                  {category.activities.map(activity => (
-                    <option key={activity.activityVersionId} value={activity.activityVersionId}>
-                      {getActivityDisplay(activity)}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-          {catalogState === "loading" ? <div className="wf-dialog-note">Loading activity catalog...</div> : null}
-          {catalogState === "failed" ? <div className="wf-dialog-note">Activity catalog could not be loaded. Composite roots remain available.</div> : null}
+          <fieldset className="wf-form-field wf-root-field">
+            <legend>Root activity</legend>
+            <div className="wf-root-cards" role="radiogroup" aria-label="Root activity">
+              {createWorkflowRootOptions.map(option => {
+                const checked = draft.rootKind === option.value;
+                return (
+                  <label key={option.value} className="wf-root-card" data-checked={checked || undefined}>
+                    <input
+                      type="radio"
+                      name="wf-root-kind"
+                      aria-label={option.label}
+                      value={option.value}
+                      checked={checked}
+                      onChange={() => onChange({ ...draft, rootKind: option.value, rootActivityVersionId: null })}
+                    />
+                    <span className="wf-root-card-title">{option.label}</span>
+                    <span className="wf-root-card-hint">{option.hint}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
           <div className="wf-dialog-actions">
             <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
             <button type="submit" disabled={creating || !draft.name.trim()}>{creating ? "Creating..." : "Create"}</button>
@@ -1665,35 +1653,6 @@ function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioA
   return true;
 }
 
-function groupCreateRootActivities(activities: ActivityCatalogItem[]) {
-  const flowchartActivity = findRootKindActivity(activities, "flowchart");
-  const sequenceActivity = findRootKindActivity(activities, "sequence");
-  const compositeRoots = [
-    { value: flowchartActivity?.activityVersionId ?? "kind:flowchart", label: "Flowchart" },
-    { value: sequenceActivity?.activityVersionId ?? "kind:sequence", label: "Sequence" }
-  ];
-  const categories = new Map<string, ActivityCatalogItem[]>();
-
-  for (const activity of activities.filter(isActivityBrowsable)) {
-    if (isCompositeRootActivity(activity)) continue;
-    const category = activity.category || "Uncategorized";
-    categories.set(category, [...(categories.get(category) ?? []), activity]);
-  }
-
-  const otherCategories = Array.from(categories.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, categoryActivities]) => ({
-      name,
-      activities: categoryActivities.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
-    }));
-
-  return { compositeRoots, otherCategories };
-}
-
-function getSelectedRootValue(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
-  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? `kind:${draft.rootKind}`;
-}
-
 function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
   return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? null;
 }
@@ -1732,10 +1691,6 @@ function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPalett
       category,
       activities: categoryActivities.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
     }));
-}
-
-function isCompositeRootActivity(activity: ActivityCatalogItem) {
-  return isFlowchartActivity(activity) || isSequenceActivity(activity);
 }
 
 function isFlowchartActivity(activity: ActivityCatalogItem) {
