@@ -35,7 +35,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var type = wellKnownTypeRegistry.GetTypeOrDefault(value);
+        var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);
         return TypeReferenceFactory.FromClrType(type, wellKnownTypeRegistry.GetAliasOrDefault);
     }
 
@@ -44,7 +44,7 @@ public sealed class Elsa3ArgumentDefinitionToInputOutput(IWellKnownTypeRegistry 
         if (string.IsNullOrWhiteSpace(value))
             return null;
 
-        var type = wellKnownTypeRegistry.GetTypeOrDefault(value);
+        var type = LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, value);
         return wellKnownTypeRegistry.GetAliasOrDefault(type);
     }
 }
