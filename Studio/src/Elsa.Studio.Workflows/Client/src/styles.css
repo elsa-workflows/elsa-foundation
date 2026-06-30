@@ -3121,6 +3121,127 @@
   accent-color: var(--wf-accent);
 }
 
+.studio-property-multiselect {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 8px 9px;
+}
+
+.studio-property-multiselect-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--wf-text);
+  font-size: 12px;
+}
+
+.studio-property-multiselect-option input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--wf-accent);
+}
+
+.studio-property-multiselect-empty {
+  margin: 0;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+/* Repeater for collection-typed literal inputs. */
+.wf-collection-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.wf-collection-empty {
+  margin: 0;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-collection-items {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-collection-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.wf-collection-item-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-collection-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.wf-collection-item-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 28px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+  color: var(--wf-muted-text);
+  cursor: pointer;
+}
+
+.wf-collection-item-button:hover:not(:disabled),
+.wf-collection-item-button:focus-visible {
+  border-color: var(--wf-accent);
+  color: var(--wf-accent);
+}
+
+.wf-collection-item-button.danger:hover:not(:disabled),
+.wf-collection-item-button.danger:focus-visible {
+  border-color: var(--wf-danger);
+  color: var(--wf-danger);
+}
+
+.wf-collection-item-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wf-collection-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  border: 1px dashed var(--wf-border-strong);
+  border-radius: var(--wf-radius);
+  background: transparent;
+  color: var(--wf-text);
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.wf-collection-add:hover:not(:disabled),
+.wf-collection-add:focus-visible {
+  border-color: var(--wf-accent);
+  color: var(--wf-accent);
+}
+
+.wf-collection-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .wf-slot-list {
   position: relative;
   z-index: 1;

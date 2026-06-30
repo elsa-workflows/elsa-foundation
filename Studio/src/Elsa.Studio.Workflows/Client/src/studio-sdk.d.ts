@@ -97,10 +97,13 @@ declare module "@elsa-workflows/studio-sdk" {
     description?: string | null;
   }
 
+  export type StudioActivityPropertyEditorScope = "element" | "collection";
+
   export interface StudioActivityPropertyEditorContext {
     activity: unknown;
     expressionDescriptors: StudioExpressionDescriptor[];
     readOnly?: boolean;
+    scope?: StudioActivityPropertyEditorScope;
   }
 
   export interface StudioActivityPropertyEditorProps {

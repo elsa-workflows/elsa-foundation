@@ -1,6 +1,7 @@
 import type {
   ElsaStudioModuleApi,
   StudioActivityInputDescriptor,
+  StudioActivityPropertyEditorContext,
   StudioActivityPropertyEditorContribution,
   StudioActivityPropertyEditorProps
 } from "../sdk";
@@ -15,36 +16,109 @@ export function registerBuiltInPropertyEditors(api: ElsaStudioModuleApi) {
 
 export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] = [
   {
+    id: "studio.property.multiselect",
+    order: 90,
+    // Collection-scoped: owns the whole collection as a checklist when the input declares a fixed
+    // option set (so an enum/option collection prevents duplicates instead of repeating dropdowns).
+    supports: (descriptor, context) => isCollectionScope(context) && getOptions(descriptor).length > 0,
+    component: MultiSelectEditor
+  },
+  {
     id: "studio.property.dropdown",
     order: 100,
-    supports: descriptor => hasUiHint(descriptor, "dropdown") || getOptions(descriptor).length > 0,
+    supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "dropdown") || getOptions(descriptor).length > 0),
     component: DropdownEditor
   },
   {
     id: "studio.property.checkbox",
     order: 120,
-    supports: descriptor => hasUiHint(descriptor, "checkbox") || isBooleanDescriptor(descriptor),
+    supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "checkbox") || isBooleanDescriptor(descriptor)),
     component: CheckboxEditor
   },
   {
     id: "studio.property.multiline",
     order: 140,
-    supports: descriptor => hasUiHint(descriptor, "multiline"),
+    supports: (descriptor, context) => isElementScope(context) && hasUiHint(descriptor, "multiline"),
     component: MultilineEditor
   },
   {
     id: "studio.property.singleline",
     order: 160,
-    supports: descriptor => hasUiHint(descriptor, "singleline") || isTextDescriptor(descriptor),
+    supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "singleline") || isTextDescriptor(descriptor)),
     component: SinglelineEditor
   },
   {
     id: "studio.property.text-fallback",
     order: 10_000,
-    supports: () => true,
+    // Element-scoped only: in collection scope, declining here lets the panel fall back to its repeater.
+    supports: (_descriptor, context) => isElementScope(context),
     component: SinglelineEditor
   }
 ];
+
+function isCollectionScope(context: StudioActivityPropertyEditorContext) {
+  return context.scope === "collection";
+}
+
+function isElementScope(context: StudioActivityPropertyEditorContext) {
+  return context.scope !== "collection";
+}
+
+function MultiSelectEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  const options = getOptions(descriptor);
+  const selected = toValueArray(value);
+  const toggle = (optionValue: unknown, checked: boolean) => {
+    const next = checked
+      ? [...selected.filter(item => !sameOptionValue(item, optionValue)), optionValue]
+      : selected.filter(item => !sameOptionValue(item, optionValue));
+    onChange(next);
+  };
+
+  if (options.length === 0) {
+    return <p className="studio-property-multiselect-empty">No options available.</p>;
+  }
+
+  return (
+    <div className="studio-property-multiselect" role="group">
+      {options.map(option => (
+        <label key={String(option.value)} className="studio-property-multiselect-option">
+          <input
+            type="checkbox"
+            checked={selected.some(item => sameOptionValue(item, option.value))}
+            disabled={disabled}
+            onChange={event => toggle(option.value, event.target.checked)}
+          />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+// Parallel to `toLiteralCollection` in the workflows module's activityProperties.ts; see the note there
+// for why this coercion is duplicated rather than shared across the type-only studio-sdk boundary.
+function toValueArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // Not JSON — treat the whole string as a single selected value.
+      }
+    }
+    return [value];
+  }
+  return [value];
+}
+
+function sameOptionValue(left: unknown, right: unknown) {
+  return left === right || String(left) === String(right);
+}
 
 function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
   return (

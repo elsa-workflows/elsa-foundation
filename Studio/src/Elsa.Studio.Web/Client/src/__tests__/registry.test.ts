@@ -199,6 +199,14 @@ describe("studio registry", () => {
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "checkbox", typeName: "System.Boolean" }), context)?.id).toBe("studio.property.checkbox");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "unknown", typeName: "Acme.Custom" }), context)?.id).toBe("studio.property.text-fallback");
     expect(resolveEditor(api.propertyEditors.list(), input({ uiHint: "singleline", typeName: "System.String" }), context)?.id).toBe("custom.singleline");
+
+    // Collection scope: an option set is owned by the multi-select; without options nothing claims it, so
+    // the property panel falls back to its repeater. Element scope is unaffected by either rule.
+    const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
+    const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: ["a", "b"] } });
+    expect(resolveEditor(api.propertyEditors.list(), optionInput, collectionContext)?.id).toBe("studio.property.multiselect");
+    expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1" }), collectionContext)).toBeUndefined();
+    expect(resolveEditor(api.propertyEditors.list(), optionInput, context)?.id).toBe("studio.property.dropdown");
   });
 
   it("tracks expression editor contributions through the public SDK registry", () => {

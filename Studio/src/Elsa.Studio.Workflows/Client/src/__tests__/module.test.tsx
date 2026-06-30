@@ -629,6 +629,86 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("renders a collection input as a repeater and saves the authored list", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal" },
+        { type: "JavaScript", displayName: "JavaScript" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-lines-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines",
+          category: "Primitives",
+          displayName: "Write Lines"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-lines-root",
+              activityVersionId: "write-lines-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Lines");
+    await click(Array.from(container.querySelectorAll(".react-flow__node"))
+      .find(node => node.textContent?.includes("Write Lines")) ?? null);
+    await waitForText(container, "Lines");
+
+    // The collection input renders the repeater (not a single text box) and starts empty.
+    const repeater = container.querySelector(".wf-collection-editor");
+    expect(repeater).toBeTruthy();
+    expect(repeater?.querySelector(".wf-collection-empty")).toBeTruthy();
+
+    const addButton = buttonByText(container, "Add item");
+    await click(addButton);
+    await click(buttonByText(container, "Add item"));
+    const rows = container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']");
+    expect(rows.length).toBe(2);
+    await fill(rows[0], "First line");
+    await fill(container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']")[1], "Second line");
+
+    await click(buttonByText(container, "Save"));
+
+    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
+    expect(putCall).toBeTruthy();
+    const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
+    // The authored list reaches the wire as a JSON array string (the backend's ArgumentValue.Value is a
+    // string), not a comma-jammed value — and `toLiteralCollection` parses it back into rows on load.
+    expect(savedRoot.inputs).toEqual([
+      {
+        referenceKey: "Lines",
+        value: { value: '["First line","Second line"]', expressionType: "Literal" }
+      }
+    ]);
+
+    await unmount();
+  });
+
   it("filters the canvas activity picker with keyboard search", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -1574,6 +1654,31 @@ function writeLineDescriptor() {
       category: "General",
       isBrowsable: true,
       uiHint: "singleline",
+      isWrapped: true,
+      defaultSyntax: "Literal"
+    }],
+    outputs: [],
+    ports: []
+  };
+}
+
+function writeLinesDescriptor() {
+  return {
+    typeName: "Elsa.Activities.Primitives.Activities.WriteLines",
+    namespace: "Elsa.Activities.Primitives",
+    name: "WriteLines",
+    version: 1,
+    category: "Primitives",
+    displayName: "Write Lines",
+    kind: "Action",
+    inputs: [{
+      name: "Lines",
+      typeName: "System.Collections.Generic.ICollection`1[[System.String, System.Private.CoreLib]], System.Private.CoreLib",
+      displayName: "Lines",
+      description: "Lines to write.",
+      order: 0,
+      category: "General",
+      isBrowsable: true,
       isWrapped: true,
       defaultSyntax: "Literal"
     }],

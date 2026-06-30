@@ -293,10 +293,19 @@ export interface StudioExpressionDescriptor {
   description?: string | null;
 }
 
+/**
+ * Whether an editor renders a whole property value ("element", the default) or a single element of a
+ * collection-typed property ("collection"). The property panel resolves collection-typed inputs in
+ * "collection" scope first (so an editor can own the entire collection, e.g. a multi-select); when no
+ * collection-scoped editor claims it, each repeater row is resolved in "element" scope.
+ */
+export type StudioActivityPropertyEditorScope = "element" | "collection";
+
 export interface StudioActivityPropertyEditorContext {
   activity: unknown;
   expressionDescriptors: StudioExpressionDescriptor[];
   readOnly?: boolean;
+  scope?: StudioActivityPropertyEditorScope;
 }
 
 export interface StudioActivityPropertyEditorProps {
