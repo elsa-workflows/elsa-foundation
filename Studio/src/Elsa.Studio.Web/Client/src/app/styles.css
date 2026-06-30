@@ -508,6 +508,9 @@ textarea:focus {
 
 .content:has(> .wf-editor) > .wf-editor {
   width: 100%;
+  /* Fill the shell-sized content area instead of the editor's own viewport math
+     (calc(100vh - 72px)), which ignores the bottom panel and overflows under it. */
+  height: 100%;
   margin-inline: 0;
 }
 
