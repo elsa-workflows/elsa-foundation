@@ -11,3 +11,6 @@ coverage/
 *.suo
 .idea/
 .vscode/
+
+# Local dev-only visual harness for the studio client
+src/Elsa.Studio.Web/Client/harness/

@@ -33,21 +33,25 @@ describe("extension builder page", () => {
 
     await waitForText(container, "Team Extensions");
 
-    // Simplified vocabulary and a single create affordance.
+    // Simplified vocabulary and a single create affordance on the home view.
     expect(container.textContent).toContain("Extensions");
     expect(container.querySelector("[aria-label='Extension name']")).not.toBeNull();
 
-    // Advanced-only surfaces are hidden.
+    // Advanced-only create surfaces are hidden on the home view.
     expect(container.querySelector("[aria-label='Server-local repository path']")).toBeNull();
     expect(container.querySelector("[aria-label='Clone repository URL']")).toBeNull();
+
+    await openSolution(container);
+
+    // Advanced-only workspace surfaces are hidden.
     expect(container.querySelector("[aria-label='Working branch']")).toBeNull();
     expect(container.querySelector("[aria-label='Project name']")).toBeNull();
     expect(container.querySelector("[aria-label='Build command']")).toBeNull();
     expect(container.querySelector("[aria-label='Build target path']")).toBeNull();
     expect(hasTab(container, "Runtime")).toBe(false);
-    expect(hasTab(container, "Source")).toBe(false);
+    expect(hasTab(container, "Source control")).toBe(false);
 
-    // Pack is the prominent action.
+    // Pack is the prominent action in the command bar.
     expect(buttonContaining(container, "Pack")).not.toBeNull();
 
     await unmount();
@@ -61,12 +65,39 @@ describe("extension builder page", () => {
 
     await enableAdvanced(container);
 
+    // Advanced create affordances appear on the home view.
     expect(container.querySelector("[aria-label='Server-local repository path']")).not.toBeNull();
     expect(container.querySelector("[aria-label='Clone repository URL']")).not.toBeNull();
+
+    await openSolution(container);
+    await openDock(container, "Build output");
+
+    // The full workspace surfaces are revealed.
     expect(container.querySelector("[aria-label='Build command']")).not.toBeNull();
     expect(container.querySelector("[aria-label='Project name']")).not.toBeNull();
     expect(hasTab(container, "Runtime")).toBe(true);
-    expect(hasTab(container, "Source")).toBe(true);
+    expect(hasTab(container, "Source control")).toBe(true);
+
+    await unmount();
+  });
+
+  it("keeps the build panel visible when promoting a package in simplified mode", async () => {
+    // In simplified mode only the build tab exists; promotion handlers still switch the active
+    // inspector tab to runtime/promote, so the dock must clamp back to build instead of rendering
+    // an empty body.
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi(), { advanced: false });
+    await waitForText(container, "Team Extensions");
+    await openSolution(container);
+    await openDock(container, "Build output");
+
+    await waitForText(container, "Package outputs");
+    await clickButton(container, "Promote package");
+    await flushPromises();
+
+    // The dock stays on the build panel (no Runtime/Promote tab to switch to) and is not blank.
+    expect(container.textContent).toContain("Package outputs");
+    expect(container.querySelector(".extension-builder-dock-body")?.textContent?.trim()).not.toBe("");
+    expect(hasTab(container, "Runtime")).toBe(false);
 
     await unmount();
   });
@@ -108,14 +139,20 @@ describe("extension builder page", () => {
   it("renders owner-scoped workspaces, templates, files, build status, and runtime state", async () => {
     const { container, unmount } = await renderExtensionBuilderPage(stubApi());
 
-    await waitForText(container, "Activities/HelloActivity.cs");
+    await waitForText(container, "Team Extensions");
 
+    // Home view surfaces repository summaries.
     expect(container.textContent).toContain("Extension Builder");
     expect(container.textContent).toContain("Repositories");
     expect(container.textContent).toContain("Team Extensions");
     expect(container.textContent).toContain("alice");
     expect(container.textContent).toContain("not connected");
     expect(container.textContent).toContain("main");
+
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    // Workspace surfaces templates, files, editor, and runtime state.
     expect(container.textContent).toContain("Elsa activity/module");
     expect(container.textContent).toContain("Generic .NET class library");
     expect(container.querySelector<HTMLInputElement>("[aria-label='Project name']")?.value).toBe("ElsaActivityExtension");
@@ -167,7 +204,8 @@ describe("extension builder page", () => {
       }
     }));
 
-    await waitForText(container, "Activities/HelloActivity.cs");
+    await openSolution(container);
+    await waitForText(container, "HelloActivity.cs");
     await flushPromises();
 
     expect(container.textContent).not.toContain("Request failed with 404.");
@@ -216,8 +254,8 @@ describe("extension builder page", () => {
       path: serverPath,
       displayName: "Server Extensions"
     });
-    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain("Server Extensions");
-    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain(`release · ${remoteState}`);
+    expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Server Extensions");
+    expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`release · ${remoteState}`);
     expect(container.textContent).toContain("Attached server-local repository Server Extensions.");
 
     await unmount();
@@ -263,8 +301,8 @@ describe("extension builder page", () => {
       repositoryUrl,
       displayName: "Cloned Extensions"
     });
-    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain("Cloned Extensions");
-    expect(container.querySelector(".modules-source-button.active")?.textContent).toContain(`main · ${repositoryUrl}`);
+    expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Cloned Extensions");
+    expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`main · ${repositoryUrl}`);
     expect(container.textContent).toContain("Cloned repository Cloned Extensions.");
 
     await unmount();
@@ -295,8 +333,7 @@ describe("extension builder page", () => {
     await waitForText(container, "Created managed repository Managed Repository.");
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces", { displayName: "Managed Repository" });
-    expect(container.textContent).toContain("Managed Repository: 0 project(s), not connected on main.");
-    const activeRepository = container.querySelector(".modules-source-button.active");
+    const activeRepository = container.querySelector(".extension-builder-solution-card.active");
     expect(activeRepository?.textContent).toContain("Managed Repository");
     expect(activeRepository?.textContent).toContain("main · not connected");
     expect(activeRepository?.textContent).not.toContain("dirty");
@@ -326,6 +363,7 @@ describe("extension builder page", () => {
     });
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
     await waitForText(container, "Team Extensions");
+    await openSolution(container);
 
     const branchInput = await waitForElement<HTMLInputElement>(container, "[aria-label='Working branch']");
     await fill(branchInput, "feature/session-work");
@@ -336,8 +374,8 @@ describe("extension builder page", () => {
       branchName: "feature/session-work",
       allowProtectedBranchEdit: false
     }));
-    const activeRepository = container.querySelector(".modules-source-button.active");
-    expect(activeRepository?.textContent).toContain("feature/session-work · not connected · dirty");
+    // The command-bar breadcrumb reflects the refreshed active branch.
+    expect(container.querySelector(".extension-builder-crumb")?.textContent).toContain("feature/session-work");
 
     await unmount();
   });
@@ -381,6 +419,7 @@ describe("extension builder page", () => {
       return defaultGetJson(url);
     });
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Template target path']"), "src/Generated");
@@ -390,9 +429,10 @@ describe("extension builder page", () => {
     await waitForText(container, "Applied C# class.");
 
     expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
-    expect(container.textContent).toContain("src/Generated/GeneratedActivity.cs *");
+    // The generated file opens in the editor (full path shown in the editor status bar).
+    expect(container.querySelector(".extension-builder-editor-status")?.textContent).toContain("src/Generated/GeneratedActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("GeneratedActivity");
-    await clickTab(container, "Source");
+    await clickTab(container, "Source control");
     expect(container.textContent).toContain("src/Generated/GeneratedActivity.cs");
 
     await unmount();
@@ -435,9 +475,10 @@ describe("extension builder page", () => {
       return defaultGetJson(url);
     });
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
-    await clickTab(container, "Source");
+    await clickTab(container, "Source control");
     await waitForText(container, "src/Status.cs");
     await clickExactButton(container, "Stage");
     await waitForText(container, "No unstaged changes.");
@@ -478,6 +519,7 @@ describe("extension builder page", () => {
     });
     const fetchMock = mockFetch();
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
@@ -515,7 +557,9 @@ describe("extension builder page", () => {
       return defaultPostJson(url);
     });
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
+    await openDock(container, "Build output");
 
     await selectValue(await waitForElement<HTMLSelectElement>(container, "[aria-label='Build command']"), "Test");
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Build target path']"), "src/TeamExtensions.Tests/TeamExtensions.Tests.csproj");
@@ -557,7 +601,9 @@ describe("extension builder page", () => {
       return defaultGetJson(url);
     });
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
+    await openDock(container, "Build output");
 
     await selectValue(await waitForElement<HTMLSelectElement>(container, "[aria-label='Build command']"), "Pack");
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Build target path']"), "Hello.slnx");
@@ -601,6 +647,8 @@ describe("extension builder page", () => {
         return {};
       }
     }));
+    await openSolution(container);
+    await openDock(container, "Build output");
     await waitForText(container, "CS1002");
 
     expect(container.textContent).toContain("CS1002");
@@ -624,6 +672,7 @@ describe("extension builder page", () => {
     ] as const) {
       const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(category) : {});
       const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+      await openSolution(container);
       await waitForText(container, "Activities/HelloActivity.cs");
 
       await clickTab(container, "Promote");
@@ -662,6 +711,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Succeeded");
@@ -692,6 +742,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     await clickTab(container, "Runtime");
@@ -717,6 +768,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     await clickTab(container, "Promote");
@@ -751,6 +803,7 @@ describe("extension builder page", () => {
         return {};
       }
     }));
+    await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
     expect(container.textContent).toContain("Generic .NET class library");
@@ -908,6 +961,22 @@ async function clickTab(container: Element, text: string) {
   if (!button) throw new Error(`Could not find tab containing '${text}'.`);
   flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await flushPromises();
+}
+
+// The redesigned module opens on a home/solution-browser view; opening a solution card
+// enters the focused workspace (explorer + editor + bottom dock).
+async function openSolution(container: Element, name?: string) {
+  await waitForElement(container, ".extension-builder-solution-card");
+  const cards = Array.from(container.querySelectorAll<HTMLButtonElement>(".extension-builder-solution-card"));
+  const card = (name ? cards.find(candidate => candidate.textContent?.includes(name)) : cards[0]) ?? cards[0];
+  if (!card) throw new Error("Could not find a solution card to open.");
+  flushSync(() => card.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await flushPromises();
+}
+
+// Build/Source/Promote/Runtime controls live in the bottom dock, collapsed by default.
+async function openDock(container: Element, label: string) {
+  await clickTab(container, label);
 }
 
 async function flushPromises() {

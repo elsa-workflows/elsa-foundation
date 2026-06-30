@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, Hammer, RefreshCcw } from "lucide-react";
+import { ChevronLeft, Hammer, PackageCheck, Play, Save, Settings2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../../sdk";
-import { EmptyState, StudioAlert, StudioToolbar, StudioToolbarGroup } from "../../ui";
+import { EmptyState, StatusChip, StudioAlert } from "../../ui";
 import {
   applyRepositoryTemplate,
   attachServerLocalRepository,
@@ -55,7 +55,6 @@ import {
   unstageRepositoryFile
 } from "../extensionBuilderApi";
 import { getErrorMessage } from "../moduleManagementApi";
-import { BuildRuntimeInspector } from "./BuildRuntimeInspector";
 import {
   canApplyProjectState,
   createTemplateApplicationDraft,
@@ -65,7 +64,6 @@ import {
   derivePackageId,
   fileSortKey,
   formatDiagnosticLocation,
-  formatRemoteState,
   getExtensionBuilderSessionId,
   isBuildForCurrentRevision,
   isBuildRunning,
@@ -74,14 +72,16 @@ import {
   mergeBuildHistory,
   patchProject,
   readAdvancedPreference,
+  runtimeTone,
   upsertEditorTab,
   upsertFile,
   validateProjectDraft,
   writeAdvancedPreference
 } from "./helpers";
-import { ProjectWorkspace } from "./ProjectWorkspace";
-import { SummaryItem } from "./SummaryItem";
-import { WorkspaceBrowser } from "./WorkspaceBrowser";
+import { BottomDock } from "./BottomDock";
+import { EditorSurface } from "./EditorSurface";
+import { HomeView, type HomeStat } from "./HomeView";
+import { SolutionExplorer } from "./SolutionExplorer";
 import type { BuilderState, EditorTab, InspectorTab, ProjectDraft, TemplateApplicationDraft } from "./types";
 
 export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
@@ -113,6 +113,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const [buildTargetPath, setBuildTargetPath] = useState("");
   const [activeInspectorTab, setActiveInspectorTab] = useState<InspectorTab>("build");
   const [advanced, setAdvanced] = useState(readAdvancedPreference);
+  const [enteredWorkspaceId, setEnteredWorkspaceId] = useState("");
+  const [dockOpen, setDockOpen] = useState(false);
   const [extensionName, setExtensionName] = useState("");
   const [workspaceName, setWorkspaceName] = useState("Extension workspace");
   const [serverLocalPath, setServerLocalPath] = useState("");
@@ -141,11 +143,14 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const projectTemplates = useMemo(() => templates.filter(template => template.scope === "Project"), [templates]);
   const activeTab = editorTabs.find(tab => tab.path === activeFilePath) ?? null;
   const editorDirty = activeTab ? activeTab.content !== activeTab.savedContent : editorText !== savedEditorText;
-  const hasRepositoryRows = repositories.length > 0 || workspaces.length > 0;
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
   const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
   const defaultWorkingBranchName = useMemo(() => `extension-builder/${sessionId}`, [sessionId]);
+  // Only enter the workspace view when a backing workspace record is actually resolved. A
+  // repository summary can exist without a hydrated workspace; entering on the repository alone
+  // would strand the user on a shell with no editable content.
+  const inWorkspace = !!enteredWorkspaceId && selectedWorkspace?.id === enteredWorkspaceId;
 
   function clearBuildPoll() {
     if (pollTimerId.current) {
@@ -397,6 +402,18 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const confirmDiscard = () =>
     api.dialogs.confirm({ message: "Discard unsaved file changes?", confirmLabel: "Discard", tone: "danger" });
 
+  async function openSolution(workspaceId: string) {
+    if (editorDirty && !(await confirmDiscard())) return;
+    setSelectedWorkspaceId(workspaceId);
+    setEnteredWorkspaceId(workspaceId);
+    setDockOpen(false);
+  }
+
+  async function backToHome() {
+    if (editorDirty && !(await confirmDiscard())) return;
+    setEnteredWorkspaceId("");
+  }
+
   async function openFile(workspaceId: string, path: string, options?: { force?: boolean }) {
     if (!options?.force && editorDirty && !(await confirmDiscard())) return false;
     setError(null);
@@ -594,6 +611,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (project) {
       setExtensionName("");
       await finishProjectCreation(project, createdWorkspaceId || undefined);
+      if (createdWorkspaceId) {
+        setEnteredWorkspaceId(createdWorkspaceId);
+        setDockOpen(false);
+      }
     }
   }
 
@@ -743,6 +764,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (diff && selectedIds.current.workspaceId === selectedWorkspace.id) {
       setSourceControlDiff(diff);
       setActiveInspectorTab("source");
+      setDockOpen(true);
     }
   }
 
@@ -822,6 +844,8 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
       return;
     }
 
+    setActiveInspectorTab("build");
+    setDockOpen(true);
     const requestedRevision = selectedProject.currentRevision ?? null;
     const command = commandOverride || buildCommand || "Build";
     const targetPath = buildTargetPath.trim() || selectedSolutionPath || null;
@@ -879,6 +903,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       }
       setActiveInspectorTab(result.accepted ? "runtime" : "promote");
+      setDockOpen(true);
     }
   }
 
@@ -902,6 +927,7 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
         if (!isCurrentSelection(selectedIds.current, workspaceId, projectId)) return;
       }
       setActiveInspectorTab(result.accepted ? "runtime" : "promote");
+      setDockOpen(true);
     }
   }
 
@@ -962,7 +988,10 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     if (!selectedWorkspace) return;
     if (!(await api.dialogs.confirm({ message: `Delete workspace ${selectedWorkspace.name}?`, confirmLabel: "Delete", tone: "danger" }))) return;
     const deleted = await runOperation(() => deleteWorkspace(context, selectedWorkspace.id), `Deleted workspace ${selectedWorkspace.name}.`);
-    if (deleted) await refreshWorkspacesSafely();
+    if (deleted) {
+      setEnteredWorkspaceId("");
+      await refreshWorkspacesSafely();
+    }
   }
 
   if (state === "loading") {
@@ -989,168 +1018,205 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
     );
   }
 
-  return (
-    <section className="extension-builder-page modules-page">
-      <div className="section-header modules-header">
-        <div>
-          <h2>Extension Builder</h2>
-          <p>{advanced
-            ? (selectedRepository ? `${selectedRepository.name}: ${selectedRepository.projectCount} project(s), ${formatRemoteState(selectedRepository.remoteState)}${selectedRepository.activeBranch ? ` on ${selectedRepository.activeBranch}` : ""}.` : "Select, create, or clone a Git-backed repository to start building extensions.")
-            : (selectedProject ? `Editing ${selectedProject.name} — edit, pack, and publish your NuGet package.` : "Create an extension to build a class library and pack it as a NuGet package.")}</p>
-        </div>
-        <StudioToolbar>
-          <StudioToolbarGroup>
-            <label className="extension-builder-advanced-toggle">
-              <input type="checkbox" aria-label="Advanced mode" checked={advanced} disabled={operationBusy} onChange={event => setAdvanced(event.target.checked)} />
-              <span>Advanced</span>
-            </label>
-            <button type="button" className="studio-button" onClick={() => bootstrap()} disabled={state === "loading" || operationBusy}>
-              <RefreshCcw size={15} />
-              Refresh
-            </button>
-          </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+  const totalProjects = repositories.reduce((count, repository) => count + repository.projectCount, 0) || workspaces.reduce((count, workspace) => count + workspace.projects.length, 0);
+  const loadedCount = workspaces.reduce((count, workspace) => count + workspace.projects.filter(project => project.runtimeStatus === "Loaded").length, 0);
+  const attentionTotal = repositories.reduce((count, repository) => count + repository.attentionCount, 0);
+  const stats: HomeStat[] = advanced
+    ? [
+      { label: "Repositories", value: repositories.length || workspaces.length },
+      { label: "Projects", value: totalProjects },
+      { label: "Loaded at runtime", value: loadedCount },
+      { label: "Needs attention", value: attentionTotal }
+    ]
+    : [
+      { label: "Extensions", value: repositories.length || workspaces.length },
+      { label: "Projects", value: totalProjects },
+      { label: "Loaded at runtime", value: loadedCount }
+    ];
+  const workspaceLabel = selectedWorkspace?.name ?? selectedRepository?.name ?? "Solution";
 
+  return (
+    <section className={inWorkspace ? "extension-builder-page extension-builder-page-workspace" : "extension-builder-page"}>
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
 
-      <div className="modules-summary-strip">
-        <SummaryItem label="Extensions" value={repositories.length || workspaces.length} />
-        <SummaryItem label="Projects" value={repositories.reduce((count, repository) => count + repository.projectCount, 0) || workspaces.reduce((count, workspace) => count + workspace.projects.length, 0)} />
-        <SummaryItem label="Build" value={activeBuild?.status ?? selectedProject?.latestBuildStatus ?? "none"} />
-        {advanced ? <SummaryItem label="Remote" value={selectedRepository ? formatRemoteState(selectedRepository.remoteState) : "unknown"} /> : null}
-        {advanced ? <SummaryItem label="Attention" value={selectedRepository?.attentionCount ?? 0} /> : null}
-      </div>
-
-      {!hasRepositoryRows ? (
-        <EmptyState icon={<Boxes size={22} />}>No extensions yet. Create one to start building a NuGet package.</EmptyState>
-      ) : null}
-
-      <div className="extension-builder-workbench">
-        <WorkspaceBrowser
+      {!inWorkspace ? (
+        <HomeView
           capabilities={capabilities!}
           advanced={advanced}
-          templates={projectTemplates}
-          extensionName={extensionName}
-          onExtensionNameChange={setExtensionName}
-          onCreateExtension={handleCreateExtension}
+          busy={operationBusy}
+          loading={state === "loading"}
+          stats={stats}
           repositories={repositories}
           workspaces={workspaces}
           selectedWorkspaceId={selectedRepository?.id ?? selectedWorkspace?.id ?? ""}
-          selectedProjectId={selectedProject?.id ?? ""}
+          extensionName={extensionName}
           workspaceName={workspaceName}
-          workingBranchName={workingBranchName || defaultWorkingBranchName}
-          allowProtectedBranchEdit={allowProtectedBranchEdit}
           serverLocalPath={serverLocalPath}
           serverLocalName={serverLocalName}
+          cloneRepositoryUrl={cloneRepositoryUrl}
+          cloneRepositoryName={cloneRepositoryName}
+          onToggleAdvanced={setAdvanced}
+          onRefresh={() => bootstrap()}
+          onOpenSolution={openSolution}
+          onExtensionNameChange={setExtensionName}
+          onCreateExtension={handleCreateExtension}
+          onWorkspaceNameChange={setWorkspaceName}
+          onCreateWorkspace={handleCreateWorkspace}
           onServerLocalPathChange={setServerLocalPath}
           onServerLocalNameChange={setServerLocalName}
           onAttachServerLocalRepository={handleAttachServerLocalRepository}
-          cloneRepositoryUrl={cloneRepositoryUrl}
-          cloneRepositoryName={cloneRepositoryName}
           onCloneRepositoryUrlChange={setCloneRepositoryUrl}
           onCloneRepositoryNameChange={setCloneRepositoryName}
-          projectDraft={projectDraft}
-          busy={operationBusy}
-          onWorkspaceNameChange={setWorkspaceName}
-          onWorkingBranchNameChange={setWorkingBranchName}
-          onAllowProtectedBranchEditChange={setAllowProtectedBranchEdit}
-          onProjectDraftChange={setProjectDraft}
-          onCreateWorkspace={handleCreateWorkspace}
-          onSelectWorkingCopy={handleSelectWorkingCopy}
           onCloneRepository={handleCloneRepository}
-          onCreateProject={handleCreateProject}
-          onSelectWorkspace={async workspaceId => {
-            if (editorDirty && !(await confirmDiscard())) return;
-            setSelectedWorkspaceId(workspaceId);
-          }}
-          onSelectProject={async projectId => {
-            if (editorDirty && !(await confirmDiscard())) return;
-            setSelectedProjectId(projectId);
-          }}
-          onDeleteWorkspace={handleDeleteWorkspace}
-          onDeleteProject={handleDeleteProject}
         />
+      ) : (
+        <div className="extension-builder-shell">
+          <header className="extension-builder-commandbar">
+            <div className="extension-builder-commandbar-left">
+              <button type="button" className="extension-builder-back" onClick={() => void backToHome()}>
+                <ChevronLeft size={15} />
+                Solutions
+              </button>
+              <span className="extension-builder-crumb">
+                <strong>{workspaceLabel}</strong>
+                {selectedProject ? <span className="modules-muted"> / {selectedProject.packageId} {selectedProject.packageVersion}</span> : null}
+                {advanced && selectedRepository?.activeBranch ? <span className="modules-muted"> · {selectedRepository.activeBranch}</span> : null}
+              </span>
+            </div>
+            <div className="extension-builder-commandbar-right">
+              {selectedProject ? <StatusChip tone={runtimeTone(selectedProject.runtimeStatus)}>{selectedProject.runtimeStatus ?? selectedProject.latestBuildStatus ?? "new"}</StatusChip> : null}
+              <button type="button" className="studio-button" disabled={operationBusy || !capabilities!.canEditFiles || !activeFilePath} title={!capabilities!.canEditFiles ? "Requires canEditFiles" : undefined} onClick={handleSaveFile}>
+                <Save size={15} />
+                Save
+              </button>
+              {advanced ? (
+                <button type="button" className="studio-button" disabled={operationBusy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities!.canBuild ? "Requires canBuild" : undefined} onClick={() => handleSubmitBuild()}>
+                  <Play size={15} />
+                  Build
+                </button>
+              ) : (
+                <button type="button" className="studio-button studio-button-primary" disabled={operationBusy || !canBuild} title={editorDirty ? "Save file changes before packing" : !capabilities!.canBuild ? "Requires canBuild" : "Build and pack a NuGet package"} onClick={() => handleSubmitBuild("Pack")}>
+                  <PackageCheck size={15} />
+                  Pack
+                </button>
+              )}
+              <button type="button" className="studio-icon-button" aria-label="Build &amp; properties" title="Build & properties" onClick={() => setDockOpen(open => !open)}>
+                <Settings2 size={15} />
+              </button>
+            </div>
+          </header>
 
-        <ProjectWorkspace
-          capabilities={capabilities!}
-          advanced={advanced}
-          workspace={selectedWorkspace}
-          project={selectedProject}
-          templates={templates}
-          templateDraft={templateDraft}
-          files={fileRows}
-          solutions={solutions}
-          selectedSolutionPath={selectedSolutionPath}
-          editorTabs={editorTabs}
-          activeFilePath={activeFilePath}
-          editorText={editorText}
-          editorDirty={editorDirty}
-          lineHint={lineHint}
-          newFilePath={newFilePath}
-          busy={operationBusy}
-          diagnostics={activeBuild?.diagnostics ?? []}
-          onTemplateDraftChange={setTemplateDraft}
-          onApplyTemplate={handleApplyTemplate}
-          onSelectSolution={handleSelectSolution}
-          onNewFilePathChange={setNewFilePath}
-          onCreateFile={handleCreateFile}
-          onDeleteFile={handleDeleteFile}
-          onRenameFile={handleRenameFile}
-          onOpenFile={path => selectedWorkspace ? openFile(selectedWorkspace.id, path) : undefined}
-          onSelectEditorTab={handleSelectEditorTab}
-          onCloseEditorTab={handleCloseEditorTab}
-          onEditorTextChange={handleEditorTextChange}
-          onSaveFile={handleSaveFile}
-          onSubmitBuild={handleSubmitBuild}
-          canBuild={canBuild}
-        />
+          <div className="extension-builder-ide">
+            {selectedWorkspace ? (
+              <>
+                <SolutionExplorer
+                  capabilities={capabilities!}
+                  advanced={advanced}
+                  workspace={selectedWorkspace}
+                  project={selectedProject}
+                  templates={templates}
+                  templateDraft={templateDraft}
+                  files={fileRows}
+                  solutions={solutions}
+                  selectedSolutionPath={selectedSolutionPath}
+                  selectedProjectId={selectedProject?.id ?? ""}
+                  newFilePath={newFilePath}
+                  busy={operationBusy}
+                  projectDraft={projectDraft}
+                  workingBranchName={workingBranchName || defaultWorkingBranchName}
+                  allowProtectedBranchEdit={allowProtectedBranchEdit}
+                  activeFilePath={activeFilePath}
+                  onRefresh={() => loadProjectDetails(selectedWorkspace.id, selectedProject?.id ?? "", selectedSolutionPath || null)}
+                  onSelectProject={async projectId => {
+                    if (editorDirty && !(await confirmDiscard())) return;
+                    setSelectedProjectId(projectId);
+                  }}
+                  onTemplateDraftChange={setTemplateDraft}
+                  onApplyTemplate={handleApplyTemplate}
+                  onSelectSolution={handleSelectSolution}
+                  onNewFilePathChange={setNewFilePath}
+                  onCreateFile={handleCreateFile}
+                  onDeleteFile={handleDeleteFile}
+                  onRenameFile={handleRenameFile}
+                  onOpenFile={path => { if (selectedWorkspace) void openFile(selectedWorkspace.id, path); }}
+                  onProjectDraftChange={setProjectDraft}
+                  onCreateProject={handleCreateProject}
+                  onDeleteProject={handleDeleteProject}
+                  onDeleteWorkspace={handleDeleteWorkspace}
+                  onWorkingBranchNameChange={setWorkingBranchName}
+                  onAllowProtectedBranchEditChange={setAllowProtectedBranchEdit}
+                  onSelectWorkingCopy={handleSelectWorkingCopy}
+                />
 
-        <BuildRuntimeInspector
-          capabilities={capabilities!}
-          advanced={advanced}
-          project={selectedProject}
-          activeTab={activeInspectorTab}
-          onSelectTab={tab => setActiveInspectorTab(tab as InspectorTab)}
-          activeBuild={activeBuild}
-          buildHistory={buildHistory}
-          buildLog={buildLog}
-          sourceControlStatus={sourceControlStatus}
-          sourceControlDiff={sourceControlDiff}
-          commitMessage={commitMessage}
-          buildCommand={buildCommand}
-          buildTargetPath={buildTargetPath}
-          artifact={latestArtifact}
-          promotionResult={promotionResult}
-          runtimeStatus={runtimeStatus}
-          busy={operationBusy}
-          canBuild={canBuild}
-          canPromote={canPromote}
-          onBuildCommandChange={setBuildCommand}
-          onBuildTargetPathChange={setBuildTargetPath}
-          onSubmitBuild={handleSubmitBuild}
-          onPromoteArtifact={handlePromoteArtifact}
-          onSelectBuild={build => {
-            setActiveBuild(build);
-            setActiveInspectorTab("build");
-            if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id, build.revision);
-          }}
-          onSelectSourceDiff={handleSelectSourceDiff}
-          onStageFile={handleStageFile}
-          onUnstageFile={handleUnstageFile}
-          onStageAll={handleStageAll}
-          onCommitMessageChange={setCommitMessage}
-          onCommit={handleCommitChanges}
-          onPush={handlePushRepository}
-          onPull={handlePullRepository}
-          onPromote={handlePromote}
-          onRefreshRuntime={() => refreshRuntimeStatus()}
-          onRetryReconciliation={handleRetryReconciliation}
-          onRollback={handleRollback}
-          onDiagnosticSelect={diagnostic => void handleDiagnosticSelect(diagnostic)}
-        />
-      </div>
+                <EditorSurface
+                  workspace={selectedWorkspace}
+                  project={selectedProject}
+                  canEdit={capabilities!.canEditFiles}
+                  editorTabs={editorTabs}
+                  activeFilePath={activeFilePath}
+                  editorText={editorText}
+                  editorDirty={editorDirty}
+                  lineHint={lineHint}
+                  diagnostics={activeBuild?.diagnostics ?? []}
+                  onSelectEditorTab={handleSelectEditorTab}
+                  onCloseEditorTab={handleCloseEditorTab}
+                  onEditorTextChange={handleEditorTextChange}
+                />
+              </>
+            ) : (
+              <EmptyState icon={<Hammer size={22} />}>This solution is still loading.</EmptyState>
+            )}
+          </div>
+
+          <BottomDock
+            capabilities={capabilities!}
+            advanced={advanced}
+            project={selectedProject}
+            open={dockOpen}
+            onToggleOpen={() => setDockOpen(open => !open)}
+            activeTab={activeInspectorTab}
+            onSelectTab={tab => setActiveInspectorTab(tab)}
+            activeBuild={activeBuild}
+            buildHistory={buildHistory}
+            buildLog={buildLog}
+            sourceControlStatus={sourceControlStatus}
+            sourceControlDiff={sourceControlDiff}
+            commitMessage={commitMessage}
+            buildCommand={buildCommand}
+            buildTargetPath={buildTargetPath}
+            artifact={latestArtifact}
+            promotionResult={promotionResult}
+            runtimeStatus={runtimeStatus}
+            busy={operationBusy}
+            canBuild={canBuild}
+            canPromote={canPromote}
+            onBuildCommandChange={setBuildCommand}
+            onBuildTargetPathChange={setBuildTargetPath}
+            onSubmitBuild={handleSubmitBuild}
+            onPromoteArtifact={handlePromoteArtifact}
+            onSelectBuild={build => {
+              setActiveBuild(build);
+              setActiveInspectorTab("build");
+              setDockOpen(true);
+              if (selectedWorkspace && selectedProject) void refreshBuild(selectedWorkspace.id, selectedProject.id, build.id, build.revision);
+            }}
+            onSelectSourceDiff={handleSelectSourceDiff}
+            onStageFile={handleStageFile}
+            onUnstageFile={handleUnstageFile}
+            onStageAll={handleStageAll}
+            onCommitMessageChange={setCommitMessage}
+            onCommit={handleCommitChanges}
+            onPush={handlePushRepository}
+            onPull={handlePullRepository}
+            onPromote={handlePromote}
+            onRefreshRuntime={() => refreshRuntimeStatus()}
+            onRetryReconciliation={handleRetryReconciliation}
+            onRollback={handleRollback}
+            onDiagnosticSelect={diagnostic => void handleDiagnosticSelect(diagnostic)}
+          />
+        </div>
+      )}
     </section>
   );
 }

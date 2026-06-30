@@ -26,3 +26,10 @@ export const inspectorTabs = [
   { id: "promote", label: "Promote" },
   { id: "runtime", label: "Runtime" }
 ];
+
+export const dockTabs: { id: InspectorTab; label: string }[] = [
+  { id: "build", label: "Build output" },
+  { id: "source", label: "Source control" },
+  { id: "promote", label: "Promote" },
+  { id: "runtime", label: "Runtime" }
+];
