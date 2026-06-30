@@ -9,14 +9,15 @@ namespace Elsa.Agent.Tests;
 public sealed class AgentPolicyTests
 {
     [Fact]
-    public void Default_policy_gates_mutations_with_auto_read_only_ceiling()
+    public void Default_policy_opens_on_auto_read_only_but_offers_autopilot_up_to_the_ceiling()
     {
         var policy = AgentPolicy.Default;
 
+        // A new session opens on the safe default, while the ceiling makes Autopilot (FullAuto) selectable.
         Assert.Equal(AgentAutonomyMode.AutoReadOnly, policy.AutonomyMode);
-        Assert.Equal(AgentAutonomyMode.AutoReadOnly, policy.MaxAutonomyMode);
+        Assert.Equal(AgentAutonomyMode.FullAuto, policy.MaxAutonomyMode);
         Assert.True(policy.RequiresApprovalForMutations);
-        Assert.Equal([AgentAutonomyMode.Manual, AgentAutonomyMode.AutoReadOnly], policy.AllowedAutonomyModes);
+        Assert.Equal([AgentAutonomyMode.Manual, AgentAutonomyMode.AutoReadOnly, AgentAutonomyMode.FullAuto], policy.AllowedAutonomyModes);
     }
 
     [Fact]

@@ -185,8 +185,10 @@ public sealed record AgentPolicy(
         ContextVisibility: true,
         AgentContextSensitivity.Sensitive,
         ["workflow.definition", "workflow.instance", "workflow.execution", "workflow.diagnostics"],
+        // A new session opens on the safe "auto-apply low-risk" default, but the ceiling permits clients
+        // to opt up to FullAuto ("Autopilot") — mutating tools run inline, risky edits still defer to review.
         AutonomyMode: AgentAutonomyMode.AutoReadOnly,
-        MaxAutonomyMode: AgentAutonomyMode.AutoReadOnly,
+        MaxAutonomyMode: AgentAutonomyMode.FullAuto,
         DeniedCapabilityIds: [],
         RetentionLabel: "Configured by administrator");
 
