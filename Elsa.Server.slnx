@@ -268,8 +268,7 @@
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Expressions/" />
-  <Folder Name="/tests/Elsa/Expressions/Tests/">
+  <Folder Name="/tests/Elsa/Expressions/">
     <Project Path="tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Foundation/" />
@@ -307,8 +306,7 @@
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Serialization/" />
-  <Folder Name="/tests/Elsa/Serialization/Tests/">
+  <Folder Name="/tests/Elsa/Serialization/">
     <Project Path="tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
@@ -327,8 +325,7 @@
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa3/" />
-  <Folder Name="/tests/Elsa3/Mapping/" />
-  <Folder Name="/tests/Elsa3/Mapping/Tests/">
+  <Folder Name="/tests/Elsa3/Mapping/">
     <Project Path="tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
 </Solution>

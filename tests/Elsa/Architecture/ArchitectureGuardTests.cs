@@ -553,6 +553,9 @@ public sealed class ArchitectureGuardTests
         if (project.Name == "Elsa.Primitives")
             return "src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj";
 
+        if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/", StringComparison.Ordinal))
+            return $"tests/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
+
         if (project.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
             return $"src/Elsa3/{string.Join('/', project.Name.Split('.')[1..])}/{project.Name}.csproj";
 
