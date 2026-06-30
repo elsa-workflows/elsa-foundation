@@ -16,10 +16,16 @@ using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
 using System.Text.Json;
 
+// Install the console stream capture hook before the host is created so that, when the ConsoleStream
+// feature is enabled in shells.json, all process stdout is captured from startup instead of only from
+// the point the feature is activated during host build.
+ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args);
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: false, reloadOnChange: true);
 builder.Configuration.AddJsonFile("nuplane-management.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
+ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(configuration);
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 builder.WebHost.UseStaticWebAssets();

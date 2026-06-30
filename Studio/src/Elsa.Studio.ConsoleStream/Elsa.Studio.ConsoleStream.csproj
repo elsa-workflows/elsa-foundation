@@ -22,4 +22,8 @@
     <ProjectReference Include="..\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Studio.Tests" />
+  </ItemGroup>
+
 </Project>
