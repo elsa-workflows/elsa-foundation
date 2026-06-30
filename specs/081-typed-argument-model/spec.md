@@ -79,7 +79,7 @@ A maintainer renames or moves the CLR type behind an alias. Workflows saved agai
 - **Empty/missing collectionKind**: treated as `Single` (the default shape).
 - **Empty/missing alias**: rejected as an invalid argument definition.
 - **HashSet element semantics**: a `HashSet<T>` uses default element equality; custom comparers are out of scope.
-- **Internal compiled-type path**: activity property signatures (arbitrary CLR types not authored by users) continue to serialize via the existing alias-or-assembly-qualified-name fallback; this is explicitly *not* changed to alias-only.
+- **Internal compiled-type path**: activity property signatures (CLR types not authored by users) serialize **alias-only** too (FR-004 revised). These types are registered under the alias convention (primitives bare; otherwise `FullName`), so there is no assembly-qualified-name fallback. An activity input typed as an enum or complex type resolves to its real CLR type via the registry, not to `object`.
 
 ## Requirements *(mandatory)*
 
@@ -90,7 +90,9 @@ A maintainer renames or moves the CLR type behind an alias. Workflows saved agai
 - **FR-001**: A workflow Variable, Input, and Output MUST persist its type as exactly two fields: a string `alias` (stable element-type identifier) and a `collectionKind` enumeration value. No namespace, assembly name, or assembly version may appear in the persisted argument definition.
 - **FR-002**: `collectionKind` MUST support exactly these values: `Single`, `Array`, `List`, `HashSet`. A missing value MUST be treated as `Single`.
 - **FR-003**: The decomposed type representation (type name + namespace + assembly name + assembly version) MUST be removed from the authored-definition serialization path for Variables, Inputs, and Outputs.
-- **FR-004**: The decomposed/assembly-qualified representation MAY remain ONLY on the internal compiled-type serialization path used for activity property signatures (types not authored through the argument editor). This feature MUST NOT migrate that path to alias-only.
+- **FR-004** *(revised 2026-06-30)*: A CLR type name MUST NEVER be stored or serialized as a type identity — **anywhere**. The persisted/serialized identity of a type is **always a registry alias**. This applies not only to authored Variables/Inputs/Outputs but to **every** path that serializes a type, including the compiled-type / activity-property-signature path (e.g. `TypeJsonConverter`). Specifically: assembly-qualified names, assembly names, assembly versions, and raw reflected `Type.FullName`-as-fallback MUST NOT be emitted as a stored type token. *(This supersedes the original FR-004, which permitted a decomposed/assembly-qualified representation on the compiled-type path — that allowance is withdrawn.)*
+- **FR-004a**: There MUST be **no CLR-name fallback** on read or write. The alias↔type resolver MUST NOT fall back to `Type.GetType(name)` on read, and MUST NOT fall back to an assembly-qualified name on write. A type's stored token is its registered alias and nothing else.
+- **FR-004b**: Every type that can be referenced (authored argument element types **and** activity input/output property-signature types) MUST be resolvable through the registry. The framework MUST register the types it can reach — primitives plus activity I/O CLR types — so their aliases resolve without a fallback. Registration uses a single **alias convention** applied identically by the runtime registry and the reflection-only activity scanner: framework primitives use the reserved bare BCL alias (`String`, `Int32`, …); every other type uses its `FullName` (dotted, namespace-qualified, **no** assembly name or version) as the alias, unless a curated dotted alias is explicitly registered for it. Writing an unregistered type lazily registers it under this convention rather than emitting a CLR name.
 
 #### Uniform argument model
 
@@ -170,4 +172,4 @@ A maintainer renames or moves the CLR type behind an alias. Workflows saved agai
 - **Studio/frontend implementation (Phase 2)** — except for defining and documenting the wire contract Phase 2 consumes (FR-019).
 - **Parameterized non-collection generics** (e.g. `Dictionary<K,V>`) and any generic arity beyond a single element type. If ever needed, a dedicated alias for the closed type is the escape hatch.
 - **Per-type collection-kind restrictions** and custom equality comparers for `HashSet`.
-- **Changing the internal compiled-type (activity property signature) serialization path** beyond adding `HashSet` support where shared.
+- *(Removed from out-of-scope)* The internal compiled-type (activity property signature) path **is** in scope per the revised FR-004: it becomes alias-only with no assembly-qualified fallback, and activity I/O types are registered so they resolve.

@@ -65,11 +65,15 @@ Leave `InputDefinition`/`OutputDefinition` as standalone records with their exis
 
 **Note**: making `RegisterType` throw means the seeding bridge must register each alias exactly once; the seed is the single registration site for primitives, so existing scattered `RegisterType` calls (if any) are audited during `/speckit.tasks`.
 
-## D8 — Compiled-Type path keeps alias-or-AQN; add `HashSet`
+## D8 — Compiled-Type path is alias-only too; no CLR-name fallback *(revised 2026-06-30)*
 
-**Decision**: Leave `TypeJsonConverter` (the `JsonConverter<Type>` for activity property signatures) on its alias-or-assembly-qualified-name behavior, and **add `HashSet<>` read/write** to it for parity with `[]` and `List<>` (FR-008).
+**Decision (revised)**: The compiled-type path (`TypeJsonConverter`, the `JsonConverter<Type>`) is **alias-only** — no assembly-qualified-name fallback on write, no `Type.GetType` fallback on read. Add `HashSet<>` parity. All fallbacks are removed across `GetAliasOrDefault`, `GetTypeOrDefault`/`TryGetTypeOrDefault`, and `TypeJsonConverter`.
 
-**Rationale**: That converter serializes arbitrary compiled CLR types that no human curated; it legitimately needs the AQN fallback (FR-004). It is a separate path from the authored `TypeReference` and must not be migrated to alias-only. The missing `HashSet` case is the only functional gap there.
+**Mechanism**: a single **alias convention** (`CanonicalAlias(Type)`) is used identically by the runtime registry and the reflection-only scanner — primitives → reserved bare BCL alias; every other type → `FullName` (dotted, no assembly/version) unless a curated dotted alias is registered. A startup registration pass registers activity input/output CLR types (reflecting the runtime-loaded activities) under this convention, and `GetAliasOrDefault` lazily registers an unseen type under the convention on write — so storage **never** emits a CLR/assembly-qualified name, and every referenced type resolves through the registry.
+
+**Why the reversal**: the original D8 (keep AQN on the compiled path) was withdrawn by the user — storing any CLR type name couples persisted definitions to code structure and reintroduces the brittle assembly/version identity. The compiled path is no longer exempt; it routes through the same alias convention. This also lets the `descriptors`/inspector endpoint resolve an alias→enum type at runtime and restore enum default-editor options (previously dropped).
+
+**Rationale (original, retained for context)**: that converter serializes CLR types that no human curated, which is why a *convention-based default alias* (`FullName`) is provided rather than requiring every such type to be hand-registered. The missing `HashSet` case is the only functional gap there.
 
 ## D9 — `VariableMapper` compose/decompose
 
