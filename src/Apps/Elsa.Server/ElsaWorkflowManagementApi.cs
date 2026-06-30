@@ -9,6 +9,7 @@ using Elsa.Activities.Sequence.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
@@ -377,12 +378,13 @@ internal static class ElsaWorkflowManagementApi
             }
 
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ElsaWorkflowManagementApi));
+            var wellKnownTypeRegistry = services.GetRequiredService<IWellKnownTypeRegistry>();
             var response = versions
                 .Where(x => x.Definition is not null)
                 .OrderBy(x => x.Definition!.Category, StringComparer.Ordinal)
                 .ThenBy(x => x.Definition!.DisplayName, StringComparer.Ordinal)
                 .ThenBy(x => x.Id, StringComparer.Ordinal)
-                .Select(v => ToActivityDescriptorResponse(v, logger))
+                .Select(v => ToActivityDescriptorResponse(v, logger, wellKnownTypeRegistry))
                 .ToArray();
 
             return Results.Ok(new ActivityDescriptorsResponse(response));
@@ -617,7 +619,7 @@ internal static class ElsaWorkflowManagementApi
     private static bool IsSequenceActivity(string? activityTypeKey) =>
         activityTypeKey?.Contains(nameof(Sequence), StringComparison.Ordinal) == true;
 
-    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version, ILogger logger)
+    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
     {
         var definition = version.Definition!;
         var activityName = definition.ActivityTypeKey.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? definition.ActivityTypeKey;
@@ -630,7 +632,7 @@ internal static class ElsaWorkflowManagementApi
             definition.DisplayName ?? activityName,
             definition.Description,
             version.ExecutionType.ToString(),
-            version.Inputs.Select(input => ToInputDescriptorResponse(input, logger)).ToArray(),
+            version.Inputs.Select(input => ToInputDescriptorResponse(input, logger, wellKnownTypeRegistry)).ToArray(),
             version.Outputs.Select(ToOutputDescriptorResponse).ToArray(),
             version.DesignFacets.SelectMany(ToPortDescriptorResponses).ToArray(),
             new Dictionary<string, object>(),
@@ -641,7 +643,7 @@ internal static class ElsaWorkflowManagementApi
             false);
     }
 
-    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input, ILogger logger) =>
+    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry) =>
         new(
             input.Name,
             GetTypeName(input.Type),
@@ -654,7 +656,7 @@ internal static class ElsaWorkflowManagementApi
             true,
             null,
             "Literal",
-            input.UISpecifications ?? GetUiSpecifications(input.Type, logger),
+            input.UISpecifications ?? GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
             input.IsRequired);
 
     private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
@@ -715,10 +717,20 @@ internal static class ElsaWorkflowManagementApi
     private static string InferUiHint(TypeReference type) =>
         string.Equals(type.Alias, "Boolean", StringComparison.Ordinal) ? "checkbox" : "singleline";
 
-    // Enum option inference previously loaded the CLR type from a decomposed TypeInformation. With the
-    // alias-only authored model there is no static CLR type to reflect over here; enum-aware default
-    // editors are surfaced through the type-descriptor catalog (defaultEditor) instead (spec FR-015).
-    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger) => null;
+    // Restored (FR-004b / research D8 revised): the authored type is an alias, and the registry now resolves
+    // every referenceable element type (primitives + activity I/O types) back to its real CLR type — so an
+    // enum-typed input can again expose its option list. We resolve only the element type (collection-ness is
+    // irrelevant to whether the element is an enum) via IWellKnownTypeRegistry; unknown aliases yield no options.
+    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
+    {
+        if (!wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var elementType) || !elementType.IsEnum)
+            return null;
+
+        return new Dictionary<string, object>
+        {
+            ["options"] = Enum.GetNames(elementType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
+        };
+    }
 
     private static bool IsContainerDesignFacet(Elsa.Activities.Design.Core.Models.ActivityDesignFacet facet) =>
         facet.Kind.Contains("structure", StringComparison.OrdinalIgnoreCase);

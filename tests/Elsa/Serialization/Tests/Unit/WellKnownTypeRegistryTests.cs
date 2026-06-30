@@ -118,4 +118,41 @@ public sealed class WellKnownTypeRegistryTests
             Assert.Equal(type, resolved);
         }
     }
+
+    [Fact]
+    public void GetAliasOrDefault_UnregisteredNonPrimitive_ReturnsFullName_NotAssemblyQualified()
+    {
+        // FR-004 / FR-004a: an unregistered non-primitive type yields its dotted FullName (the convention alias) —
+        // NEVER an assembly-qualified name with a version. The call is pure: it does not register the type.
+        var alias = _registry.GetAliasOrDefault(typeof(Uri));
+
+        Assert.Equal(typeof(Uri).FullName, alias);
+        Assert.DoesNotContain(", Version=", alias, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Private.CoreLib", alias, StringComparison.Ordinal);
+        Assert.False(_registry.TryGetAlias(typeof(Uri), out _)); // Pure: no mutation.
+    }
+
+    [Fact]
+    public void GetAliasOrDefault_RegisteredType_ReturnsRegisteredAlias()
+    {
+        _registry.RegisterType(typeof(Uri), "Acme.Customer");
+
+        Assert.Equal("Acme.Customer", _registry.GetAliasOrDefault(typeof(Uri)));
+    }
+
+    [Fact]
+    public void GetAliasOrDefault_Primitive_ReturnsBareAlias()
+    {
+        // Even without registration, a BCL primitive resolves to its reserved bare alias via the convention.
+        Assert.Equal("String", _registry.GetAliasOrDefault(typeof(string)));
+        Assert.Equal("Int32", _registry.GetAliasOrDefault(typeof(int)));
+    }
+
+    [Fact]
+    public void GetTypeOrDefault_UnknownAlias_ReturnsObject_NoTypeGetTypeFallback()
+    {
+        // FR-004a: even a syntactically valid assembly-qualified name must NOT resolve via Type.GetType.
+        Assert.Equal(typeof(object), _registry.GetTypeOrDefault("System.Uri, System.Private.Uri"));
+        Assert.False(_registry.TryGetTypeOrDefault("System.Uri, System.Private.Uri", out _));
+    }
 }

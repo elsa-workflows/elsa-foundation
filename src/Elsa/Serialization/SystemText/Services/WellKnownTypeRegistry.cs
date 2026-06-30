@@ -1,4 +1,4 @@
-using Elsa.Primitives.Extensions;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Core.Exceptions;
 
@@ -10,26 +10,10 @@ public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
     /// <summary>
     /// The canonical set of bare (non-dotted) aliases the framework owns. These are the BCL primitive
     /// aliases; module-contributed types must use dotted aliases (see <see cref="ReservedAliasNamespaceException"/>).
+    /// Single-sourced from <see cref="TypeAliasConvention.ReservedBareAliases"/> so the reserved set and the
+    /// alias convention cannot drift.
     /// </summary>
-    /// <remarks>
-    /// Single-sourcing note: <c>DefaultVariableTypeDescriptorProvider</c> (in Elsa.Expressions) contributes the
-    /// runtime-seeded subset of these aliases. Serialization.Core cannot reference Expressions, so the reserved
-    /// set is defined here (the resolution authority) and the provider's aliases must stay matching. Both use the
-    /// stable BCL type names (Int32, Boolean, …), which never change, so the two lists cannot drift in practice.
-    /// </remarks>
-    public static readonly IReadOnlySet<string> ReservedBareAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        // Reference primitives.
-        "String", "Object",
-        // Integral types.
-        "Byte", "SByte", "Int16", "UInt16", "Int32", "UInt32", "Int64", "UInt64", "Char",
-        // Floating point / numeric.
-        "Single", "Double", "Decimal",
-        // Logical.
-        "Boolean",
-        // Common framework value types.
-        "DateTime", "DateTimeOffset", "TimeSpan", "Guid"
-    };
+    public static readonly IReadOnlySet<string> ReservedBareAliases = TypeAliasConvention.ReservedBareAliases;
 
     private readonly Dictionary<string, Type> _aliasTypeDictionary = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<Type, string> _typeAliasDictionary = [];
@@ -100,31 +84,31 @@ public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
     /// <inheritdoc />
     public IEnumerable<Type> ListTypes() => _typeAliasDictionary.Keys;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// FR-004 / FR-004a: NEVER emits an assembly-qualified name. Returns the registered alias if present,
+    /// else the deterministic <see cref="TypeAliasConvention.CanonicalAlias"/> (a bare primitive alias or the
+    /// dotted <c>FullName</c>). This is a PURE computation — it does NOT mutate the dictionaries (registration
+    /// stays startup-only), so an unregistered type still serializes alias-only without runtime mutation.
+    /// </remarks>
     public string GetAliasOrDefault(Type type)
     {
         return TryGetAlias(type, out var alias)
             ? alias
-            : type.GetSimpleAssemblyQualifiedName();
+            : TypeAliasConvention.CanonicalAlias(type);
     }
 
     /// <inheritdoc />
+    /// <remarks>FR-004a: registry lookup only — no <c>Type.GetType</c> fallback. Unknown → <c>object</c>.</remarks>
     public Type GetTypeOrDefault(string alias)
     {
-        return TryGetType(alias, out var type) ? type : Type.GetType(alias) ?? typeof(object);
+        return TryGetType(alias, out var type) ? type : typeof(object);
     }
 
     /// <inheritdoc />
+    /// <remarks>FR-004a: registry lookup only — no <c>Type.GetType</c> fallback. Unknown → false.</remarks>
     public bool TryGetTypeOrDefault(string alias, out Type type)
     {
-        if (TryGetType(alias, out type))
-            return true;
-
-        var t = Type.GetType(alias);
-
-        if (t == null)
-            return false;
-
-        type = t;
-        return true;
+        return TryGetType(alias, out type);
     }
 }

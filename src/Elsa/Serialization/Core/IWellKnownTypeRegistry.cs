@@ -43,17 +43,21 @@ public interface IWellKnownTypeRegistry
     IEnumerable<Type> ListTypes();
 
     /// <summary>
-    /// Returns the alias for the specified type. If no alias was found, the assembly qualified type name is returned instead.
+    /// Returns the alias for the specified type. If no alias is registered, a deterministic convention alias
+    /// (a reserved bare primitive alias, otherwise the dotted <see cref="Type.FullName"/>) is returned — NEVER an
+    /// assembly-qualified name (FR-004 / FR-004a). Pure: does not mutate the registry.
     /// </summary>
     string GetAliasOrDefault(Type type);
 
     /// <summary>
-    /// Returns the type associated with the specified alias. If no type was found, the alias is interpreted as a type name/
+    /// Returns the type associated with the specified alias via registry lookup only. If no type is registered,
+    /// <c>typeof(object)</c> is returned — there is no <c>Type.GetType</c> fallback (FR-004a).
     /// </summary>
     Type GetTypeOrDefault(string alias);
 
     /// <summary>
-    /// Attempt to return a type with the specified alias.
+    /// Attempts to return the registered type for the specified alias. Registry lookup only — no
+    /// <c>Type.GetType</c> fallback; an unregistered alias returns false (FR-004a).
     /// </summary>
     bool TryGetTypeOrDefault(string alias, out Type type);
 }

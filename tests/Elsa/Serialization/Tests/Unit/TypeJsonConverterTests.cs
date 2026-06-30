@@ -19,9 +19,40 @@ public sealed class TypeJsonConverterTests
         IWellKnownTypeRegistry registry = new WellKnownTypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(int), "Int32");
+        registry.RegisterType(typeof(Uri), "Acme.Customer");
 
         _options = new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
         _options.Converters.Add(new TypeJsonConverter(registry));
+    }
+
+    [Fact]
+    public void Write_RegisteredNonPrimitive_EmitsAliasOnly_NoAssemblyOrVersion()
+    {
+        // FR-004 / FR-004a: a registered non-primitive type serializes to its alias only — no assembly name,
+        // no version, no assembly-qualified name in the JSON.
+        var json = JsonSerializer.Serialize(typeof(Uri), _options);
+
+        Assert.Equal("\"Acme.Customer\"", json);
+        Assert.DoesNotContain(", Version=", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Private.CoreLib", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RoundTrip_RegisteredNonPrimitive_PreservesType()
+    {
+        var json = JsonSerializer.Serialize(typeof(Uri), _options);
+        var roundTripped = JsonSerializer.Deserialize<Type>(json, _options);
+
+        Assert.Equal(typeof(Uri), roundTripped);
+    }
+
+    [Fact]
+    public void Read_UnknownAlias_ResolvesToObject_NoThrow()
+    {
+        // FR-004a / FR-018: an unresolved alias resolves to object (logged) rather than throwing.
+        var type = JsonSerializer.Deserialize<Type>("\"Acme.Unregistered\"", _options);
+
+        Assert.Equal(typeof(object), type);
     }
 
     [Fact]

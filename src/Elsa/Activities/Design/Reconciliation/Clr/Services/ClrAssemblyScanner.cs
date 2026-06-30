@@ -177,13 +177,14 @@ public sealed class ClrAssemblyScanner(
     }
 
     // Reflection-only path: types come from a MetadataLoadContext, so the runtime well-known type
-    // registry can't resolve them. The framework primitive aliases are the simple CLR type names
-    // (e.g. string→"String", int→"Int32"), so we use Type.Name as the element alias here — the same
-    // bare aliases DefaultVariableTypeDescriptorProvider seeds into the registry.
+    // registry can't resolve them. The element alias is produced by the shared TypeAliasConvention —
+    // a reserved bare alias for BCL primitives (string→"String", int→"Int32"), else the dotted FullName.
+    // The framework's runtime registration pass registers activity I/O CLR types under the SAME
+    // convention, so these aliases resolve back to the real CLR type at compile time (FR-004b).
     private static TypeReference ToTypeReference(Type? valueType) =>
         valueType is null
             ? new TypeReference("Object")
-            : TypeReferenceFactory.FromClrType(valueType, t => t.Name);
+            : TypeReferenceFactory.FromClrType(valueType, TypeAliasConvention.CanonicalAlias);
 
     private static Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {
