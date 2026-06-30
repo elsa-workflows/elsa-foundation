@@ -31,7 +31,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Aggregated by:** the single `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (this feature), which collects every registered constructor and adds it to the registry. The registry enforces one-constructor-per-`DescriptorType` (throws on a duplicate).
 
 **Known implementations (shipped):**
-- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.TypeInformation`; the default/primitive CLR kind)*
+- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.ClrActivityDescriptor`; the default/primitive CLR kind — resolves the activity's stable alias via `IWellKnownTypeRegistry`)*
 - `Elsa.Activities.Composition.Runtime` — `WorkflowActivityConstructor` *(descriptor type `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; the Workflow kind)*
 
 ### `IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*

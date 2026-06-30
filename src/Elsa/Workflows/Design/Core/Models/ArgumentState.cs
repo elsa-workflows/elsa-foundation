@@ -1,5 +1,4 @@
 ﻿using Elsa.Expressions.Core.Models;
-using Elsa.Primitives.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
 
@@ -7,8 +6,9 @@ public sealed record ArgumentState(
     string ReferenceKey,
     ArgumentValue Value,
     bool? AutoEvaluate,
-    TypeInformation? EvaluatorType,
-    TypeInformation? StorageDriverType,
+    // Stable type aliases (the shared TypeAliasConvention), never an assembly-qualified name.
+    string? EvaluatorType,
+    string? StorageDriverType,
     bool? IsSensitive
 )
 {

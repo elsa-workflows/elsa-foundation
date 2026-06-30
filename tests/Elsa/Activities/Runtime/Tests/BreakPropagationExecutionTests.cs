@@ -26,8 +26,8 @@ namespace Elsa.Activities.Runtime.Tests;
 /// (#299). The realistic shapes from the issue follow-up: a <c>Break</c> nested inside a <c>Sequence</c> or
 /// an <c>If</c> branch must bubble out of that composite and end the enclosing loop. Every activity here —
 /// the loops, the intermediate composites, and the <c>Break</c> leaf — is constructed by the production
-/// <see cref="Primitives.Constructors.ClrActivityConstructor"/> from its <see cref="TypeInformation"/>
-/// descriptor, so the test exercises the real construct → bind → execute → propagate path rather than test
+/// <see cref="Primitives.Constructors.ClrActivityConstructor"/> from its <see cref="ClrActivityDescriptor"/>
+/// (stable-alias) descriptor, so the test exercises the real construct → bind → execute → propagate path rather than test
 /// stubs. Marker steps are probe leaves so the test can assert which steps ran.
 /// </summary>
 public sealed class BreakPropagationExecutionTests
@@ -145,7 +145,7 @@ public sealed class BreakPropagationExecutionTests
     private static WorkflowExecutionHarness.Builder BaseHarness() =>
         WorkflowExecutionHarness.Create()
             // ClrActivityConstructor (registered by ActivitiesPrimitivesFeature) constructs every CLR
-            // activity below from its TypeInformation descriptor; it depends on IPayloadSerializer from the
+            // activity below from its ClrActivityDescriptor (stable-alias) descriptor; it depends on IPayloadSerializer from the
             // SerializationFeature. The probe leaf supplies the marker steps.
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
@@ -241,8 +241,8 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: typeof(TypeInformation).FullName!,
-            descriptorPayload: Serializer.SerializeToElement(TypeInformation.FromType(activityType)),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
@@ -255,8 +255,8 @@ public sealed class BreakPropagationExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: typeof(TypeInformation).FullName!,
-            descriptorPayload: Serializer.SerializeToElement(TypeInformation.FromType(activityType)),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

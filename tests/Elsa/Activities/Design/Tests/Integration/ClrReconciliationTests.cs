@@ -89,8 +89,8 @@ public sealed class ClrReconciliationTests
                 DisplayName: null,
                 Category: null,
                 Description: null,
-                DescriptorType: typeof(TypeInformation).FullName!,
-                Descriptor: TypeInformation.FromType(typeof(VersionedFixtureActivity)),
+                DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+                Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(VersionedFixtureActivity))),
                 Inputs: [],
                 Outputs: [],
                 DesignFacets: []));

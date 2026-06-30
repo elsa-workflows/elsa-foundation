@@ -43,7 +43,7 @@ public sealed class SavingEventDispatchTests
 
         await handler.Handle(ctx, version, CancellationToken.None);
 
-        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.Equal(typeof(ClrActivityDescriptor).FullName, version.DescriptorType);
         Assert.False(string.IsNullOrWhiteSpace(version.DescriptorPayloadSource));
         Assert.Contains("Acme", version.DescriptorPayloadSource);
         Assert.False(string.IsNullOrWhiteSpace(version.DesignFacetsSource));
@@ -106,7 +106,7 @@ public sealed class SavingEventDispatchTests
         // Probe ran (fan-out reached every typed contributor)…
         Assert.True(probe.WasInvoked);
         // …and the real handler ran (shadow column populated).
-        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.Equal(typeof(ClrActivityDescriptor).FullName, version.DescriptorType);
         Assert.Contains("Acme", version.DescriptorPayloadSource);
     }
 
@@ -160,8 +160,8 @@ public sealed class SavingEventDispatchTests
         return new ActivityDefinitionVersion("1.0.0", defId)
         {
             Id = Guid.NewGuid().ToString("N"),
-            DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0")),
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Acme.Foo")),
             DesignFacets =
             [
                 Facet("elsa.test.visual", """{ "lane": "left" }""")

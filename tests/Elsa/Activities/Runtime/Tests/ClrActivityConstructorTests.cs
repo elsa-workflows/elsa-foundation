@@ -1,10 +1,8 @@
 using Elsa.Activities.Primitives.Activities;
-using Elsa.Activities.Primitives.Binding;
-using Elsa.Activities.Primitives.Constructors;
+using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Expressions.Models;
-using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,15 +17,15 @@ public class ClrActivityConstructorTests
     [Fact] // US4 / SC-003 — CLR round-trip with no Kind string
     public async Task Create_ClrDescriptor_ConstructsActivityAndBindsInput()
     {
-        // Arrange: the CLR descriptor IS TypeInformation; payload is the activity type's TypeInformation,
-        // serialized via the canonical payload serializer (the same one the constructor reads with).
+        // Arrange: the CLR descriptor is the stable-alias ClrActivityDescriptor; the payload is serialized via
+        // the canonical payload serializer (the same one the constructor reads with) and the activity type is
+        // registered in the well-known type registry so its alias resolves — no assembly name/version anywhere.
         var serializer = Serializer();
-        var descriptor = TypeInformation.FromType(typeof(WriteLine));
-        var payload = serializer.SerializeToElement(descriptor);
+        var payload = ClrConstruction.Payload(serializer, typeof(WriteLine));
 
         var registry = new ActivityConstructorRegistry();
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        registry.Add(new ClrActivityConstructor(serviceProvider, new ActivityArgumentBinder(), serializer));
+        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLine)));
         var factory = new ActivityFactory(registry);
 
         var inputs = new Dictionary<string, InputArgument>
@@ -36,7 +34,7 @@ public class ClrActivityConstructorTests
         };
 
         // Act
-        var activity = await factory.Create(typeof(TypeInformation).FullName!, payload, inputs, null);
+        var activity = await factory.Create(ClrConstruction.DescriptorType, payload, inputs, null);
 
         // Assert
         var writeLine = Assert.IsType<WriteLine>(activity);
@@ -44,11 +42,25 @@ public class ClrActivityConstructorTests
     }
 
     [Fact] // descriptor type is derived from typeof(TDescriptor) — never hand-authored
-    public void ClrConstructor_DescriptorType_IsTypeInformationFullName()
+    public void ClrConstructor_DescriptorType_IsClrActivityDescriptorFullName()
     {
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        var constructor = new ClrActivityConstructor(serviceProvider, new ActivityArgumentBinder(), Serializer());
+        var constructor = ClrConstruction.Constructor(serviceProvider, Serializer());
 
-        Assert.Equal("Elsa.Primitives.Models.TypeInformation", constructor.DescriptorType);
+        Assert.Equal("Elsa.Primitives.Models.ClrActivityDescriptor", constructor.DescriptorType);
+    }
+
+    [Fact] // an alias that resolves to no registered CLR type is a loud failure, not a silent object
+    public async Task Create_UnknownAlias_ThrowsUnknownActivityType()
+    {
+        var serializer = Serializer();
+        var serviceProvider = new ServiceCollection().BuildServiceProvider();
+        var registry = new ActivityConstructorRegistry();
+        // Constructor with an empty registry: the WriteLine alias resolves to nothing.
+        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer));
+        var factory = new ActivityFactory(registry);
+
+        await Assert.ThrowsAsync<UnknownActivityTypeException>(() =>
+            factory.Create(ClrConstruction.DescriptorType, ClrConstruction.Payload(serializer, typeof(WriteLine)), null, null).AsTask());
     }
 }

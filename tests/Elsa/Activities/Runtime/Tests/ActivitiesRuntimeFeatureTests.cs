@@ -32,7 +32,7 @@ public sealed class ActivitiesRuntimeFeatureTests
             descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IStartupTask) &&
-            descriptor.ImplementationType == typeof(RegisterActivityIoTypesStartupTask));
+            descriptor.ImplementationType == typeof(RegisterActivityTypesStartupTask));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ActivityFaultIncidentRecorder) &&
             descriptor.ImplementationType == typeof(ActivityFaultIncidentRecorder));

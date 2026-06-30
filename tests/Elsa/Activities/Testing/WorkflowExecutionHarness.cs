@@ -1,13 +1,17 @@
 using System.Text.Json;
+using CShells.Features;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Tasks;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.Testing;
 
@@ -236,7 +240,22 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
 
-            return new WorkflowExecutionHarness(services.BuildServiceProvider());
+            var provider = services.BuildServiceProvider();
+
+            // The real host runs RegisterActivityTypesStartupTask at startup to register the loaded activity CLR
+            // types into the well-known type registry, so the CLR construction descriptor resolves an activity's
+            // stable alias back to its type. The harness builds the provider directly (no startup-task runner),
+            // so run that one registration pass here. Guarded on the registry being composed: only CLR-construction
+            // tests add the SerializationFeature that registers it; probe-only graphs don't need it.
+            if (provider.GetService<IWellKnownTypeRegistry>() is { } typeRegistry)
+                new RegisterActivityTypesStartupTask(
+                        typeRegistry,
+                        provider.GetServices<IFeatureAssemblyProvider>(),
+                        provider,
+                        NullLogger<RegisterActivityTypesStartupTask>.Instance)
+                    .ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+            return new WorkflowExecutionHarness(provider);
         }
     }
 }

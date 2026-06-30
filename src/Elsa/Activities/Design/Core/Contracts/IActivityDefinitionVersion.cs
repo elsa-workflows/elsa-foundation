@@ -12,7 +12,7 @@ public interface IActivityDefinitionVersion
     string DefinitionId { get; }
 
     /// <summary>
-    /// The descriptor type's <c>FullName</c> (e.g. <c>Elsa.Primitives.Models.TypeInformation</c>,
+    /// The descriptor type's <c>FullName</c> (e.g. <c>Elsa.Primitives.Models.ClrActivityDescriptor</c>,
     /// <c>Elsa.Workflows.Primitives.Models.WorkflowIdentity</c>). The runtime construction registry's
     /// lookup key. The design domain treats this purely as an opaque string — it never resolves it to
     /// a CLR type.

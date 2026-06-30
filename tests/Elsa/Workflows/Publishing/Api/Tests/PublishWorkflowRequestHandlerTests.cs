@@ -322,8 +322,8 @@ public sealed class PublishWorkflowRequestHandlerTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(TypeInformation.FromType<object>()),
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs
         };
 
