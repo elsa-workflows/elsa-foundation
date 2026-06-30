@@ -209,6 +209,7 @@
   <Folder Name="/src/elsa3/Activities/Design/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
+  <Folder Name="/src/elsa3/Mapping/" />
   <Folder Name="/tests/" />
   <Folder Name="/tests/Elsa/" />
   <Folder Name="/tests/Elsa/Activities/" />
@@ -304,5 +305,10 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa3/" />
+  <Folder Name="/tests/Elsa3/Mapping/" />
+  <Folder Name="/tests/Elsa3/Mapping/Tests/">
+    <Project Path="tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
 </Solution>

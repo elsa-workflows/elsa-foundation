@@ -1,5 +1,7 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Runtime.Tasks;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +30,9 @@ public sealed class ActivitiesRuntimeFeatureTests
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
             descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IStartupTask) &&
+            descriptor.ImplementationType == typeof(RegisterActivityIoTypesStartupTask));
         Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(ActivityFaultIncidentRecorder) &&
             descriptor.ImplementationType == typeof(ActivityFaultIncidentRecorder));
