@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { Maximize2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Maximize2, Plus, Trash2, X } from "lucide-react";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -14,9 +14,15 @@ import type { ActivityNode, VariableReference, VisibleVariableView } from "./wor
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import { makeVariableReference, readVariableReference, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import {
+  defaultCollectionItem,
   defaultExpressionDescriptors,
+  describeCollectionType,
   getLiteralEditorValue,
+  isRepeaterOptOut,
+  makeCollectionElementDescriptor,
+  moveCollectionItem,
   readWrappedInput,
+  toLiteralCollection,
   withLiteralValue,
   withSyntax,
   writeInputValue
@@ -120,6 +126,15 @@ function PropertyRow({
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? "Literal";
   const value = getLiteralEditorValue(activity, input);
+  // Collection-typed literals get structured authoring: a collection-scoped editor (e.g. a multi-select
+  // for option sets) owns the whole value when one claims it; otherwise a repeater of per-element editors.
+  const isLiteralSyntax = syntax.toLowerCase() === "literal";
+  const collectionType = wrapped && isLiteralSyntax && !isRepeaterOptOut(input)
+    ? describeCollectionType(input.typeName)
+    : null;
+  const collectionScopedEditor = collectionType
+    ? resolveEditor(editors, input, { ...context, scope: "collection" })
+    : undefined;
   const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped ? {
     activity,
     descriptor: input,
@@ -146,6 +161,23 @@ function PropertyRow({
     if (!wrapped) return;
     onChange(writeInputValue(activity, input, withSyntax(wrapped, nextSyntax)));
   };
+  // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
+  // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
+  const collectionEditor = collectionType
+    ? collectionScopedEditor
+      ? renderEditor(collectionScopedEditor.component, input, value, readOnly, { ...context, scope: "collection" }, setRaw)
+      : (
+        <CollectionLiteralEditor
+          input={input}
+          elementTypeName={collectionType.elementTypeName}
+          value={value}
+          editors={editors}
+          context={context}
+          disabled={readOnly}
+          onChange={setRaw}
+        />
+      )
+    : null;
   const valueEditor = syntax === variableSyntax && wrapped ? (
     <VariablePicker
       value={value}
@@ -154,7 +186,7 @@ function PropertyRow({
       disabled={readOnly}
       onChange={setRaw}
     />
-  ) : InlineExpressionEditorComponent && inlineExpressionContext ? (
+  ) : collectionEditor ?? (InlineExpressionEditorComponent && inlineExpressionContext ? (
     <InlineExpressionEditorComponent
       descriptor={input}
       syntax={syntax}
@@ -163,7 +195,7 @@ function PropertyRow({
       context={inlineExpressionContext}
       onChange={setRaw}
     />
-  ) : renderEditor(EditorComponent, input, value, readOnly, context, setRaw);
+  ) : renderEditor(EditorComponent, input, value, readOnly, context, setRaw));
 
   return (
     <div className="wf-property-row">
@@ -237,6 +269,89 @@ function PropertyRow({
           onClose={() => setExpanded(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+// Repeater for collection-typed literals: each row reuses the registered element editor (text, checkbox,
+// dropdown, …) resolved in "element" scope, with add / reorder / remove controls around it.
+function CollectionLiteralEditor({
+  input,
+  elementTypeName,
+  value,
+  editors,
+  context,
+  disabled,
+  onChange
+}: {
+  input: StudioActivityInputDescriptor;
+  elementTypeName: string | null;
+  value: unknown;
+  editors: StudioActivityPropertyEditorContribution[];
+  context: StudioActivityPropertyEditorContext;
+  disabled: boolean;
+  onChange(value: unknown): void;
+}) {
+  const items = toLiteralCollection(value);
+  const elementDescriptor = makeCollectionElementDescriptor(input, elementTypeName);
+  const elementContext: StudioActivityPropertyEditorContext = { ...context, scope: "element" };
+  const ElementComponent = resolveEditor(editors, elementDescriptor, elementContext)?.component;
+  const label = input.displayName || input.name;
+  const replaceAt = (index: number, next: unknown) =>
+    onChange(items.map((current, position) => (position === index ? next : current)));
+
+  return (
+    <div className="wf-collection-editor">
+      {items.length === 0 ? (
+        <p className="wf-collection-empty">No items yet.</p>
+      ) : (
+        <ul className="wf-collection-items">
+          {items.map((item, index) => (
+            <li key={index} className="wf-collection-item">
+              <div className="wf-collection-item-editor">
+                {renderEditor(ElementComponent, elementDescriptor, item, disabled, elementContext, next => replaceAt(index, next))}
+              </div>
+              <div className="wf-collection-item-actions">
+                <button
+                  type="button"
+                  className="wf-collection-item-button"
+                  aria-label={`Move ${label} item ${index + 1} up`}
+                  disabled={disabled || index === 0}
+                  onClick={() => onChange(moveCollectionItem(items, index, index - 1))}
+                >
+                  <ChevronUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="wf-collection-item-button"
+                  aria-label={`Move ${label} item ${index + 1} down`}
+                  disabled={disabled || index === items.length - 1}
+                  onClick={() => onChange(moveCollectionItem(items, index, index + 1))}
+                >
+                  <ChevronDown size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="wf-collection-item-button danger"
+                  aria-label={`Remove ${label} item ${index + 1}`}
+                  disabled={disabled}
+                  onClick={() => onChange(items.filter((_, position) => position !== index))}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        className="wf-collection-add"
+        disabled={disabled}
+        onClick={() => onChange([...items, defaultCollectionItem(elementTypeName)])}
+      >
+        <Plus size={13} /> Add item
+      </button>
     </div>
   );
 }
