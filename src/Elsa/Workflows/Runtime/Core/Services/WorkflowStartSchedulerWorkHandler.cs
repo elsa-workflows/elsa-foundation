@@ -52,7 +52,7 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(startPayload.RequestedArtifactId);
 
-        ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, startPayload.PinnedExecutable, executable.Identity);
 
         var now = _timeProvider.GetUtcNow();
         var rootActivityId = executable.RootActivity.ExecutableNodeId;
@@ -78,19 +78,6 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         {
             throw new InvalidOperationException("Start scheduler work item payload is not a valid start command payload.", exception);
         }
-    }
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"Start scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
