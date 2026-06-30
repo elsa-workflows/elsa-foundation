@@ -112,6 +112,34 @@ describe("WeaverSurface", () => {
     unmount();
   });
 
+  it("routes a correlated prompt's completed answer back via onPromptResult", async () => {
+    const api = readyApi();
+    const client = readyClient();
+    const events: AgentStreamEvent[] = [
+      { type: "turn-started", turnId: "turn_1", maxSteps: 8 },
+      { type: "message-delta", messageId: "msg_1", content: "Here you go.\n```json\n{\"name\":\"Order Approval\"}\n```" },
+      { type: "message-completed", messageId: "msg_1" }
+    ];
+    const subscribeStream = ((_ctx, _url, onEvent) => {
+      for (const event of events) onEvent(event);
+      return { close: () => {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+
+    const results: Array<{ requestId: string; status: string; text: string; autoApply?: boolean }> = [];
+    api.ai.onPromptResult(result => results.push(result));
+
+    const { unmount } = render(
+      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "p1", message: "name it", requestId: "req-1" }} />
+    );
+    await flushPromises();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ requestId: "req-1", status: "completed", autoApply: false });
+    expect(results[0].text).toContain("Order Approval");
+
+    unmount();
+  });
+
   it("forwards the selected autonomy mode when the session is created", async () => {
     const api = readyApi();
     const client = readyClient(); // ceiling is full-auto

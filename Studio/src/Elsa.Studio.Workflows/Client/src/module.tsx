@@ -711,8 +711,8 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
         <CreateWorkflowDialog
           draft={createDraft}
           creating={creating}
+          ai={ai}
           suggestMetadataAction={suggestMetadataAction}
-          onSuggestMetadata={suggestMetadataAction ? () => dispatchAiAction(ai, suggestMetadataAction, { draft: createDraft, activities: catalog }) : undefined}
           onChange={nextDraft => setCreateDraft(nextDraft)}
           onClose={() => setCreateDraft(null)}
           onSubmit={submitCreate}
@@ -722,15 +722,71 @@ function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEndpointC
   );
 }
 
-function CreateWorkflowDialog({ draft, creating, suggestMetadataAction, onSuggestMetadata, onChange, onClose, onSubmit }: {
+function CreateWorkflowDialog({ draft, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
   creating: boolean;
+  ai: StudioAiContributionApi;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
-  onSuggestMetadata?: () => void;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;
   onSubmit(): void;
 }) {
+  const [intentOpen, setIntentOpen] = useState(false);
+  const [intent, setIntent] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestion, setSuggestion] = useState<WorkflowMetadataSuggestion | null>(null);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const pendingRequestIdRef = useRef<string | null>(null);
+  // Apply onto the latest draft without re-subscribing the result listener on every keystroke.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const applySuggestion = useCallback((value: WorkflowMetadataSuggestion) => {
+    const next = { ...draftRef.current };
+    if (value.name) next.name = value.name;
+    if (value.description) next.description = value.description;
+    onChangeRef.current(next);
+    setSuggestion(null);
+    setSuggestError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!suggestMetadataAction) return;
+    return ai.onPromptResult(result => {
+      if (result.requestId !== pendingRequestIdRef.current) return;
+      pendingRequestIdRef.current = null;
+      setSuggesting(false);
+      if (result.status !== "completed") {
+        setSuggestError(result.status === "cancelled"
+          ? "Weaver needs more detail — continue in the assistant panel."
+          : "Weaver couldn't generate a suggestion. Try again or fill the fields manually.");
+        return;
+      }
+      const parsed = parseWorkflowMetadataSuggestion(result.text);
+      if (!parsed) {
+        setSuggestError("Couldn't read a suggestion from Weaver's reply. See the assistant panel.");
+        return;
+      }
+      // Autopilot fills the fields automatically; otherwise the user applies it explicitly.
+      if (result.autoApply) applySuggestion(parsed);
+      else setSuggestion(parsed);
+    });
+  }, [ai, suggestMetadataAction, applySuggestion]);
+
+  const runSuggest = () => {
+    if (!suggestMetadataAction) return;
+    const prompt = suggestMetadataAction.createPrompt({ draft: draftRef.current, intent });
+    if (!prompt) return;
+    const requestId = `wf-suggest-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    pendingRequestIdRef.current = requestId;
+    setSuggesting(true);
+    setSuggestion(null);
+    setSuggestError(null);
+    ai.dispatchPrompt({ ...prompt, requestId });
+  };
+
   return (
     <div className="wf-dialog-backdrop" role="presentation">
       <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
@@ -743,11 +799,55 @@ function CreateWorkflowDialog({ draft, creating, suggestMetadataAction, onSugges
           <div className="wf-dialog-heading">
             <h3 id="workflow-create-title">Create Workflow</h3>
             {suggestMetadataAction ? (
-              <button type="button" className="wf-ai-action" onClick={onSuggestMetadata} title={suggestMetadataAction.description ?? suggestMetadataAction.label}>
+              <button
+                type="button"
+                className="wf-ai-action"
+                aria-expanded={intentOpen}
+                onClick={() => setIntentOpen(open => !open)}
+                title={suggestMetadataAction.description ?? suggestMetadataAction.label}
+              >
                 <Sparkles size={13} /> {suggestMetadataAction.label}
               </button>
             ) : null}
           </div>
+          {suggestMetadataAction && intentOpen ? (
+            <div className="wf-ai-suggest" role="group" aria-label="Suggest name and description">
+              <label className="wf-form-field">
+                <span>What should this workflow do?</span>
+                <textarea
+                  autoFocus
+                  aria-label="Workflow intent"
+                  rows={2}
+                  placeholder="e.g. Route incoming support tickets to the right team and notify on SLA breach (optional)"
+                  value={intent}
+                  disabled={suggesting}
+                  onChange={event => setIntent(event.target.value)}
+                  onKeyDown={event => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      runSuggest();
+                    }
+                  }}
+                />
+              </label>
+              <div className="wf-ai-suggest-actions">
+                <button type="button" className="wf-ai-action" onClick={runSuggest} disabled={suggesting}>
+                  <Sparkles size={13} /> {suggesting ? "Generating…" : "Generate"}
+                </button>
+              </div>
+              {suggestError ? <p className="wf-ai-suggest-error" role="alert">{suggestError}</p> : null}
+              {suggestion ? (
+                <div className="wf-ai-suggest-preview">
+                  {suggestion.name ? <p><strong>{suggestion.name}</strong></p> : null}
+                  {suggestion.description ? <p>{suggestion.description}</p> : null}
+                  <div className="wf-ai-suggest-actions">
+                    <button type="button" onClick={() => applySuggestion(suggestion)}>Apply</button>
+                    <button type="button" onClick={() => setSuggestion(null)}>Dismiss</button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <label className="wf-form-field">
             <span>Display name</span>
             <input
@@ -1651,6 +1751,46 @@ function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioA
 
   ai.dispatchPrompt(prompt);
   return true;
+}
+
+interface WorkflowMetadataSuggestion {
+  name?: string;
+  description?: string;
+}
+
+// Weaver is asked to return a fenced ```json {"name","description"} block; parse defensively and fall
+// back to a bare object or "Name:"/"Description:" lines so a slightly off-format reply still applies.
+function parseWorkflowMetadataSuggestion(text: string): WorkflowMetadataSuggestion | null {
+  if (!text) return null;
+  const candidates: string[] = [];
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) candidates.push(fenced[1]);
+  const brace = text.match(/\{[\s\S]*?\}/);
+  if (brace) candidates.push(brace[0]);
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate.trim()) as Record<string, unknown>;
+      const suggestion = pickSuggestion(parsed.name, parsed.description);
+      if (suggestion) return suggestion;
+    } catch {
+      // Not valid JSON — try the next candidate.
+    }
+  }
+  const nameLine = text.match(/name\s*[:\-]\s*(.+)/i)?.[1];
+  const descLine = text.match(/description\s*[:\-]\s*(.+)/i)?.[1];
+  return pickSuggestion(nameLine, descLine);
+}
+
+function pickSuggestion(name: unknown, description: unknown): WorkflowMetadataSuggestion | null {
+  const cleanName = typeof name === "string" ? unquote(name) : undefined;
+  const cleanDescription = typeof description === "string" ? unquote(description) : undefined;
+  return cleanName || cleanDescription ? { name: cleanName || undefined, description: cleanDescription || undefined } : null;
+}
+
+function unquote(value: string) {
+  // Strip a trailing comma first (e.g. a lifted JSON line `"Order Approval",`), then a surrounding
+  // quote pair. Stripping each end independently avoids leaving a dangling quote when both are present.
+  return value.trim().replace(/,$/, "").trim().replace(/^["']/, "").replace(/["']$/, "").trim();
 }
 
 function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {

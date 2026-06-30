@@ -137,6 +137,22 @@
   border-radius: 4px;
   padding: 0.05rem 0.3rem;
 }
+.weaver-code-collapse { margin: 0.5rem 0; }
+.weaver-code-collapse > summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--studio-text-muted, var(--studio-accent));
+  padding: 0.3rem 0.5rem;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  user-select: none;
+  list-style: none;
+}
+.weaver-code-collapse > summary::-webkit-details-marker { display: none; }
+.weaver-code-collapse > summary::before { content: "▸ "; }
+.weaver-code-collapse[open] > summary::before { content: "▾ "; }
+.weaver-code-collapse[open] > summary { margin-bottom: 0.4rem; }
+.weaver-code-collapse > pre { margin: 0; }
 .weaver-markdown table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
 .weaver-markdown th, .weaver-markdown td { border: 1px solid var(--studio-border); padding: 0.3rem 0.5rem; text-align: left; }
 .weaver-markdown a { color: var(--studio-accent); }

@@ -534,6 +534,21 @@ export interface StudioAiPromptRequest {
     actionId?: string;
     label?: string;
   };
+  /**
+   * Correlation id set by a caller that wants the assistant's completed response routed back to it
+   * via {@link StudioAiPromptDispatcher.onPromptResult}. Omit for fire-and-forget prompts.
+   */
+  requestId?: string;
+}
+
+/** The completed outcome of a prompt dispatched with a {@link StudioAiPromptRequest.requestId}. */
+export interface StudioAiPromptResult {
+  requestId: string;
+  status: "completed" | "cancelled" | "failed";
+  /** The assistant's final message text (empty for cancelled/failed turns). */
+  text: string;
+  /** True when the originating Weaver session is in an autonomous mode (Autopilot), so callers may apply without asking. */
+  autoApply?: boolean;
 }
 
 export interface StudioAiContextProviderContribution {
@@ -786,6 +801,10 @@ export interface StudioContributionRegistry<T> {
 export interface StudioAiPromptDispatcher {
   dispatchPrompt(request: StudioAiPromptRequest): void;
   onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
+  /** Publishes the completed outcome of a correlated prompt back to interested callers. */
+  publishPromptResult(result: StudioAiPromptResult): void;
+  /** Subscribes to correlated prompt results. Returns an unsubscribe function. */
+  onPromptResult(listener: (result: StudioAiPromptResult) => void): () => void;
 }
 
 export interface StudioAiContributionApi extends StudioAiPromptDispatcher {
@@ -870,6 +889,7 @@ export function createContributionRegistry<T>(options: CreateStudioContributionR
 
 export function createAiContributionApi(): StudioAiContributionApi {
   const listeners = new Set<(request: StudioAiPromptRequest) => void>();
+  const resultListeners = new Set<(result: StudioAiPromptResult) => void>();
 
   return {
     contextProviders: createContributionRegistry({ slot: studioSlots.aiContextProviders }),
@@ -885,6 +905,15 @@ export function createAiContributionApi(): StudioAiContributionApi {
     onPrompt(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    publishPromptResult(result) {
+      for (const listener of resultListeners) {
+        listener(result);
+      }
+    },
+    onPromptResult(listener) {
+      resultListeners.add(listener);
+      return () => resultListeners.delete(listener);
     }
   };
 }

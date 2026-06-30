@@ -45,7 +45,9 @@ function testApi(): ElsaStudioModuleApi {
       proposalRenderers: registry(),
       surfaces: registry(),
       dispatchPrompt: vi.fn(),
-      onPrompt: vi.fn()
+      onPrompt: vi.fn(),
+      publishPromptResult: vi.fn(),
+      onPromptResult: vi.fn(() => () => {})
     }
   } as unknown as ElsaStudioModuleApi;
 }

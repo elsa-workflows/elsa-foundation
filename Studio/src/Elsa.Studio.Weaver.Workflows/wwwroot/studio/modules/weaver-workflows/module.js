@@ -1,219 +1,216 @@
-var f = { exports: {} }, l = {};
-var u;
-function v() {
-  if (u) return l;
-  u = 1;
-  var e = /* @__PURE__ */ Symbol.for("react.transitional.element"), t = /* @__PURE__ */ Symbol.for("react.fragment");
-  function a(h, r, i) {
-    var c = null;
-    if (i !== void 0 && (c = "" + i), r.key !== void 0 && (c = "" + r.key), "key" in r) {
-      i = {};
-      for (var w in r)
-        w !== "key" && (i[w] = r[w]);
-    } else i = r;
-    return r = i.ref, {
-      $$typeof: e,
-      type: h,
-      key: c,
-      ref: r !== void 0 ? r : null,
-      props: i
+var u = { exports: {} }, c = {};
+var m;
+function x() {
+  if (m) return c;
+  m = 1;
+  var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), e = /* @__PURE__ */ Symbol.for("react.fragment");
+  function o(l, i, r) {
+    var f = null;
+    if (r !== void 0 && (f = "" + r), i.key !== void 0 && (f = "" + i.key), "key" in i) {
+      r = {};
+      for (var p in i)
+        p !== "key" && (r[p] = i[p]);
+    } else r = i;
+    return i = r.ref, {
+      $$typeof: t,
+      type: l,
+      key: f,
+      ref: i !== void 0 ? i : null,
+      props: r
     };
   }
-  return l.Fragment = t, l.jsx = a, l.jsxs = a, l;
+  return c.Fragment = e, c.jsx = o, c.jsxs = o, c;
 }
-var k;
+var h;
 function g() {
-  return k || (k = 1, f.exports = v()), f.exports;
+  return h || (h = 1, u.exports = x()), u.exports;
 }
-var n = g();
-const o = "Elsa.Studio.Weaver.Workflows";
-function y(e) {
-  e.ai.contextProviders.add({
+var a = g();
+const n = "Elsa.Studio.Weaver.Workflows";
+function b(t) {
+  t.ai.contextProviders.add({
     id: "weaver.workflows.definition-context",
     kind: "workflow-definition",
     label: "Workflow definition",
     description: "Attaches workflow definition metadata, draft state, versions, and validation diagnostics.",
-    moduleId: o,
-    createAttachment: (t) => p("workflow-definition", t)
-  }), e.ai.contextProviders.add({
+    moduleId: n,
+    createAttachment: (e) => k("workflow-definition", e)
+  }), t.ai.contextProviders.add({
     id: "weaver.workflows.executable-context",
     kind: "workflow-executable",
     label: "Workflow executable",
     description: "Attaches runtime executable identity, source, root activity, and resume target metadata.",
-    moduleId: o,
-    createAttachment: (t) => p("workflow-executable", t)
-  }), e.ai.contextProviders.add({
+    moduleId: n,
+    createAttachment: (e) => k("workflow-executable", e)
+  }), t.ai.contextProviders.add({
     id: "weaver.workflows.instance-context",
     kind: "workflow-instance",
     label: "Workflow instance",
     description: "Attaches workflow instance state, incidents, bookmarks, and recent execution history when available.",
-    moduleId: o,
-    createAttachment: (t) => p("workflow-instance", t)
-  }), e.ai.promptActions.add({
+    moduleId: n,
+    createAttachment: (e) => k("workflow-instance", e)
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.suggest-create-metadata",
     label: "Suggest name and description",
     description: "Ask Weaver to propose a workflow display name and description for the draft being created.",
-    moduleId: o,
+    moduleId: n,
     placement: "field-adornment",
     contextKind: "workflow-create-draft",
-    createPrompt: (t) => ({
-      message: [
-        "Suggest a concise Elsa workflow display name and one sentence description for this new workflow.",
-        "Return only the proposed name and description.",
-        `Draft context: ${b(t)}`
-      ].join(`
+    createPrompt: (e) => {
+      const o = w(e) && w(e.draft) ? e.draft : {}, l = w(e) && typeof e.intent == "string" ? e.intent.trim() : "", i = typeof o.rootKind == "string" ? o.rootKind : void 0, r = { intent: l, rootKind: i, name: o.name ?? "", description: o.description ?? "" };
+      return {
+        message: [
+          "Suggest a concise display name and a one-sentence description for a new Elsa workflow.",
+          l ? `The user describes what the workflow should do as: "${l}".` : "The user has not described the workflow yet — infer a sensible, generic automation name and description.",
+          i ? `The root activity is a ${i}.` : "",
+          'Reply with one short friendly sentence, then a fenced ```json code block containing exactly {"name": string, "description": string} and nothing else in that block.'
+        ].filter(Boolean).join(`
 `),
-      mode: "enqueue",
-      attachments: [s("workflow-create-draft", "new-workflow", t)],
-      source: { moduleId: o, actionId: "weaver.workflows.suggest-create-metadata", label: "Suggest workflow metadata" }
-    })
-  }), e.ai.promptActions.add({
+        mode: "enqueue",
+        attachments: [s("workflow-create-draft", "new-workflow", r)],
+        source: { moduleId: n, actionId: "weaver.workflows.suggest-create-metadata", label: "Suggest workflow metadata" }
+      };
+    }
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.explain-definition",
     label: "Explain workflow",
     description: "Ask Weaver to explain the selected workflow definition.",
-    moduleId: o,
+    moduleId: n,
     placement: "selection",
     contextKind: "workflow-definition",
-    createPrompt: (t) => ({
+    createPrompt: (e) => ({
       message: "Explain what this workflow definition does, where it starts, and what a maintainer should inspect first.",
       mode: "enqueue",
-      attachments: [s("workflow-definition", d(t), t)],
-      source: { moduleId: o, actionId: "weaver.workflows.explain-definition", label: "Explain workflow" }
+      attachments: [s("workflow-definition", d(e), e)],
+      source: { moduleId: n, actionId: "weaver.workflows.explain-definition", label: "Explain workflow" }
     })
-  }), e.ai.promptActions.add({
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.explain-executable",
     label: "Explain executable",
     description: "Ask Weaver to explain a published workflow executable and its runtime start conditions.",
-    moduleId: o,
+    moduleId: n,
     placement: "selection",
     contextKind: "workflow-executable",
-    createPrompt: (t) => ({
+    createPrompt: (e) => ({
       message: "Explain this workflow executable, its root activity, source version, and runtime execution implications.",
       mode: "enqueue",
-      attachments: [s("workflow-executable", d(t), t)],
-      source: { moduleId: o, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
+      attachments: [s("workflow-executable", d(e), e)],
+      source: { moduleId: n, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
     })
-  }), e.ai.promptActions.add({
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.find-draft-risks",
     label: "Find draft risks",
     description: "Ask Weaver to inspect draft validation errors and graph structure for likely runtime issues.",
-    moduleId: o,
+    moduleId: n,
     placement: "toolbar",
     contextKind: "workflow-definition",
-    createPrompt: (t) => ({
+    createPrompt: (e) => ({
       message: "Find correctness, validation, maintainability, and runtime risks in this workflow draft. Prefer concrete findings over generic advice.",
       mode: "enqueue",
-      attachments: [s("workflow-definition", d(t), t)],
-      source: { moduleId: o, actionId: "weaver.workflows.find-draft-risks", label: "Find workflow risks" }
+      attachments: [s("workflow-definition", d(e), e)],
+      source: { moduleId: n, actionId: "weaver.workflows.find-draft-risks", label: "Find workflow risks" }
     })
-  }), e.ai.promptActions.add({
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.propose-update",
     label: "Propose update",
     description: "Ask Weaver for a reviewed workflow update proposal instead of applying mutations directly.",
-    moduleId: o,
+    moduleId: n,
     placement: "toolbar",
     contextKind: "workflow-definition",
-    createPrompt: (t) => ({
+    createPrompt: (e) => ({
       message: "Propose a safe workflow update. Return rationale, warnings, validation diagnostics, and a graph diff. Do not apply changes directly.",
       mode: "enqueue",
-      attachments: [s("workflow-definition", d(t), t)],
-      source: { moduleId: o, actionId: "weaver.workflows.propose-update", label: "Propose workflow update" }
+      attachments: [s("workflow-definition", d(e), e)],
+      source: { moduleId: n, actionId: "weaver.workflows.propose-update", label: "Propose workflow update" }
     })
-  }), e.ai.promptActions.add({
+  }), t.ai.promptActions.add({
     id: "weaver.workflows.explain-instance",
     label: "Explain instance",
     description: "Ask Weaver to explain workflow instance state and history when instance data is available.",
-    moduleId: o,
+    moduleId: n,
     placement: "empty-state",
     contextKind: "workflow-instance",
-    createPrompt: (t) => ({
+    createPrompt: (e) => ({
       message: "Explain how to reason about workflow instances in this Studio view. If an instance is attached, summarize its state, incidents, bookmarks, and next actions.",
       mode: "enqueue",
-      attachments: [s("workflow-instance", d(t), t)],
-      source: { moduleId: o, actionId: "weaver.workflows.explain-instance", label: "Explain workflow instance" }
+      attachments: [s("workflow-instance", d(e), e)],
+      source: { moduleId: n, actionId: "weaver.workflows.explain-instance", label: "Explain workflow instance" }
     })
-  }), e.ai.tools.add({
+  }), t.ai.tools.add({
     name: "workflow.definition.read",
     displayName: "Read workflow definition",
     description: "Reads workflow definition metadata, draft state, versions, and validation diagnostics.",
     mutability: "read-only",
     dangerLevel: "low",
     tenantBehavior: "tenant-scoped",
-    moduleId: o,
+    moduleId: n,
     permissions: ["workflows:read"],
     agentScopes: ["workflow-author"]
-  }), e.ai.tools.add({
+  }), t.ai.tools.add({
     name: "workflow.proposal.create",
     displayName: "Create workflow proposal",
     description: "Creates a reviewed workflow create/update proposal that requires explicit user approval before apply.",
     mutability: "proposal",
     dangerLevel: "medium",
     tenantBehavior: "tenant-scoped",
-    moduleId: o,
+    moduleId: n,
     permissions: ["workflows:write"],
     agentScopes: ["workflow-author"]
-  }), e.ai.proposalRenderers.add({
+  }), t.ai.proposalRenderers.add({
     id: "weaver.workflows.workflow-proposal-renderer",
     kind: "WorkflowCreate",
-    moduleId: o,
-    component: m
-  }), e.ai.proposalRenderers.add({
+    moduleId: n,
+    component: v
+  }), t.ai.proposalRenderers.add({
     id: "weaver.workflows.workflow-update-proposal-renderer",
     kind: "WorkflowUpdate",
-    moduleId: o,
-    component: m
+    moduleId: n,
+    component: v
   });
 }
-function m({ proposal: e }) {
-  const t = e.graphDiff;
-  return /* @__PURE__ */ n.jsxs("section", { "aria-label": "Workflow proposal", children: [
-    /* @__PURE__ */ n.jsxs("h3", { children: [
-      e.kind,
+function v({ proposal: t }) {
+  const e = t.graphDiff;
+  return /* @__PURE__ */ a.jsxs("section", { "aria-label": "Workflow proposal", children: [
+    /* @__PURE__ */ a.jsxs("h3", { children: [
+      t.kind,
       " proposal"
     ] }),
-    /* @__PURE__ */ n.jsx("p", { children: e.rationale || "No rationale provided." }),
-    e.warnings?.length ? /* @__PURE__ */ n.jsx("ul", { children: e.warnings.map((a) => /* @__PURE__ */ n.jsx("li", { children: a }, a)) }) : null,
-    e.diagnostics?.length ? /* @__PURE__ */ n.jsx("ul", { children: e.diagnostics.map((a) => /* @__PURE__ */ n.jsxs("li", { children: [
-      a.severity ?? "info",
+    /* @__PURE__ */ a.jsx("p", { children: t.rationale || "No rationale provided." }),
+    t.warnings?.length ? /* @__PURE__ */ a.jsx("ul", { children: t.warnings.map((o) => /* @__PURE__ */ a.jsx("li", { children: o }, o)) }) : null,
+    t.diagnostics?.length ? /* @__PURE__ */ a.jsx("ul", { children: t.diagnostics.map((o) => /* @__PURE__ */ a.jsxs("li", { children: [
+      o.severity ?? "info",
       ": ",
-      a.message
-    ] }, `${a.code ?? ""}-${a.message}`)) }) : null,
-    t ? /* @__PURE__ */ n.jsxs("dl", { children: [
-      /* @__PURE__ */ n.jsx("dt", { children: "Added" }),
-      /* @__PURE__ */ n.jsx("dd", { children: t.addedActivityIds?.length ?? 0 }),
-      /* @__PURE__ */ n.jsx("dt", { children: "Removed" }),
-      /* @__PURE__ */ n.jsx("dd", { children: t.removedActivityIds?.length ?? 0 }),
-      /* @__PURE__ */ n.jsx("dt", { children: "Changed" }),
-      /* @__PURE__ */ n.jsx("dd", { children: t.changedActivityIds?.length ?? 0 })
+      o.message
+    ] }, `${o.code ?? ""}-${o.message}`)) }) : null,
+    e ? /* @__PURE__ */ a.jsxs("dl", { children: [
+      /* @__PURE__ */ a.jsx("dt", { children: "Added" }),
+      /* @__PURE__ */ a.jsx("dd", { children: e.addedActivityIds?.length ?? 0 }),
+      /* @__PURE__ */ a.jsx("dt", { children: "Removed" }),
+      /* @__PURE__ */ a.jsx("dd", { children: e.removedActivityIds?.length ?? 0 }),
+      /* @__PURE__ */ a.jsx("dt", { children: "Changed" }),
+      /* @__PURE__ */ a.jsx("dd", { children: e.changedActivityIds?.length ?? 0 })
     ] }) : null
   ] });
 }
-function p(e, t) {
-  return s(e, d(t), t);
+function k(t, e) {
+  return s(t, d(e), e);
 }
-function s(e, t, a) {
+function s(t, e, o) {
   return {
-    kind: e,
-    referenceId: t,
-    metadata: x(a) ? a : { value: a }
+    kind: t,
+    referenceId: e,
+    metadata: w(o) ? o : { value: o }
   };
 }
-function d(e) {
-  if (!x(e)) return null;
-  const t = e.id ?? e.definitionId ?? e.artifactId ?? e.instanceId;
-  return typeof t == "string" ? t : null;
+function d(t) {
+  if (!w(t)) return null;
+  const e = t.id ?? t.definitionId ?? t.artifactId ?? t.instanceId;
+  return typeof e == "string" ? e : null;
 }
-function b(e) {
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return "{}";
-  }
-}
-function x(e) {
-  return typeof e == "object" && e !== null;
+function w(t) {
+  return typeof t == "object" && t !== null;
 }
 export {
-  m as WorkflowProposalRenderer,
-  y as register
+  v as WorkflowProposalRenderer,
+  b as register
 };

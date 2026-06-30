@@ -94,7 +94,7 @@ function AppContent() {
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
-  const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string } | null>(null);
+  const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string; requestId?: string } | null>(null);
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
@@ -117,7 +117,7 @@ function AppContent() {
     if (!api) return;
     return api.ai.onPrompt(prompt => {
       setAssistantOpen(true);
-      setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message });
+      setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message, requestId: prompt.requestId });
     });
   }, [api]);
 

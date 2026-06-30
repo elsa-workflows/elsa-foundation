@@ -3318,6 +3318,58 @@
   padding: 7px 10px;
 }
 
+.wf-ai-suggest {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--wf-accent) 30%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-accent) 5%, var(--wf-surface));
+  border-radius: var(--wf-radius);
+}
+
+.wf-ai-suggest-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wf-ai-suggest-actions .wf-ai-action {
+  min-height: 30px;
+  border-radius: var(--wf-radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.wf-ai-suggest-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wf-ai-suggest-error {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wf-danger, #d4574e);
+}
+
+.wf-ai-suggest-preview {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel-muted);
+  font-size: 13px;
+}
+
+.wf-ai-suggest-preview p {
+  margin: 0;
+  font-weight: 500;
+  text-transform: none;
+}
+
 @media (max-width: 560px) {
   .wf-dialog-heading {
     flex-direction: column;

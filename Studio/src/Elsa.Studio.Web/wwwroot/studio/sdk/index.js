@@ -215,7 +215,7 @@ class b extends Error {
     super(t), this.name = "AuthAdapterError";
   }
 }
-function Le(e = {}) {
+function Je(e = {}) {
   const t = e.baseUrl ?? window.location.origin, r = e.fetch ?? fetch;
   return re({
     bootstrap: () => O(r, t, "/_elsa/identity/bootstrap"),
@@ -387,7 +387,7 @@ function Ne(e, t, r = {}) {
     }
   };
 }
-const L = /* @__PURE__ */ new Map();
+const J = /* @__PURE__ */ new Map();
 async function A(e, t, r, n, o) {
   const s = n.fetch ?? fetch, c = new URL(t, e).toString(), i = await s(c, await Q(r, W(n, o))), a = i.status === 401 && n.refreshOnUnauthorized !== !1 ? await he(s, c, r, W(n, o)) : i;
   if (!a.ok)
@@ -405,11 +405,11 @@ async function he(e, t, r, n) {
   return await pe(t, r) ? e(t, await Q(r, n)) : new Response("Authentication required.", { status: 401 });
 }
 async function pe(e, t) {
-  const r = new URL(e).origin, n = L.get(r);
+  const r = new URL(e).origin, n = J.get(r);
   if (n)
     return n;
-  const o = t.refresh().then((s) => s.status === "authenticated").finally(() => L.delete(r));
-  return L.set(r, o), o;
+  const o = t.refresh().then((s) => s.status === "authenticated").finally(() => J.delete(r));
+  return J.set(r, o), o;
 }
 async function Q(e, t) {
   const r = new Headers(t?.headers), n = await e.getAccessToken();
@@ -534,19 +534,26 @@ function S(e = {}) {
   };
 }
 function He() {
-  const e = /* @__PURE__ */ new Set();
+  const e = /* @__PURE__ */ new Set(), t = /* @__PURE__ */ new Set();
   return {
     contextProviders: S({ slot: m.aiContextProviders }),
     promptActions: S({ slot: m.aiPromptActions }),
     tools: S({ slot: m.aiTools }),
     proposalRenderers: S({ slot: m.aiProposalRenderers }),
     surfaces: S({ slot: m.aiSurfaces }),
-    dispatchPrompt(t) {
-      for (const r of e)
-        r(t);
+    dispatchPrompt(r) {
+      for (const n of e)
+        n(r);
     },
-    onPrompt(t) {
-      return e.add(t), () => e.delete(t);
+    onPrompt(r) {
+      return e.add(r), () => e.delete(r);
+    },
+    publishPromptResult(r) {
+      for (const n of t)
+        n(r);
+    },
+    onPromptResult(r) {
+      return t.add(r), () => t.delete(r);
     }
   };
 }
@@ -642,7 +649,7 @@ function R(e, t) {
   return { state: "available" };
 }
 function ve(e, t) {
-  if (!J(e) || !("availability" in e))
+  if (!L(e) || !("availability" in e))
     return !0;
   const r = e.availability;
   return typeof r == "function" ? r(t) : r;
@@ -654,7 +661,7 @@ function ke(e) {
   return me(e, "order") ?? 500;
 }
 function be(e, t) {
-  if (!J(e))
+  if (!L(e))
     return `_${t.toString().padStart(4, "0")}`;
   for (const r of ["id", "name", "label", "title", "path"]) {
     const n = e[r];
@@ -664,18 +671,18 @@ function be(e, t) {
   return `_${t.toString().padStart(4, "0")}`;
 }
 function H(e, t) {
-  if (!J(e))
+  if (!L(e))
     return;
   const r = e[t];
   return typeof r == "string" ? r : void 0;
 }
 function me(e, t) {
-  if (!J(e))
+  if (!L(e))
     return;
   const r = e[t];
   return typeof r == "number" ? r : void 0;
 }
-function J(e) {
+function L(e) {
   return typeof e == "object" && e !== null;
 }
 function Ke(e, t = {}) {
@@ -882,7 +889,7 @@ export {
   He as createAiContributionApi,
   re as createAuthProviderManager,
   Ne as createAuthenticatedHttpClient,
-  Le as createBackendAuthProviderManager,
+  Je as createBackendAuthProviderManager,
   S as createContributionRegistry,
   Be as createDialogController,
   Ke as createEndpointContext,

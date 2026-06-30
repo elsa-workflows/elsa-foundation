@@ -863,6 +863,34 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("reveals an intent box, requests a metadata suggestion, and applies it to the form", async () => {
+    const { container, unmount, publishSuggestion } = await openCreateDialogWithSuggest();
+    await fill(textareaByLabel(container, "Workflow intent"), "Approve large orders");
+    await click(buttonByText(dialog(container), "Generate"));
+
+    await publishSuggestion({ text: "Sure!\n```json\n{\"name\": \"Order Approval\", \"description\": \"Routes large orders to approvers.\"}\n```" });
+
+    // Non-autopilot result surfaces an Apply button rather than auto-filling.
+    await click(buttonByText(dialog(container), "Apply"));
+
+    expect(inputByLabel(container, "Display name")?.value).toBe("Order Approval");
+    expect(textareaByLabel(container, "Description")?.value).toBe("Routes large orders to approvers.");
+
+    await unmount();
+  });
+
+  it("auto-fills the create form from an Autopilot suggestion without an Apply step", async () => {
+    const { container, unmount, publishSuggestion } = await openCreateDialogWithSuggest();
+    await click(buttonByText(dialog(container), "Generate"));
+
+    await publishSuggestion({ autoApply: true, text: "{\"name\": \"Auto Workflow\", \"description\": \"Created by Autopilot.\"}" });
+
+    expect(inputByLabel(container, "Display name")?.value).toBe("Auto Workflow");
+    expect(buttonByText(dialog(container), "Apply")).toBeNull();
+
+    await unmount();
+  });
+
   it("selects multiple workflow definition rows and clears selection", async () => {
     const fetchMock = vi.fn(async () => response({
       definitions: [
@@ -1382,11 +1410,16 @@ function testApi(): ElsaStudioModuleApi {
     workflowDesigner: {
       panels: registry()
     },
-    ai: {
-      promptActions: registry(),
-      dispatchPrompt: vi.fn(),
-      onPrompt: vi.fn(() => () => {})
-    },
+    ai: (() => {
+      const resultListeners = new Set<(result: unknown) => void>();
+      return {
+        promptActions: registry(),
+        dispatchPrompt: vi.fn(),
+        onPrompt: vi.fn(() => () => {}),
+        publishPromptResult: (result: unknown) => { for (const listener of resultListeners) listener(result); },
+        onPromptResult: (listener: (result: unknown) => void) => { resultListeners.add(listener); return () => resultListeners.delete(listener); }
+      };
+    })(),
     dialogs: {
       confirm: vi.fn(async () => true),
       prompt: vi.fn(async () => null),
@@ -1506,6 +1539,40 @@ function routeMatchesPath(routePath: string, path: string) {
   const pathSegments = path.split("/").filter(Boolean);
   return routeSegments.length === pathSegments.length &&
     routeSegments.every((segment, index) => segment.startsWith(":") || segment === pathSegments[index]);
+}
+
+// Renders the definitions list with a stub suggest-metadata action, opens the Create dialog, and reveals
+// the intent box — the shared arrange for the metadata-suggestion tests. publishSuggestion() feeds a
+// Weaver reply back through the real onPromptResult bus using the requestId the dialog dispatched.
+async function openCreateDialogWithSuggest() {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes("/activities") ? response({ activities: [] }) : response({ definitions: [definition()] })));
+
+  const captured: { requestId?: string } = {};
+  const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
+    api.ai.promptActions.add({
+      id: "weaver.workflows.suggest-create-metadata",
+      label: "Suggest name and description",
+      placement: "field-adornment",
+      contextKind: "workflow-create-draft",
+      createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
+    });
+    api.ai.dispatchPrompt = request => { captured.requestId = request.requestId; };
+  });
+
+  await waitForText(rendered.container, "Hello World");
+  await click(buttonByText(rendered.container, "Create"));
+  await waitForText(rendered.container, "Create Workflow");
+  // The button reveals the intent field rather than firing a context-free prompt.
+  await click(buttonByText(dialog(rendered.container), "Suggest name and description"));
+
+  const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
+    expect(captured.requestId).toBeTruthy();
+    flushSync(() => rendered.api.ai.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    await flushPromises();
+  };
+
+  return { ...rendered, captured, publishSuggestion };
 }
 
 function definition(overrides: Partial<Record<string, unknown>> = {}) {

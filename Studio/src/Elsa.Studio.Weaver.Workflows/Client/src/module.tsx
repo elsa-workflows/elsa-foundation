@@ -42,16 +42,28 @@ export function register(api: ElsaStudioModuleApi) {
     moduleId,
     placement: "field-adornment",
     contextKind: "workflow-create-draft",
-    createPrompt: context => ({
-      message: [
-        "Suggest a concise Elsa workflow display name and one sentence description for this new workflow.",
-        "Return only the proposed name and description.",
-        `Draft context: ${safeJson(context)}`
-      ].join("\n"),
-      mode: "enqueue",
-      attachments: [createAttachment("workflow-create-draft", "new-workflow", context)],
-      source: { moduleId, actionId: "weaver.workflows.suggest-create-metadata", label: "Suggest workflow metadata" }
-    })
+    createPrompt: context => {
+      // Only the user's intent and the chosen root kind are relevant to naming. Deliberately omit any
+      // activity catalog or large draft payload so the conversation isn't flooded with technical JSON.
+      const draft: Record<string, unknown> = isRecord(context) && isRecord(context.draft) ? context.draft : {};
+      const intent = isRecord(context) && typeof context.intent === "string" ? context.intent.trim() : "";
+      const rootKind = typeof draft.rootKind === "string" ? draft.rootKind : undefined;
+      const attachment = { intent, rootKind, name: draft.name ?? "", description: draft.description ?? "" };
+      return {
+        message: [
+          "Suggest a concise display name and a one-sentence description for a new Elsa workflow.",
+          intent
+            ? `The user describes what the workflow should do as: "${intent}".`
+            : "The user has not described the workflow yet — infer a sensible, generic automation name and description.",
+          rootKind ? `The root activity is a ${rootKind}.` : "",
+          "Reply with one short friendly sentence, then a fenced ```json code block containing exactly " +
+          '{"name": string, "description": string} and nothing else in that block.'
+        ].filter(Boolean).join("\n"),
+        mode: "enqueue",
+        attachments: [createAttachment("workflow-create-draft", "new-workflow", attachment)],
+        source: { moduleId, actionId: "weaver.workflows.suggest-create-metadata", label: "Suggest workflow metadata" }
+      };
+    }
   });
 
   api.ai.promptActions.add({
@@ -215,14 +227,6 @@ function readReferenceId(reference: unknown) {
   if (!isRecord(reference)) return null;
   const id = reference.id ?? reference.definitionId ?? reference.artifactId ?? reference.instanceId;
   return typeof id === "string" ? id : null;
-}
-
-function safeJson(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return "{}";
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

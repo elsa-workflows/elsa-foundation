@@ -20,6 +20,14 @@ declare module "@elsa-workflows/studio-sdk" {
       actionId?: string;
       label?: string;
     };
+    requestId?: string;
+  }
+
+  export interface StudioAiPromptResult {
+    requestId: string;
+    status: "completed" | "cancelled" | "failed";
+    text: string;
+    autoApply?: boolean;
   }
 
   export interface StudioAiContextProviderContribution {
@@ -88,6 +96,8 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
     readonly tools: StudioContributionRegistry<StudioAiToolContribution>;
     readonly proposalRenderers: StudioContributionRegistry<StudioAiProposalRendererContribution>;
+    publishPromptResult(result: StudioAiPromptResult): void;
+    onPromptResult(listener: (result: StudioAiPromptResult) => void): () => void;
   }
 
   export interface ElsaStudioModuleApi {

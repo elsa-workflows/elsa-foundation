@@ -66,7 +66,7 @@ export interface UseWeaverSession {
   promptStarters: ReturnType<typeof getActivePromptStarters>;
   capabilities: ReturnType<typeof getActiveAgentCapabilities>;
   activeProvider: AgentProviderDiagnostics | undefined;
-  send(message: string): void;
+  send(message: string, options?: { requestId?: string }): void;
   stop(): void;
   removeFollowup(id: string): void;
   approveProposal(proposal: AgentActionProposal): void;
@@ -115,6 +115,10 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const seenBatchIdsRef = useRef(new Set<string>());
   const autoApplyModeRef = useRef(autoApplyMode);
   autoApplyModeRef.current = autoApplyMode;
+  // Correlation id for the in-flight turn, when a caller asked for the response routed back (see send()).
+  const turnRequestIdRef = useRef<string | null>(null);
+  // Accumulated assistant text per message id, so a correlated turn can publish its final answer.
+  const assistantTextByIdRef = useRef(new Map<string, string>());
 
   const agentClient = useMemo(() => client ?? createAgentClient(api.backend), [api.backend, client]);
   const mode: StudioAgentMode = bootstrap?.modes.includes("troubleshoot") ? "troubleshoot" : bootstrap?.modes[0] ?? "troubleshoot";
@@ -198,9 +202,11 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         turnIdRef.current = event.turnId;
         break;
       case "message-started":
+        if (event.role === "assistant") assistantTextByIdRef.current.set(event.messageId, "");
         setMessages(current => upsertMessage(current, { id: event.messageId, role: event.role, content: "", status: "streaming" }));
         break;
       case "message-delta":
+        assistantTextByIdRef.current.set(event.messageId, (assistantTextByIdRef.current.get(event.messageId) ?? "") + event.content);
         setMessages(current => upsertDelta(current, event.messageId, event.content));
         break;
       case "step-started":
@@ -239,19 +245,25 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       }
       case "clarification-requested":
         setMessages(current => [...current, { id: event.clarification.id, role: "assistant", content: event.clarification.prompt, status: "completed" }]);
+        // Weaver needs more input from the user in the chat; release any correlated caller so it stops waiting.
+        publishTurnResult("cancelled", "");
         finishTurn();
         break;
       case "message-completed":
         setMessages(current => current.map(message => message.id === event.messageId ? { ...message, status: "completed" } : message));
+        publishTurnResult("completed", assistantTextByIdRef.current.get(event.messageId) ?? "");
+        assistantTextByIdRef.current.delete(event.messageId);
         finishTurn();
         break;
       case "turn-cancelled":
         setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
+        publishTurnResult("cancelled", "");
         finishTurn();
         break;
       case "error":
         setError(event.message);
         setMessages(current => [...current, { id: `error-${current.length}`, role: "error", content: event.message, status: "failed" }]);
+        publishTurnResult("failed", "");
         finishTurn();
         break;
     }
@@ -264,34 +276,52 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     turnIdRef.current = null;
   }
 
-  const startTurn = useCallback(async (message: string) => {
+  // Autopilot ("full-auto") lets correlated callers apply a result without asking.
+  const isAutonomous = () => autoApplyModeRef.current === "full-auto";
+
+  // Route a correlated turn's outcome back to the caller (e.g. the Create dialog) exactly once. Defaults
+  // to the in-flight turn, but a superseded/errored turn can pass its own captured id (the ref may have
+  // since moved on to a newer turn — in that case we publish without clearing the newer turn's id).
+  function publishTurnResult(status: "completed" | "cancelled" | "failed", text: string, requestId = turnRequestIdRef.current) {
+    if (!requestId) return;
+    if (turnRequestIdRef.current === requestId) turnRequestIdRef.current = null;
+    api.ai.publishPromptResult({ requestId, status, text, autoApply: isAutonomous() });
+  }
+
+  const startTurn = useCallback(async (message: string, requestId?: string) => {
     const generation = ++turnGenerationRef.current;
     stopRequestedRef.current = false;
+    turnRequestIdRef.current = requestId ?? null;
     setChatState("streaming");
     setError(null);
     setTimeline([]);
     setPlan([]);
     setMessages(current => [...current, { id: `user-${current.length}`, role: "user", content: message, status: "completed" }]);
 
+    // Release a correlated caller from before the stream opens (supersede/error), so it never hangs.
+    // Pass the captured requestId because a supersede may have already moved turnRequestIdRef on.
+    const settle = (status: "cancelled" | "failed") => publishTurnResult(status, "", requestId);
+
     try {
       const collected = await collectAgentContext(api, surface, mode, sessionIdRef.current ?? undefined);
-      if (turnGenerationRef.current !== generation) return;
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
       setAttachments(collected);
       const activeSessionId = await ensureSession(collected);
-      if (turnGenerationRef.current !== generation) return;
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
       const response = await agentClient.sendMessage(activeSessionId, { message, mode, contextAttachments: collected, capabilityId: capabilities[0]?.id });
       // The user stopped (or started another turn) while we were awaiting; do not re-open a stream.
-      if (turnGenerationRef.current !== generation) return;
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
       setMessages(current => [...current, { id: response.messageId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming" }]);
       streamRef.current?.close();
       streamRef.current = subscribeStream(
         api.backend,
         response.streamUrl,
         handleStreamEvent,
-        streamError => { setError(getAgentErrorMessage(streamError)); finishTurn(); },
+        streamError => { setError(getAgentErrorMessage(streamError)); publishTurnResult("failed", ""); finishTurn(); },
         { defaultMessageId: response.messageId });
     } catch (e) {
-      if (turnGenerationRef.current !== generation) return;
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
+      settle("failed");
       setError(getAgentErrorMessage(e));
       setMessages(current => [...current, { id: `error-${current.length}`, role: "error", content: getAgentErrorMessage(e), status: "failed" }]);
       finishTurn();
@@ -312,11 +342,11 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     }
   }, [agentClient, attachments, capabilities, ensureSession, mode]);
 
-  const send = useCallback((message: string) => {
+  const send = useCallback((message: string, options?: { requestId?: string }) => {
     const trimmed = message.trim();
     if (!trimmed || !ready) return;
     if (chatState === "streaming") void steer(trimmed);
-    else void startTurn(trimmed);
+    else void startTurn(trimmed, options?.requestId);
   }, [chatState, ready, startTurn, steer]);
 
   const stop = useCallback(() => {
@@ -338,6 +368,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       streamRef.current = null;
     }
     setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
+    publishTurnResult("cancelled", "");
     finishTurn();
   }, [agentClient]);
 

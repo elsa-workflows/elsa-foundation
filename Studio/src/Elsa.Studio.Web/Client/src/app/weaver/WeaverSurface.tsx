@@ -16,7 +16,14 @@ import { useWeaverSession, type UseWeaverSession, type WeaverAutoApplyMode } fro
 const AUTO_APPLY_LABELS: Record<WeaverAutoApplyMode, string> = {
   "manual": "Manual review",
   "auto-read-only": "Auto-apply low-risk",
-  "full-auto": "Full auto"
+  "full-auto": "Autopilot"
+};
+
+// Tooltip copy for the autonomy dropdown, surfaced via the <option> title attribute.
+const AUTO_APPLY_HINTS: Record<WeaverAutoApplyMode, string> = {
+  "manual": "Every change is proposed for your review before anything is applied.",
+  "auto-read-only": "Read-only steps run automatically; mutating changes are still proposed for review.",
+  "full-auto": "Weaver applies safe changes and runs tasks autonomously, deferring only genuinely risky edits for review."
 };
 
 export function WeaverSurface({
@@ -36,7 +43,7 @@ export function WeaverSurface({
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
   onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
-  incomingPrompt?: { id: string; message: string } | null;
+  incomingPrompt?: { id: string; message: string; requestId?: string } | null;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
@@ -61,7 +68,7 @@ export function WeaverSurface({
   useEffect(() => {
     if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.ready) {
       lastPromptIdRef.current = incomingPrompt.id;
-      sendRef.current(incomingPrompt.message);
+      sendRef.current(incomingPrompt.message, { requestId: incomingPrompt.requestId });
     }
   }, [incomingPrompt, session.ready]);
 
@@ -83,7 +90,7 @@ export function WeaverSurface({
               onChange={event => session.setAutoApplyMode(event.target.value as WeaverAutoApplyMode)}
             >
               {session.allowedAutoApplyModes.map(mode => (
-                <option key={mode} value={mode}>{AUTO_APPLY_LABELS[mode]}</option>
+                <option key={mode} value={mode} title={AUTO_APPLY_HINTS[mode]}>{AUTO_APPLY_LABELS[mode]}</option>
               ))}
             </select>
           </label>

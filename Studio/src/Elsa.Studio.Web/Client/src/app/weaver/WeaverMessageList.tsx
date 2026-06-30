@@ -1,10 +1,40 @@
 import React from "react";
 import { Bot, ThumbsDown, ThumbsUp, User } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { AgentMessageViewModel } from "../agent/agentTypes";
 
 const PLACEHOLDER = "Awaiting assistant response…";
+
+// Code/JSON blocks beyond either threshold are collapsed behind a disclosure so long, technical
+// payloads (e.g. an activity-catalog dump) don't flood the conversation. Tuned for the narrow dock.
+const COLLAPSE_LINE_THRESHOLD = 12;
+const COLLAPSE_CHAR_THRESHOLD = 600;
+
+// react-markdown renders fenced code as <pre><code>…</code></pre>; overriding <pre> lets us wrap the
+// whole block in a valid <details> (a <details> inside <pre> would be invalid markup).
+const markdownComponents: Components = {
+  pre({ children, ...props }) {
+    const text = extractCodeText(children);
+    const lineCount = text.replace(/\n+$/, "").split("\n").length;
+    const block = <pre {...props}>{children}</pre>;
+    if (lineCount <= COLLAPSE_LINE_THRESHOLD && text.length <= COLLAPSE_CHAR_THRESHOLD) return block;
+    return (
+      <details className="weaver-code-collapse">
+        <summary>{`Show ${lineCount} line${lineCount === 1 ? "" : "s"} of code`}</summary>
+        {block}
+      </details>
+    );
+  }
+};
+
+function extractCodeText(node: React.ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractCodeText).join("");
+  if (React.isValidElement(node)) return extractCodeText((node.props as { children?: React.ReactNode }).children);
+  return "";
+}
 
 export function WeaverMessageList({
   messages,
@@ -58,7 +88,7 @@ function WeaverMessageContent({ message, streaming }: { message: AgentMessageVie
   if (message.role === "assistant" && !isAwaiting) {
     return (
       <div className="weaver-markdown">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{message.content}</ReactMarkdown>
         {showCaret ? <span className="weaver-caret" aria-hidden="true" /> : null}
       </div>
     );
