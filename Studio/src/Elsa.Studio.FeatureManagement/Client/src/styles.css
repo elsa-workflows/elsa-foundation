@@ -388,14 +388,96 @@
   align-items: center;
 }
 
-.feature-management-card-title em,
-.feature-management-card-meta span {
+/* Badges & chips — scannable, color-coded feature metadata */
+.feature-management-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  font-style: normal;
+  line-height: 1.55;
+  white-space: nowrap;
+  color: var(--studio-text, var(--foreground));
+  background: var(--studio-surface, var(--card));
+}
+
+.feature-management-badge svg {
+  flex: 0 0 auto;
+  opacity: .85;
+}
+
+.feature-management-badge.tone-neutral {
+  color: var(--studio-text-muted, var(--muted-foreground));
+}
+
+.feature-management-badge.tone-info {
+  color: #2563eb;
+  border-color: color-mix(in srgb, #2563eb 45%, var(--border));
+  background: color-mix(in srgb, #2563eb 10%, transparent);
+}
+
+.feature-management-badge.tone-violet {
+  color: #7c3aed;
+  border-color: color-mix(in srgb, #7c3aed 45%, var(--border));
+  background: color-mix(in srgb, #7c3aed 10%, transparent);
+}
+
+.feature-management-badge.tone-enabled {
+  color: #16a34a;
+  border-color: color-mix(in srgb, #16a34a 45%, var(--border));
+  background: color-mix(in srgb, #16a34a 12%, transparent);
+}
+
+.feature-management-badge.tone-advanced {
+  color: #0891b2;
+  border-color: color-mix(in srgb, #0891b2 45%, var(--border));
+  background: color-mix(in srgb, #0891b2 10%, transparent);
+}
+
+.feature-management-badge.tone-experimental {
+  color: #d97706;
+  border-color: color-mix(in srgb, #d97706 50%, var(--border));
+  background: color-mix(in srgb, #d97706 12%, transparent);
+}
+
+.feature-management-badge.tone-danger {
+  color: var(--danger, #dc2626);
+  border-color: color-mix(in srgb, var(--danger, #dc2626) 50%, var(--border));
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+}
+
+.feature-management-chips {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.feature-management-chip {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   border-radius: 5px;
-  color: var(--studio-text-muted, var(--muted-foreground));
+  padding: 1px 7px;
   font-size: 11px;
+  font-weight: 600;
   font-style: normal;
-  padding: 2px 6px;
+  white-space: nowrap;
+  color: var(--studio-text-muted, var(--muted-foreground));
+  background: color-mix(in srgb, var(--studio-surface, var(--card)) 84%, var(--muted));
+}
+
+.feature-management-chip-overflow {
+  cursor: default;
+}
+
+.feature-management-card-title .feature-management-badge {
+  font-size: 10px;
+  padding: 0 7px;
 }
 
 .feature-management-card small {
@@ -795,6 +877,29 @@
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.feature-management-inspector-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.feature-management-detail-wide {
+  grid-column: 1 / -1;
+}
+
+.feature-management-card-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.feature-management-card-count svg {
+  color: var(--studio-text-muted, var(--muted-foreground));
 }
 
 @media (max-width: 860px) {
