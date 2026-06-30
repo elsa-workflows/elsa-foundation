@@ -38,6 +38,10 @@ public sealed class DefaultSecretResolver(
             await auditSink.RecordAsync(new("resolve", resolvedSecret.Name, "succeeded", timeProvider.GetUtcNow()), cancellationToken);
             return ResolvedSecret.Success(payload.Value, mapper.Map(resolvedSecret));
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception e)
         {
             return await FailureAsync(resolvedSecret.Name, SecretResolutionFailureCode.StoreUnavailable, e.Message, cancellationToken);
