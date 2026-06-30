@@ -709,6 +709,61 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("reorders collection items via drag and drop", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal" }] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "write-lines-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines", category: "Primitives", displayName: "Write Lines" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: { nodeId: "write-lines-root", activityVersionId: "write-lines-v1", inputs: [], outputs: [], structure: null },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Lines");
+    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Lines")) ?? null);
+    await waitForText(container, "Lines");
+
+    const rowInputs = () => Array.from(container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']"));
+    await click(buttonByText(container, "Add item"));
+    await click(buttonByText(container, "Add item"));
+    await click(buttonByText(container, "Add item"));
+    await fill(rowInputs()[0], "A");
+    await fill(rowInputs()[1], "B");
+    await fill(rowInputs()[2], "C");
+
+    // Drag the first row's handle onto the third row; the list reorders A,B,C -> B,C,A.
+    const handles = container.querySelectorAll(".wf-collection-item-handle");
+    const rows = container.querySelectorAll(".wf-collection-item");
+    const transfer = makeDataTransfer();
+    await fireDrag(handles[0], "dragstart", transfer);
+    await fireDrag(rows[2], "dragover", transfer);
+    await fireDrag(rows[2], "drop", transfer);
+
+    expect(rowInputs().map(row => row.value)).toEqual(["B", "C", "A"]);
+
+    await unmount();
+  });
+
   it("filters the canvas activity picker with keyboard search", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -1697,6 +1752,27 @@ function response(body: unknown, status = 200) {
 async function click(element: Element | null) {
   if (!(element instanceof HTMLElement)) throw new Error("Element not found");
   element.click();
+  await flushPromises();
+  flushSync(() => {});
+}
+
+// jsdom doesn't implement DataTransfer; a minimal stand-in is enough for the drag handlers, which only
+// set effectAllowed/dropEffect and a text payload.
+function makeDataTransfer() {
+  const store: Record<string, string> = {};
+  return {
+    effectAllowed: "",
+    dropEffect: "",
+    setData: (format: string, value: string) => { store[format] = value; },
+    getData: (format: string) => store[format] ?? ""
+  };
+}
+
+async function fireDrag(element: Element | null, type: "dragstart" | "dragover" | "drop", dataTransfer: ReturnType<typeof makeDataTransfer>) {
+  if (!(element instanceof HTMLElement)) throw new Error("Drag target not found");
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  element.dispatchEvent(event);
   await flushPromises();
   flushSync(() => {});
 }
