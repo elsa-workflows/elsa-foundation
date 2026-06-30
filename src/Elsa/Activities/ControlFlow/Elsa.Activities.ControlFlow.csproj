@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 

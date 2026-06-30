@@ -17,11 +17,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\..\..\src\Elsa\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
-		<ProjectReference Include="..\..\..\..\src\Elsa\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
-		<ProjectReference Include="..\..\..\..\src\Elsa\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-		<ProjectReference Include="..\..\..\..\src\Elsa\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
-		<ProjectReference Include="..\..\..\..\src\Elsa\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
+		<ProjectReference Include="..\..\..\..\..\src\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

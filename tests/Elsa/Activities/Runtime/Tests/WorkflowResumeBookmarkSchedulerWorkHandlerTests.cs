@@ -172,6 +172,37 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PropagatesFaultToParent_WhenResumeFaultsAndChildHasParent()
+    {
+        // A suspended branch that faults on resume must propagate the fault to its parent fork/join so the
+        // join resolves deterministically (#308), mirroring the invoke-path propagation. The child keeps its
+        // own blocking incident; a child-fault parent-evaluation work item rides along on the incident
+        // checkpoint, tagged so the parent-completion handler routes it to OnChildFaultedAsync.
+        await _executableStore.SaveAsync(NewExecutable(resumeTargetId: "resume-target:throwing"));
+        await _activityStateStore.SaveAsync(NewParentState());
+        await _activityStateStore.SaveAsync(NewSuspendedState() with { ParentActivityExecutionId = "actexec-parent" });
+        await SaveBookmarkAsync(resumeTargetId: "resume-target:throwing");
+        await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingResumeTargetActivity()));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem(resumeTargetId: "resume-target:throwing"));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+
+        var parentEvaluation = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
+        Assert.Equal(bool.TrueString, parentEvaluation.CommandMetadata[RuntimeMetadataKeys.ChildFaulted]);
+        Assert.Equal("incident:resume-work:actexec-1:ActivityResumeFaulted", parentEvaluation.CommandMetadata[RuntimeMetadataKeys.IncidentId]);
+        Assert.NotNull(parentEvaluation.Payload);
+        var payload = parentEvaluation.Payload.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, payload.CompletionKind);
+        Assert.Equal("actexec-parent", payload.ActivityExecutionId);
+        Assert.Equal("node-parent", payload.ExecutableNodeId);
+        Assert.Equal("actexec-1", payload.CompletedChildActivityExecutionId);
+    }
+
+    [Fact]
     public async Task HandleAsync_RecordsIncidentWhenInputMaterializationFails()
     {
         await _executableStore.SaveAsync(NewExecutable(inputBinding: new RuntimeInputBinding(
@@ -194,6 +225,63 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.Equal(_now, state.CompletedAt);
         Assert.Contains("typeName", state.Metadata["runtime.faultMessage"]);
         await AssertIncidentRecordedAsync("InputMaterializationFailed", message => Assert.Contains("typeName", message));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenActivityConstructionFails()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        var factory = new ThrowingActivityFactory(new InvalidOperationException("missing constructor"));
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", state.SubStatus);
+        Assert.Equal(_now, state.CompletedAt);
+        Assert.Equal(1, state.FaultCount);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Metadata["runtime.faultType"]);
+        Assert.Equal("missing constructor", state.Metadata["runtime.faultMessage"]);
+        await AssertIncidentRecordedAsync("ActivityResumeConstructionFailed", message => Assert.Equal("missing constructor", message));
+        Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_RecordsFaultedStateWhenArgumentBindingThrows()
+    {
+        // Models a binder InvalidOperationException (the #313/#316 class of bug): the argument binder runs inside
+        // activityFactory.Create, so a typed-binding failure on the resume path must fault the activity with a
+        // blocking incident rather than escaping the fault boundary and stalling the run silently at Running (#325).
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        var factory = new ThrowingActivityFactory(new InvalidOperationException("cannot bind argument 'Value'"));
+        await using var provider = NewProvider(factory);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", state.SubStatus);
+        await AssertIncidentRecordedAsync("ActivityResumeConstructionFailed", message => Assert.Contains("cannot bind argument", message));
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Faulted, projection.Status);
+        Assert.Equal("ActivityResumeConstructionFailed", projection.SubStatus);
+        var incident = Assert.Single(projection.Incidents);
+        Assert.Equal("ActivityResumeConstructionFailed", incident.FailureType);
+        Assert.True(incident.IsBlocking);
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
         Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
     }
@@ -488,6 +576,33 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
+    // A minimal Running parent execution for the faulted branch, so child-fault propagation can resolve the
+    // parent's executable node when building the parent-evaluation work item.
+    private static ActivityExecutionState NewParentState() =>
+        new(
+            Execution: new ActivityExecution(
+                ActivityExecutionId: "actexec-parent",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-parent",
+                AuthoredActivityId: "authored-node-parent",
+                ActivityType: "test/parallel",
+                ActivityTypeVersion: "1.0.0"),
+            Status: ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ScheduledAt: DateTimeOffset.UtcNow.AddMinutes(-4),
+            StartedAt: DateTimeOffset.UtcNow.AddMinutes(-3),
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+
     private static BookmarkState NewBookmark(
         string resumeTargetId,
         string stimulusType,
@@ -585,6 +700,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
                 outputProducingActivity.Customer = (OutputArgument<object?>)customer;
             return ValueTask.FromResult(activity);
         }
+    }
+
+    private sealed class ThrowingActivityFactory(Exception exception) : IActivityFactory
+    {
+        public ValueTask<IActivity> Create(
+            string descriptorType,
+            JsonElement payload,
+            IDictionary<string, InputArgument>? inputs,
+            IDictionary<string, OutputArgument>? outputs,
+            CancellationToken cancellationToken = default) =>
+            throw exception;
     }
 
     private sealed class ResumeTargetActivity : ActivityBase

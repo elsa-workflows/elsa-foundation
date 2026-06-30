@@ -8,211 +8,220 @@
     <File Path="NuGet.config" />
   </Folder>
   <Folder Name="/src/" />
-  <Folder Name="/src/apps/">
-    <Project Path="src/apps/Elsa.Server/Elsa.Server.csproj" />
+  <Folder Name="/src/Apps/">
+    <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/" />
-  <Folder Name="/src/elsa/Activities/">
+  <Folder Name="/src/Elsa/" />
+  <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Composition/">
+  <Folder Name="/src/Elsa/Activities/Composition/">
     <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Design/">
+  <Folder Name="/src/Elsa/Activities/Design/">
     <Project Path="src/Elsa/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <Project Path="src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Design/Core/" />
-  <Folder Name="/src/elsa/Activities/Design/Persistence/">
+  <Folder Name="/src/Elsa/Activities/Design/Core/" />
+  <Folder Name="/src/Elsa/Activities/Design/Persistence/">
     <Project Path="src/Elsa/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj" />
+    <Project Path="src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Design/Persistence/EFCore/">
+  <Folder Name="/src/Elsa/Activities/Design/Persistence/EFCore/">
     <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Elsa.Activities.Design.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Activities/Design/Persistence/EFCore/Sqlite/Elsa.Activities.Design.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Design/Persistence/Groundwork/">
-    <Project Path="src/Elsa/Activities/Design/Persistence/Groundwork/Elsa.Activities.Design.Persistence.Groundwork.csproj" />
-  </Folder>
-  <Folder Name="/src/elsa/Activities/Design/Reconciliation/">
+  <Folder Name="/src/Elsa/Activities/Design/Reconciliation/">
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
     <Project Path="src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Activities/Runtime/">
+  <Folder Name="/src/Elsa/Activities/Runtime/">
     <Project Path="src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Agent/">
-    <Project Path="src\Elsa\Agent\Abstractions\Elsa.Agent.Core.csproj" />
+  <Folder Name="/src/Elsa/Agent/">
+    <Project Path="src\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
     <Project Path="src\Elsa\Agent\Anthropic\Elsa.Agent.Anthropic.csproj" />
     <Project Path="src\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
     <Project Path="src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
-    <Project Path="src\Elsa\Agent\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
+    <Project Path="src\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Api/">
+  <Folder Name="/src/Elsa/Api/">
     <Project Path="src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Caching/">
+  <Folder Name="/src/Elsa/Caching/">
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Diagnostics/">
+  <Folder Name="/src/Elsa/Diagnostics/">
     <Project Path="src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/" />
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/Persistence/" />
+  <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/">
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Events/">
+  <Folder Name="/src/Elsa/Events/">
     <Project Path="src/Elsa/Events/Core/Elsa.Events.Core.csproj" />
     <Project Path="src/Elsa/Events/Elsa.Events.csproj" />
     <Project Path="src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Events/Core/" />
-  <Folder Name="/src/elsa/Expressions/">
+  <Folder Name="/src/Elsa/Events/Core/" />
+  <Folder Name="/src/Elsa/Expressions/">
     <Project Path="src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj" />
     <Project Path="src/Elsa/Expressions/Elsa.Expressions.csproj" />
     <Project Path="src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Expressions/Core/" />
-  <Folder Name="/src/elsa/Expressions/JavaScript/">
+  <Folder Name="/src/Elsa/Expressions/Core/" />
+  <Folder Name="/src/Elsa/Expressions/JavaScript/">
     <Project Path="src/Elsa/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Libraries/Elsa.Expressions.JavaScript.Libraries.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Primitives/Elsa.Expressions.JavaScript.Primitives.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Expressions/JavaScript/Rendering/">
+  <Folder Name="/src/Elsa/Expressions/JavaScript/Rendering/">
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <Project Path="src/Elsa/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Http/">
+  <Folder Name="/src/Elsa/Http/">
     <Project Path="src/Elsa/Http/Core/Elsa.Http.Core.csproj" />
     <Project Path="src/Elsa/Http/Elsa.Http.csproj" />
     <Project Path="src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Identity/">
-    <Project Path="src/Elsa/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
-    <Project Path="src/Elsa/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
-    <Project Path="src/Elsa/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
-    <Project Path="src/Elsa/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
-    <Project Path="src/Elsa/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+  <Folder Name="/src/Elsa/Foundation/" />
+  <Folder Name="/src/Elsa/Foundation/Identity/">
+    <Project Path="src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Locking/">
+  <Folder Name="/src/Elsa/Locking/">
     <Project Path="src/Elsa/Locking/Core/Elsa.Locking.Core.csproj" />
     <Project Path="src/Elsa/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Mediator/">
+  <Folder Name="/src/Elsa/Mediator/">
     <Project Path="src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj" />
     <Project Path="src/Elsa/Mediator/Elsa.Mediator.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Modularity/">
+  <Folder Name="/src/Elsa/Modularity/">
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Persistence/">
+  <Folder Name="/src/Elsa/Persistence/">
     <Project Path="src/Elsa/Persistence/Core/Elsa.Persistence.Core.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Persistence/EFCore/">
+  <Folder Name="/src/Elsa/Persistence/EFCore/">
     <Project Path="src/Elsa/Persistence/EFCore/Elsa.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Persistence/EFCore/Sqlite/Elsa.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Persistence/EFCore/Sqlite/" />
-  <Folder Name="/src/elsa/Persistence/Groundwork/">
+  <Folder Name="/src/Elsa/Persistence/EFCore/Sqlite/" />
+  <Folder Name="/src/Elsa/Persistence/Groundwork/">
     <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Persistence/Groundwork/Sqlite/">
     <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Unified/Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Persistence/Groundwork.Querying/">
-    <Project Path="src/Elsa/Persistence/Groundwork.Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
-  </Folder>
-  <Folder Name="/src/elsa/Pipelines/">
+  <Folder Name="/src/Elsa/Pipelines/">
     <Project Path="src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Primitives/" />
-  <Folder Name="/src/elsa/Primitives/Hosting/">
+  <Folder Name="/src/Elsa/Primitives/" />
+  <Folder Name="/src/Elsa/Primitives/Hosting/">
     <Project Path="src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Primitives/Primitives/">
+  <Folder Name="/src/Elsa/Primitives/Primitives/">
     <Project Path="src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Serialization/">
+  <Folder Name="/src/Elsa/Serialization/">
     <Project Path="src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj" />
     <Project Path="src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
     <Project Path="src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Secrets/">
+  <Folder Name="/src/Elsa/Secrets/">
     <Project Path="src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Secrets/Persistence/" />
-  <Folder Name="/src/elsa/Secrets/Persistence/Groundwork/">
+  <Folder Name="/src/Elsa/Secrets/Persistence/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Serialization/Core/" />
-  <Folder Name="/src/elsa/Serialization/SystemText/" />
-  <Folder Name="/src/elsa/Tasks/">
+  <Folder Name="/src/Elsa/Serialization/Core/" />
+  <Folder Name="/src/Elsa/Serialization/SystemText/" />
+  <Folder Name="/src/Elsa/Tasks/">
     <Project Path="src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <Project Path="src/Elsa/Tasks/Elsa.Tasks.csproj" />
     <Project Path="src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Tasks/Core/" />
-  <Folder Name="/src/elsa/Workflows/">
+  <Folder Name="/src/Elsa/Tasks/Core/" />
+  <Folder Name="/src/Elsa/Workflows/">
     <Project Path="src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/">
+  <Folder Name="/src/Elsa/Workflows/Design/">
     <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/Persistence/">
+  <Folder Name="/src/Elsa/Workflows/Design/Persistence/">
     <Project Path="src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/Persistence/EFCore/">
+  <Folder Name="/src/Elsa/Workflows/Design/Persistence/EFCore/">
     <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Elsa.Workflows.Design.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/Persistence/Groundwork/">
-    <Project Path="src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
-  </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/Reconciliation/">
+  <Folder Name="/src/Elsa/Workflows/Design/Reconciliation/">
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Design/Validations/">
+  <Folder Name="/src/Elsa/Workflows/Design/Validations/">
     <Project Path="src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Publishing/">
+  <Folder Name="/src/Elsa/Workflows/Publishing/">
     <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
   </Folder>
-  <Folder Name="/src/elsa/Workflows/Runtime/">
+  <Folder Name="/src/Elsa/Workflows/Runtime/">
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
   </Folder>
-  <Folder Name="/src/elsa3/">
+  <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
     <Project Path="src/Elsa3/Models/Elsa3.Models.csproj" />
   </Folder>
-  <Folder Name="/src/elsa3/Activities/" />
-  <Folder Name="/src/elsa3/Activities/Design/">
+  <Folder Name="/src/Elsa3/Activities/" />
+  <Folder Name="/src/Elsa3/Activities/Design/">
     <Project Path="src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj" />
   </Folder>
-  <Folder Name="/src/elsa3/Mapping/" />
+  <Folder Name="/src/Elsa3/Mapping/" />
   <Folder Name="/tests/" />
   <Folder Name="/tests/Elsa/" />
-  <Folder Name="/tests/Elsa/Activities/" />
+  <Folder Name="/tests/Elsa/Activities/">
+    <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Composition/">
     <Project Path="tests/Elsa/Activities/Composition/Tests/Elsa.Activities.Composition.Tests.csproj" />
   </Folder>
@@ -224,9 +233,6 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Sequence/">
     <Project Path="tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj" />
-  </Folder>
-  <Folder Name="/tests/Elsa/Activities/Testing/">
-    <Project Path="tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/" />
   <Folder Name="/tests/Elsa/Activities/Design/Tests/">
@@ -246,27 +252,29 @@
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Diagnostics/">
+  <Folder Name="/tests/Elsa/Diagnostics/" />
+  <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/">
     <Project Path="tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj" />
-    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/">
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/">
+    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/" />
-  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Tests/" />
-  <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/" />
-  <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/" />
-  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/" />
-  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/" />
-  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/">
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Expressions/" />
   <Folder Name="/tests/Elsa/Expressions/Tests/">
     <Project Path="tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Identity/">
-    <Project Path="tests/Elsa/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
+  <Folder Name="/tests/Elsa/Foundation/" />
+  <Folder Name="/tests/Elsa/Foundation/Identity/">
+    <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
@@ -276,8 +284,20 @@
     <Project Path="tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/" />
+  <Folder Name="/tests/Elsa/Persistence/Core/">
+    <Project Path="tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/EFCore/">
+    <Project Path="tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/Querying/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/UnifiedHost/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Samples/" />
   <Folder Name="/tests/Elsa/Samples/Nuplane/" />

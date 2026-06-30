@@ -19,8 +19,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\Abstractions\Elsa.Agent.Core.csproj" />
-		<ProjectReference Include="..\Workflows\Agent\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
+		<ProjectReference Include="..\Workflows\Elsa.Agent.Workflows.csproj" />
 	</ItemGroup>
 
 </Project>

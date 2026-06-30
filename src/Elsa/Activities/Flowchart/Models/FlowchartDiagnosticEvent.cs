@@ -47,5 +47,6 @@ public enum FlowchartDiagnosticKind
     LoopIteration,
     Canceled,
     PolicyFailure,
-    Completed
+    Completed,
+    Faulted
 }

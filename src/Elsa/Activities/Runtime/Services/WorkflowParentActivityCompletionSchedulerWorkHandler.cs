@@ -159,8 +159,17 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 cancellationToken);
             valueSnapshots = BuildInputValueSnapshots(payloadCapturePolicy, workItem, payload, constructedParent.Inputs, _timeProvider.GetUtcNow());
             var parentActivity = constructedParent.Activity;
+            var childFaulted = IsChildFaulted(workItem);
 
-            if (parentActivity is not IActivityChildCompletionHandler childCompletionHandler)
+            if (childFaulted)
+            {
+                // A faulted child is propagated only to parents that opt into child-fault handling (fork/join
+                // composites). For any other parent the fault stays a blocking incident — sequential containers
+                // must halt on a faulted step, not advance past it.
+                if (parentActivity is not IActivityChildFaultHandler)
+                    return;
+            }
+            else if (parentActivity is not IActivityChildCompletionHandler)
             {
                 await EnqueueContinuationSchedulingAsync(schedulerWorkQueue, workItem, payload, cancellationToken);
                 return;
@@ -180,14 +189,28 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 parentState);
             RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
-            var childCompletedContext = new ActivityChildCompletedContext(
-                context,
-                completedChildActivityExecutionId,
-                completedChildState.Execution.ExecutableNodeId,
-                payload.OutcomeNames,
-                completedChildState.IterationId);
+            if (childFaulted)
+            {
+                var childFaultedContext = new ActivityChildFaultedContext(
+                    context,
+                    completedChildActivityExecutionId,
+                    completedChildState.Execution.ExecutableNodeId,
+                    ReadIncidentId(workItem),
+                    completedChildState.IterationId);
 
-            await childCompletionHandler.OnChildCompletedAsync(childCompletedContext);
+                await ((IActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
+            }
+            else
+            {
+                var childCompletedContext = new ActivityChildCompletedContext(
+                    context,
+                    completedChildActivityExecutionId,
+                    completedChildState.Execution.ExecutableNodeId,
+                    payload.OutcomeNames,
+                    completedChildState.IterationId);
+
+                await ((IActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
+            }
 
             var scheduledChildren = context.GetChildActivityScheduleRequests();
             if (context.CompositeCompletionRequested && scheduledChildren.Count > 0)
@@ -628,6 +651,17 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             Metadata = metadata
         };
     }
+
+    // True when this parent-evaluation work item was raised by a child fault (vs. a child completion). Set by
+    // ChildFaultParentEvaluation when it propagates the fault to the parent (#308).
+    private static bool IsChildFaulted(RuntimeSchedulerWorkItem workItem) =>
+        workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildFaulted, out var value)
+        && bool.TryParse(value, out var faulted) && faulted;
+
+    private static string? ReadIncidentId(RuntimeSchedulerWorkItem workItem) =>
+        workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.IncidentId, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
 
     private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
     {

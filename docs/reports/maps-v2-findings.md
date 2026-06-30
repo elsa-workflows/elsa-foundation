@@ -6,7 +6,7 @@ This is a point-in-time report from generated map facts. It is not a constitutio
 
 ## Summary
 
-- Domains in domain map: 22
+- Domains in domain map: 23
 - Source extension catalogs discovered: 45
 - Source extension catalogs indexed from root: 36
 - Discovered source catalogs not linked from root index: 9

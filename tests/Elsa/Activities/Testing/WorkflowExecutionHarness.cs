@@ -110,6 +110,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
+    /// <summary>Builds a leaf node that always faults during execution (see <see cref="FaultingActivity"/>).</summary>
+    public static ExecutableNode NewFaultingNode(string nodeId, string? message = null) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: FaultingActivity.FaultingActivityType,
+            activityTypeVersion: "1.0.0",
+            descriptorType: FaultingActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new FaultingDescriptor(message ?? $"Branch '{nodeId}' faulted.")),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
     private static WorkflowExecutionAgentActivationRequest NewActivationRequest() =>
         new(
             workflowExecutionId: WorkflowExecutionId,
@@ -146,6 +159,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         private readonly List<Action<IServiceCollection>> _featureConfigurators = [];
         private readonly List<Action<IServiceCollection>> _constructorRegistrations = [];
         private bool _probeRegistered;
+        private bool _faultingRegistered;
 
         internal Builder()
         {
@@ -182,6 +196,13 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             return this;
         }
 
+        /// <summary>Registers the shared <see cref="FaultingActivityConstructor"/> so faulting leaf nodes can be constructed.</summary>
+        public Builder WithFaultingLeaf()
+        {
+            _faultingRegistered = true;
+            return this;
+        }
+
         /// <summary>Escape hatch for additional service overrides (custom id generator, stubs, etc.).</summary>
         public Builder ConfigureServices(Action<IServiceCollection> configure)
         {
@@ -206,6 +227,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
             if (_probeRegistered)
                 services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
+
+            if (_faultingRegistered)
+                services.AddSingleton<IActivityConstructor, FaultingActivityConstructor>();
 
             services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
 

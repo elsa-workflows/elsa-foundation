@@ -38,19 +38,24 @@ namespace Elsa.Activities.Parallel.Activities;
 /// and never overwrite each other.
 /// </para>
 /// <para>
-/// <b>Faulted branches are not counted (known limitation, #308).</b> The join counts only branch children
-/// that reach <c>Completed</c>; a branch that <b>faults</b> is never counted. With the default (all-branches)
-/// threshold, one faulted branch leaves the join unsatisfied, so the <c>Parallel</c> composite stays
-/// <c>Running</c> indefinitely (there is no composite incident or timeout). This mirrors the existing
-/// flowchart fork/join contract and is a documented limitation, not a bug; fault-aware join is tracked in
-/// #308. A configured threshold low enough to be met by the non-faulted branches still completes.
+/// <b>Fault-aware join (#308).</b> Branch faults are propagated to this composite via
+/// <see cref="IActivityChildFaultHandler"/> (the engine rides a child-fault parent-evaluation work item on the
+/// branch's fault incident), so the join resolves deterministically instead of hanging. The join counts each
+/// branch by terminal disposition: it completes with <c>Done</c> once enough branches reach <c>Completed</c>
+/// to meet the threshold; it <b>faults the composite</b> (surfacing a composite incident) once too many
+/// branches reach a terminal non-success state (<c>Faulted</c>/<c>Cancelled</c>) for the remaining branches to
+/// ever reach the threshold; otherwise it defers. With the default (all-branches) threshold a single faulted
+/// branch therefore faults the composite; a configured threshold low enough to be met by the non-faulted
+/// branches still completes. The faulted branch keeps its own blocking incident regardless. The flowchart
+/// fork/join (<c>Flowchart</c> / <c>ParallelJoinFlowchartPolicy</c>) is fault-aware too: a faulted inbound
+/// branch faults the flowchart deterministically rather than hanging the join.
 /// </para>
 /// <para>
 /// The runtime activity class references only the runtime contract surface; the design-side
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </para>
 /// </remarks>
-public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler
+public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
     public const string BranchSlotSuffix = "]";
@@ -95,16 +100,51 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler
         if (!navigator.IsBranch(context.CompletedChildExecutableNodeId))
             throw new ParallelExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
 
-        var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
-        var completedBranchCount = await CountCompletedBranchesAsync(runtimeContext, navigator, compositeExecutionId);
+        await ApplyJoinDecisionAsync(runtimeContext, navigator);
+    }
 
-        // Join: complete once the join condition is met (default = all branches), otherwise wait for more.
-        if (completedBranchCount >= navigator.EffectiveThreshold)
+    public async ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var runtimeContext = RequireRuntimeContext(context.ParentContext);
+        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+
+        if (!navigator.IsBranch(context.FaultedChildExecutableNodeId))
+            throw new ParallelExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");
+
+        await ApplyJoinDecisionAsync(runtimeContext, navigator);
+    }
+
+    /// <summary>
+    /// Evaluates the fault-aware join from the durable branch states and applies the decision: complete with
+    /// <see cref="ActivityOutcomes.Done"/> once enough branches have <c>Completed</c>, fault the composite
+    /// when too many branches reached a terminal non-success state for the success threshold to ever be met
+    /// (#308), or defer while branches are still running. Both the completion and fault callbacks funnel
+    /// through here so the decision is identical regardless of which branch event triggered it.
+    /// </summary>
+    private static async ValueTask ApplyJoinDecisionAsync(IRuntimeActivityExecutionContext runtimeContext, ParallelNavigator navigator)
+    {
+        var compositeExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
+        var (completed, terminalNonSuccess) = await CountBranchesAsync(runtimeContext, navigator, compositeExecutionId);
+        var runnable = navigator.RunnableBranches.Count;
+        var threshold = navigator.EffectiveThreshold;
+
+        // Enough branches have succeeded: the join is satisfied.
+        if (completed >= threshold)
         {
             runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
             return;
         }
 
+        // The remaining branches can no longer carry the join to its success threshold, so it can never
+        // complete: fault the composite (the throw is recorded by the engine as a composite incident) rather
+        // than leaving it Running forever (#308).
+        if (runnable - terminalNonSuccess < threshold)
+            throw new ParallelExecutionException(
+                $"Parallel join can no longer be satisfied: {terminalNonSuccess} of {runnable} branch(es) reached a terminal non-success state, leaving fewer than the required {threshold} successful branch(es).");
+
+        // More branches are still running; wait for them.
         runtimeContext.DeferCompositeCompletion();
     }
 
@@ -136,10 +176,12 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler
     }
 
     /// <summary>
-    /// Counts the distinct branch nodes of this composite that have finished, by reading the durable
-    /// activity-execution store. Distinct-by-node guards against any branch contributing more than once.
+    /// Counts the distinct branch nodes of this composite by terminal disposition, by reading the durable
+    /// activity-execution store: how many <c>Completed</c> (success) and how many reached a terminal
+    /// non-success state (<c>Faulted</c>/<c>Cancelled</c>). Grouping by node guards against any branch
+    /// contributing more than once; a branch that has any <c>Completed</c> state counts as a success.
     /// </summary>
-    private static async ValueTask<int> CountCompletedBranchesAsync(
+    private static async ValueTask<(int Completed, int TerminalNonSuccess)> CountBranchesAsync(
         IRuntimeActivityExecutionContext runtimeContext,
         ParallelNavigator navigator,
         string compositeExecutionId)
@@ -147,15 +189,28 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler
         var store = runtimeContext.GetRequiredService<IActivityExecutionStateStore>();
         var states = await store.ListAsync(runtimeContext.WorkflowExecutionId, runtimeContext.CancellationToken);
 
-        return states
+        var branchGroups = states
             .Where(state =>
-                state.Status == ActivityExecutionStatus.Completed &&
                 StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, compositeExecutionId) &&
                 navigator.IsBranch(state.Execution.ExecutableNodeId))
-            .Select(state => state.Execution.ExecutableNodeId)
-            .Distinct(StringComparer.Ordinal)
-            .Count();
+            .GroupBy(state => state.Execution.ExecutableNodeId, StringComparer.Ordinal);
+
+        var completed = 0;
+        var terminalNonSuccess = 0;
+        foreach (var branchGroup in branchGroups)
+        {
+            var statuses = branchGroup.Select(state => state.Status).ToArray();
+            if (statuses.Contains(ActivityExecutionStatus.Completed))
+                completed++;
+            else if (statuses.Any(IsTerminalNonSuccess))
+                terminalNonSuccess++;
+        }
+
+        return (completed, terminalNonSuccess);
     }
+
+    private static bool IsTerminalNonSuccess(ActivityExecutionStatus status) =>
+        status is ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled;
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
     {
