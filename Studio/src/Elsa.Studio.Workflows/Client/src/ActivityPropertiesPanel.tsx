@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from "react";
-import { ChevronDown, ChevronUp, Maximize2, Plus, Trash2, X } from "lucide-react";
+import { type DragEvent, useEffect, useId, useState } from "react";
+import { ChevronDown, ChevronUp, GripVertical, Maximize2, Plus, Trash2, X } from "lucide-react";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -275,6 +275,14 @@ function PropertyRow({
 
 // Repeater for collection-typed literals: each row reuses the registered element editor (text, checkbox,
 // dropdown, …) resolved in "element" scope, with add / reorder / remove controls around it.
+function collectionItemClassName(index: number, dragIndex: number | null, overIndex: number | null) {
+  return [
+    "wf-collection-item",
+    dragIndex === index ? "dragging" : "",
+    dragIndex !== null && dragIndex !== index && overIndex === index ? "drop-target" : ""
+  ].filter(Boolean).join(" ");
+}
+
 function CollectionLiteralEditor({
   input,
   elementTypeName,
@@ -300,6 +308,32 @@ function CollectionLiteralEditor({
   const replaceAt = (index: number, next: unknown) =>
     onChange(items.map((current, position) => (position === index ? next : current)));
 
+  // Drag-to-reorder. Only the grip handle is draggable (so it never competes with text selection in the
+  // row editors); the rows are drop zones. The list reorders atomically on drop via the shared
+  // moveCollectionItem helper — index keys stay valid because items don't shift mid-gesture.
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const resetDrag = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+  const handleDragStart = (index: number) => (event: DragEvent) => {
+    setDragIndex(index);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(index));
+  };
+  const handleDragOver = (index: number) => (event: DragEvent) => {
+    if (dragIndex === null) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (overIndex !== index) setOverIndex(index);
+  };
+  const handleDrop = (index: number) => (event: DragEvent) => {
+    event.preventDefault();
+    if (dragIndex !== null && dragIndex !== index) onChange(moveCollectionItem(items, dragIndex, index));
+    resetDrag();
+  };
+
   return (
     <div className="wf-collection-editor">
       {items.length === 0 ? (
@@ -307,7 +341,22 @@ function CollectionLiteralEditor({
       ) : (
         <ul className="wf-collection-items">
           {items.map((item, index) => (
-            <li key={index} className="wf-collection-item">
+            <li
+              key={index}
+              className={collectionItemClassName(index, dragIndex, overIndex)}
+              onDragOver={handleDragOver(index)}
+              onDrop={handleDrop(index)}
+            >
+              <span
+                className="wf-collection-item-handle"
+                draggable={!disabled}
+                aria-label={`Drag ${label} item ${index + 1} to reorder`}
+                title="Drag to reorder"
+                onDragStart={handleDragStart(index)}
+                onDragEnd={resetDrag}
+              >
+                <GripVertical size={13} aria-hidden="true" />
+              </span>
               <div className="wf-collection-item-editor">
                 {renderEditor(ElementComponent, elementDescriptor, item, disabled, elementContext, next => replaceAt(index, next))}
               </div>
