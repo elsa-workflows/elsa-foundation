@@ -122,6 +122,33 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("surfaces Add project and explains the blocked Pack when a solution has no project (simple mode)", async () => {
+    const emptyWorkspace = { id: "ws-1", displayName: "Team Extensions", ownerId: "alice", trustContext: "trusted-team", projectIds: [] };
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/capabilities")) return trustedCapabilities();
+        if (url.endsWith("/repositories")) return [repositorySummary({ projectCount: 0 })];
+        if (url.endsWith("/workspaces")) return [emptyWorkspace];
+        if (url.endsWith("/templates")) return templates();
+        if (url.endsWith("/repository-tree")) return repositoryTree();
+        if (url.endsWith("/source-control/status")) return sourceControlStatus();
+        return {};
+      }
+    }), { advanced: false });
+    await waitForText(container, "Team Extensions");
+    await openSolution(container);
+
+    // Simple mode still offers a way to add a project when the solution has none.
+    expect(await waitForElement<HTMLInputElement>(container, "[aria-label='Project name']")).not.toBeNull();
+
+    // The Pack button explains why it is disabled instead of claiming it is ready.
+    const pack = buttonContaining(container, "Pack");
+    expect(pack?.disabled).toBe(true);
+    expect(pack?.title).toContain("Add a project");
+
+    await unmount();
+  });
+
   it("creates an extension in a single step (repository, working copy, and project)", async () => {
     const postJson = vi.fn(async (url: string, body: unknown) => {
       if (url.endsWith("/workspaces")) return managedWorkspace();

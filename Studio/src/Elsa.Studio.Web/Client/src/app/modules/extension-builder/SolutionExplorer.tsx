@@ -100,7 +100,7 @@ export function SolutionExplorer({
         <div className="extension-builder-explorer-section">
           <span className="extension-builder-explorer-label">Projects</span>
           {projects.length === 0 ? (
-            <p className="modules-muted">{advanced ? "No projects yet. Add one below." : "No projects yet. Add a project in advanced mode to build a package."}</p>
+            <p className="modules-muted">No projects yet. Add one below.</p>
           ) : (
             <div className="extension-builder-project-switch">
               {projects.map(item => (
@@ -204,9 +204,10 @@ export function SolutionExplorer({
           </details>
         ) : null}
 
-        {advanced ? (
-          <details className="extension-builder-explorer-details">
+        {advanced || projects.length === 0 ? (
+          <details className="extension-builder-explorer-details" open={projects.length === 0}>
             <summary>Add project</summary>
+            {projects.length === 0 ? <p className="modules-muted">A project is the build target. Add one to pack this solution into a NuGet package.</p> : null}
             <label>
               <span>Template</span>
               <select aria-label="Project template" value={projectDraft.templateId} disabled={busy || !canCreate} onChange={event => onProjectDraftChange(applyTemplateDefaults({ ...projectDraft, templateId: event.target.value }, templates.find(template => template.id === event.target.value)))}>
@@ -229,16 +230,18 @@ export function SolutionExplorer({
               <PackageCheck size={15} />
               Create project
             </button>
-            <div className="extension-builder-danger-actions">
-              <button type="button" className="studio-button" disabled={busy || !selectedProjectId} onClick={onDeleteProject}>
-                <Trash2 size={15} />
-                Delete project
-              </button>
-              <button type="button" className="studio-button" disabled={busy} onClick={onDeleteWorkspace}>
-                <Trash2 size={15} />
-                Delete solution
-              </button>
-            </div>
+            {advanced ? (
+              <div className="extension-builder-danger-actions">
+                <button type="button" className="studio-button" disabled={busy || !selectedProjectId} onClick={onDeleteProject}>
+                  <Trash2 size={15} />
+                  Delete project
+                </button>
+                <button type="button" className="studio-button" disabled={busy} onClick={onDeleteWorkspace}>
+                  <Trash2 size={15} />
+                  Delete solution
+                </button>
+              </div>
+            ) : null}
           </details>
         ) : null}
       </div>

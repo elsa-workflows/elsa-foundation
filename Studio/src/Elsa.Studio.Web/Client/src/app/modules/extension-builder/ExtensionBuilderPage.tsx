@@ -146,6 +146,15 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
   const editorDirty = activeTab ? activeTab.content !== activeTab.savedContent : editorText !== savedEditorText;
   const latestArtifact = activeBuild?.artifact ?? null;
   const canBuild = !!capabilities?.canBuild && !!selectedProject && !editorDirty && !isBuildRunning(activeBuild);
+  const buildDisabledReason = !capabilities?.canBuild
+    ? "Requires canBuild"
+    : !selectedProject
+      ? "Add a project to this solution to build a package"
+      : editorDirty
+        ? "Save or discard file changes first"
+        : isBuildRunning(activeBuild)
+          ? "A build is already running"
+          : null;
   const canPromote = !!capabilities?.canPromote && !!latestArtifact && isBuildForCurrentRevision(activeBuild, selectedProject);
   const defaultWorkingBranchName = useMemo(() => `extension-builder/${sessionId}`, [sessionId]);
   // Only enter the workspace view when a backing workspace record is actually resolved. A
@@ -1087,12 +1096,12 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
                 Save
               </button>
               {advanced ? (
-                <button type="button" className="studio-button" disabled={operationBusy || !canBuild} title={editorDirty ? "Save file changes before building" : !capabilities!.canBuild ? "Requires canBuild" : undefined} onClick={() => handleSubmitBuild()}>
+                <button type="button" className="studio-button" disabled={operationBusy || !canBuild} title={buildDisabledReason ?? undefined} onClick={() => handleSubmitBuild()}>
                   <Play size={15} />
                   Build
                 </button>
               ) : (
-                <button type="button" className="studio-button studio-button-primary" disabled={operationBusy || !canBuild} title={editorDirty ? "Save file changes before packing" : !capabilities!.canBuild ? "Requires canBuild" : "Build and pack a NuGet package"} onClick={() => handleSubmitBuild("Pack")}>
+                <button type="button" className="studio-button studio-button-primary" disabled={operationBusy || !canBuild} title={buildDisabledReason ?? "Build and pack a NuGet package"} onClick={() => handleSubmitBuild("Pack")}>
                   <PackageCheck size={15} />
                   Pack
                 </button>
