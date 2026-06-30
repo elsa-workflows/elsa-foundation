@@ -36,15 +36,13 @@ public sealed class ListWorkflowInstancesRequestHandler(
             .Take(take)
             .ToArray();
 
-        var results = new List<WorkflowInstanceSummaryView>(orderedStates.Length);
-        foreach (var state in orderedStates)
+        var summaryTasks = orderedStates.Select(async state =>
         {
             var activityCount = (await activityExecutionStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
             var incidentCount = (await incidentStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
-            results.Add(WorkflowInstanceSummaryView.From(state, activityCount, incidentCount));
-        }
-
-        return results;
+            return WorkflowInstanceSummaryView.From(state, activityCount, incidentCount);
+        });
+        return await Task.WhenAll(summaryTasks);
     }
 
     private static DateTimeOffset GetSortTimestamp(WorkflowExecutionState state) =>

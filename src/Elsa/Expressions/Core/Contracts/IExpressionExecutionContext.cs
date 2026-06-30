@@ -19,13 +19,13 @@ public interface IExpressionExecutionContext
 
     string GetCorrelationId();
 
-    string GetWorkfowDefinitionId();
+    string GetWorkflowDefinitionId();
 
-    string GetWorkfowDefinitionVersionId();
+    string GetWorkflowDefinitionVersionId();
 
-    int GetWorkfowDefinitionVersion();
+    int GetWorkflowDefinitionVersion();
 
-    string GetWorkfowInstanceId();
+    string GetWorkflowInstanceId();
 
     object? GetRequiredService(Type type);
 
