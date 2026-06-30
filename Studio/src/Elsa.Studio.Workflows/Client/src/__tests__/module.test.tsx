@@ -680,22 +680,21 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("creates a workflow definition from any selected root activity", async () => {
+  it("creates a workflow definition from the selected root type card", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST" && url.endsWith("/_elsa/workflow-management/definitions")) {
         expect(JSON.parse(String(init.body))).toEqual({
           name: "Customer onboarding",
           description: "Creates the first customer workflow.",
-          rootKind: "flowchart",
-          rootActivityVersionId: "write-line-v1"
+          rootKind: "sequence",
+          rootActivityVersionId: "sequence-v1"
         });
         return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
       }
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
-        activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence", category: "Composition", displayName: "Sequence" }),
-        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
+        activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence", category: "Composition", displayName: "Sequence" })
       ] });
       if (url.includes("/definitions/created-definition")) return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
       return response({ definitions: [definition()] });
@@ -706,14 +705,13 @@ describe("workflows module", () => {
     await waitForText(container, "Hello World");
     await click(buttonByText(container, "Create"));
     await waitForText(container, "Create Workflow");
-    await waitForText(container, "Write Line");
-    expect(selectByLabel(container, "Root activity")?.querySelector("optgroup[label='Composite roots']")).toBeTruthy();
-    expect(selectByLabel(container, "Root activity")?.querySelector("optgroup[label='Primitives']")).toBeTruthy();
-    expect(selectByLabel(container, "Root activity")?.querySelector("option[value='write-line-v1']")?.disabled).toBe(false);
+    const rootCards = dialog(container).querySelectorAll(".wf-root-card");
+    expect(rootCards).toHaveLength(2);
+    expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence"]);
 
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await fill(textareaByLabel(container, "Description"), "Creates the first customer workflow.");
-    await select(selectByLabel(container, "Root activity"), "write-line-v1");
+    await click(inputByLabel(container, "Sequence"));
     await click(buttonByText(dialog(container), "Create"));
 
     expect(fetchMock).toHaveBeenCalledWith(
