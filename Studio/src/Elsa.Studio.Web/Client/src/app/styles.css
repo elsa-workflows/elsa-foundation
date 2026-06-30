@@ -514,6 +514,13 @@ textarea:focus {
   margin-inline: 0;
 }
 
+/* The Extension Builder workspace is a full-bleed IDE: drop the content padding so the
+   shell fills the whole area (the home view keeps the normal padded layout). */
+.content:has(> .extension-builder-page-workspace) {
+  padding: 0;
+  overflow: hidden;
+}
+
 .dashboard-view,
 .diagnostics-view {
   display: grid;
@@ -2937,7 +2944,10 @@ textarea:focus {
   gap: 12px;
 }
 .extension-builder-page-workspace {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
 /* ---- Module home ---- */
@@ -3124,9 +3134,8 @@ textarea:focus {
 .extension-builder-shell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  height: clamp(520px, calc(100vh - 150px), 1040px);
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius-md);
+  flex: 1;
+  min-height: 0;
   background: var(--studio-surface);
   overflow: hidden;
 }
