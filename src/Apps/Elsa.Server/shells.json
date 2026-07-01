@@ -4,13 +4,13 @@
       "default": {
         "Name": "default",
         "Features": {
+          "ActivitiesControlFlow": {},
           "ActivitiesDesignApi": {},
           "ActivitiesDesignPersistenceEFCoreSqlite": {},
           "ActivitiesDesignReconciliation": {},
+          "ActivitiesFlowchart": {},
           "ActivitiesPrimitives": {},
           "ActivitiesRuntime": {},
-          "ActivitiesControlFlow": {},
-          "ActivitiesFlowchart": {},
           "ActivitiesSequence": {},
           "ClrActivityReconciliation": {
             "Options": {
@@ -27,16 +27,90 @@
           "FastEndpoints": {
             "EndpointRoutePrefix": ""
           },
+          "FileSystemDistributedLocking": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
-          "FileSystemDistributedLocking": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
+          "GroundworkRuntimePersistenceSqlite": {},
+          "HttpJavaScript": {},
+          "JavaScriptActivities": {},
+          "JavaScriptEndpoints": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Dynamic.ExpandoObject"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary\u00602[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptWorkflowsDesign": {},
+          "JavaScriptWorkflowsRuntime": {},
           "Mediator": {},
           "MemoryCache": {},
           "ModularityApi": {},
@@ -44,14 +118,14 @@
           "SampleNuplaneActivities": {},
           "Secrets": {},
           "SecretsApi": {},
+          "SecretsGroundworkPersistence": {},
           "Serialization": {},
           "Tasks": {},
           "WeatherForecastSample": {},
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {},
-          "GroundworkRuntimePersistenceSqlite": {}
+          "WorkflowsRuntimeApi": {}
         },
         "Configuration": {
           "WebRouting": {

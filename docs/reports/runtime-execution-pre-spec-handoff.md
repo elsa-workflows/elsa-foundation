@@ -51,7 +51,7 @@ The next runtime execution spec should treat these as non-negotiable inputs unle
 
 ## Current Runtime Surface
 
-`Elsa.Workflows.Runtime.Core` is intentionally minimal. `WorkflowExecutionContext` implements `IWorkflowExecutionContext`, but every public member throws `NotImplementedException`. The project has no direct test-project reference in the generated test map.
+`Elsa.Workflows.Runtime.Core` is intentionally minimal. `WorkflowExecutionContext` implements `IWorkflowExecutionContext` with real logic (seeded inputs/variables/outputs, working getters/setters) — this corrects an earlier "throws for every member" classification. The gap is not missing logic; it is that nothing in production ever constructs or DI-registers an instance. `WorkflowInvokeActivitySchedulerWorkHandler.cs:77` creates a per-work-item DI scope but builds a `SimpleActivityExecutionContext` from stores instead. See "Runtime JavaScript expression-context wiring shortcut" below. The project has no direct test-project reference in the generated test map.
 
 The current runtime contracts expose workflow execution identity, variables, workflow inputs, activity outputs, and activity-context lookup for expression execution. These are the pressure points the next spec must either keep, replace, or decompose.
 
@@ -137,6 +137,18 @@ Forbidden unless the constitution changes:
 Classification: known deferred architecture debt.
 
 Pre-spec instruction: do not refactor this as a drive-by fix during runtime execution planning. Keep it named, and require the eventual design-time declaration/runtime binding split after foundation/workspace ownership stabilizes.
+
+### Runtime JavaScript expression-context wiring shortcut
+
+A separate, distinct issue from the Design.Core project-reference shortcut above. Five JS runtime pre-processors/post-processor (`WorkflowInputFunctionsPreProcessor`, `WorkflowFunctionsPreProcessor`, `VariableFunctionsPreProcessor`, `ActivityOutputFunctionsPreProcessor`, `CopyVariablesToWorkflowContext`) take `IWorkflowExecutionContext` via constructor injection. Because no production code path ever constructs or DI-registers a `WorkflowExecutionContext` instance, these are dead code today — the DI container cannot satisfy the dependency, so resolving them throws.
+
+`MaterializationAccessorsPreProcessor` is the one sibling that gets this right: it takes nothing via constructor and instead derives its state from the `IExpressionExecutionContext` parameter already passed into `PreProcess(...)`.
+
+Upstream `elsa-core` solves the equivalent problem (JS `getInput`/`getOutput`/`getVariable` accessors) with the same pub/sub pre-processor pipeline shape, but never through DI: the live execution context is always threaded explicitly as a parameter down the call chain, carried in a `TransientProperties`-style bag on `ExpressionExecutionContext` and retrieved via typed extension methods. See [Elsa Core runtime expression-context wiring analysis](elsa-core-runtime-expression-context-wiring-analysis.md) for the full comparison and design options.
+
+Classification: known deferred architecture debt, directly within this bucket's "workflow execution context lifetime, DI scope, and concurrency model" scope item.
+
+Pre-spec instruction: do not wire DI registration or refactor the pre-processors as a drive-by fix. The execution-context lifetime/shape must be decided first — resolving this is expected to be part of the runtime execution seam spec, not a preparatory patch.
 
 ### Shared activity/workflow input-output models
 

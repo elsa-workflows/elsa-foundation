@@ -16,9 +16,10 @@ public sealed class EventHandlerInvokerMiddleware(EventMiddlewareDelegate next)
         var eventType = context.Event.GetType();
         var handlerType = typeof(IEventHandler<>).MakeGenericType(eventType);
 
-        var allHandlers = context.ServiceProvider.GetServices<IEventHandler>();
-        var handlers = allHandlers
-            .Where(handlerType.IsInstanceOfType)
+        // Resolve only the handlers registered for this event type. Resolving the non-generic marker set
+        // instead would force every event handler in the container to be constructed on every publish.
+        var handlers = context.ServiceProvider.GetServices(handlerType)
+            .Cast<IEventHandler>()
             .DistinctBy(h => h.GetType())
             .ToArray();
 

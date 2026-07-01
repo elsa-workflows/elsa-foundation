@@ -31,6 +31,22 @@ public sealed class RuntimeFeatureCatalogTests
     }
 
     [Fact]
+    public async Task ContributorSurfacesFeatureDependencies()
+    {
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
+            new ShellFeatureDescriptor("RuntimeFeature")
+            {
+                Dependencies = ["DependencyOne", "DependencyTwo"]
+            }));
+        var context = CreateContext();
+
+        await contributor.ContributeAsync(context);
+
+        var item = context.Items["RuntimeFeature"].ToItem();
+        Assert.Equal(["DependencyOne", "DependencyTwo"], item.Dependencies);
+    }
+
+    [Fact]
     public async Task ContributorDoesNotReplaceManifestSourceKind()
     {
         var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(

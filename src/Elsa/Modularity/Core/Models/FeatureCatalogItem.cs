@@ -21,7 +21,8 @@ public sealed record FeatureCatalogItem(
     string? ManifestPath,
     string? ManifestHash,
     string? ReadError,
-    IReadOnlyList<FeatureSettingDescriptor> Settings);
+    IReadOnlyList<FeatureSettingDescriptor> Settings,
+    IReadOnlyList<string> Dependencies);
 
 public sealed class FeatureCatalogItemBuilder
 {
@@ -40,6 +41,7 @@ public sealed class FeatureCatalogItemBuilder
     public string? ManifestHash { get; set; }
     public string? ReadError { get; set; }
     public IReadOnlyList<FeatureSettingDescriptor> Settings { get; set; } = [];
+    public IReadOnlyList<string> Dependencies { get; set; } = [];
 
     public FeatureCatalogItem ToItem() =>
         new(
@@ -57,5 +59,6 @@ public sealed class FeatureCatalogItemBuilder
             ManifestPath,
             ManifestHash,
             ReadError,
-            Settings);
+            Settings,
+            Dependencies);
 }

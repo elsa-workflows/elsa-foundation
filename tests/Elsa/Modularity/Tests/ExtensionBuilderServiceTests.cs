@@ -952,7 +952,7 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
         ];
         featureManagement.Features =
         [
-            new("FeatureA", "Feature A", null, [], "manifest", result.PublishedPackage.PackageId, result.PublishedPackage.Version, true, Json("{}"), false, false, null, null, null, [])
+            new("FeatureA", "Feature A", null, [], "manifest", result.PublishedPackage.PackageId, result.PublishedPackage.Version, true, Json("{}"), false, false, null, null, null, [], [])
         ];
 
         var status = await service.GetRuntimeStatusAsync(_caller, project.Id);
