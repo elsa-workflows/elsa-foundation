@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Extensions;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Handlers;
@@ -140,14 +141,14 @@ public sealed class SavingEventDispatchTests
         // The audience for OnEntitySaving is the single aggregator — features contribute via the
         // typed interface, never their own IEventHandler<OnEntitySaving>.
         var services = new ServiceCollection();
-        services.AddScoped<IEventHandler, ApplyEntitySavingHandlers>();
+        services.TryAddEventHandler<OnEntitySaving, ApplyEntitySavingHandlers>();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
+        // Resolve through the closed generic — the only service type the event pipeline dispatches.
         var savingSubscribers = scope.ServiceProvider
-            .GetServices<IEventHandler>()
-            .OfType<IEventHandler<OnEntitySaving>>()
+            .GetServices<IEventHandler<OnEntitySaving>>()
             .ToList();
 
         Assert.Single(savingSubscribers);
