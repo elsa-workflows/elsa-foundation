@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   Minimize2,
   PackagePlus,
   PackageSearch,
+  RefreshCw,
   Search,
   ShieldCheck
 } from "lucide-react";
@@ -77,6 +78,10 @@ const builtInNavigation: StudioNavigationContribution[] = [
 ];
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
+// How often the host-health strip re-checks. When a host is unavailable we back off exponentially
+// from the healthy cadence up to the ceiling so a downed backend isn't hammered every few seconds.
+const healthyHealthPollMs = 15000;
+const maxHealthPollMs = 60000;
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
 const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
@@ -620,30 +625,75 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
   const [studio, setStudio] = useState<HostHealthEntry>(checkingHostHealth("Checking Studio host."));
   const [server, setServer] = useState<HostHealthEntry>(checkingHostHealth("Checking Server host."));
   const [backend, setBackend] = useState<HostHealthEntry>(checkingHostHealth("Checking backend API."));
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const refreshRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let disposed = false;
+    let running = false;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    async function load() {
-      const [studioHealth, serverHealth, backendHealth] = await Promise.all([
-        readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
-        readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server"),
-        readBackendHealth(api.backend.baseUrl)
-      ]);
+    async function run() {
+      if (disposed || running) return;
+      running = true;
+      setRefreshing(true);
+      try {
+        const [studioHealth, serverHealth, backendHealth] = await Promise.all([
+          readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
+          readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server"),
+          readBackendHealth(api.backend.baseUrl)
+        ]);
 
-      if (!disposed) {
+        if (disposed) return;
         setStudio(studioHealth);
         setServer(serverHealth);
         setBackend(backendHealth);
+        setLastChecked(new Date());
+
+        const degraded = [studioHealth, serverHealth, backendHealth].some(host => host.status === "unavailable");
+        failures = degraded ? failures + 1 : 0;
+        schedule();
+      } finally {
+        running = false;
+        if (!disposed) setRefreshing(false);
       }
     }
 
-    void load();
+    // Poll on an interval, backing off while a host is down, and pause polling while the tab is hidden
+    // (the visibility handler refetches on return so we never show stale status).
+    function schedule() {
+      if (timer) clearTimeout(timer);
+      if (disposed || document.hidden) return;
+      const delay = failures === 0 ? healthyHealthPollMs : Math.min(maxHealthPollMs, healthyHealthPollMs * 2 ** (failures - 1));
+      timer = setTimeout(() => void run(), delay);
+    }
+
+    refreshRef.current = () => void run();
+    const onModulesChanged = () => void run();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void run();
+    };
+    window.addEventListener(ModulesChangedEventName, onModulesChanged);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    void run();
 
     return () => {
       disposed = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener(ModulesChangedEventName, onModulesChanged);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [api]);
+
+  // Keep the "updated Ns ago" label ticking without re-running health checks.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
 
   const unavailableHosts = [studio, server].filter(host => host.status === "unavailable").length;
   const attention = studio.attention + server.attention + unavailableHosts;
@@ -654,11 +704,20 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
       : "attention";
 
   return (
-    <div className="host-health-strip" aria-label="Host health">
-      <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
-      <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
-      <HostHealthTile title="Backend API" value={backend.status === "ok" ? "Connected" : labelForHostStatus(backend.status)} detail={backend.detail} status={backend.status} icon={<Activity size={18} />} />
-      <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
+    <div className="host-health">
+      <div className="host-health-strip" aria-label="Host health">
+        <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
+        <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
+        <HostHealthTile title="Backend API" value={backend.status === "ok" ? "Connected" : labelForHostStatus(backend.status)} detail={backend.detail} status={backend.status} icon={<Activity size={18} />} />
+        <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
+      </div>
+      <div className="host-health-meta">
+        <span className="host-health-updated">{formatCheckedAgo(lastChecked, now)}</span>
+        <button type="button" className="host-health-refresh" onClick={() => refreshRef.current()} disabled={refreshing}>
+          <RefreshCw size={13} className={refreshing ? "is-spinning" : undefined} aria-hidden="true" />
+          {refreshing ? "Checking…" : "Refresh"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -709,31 +768,50 @@ async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
   // Leading-slash path so it resolves to the origin root, matching the server route (mapped at
   // absolute "/_elsa/health") and the sibling "Server host" registry probe rather than any base path.
   const healthUrl = new URL("/_elsa/health", baseUrl).toString();
-
+  // Prefer a readable (CORS) response so we can tell a healthy host apart from one returning 5xx.
+  // An opaque no-cors probe settles even for a crashing server, so it can't distinguish the two.
   try {
     // Readable CORS request so we can inspect the real status: a rejected fetch means the
     // host is unreachable, while any response (even an error status) means the API is up.
-    const response = await fetch(healthUrl, { cache: "no-store" });
-    if (response.ok) {
-      return {
-        status: "ok",
-        attention: 0,
-        detail: healthUrl
-      };
-    }
+    try {
+      const response = await fetch(healthUrl, { cache: "no-store" });
+      if (response.ok) {
+        return {
+          status: "ok",
+          attention: 0,
+          detail: healthUrl
+        };
+      }
 
-    return {
-      status: "attention",
-      attention: 1,
-      detail: `${healthUrl} responded with ${response.status}.`
-    };
-  } catch (e) {
-    return {
-      status: "unavailable",
-      attention: 0,
-      detail: `${healthUrl} (${getHealthErrorMessage(e)})`
-    };
+      return {
+        status: "attention",
+        attention: 1,
+        detail: `${healthUrl} responded with ${response.status}.`
+      };
+    } catch (readableError) {
+      // The host may not send CORS headers on its health endpoint; fall back to a reachability-only probe
+      // (which can still confirm the socket is up) before declaring the API unavailable.
+      try {
+        await fetch(healthUrl, { cache: "no-store", mode: "no-cors" });
+        return { status: "ok", attention: 0, detail: healthUrl };
+      } catch (e) {
+        return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
+      }
+    }
   }
+}
+
+function formatCheckedAgo(at: Date | null, now: number): string {
+  if (!at) return "Checking…";
+
+  const seconds = Math.max(0, Math.round((now - at.getTime()) / 1000));
+  if (seconds < 5) return "Updated just now";
+  if (seconds < 60) return `Updated ${seconds}s ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Updated ${minutes}m ago`;
+
+  return `Updated ${Math.floor(minutes / 60)}h ago`;
 }
 
 function checkingHostHealth(detail: string): HostHealthEntry {

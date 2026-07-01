@@ -699,6 +699,11 @@ textarea:focus {
   font-size: 13px;
 }
 
+.host-health {
+  display: grid;
+  gap: 8px;
+}
+
 .host-health-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -707,6 +712,48 @@ textarea:focus {
   background: var(--card);
   overflow: hidden;
   position: relative;
+}
+
+.host-health-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.host-health-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.host-health-refresh:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.host-health-refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.host-health-refresh .is-spinning {
+  animation: host-health-spin 0.8s linear infinite;
+}
+
+@keyframes host-health-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .host-health-tile {

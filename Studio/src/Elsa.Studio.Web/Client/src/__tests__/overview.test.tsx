@@ -80,6 +80,52 @@ describe("dashboard", () => {
     await unmount();
   });
 
+  it("flags the backend as degraded when it responds with a server error", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
+    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson: async () => healthyRegistry() }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("responded with HTTP 503");
+    expect(container.textContent).not.toContain("Connected");
+
+    await unmount();
+  });
+
+  it("re-checks host health when modules change", async () => {
+    stubBackendFetch();
+    const backendGetJson = vi.fn(async () => healthyRegistry());
+    const { unmount } = await renderDashboard(stubApi({ backendGetJson }));
+
+    await flushPromises();
+    expect(backendGetJson).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new Event("elsa-studio:modules-changed"));
+    await flushPromises();
+
+    expect(backendGetJson).toHaveBeenCalledTimes(2);
+
+    await unmount();
+  });
+
+  it("re-checks host health when Refresh is clicked", async () => {
+    stubBackendFetch();
+    const backendGetJson = vi.fn(async () => healthyRegistry());
+    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
+
+    await flushPromises();
+    expect(backendGetJson).toHaveBeenCalledTimes(1);
+
+    const refresh = container.querySelector<HTMLButtonElement>(".host-health-refresh");
+    expect(refresh).not.toBeNull();
+    flushSync(() => refresh!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+
+    expect(backendGetJson).toHaveBeenCalledTimes(2);
+
+    await unmount();
+  });
+
   it("renders dashboard widgets contributed through the Studio SDK", async () => {
     stubBackendFetch();
     const { container, unmount } = await renderDashboard(stubApi({
