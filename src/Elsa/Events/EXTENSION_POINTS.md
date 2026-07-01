@@ -9,8 +9,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 ### `IEventHandler<T>` *(Core — `Elsa.Events.Core`)* where `T : IEvent`
 - **Kind:** Contributor (event subscriber — handles a specific event type).
 - **Signature:** `Task Handle(T @event, CancellationToken cancellationToken);`
-- **Register:** `services.AddScoped<IEventHandler, MyHandler>()` (non-generic base) or via `AddEventHandlersFrom(assembly)` assembly scan.
-- **Consumed by:** `EventPublisher` (this feature), which resolves all registered `IEventHandler<T>` implementations for the published event type and dispatches them according to the publishing strategy.
+- **Register:** `services.AddEventHandler<TEvent, MyHandler>()` (additive), `services.TryAddEventHandler<TEvent, MyHandler>()` (idempotent — for aggregators several features may each register), or `AddEventHandlersFrom(assembly)` assembly scan. All three record the handler under both the closed generic `IEventHandler<TEvent>` (the dispatch path) and the non-generic `IEventHandler` marker. **Do not register only under the bare `IEventHandler` marker** (`AddScoped<IEventHandler, MyHandler>()`): the pipeline resolves handlers exclusively through the closed generic, so a marker-only registration silently never dispatches.
+- **Consumed by:** `EventPublisher` (this feature), which resolves the registered `IEventHandler<T>` implementations for the published event type (via the closed generic service type) and dispatches them according to the publishing strategy.
 
 **The single-aggregating-handler convention** (framework §2.24.2): by convention, for every contributor-interface fan-in event (e.g. `OnDraftValidating`, `OnJsonPayloadConvertersInitializing`), exactly ONE `IEventHandler<OnXxx>` is registered — the aggregator that loops the typed contributor implementations. Feature code never registers its own `IEventHandler` for these events; it registers a typed contributor (e.g. `IDraftValidator`, `IJsonConverterSource`). This makes the contributor count visible at a glance.
 
