@@ -3,6 +3,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using Elsa.Studio.Api.Features;
 using Elsa.Studio.ConsoleStream;
+using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
@@ -62,6 +63,13 @@ builder.Services.AddCShellsAspNetCore(shells =>
         });
 });
 
+// Host the console-log-streaming server (capture host + SignalR hub + HTTP endpoints) on the application
+// root rather than inside the ConsoleStream shell feature. Shell route scopes are recycled at runtime on
+// package changes (see StudioNuplaneShellReloadObserver), which would dispose the service provider a live
+// hub connection captured and throw ObjectDisposedException in OnDisconnectedAsync. The root container's
+// lifetime matches the connection's. Gated by the same feature-enablement check as the capture hook above.
+builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
+
 var app = builder.Build();
 
 app.MapGet("/studio-runtime.js", () =>
@@ -81,6 +89,7 @@ app.UseStaticFiles();
 
 app.MapElsaModuleManagementApi();
 app.MapElsaFeatureManagementApi();
+app.MapConsoleStreamStudioIfEnabled(configuration);
 app.MapShells();
 app.MapActiveShellStudioApi();
 app.MapNuplaneStaticWebAssets();
