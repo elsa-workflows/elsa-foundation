@@ -2,6 +2,8 @@
 
 Status: brainstorm decisions locked for the Runtime Execution Seam discussion. This is not yet a ratified Speckit spec, implementation plan, glossary entry, or constitution gate.
 
+> **Superseded-in-part 2026-07-02.** Decisions 1–5 and 7–10 are implemented as intended; Decision 6 (named-slot middleware pipelines) is superseded by the scheduler-work-handler execution model. See [runtime expression-context source reconciliation](runtime-expression-context-source-reconciliation.md).
+
 Program goal state: [Runtime Execution Seam](../program-goals/runtime-execution-seam.md).
 
 Source evidence: [Elsa Core runtime execution layer analysis](elsa-core-runtime-execution-layer-analysis.md).

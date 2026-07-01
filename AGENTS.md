@@ -159,7 +159,8 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/081-typed-argument-model/plan.md
+No Speckit plan is active right now. When a work unit is active, read its
+plan under specs/ for context on technologies, project structure, shell
+commands, and other important information. The last completed unit was
+specs/081-typed-argument-model (merged).
 <!-- SPECKIT END -->

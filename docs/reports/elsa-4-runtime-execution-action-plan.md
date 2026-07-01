@@ -2,6 +2,8 @@
 
 Status: pre-Speckit action plan derived from locked runtime execution brainstorm decisions. This is not a ratified Speckit spec or implementation task list.
 
+> **Superseded-in-part 2026-07-02.** The recommended first unit (Slices 1–9) is substantially implemented; Slice 4's named-slot pipeline is superseded by the scheduler-work-handler execution model. See [runtime expression-context source reconciliation](runtime-expression-context-source-reconciliation.md).
+
 Program goal state: [Runtime Execution Seam](../program-goals/runtime-execution-seam.md).
 
 Decision source: [Elsa 4 runtime execution brainstorm decisions](elsa-4-runtime-execution-brainstorm-decisions.md).
