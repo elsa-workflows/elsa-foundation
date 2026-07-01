@@ -17,6 +17,19 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 
 ---
 
+## Implementation Status Note (2026-07-02) — read before resuming
+
+An audit reconciled this file against the actual tree. Two drifts affect the **open** tasks below:
+
+1. **Layout is nested, not flat.** The repo was reorganised to `src/Elsa/Activities/...` after this file was authored. Translate every flat path: `src/Elsa.Activities.Primitives` → `src/Elsa/Activities/Primitives`; `tests/Elsa.Activities.Primitives.Tests` → `tests/Elsa/Activities/Primitives/Tests`; etc.
+2. **FR-009 CLR descriptor superseded by spec 081.** The CLR descriptor is **not** `TypeInformation`; the shipped scanner emits an alias-based `ClrActivityDescriptor` (`DescriptorType = typeof(ClrActivityDescriptor).FullName`, payload = `TypeAliasConvention.CanonicalAlias(type)`). Implement/verify against the current code, not FR-009's literal text. The Workflow kind still correctly uses `WorkflowIdentity`.
+
+**Done (verified green):** Phases 1–5 seam/CLR/Workflow-runtime/design-purge; plus T002/T028/T029/T031 — the `Composition.Design` reconciliation source + feature + host wiring landed on branch `006-activity-construction-seam` (commit `96e8072e`). Full solution built green as of this note.
+
+**Remaining open:** T004, T018, T023, T025, T041, T042, T046, T050–T055 (a new `tests/Elsa/Activities/Primitives/Tests` project + binder/registration tests; the SC-proving architecture tests T050–T053; persistence/read-contract tests; JSON reconciliation field verify; feature docs; final `dotnet build Elsa.Server.slnx` + all-tests + quickstart validation). None depend on undecided design.
+
+---
+
 ## Phase 1: Setup (Shared Infrastructure)
 
 **Purpose**: Create the new projects, the shared descriptor model, and test scaffolding.
