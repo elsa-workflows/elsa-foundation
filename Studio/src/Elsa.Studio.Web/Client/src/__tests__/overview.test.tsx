@@ -43,7 +43,7 @@ describe("dashboard", () => {
     expect(container.textContent).toContain("Connected");
     expect(container.textContent).toContain("Server module registry is unavailable: Request failed with 404.");
     expect(container.textContent).toContain("Open Modules to review host-scoped issues.");
-    expect(fetchMock).toHaveBeenCalledWith("https://foundation.example/_elsa/health", { cache: "no-store" });
+    expect(fetchMock).toHaveBeenCalledWith("https://foundation.example/", { cache: "no-store" });
 
     await unmount();
   });
@@ -58,7 +58,43 @@ describe("dashboard", () => {
 
     expect(container.textContent).toContain("Backend API");
     expect(container.textContent).toContain("Review");
-    expect(container.textContent).toContain("https://foundation.example/_elsa/health responded with 503.");
+    expect(container.textContent).toContain("https://foundation.example/ responded with 503.");
+
+    await unmount();
+  });
+
+  it("flags the Backend API tile when a 200 response self-reports a non-healthy status", async () => {
+    stubBackendFetch(() => new Response(JSON.stringify({ status: "Degraded", service: "elsa-server" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }));
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry()
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Backend API");
+    expect(container.textContent).toContain("Review");
+    expect(container.textContent).toContain('https://foundation.example/ reported "Degraded".');
+    expect(container.textContent).not.toContain("Connected");
+
+    await unmount();
+  });
+
+  it("stays Connected when a 200 response reports a healthy status", async () => {
+    stubBackendFetch(() => new Response(JSON.stringify({ status: "Healthy", service: "elsa-server" }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    }));
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry()
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Backend API");
+    expect(container.textContent).toContain("Connected");
 
     await unmount();
   });
@@ -75,7 +111,7 @@ describe("dashboard", () => {
 
     expect(container.textContent).toContain("Backend API");
     expect(container.textContent).toContain("Unavailable");
-    expect(container.textContent).toContain("https://foundation.example/_elsa/health (Failed to fetch)");
+    expect(container.textContent).toContain("https://foundation.example/ (Failed to fetch)");
 
     await unmount();
   });
@@ -86,7 +122,7 @@ describe("dashboard", () => {
 
     await flushPromises();
 
-    expect(container.textContent).toContain("responded with HTTP 503");
+    expect(container.textContent).toContain("responded with 503.");
     expect(container.textContent).not.toContain("Connected");
 
     await unmount();

@@ -765,9 +765,10 @@ async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, host
 }
 
 async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
-  // Leading-slash path so it resolves to the origin root, matching the server route (mapped at
-  // absolute "/_elsa/health") and the sibling "Server host" registry probe rather than any base path.
-  const healthUrl = new URL("/_elsa/health", baseUrl).toString();
+  // The backend Elsa Server exposes its liveness signal at the origin root (returns
+  // `{ "status": "Healthy", ... }` with CORS enabled) — it does not map a `/_elsa/health` route.
+  // Probe the root so the tile reflects the backend's real health check rather than a 404.
+  const healthUrl = new URL("/", baseUrl).toString();
   // Prefer a readable (CORS) response so we can tell a healthy host apart from one returning 5xx.
   // An opaque no-cors probe settles even for a crashing server, so it can't distinguish the two.
   // Readable CORS request so we can inspect the real status: a rejected fetch means the
@@ -775,6 +776,17 @@ async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
   try {
     const response = await fetch(healthUrl, { cache: "no-store" });
     if (response.ok) {
+      // A 2xx can still carry a self-reported "Degraded"/"Unhealthy" status (ASP.NET Core health
+      // checks answer 200 for Degraded), so inspect the body before declaring the backend healthy.
+      const reported = await readReportedHealthStatus(response);
+      if (reported && !isHealthyStatus(reported)) {
+        return {
+          status: "attention",
+          attention: 1,
+          detail: `${healthUrl} reported "${reported}".`
+        };
+      }
+
       return {
         status: "ok",
         attention: 0,
@@ -797,6 +809,23 @@ async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
       return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
     }
   }
+}
+
+// Best-effort read of the backend's self-reported health status (e.g. `{ "status": "Healthy" }`).
+// Returns null for a non-JSON or bodyless response so the caller falls back to treating a 2xx as healthy.
+async function readReportedHealthStatus(response: Response): Promise<string | null> {
+  if (!(response.headers.get("content-type") ?? "").includes("json")) return null;
+  try {
+    const body = await response.json();
+    const status = (body as { status?: unknown })?.status;
+    return typeof status === "string" ? status : null;
+  } catch {
+    return null;
+  }
+}
+
+function isHealthyStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "healthy";
 }
 
 function formatCheckedAgo(at: Date | null, now: number): string {
