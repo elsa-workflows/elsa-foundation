@@ -2866,8 +2866,13 @@ function WorkflowEditor({
   const promoteAndPublish = async () => {
     if (!draft || busy) return;
     setOperation("promoting");
-    setStatus("Promoting...");
+    setStatus("Saving...");
     try {
+      // Persist in-flight edits first: promotion snapshots the persisted draft, so without
+      // this save the new version — and the post-promote load() — would revert to the last
+      // stored state and lose unsaved changes.
+      await saveDraft(draft, "Saved");
+      setStatus("Promoting...");
       const promoted = await promoteDraft(context, draft.id);
       const published = await publishVersion(context, promoted.versionId);
       setPublishedArtifactId(published.artifactId);
