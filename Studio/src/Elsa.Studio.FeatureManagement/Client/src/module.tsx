@@ -35,7 +35,14 @@ interface FeatureCatalogItem {
   manifestHash?: string | null;
   readError?: string | null;
   settings: StudioSettingDescriptor[];
-  dependencies: string[];
+  dependencies: FeatureDependency[];
+}
+
+// A feature dependency carries whether it is optional. Optional dependencies are surfaced for display but are
+// excluded from the hard enable/disable cascade so they are never force-toggled like mandatory dependencies.
+interface FeatureDependency {
+  id: string;
+  optional: boolean;
 }
 
 interface DraftFeature extends FeatureCatalogItem {
@@ -175,68 +182,22 @@ export function isDirty(current: FeatureCatalogResponse | null, draft: DraftFeat
   return current ? canonicalize(current.features) !== canonicalize(draft) : false;
 }
 
-const normalizeId = (value: string) => value.trim().toLowerCase();
-
-// Direct dependencies of a feature (the features it requires).
-function getFeatureDependencies(feature: DraftFeature) {
-  return Array.isArray(feature.dependencies) ? feature.dependencies : [];
+function featureIndexById(features: DraftFeature[]) {
+  return new Map(features.map(feature => [normalizeType(feature.id), feature]));
 }
 
-// Resolves the set of feature ids affected when toggling `id` to `enabled`:
-// enabling pulls in every transitive dependency, disabling pushes out every
-// transitive dependant, so the desired state never leaves a broken dependency edge.
-export function computeFeatureCascade(features: DraftFeature[], id: string, enabled: boolean): Set<string> {
-  const byId = new Map(features.map(feature => [normalizeId(feature.id), feature]));
-  const affected = new Set<string>();
-  const root = byId.get(normalizeId(id));
-  if (!root) {
-    return affected;
-  }
-
-  const stack = [root];
-  affected.add(root.id);
-
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    const related = enabled
-      // dependencies the feature requires
-      ? getFeatureDependencies(current)
-          .map(dependency => byId.get(normalizeId(dependency)))
-          .filter((feature): feature is DraftFeature => feature != null)
-      // dependants that require the feature
-      : features.filter(feature => getFeatureDependencies(feature)
-          .some(dependency => normalizeId(dependency) === normalizeId(current.id)));
-
-    for (const feature of related) {
-      if (!affected.has(feature.id)) {
-        affected.add(feature.id);
-        stack.push(feature);
-      }
-    }
-  }
-
-  return affected;
-}
-
-// Applies a toggle to the draft, cascading to dependencies/dependants.
-export function applyFeatureToggle(features: DraftFeature[], id: string, enabled: boolean): DraftFeature[] {
-  const affected = computeFeatureCascade(features, id, enabled);
-  if (affected.size === 0) {
-    return features;
-  }
-
-  return features.map(feature => affected.has(feature.id) && feature.enabled !== enabled
-    ? { ...feature, enabled }
-    : feature);
-}
-
-// Direct dependants, indexed by the feature id they require (used for inspector display).
+// Direct dependants, indexed by the normalized feature id they require. Used for
+// the inspector's "Required by" display and to resolve the disable cascade below.
 export function buildDependentsIndex(features: DraftFeature[]): Map<string, string[]> {
   const index = new Map<string, string[]>();
 
   for (const feature of features) {
-    for (const dependency of getFeatureDependencies(feature)) {
-      const key = normalizeId(dependency);
+    for (const dependency of feature.dependencies) {
+      // Optional dependencies form no hard dependant edge: disabling the dependency must not force-disable a feature
+      // that only optionally uses it, and it should not appear under the "Required by" list.
+      if (dependency.optional)
+        continue;
+      const key = normalizeType(dependency.id);
       const existing = index.get(key);
       if (existing) {
         existing.push(feature.id);
@@ -247,6 +208,76 @@ export function buildDependentsIndex(features: DraftFeature[]): Map<string, stri
   }
 
   return index;
+}
+
+// Walks the dependency graph from `root`, adding every reachable feature id to
+// `affected`: enabling follows the dependencies a feature requires; disabling
+// follows the dependants that require it (via the shared reverse index).
+function collectCascade(
+  root: DraftFeature,
+  enabled: boolean,
+  byId: Map<string, DraftFeature>,
+  dependents: Map<string, string[]>,
+  affected: Set<string>) {
+  const stack = [root];
+  affected.add(root.id);
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const relatedIds = enabled
+      ? current.dependencies.filter(dependency => !dependency.optional).map(dependency => dependency.id)
+      : dependents.get(normalizeType(current.id)) ?? [];
+
+    for (const relatedId of relatedIds) {
+      const feature = byId.get(normalizeType(relatedId));
+      if (feature && !affected.has(feature.id)) {
+        affected.add(feature.id);
+        stack.push(feature);
+      }
+    }
+  }
+}
+
+// Shared cascade resolver for one or many seed ids. Builds the feature index (and,
+// when disabling, the reverse dependants index) once, then folds every seed id
+// through the graph so bulk toggles never rebuild those indexes per feature.
+function collectToggleTargets(features: DraftFeature[], ids: Iterable<string>, enabled: boolean): Set<string> {
+  const byId = featureIndexById(features);
+  const dependents = enabled ? new Map<string, string[]>() : buildDependentsIndex(features);
+  const affected = new Set<string>();
+
+  for (const id of ids) {
+    const root = byId.get(normalizeType(id));
+    if (root) {
+      collectCascade(root, enabled, byId, dependents, affected);
+    }
+  }
+
+  return affected;
+}
+
+// Resolves the set of feature ids affected when toggling `id` to `enabled`:
+// enabling pulls in every transitive dependency, disabling pushes out every
+// transitive dependant, so the desired state never leaves a broken dependency edge.
+export function computeFeatureCascade(features: DraftFeature[], id: string, enabled: boolean): Set<string> {
+  return collectToggleTargets(features, [id], enabled);
+}
+
+// Applies `enabled` to every seed id and its cascade in a single pass over the draft.
+function applyFeatureToggles(features: DraftFeature[], ids: Iterable<string>, enabled: boolean): DraftFeature[] {
+  const affected = collectToggleTargets(features, ids, enabled);
+  if (affected.size === 0) {
+    return features;
+  }
+
+  return features.map(feature => affected.has(feature.id) && feature.enabled !== enabled
+    ? { ...feature, enabled }
+    : feature);
+}
+
+// Applies a toggle to the draft, cascading to dependencies/dependants.
+export function applyFeatureToggle(features: DraftFeature[], id: string, enabled: boolean): DraftFeature[] {
+  return applyFeatureToggles(features, [id], enabled);
 }
 
 function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
@@ -311,7 +342,7 @@ export function FeatureManagementPage() {
     ?? filteredDraft[0]
     ?? null;
   const dependentsIndex = useMemo(() => buildDependentsIndex(draft), [draft]);
-  const selectedDependents = selectedFeature ? dependentsIndex.get(normalizeId(selectedFeature.id)) ?? [] : [];
+  const selectedDependents = selectedFeature ? dependentsIndex.get(normalizeType(selectedFeature.id)) ?? [] : [];
   const dirty = isDirty(catalog, draft);
   const enabledCount = draft.filter(feature => feature.enabled).length;
   const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
@@ -459,9 +490,7 @@ export function FeatureManagementPage() {
 
     updateHostState(activeHost.id, state => ({
       ...state,
-      draft: Array.from(state.checkedFeatureIds).reduce(
-        (draft, id) => applyFeatureToggle(draft, id, enabled),
-        state.draft)
+      draft: applyFeatureToggles(state.draft, state.checkedFeatureIds, enabled)
     }));
   }
 
@@ -844,7 +873,7 @@ function FeatureInspector({
 
 function FeatureMetadata({ feature, displayName, dependents }: { feature: DraftFeature; displayName: string; dependents: string[] }) {
   const source = getSourceMeta(feature.sourceKind);
-  const dependencies = getFeatureDependencies(feature);
+  const dependencies = feature.dependencies.map(dependency => dependency.id);
   const packageName = feature.packageId
     ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
     : "Not package-backed";
@@ -1150,10 +1179,28 @@ function JsonSettingEditor({ setting, value, disabled, onChange }: StudioSetting
   );
 }
 
+// Coerce the wire dependency list into FeatureDependency objects. Tolerates a legacy `string[]` payload (treated as
+// mandatory) so an older backend still cascades correctly.
+function normalizeDependencies(raw: unknown): FeatureDependency[] {
+  if (!Array.isArray(raw))
+    return [];
+
+  const dependencies: FeatureDependency[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      dependencies.push({ id: entry, optional: false });
+    } else if (entry && typeof entry === "object" && typeof (entry as { id?: unknown }).id === "string") {
+      dependencies.push({ id: (entry as { id: string }).id, optional: (entry as { optional?: unknown }).optional === true });
+    }
+  }
+
+  return dependencies;
+}
+
 function toDraftFeature(feature: FeatureCatalogItem): DraftFeature {
   return {
     ...feature,
-    dependencies: Array.isArray(feature.dependencies) ? feature.dependencies : [],
+    dependencies: normalizeDependencies(feature.dependencies),
     configuration: feature.configuration && typeof feature.configuration === "object" && !Array.isArray(feature.configuration)
       ? { ...feature.configuration }
       : {}

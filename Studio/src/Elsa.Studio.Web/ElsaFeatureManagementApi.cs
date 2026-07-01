@@ -133,8 +133,22 @@ internal static class ElsaFeatureManagementApi
             manifest?.ManifestHash,
             hasDescriptor || hasManifest ? null : "Feature is enabled in shells.json but no runtime descriptor is currently available.",
             manifest?.Settings ?? [],
-            descriptor?.Dependencies is { Count: > 0 } dependencies ? dependencies : manifest?.Dependencies ?? []);
+            MergeDependencies(hasDescriptor, descriptor?.Dependencies, manifest?.Dependencies));
     }
+
+    /// <summary>
+    /// Merges the runtime-resolved dependency list with the manifest-declared one. When a runtime descriptor exists
+    /// its graph is authoritative — even when it resolved zero dependencies — so gate the manifest fallback on whether
+    /// a descriptor was actually present rather than on list emptiness, which cannot tell "resolved zero" apart from
+    /// "no runtime info". Runtime-resolved dependencies are always mandatory (CShells descriptors carry no optional flag).
+    /// </summary>
+    internal static IReadOnlyList<FeatureManagementDependency> MergeDependencies(
+        bool hasDescriptor,
+        IReadOnlyList<string>? descriptorDependencies,
+        IReadOnlyList<FeatureManagementDependency>? manifestDependencies) =>
+        hasDescriptor
+            ? (descriptorDependencies ?? []).Select(id => new FeatureManagementDependency(id, false)).ToArray()
+            : manifestDependencies ?? [];
 
     /// <summary>
     /// Reads <c>elsa-package.json</c> manifests using the shared <c>Elsa.Platform.PackageManifests</c> wire contract
@@ -210,17 +224,20 @@ internal static class ElsaFeatureManagementApi
     /// short CShells ID (e.g. <c>"JintEngine"</c>). Strip that same-package prefix so manifest-declared dependencies
     /// line up with the IDs the cascade (and the runtime-resolved path) actually uses.
     /// </summary>
-    private static IReadOnlyList<string> GetDependencies(FeatureManifest feature, string packageId)
+    internal static IReadOnlyList<FeatureManagementDependency> GetDependencies(FeatureManifest feature, string packageId)
     {
         var prefix = string.IsNullOrWhiteSpace(packageId) ? null : packageId + ".";
 
         return feature.Dependencies
-            .Select(dependency => dependency.FeatureId)
-            .Where(featureId => !string.IsNullOrWhiteSpace(featureId))
-            .Select(featureId => prefix is not null && featureId!.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? featureId[prefix.Length..]
-                : featureId!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(dependency => !string.IsNullOrWhiteSpace(dependency.FeatureId))
+            .Select(dependency =>
+            {
+                var featureId = dependency.FeatureId!;
+                if (prefix is not null && featureId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    featureId = featureId[prefix.Length..];
+                return new FeatureManagementDependency(featureId, dependency.Optional);
+            })
+            .DistinctBy(dependency => dependency.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -252,33 +269,26 @@ internal static class ElsaFeatureManagementApi
             GetBool(setting.UI, "advanced"),
             GetBool(setting.UI, "experimental"),
             GetString(setting.UI, "hint"),
-            optionsProvider ?? GetString(setting.UI, "optionsProvider"),
+            optionsProvider,
             options);
     }
 
     /// <summary>
     /// The generator nests static options under <c>ui.options.items</c> and provider-backed options under
-    /// <c>ui.options.provider</c> (with <c>ui.options.source</c> discriminating the two); this also accepts a flat
-    /// <c>ui.options</c> array for forward/backward compatibility, then falls back to <c>validation.enum</c>.
+    /// <c>ui.options.provider</c> (with <c>ui.options.source</c> discriminating the two), then falls back to
+    /// <c>validation.enum</c> for plain enums.
     /// </summary>
     private static (IReadOnlyList<FeatureManagementSettingOptionResponse> Options, string? OptionsProvider) GetSettingOptions(
         Dictionary<string, object?> ui,
         Dictionary<string, object?> validation)
     {
-        if (GetElement(ui, "options") is { } optionsElement)
+        if (GetElement(ui, "options") is { ValueKind: JsonValueKind.Object } optionsElement)
         {
-            if (optionsElement.ValueKind is JsonValueKind.Object)
-            {
-                if (string.Equals(GetJsonString(optionsElement, "source"), "provider", StringComparison.OrdinalIgnoreCase))
-                    return ([], GetJsonString(optionsElement, "provider"));
+            if (string.Equals(GetJsonString(optionsElement, "source"), "provider", StringComparison.OrdinalIgnoreCase))
+                return ([], GetJsonString(optionsElement, "provider"));
 
-                if (optionsElement.TryGetProperty("items", out var items) && items.ValueKind is JsonValueKind.Array)
-                    return (MapOptions(items), null);
-            }
-            else if (optionsElement.ValueKind is JsonValueKind.Array)
-            {
-                return (MapOptions(optionsElement), null);
-            }
+            if (optionsElement.TryGetProperty("items", out var items) && items.ValueKind is JsonValueKind.Array)
+                return (MapOptions(items), null);
         }
 
         if (GetElement(validation, "enum") is { ValueKind: JsonValueKind.Array } enumValues)
@@ -368,7 +378,9 @@ internal sealed record FeatureManagementManifestFeature(
     string? ManifestPath,
     string? ManifestHash,
     IReadOnlyList<FeatureManagementSettingResponse> Settings,
-    IReadOnlyList<string> Dependencies);
+    IReadOnlyList<FeatureManagementDependency> Dependencies);
+
+internal sealed record FeatureManagementDependency(string Id, bool Optional);
 
 internal sealed record FeatureManagementCatalogResponse(
     string Revision,
@@ -390,7 +402,7 @@ internal sealed record FeatureManagementCatalogItemResponse(
     string? ManifestHash,
     string? ReadError,
     IReadOnlyList<FeatureManagementSettingResponse> Settings,
-    IReadOnlyList<string> Dependencies);
+    IReadOnlyList<FeatureManagementDependency> Dependencies);
 
 internal sealed record FeatureManagementSettingResponse(
     string Name,

@@ -85,6 +85,41 @@ describe("feature management module", () => {
     expect(Array.from(computeFeatureCascade(draft, "Api", true)).sort()).toEqual(["Api", "FastEndpoints"]);
   });
 
+  it("enabling a feature does not cascade to its optional dependencies", () => {
+    const draft = [
+      feature("Api", false, {}, [], { dependencies: [{ id: "FastEndpoints", optional: false }, { id: "Telemetry", optional: true }] }),
+      feature("FastEndpoints", false, {}),
+      feature("Telemetry", false, {})
+    ];
+
+    const result = applyFeatureToggle(draft, "Api", true);
+
+    // The mandatory dependency is pulled in; the optional one is left untouched.
+    expect(enabledIds(result)).toEqual(["Api", "FastEndpoints"]);
+  });
+
+  it("disabling a feature does not cascade to features that depend on it optionally", () => {
+    const draft = [
+      feature("Api", true, {}, [], { dependencies: [{ id: "Telemetry", optional: true }] }),
+      feature("Telemetry", true, {})
+    ];
+
+    const result = applyFeatureToggle(draft, "Telemetry", false);
+
+    // Api only optionally uses Telemetry, so disabling Telemetry must not force Api off.
+    expect(enabledIds(result)).toEqual(["Api"]);
+  });
+
+  it("excludes optional dependencies from the dependants index", () => {
+    const draft = [
+      feature("Api", true, {}, [], { dependencies: [{ id: "Telemetry", optional: true }] }),
+      feature("Ui", true, {}, [], { dependencies: ["Telemetry"] }),
+      feature("Telemetry", true, {})
+    ];
+
+    expect(buildDependentsIndex(draft).get("telemetry")).toEqual(["Ui"]);
+  });
+
   it("indexes direct dependants by required feature id", () => {
     const draft = [
       feature("Api", true, {}, [], { dependencies: ["FastEndpoints"] }),
@@ -524,7 +559,7 @@ function feature(
   categories: string[] = [],
   overrides: Record<string, unknown> = {}
 ) {
-  return {
+  const built = {
     id,
     displayName: id,
     categories,
@@ -534,8 +569,15 @@ function feature(
     advanced: false,
     experimental: false,
     settings: [],
+    dependencies: [],
     ...overrides
-  } as any;
+  };
+
+  // Normalize dependency overrides so a bare string means a mandatory dependency and an object can flag `optional`.
+  built.dependencies = (built.dependencies as Array<string | { id: string; optional?: boolean }>).map(dependency =>
+    typeof dependency === "string" ? { id: dependency, optional: false } : { id: dependency.id, optional: dependency.optional === true });
+
+  return built as any;
 }
 
 function enabledIds(features: Array<{ id: string; enabled: boolean }>) {
