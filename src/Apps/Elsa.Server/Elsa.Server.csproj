@@ -34,11 +34,6 @@
 		</Content>
 	</ItemGroup>
 
-	<Target Name="BuildDemoClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' And Exists('DemoClient/package.json')">
-		<Exec WorkingDirectory="DemoClient" Command="npm ci" />
-		<Exec WorkingDirectory="DemoClient" Command="npm run build" />
-	</Target>
-
 	<ItemGroup>
 		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
