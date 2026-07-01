@@ -149,8 +149,14 @@ function PropertyRow({
   const inlineDiagnostics = inlineExpressionEditor && inlineExpressionContext
     ? getExpressionEditorDiagnostics(inlineExpressionEditor, inlineExpressionContext, value)
     : [];
-  const useInlineSyntaxPicker = Boolean(wrapped && isSingleLineTextInput(input, editor?.id));
-  const canExpandEditor = Boolean(wrapped && isExpandableTextInput(input, editor?.id));
+  // A collection renders a multi-row repeater, not a single-line field, so the inline text chrome (the
+  // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
+  // it would stretch down the whole list and cover the per-row reorder controls. Such inputs still get a
+  // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
+  // gating on the collection itself (not the hint) is what keeps the two features from colliding.
+  const isCollectionEditor = collectionType != null;
+  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && isSingleLineTextInput(input, editor?.id));
+  const canExpandEditor = Boolean(wrapped && !isCollectionEditor && isExpandableTextInput(input, editor?.id));
   const [expanded, setExpanded] = useState(false);
 
   const setRaw = (nextValue: unknown) => {

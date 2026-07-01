@@ -689,6 +689,14 @@ describe("workflows module", () => {
     expect(repeater).toBeTruthy();
     expect(repeater?.querySelector(".wf-collection-empty")).toBeTruthy();
 
+    // Despite the "singleline" hint, the collection does NOT get wrapped in the inline expression-field
+    // chrome (whose overlaid picker would stretch over the list and hide the reorder controls). It gets a
+    // block syntax picker above the list instead.
+    expect(container.querySelector(".wf-expression-field")).toBeNull();
+    const syntaxPicker = container.querySelector(".wf-syntax-picker");
+    expect(syntaxPicker).toBeTruthy();
+    expect(syntaxPicker?.classList.contains("inline")).toBe(false);
+
     const addButton = buttonByText(container, "Add item");
     await click(addButton);
     await click(buttonByText(container, "Add item"));
@@ -1806,6 +1814,9 @@ function writeLinesDescriptor() {
       order: 0,
       category: "General",
       isBrowsable: true,
+      // Collection list inputs commonly carry a "singleline" hint; the repeater must still win over the
+      // single-line inline chrome (regression: the inline picker used to stretch over the whole list).
+      uiHint: "singleline",
       isWrapped: true,
       defaultSyntax: "Literal"
     }],
