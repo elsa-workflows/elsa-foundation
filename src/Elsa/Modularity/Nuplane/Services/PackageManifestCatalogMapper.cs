@@ -111,33 +111,26 @@ internal static class PackageManifestCatalogMapper
             GetBool(setting.UI, "advanced"),
             GetBool(setting.UI, "experimental"),
             GetString(setting.UI, "hint"),
-            optionsProvider ?? GetString(setting.UI, "optionsProvider"),
+            optionsProvider,
             options);
     }
 
     /// <summary>
     /// The generator nests static options under <c>ui.options.items</c> and provider-backed options under
-    /// <c>ui.options.provider</c> (with <c>ui.options.source</c> discriminating the two); this also accepts a flat
-    /// <c>ui.options</c> array for forward/backward compatibility, then falls back to <c>validation.enum</c>.
+    /// <c>ui.options.provider</c> (with <c>ui.options.source</c> discriminating the two), then falls back to
+    /// <c>validation.enum</c>.
     /// </summary>
     private static (IReadOnlyList<FeatureSettingOptionDescriptor> Options, string? OptionsProvider) GetSettingOptions(
         Dictionary<string, object?> ui,
         Dictionary<string, object?> validation)
     {
-        if (GetElement(ui, "options") is { } optionsElement)
+        if (GetElement(ui, "options") is { ValueKind: JsonValueKind.Object } optionsElement)
         {
-            if (optionsElement.ValueKind is JsonValueKind.Object)
-            {
-                if (string.Equals(GetJsonString(optionsElement, "source"), "provider", StringComparison.OrdinalIgnoreCase))
-                    return ([], GetJsonString(optionsElement, "provider"));
+            if (string.Equals(GetJsonString(optionsElement, "source"), "provider", StringComparison.OrdinalIgnoreCase))
+                return ([], GetJsonString(optionsElement, "provider"));
 
-                if (optionsElement.TryGetProperty("items", out var items) && items.ValueKind is JsonValueKind.Array)
-                    return (MapOptions(items), null);
-            }
-            else if (optionsElement.ValueKind is JsonValueKind.Array)
-            {
-                return (MapOptions(optionsElement), null);
-            }
+            if (optionsElement.TryGetProperty("items", out var items) && items.ValueKind is JsonValueKind.Array)
+                return (MapOptions(items), null);
         }
 
         if (GetElement(validation, "enum") is { ValueKind: JsonValueKind.Array } enumValues)
