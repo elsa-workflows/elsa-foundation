@@ -105,14 +105,11 @@ builder.Services.AddScoped<IExtensionBuilderBuildRunner, ExtensionBuilderBuildRu
 builder.Services.AddScoped<IExtensionBuilderBuildExecutor, ExtensionBuilderBuildExecutor>();
 builder.Services.AddScoped<IExtensionBuilderPromotionService, ExtensionBuilderPromotionService>();
 builder.Services.AddScoped<IExtensionBuilderService, ExtensionBuilderService>();
-builder.Services.AddSingleton<DemoPackageEventStore>();
-builder.Services.AddSingleton<DemoNuplaneObserver>();
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-    nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
 builder.Services.AddNuplaneFeatureCatalog();
@@ -194,15 +191,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
 var app = builder.Build();
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    RequestPath = "/demo"
-});
-
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
-app.MapElsaDemoApi();
 app.MapElsaModuleManagementApi();
 app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
@@ -213,6 +204,4 @@ app.MapShellManagementApi("/_admin/shells");
 // note above). Mapped after UseCors so the Studio cross-origin policy applies.
 if (consoleLogStreamingEnabled)
     app.MapConsoleLogStreaming();
-app.MapFallbackToFile("/demo", "index.html");
-app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
 app.Run();
