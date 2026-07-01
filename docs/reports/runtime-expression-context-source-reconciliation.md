@@ -120,6 +120,6 @@ Gate impact: expected to stay within existing §E2.2 / §E2.6 / §E2.9 constrain
 ## Follow-up surface
 
 - Edge A feeds its own ADR (number assigned when the unit is picked up) and, if approved, a narrow Speckit unit under `specs/` scoped to D1–D4 (retire/re-point + guardrail), *not* the already-built artifact/state contract.
-- Edge B (pipeline wiring) has a drafted decision — [ADR 0029](../adr/0029-runtime-execution-flows-through-the-pipelines.md) "Runtime execution flows through the workflow and activity pipelines" — and a sizing report ([pipeline wiring sizing](runtime-execution-pipeline-wiring-sizing.md)). It splits into Move 1 (wire the executor; behavior-preserving) and Move 2 (incremental handler decomposition). Steward confirmed the pipeline is the intended execution spine.
+- Edge B (pipeline wiring) has an accepted decision — [ADR 0029](../adr/0029-runtime-execution-flows-through-the-pipelines.md) "Runtime execution flows through the workflow and activity pipelines" — and a sizing report ([pipeline wiring sizing](runtime-execution-pipeline-wiring-sizing.md)). It splits into Move 1 (wire the executor; behavior-preserving) and Move 2 (incremental handler decomposition). Steward confirmed the pipeline is the intended execution spine.
 - Record the S4 unwired-pipeline finding and the S7 sensitive-value default in the Runtime Execution Seam bucket and [unfinished work](unfinished-work.md).
 - The AGENTS.md SPECKIT pointer (still `specs/081-typed-argument-model/plan.md`; 081 is merged) should be corrected when the next unit is chosen.

@@ -1,6 +1,6 @@
 # Runtime Execution Flows Through The Workflow And Activity Pipelines
 
-Status: proposed
+Status: accepted
 
 The runtime scheduler will dispatch every work item **through the runtime pipeline appropriate to its kind** — the workflow-execution pipeline for workflow-tick and lifecycle work, the activity-execution pipeline for per-activity-execution work — with the existing scheduler work handler running as the pipeline's `Invoke`-slot body. This makes the already-defined pipeline contract (`IWorkflowRuntimeMiddleware` / `IActivityRuntimeMiddleware`, the pipeline builders, `RuntimeWorkflowPipelineSlots` / `RuntimeActivityPipelineSlots`, `RuntimePipelinePlan`) the **real execution spine**: a module that registers runtime middleware against a slot now actually runs during execution. This decision settles the "make the pipeline real" move (Move 1) and states the direction for, but does not commit, the larger handler-decomposition move (Move 2).
 
