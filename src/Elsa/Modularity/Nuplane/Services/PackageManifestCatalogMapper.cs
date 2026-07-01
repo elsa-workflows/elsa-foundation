@@ -63,7 +63,10 @@ internal static class PackageManifestCatalogMapper
 
             // The runtime contributor (which resolves the live CShells dependency graph) runs before this one and
             // wins when a feature is currently loaded; this only fills the gap for disabled/not-yet-loaded features.
-            if (builder.Dependencies.Count == 0 && feature.Dependencies.Count > 0)
+            // Gate on the runtime's "was resolved" signal so a loaded feature that genuinely has zero dependencies is
+            // not backfilled from a stale manifest, and keep the emptiness check so a second manifest declaring the
+            // same feature does not clobber a dependency list an earlier manifest already populated.
+            if (!builder.DependenciesResolved && builder.Dependencies.Count == 0 && feature.Dependencies.Count > 0)
                 builder.Dependencies = GetDependencies(feature, packageId);
         }
     }
@@ -74,17 +77,20 @@ internal static class PackageManifestCatalogMapper
     /// short CShells ID (e.g. <c>"JintEngine"</c>). Strip that same-package prefix so manifest-declared dependencies
     /// line up with the IDs the cascade (and the runtime-resolved path) actually use.
     /// </summary>
-    private static IReadOnlyList<string> GetDependencies(FeatureManifest feature, string? packageId)
+    private static IReadOnlyList<FeatureDependency> GetDependencies(FeatureManifest feature, string? packageId)
     {
         var prefix = string.IsNullOrWhiteSpace(packageId) ? null : packageId + ".";
 
         return feature.Dependencies
-            .Select(dependency => dependency.FeatureId)
-            .Where(featureId => !string.IsNullOrWhiteSpace(featureId))
-            .Select(featureId => prefix is not null && featureId!.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? featureId[prefix.Length..]
-                : featureId!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(dependency => !string.IsNullOrWhiteSpace(dependency.FeatureId))
+            .Select(dependency =>
+            {
+                var featureId = dependency.FeatureId!;
+                if (prefix is not null && featureId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    featureId = featureId[prefix.Length..];
+                return new FeatureDependency(featureId, dependency.Optional);
+            })
+            .DistinctBy(dependency => dependency.Id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 

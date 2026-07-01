@@ -43,7 +43,24 @@ public sealed class RuntimeFeatureCatalogTests
         await contributor.ContributeAsync(context);
 
         var item = context.Items["RuntimeFeature"].ToItem();
-        Assert.Equal(["DependencyOne", "DependencyTwo"], item.Dependencies);
+        Assert.Equal(["DependencyOne", "DependencyTwo"], item.Dependencies.Select(dependency => dependency.Id));
+        Assert.All(item.Dependencies, dependency => Assert.False(dependency.Optional));
+    }
+
+    [Fact]
+    public async Task ContributorMarksDependenciesResolvedEvenWhenDescriptorHasNone()
+    {
+        // A descriptor with zero dependencies still authoritatively resolves this feature's graph, so the flag must
+        // be set to stop the manifest contributor from backfilling a stale dependency list.
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
+            new ShellFeatureDescriptor("RuntimeFeature")));
+        var context = CreateContext();
+
+        await contributor.ContributeAsync(context);
+
+        var builder = context.Items["RuntimeFeature"];
+        Assert.True(builder.DependenciesResolved);
+        Assert.Empty(builder.Dependencies);
     }
 
     [Fact]

@@ -22,7 +22,9 @@ public sealed record FeatureCatalogItem(
     string? ManifestHash,
     string? ReadError,
     IReadOnlyList<FeatureSettingDescriptor> Settings,
-    IReadOnlyList<string> Dependencies);
+    IReadOnlyList<FeatureDependency> Dependencies);
+
+public sealed record FeatureDependency(string Id, bool Optional);
 
 public sealed class FeatureCatalogItemBuilder
 {
@@ -41,7 +43,12 @@ public sealed class FeatureCatalogItemBuilder
     public string? ManifestHash { get; set; }
     public string? ReadError { get; set; }
     public IReadOnlyList<FeatureSettingDescriptor> Settings { get; set; } = [];
-    public IReadOnlyList<string> Dependencies { get; set; } = [];
+    public IReadOnlyList<FeatureDependency> Dependencies { get; set; } = [];
+
+    // Set by the runtime contributor when a live descriptor exists for this feature, so the manifest
+    // contributor can distinguish "runtime authoritatively resolved zero dependencies" from "no runtime
+    // info available" instead of treating an empty list as an unknown sentinel. Not part of ToItem().
+    public bool DependenciesResolved { get; set; }
 
     public FeatureCatalogItem ToItem() =>
         new(

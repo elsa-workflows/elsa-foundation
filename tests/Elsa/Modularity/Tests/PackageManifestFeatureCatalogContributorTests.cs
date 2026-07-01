@@ -142,7 +142,37 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
 
         PackageManifestCatalogMapper.Apply(context, result.Manifest!, result.Path, result.Hash, "Elsa.FeaturePackage", "1.0.0");
 
-        Assert.Equal(["OtherFeature", "External.Feature"], context.Items["ManifestFeature"].Dependencies);
+        var dependencies = context.Items["ManifestFeature"].Dependencies;
+        Assert.Equal(["OtherFeature", "External.Feature"], dependencies.Select(dependency => dependency.Id));
+        Assert.All(dependencies, dependency => Assert.False(dependency.Optional));
+    }
+
+    [Fact]
+    public void ApplyThreadsOptionalDependencyFlag()
+    {
+        File.WriteAllText(Path.Combine(_directory, "elsa-package.json"), """
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [
+            {
+              "id": "ManifestFeature",
+              "dependencies": [
+                { "featureId": "Elsa.FeaturePackage.RequiredFeature" },
+                { "featureId": "Elsa.FeaturePackage.OptionalFeature", "optional": true }
+              ]
+            }
+          ]
+        }
+        """);
+
+        var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+        var context = CreateContext();
+
+        PackageManifestCatalogMapper.Apply(context, result.Manifest!, result.Path, result.Hash, "Elsa.FeaturePackage", "1.0.0");
+
+        var dependencies = context.Items["ManifestFeature"].Dependencies;
+        Assert.Equal(["RequiredFeature", "OptionalFeature"], dependencies.Select(dependency => dependency.Id));
+        Assert.Equal([false, true], dependencies.Select(dependency => dependency.Optional));
     }
 
     [Fact]
@@ -159,11 +189,69 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
 
         var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
         var context = CreateContext();
-        context.GetOrAdd("ManifestFeature").Dependencies = ["RuntimeResolvedDependency"];
+        var builder = context.GetOrAdd("ManifestFeature");
+        builder.Dependencies = [new FeatureDependency("RuntimeResolvedDependency", Optional: false)];
+        builder.DependenciesResolved = true;
 
         PackageManifestCatalogMapper.Apply(context, result.Manifest!, result.Path, result.Hash, "Elsa.FeaturePackage", "1.0.0");
 
-        Assert.Equal(["RuntimeResolvedDependency"], context.Items["ManifestFeature"].Dependencies);
+        Assert.Equal(["RuntimeResolvedDependency"], context.Items["ManifestFeature"].Dependencies.Select(dependency => dependency.Id));
+    }
+
+    [Fact]
+    public void ApplyDoesNotClobberDependenciesAlreadyFilledByAnEarlierManifest()
+    {
+        // Two package manifests declare the same feature and neither is loaded at runtime (DependenciesResolved stays
+        // false). The first manifest to fill the dependency list must win; a later manifest must not overwrite it.
+        var context = CreateContext();
+
+        File.WriteAllText(Path.Combine(_directory, "elsa-package.json"), """
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [
+            { "id": "ManifestFeature", "dependencies": [ { "featureId": "Elsa.FeaturePackage.FirstDependency" } ] }
+          ]
+        }
+        """);
+        var first = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+        PackageManifestCatalogMapper.Apply(context, first.Manifest!, first.Path, first.Hash, "Elsa.FeaturePackage", "1.0.0");
+
+        File.WriteAllText(Path.Combine(_directory, "elsa-package.json"), """
+        {
+          "package": { "id": "Other.FeaturePackage", "version": "2.0.0" },
+          "features": [
+            { "id": "ManifestFeature", "dependencies": [ { "featureId": "Other.FeaturePackage.SecondDependency" } ] }
+          ]
+        }
+        """);
+        var second = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+        PackageManifestCatalogMapper.Apply(context, second.Manifest!, second.Path, second.Hash, "Other.FeaturePackage", "2.0.0");
+
+        Assert.Equal(["FirstDependency"], context.Items["ManifestFeature"].Dependencies.Select(dependency => dependency.Id));
+    }
+
+    [Fact]
+    public void ApplyDoesNotFillDependenciesWhenRuntimeResolvedZero()
+    {
+        // A loaded feature whose runtime descriptor resolved zero dependencies must not be backfilled from a stale
+        // manifest that still lists some — the runtime "was resolved" signal wins over list emptiness.
+        File.WriteAllText(Path.Combine(_directory, "elsa-package.json"), """
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [
+            { "id": "ManifestFeature", "dependencies": [ { "featureId": "Elsa.FeaturePackage.StaleDependency" } ] }
+          ]
+        }
+        """);
+
+        var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+        var context = CreateContext();
+        var builder = context.GetOrAdd("ManifestFeature");
+        builder.DependenciesResolved = true;
+
+        PackageManifestCatalogMapper.Apply(context, result.Manifest!, result.Path, result.Hash, "Elsa.FeaturePackage", "1.0.0");
+
+        Assert.Empty(context.Items["ManifestFeature"].Dependencies);
     }
 
     private static FeatureCatalogContributionContext CreateContext() =>
