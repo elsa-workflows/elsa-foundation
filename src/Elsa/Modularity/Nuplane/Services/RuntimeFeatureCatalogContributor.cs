@@ -24,10 +24,12 @@ public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalog runt
             builder.Description = GetMetadataString(descriptor, "Description") ?? builder.Description;
 
             // Surface the feature's resolved dependency graph (from [ShellFeature(DependsOn = ...)]) so the UI can
-            // cascade enable/disable across dependencies and dependants. The manifest contributor runs after this one
-            // but leaves Dependencies untouched, so the runtime-resolved list wins for loaded features.
-            if (descriptor.Dependencies.Count > 0)
-                builder.Dependencies = descriptor.Dependencies;
+            // cascade enable/disable across dependencies and dependants. A runtime descriptor exists for this feature,
+            // so its dependency graph is authoritative even when empty; mark it resolved so the manifest contributor
+            // (which runs after this one) leaves it untouched instead of filling from a possibly-stale manifest.
+            // Runtime-resolved dependencies are always mandatory — CShells descriptors carry no optional flag.
+            builder.Dependencies = descriptor.Dependencies.Select(id => new FeatureDependency(id, Optional: false)).ToArray();
+            builder.DependenciesResolved = true;
 
             // Surface categories/settings declared via the source-only manifest hint attributes. The package-manifest
             // contributor runs after this one and overwrites with FeatureSourceKinds.Manifest, so manifest data wins
