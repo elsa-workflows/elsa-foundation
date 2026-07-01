@@ -1,3 +1,5 @@
+using ConsoleLogStreaming.AspNetCore.DependencyInjection;
+using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
@@ -49,8 +51,22 @@ ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
-ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(builder.Configuration);
 var configuration = builder.Configuration;
+
+// Console log streaming is a process-global, host-level diagnostic: capture is a static tee on Console.Out and the
+// live stream is a long-lived SignalR connection. It is therefore composed once on the application root rather than
+// per-shell — a shell-hosted hub captures the shell container's IServiceScopeFactory and throws
+// ObjectDisposedException on disconnect when that shell is recycled on feature enable. The shell feature is only the
+// enable/discover surface (see ConsoleLogStreamingFeature); the host owns the console hook, capture options, the
+// recent/sources HTTP endpoints, and the hub. Because this is composed once at startup, enabling the feature at
+// runtime takes effect only after a restart. The enabled check + hook install are done once here and reused.
+var consoleLogStreamingEnabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+if (consoleLogStreamingEnabled)
+{
+    ConsoleLogStreamingFeature.InstallConsoleStreamHook();
+    builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingFeature.ConfigureHost);
+    builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingFeature.ConfigureEndpoints);
+}
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
@@ -192,6 +208,11 @@ app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
+
+// Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
+// note above). Mapped after UseCors so the Studio cross-origin policy applies.
+if (consoleLogStreamingEnabled)
+    app.MapConsoleLogStreaming();
 app.MapFallbackToFile("/demo", "index.html");
 app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
 app.Run();
