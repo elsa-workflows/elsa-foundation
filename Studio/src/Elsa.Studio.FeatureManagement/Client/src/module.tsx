@@ -35,6 +35,7 @@ interface FeatureCatalogItem {
   manifestHash?: string | null;
   readError?: string | null;
   settings: StudioSettingDescriptor[];
+  dependencies: string[];
 }
 
 interface DraftFeature extends FeatureCatalogItem {
@@ -174,6 +175,80 @@ export function isDirty(current: FeatureCatalogResponse | null, draft: DraftFeat
   return current ? canonicalize(current.features) !== canonicalize(draft) : false;
 }
 
+const normalizeId = (value: string) => value.trim().toLowerCase();
+
+// Direct dependencies of a feature (the features it requires).
+function getFeatureDependencies(feature: DraftFeature) {
+  return Array.isArray(feature.dependencies) ? feature.dependencies : [];
+}
+
+// Resolves the set of feature ids affected when toggling `id` to `enabled`:
+// enabling pulls in every transitive dependency, disabling pushes out every
+// transitive dependant, so the desired state never leaves a broken dependency edge.
+export function computeFeatureCascade(features: DraftFeature[], id: string, enabled: boolean): Set<string> {
+  const byId = new Map(features.map(feature => [normalizeId(feature.id), feature]));
+  const affected = new Set<string>();
+  const root = byId.get(normalizeId(id));
+  if (!root) {
+    return affected;
+  }
+
+  const stack = [root];
+  affected.add(root.id);
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const related = enabled
+      // dependencies the feature requires
+      ? getFeatureDependencies(current)
+          .map(dependency => byId.get(normalizeId(dependency)))
+          .filter((feature): feature is DraftFeature => feature != null)
+      // dependants that require the feature
+      : features.filter(feature => getFeatureDependencies(feature)
+          .some(dependency => normalizeId(dependency) === normalizeId(current.id)));
+
+    for (const feature of related) {
+      if (!affected.has(feature.id)) {
+        affected.add(feature.id);
+        stack.push(feature);
+      }
+    }
+  }
+
+  return affected;
+}
+
+// Applies a toggle to the draft, cascading to dependencies/dependants.
+export function applyFeatureToggle(features: DraftFeature[], id: string, enabled: boolean): DraftFeature[] {
+  const affected = computeFeatureCascade(features, id, enabled);
+  if (affected.size === 0) {
+    return features;
+  }
+
+  return features.map(feature => affected.has(feature.id) && feature.enabled !== enabled
+    ? { ...feature, enabled }
+    : feature);
+}
+
+// Direct dependants, indexed by the feature id they require (used for inspector display).
+export function buildDependentsIndex(features: DraftFeature[]): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+
+  for (const feature of features) {
+    for (const dependency of getFeatureDependencies(feature)) {
+      const key = normalizeId(dependency);
+      const existing = index.get(key);
+      if (existing) {
+        existing.push(feature.id);
+      } else {
+        index.set(key, [feature.id]);
+      }
+    }
+  }
+
+  return index;
+}
+
 function getFeatureHosts(api: ElsaStudioModuleApi): FeatureHostConfig[] {
   return [
     {
@@ -235,6 +310,8 @@ export function FeatureManagementPage() {
     ?? filteredDraft.find(feature => feature.enabled)
     ?? filteredDraft[0]
     ?? null;
+  const dependentsIndex = useMemo(() => buildDependentsIndex(draft), [draft]);
+  const selectedDependents = selectedFeature ? dependentsIndex.get(normalizeId(selectedFeature.id)) ?? [] : [];
   const dirty = isDirty(catalog, draft);
   const enabledCount = draft.filter(feature => feature.enabled).length;
   const selectedCategoryLabel = categories.find(category => category.id === selectedCategory)?.label ?? "All categories";
@@ -328,7 +405,15 @@ export function FeatureManagementPage() {
   }
 
   function toggleFeature(feature: DraftFeature) {
-    updateFeature(feature.id, current => ({ ...current, enabled: !current.enabled }));
+    if (readOnly) {
+      return;
+    }
+
+    const enabled = !feature.enabled;
+    updateHostState(activeHost.id, state => ({
+      ...state,
+      draft: applyFeatureToggle(state.draft, feature.id, enabled)
+    }));
   }
 
   function toggleCheckedFeature(id: string, checked: boolean) {
@@ -374,9 +459,9 @@ export function FeatureManagementPage() {
 
     updateHostState(activeHost.id, state => ({
       ...state,
-      draft: state.draft.map(feature => state.checkedFeatureIds.has(feature.id)
-        ? { ...feature, enabled }
-        : feature)
+      draft: Array.from(state.checkedFeatureIds).reduce(
+        (draft, id) => applyFeatureToggle(draft, id, enabled),
+        state.draft)
     }));
   }
 
@@ -477,6 +562,7 @@ export function FeatureManagementPage() {
 
         <FeatureInspector
           feature={selectedFeature}
+          dependents={selectedDependents}
           disabled={editingDisabled}
           onToggle={toggleFeature}
           onSettingChange={updateSetting}
@@ -678,11 +764,13 @@ function FeatureCard({
 
 function FeatureInspector({
   feature,
+  dependents,
   disabled,
   onToggle,
   onSettingChange
 }: {
   feature: DraftFeature | null;
+  dependents: string[];
   disabled: boolean;
   onToggle(feature: DraftFeature): void;
   onSettingChange(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown): void;
@@ -718,7 +806,7 @@ function FeatureInspector({
       {feature.readError ? <div className="feature-management-warning">{feature.readError}</div> : null}
 
       <section className="feature-management-inspector-section" aria-label="Feature metadata">
-        <FeatureMetadata feature={feature} displayName={displayName} />
+        <FeatureMetadata feature={feature} displayName={displayName} dependents={dependents} />
       </section>
 
       <section className="feature-management-inspector-section feature-management-settings-panel" aria-label="Feature settings">
@@ -754,8 +842,9 @@ function FeatureInspector({
   );
 }
 
-function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; displayName: string }) {
+function FeatureMetadata({ feature, displayName, dependents }: { feature: DraftFeature; displayName: string; dependents: string[] }) {
   const source = getSourceMeta(feature.sourceKind);
+  const dependencies = getFeatureDependencies(feature);
   const packageName = feature.packageId
     ? [feature.packageId, feature.packageVersion].filter(Boolean).join(" ")
     : "Not package-backed";
@@ -771,6 +860,8 @@ function FeatureMetadata({ feature, displayName }: { feature: DraftFeature; disp
         <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
         <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
         <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
+        {dependencies.length > 0 ? <div className="feature-management-detail-wide"><dt>Depends on</dt><dd><FeatureLinkChips ids={dependencies} /></dd></div> : null}
+        {dependents.length > 0 ? <div className="feature-management-detail-wide"><dt>Required by</dt><dd><FeatureLinkChips ids={dependents} /></dd></div> : null}
         <div><dt>Advanced</dt><dd>{feature.advanced ? <FeatureBadge tone="advanced">Advanced</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
         <div><dt>Experimental</dt><dd>{feature.experimental ? <FeatureBadge tone="experimental">Experimental</FeatureBadge> : <span className="feature-management-muted">No</span>}</dd></div>
         {feature.description ? <div className="feature-management-detail-wide"><dt>Description</dt><dd>{feature.description}</dd></div> : null}
@@ -802,6 +893,14 @@ function CategoryChips({ categories, max }: { categories: string[]; max?: number
     <span className="feature-management-chips">
       {shown.map(category => <span key={category} className="feature-management-chip">{category}</span>)}
       {overflow > 0 ? <span className="feature-management-chip feature-management-chip-overflow" title={categories.slice(shown.length).join(", ")}>+{overflow}</span> : null}
+    </span>
+  );
+}
+
+function FeatureLinkChips({ ids }: { ids: string[] }) {
+  return (
+    <span className="feature-management-chips">
+      {ids.map(id => <span key={id} className="feature-management-chip"><code>{id}</code></span>)}
     </span>
   );
 }
@@ -1054,6 +1153,7 @@ function JsonSettingEditor({ setting, value, disabled, onChange }: StudioSetting
 function toDraftFeature(feature: FeatureCatalogItem): DraftFeature {
   return {
     ...feature,
+    dependencies: Array.isArray(feature.dependencies) ? feature.dependencies : [],
     configuration: feature.configuration && typeof feature.configuration === "object" && !Array.isArray(feature.configuration)
       ? { ...feature.configuration }
       : {}

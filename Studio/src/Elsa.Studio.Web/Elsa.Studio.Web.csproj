@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="Elsa.Platform.PackageManifests" />
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Admin" />
     <PackageReference Include="Nuplane.Loading" />

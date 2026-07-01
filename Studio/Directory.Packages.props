@@ -21,5 +21,6 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
+    <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
   </ItemGroup>
 </Project>

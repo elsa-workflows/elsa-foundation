@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Platform.PackageManifests;
 using Microsoft.AspNetCore.Mvc;
 using Nuplane.Abstractions;
 using Nuplane.Admin;
@@ -131,62 +132,71 @@ internal static class ElsaFeatureManagementApi
             manifest?.ManifestPath,
             manifest?.ManifestHash,
             hasDescriptor || hasManifest ? null : "Feature is enabled in shells.json but no runtime descriptor is currently available.",
-            manifest?.Settings ?? []);
+            manifest?.Settings ?? [],
+            descriptor?.Dependencies is { Count: > 0 } dependencies ? dependencies : manifest?.Dependencies ?? []);
     }
 
+    /// <summary>
+    /// Reads <c>elsa-package.json</c> manifests using the shared <c>Elsa.Platform.PackageManifests</c> wire contract
+    /// (the same models the generator that produces these files is built against), instead of hand-parsing raw JSON.
+    /// </summary>
     private static IEnumerable<FeatureManagementManifestFeature> GetPackageManifestFeatures(IEnumerable<ActivePackage> packages)
     {
         foreach (var package in packages)
         {
-            var manifest = ModuleManagementPackageManifest.Read(package.InstallPath);
-            if (manifest?.Content is not JsonObject manifestObject)
+            var manifestFile = ModuleManagementPackageManifest.Read(package.InstallPath);
+            if (manifestFile?.Content is null)
                 continue;
 
-            var manifestPackage = manifestObject["package"] as JsonObject;
-            var packageId = ReadString(manifestPackage, "id") ?? package.PackageId;
-            var packageVersion = ReadString(manifestPackage, "version") ?? package.Version;
-
-            if (manifestObject["features"] is not JsonArray features)
-                continue;
-
-            foreach (var featureNode in features.OfType<JsonObject>())
+            ElsaPackageManifest? manifest;
+            try
             {
-                var featureId = ReadString(featureNode["extensions"] as JsonObject, "cshellsFeatureName")
-                    ?? ReadString(featureNode, "id");
+                manifest = manifestFile.Content.Deserialize<ElsaPackageManifest>(ManifestJsonSerializerOptions.Default);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
 
+            if (manifest is null)
+                continue;
+
+            var packageId = string.IsNullOrWhiteSpace(manifest.Package.Id) ? package.PackageId : manifest.Package.Id;
+            var packageVersion = string.IsNullOrWhiteSpace(manifest.Package.Version) ? package.Version : manifest.Package.Version;
+            var manifestHash = ComputeHash(manifestFile.Content.ToJsonString());
+
+            foreach (var feature in manifest.Features)
+            {
+                var featureId = GetString(feature.Extensions, "cshellsFeatureName");
+                if (string.IsNullOrWhiteSpace(featureId))
+                    featureId = feature.Id;
                 if (string.IsNullOrWhiteSpace(featureId))
                     continue;
 
                 yield return new FeatureManagementManifestFeature(
                     featureId,
-                    ReadString(featureNode, "displayName") ?? featureId,
-                    ReadString(featureNode, "description"),
-                    GetCategories(featureNode),
+                    string.IsNullOrWhiteSpace(feature.DisplayName) ? featureId : feature.DisplayName,
+                    feature.Description,
+                    GetCategories(feature),
                     packageId,
                     packageVersion,
-                    ReadBool(featureNode, "advanced"),
-                    ReadBool(featureNode, "experimental"),
-                    manifest.Path,
-                    ComputeHash(manifestObject.ToJsonString()),
-                    GetSettings(featureNode));
+                    feature.Advanced,
+                    feature.Experimental,
+                    manifestFile.Path,
+                    manifestHash,
+                    GetSettings(feature.Settings),
+                    GetDependencies(feature, packageId));
             }
         }
     }
 
-    private static IReadOnlyList<string> GetCategories(JsonObject feature)
+    private static IReadOnlyList<string> GetCategories(FeatureManifest feature)
     {
         var categories = new List<string>();
-        var category = ReadString(feature, "category");
-        if (!string.IsNullOrWhiteSpace(category))
-            categories.Add(category);
+        if (!string.IsNullOrWhiteSpace(feature.Category))
+            categories.Add(feature.Category);
 
-        if (feature["categories"] is JsonArray values)
-        {
-            categories.AddRange(values
-                .Select(ReadString)
-                .OfType<string>()
-                .Where(value => !string.IsNullOrWhiteSpace(value)));
-        }
+        categories.AddRange(feature.Categories.Where(value => !string.IsNullOrWhiteSpace(value)));
 
         return categories
             .DefaultIfEmpty("Studio")
@@ -194,97 +204,130 @@ internal static class ElsaFeatureManagementApi
             .ToArray();
     }
 
-    private static IReadOnlyList<FeatureManagementSettingResponse> GetSettings(JsonObject feature)
+    /// <summary>
+    /// The generator qualifies a feature's own <c>[ShellFeature(DependsOn = ...)]</c> references with its declaring
+    /// package ID (e.g. <c>"Elsa.JavaScript.JintEngine"</c>), but the runtime feature catalog keys features by their
+    /// short CShells ID (e.g. <c>"JintEngine"</c>). Strip that same-package prefix so manifest-declared dependencies
+    /// line up with the IDs the cascade (and the runtime-resolved path) actually uses.
+    /// </summary>
+    private static IReadOnlyList<string> GetDependencies(FeatureManifest feature, string packageId)
     {
-        if (feature["settings"] is not JsonArray settings)
-            return [];
+        var prefix = string.IsNullOrWhiteSpace(packageId) ? null : packageId + ".";
 
-        return settings
-            .OfType<JsonObject>()
-            .Select(ToSetting)
+        return feature.Dependencies
+            .Select(dependency => dependency.FeatureId)
+            .Where(featureId => !string.IsNullOrWhiteSpace(featureId))
+            .Select(featureId => prefix is not null && featureId!.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? featureId[prefix.Length..]
+                : featureId!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<FeatureManagementSettingResponse> GetSettings(IReadOnlyList<FeatureSettingManifest> settings) =>
+        settings
             .Where(setting => !string.IsNullOrWhiteSpace(setting.Name))
+            .Select(ToSetting)
             .OrderBy(setting => setting.Category ?? "", StringComparer.OrdinalIgnoreCase)
             .ThenBy(setting => setting.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-    }
 
-    private static FeatureManagementSettingResponse ToSetting(JsonObject setting)
+    private static FeatureManagementSettingResponse ToSetting(FeatureSettingManifest setting)
     {
-        var ui = setting["ui"] as JsonObject;
-        var validation = setting["validation"] as JsonObject;
-        var name = ReadString(setting, "name") ?? "";
+        var (options, optionsProvider) = GetSettingOptions(setting.UI, setting.Validation);
 
         return new(
-            name,
-            ReadString(setting, "displayName") ?? name,
-            ReadString(setting, "description"),
-            ReadString(setting, "category"),
-            ReadString(setting, "group"),
-            ReadString(setting, "clrType"),
-            ReadString(setting, "jsonType"),
-            ReadBool(setting, "required"),
-            setting["defaultValue"]?.DeepClone(),
-            ReadBool(setting, "secret"),
-            ReadBool(setting, "sensitive") || ReadBool(setting["extensions"] as JsonObject, "sensitive"),
-            ReadBool(setting, "restartRequired"),
-            ReadBool(ui, "advanced"),
-            ReadBool(ui, "experimental"),
-            ReadString(ui, "hint", "uiHint"),
-            ReadString(ui, "optionsProvider"),
-            GetSettingOptions(ui, validation));
+            setting.Name,
+            string.IsNullOrWhiteSpace(setting.DisplayName) ? setting.Name : setting.DisplayName,
+            setting.Description,
+            setting.Category,
+            GetString(setting.UI, "group"),
+            setting.ClrType,
+            setting.JsonType,
+            setting.Required,
+            ToJsonNode(setting.DefaultValue),
+            setting.Secret,
+            GetBool(setting.Extensions, "sensitive"),
+            setting.RestartRequired,
+            GetBool(setting.UI, "advanced"),
+            GetBool(setting.UI, "experimental"),
+            GetString(setting.UI, "hint"),
+            optionsProvider ?? GetString(setting.UI, "optionsProvider"),
+            options);
     }
 
-    private static IReadOnlyList<FeatureManagementSettingOptionResponse> GetSettingOptions(JsonObject? ui, JsonObject? validation)
+    /// <summary>
+    /// The generator nests static options under <c>ui.options.items</c> and provider-backed options under
+    /// <c>ui.options.provider</c> (with <c>ui.options.source</c> discriminating the two); this also accepts a flat
+    /// <c>ui.options</c> array for forward/backward compatibility, then falls back to <c>validation.enum</c>.
+    /// </summary>
+    private static (IReadOnlyList<FeatureManagementSettingOptionResponse> Options, string? OptionsProvider) GetSettingOptions(
+        Dictionary<string, object?> ui,
+        Dictionary<string, object?> validation)
     {
-        if (ui?["options"] is JsonArray options)
+        if (GetElement(ui, "options") is { } optionsElement)
         {
-            return options
-                .OfType<JsonObject>()
-                .Select(option => new FeatureManagementSettingOptionResponse(
-                    ReadString(option, "label") ?? ReadString(option["value"]) ?? "",
-                    option["value"]?.DeepClone(),
-                    ReadString(option, "description")))
-                .ToArray();
+            if (optionsElement.ValueKind is JsonValueKind.Object)
+            {
+                if (string.Equals(GetJsonString(optionsElement, "source"), "provider", StringComparison.OrdinalIgnoreCase))
+                    return ([], GetJsonString(optionsElement, "provider"));
+
+                if (optionsElement.TryGetProperty("items", out var items) && items.ValueKind is JsonValueKind.Array)
+                    return (MapOptions(items), null);
+            }
+            else if (optionsElement.ValueKind is JsonValueKind.Array)
+            {
+                return (MapOptions(optionsElement), null);
+            }
         }
 
-        if (validation?["enum"] is not JsonArray enumValues)
-            return [];
+        if (GetElement(validation, "enum") is { ValueKind: JsonValueKind.Array } enumValues)
+            return (MapOptions(enumValues), null);
 
-        return enumValues
-            .Select(value => new FeatureManagementSettingOptionResponse(
-                ReadString(value) ?? value?.ToJsonString() ?? "",
-                value?.DeepClone(),
-                null))
-            .ToArray();
+        return ([], null);
     }
+
+    private static IReadOnlyList<FeatureManagementSettingOptionResponse> MapOptions(JsonElement options) =>
+        options.EnumerateArray()
+            .Select(option => option.ValueKind is JsonValueKind.Object
+                ? new FeatureManagementSettingOptionResponse(
+                    GetJsonString(option, "label") ?? (option.TryGetProperty("value", out var v) ? JsonValueToDisplayText(v) : ""),
+                    option.TryGetProperty("value", out var value) ? ToJsonNode(value) : null,
+                    GetJsonString(option, "description"))
+                : new FeatureManagementSettingOptionResponse(JsonValueToDisplayText(option), ToJsonNode(option), null))
+            .ToArray();
+
+    private static string JsonValueToDisplayText(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString() ?? "",
+        JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+        JsonValueKind.Null or JsonValueKind.Undefined => "",
+        _ => value.GetRawText()
+    };
 
     private static string? ReadMetadataString(ShellFeatureDescriptor? descriptor, string key) =>
         descriptor?.Metadata.TryGetValue(key, out var value) == true
             ? value?.ToString()
             : null;
 
-    private static string? ReadString(JsonObject? obj, params string[] names)
-    {
-        if (obj is null)
-            return null;
+    private static JsonElement? GetElement(IReadOnlyDictionary<string, object?> values, string key) =>
+        values.TryGetValue(key, out var value) && value is JsonElement element ? element : null;
 
-        foreach (var name in names)
-        {
-            var value = ReadString(obj[name]);
-            if (!string.IsNullOrWhiteSpace(value))
-                return value;
-        }
+    private static string? GetString(IReadOnlyDictionary<string, object?> values, string key) =>
+        GetElement(values, key) is { ValueKind: JsonValueKind.String } element ? element.GetString() : null;
 
-        return null;
-    }
+    private static bool GetBool(IReadOnlyDictionary<string, object?> values, string key) =>
+        GetElement(values, key) is { ValueKind: JsonValueKind.True };
 
-    private static string? ReadString(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue<string>(out var text)
-            ? text
+    private static string? GetJsonString(JsonElement element, string property) =>
+        element.ValueKind is JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.String
+            ? value.GetString()
             : null;
 
-    private static bool ReadBool(JsonObject? obj, string name) =>
-        obj?[name] is JsonValue value && value.TryGetValue<bool>(out var result) && result;
+    private static JsonNode? ToJsonNode(object? value) => value is JsonElement element ? ToJsonNode(element) : null;
+
+    private static JsonNode? ToJsonNode(JsonElement element) =>
+        element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : JsonNode.Parse(element.GetRawText());
 
     private static JsonElement EmptyJsonObject()
     {
@@ -324,7 +367,8 @@ internal sealed record FeatureManagementManifestFeature(
     bool Experimental,
     string? ManifestPath,
     string? ManifestHash,
-    IReadOnlyList<FeatureManagementSettingResponse> Settings);
+    IReadOnlyList<FeatureManagementSettingResponse> Settings,
+    IReadOnlyList<string> Dependencies);
 
 internal sealed record FeatureManagementCatalogResponse(
     string Revision,
@@ -345,7 +389,8 @@ internal sealed record FeatureManagementCatalogItemResponse(
     string? ManifestPath,
     string? ManifestHash,
     string? ReadError,
-    IReadOnlyList<FeatureManagementSettingResponse> Settings);
+    IReadOnlyList<FeatureManagementSettingResponse> Settings,
+    IReadOnlyList<string> Dependencies);
 
 internal sealed record FeatureManagementSettingResponse(
     string Name,

@@ -3,6 +3,9 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import {
+  applyFeatureToggle,
+  buildDependentsIndex,
+  computeFeatureCascade,
   createApplyPayload,
   FeatureManagementPage,
   getErrorMessage,
@@ -45,6 +48,51 @@ describe("feature management module", () => {
         { id: "Disabled", enabled: false, configuration: {} }
       ]
     });
+  });
+
+  it("enabling a feature cascades to its transitive dependencies", () => {
+    const draft = [
+      feature("Api", false, {}, [], { dependencies: ["FastEndpoints"] }),
+      feature("FastEndpoints", false, {}, [], { dependencies: ["Runtime"] }),
+      feature("Runtime", false, {}),
+      feature("Unrelated", false, {})
+    ];
+
+    const result = applyFeatureToggle(draft, "Api", true);
+
+    expect(enabledIds(result)).toEqual(["Api", "FastEndpoints", "Runtime"]);
+  });
+
+  it("disabling a feature cascades to its transitive dependants", () => {
+    const draft = [
+      feature("Api", true, {}, [], { dependencies: ["FastEndpoints"] }),
+      feature("FastEndpoints", true, {}, [], { dependencies: ["Runtime"] }),
+      feature("Runtime", true, {}),
+      feature("Unrelated", true, {})
+    ];
+
+    const result = applyFeatureToggle(draft, "Runtime", false);
+
+    expect(enabledIds(result)).toEqual(["Unrelated"]);
+  });
+
+  it("matches dependency ids case-insensitively", () => {
+    const draft = [
+      feature("Api", false, {}, [], { dependencies: ["fastendpoints"] }),
+      feature("FastEndpoints", false, {})
+    ];
+
+    expect(Array.from(computeFeatureCascade(draft, "Api", true)).sort()).toEqual(["Api", "FastEndpoints"]);
+  });
+
+  it("indexes direct dependants by required feature id", () => {
+    const draft = [
+      feature("Api", true, {}, [], { dependencies: ["FastEndpoints"] }),
+      feature("Ui", true, {}, [], { dependencies: ["FastEndpoints"] }),
+      feature("FastEndpoints", true, {})
+    ];
+
+    expect(buildDependentsIndex(draft).get("fastendpoints")).toEqual(["Api", "Ui"]);
   });
 
   it("detects dirty staged feature state", () => {
@@ -192,6 +240,45 @@ describe("feature management module", () => {
         { id: "FeatureA", enabled: false, configuration: {} },
         { id: "FeatureB", enabled: false, configuration: {} },
         { id: "FeatureC", enabled: false, configuration: {} }
+      ]
+    });
+
+    await unmount();
+  });
+
+  it("enables dependencies when a feature is toggled on in the list", async () => {
+    let postPayload: unknown = null;
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "rev-1",
+        features: [
+          feature("Api", false, {}, [], { dependencies: ["FastEndpoints"] }),
+          feature("FastEndpoints", false, {})
+        ]
+      }),
+      postJson: async (_url: string, body: unknown) => {
+        postPayload = body;
+        return {
+          catalog: { revision: "rev-2", features: [feature("Api", true, {}), feature("FastEndpoints", true, {})] },
+          featureDescriptorCount: 2,
+          reloadedShellCount: 1
+        };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Enable Api']"));
+
+    expect(container.textContent).toContain("2 enabled of 2 available");
+
+    await click(buttonByText(container, "Apply"));
+
+    expect(postPayload).toEqual({
+      revision: "rev-1",
+      features: [
+        { id: "Api", enabled: true, configuration: {} },
+        { id: "FastEndpoints", enabled: true, configuration: {} }
       ]
     });
 
@@ -449,6 +536,10 @@ function feature(
     settings: [],
     ...overrides
   } as any;
+}
+
+function enabledIds(features: Array<{ id: string; enabled: boolean }>) {
+  return features.filter(feature => feature.enabled).map(feature => feature.id);
 }
 
 function httpError(status: number, message: string) {
