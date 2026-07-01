@@ -78,17 +78,27 @@ Verified against the action plan's "first Speckit unit" (Slices 1–9) and the l
 | S7 History/incident separation, payload-capture policy | Implemented-as-intended (sensitive-value default: **partial/unverified**) | `RuntimeHistoryEvent`, `IncidentState` + `IncidentHistoryProjection`, `IRuntimePayloadCapturePolicy` |
 | S8 Operational recovery + outbox, domain-retry boundary | Implemented-as-intended | `OperationalState` (lease/heartbeat/drain/interrupted), `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxStore`, `IRuntimeDomainRetryPolicy` |
 | S9 Elsa 3 migration boundary (import-only; live resume rejected) | Implemented-as-intended | `Elsa3MigrationBoundary`, `Elsa3MigrationCompatibility.RejectLiveInstanceResume<T>()` |
-| S4 Pipeline slots + inspectable plan | **Divergent (deliberate)** | See below |
+| S4 Pipeline slots + inspectable plan | **Scaffolded but unwired (drift/deferred)** | See below |
 
-### The one real divergence — S4 execution model
+### The one real gap — S4 execution pipeline is scaffolded but UNWIRED
 
-The brainstorm pinned two middleware pipelines with ~9 stable named slots each, traversed in order. Reality: execution is **scheduler-work-handler driven** (`WorkflowExecutionCommandProcessor` → `RuntimeSchedulerWorkItem` → `IWorkflowSchedulerWorkHandler.HandleAsync`, with `IWorkflowSchedulerDrainer`). The pipeline types exist (`RuntimeWorkflowPipelineSlots` [4 slots], `RuntimeActivityPipelineSlots` [7 slots], `RuntimePipelinePlan` + builder) but are **registration/introspection metadata, not the execution loop**. This is a coherent design choice (deterministic batch processing + recovery), not a defect — but it means Decision 6 (named-slot middleware chain) is **superseded by the scheduler model** and should be recorded as such rather than treated as pending work.
+Corrected 2026-07-02 (was previously mischaracterized in this report as a "deliberate divergence"). The brainstorm pinned two middleware pipelines with stable named slots each, traversed in order. The pipeline **contract** exists — `RuntimeWorkflowPipelineSlots`, `RuntimeActivityPipelineSlots`, `RuntimePipelinePlan`, `WorkflowRuntimePipelineBuilder`/`ActivityRuntimePipelineBuilder`, `IWorkflowRuntimeMiddleware`/`IActivityRuntimeMiddleware` — but it is a **skeleton that nothing invokes**:
+
+- The middleware are empty placeholders (`RuntimeActivityInvokeMiddleware : ActivityRuntimeMiddlewareBase;` etc.) whose base `InvokeAsync` just calls `next(context)`. No behavior.
+- The builders / `BuildPlan()` are called **only from `RuntimePipelineContractTests`** (a slot-order contract test), never in production; the pipeline is registered in **no feature and no DI**.
+- There is **no pipeline invoker** — nothing composes middleware into a chain and runs it.
+- Real execution is **inlined** in scheduler work handlers: `WorkflowSchedulerCommandProcessor` → enqueue `RuntimeSchedulerWorkItem` → drain → `IWorkflowSchedulerWorkHandler.HandleAsync`, and `WorkflowInvokeActivitySchedulerWorkHandler` (~970 lines) performs every phase the activity slots name (load state, evaluate inputs, invoke, capture outputs, schedule, checkpoint, post-commit) as hardcoded sequential code.
+
+This is the **same failure class** as the dead JS `IWorkflowExecutionContext` processors: types that advertise a capability that isn't wired. Here it is worse as a *false affordance* — a module can register an `IActivityRuntimeMiddleware` and it will **silently never run**, because no execution path consults the pipeline.
+
+Scheduler vs pipeline is **not** an either/or. The scheduler (durable work-item queue + drain + checkpoint) is the correct dispatch layer and is conformant; the pipelines are the per-tick / per-activity **execution spine** the handler *should* invoke. The gap is that the step routing execution through the pipeline was never done, and handler-inlined execution filled the vacuum. Whether that is accidental drift or deliberately-deferred wiring (Slice 4 framed the slot contract as "define extension points before implementing behavior-heavy middleware") is an intent question for the steward — but either way it is **outstanding work, not a settled alternative design**.
 
 ## Reconciliation outcome
 
-1. **The seam's "recommended first Speckit unit" is essentially done.** The artifact + split-state + checkpoint + bookmark + bindings + recovery + Elsa-3-boundary contracts are implemented as intended. The action plan and brainstorm-decisions reports are planning notes largely overtaken by merged code; they should be marked as historically-superseded for the built portions, not queued as next work.
-2. **The genuine remaining edge is narrow and specific:** the execution-time JS expression accessors. The runtime has decisively converged on the parameter-carrier + durable-value model; the five `IWorkflowExecutionContext` processors are dead code and an unguarded resolution-throw landmine.
-3. **Two smaller follow-ups surfaced:** (a) Decision 6's named-slot pipeline model is superseded by the scheduler model — record it; (b) the sensitive-value payload-capture default is unverified (S7) — confirm or specify.
+1. **Most of the "recommended first Speckit unit" is done.** The artifact + split-state + checkpoint + bookmark + bindings + recovery + Elsa-3-boundary contracts are implemented as intended. The action-plan/brainstorm reports are planning notes largely overtaken by merged code for the built portions and are marked historically-superseded there. **The exception is S4 (execution pipeline), which is scaffolded but unwired and remains genuinely outstanding** (see above).
+2. **Remaining edge A — execution-time JS expression accessors (narrow unit).** The runtime has decisively converged on the parameter-carrier + durable-value model; the five `IWorkflowExecutionContext` processors are dead code and an unguarded resolution-throw landmine.
+3. **Remaining edge B — route runtime execution through the workflow + activity pipelines (distinct, larger unit).** Reclassified from a "follow-up" to a first-class work unit: the pipeline contract is a false affordance until execution is wired through it. This blocks the module system from extending runtime execution (tracing, tenanting, authz, retry, custom persistence policy) and duplicates phase logic across handlers. Arguably more foundational than edge A. Sizing in progress (inlined-phase → slot mapping across the scheduler handlers).
+4. **Minor:** the sensitive-value payload-capture default is unverified (S7) — confirm or specify.
 
 ## Decision framing for the next ADR (not decided here)
 
@@ -109,6 +119,7 @@ Gate impact: expected to stay within existing §E2.2 / §E2.6 / §E2.9 constrain
 
 ## Follow-up surface
 
-- Feeds a single ADR (`docs/adr/0029-…`) and, if approved, a narrow Speckit unit under `specs/` scoped to D1–D4 (retire/re-point + guardrail), *not* the already-built artifact/state contract.
-- Record the S4 pipeline supersession and the S7 sensitive-value default in the Runtime Execution Seam bucket and [unfinished work](unfinished-work.md).
+- Edge A feeds a single ADR (`docs/adr/0029-…`) and, if approved, a narrow Speckit unit under `specs/` scoped to D1–D4 (retire/re-point + guardrail), *not* the already-built artifact/state contract.
+- Edge B (pipeline wiring) is its own ADR + Speckit unit — "route runtime execution through the workflow + activity pipelines" — sized by the inlined-phase → slot mapping. Steward intent (is the pipeline the intended execution spine?) confirms this as unfinished-wiring work, not a settled alternative.
+- Record the S4 unwired-pipeline finding and the S7 sensitive-value default in the Runtime Execution Seam bucket and [unfinished work](unfinished-work.md).
 - The AGENTS.md SPECKIT pointer (still `specs/081-typed-argument-model/plan.md`; 081 is merged) should be corrected when the next unit is chosen.
