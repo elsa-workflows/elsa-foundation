@@ -36,6 +36,22 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
+  it("sends structured literals (collections and objects) as Object expressions the backend can deserialize", () => {
+    const state = stateOf(writeLine("write-one", {
+      lines: wrapped(["Hello", "world"], "Literal"),
+      config: wrapped({ enabled: true }, "Literal")
+    }));
+
+    const node = canonicalizeStateForWire(state).rootActivity!;
+
+    // A scalar literal converter can't turn the JSON string form of a list/object into ICollection<T> or a
+    // complex type, so structured literal values ride the "Object" expression instead of "Literal".
+    expect(node.inputs).toEqual([
+      { referenceKey: "Lines", value: { value: '["Hello","world"]', expressionType: "Object" } },
+      { referenceKey: "Config", value: { value: '{"enabled":true}', expressionType: "Object" } }
+    ]);
+  });
+
   it("leaves non-input extras and structure untouched while canonicalizing nested activities", () => {
     const child = writeLine("child", { text: wrapped("nested", "Literal") });
     const root: ActivityNode = {

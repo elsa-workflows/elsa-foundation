@@ -198,9 +198,14 @@ function disconnectActivities(draft: WorkflowDraft, parameters: Record<string, u
 }
 
 function setActivityProperty(activity: ActivityNode, propertyName: string, value: unknown) {
+  // A structured value (collection or object) must be authored as an Object expression so the backend
+  // JSON-deserializes it into the target type; a scalar rides the Literal path. Same rule toWireArgument
+  // in activityInputWire enforces at the wire boundary, applied here so the in-memory model is correct
+  // at the source instead of relying on the boundary to retrofit it.
+  const structured = isRecord(value);
   activity[camelize(propertyName)] = {
     typeName: typeof value === "string" ? "String" : "Object",
-    expression: { type: "Literal", value }
+    expression: { type: structured ? "Object" : "Literal", value }
   };
 }
 

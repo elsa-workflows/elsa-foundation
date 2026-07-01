@@ -70,7 +70,7 @@ function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
     if (isWrappedInputValue(value)) {
       collected.push({
         referenceKey: pascalize(key),
-        value: { value: toWireArgumentValue(value.expression), expressionType: value.expression.type || "Literal" }
+        value: toWireArgument(value.expression)
       });
     } else {
       extras[key] = value;
@@ -116,15 +116,24 @@ function camelize(value: string): string {
   return value ? value.charAt(0).toLowerCase() + value.slice(1) : value;
 }
 
-// Serializes an expression's value for the wire. A Variable expression keeps its structured
-// VariableReference object (the backend's VariableReference.TryParse reads `{ referenceKey,
-// declaringScopeId }` from an ArgumentValue.Value object); every other expression serializes to a
-// string per the backend's literal storage.
-function toWireArgumentValue(expression: { type: string; value: unknown }): unknown {
-  if ((expression.type || "Literal") === "Variable" && isRecord(expression.value)) {
-    return expression.value;
+// Resolves an expression to the backend's ArgumentValue { value, expressionType }. Most expressions keep
+// their authored syntax and serialize the value to a string. Two exceptions:
+//  - A Variable expression keeps its structured VariableReference object (the backend's
+//    VariableReference.TryParse reads `{ referenceKey, declaringScopeId }` from an ArgumentValue.Value
+//    object) so the declaring scope survives the trip.
+//  - A Literal whose value is structured (an array or object, e.g. a collection repeater's list) is sent
+//    as an "Object" expression. The backend's literal converter only handles scalars, so it can't turn
+//    the JSON-string form of a list into ICollection<T>; the Object handler JSON-deserializes it into the
+//    target type. isRecord covers both arrays and plain objects.
+function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
+  const expressionType = expression.type || "Literal";
+  if (expressionType === "Variable" && isRecord(expression.value)) {
+    return { value: expression.value, expressionType };
   }
-  return toWireValue(expression.value);
+  if (expressionType === "Literal" && isRecord(expression.value)) {
+    return { value: toWireValue(expression.value), expressionType: "Object" };
+  }
+  return { value: toWireValue(expression.value), expressionType };
 }
 
 // ArgumentValue.Value is a string on the backend, so non-string literals must be serialized.

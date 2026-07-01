@@ -711,11 +711,13 @@ describe("workflows module", () => {
     expect(putCall).toBeTruthy();
     const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
     // The authored list reaches the wire as a JSON array string (the backend's ArgumentValue.Value is a
-    // string), not a comma-jammed value — and `toLiteralCollection` parses it back into rows on load.
+    // string) under the "Object" expression type, so the backend JSON-deserializes it into ICollection<T>
+    // rather than failing to convert a scalar literal — and `toLiteralCollection` parses it back into rows
+    // on load.
     expect(savedRoot.inputs).toEqual([
       {
         referenceKey: "Lines",
-        value: { value: '["First line","Second line"]', expressionType: "Literal" }
+        value: { value: '["First line","Second line"]', expressionType: "Object" }
       }
     ]);
 

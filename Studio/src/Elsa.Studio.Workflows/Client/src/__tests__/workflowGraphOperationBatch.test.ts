@@ -51,6 +51,37 @@ describe("workflow graph operation batch", () => {
     });
     expect(result.draft.layout).toEqual([{ nodeId: "activity-send-email-1", x: 320, y: 180 }]);
   });
+
+  it("authors a structured property value as an Object expression the backend can deserialize", () => {
+    const result = applyWorkflowGraphOperationBatch(workflowDraft(), {
+      schemaVersion: "elsa.workflow-graph-operation-batch.v1",
+      workflowDefinitionId: "definition-1",
+      baseRevision: "rev-1",
+      operations: [
+        {
+          id: "op-add-write-lines",
+          kind: "add-activity",
+          parameters: { activityId: "temp:activity:write-lines-1", activityType: "Elsa.WriteLines", displayName: "Write Lines" },
+          temporaryReferences: ["temp:activity:write-lines-1"]
+        },
+        { id: "op-set-root", kind: "set-root", parameters: { activityId: "temp:activity:write-lines-1" } },
+        {
+          id: "op-set-lines",
+          kind: "set-activity-property",
+          parameters: { activityId: "temp:activity:write-lines-1", propertyName: "Lines", value: ["Hello", "world"] }
+        }
+      ]
+    }, [activity("write-lines-v1", "Elsa.WriteLines", "Write Lines")]);
+
+    // A scalar Literal can't be converted to ICollection<T>; the structured value rides an Object
+    // expression so the backend JSON-deserializes it into the target type.
+    expect(result.draft.state.rootActivity).toMatchObject({
+      lines: {
+        typeName: "Object",
+        expression: { type: "Object", value: ["Hello", "world"] }
+      }
+    });
+  });
 });
 
 function workflowDraft(overrides: Partial<WorkflowDraft> = {}): WorkflowDraft {

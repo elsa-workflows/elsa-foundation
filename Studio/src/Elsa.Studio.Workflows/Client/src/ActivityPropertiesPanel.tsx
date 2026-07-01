@@ -129,8 +129,12 @@ function PropertyRow({
   const value = getLiteralEditorValue(activity, input);
   // Collection-typed literals get structured authoring: a collection-scoped editor (e.g. a multi-select
   // for option sets) owns the whole value when one claims it; otherwise a repeater of per-element editors.
-  const isLiteralSyntax = syntax.toLowerCase() === "literal";
-  const collectionType = wrapped && isLiteralSyntax && !isRepeaterOptOut(input)
+  // The repeater authors collection literals under both the "Literal" syntax (freshly added inputs) and
+  // the "Object" syntax — how they come back from the backend, which needs Object to JSON-deserialize the
+  // list into ICollection<T> (see toWireArgument in activityInputWire).
+  const lowerSyntax = syntax.toLowerCase();
+  const isStructuredLiteralSyntax = lowerSyntax === "literal" || lowerSyntax === "object";
+  const collectionType = wrapped && isStructuredLiteralSyntax && !isRepeaterOptOut(input)
     ? describeCollectionType(input.typeName)
     : null;
   const collectionScopedEditor = collectionType
