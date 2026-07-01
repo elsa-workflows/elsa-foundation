@@ -37,6 +37,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private int _draining;
     private int _insertedSincePrune;
     private Task? _drainLoop;
+    private int _disposed;
 
     public EfCoreOpenTelemetryStore(
         IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
@@ -497,6 +498,9 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
         _channel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
