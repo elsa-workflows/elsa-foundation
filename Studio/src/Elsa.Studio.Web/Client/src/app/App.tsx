@@ -770,33 +770,31 @@ async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
   const healthUrl = new URL("/_elsa/health", baseUrl).toString();
   // Prefer a readable (CORS) response so we can tell a healthy host apart from one returning 5xx.
   // An opaque no-cors probe settles even for a crashing server, so it can't distinguish the two.
+  // Readable CORS request so we can inspect the real status: a rejected fetch means the
+  // host is unreachable, while any response (even an error status) means the API is up.
   try {
-    // Readable CORS request so we can inspect the real status: a rejected fetch means the
-    // host is unreachable, while any response (even an error status) means the API is up.
-    try {
-      const response = await fetch(healthUrl, { cache: "no-store" });
-      if (response.ok) {
-        return {
-          status: "ok",
-          attention: 0,
-          detail: healthUrl
-        };
-      }
-
+    const response = await fetch(healthUrl, { cache: "no-store" });
+    if (response.ok) {
       return {
-        status: "attention",
-        attention: 1,
-        detail: `${healthUrl} responded with ${response.status}.`
+        status: "ok",
+        attention: 0,
+        detail: healthUrl
       };
-    } catch (readableError) {
-      // The host may not send CORS headers on its health endpoint; fall back to a reachability-only probe
-      // (which can still confirm the socket is up) before declaring the API unavailable.
-      try {
-        await fetch(healthUrl, { cache: "no-store", mode: "no-cors" });
-        return { status: "ok", attention: 0, detail: healthUrl };
-      } catch (e) {
-        return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
-      }
+    }
+
+    return {
+      status: "attention",
+      attention: 1,
+      detail: `${healthUrl} responded with ${response.status}.`
+    };
+  } catch (readableError) {
+    // The host may not send CORS headers on its health endpoint; fall back to a reachability-only probe
+    // (which can still confirm the socket is up) before declaring the API unavailable.
+    try {
+      await fetch(healthUrl, { cache: "no-store", mode: "no-cors" });
+      return { status: "ok", attention: 0, detail: healthUrl };
+    } catch (e) {
+      return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
     }
   }
 }
