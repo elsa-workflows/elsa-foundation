@@ -37,6 +37,12 @@ The table below preserves candidate signals from the last review. It is not an a
 
 ## Code/domain implementation gaps
 
+> **Runtime execution seam — source reconciliation (2026-07-02).** A read-only, three-sweep source verification ([runtime expression-context source reconciliation](runtime-expression-context-source-reconciliation.md)) re-baselined several rows below against merged code. Corrections as of 2026-07-02:
+> - *Workflow runtime is minimal/stub-like* — **refuted.** The executable-artifact, split runtime-state, checkpoint/commit, bookmark-resume, input-binding/durable-capture, operational-recovery/outbox, and Elsa-3 import-boundary contracts are implemented as intended (action-plan Slices 1–9).
+> - *Workflow design/runtime boundary is graph-shaped* — **resolved.** `WorkflowExecutable` carries a single compiled `RootActivity`, not workflow-level edges/start-nodes.
+> - *Runtime execution pre-spec risks* and the *`runtime-variables-inputs-not-persisted`* gap (row below and the typed-argument row) — **re-baselined.** Workflow variables and inputs ARE persisted/projected via `DurableValueState`; the remaining edge is the five dead execution-time `IWorkflowExecutionContext` JS pre/post-processors (a resolution-throw landmine if `JavaScriptWorkflowsRuntimeFeature` is enabled; unguarded by tests). Decision framing D1–D4 and the accessor keep/drop surface (deferred to ADR 0029) live in the reconciliation report and the [Runtime Execution Seam](../program-goals/runtime-execution-seam.md) bucket. **Unit recorded and paused 2026-07-02.**
+> - New follow-ups: Decision-6 named-slot middleware pipeline is **superseded** by the scheduler-work-handler execution model (record, don't queue); the sensitive-value payload-capture default (Slice 7) is **unverified** — confirm or specify when the unit resumes.
+
 | Item | Evidence | Next action |
 |---|---|---|
 | Workflow runtime is minimal/stub-like | Elsa constitution labels `Elsa.Workflows.Runtime.Core` and storage drivers as stubs | Verify current code, then plan runtime domain work |

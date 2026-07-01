@@ -2,6 +2,8 @@
 
 Status: pre-spec architecture handoff for the architect who will plan runtime execution. This is not an implementation plan and not a Speckit specification.
 
+> **Re-baselined 2026-07-02.** Much of the runtime execution surface described here is now implemented as intended; treat this handoff as historical context, not a pending queue. See [runtime expression-context source reconciliation](runtime-expression-context-source-reconciliation.md).
+
 ## Purpose
 
 This report collects the constraints, experiments, risks, and open questions that should be in front of the architect before a runtime execution specification is written.

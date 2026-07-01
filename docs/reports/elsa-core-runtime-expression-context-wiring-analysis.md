@@ -2,6 +2,8 @@
 
 Status: source-backed analysis for execution-layer planning. This is not a design decision, Speckit spec, or implementation plan.
 
+> **Re-baselined 2026-07-02.** Parts of this analysis are overtaken by merged code — workflow variables/inputs ARE persisted, and generic JS accessors resolve at input-materialization time via the parameter-carrier this note recommends. See [runtime expression-context source reconciliation](runtime-expression-context-source-reconciliation.md) for the current baseline and the D1–D4 decision framing.
+
 Program goal state: [Runtime Execution Seam](../program-goals/runtime-execution-seam.md).
 
 Parent report: [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md), topic 8 (full-source review addition — this candidate was not maintainer-listed; it is source-derived from an elsa-foundation defect investigation).

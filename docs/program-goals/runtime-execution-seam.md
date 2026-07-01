@@ -49,6 +49,15 @@ The goal is to specify the seam between Workflows Design and Workflows Runtime b
 11. Plan and implement [Runtime checkpoint commit](../../specs/080-runtime-checkpoint-commit/spec.md), based on [ADR 0020](../adr/0020-runtime-checkpoint-commit-post-commit-work.md): deepen runtime checkpoint commit so it records post-commit work without inline delivery, replaces `IRuntimeCheckpointWriter` with `IRuntimeCheckpointCommitStore`, and keeps post-commit delivery in the outbox processor.
 12. Resolve the expression-execution-context propagation question (workflow execution context lifetime, DI scope) using [Elsa Core runtime expression-context wiring analysis](../reports/elsa-core-runtime-expression-context-wiring-analysis.md): five JS runtime pre-processors/post-processor are currently dead code because `IWorkflowExecutionContext` is never constructed or DI-registered in production; the analysis recommends threading the live context as an explicit parameter (mirroring elsa-core's `TransientProperties` model) instead of DI constructor injection. Do not implement ahead of an approved spec.
 
+## Reconciliation checkpoint (2026-07-02)
+
+A read-only source verification (three independent sweeps) re-baselined this bucket against merged code. See [runtime expression-context source reconciliation](../reports/runtime-expression-context-source-reconciliation.md).
+
+- **Objectives 1–11 substantially implemented.** The executable-artifact, split runtime-state, checkpoint/commit, bookmark-resume, input-binding/durable-capture, operational-recovery/outbox, and Elsa-3 import-boundary contracts conform to intent. The action plan's recommended "first Speckit unit" is effectively built — treat its slices as done-or-superseded, not queued.
+- **Objective 12 (expression-context) re-baselined.** Workflow variables and inputs ARE persisted and projected via `DurableValueState`; generic JS `getVariable`/`getInput`/`getOutput` resolve at input-materialization time through the `IMaterializationExpressionState` parameter-carrier (the analysis's preferred Option 2). The remaining edge is the five dead execution-time `IWorkflowExecutionContext` JS pre/post-processors — a resolution-throw landmine if `JavaScriptWorkflowsRuntimeFeature` is enabled, unguarded by tests. Decision framing D1–D4 is in the reconciliation report; the accessor keep/drop surface (D3) is deferred to ADR 0029.
+- **Unit recorded and paused (user decision, 2026-07-02).** ADR 0029 plus a narrow retire/re-point + guardrail spec are deferred until the unit is resumed. No code or spec written this pass.
+- **New follow-ups.** (a) Decision 6's named-slot middleware-pipeline model is superseded by the scheduler-work-handler execution model — record as architecture-of-record, not pending work. (b) The sensitive-value payload-capture default (Slice 7) is unverified — confirm or specify when the unit resumes.
+
 ## Linked Surfaces
 
 - [Runtime execution pre-spec handoff](../reports/runtime-execution-pre-spec-handoff.md)
