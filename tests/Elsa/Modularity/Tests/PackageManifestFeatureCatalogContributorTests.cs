@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
@@ -87,6 +88,26 @@ public sealed class PackageManifestFeatureCatalogContributorTests : IAsyncDispos
             value => Assert.Equal("manual", value.GetString()));
         var dependency = Assert.Single(feature.Dependencies);
         Assert.Equal("Elsa.FeaturePackage.OtherFeature", dependency.FeatureId);
+    }
+
+    [Fact]
+    public void ReadManifestParsesManifestWithUtf8ByteOrderMark()
+    {
+        // A BOM-emitting editor/tool can prepend a UTF-8 BOM; System.Text.Json's byte overload rejects it, so the
+        // reader must strip it rather than silently dropping every feature the package would have contributed.
+        var json = """
+        {
+          "package": { "id": "Elsa.FeaturePackage", "version": "1.0.0" },
+          "features": [ { "id": "ManifestFeature", "displayName": "Manifest Feature" } ]
+        }
+        """;
+        File.WriteAllText(Path.Combine(_directory, "elsa-package.json"), json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        var result = PackageManifestFeatureCatalogContributor.ReadManifest(_directory);
+
+        Assert.NotNull(result.Manifest);
+        var feature = Assert.Single(result.Manifest.Features);
+        Assert.Equal("ManifestFeature", feature.Id);
     }
 
     [Fact]

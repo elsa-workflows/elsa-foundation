@@ -16,13 +16,19 @@ internal static class PackageManifestCatalogMapper
     /// <summary>Parses manifest bytes and computes a content hash. Returns a <see cref="PackageManifestReadResult"/>.</summary>
     public static PackageManifestReadResult ReadManifestBytes(byte[] bytes, string path)
     {
-        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(bytes, ManifestJsonSerializerOptions.Default);
+        // System.Text.Json's byte/span overloads reject a leading UTF-8 BOM ("'0xEF' is an invalid start of a value"),
+        // so strip it before deserializing — manifests re-saved by BOM-emitting editors/tooling must still parse.
+        var manifest = JsonSerializer.Deserialize<ElsaPackageManifest>(StripByteOrderMark(bytes), ManifestJsonSerializerOptions.Default);
         if (manifest is null)
             return PackageManifestReadResult.Missing("Package manifest was empty.");
 
+        // Hash the original file bytes (BOM included) so the content identity matches the file on disk.
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         return PackageManifestReadResult.Found(path, hash, manifest);
     }
+
+    private static ReadOnlySpan<byte> StripByteOrderMark(ReadOnlySpan<byte> bytes) =>
+        bytes is [0xEF, 0xBB, 0xBF, ..] ? bytes[3..] : bytes;
 
     /// <summary>Adds every feature declared in <paramref name="manifest"/> to the catalog. Existing builders
     /// (e.g. shell-enabled features seeded earlier) are enriched in place; their <c>Enabled</c> state is left untouched.</summary>
