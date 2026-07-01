@@ -28,6 +28,9 @@ public class ActivitiesCompositionDesignFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        // The adapter is the only piece that reaches into Workflows Design; the reconciliation source
+        // depends only on the port, so it stays a pure mapper (§2.7).
+        services.AddScoped<IUsableAsActivityWorkflowSource, WorkflowDefinitionUsableAsActivitySource>();
         services.AddScoped<IActivityReconciliationSource, WorkflowActivityReconciliationSource>();
     }
 }
