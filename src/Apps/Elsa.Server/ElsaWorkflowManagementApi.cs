@@ -49,6 +49,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/definitions", ListDefinitionsAsync);
         group.MapGet("/definitions/{definitionId}", GetDefinitionAsync);
         group.MapPost("/definitions", CreateDefinitionAsync);
+        group.MapPatch("/definitions/{definitionId}", UpdateDefinitionMetadataAsync);
         group.MapDelete("/definitions/{definitionId}", DeleteDefinitionAsync);
         group.MapPost("/definitions/{definitionId}/restore", RestoreDefinitionAsync);
         group.MapDelete("/definitions/{definitionId}/permanent", DeleteDefinitionPermanentlyAsync);
@@ -139,6 +140,29 @@ internal static class ElsaWorkflowManagementApi
             var submitted = await submit.Execute(request.Name.Trim(), request.Description, state, cancellationToken);
 
             return await LoadDefinitionResultAsync(services, submitted.DefinitionId, cancellationToken);
+        }, cancellationToken);
+
+    private static Task<IResult> UpdateDefinitionMetadataAsync(IShellRegistry shellRegistry, string definitionId, UpdateWorkflowDefinitionMetadataRequest request, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+            var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+            if (definition is null || definition.DeletedAt is not null)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+
+            // Partial update — only provided fields change.
+            if (request.Name is not null)
+            {
+                if (string.IsNullOrWhiteSpace(request.Name))
+                    return Results.BadRequest(new WorkflowManagementErrorResponse("A workflow name cannot be empty."));
+                definition.Name = request.Name.Trim();
+            }
+
+            if (request.Description is not null)
+                definition.Description = request.Description;
+
+            await SaveWorkflowDefinitionAsync(services, definition, cancellationToken);
+            return await LoadDefinitionResultAsync(services, definitionId, cancellationToken);
         }, cancellationToken);
 
     private static Task<IResult> DeleteDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
@@ -845,6 +869,8 @@ internal sealed record WorkflowDraftResponse(
     IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError> ValidationErrors);
 
 internal sealed record CreateWorkflowDefinitionRequest(string Name, string? Description, string? RootKind, string? RootActivityVersionId);
+
+internal sealed record UpdateWorkflowDefinitionMetadataRequest(string? Name, string? Description);
 
 internal sealed record UpdateWorkflowDraftRequest(
     WorkflowDefinitionStateView State,
