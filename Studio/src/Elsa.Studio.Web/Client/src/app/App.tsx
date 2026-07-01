@@ -706,18 +706,32 @@ async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, host
 }
 
 async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
+  // Leading-slash path so it resolves to the origin root, matching the server route (mapped at
+  // absolute "/_elsa/health") and the sibling "Server host" registry probe rather than any base path.
+  const healthUrl = new URL("/_elsa/health", baseUrl).toString();
+
   try {
-    await fetch(baseUrl, { cache: "no-store", mode: "no-cors" });
+    // Readable CORS request so we can inspect the real status: a rejected fetch means the
+    // host is unreachable, while any response (even an error status) means the API is up.
+    const response = await fetch(healthUrl, { cache: "no-store" });
+    if (response.ok) {
+      return {
+        status: "ok",
+        attention: 0,
+        detail: healthUrl
+      };
+    }
+
     return {
-      status: "ok",
-      attention: 0,
-      detail: baseUrl
+      status: "attention",
+      attention: 1,
+      detail: `${healthUrl} responded with ${response.status}.`
     };
   } catch (e) {
     return {
       status: "unavailable",
       attention: 0,
-      detail: `${baseUrl} (${getHealthErrorMessage(e)})`
+      detail: `${healthUrl} (${getHealthErrorMessage(e)})`
     };
   }
 }

@@ -10,6 +10,9 @@ public static class StudioApiEndpointRouteBuilderExtensions
 {
     public static IEndpointRouteBuilder MapElsaStudioApi(this IEndpointRouteBuilder endpoints)
     {
+        // Lightweight, unauthenticated reachability probe for the Studio SPA's "Backend API" health tile.
+        endpoints.MapGet("/_elsa/health", () => Results.Ok(new { status = "healthy" }));
+
         endpoints.MapGet("/_elsa/studio/modules", async (HttpContext httpContext) =>
         {
             var response = await httpContext.RequestServices

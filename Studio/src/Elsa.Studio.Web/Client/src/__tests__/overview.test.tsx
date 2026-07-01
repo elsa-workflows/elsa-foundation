@@ -31,7 +31,7 @@ describe("dashboard", () => {
   });
 
   it("reports backend reachability separately from the server module registry", async () => {
-    stubBackendFetch();
+    const fetchMock = stubBackendFetch();
     const backendGetJson = vi.fn(async () => {
       throw new Error("Request failed with 404.");
     });
@@ -43,6 +43,39 @@ describe("dashboard", () => {
     expect(container.textContent).toContain("Connected");
     expect(container.textContent).toContain("Server module registry is unavailable: Request failed with 404.");
     expect(container.textContent).toContain("Open Modules to review host-scoped issues.");
+    expect(fetchMock).toHaveBeenCalledWith("https://foundation.example/_elsa/health", { cache: "no-store" });
+
+    await unmount();
+  });
+
+  it("flags the Backend API tile for attention when the health probe returns an error status", async () => {
+    stubBackendFetch(() => new Response("", { status: 503 }));
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry()
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Backend API");
+    expect(container.textContent).toContain("Review");
+    expect(container.textContent).toContain("https://foundation.example/_elsa/health responded with 503.");
+
+    await unmount();
+  });
+
+  it("marks the Backend API tile unavailable when the health probe cannot reach the host", async () => {
+    stubBackendFetch(() => {
+      throw new Error("Failed to fetch");
+    });
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendGetJson: async () => healthyRegistry()
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Backend API");
+    expect(container.textContent).toContain("Unavailable");
+    expect(container.textContent).toContain("https://foundation.example/_elsa/health (Failed to fetch)");
 
     await unmount();
   });
@@ -315,6 +348,8 @@ async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
 }
 
-function stubBackendFetch() {
-  vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 200 })));
+function stubBackendFetch(responder: () => Response | Promise<Response> = () => new Response("", { status: 200 })) {
+  const fetchMock = vi.fn(async () => responder());
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }

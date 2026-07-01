@@ -8,6 +8,10 @@ internal static class ActiveShellStudioApiEndpoint
 {
     public static IEndpointRouteBuilder MapActiveShellStudioApi(this IEndpointRouteBuilder endpoints)
     {
+        // Lightweight, unauthenticated reachability probe for the Studio SPA's "Backend API" health tile.
+        // Does not touch the shell registry so it answers even while shells are (re)activating.
+        endpoints.MapGet("/_elsa/health", () => Results.Ok(new { status = "healthy" })).WithOrder(-1000);
+
         endpoints.MapGet("/_elsa/studio/modules", async (IShellRegistry shellRegistry, HttpContext httpContext) =>
         {
             var provider = await GetActiveShellServiceProviderAsync(shellRegistry, httpContext.RequestAborted);
