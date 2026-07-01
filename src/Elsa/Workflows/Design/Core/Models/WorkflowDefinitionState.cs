@@ -47,4 +47,10 @@ public sealed record WorkflowDefinitionState(
     IEnumerable<OutputDefinition> Outputs,
     WorkflowActivityOptions? WorkflowActivityOptions,
     WorkflowStrategyOptions? StrategyOptions
-);
+)
+{
+    /// <summary>
+    /// The state of a version/draft whose <c>StateSource</c> is missing or failed to deserialize.
+    /// </summary>
+    public static readonly WorkflowDefinitionState Empty = new([], null, [], [], null, null);
+}

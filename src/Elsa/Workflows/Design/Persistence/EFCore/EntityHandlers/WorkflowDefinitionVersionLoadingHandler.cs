@@ -21,19 +21,20 @@ public sealed class WorkflowDefinitionVersionLoadingHandler(IPayloadSerializer p
 
         var stateSource = (string?)stateSourceProperty.CurrentValue;
 
+        if (string.IsNullOrWhiteSpace(stateSource))
+        {
+            entity.State = WorkflowDefinitionState.Empty;
+            return ValueTask.CompletedTask;
+        }
+
         try
         {
-            if (string.IsNullOrWhiteSpace(stateSource))
-            {
-                return ValueTask.CompletedTask;
-            }
-
-            var state = payloadSerializer.Deserialize<WorkflowDefinitionState>(stateSource);
-            entity.State = state;
+            entity.State = payloadSerializer.Deserialize<WorkflowDefinitionState>(stateSource);
         }
         catch (Exception exp)
         {
             logger.LogError(exp, "Could not deserialize workflow definition state: {DefinitionId}. Reverting to default state", entity.Id);
+            entity.State = WorkflowDefinitionState.Empty;
         }
 
         return ValueTask.CompletedTask;
