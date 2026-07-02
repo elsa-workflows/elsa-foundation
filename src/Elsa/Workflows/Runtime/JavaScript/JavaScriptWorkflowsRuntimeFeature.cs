@@ -20,6 +20,12 @@ public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        // FeatureOptions is default-constructable, so IOptions<FeatureOptions> materializes through the standard
+        // options pipeline (used by VariableFunctionsPreProcessor) and hosts can override it with the idiomatic
+        // services.Configure<FeatureOptions>(...). AddOptions is idempotent and guarantees the options infrastructure
+        // is present regardless of host composition order.
+        services.AddOptions();
+
         services
             .AddScoped<IScriptPostProcessor, CopyVariablesToWorkflowContext>()
             .AddScoped<IScriptPreProcessor, WorkflowVariablesContextPreProcessor>()

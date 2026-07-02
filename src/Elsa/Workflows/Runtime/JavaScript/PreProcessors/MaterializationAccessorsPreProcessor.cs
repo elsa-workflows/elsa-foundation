@@ -11,8 +11,8 @@ namespace Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 /// Surfaces the workflow variables, workflow inputs, and prior activity outputs carried by the
 /// materialization-time expression context (<see cref="IMaterializationExpressionState"/>) to a JavaScript
 /// activity input expression. Because activity inputs are materialized before the activity's real execution
-/// context exists, the regular runtime accessors (which depend on a live <c>IWorkflowExecutionContext</c>)
-/// are unavailable; this pre-processor reads the values straight off the expression context instead.
+/// context exists, the execution-time accessors (which read the live <see cref="IExecutionExpressionState"/>
+/// carrier) are unavailable; this pre-processor reads the values straight off the materialization context instead.
 /// </summary>
 /// <remarks>
 /// Registers the <c>variables</c>, <c>input</c>, and <c>output</c> container objects along with the
