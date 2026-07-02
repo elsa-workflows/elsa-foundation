@@ -18,7 +18,7 @@ public sealed class RuntimeWorkflowCheckpointMiddleware(RuntimeCheckpointCommitt
         ArgumentNullException.ThrowIfNull(next);
 
         if (context.Workspace.PendingCheckpointCommit is { } commit)
-            await checkpointCommitter.CommitAsync(commit);
+            await checkpointCommitter.CommitAsync(commit, context.Workspace.CancellationToken);
 
         await next(context);
     }

@@ -17,7 +17,11 @@ public sealed class RuntimeWorkflowInvokeMiddleware : IWorkflowRuntimeMiddleware
         ArgumentNullException.ThrowIfNull(next);
 
         if (context.Workspace.InvokeHandler is { } invokeHandler)
+        {
+            // Clear before running so the pipeline terminal can detect a missing Invoke slot (an unconsumed handler).
+            context.Workspace.InvokeHandler = null;
             await invokeHandler(context);
+        }
 
         await next(context);
     }

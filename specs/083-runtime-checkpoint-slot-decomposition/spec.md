@@ -65,7 +65,7 @@ A workflow cancellation dispatched through the pipeline produces exactly the sam
 - **FR-004**: The workflow `Checkpoint` slot (`RuntimeWorkflowCheckpointMiddleware`) MUST commit the workspace's pending checkpoint commit in the before-`next` direction when present, and do nothing when absent.
 - **FR-005**: `WorkflowCancelSchedulerWorkHandler` MUST implement `IRuntimePipelineWorkHandler` and stage its assembled commit on the passed context; its plain `HandleAsync` MUST commit inline (unchanged) for direct dispatch.
 - **FR-006**: The change MUST be behavior-preserving: a Cancel dispatched through the pipeline persists the same commit as before; every other workflow handler runs unchanged via the `Invoke` slot; the activity pipeline is untouched; existing tests pass.
-- **FR-007**: No `Elsa.Workflows.Design.*` dependency introduced (§E2.2/§E2.6). `RuntimePipelineContractTests` MUST pass (updated for the new workflow `Invoke` slot). Only the Cancel handler's body is changed; no other handler is touched.
+- **FR-007**: No `Elsa.Workflows.Design.*` dependency introduced (§E2.2/§E2.6). `RuntimePipelineContractTests` MUST pass **unchanged** (it derives its expected built-in slots from `RuntimeWorkflowPipelineSlots.All`, so the new `Invoke` slot is picked up automatically); the `Invoke`-before-`Checkpoint` ordering is locked by a dedicated test. Only the Cancel handler's body is changed; no other handler is touched.
 
 ### Key Entities
 

@@ -12,7 +12,7 @@ Reflects the **slot-invoked handler model** (ADR 0029 addendum). An earlier draf
 - [x] **T006** Dispatcher: workflow stages the handler invocation (aware vs plain) on the workspace + no-op terminal; activity unchanged; no accessor. (FR-002/FR-003)
 - [x] **T007** `WorkflowCancelSchedulerWorkHandler`: implement `IRuntimePipelineWorkHandler`; `BuildCommitAsync`; plain commits, aware stages. (FR-005)
 - [x] **T008** Register `RuntimeWorkflowInvokeMiddleware` in `WorkflowsRuntimeApiFeature`; remove the deleted accessor registration. (FR-002)
-- [x] **T009** Tests: middleware commits staged / no-ops; Cancel stages via the aware method / commits inline on direct dispatch; end-to-end Cancel through the feature pipeline. Add the `Invoke` middleware to the Move-1 dispatch-test provider; update `RuntimePipelineContractTests` for the new slot. (FR-006)
+- [x] **T009** Tests: middleware commits staged / no-ops; Cancel stages via the aware method / commits inline on direct dispatch; end-to-end Cancel through the feature pipeline; `Invoke`-before-`Checkpoint` ordering; fail-loud when the `Invoke` slot is missing. Add the `Invoke` middleware to the Move-1 dispatch-test provider. `RuntimePipelineContractTests` passes unchanged (derives from the slots constant). (FR-006)
 - [x] **T010** Build + full runtime suite green (542). (FR-006/SC-002) Activities.Runtime flaky test (`BreakPropagation…`) confirmed pre-existing/order-dependent — tracked separately.
 - [x] **T011** ADR 0029 addendum (slot-invoked model) + spec/plan/bucket synced.
 - [x] **T012** Update `.specify/feature.json` + AGENTS.md SPECKIT pointer → spec 083.

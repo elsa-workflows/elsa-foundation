@@ -11,10 +11,18 @@ public sealed class RuntimePipelineWorkspace
 {
     /// <summary>
     /// The invocation of the work item's selected handler, staged by the dispatcher for the <c>Invoke</c>-slot
-    /// middleware to run in the before-<c>next</c> direction (so the handler executes before <c>Checkpoint</c>). Null
-    /// when the handler runs as the pipeline terminal instead (e.g. the activity pipeline, not yet decomposed).
+    /// middleware to run in the before-<c>next</c> direction (so the handler executes before <c>Checkpoint</c>). The
+    /// <c>Invoke</c> middleware clears this once it has run the handler; a non-null value surviving to the pipeline
+    /// terminal means the <c>Invoke</c> slot was missing from the plan and is a hard error. Null when the handler runs
+    /// as the pipeline terminal instead (e.g. the activity pipeline, not yet decomposed).
     /// </summary>
     public Func<IRuntimePipelineContext, ValueTask>? InvokeHandler { get; set; }
+
+    /// <summary>
+    /// The dispatch's cancellation token, staged so slot middleware (the pipeline delegate threads no token) can forward
+    /// it to cancellable work such as the checkpoint commit.
+    /// </summary>
+    public CancellationToken CancellationToken { get; set; }
 
     /// <summary>
     /// A checkpoint commit assembled by the handler in the <c>Invoke</c> slot for the <c>Checkpoint</c> slot to persist.

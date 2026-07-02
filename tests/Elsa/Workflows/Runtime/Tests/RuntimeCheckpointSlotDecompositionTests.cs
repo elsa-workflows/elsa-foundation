@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
@@ -10,11 +11,12 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// ADR 0029 Move 2 (first slice): the workflow <c>Checkpoint</c> slot persists the commit a terminal handler stages on
-/// the dispatch workspace. Covers the middleware, the Cancel handler's staging, and the end-to-end path through the
-/// feature-composed pipeline. Cancel is the only handler migrated in this slice; behaviour is preserved.
+/// ADR 0029 Move 2 (first slice, slot-invoked handler model): the workflow <c>Invoke</c> slot runs the handler before
+/// <c>next</c> and the <c>Checkpoint</c> slot persists the commit it staged. Covers the middleware, the Cancel handler's
+/// staging vs inline commit, the end-to-end feature path, the Invoke-before-Checkpoint ordering, and the fail-loud guard
+/// when the Invoke slot is missing. Cancel is the only handler migrated in this slice; behaviour is preserved.
 /// </summary>
-public sealed class RuntimeCheckpointSlotDecompositionTests
+public sealed class RuntimeCheckpointSlotDecompositionTests : RuntimePipelineTestSupport
 {
     [Fact]
     public async Task CheckpointMiddleware_CommitsStagedCommit()
@@ -46,12 +48,8 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
     [Fact]
     public async Task CancelHandler_StagesCommitForTheCheckpointSlot_WhenDispatchedThroughThePipeline()
     {
-        var workflowStore = new InMemoryWorkflowExecutionStateStore();
-        var activityStore = new InMemoryActivityExecutionStateStore();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
-        await workflowStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
-        await activityStore.SaveAsync(NewRunningActivityState());
-        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore);
+        var handler = await NewSeededCancelHandler(checkpointStore);
         var context = new WorkflowRuntimePipelineContext(NewCancelWorkItem());
 
         // The Invoke slot calls the context-aware overload; it stages the commit rather than committing inline.
@@ -68,12 +66,8 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
     public async Task CancelHandler_CommitsInline_OnDirectDispatch()
     {
         // Behaviour-preserving fallback: dispatched without a pipeline (plain IWorkflowSchedulerWorkHandler), it commits.
-        var workflowStore = new InMemoryWorkflowExecutionStateStore();
-        var activityStore = new InMemoryActivityExecutionStateStore();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
-        await workflowStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
-        await activityStore.SaveAsync(NewRunningActivityState());
-        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore);
+        var handler = await NewSeededCancelHandler(checkpointStore);
 
         await handler.HandleAsync(NewCancelWorkItem());
 
@@ -87,7 +81,7 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
         await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
-        await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningActivityState());
+        await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewActivityStateForStatus(ActivityExecutionStatus.Running));
         var dispatcher = provider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>();
         var cancelHandler = provider.GetServices<IWorkflowSchedulerWorkHandler>().OfType<WorkflowCancelSchedulerWorkHandler>().Single();
 
@@ -96,6 +90,47 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
         var committed = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Equal(RuntimeCheckpointNames.ActivityCancelled, committed.Commit.Checkpoint.Name);
         Assert.Equal(WorkflowExecutionStatus.Cancelled, committed.Commit.StateChanges.WorkflowExecution!.State.Status);
+    }
+
+    [Fact]
+    public void BuildPlan_OrdersTheInvokeSlotBeforeTheCheckpointSlot()
+    {
+        var steps = new WorkflowRuntimePipelineBuilder().BuildPlan().Steps;
+
+        var invokeIndex = IndexOf(steps, typeof(RuntimeWorkflowInvokeMiddleware));
+        var checkpointIndex = IndexOf(steps, typeof(RuntimeWorkflowCheckpointMiddleware));
+        Assert.True(invokeIndex >= 0 && checkpointIndex >= 0);
+        Assert.True(invokeIndex < checkpointIndex, "The Invoke slot must run before the Checkpoint slot so the staged commit exists when Checkpoint commits.");
+    }
+
+    [Fact]
+    public async Task Dispatch_FailsLoudly_WhenTheInvokeSlotIsMissingFromThePlan()
+    {
+        // The dispatcher stages the handler + a no-op terminal; without the Invoke slot the handler would silently never
+        // run. The terminal guard turns that misconfiguration into a hard error instead of a success-that-did-nothing.
+        await using var provider = BuildWorkflowOnlyProvider();
+        var workflowPlan = new WorkflowRuntimePipelineBuilder().Remove<RuntimeWorkflowInvokeMiddleware>().BuildPlan();
+        var dispatcher = new RuntimeExecutionPipelineDispatcher(
+            new RuntimeSchedulerPipelineSelector(),
+            new RuntimeWorkflowExecutionPipeline(workflowPlan, provider),
+            new PassThroughActivityPipeline());
+        var handler = NewCancelHandler(
+            new InMemoryWorkflowExecutionStateStore(),
+            new InMemoryActivityExecutionStateStore(),
+            new InMemoryRuntimeCheckpointCommitStore());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => dispatcher.DispatchAsync(NewCancelWorkItem(), handler).AsTask());
+        Assert.Contains(RuntimeWorkflowPipelineSlots.Invoke, exception.Message);
+    }
+
+    private async Task<WorkflowCancelSchedulerWorkHandler> NewSeededCancelHandler(InMemoryRuntimeCheckpointCommitStore checkpointStore)
+    {
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        await workflowStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
+        await activityStore.SaveAsync(NewActivityStateForStatus(ActivityExecutionStatus.Running));
+        return NewCancelHandler(workflowStore, activityStore, checkpointStore);
     }
 
     private static WorkflowCancelSchedulerWorkHandler NewCancelHandler(
@@ -111,6 +146,29 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
 
     private static RuntimeCheckpointCommitter NewCommitter(IRuntimeCheckpointCommitStore store) =>
         new(new ImmediateRuntimeCheckpointPersistencePolicy(), store);
+
+    private static int IndexOf(IReadOnlyList<RuntimePipelinePlanStep> steps, Type middlewareType)
+    {
+        for (var index = 0; index < steps.Count; index++)
+            if (steps[index].MiddlewareType == middlewareType)
+                return index;
+        return -1;
+    }
+
+    // Resolves the workflow built-ins that remain after removing the Invoke slot (LoadState/Scheduling/Checkpoint/PostCommit + committer).
+    private static ServiceProvider BuildWorkflowOnlyProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<RuntimeCheckpointCommitter>();
+        services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.AddSingleton<RuntimeWorkflowSchedulingMiddleware>();
+        services.AddSingleton<RuntimeWorkflowCheckpointMiddleware>();
+        services.AddSingleton<RuntimeWorkflowPostCommitMiddleware>();
+        return services.BuildServiceProvider();
+    }
 
     private static RuntimeCheckpointCommit NewCommit() =>
         new(
@@ -134,68 +192,10 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-    private static RuntimeSchedulerWorkItem NewCancelWorkItem() =>
-        new(
-            workItemId: "cancel-work",
-            workflowExecutionId: "wf-1",
-            commandId: "command-cancel",
-            commandKind: WorkflowExecutionCommandKind.Cancel,
-            envelopeId: "envelope-cancel",
-            idempotencyKey: "wf-1:cancel",
-            enqueuedAt: DateTimeOffset.UnixEpoch,
-            recordedAt: DateTimeOffset.UnixEpoch,
-            sequence: 10);
+    private sealed class PassThroughActivityPipeline : IRuntimeActivityExecutionPipeline
+    {
+        public RuntimePipelinePlan Plan => new ActivityRuntimePipelineBuilder().BuildPlan();
 
-    private static WorkflowExecutionState NewWorkflowState(WorkflowExecutionStatus status) =>
-        new(
-            WorkflowExecutionId: "wf-1",
-            PinnedExecutable: NewIdentity(),
-            Status: status,
-            SubStatus: null,
-            CreatedAt: DateTimeOffset.UnixEpoch,
-            StartedAt: DateTimeOffset.UnixEpoch,
-            UpdatedAt: DateTimeOffset.UnixEpoch,
-            CompletedAt: null,
-            CorrelationId: null,
-            ParentWorkflowExecutionId: null,
-            TenantId: null,
-            SystemMetadata: new Dictionary<string, string>());
-
-    private static ActivityExecutionState NewRunningActivityState() =>
-        new(
-            Execution: new ActivityExecution(
-                ActivityExecutionId: "actexec-running",
-                WorkflowExecutionId: "wf-1",
-                ExecutableNodeId: "node-a",
-                AuthoredActivityId: "authored-a",
-                ActivityType: "Elsa.Test",
-                ActivityTypeVersion: "1.0.0"),
-            Status: ActivityExecutionStatus.Running,
-            SubStatus: null,
-            ExecutionSequence: 1,
-            ScheduledAt: DateTimeOffset.UnixEpoch,
-            StartedAt: DateTimeOffset.UnixEpoch,
-            CompletedAt: null,
-            SchedulingActivityExecutionId: null,
-            ParentActivityExecutionId: null,
-            BranchId: null,
-            IterationId: null,
-            Provenance: ActivitySchedulingProvenance.From(
-                "wf-1",
-                parentActivityExecutionId: null,
-                schedulingActivityExecutionId: null,
-                branchId: null,
-                iterationId: null,
-                executionPathId: null,
-                executionScopeId: null,
-                schedulingCause: "test"),
-            CallStackDepth: null,
-            BookmarkIds: [],
-            IncidentIds: [],
-            FaultCount: 0,
-            AggregateFaultCount: 0,
-            Metadata: new Dictionary<string, string>());
-
-    private static WorkflowExecutableIdentity NewIdentity() =>
-        new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+        public ValueTask InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate terminal) => terminal(context);
+    }
 }

@@ -19,7 +19,7 @@ public sealed record WorkflowRuntimePipelineContext(
     /// <summary>The workflow execution this dispatch belongs to.</summary>
     public string WorkflowExecutionId => WorkItem.WorkflowExecutionId;
 
-    /// <summary>Mutable per-dispatch workspace shared with the terminal handler and slot middleware.</summary>
+    /// <summary>Mutable per-dispatch workspace shared between the handler (run in the <c>Invoke</c> slot) and the slot middleware.</summary>
     public RuntimePipelineWorkspace Workspace { get; init; } = new();
 }
 
@@ -41,6 +41,10 @@ public sealed record ActivityRuntimePipelineContext(
     /// <summary>The workflow execution this dispatch belongs to.</summary>
     public string WorkflowExecutionId => WorkItem.WorkflowExecutionId;
 
-    /// <summary>Mutable per-dispatch workspace shared with the terminal handler and slot middleware.</summary>
+    /// <summary>
+    /// Mutable per-dispatch workspace. Currently unused on the activity pipeline (its handlers still run as the terminal,
+    /// so nothing stages onto or reads it) — present for the shared interface and for when the activity pipeline adopts
+    /// the slot-invoked model. See the ADR 0029 addendum.
+    /// </summary>
     public RuntimePipelineWorkspace Workspace { get; init; } = new();
 }
