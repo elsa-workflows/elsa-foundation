@@ -44,6 +44,21 @@ public sealed class WorkflowDefinitionSoftDeleteTests
     }
 
     [Fact]
+    public void From_leaves_soft_delete_metadata_unset_for_non_entity_source()
+    {
+        // Both real callers pass a read-model (WorkflowDefinitionModel), not a WorkflowDefinition entity,
+        // so `source is WorkflowDefinition` is false and the soft-delete copy branch is skipped. This pins
+        // the branch the callers actually hit — the entity-source tests above cover the copy branch.
+        var source = new WorkflowDefinitionModel("def-3", "Model", "desc");
+
+        var copy = WorkflowDefinition.From(source);
+
+        Assert.Equal("def-3", copy.Id);
+        Assert.Null(copy.DeletedAt);
+        Assert.Null(copy.DeletedReason);
+    }
+
+    [Fact]
     public async Task Soft_deleted_definitions_are_excluded_from_active_query_and_included_in_deleted_query()
     {
         using var host = WorkflowsDesignTestHost.Create();
