@@ -40,7 +40,11 @@ internal static class PackageManifestCatalogMapper
         string? packageId,
         string? packageVersion)
     {
-        foreach (var feature in manifest.Features)
+        // System.Text.Json overrides an empty-collection initializer with null when the JSON key is *explicitly* null
+        // (initializers only apply when the key is absent), so a manifest with `"features": null` deserializes to a null
+        // list. Coalesce here — and guard the per-feature collections/dictionaries below — so such a manifest is treated
+        // as empty rather than throwing and aborting catalog enumeration for the whole package.
+        foreach (var feature in manifest.Features ?? [])
         {
             var featureName = GetString(feature.Extensions, "cshellsFeatureName");
             if (string.IsNullOrWhiteSpace(featureName))
@@ -66,7 +70,7 @@ internal static class PackageManifestCatalogMapper
             // Gate on the runtime's "was resolved" signal so a loaded feature that genuinely has zero dependencies is
             // not backfilled from a stale manifest, and keep the emptiness check so a second manifest declaring the
             // same feature does not clobber a dependency list an earlier manifest already populated.
-            if (!builder.DependenciesResolved && builder.Dependencies.Count == 0 && feature.Dependencies.Count > 0)
+            if (!builder.DependenciesResolved && builder.Dependencies.Count == 0 && feature.Dependencies is { Count: > 0 })
                 builder.Dependencies = GetDependencies(feature, packageId);
         }
     }
@@ -81,7 +85,7 @@ internal static class PackageManifestCatalogMapper
     {
         var prefix = string.IsNullOrWhiteSpace(packageId) ? null : packageId + ".";
 
-        return feature.Dependencies
+        return (feature.Dependencies ?? [])
             .Where(dependency => !string.IsNullOrWhiteSpace(dependency.FeatureId))
             .Select(dependency =>
             {
@@ -94,8 +98,8 @@ internal static class PackageManifestCatalogMapper
             .ToArray();
     }
 
-    private static IReadOnlyList<FeatureSettingDescriptor> MapSettings(IReadOnlyList<FeatureSettingManifest> settings) =>
-        settings
+    private static IReadOnlyList<FeatureSettingDescriptor> MapSettings(IReadOnlyList<FeatureSettingManifest>? settings) =>
+        (settings ?? [])
             .Where(setting => !string.IsNullOrWhiteSpace(setting.Name))
             .Select(ToSetting)
             .OrderBy(setting => setting.Category ?? "", StringComparer.OrdinalIgnoreCase)
@@ -133,8 +137,8 @@ internal static class PackageManifestCatalogMapper
     /// <c>validation.enum</c>.
     /// </summary>
     private static (IReadOnlyList<FeatureSettingOptionDescriptor> Options, string? OptionsProvider) GetSettingOptions(
-        Dictionary<string, object?> ui,
-        Dictionary<string, object?> validation)
+        Dictionary<string, object?>? ui,
+        Dictionary<string, object?>? validation)
     {
         if (GetElement(ui, "options") is { ValueKind: JsonValueKind.Object } optionsElement)
         {
@@ -153,13 +157,26 @@ internal static class PackageManifestCatalogMapper
 
     private static IReadOnlyList<FeatureSettingOptionDescriptor> MapOptions(JsonElement options) =>
         options.EnumerateArray()
-            .Select(option => option.ValueKind is JsonValueKind.Object
-                ? new FeatureSettingOptionDescriptor(
-                    GetJsonString(option, "label") ?? (option.TryGetProperty("value", out var v) ? JsonValueToDisplayText(v) : ""),
-                    option.TryGetProperty("value", out var value) ? value.Clone() : default,
-                    GetJsonString(option, "description"))
-                : new FeatureSettingOptionDescriptor(JsonValueToDisplayText(option), option.Clone(), null))
+            .Select(MapOption)
+            .OfType<FeatureSettingOptionDescriptor>()
             .ToArray();
+
+    private static FeatureSettingOptionDescriptor? MapOption(JsonElement option)
+    {
+        // A scalar enum value is itself the option's value.
+        if (option.ValueKind is not JsonValueKind.Object)
+            return new FeatureSettingOptionDescriptor(JsonValueToDisplayText(option), option.Clone(), null);
+
+        // An option object without a "value" would otherwise map to a default(JsonElement) whose ValueKind is Undefined;
+        // that throws when later serialized/GetRawText'd, so skip it — mirroring the pre-refactor `.Where(o => o.Value is not null)`.
+        if (!option.TryGetProperty("value", out var value))
+            return null;
+
+        return new FeatureSettingOptionDescriptor(
+            GetJsonString(option, "label") ?? JsonValueToDisplayText(value),
+            value.Clone(),
+            GetJsonString(option, "description"));
+    }
 
     private static string JsonValueToDisplayText(JsonElement value) =>
         value.ValueKind switch
@@ -170,24 +187,26 @@ internal static class PackageManifestCatalogMapper
             _ => value.GetRawText()
         };
 
-    private static IReadOnlyList<string> MergeCategories(string? category, IReadOnlyList<string> categories)
+    private static IReadOnlyList<string> MergeCategories(string? category, IReadOnlyList<string>? categories)
     {
         var result = new List<string>();
         if (!string.IsNullOrWhiteSpace(category))
             result.Add(category);
 
-        result.AddRange(categories.Where(x => !string.IsNullOrWhiteSpace(x)));
+        result.AddRange((categories ?? []).Where(x => !string.IsNullOrWhiteSpace(x)));
 
         return result.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static JsonElement? GetElement(IReadOnlyDictionary<string, object?> values, string key) =>
-        values.TryGetValue(key, out var value) && value is JsonElement element ? element : null;
+    // `values` is nullable because System.Text.Json nulls out an initialized dictionary property when its JSON key is
+    // explicitly null (e.g. `"ui": null`); guard here so every caller tolerates that without a NullReferenceException.
+    private static JsonElement? GetElement(IReadOnlyDictionary<string, object?>? values, string key) =>
+        values is not null && values.TryGetValue(key, out var value) && value is JsonElement element ? element : null;
 
-    private static string? GetString(IReadOnlyDictionary<string, object?> values, string key) =>
+    private static string? GetString(IReadOnlyDictionary<string, object?>? values, string key) =>
         GetElement(values, key) is { ValueKind: JsonValueKind.String } element ? element.GetString() : null;
 
-    private static bool GetBool(IReadOnlyDictionary<string, object?> values, string key) =>
+    private static bool GetBool(IReadOnlyDictionary<string, object?>? values, string key) =>
         GetElement(values, key) is { ValueKind: JsonValueKind.True };
 
     private static string? GetJsonString(JsonElement element, string property) =>
