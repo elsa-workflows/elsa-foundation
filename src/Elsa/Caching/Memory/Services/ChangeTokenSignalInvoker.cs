@@ -26,7 +26,10 @@ public sealed class ChangeTokenSignalInvoker : IChangeTokenSignalInvoker
     public ValueTask TriggerTokenAsync(string key, CancellationToken cancellationToken = default)
     {
         if (_changeTokens.TryRemove(key, out var changeTokenInfo))
+        {
             changeTokenInfo.TokenSource.Cancel();
+            changeTokenInfo.TokenSource.Dispose();
+        }
 
         return default;
     }
