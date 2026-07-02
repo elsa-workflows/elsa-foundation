@@ -28,7 +28,6 @@ internal static class DefaultTypeDescriptors
             typeof(double),
             typeof(byte[]),
             typeof(Stream),
-            typeof(Guid),
             typeof(DateOnly),
             typeof(TimeOnly),
             typeof(IDictionary<string, object>)
