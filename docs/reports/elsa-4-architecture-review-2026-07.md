@@ -144,7 +144,7 @@ The audit inventoried all 1,809 public types. Statistics: 202 names >35 chars (w
 
 ## 7. Improvement roadmap (hand-off work units)
 
-Ordered by risk-adjusted value. Each unit is scoped for a dedicated coding agent; IDs reference §3 findings for full context.
+Ordered by risk-adjusted value. Each unit is scoped for a dedicated coding agent; IDs reference §3 findings for full context. **Per-unit implementation briefs (goal, verified current state, scope checklist, acceptance criteria, dependencies) live in [elsa-4-architecture-review-2026-07/roadmap.md](elsa-4-architecture-review-2026-07/roadmap.md) — hand that document to implementing agents.**
 
 **Phase 0 — safety & correctness (do first, independent of each other):**
 - **W1. Fault semantics end-to-end** (RT-1, RT-12, RT-14, RT-5): workflow `Faulted`/incident-paused status policy, drain-result propagation to dispatch callers, poison/retry policy, structured fault capture. *Blocks honest production claims.*
@@ -179,4 +179,4 @@ Ordered by risk-adjusted value. Each unit is scoped for a dedicated coding agent
 
 ## 8. Source reports
 
-This document consolidates nine detailed sub-reports (runtime; Elsa 3 comparison; infrastructure; design/activities/expressions/HTTP; persistence; modularity; naming; tests; remaining domains) produced during the 2026-07-02 review session. The sub-reports contain per-finding file:line evidence, full parity/inventory/naming tables, and open questions; they are retained as session artifacts and can be promoted into `docs/reports/` on request. All Critical/High findings in this document were independently re-verified against the working tree at commit `ffafa32f`.
+This document consolidates nine detailed sub-reports (runtime; Elsa 3 comparison; infrastructure; design/activities/expressions/HTTP; persistence; modularity; naming; tests; remaining domains) produced during the 2026-07-02 review session. The sub-reports — together with the per-work-unit implementation briefs for W1–W21 — are committed in [docs/reports/elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md). They contain per-finding file:line evidence, full parity/inventory/naming tables, and open questions. All Critical/High findings in this document were independently re-verified against the working tree at commit `ffafa32f`; where verification changed a sub-report's conclusion (RT-1, RT-5), the sub-report carries an inline correction note and this document is authoritative.
