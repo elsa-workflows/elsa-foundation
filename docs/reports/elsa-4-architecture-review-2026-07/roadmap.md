@@ -12,15 +12,53 @@ the current tree before implementing; line numbers drift.
 ## How to execute a work unit
 
 1. Read the brief below, then the referenced findings in the sub-reports for evidence and rationale.
-2. Follow the repo's Speckit flow for feature-sized units (`speckit-specify` → `speckit-plan` →
+2. **Register the work in a program-goal bucket first** (`docs/program-goals/`) — these briefs are
+   planned durable work, and per `AGENTS.md` report findings must move into a bucket (or be
+   explicitly marked `none/free-flow`) before implementation.
+3. Follow the repo's Speckit flow for feature-sized units (`speckit-specify` → `speckit-plan` →
    `speckit-tasks` → `speckit-implement`); small hygiene units (W6) can go straight to a work branch.
-3. Respect the constitution gates: feature-registration tests (§2.23.1), `public sealed`
+4. Respect the constitution gates: feature-registration tests (§2.23.1), `public sealed`
    logic-bearing implementations, unit tests for new/changed behavior, no new `InternalsVisibleTo`.
-4. When project references, features, or extension points change: refresh the generated maps
+5. When project references, features, or extension points change: refresh the generated maps
    (`bash tools/maps/generate-maps.sh` + the specific layer scripts) and update
    `EXTENSION_POINTS.md` / extension-point catalogs.
-5. One work unit per branch/PR unless the brief says otherwise. Reference the finding IDs in the
+6. One work unit per branch/PR unless the brief says otherwise. Reference the finding IDs in the
    PR description.
+
+### Skill routing
+
+Use the repository's agent skills (`docs/skills/catalog.md`) instead of ad-hoc workflows. For
+**every** unit: `elsa-work-unit-planner` to plan before coding, `elsa-add-unit-tests` after any
+implementation change, `elsa-refresh-generated-maps` + `elsa-extension-point-catalog` when
+references or extension surfaces change, and `elsa-glossary-lookup` before coining or renaming
+terms. Per-unit routing:
+
+| Work unit | Applicable skills (beyond the every-unit set) |
+|---|---|
+| W1 fault semantics | `elsa-add-event-contribution` (incident-driven status transitions), `elsa-add-replacement-contract` (poison/retry policy default) |
+| W2 durable resumption | `elsa-add-bridge-adapter` (Groundwork work-queue bridge), `elsa-add-replacement-contract` (durable queue replacing in-memory), `elsa-create-feature` (hosted pump feature) |
+| W3 state versioning | `elsa-add-replacement-contract` (upcaster registry), `elsa-source-of-truth-audit` (where the evolution contract is documented) |
+| W4 security model | `elsa-create-feature` / `elsa-extend-feature-inheritance` (per-shell security options), `elsa-cshells-appsettings` + `elsa-feature-composition` (secured reference-app composition) |
+| W5 ownership enforcement | `elsa-add-unit-tests` (fencing/TOCTOU guardrails are the deliverable) |
+| W6 hygiene | `elsa-critical-constitution-review` (MD-2/MD-4 domain-tree drift, MD-3 InternalsVisibleTo rule) |
+| W7 triggers/stimulus | `elsa-create-feature` (trigger index + routing feature), `elsa-add-event-contribution` (publish-time index contributors), `elsa-extension-point-catalog` |
+| W8 timers | `elsa-create-feature`, `elsa-add-bridge-adapter` (timer store) |
+| W9 coalescing policy | `elsa-add-replacement-contract` (persistence policy), benchmark evidence → report |
+| W10 mediator consolidation | `elsa-extension-point-catalog` (dispatch surfaces change), `elsa-verify-codebase` afterwards |
+| W11 hot paths | — (every-unit set suffices) |
+| W12 runtime structure | `elsa-create-feature` (split composition root), `elsa-extend-feature-inheritance` (API feature composing Core registration) |
+| W13 DRY sweep | — (every-unit set suffices) |
+| W14 naming pass | `elsa-glossary-lookup` first, `elsa-critical-constitution-review` (ratify naming rules), glossary updates |
+| W15 test hardening | `elsa-add-unit-tests` (it *is* the unit) |
+| W16 activity library | `elsa-create-feature` per activity module, `elsa-feature-dependency-map` |
+| W17 publishing | `elsa-create-feature` (Publishing.Core), `elsa-add-bridge-adapter` (durable artifact store) |
+| W18 identity/secrets | `elsa-add-replacement-contract` (durable identity store, audit sink) |
+| W19 observability | `elsa-create-feature` (tracing feature), `elsa-glossary-lookup` (OpenTelemetry-domain naming) |
+| W20 distributed agent | `elsa-add-replacement-contract` (agent provider), `elsa-add-bridge-adapter` (transport) |
+| W21 modularity ergonomics | `elsa-critical-constitution-review` (threshold amendment), `elsa-feature-dependency-map`, `elsa-verify-codebase` |
+
+After each phase completes, run `elsa-verify-codebase` for a compliance report, and use
+`elsa-program-goal-drift-review` if a session chains multiple units.
 
 Sizes: **S** ≤ 1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **XL** > 2 weeks (agent-adjusted; treat
 as relative effort).
