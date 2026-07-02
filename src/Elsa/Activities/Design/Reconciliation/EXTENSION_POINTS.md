@@ -1,6 +1,6 @@
 # Extension points — Activities.Design.Reconciliation domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design.Reconciliation` — the composition root where `ActivityVersionsReconcilingHandler` is registered.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design.Reconciliation` — the composition root where `CollectActivityVersions` is registered.
 
 ---
 
@@ -18,7 +18,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 - **`SourceId`:** a unique, stable identifier for this source (e.g. a file path, assembly name, remote URL).
 - **`SourceKind`:** the category of the source (e.g. `"clr"`, `"json"`, `"http"`).
 - **Register:** `services.AddScoped<IActivityReconciliationSource, MySource>()`.
-- **Consumed by:** `ActivityVersionsReconcilingHandler : IEventHandler<OnActivityVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles the returned activity versions against the catalog.
+- **Consumed by:** `CollectActivityVersions : IEventHandler<OnActivityVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles the returned activity versions against the catalog.
 
 **Known implementations (shipped):**
 - `ClrActivityReconciliationSource` (`Elsa.Activities.Design.Reconciliation.Clr`, `SourceKind = "CLR"`) — scans a configured assembly folder, reads each activity's author-controlled SemVer (the `[Version]` attribute, falling back to the declaring assembly version), and contributes one reconciliation model per discovered activity. Registered as a **standalone source feature** (`ClrActivityReconciliationFeature : IShellFeature`) that does *not* derive from the reconciliation feature — it only adds an `IActivityReconciliationSource` to DI, which the universal handler discovers. Add both features to a shell to scan a folder.
@@ -39,7 +39,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 **Publication site.** `ActivityVersionReconcilerStartupTask` (`Elsa.Activities.Design.Reconciliation`) — a startup task.
 
-**Expected handler.** Exactly one: `ActivityVersionsReconcilingHandler` (this feature).
+**Expected handler.** Exactly one: `CollectActivityVersions` (this feature).
 
 ---
 

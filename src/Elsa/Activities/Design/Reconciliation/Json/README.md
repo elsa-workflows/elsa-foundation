@@ -45,21 +45,24 @@ identity from), and validation lives in the feature — not in a property getter
   application-wide static value), everything else is scoped (§2.5.1). It does **not** derive from the
   reconciliation feature.
 
-## How the polymorphic descriptor is handled
+## How the descriptor is handled
 
-The model's `implementationDescriptor` is typed `object`, so the serializer binds it to a raw
-`JsonElement` rather than a concrete descriptor type. The JSON source does **not** know about any
-descriptor type — it just preserves the element and the `implementationKind` discriminator. The
-reconciliation feature's universal `ActivityVersionsReconcilingHandler` then resolves the descriptor
-type from `IImplementationDescriptorRegistry` by kind, deserializes the element, and validates that the
-descriptor's `Kind` agrees with the entry's `implementationKind`. So a `"Clr"` descriptor in the JSON
-deserializes to a `ClrImplementationDescriptor` exactly as if it had come from the CLR scanner, as long
-as the owning module registered that kind.
+Each entry carries an opaque `(descriptorType, descriptor)` pair. `descriptorType` is the descriptor
+type's `FullName` (the runtime construction registry's key — e.g.
+`Elsa.Primitives.Models.ClrActivityDescriptor`, `Elsa.Workflows.Primitives.Models.WorkflowIdentity`);
+`descriptor` is arbitrary JSON. The model's `Descriptor` is typed `object`, so the serializer binds it
+to a raw `JsonElement` rather than a concrete descriptor type. The JSON source does **not** know about
+any descriptor type — it just preserves the element and the `descriptorType` string. The reconciliation
+feature's universal `CollectActivityVersions` handler then persists that opaque payload verbatim
+together with `descriptorType`; it never resolves the type or deserializes the payload. Only the
+runtime feature that owns the descriptor type materializes it, at construction time. So a
+`Elsa.Primitives.Models.ClrActivityDescriptor` descriptor in the JSON is catalogued exactly as if it
+had come from the CLR scanner — no design-side kind registry, no `Kind` validation.
 
 ## Registration
 
 Compose the feature alongside `ActivitiesDesignReconciliationFeature`; the universal
-`ActivityVersionsReconcilingHandler` discovers the source from DI:
+`CollectActivityVersions` handler discovers the source from DI:
 
 Single file:
 
@@ -101,14 +104,9 @@ shell.AddFeature(new JsonActivityReconciliationFeature
     "displayName": "Send Email",
     "category": "Communication",
     "description": "Sends an email to a recipient.",
-    "implementationKind": "Clr",
-    "implementationDescriptor": {
-      "typeInfo": {
-        "typeName": "SendEmail",
-        "namespace": "Acme.Activities",
-        "assemblyName": "Acme.Activities",
-        "assemblyVersion": "1.2.3.0"
-      }
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "descriptor": {
+      "typeAlias": "Acme.Activities.SendEmail"
     },
     "inputs": [],
     "outputs": [],
