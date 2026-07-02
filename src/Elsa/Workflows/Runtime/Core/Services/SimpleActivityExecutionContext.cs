@@ -208,8 +208,11 @@ public sealed class SimpleActivityExecutionContext(
     // passed IExpressionExecutionContext. Identity is sourced from WorkflowExecutionState + the pinned
     // executable; inputs/variables/outputs are the durable-value projections. No Design dependency (§E2.2/§E2.6).
     public string WorkflowInstanceId => WorkflowExecutionId;
-    public string? CorrelationId { get; } = correlationId;
-    public string? WorkflowName { get; } = workflowName;
+    // Reflect a pending script assignment (setCorrelationId/setWorkflowInstanceName) so a read-after-write within
+    // the same evaluation observes the new value, even though the durable change is folded at the checkpoint
+    // via the control-leaf intent path (spec 064 scenario 3, carried forward by ADR 0030).
+    public string? CorrelationId => CorrelationIdAssignmentRequested ? RequestedCorrelationId : correlationId;
+    public string? WorkflowName => InstanceNameAssignmentRequested ? RequestedInstanceName : workflowName;
     public string WorkflowDefinitionId => pinnedExecutable?.DefinitionId ?? string.Empty;
     public string WorkflowDefinitionVersionId => pinnedExecutable?.DefinitionVersionId ?? string.Empty;
     public int WorkflowDefinitionVersion { get; } = workflowDefinitionVersion;

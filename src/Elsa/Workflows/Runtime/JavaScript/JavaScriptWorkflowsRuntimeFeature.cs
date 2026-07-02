@@ -1,12 +1,9 @@
 ﻿using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Expressions.JavaScript.Core.Contracts;
-using Elsa.Workflows.Runtime.JavaScript.Options;
 using Elsa.Workflows.Runtime.JavaScript.PostProcessors;
 using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.JavaScript;
 
@@ -23,10 +20,11 @@ public class JavaScriptWorkflowsRuntimeFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        // FeatureOptions is a positional record with no parameterless constructor, so the default
-        // IOptions<FeatureOptions> creation path cannot materialize it. Register a default instance so
-        // VariableFunctionsPreProcessor resolves; hosts can replace it with their own configured options.
-        services.TryAddSingleton<IOptions<FeatureOptions>>(Microsoft.Extensions.Options.Options.Create(new FeatureOptions(DisableVariableCopying: false)));
+        // FeatureOptions is default-constructable, so IOptions<FeatureOptions> materializes through the standard
+        // options pipeline (used by VariableFunctionsPreProcessor) and hosts can override it with the idiomatic
+        // services.Configure<FeatureOptions>(...). AddOptions is idempotent and guarantees the options infrastructure
+        // is present regardless of host composition order.
+        services.AddOptions();
 
         services
             .AddScoped<IScriptPostProcessor, CopyVariablesToWorkflowContext>()

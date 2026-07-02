@@ -54,3 +54,21 @@ internal static class ConsoleCapture
         return writer.ToString();
     }
 }
+
+/// <summary>
+/// A minimal no-op <see cref="IActivity"/> used as a placeholder when constructing a
+/// <c>SimpleActivityExecutionContext</c> for expression-evaluation tests that never actually execute the activity.
+/// </summary>
+internal sealed class TestActivity : IActivity
+{
+    public string Id { get; set; } = "activity-1";
+    public string NodeId { get; set; } = "node-1";
+    public string? Name { get; set; }
+    public string Type { get; set; } = "Test.Activity";
+    public string Version { get; set; } = "1.0.0";
+    public Dictionary<string, object> CustomProperties { get; set; } = new();
+    public Dictionary<string, object> SyntheticProperties { get; set; } = new();
+    public Dictionary<string, object> Metadata { get; set; } = new();
+    public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
+    public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+}

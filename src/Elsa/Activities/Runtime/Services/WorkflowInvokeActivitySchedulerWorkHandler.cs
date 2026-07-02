@@ -568,23 +568,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             : null;
 
     // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. Mirrors the
-    // resolution the retired WorkflowExecutionContext performed so getWorkflowDefinitionVersion() is unchanged.
+    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
+    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
+    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
     private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
     {
-        if (workflowState is not null && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText))
-            return ParseDefinitionVersion(versionText, DefinitionVersionMetadataKey);
+        if (workflowState is not null
+            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
+            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
+            return overrideVersion;
 
         var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
-        return ParseDefinitionVersion(majorVersion, nameof(pinnedExecutable.ArtifactVersion));
-    }
-
-    private static int ParseDefinitionVersion(string versionText, string source)
-    {
-        if (int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var version))
-            return version;
-
-        throw new InvalidOperationException($"Runtime workflow definition version from '{source}' must be numeric.");
+        return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(

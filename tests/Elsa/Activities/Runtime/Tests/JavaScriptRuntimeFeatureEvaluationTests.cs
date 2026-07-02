@@ -1,4 +1,3 @@
-using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.JavaScript;
@@ -21,18 +20,32 @@ namespace Elsa.Activities.Runtime.Tests;
 /// no test enabled the feature. These tests enable the feature, resolve every registered processor, and evaluate
 /// a script end-to-end, so a future change cannot silently re-orphan a processor behind a missing dependency.
 /// </summary>
-public sealed class JavaScriptRuntimeFeatureEvaluationTests
+public sealed class JavaScriptRuntimeFeatureEvaluationTests : IDisposable
 {
+    private readonly ServiceProvider _provider;
+    private readonly IServiceScope _scope;
+    private readonly IJavaScriptEvaluator _evaluator;
+
+    public JavaScriptRuntimeFeatureEvaluationTests()
+    {
+        _provider = BuildServiceProvider();
+        _scope = _provider.CreateScope();
+        _evaluator = _scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
+    }
+
+    public void Dispose()
+    {
+        _scope.Dispose();
+        _provider.Dispose();
+    }
+
     [Fact]
     public void EnablingFeature_ResolvesEveryRegisteredScriptProcessor_WithoutMissingDependency()
     {
-        using var provider = BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        var preProcessors = scope.ServiceProvider.GetServices<IScriptPreProcessor>().ToList();
-        var postProcessors = scope.ServiceProvider.GetServices<IScriptPostProcessor>().ToList();
-
         // All implementations construct (MS DI eagerly constructs each when the enumerable is materialized).
+        var preProcessors = _scope.ServiceProvider.GetServices<IScriptPreProcessor>().ToList();
+        var postProcessors = _scope.ServiceProvider.GetServices<IScriptPostProcessor>().ToList();
+
         Assert.NotEmpty(preProcessors);
         Assert.NotEmpty(postProcessors);
     }
@@ -40,12 +53,7 @@ public sealed class JavaScriptRuntimeFeatureEvaluationTests
     [Fact]
     public async Task EnablingFeature_EvaluatesScriptEndToEnd_AcrossAllProcessors()
     {
-        using var provider = BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
-        var context = NewExecutionContext(scope.ServiceProvider);
-
-        var result = await evaluator.EvaluateAsync("1 + 1", typeof(object), context);
+        var result = await _evaluator.EvaluateAsync("1 + 1", typeof(object), NewExecutionContext(_scope.ServiceProvider));
 
         Assert.Equal(2d, Convert.ToDouble(result));
     }
@@ -53,20 +61,28 @@ public sealed class JavaScriptRuntimeFeatureEvaluationTests
     [Fact]
     public async Task EnablingFeature_ExecutionTimeIdentityAndStateAccessorsAreLive()
     {
-        using var provider = BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
         var context = NewExecutionContext(
-            scope.ServiceProvider,
+            _scope.ServiceProvider,
             correlationId: "order-123",
             workflowInputs: new Dictionary<string, object?> { ["name"] = "World" },
             activityOutputValues: new Dictionary<string, object?> { ["Result"] = "prior" });
 
-        Assert.Equal("wfexec-1", await evaluator.EvaluateAsync("getWorkflowInstanceId()", typeof(object), context));
-        Assert.Equal("order-123", await evaluator.EvaluateAsync("getCorrelationId()", typeof(object), context));
-        Assert.Equal("definition-1", await evaluator.EvaluateAsync("getWorkflowDefinitionId()", typeof(object), context));
-        Assert.Equal("World", await evaluator.EvaluateAsync("getInput('name')", typeof(object), context));
-        Assert.Equal("prior", await evaluator.EvaluateAsync("getOutput('Result')", typeof(object), context));
+        Assert.Equal("wfexec-1", await _evaluator.EvaluateAsync("getWorkflowInstanceId()", typeof(object), context));
+        Assert.Equal("order-123", await _evaluator.EvaluateAsync("getCorrelationId()", typeof(object), context));
+        Assert.Equal("definition-1", await _evaluator.EvaluateAsync("getWorkflowDefinitionId()", typeof(object), context));
+        Assert.Equal("World", await _evaluator.EvaluateAsync("getInput('name')", typeof(object), context));
+        Assert.Equal("prior", await _evaluator.EvaluateAsync("getOutput('Result')", typeof(object), context));
+    }
+
+    [Fact]
+    public async Task SetCorrelationIdAndName_AreVisibleOnReadBackWithinTheSameEvaluation()
+    {
+        // Read-after-write: a script that sets correlation id / instance name then reads it back observes the new
+        // value, even though the durable change folds at the checkpoint (spec 064 scenario 3, carried forward).
+        var context = NewExecutionContext(_scope.ServiceProvider, correlationId: "order-1");
+
+        Assert.Equal("order-42", await _evaluator.EvaluateAsync("setCorrelationId('order-42'); getCorrelationId()", typeof(object), context));
+        Assert.Equal("Order 42", await _evaluator.EvaluateAsync("setWorkflowInstanceName('Order 42'); getWorkflowInstanceName()", typeof(object), context));
     }
 
     private static SimpleActivityExecutionContext NewExecutionContext(
@@ -104,19 +120,5 @@ public sealed class JavaScriptRuntimeFeatureEvaluationTests
         new JavaScriptWorkflowsRuntimeFeature().ConfigureServices(services);
 
         return services.BuildServiceProvider();
-    }
-
-    private sealed class TestActivity : IActivity
-    {
-        public string Id { get; set; } = "activity-1";
-        public string NodeId { get; set; } = "node-1";
-        public string? Name { get; set; }
-        public string Type { get; set; } = "Test.Activity";
-        public string Version { get; set; } = "1.0.0";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
     }
 }

@@ -24,23 +24,37 @@ namespace Elsa.Activities.Runtime.Tests;
 /// evaluation (the execution-time processors no-op on the materialization carrier).
 /// </summary>
 [Collection("ConsoleCapture")]
-public sealed class RunJavaScriptExecutionAccessorsTests
+public sealed class RunJavaScriptExecutionAccessorsTests : IDisposable
 {
     private const string StringTypeName = "System.String";
 
     private static readonly WorkflowExecutableIdentity PinnedExecutable =
         new("artifact-1", "definition-1", "version-7", "7.0.0", "hash-1");
 
+    private readonly ServiceProvider _provider;
+    private readonly IServiceScope _scope;
+    private readonly IJavaScriptEvaluator _evaluator;
+
+    public RunJavaScriptExecutionAccessorsTests()
+    {
+        _provider = JavaScriptRuntimeFeatureEvaluationTests.BuildServiceProvider();
+        _scope = _provider.CreateScope();
+        _evaluator = _scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
+    }
+
+    public void Dispose()
+    {
+        _scope.Dispose();
+        _provider.Dispose();
+    }
+
     [Fact]
     public async Task NamedVariableAccessor_ReadsCurrentScopeValue()
     {
-        using var provider = JavaScriptRuntimeFeatureEvaluationTests.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
         var variableScope = NewWorkflowScope(("greeting", "Hello"));
-        var context = NewContext(scope.ServiceProvider, variableScope);
+        var context = NewContext(_scope.ServiceProvider, variableScope);
 
-        var result = await evaluator.EvaluateAsync("getGreeting()", typeof(object), context);
+        var result = await _evaluator.EvaluateAsync("getGreeting()", typeof(object), context);
 
         Assert.Equal("Hello", result);
     }
@@ -48,13 +62,10 @@ public sealed class RunJavaScriptExecutionAccessorsTests
     [Fact]
     public async Task VariableWriteBack_ThroughSetVariableAndNamedSetter_LandsInWorkflowScope()
     {
-        using var provider = JavaScriptRuntimeFeatureEvaluationTests.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
         var variableScope = NewWorkflowScope(("greeting", "Hello"), ("status", "pending"));
-        var context = NewContext(scope.ServiceProvider, variableScope);
+        var context = NewContext(_scope.ServiceProvider, variableScope);
 
-        await evaluator.EvaluateAsync("setVariable('greeting', 'Hi'); setStatus('approved'); 1", typeof(object), context);
+        await _evaluator.EvaluateAsync("setVariable('greeting', 'Hi'); setStatus('approved'); 1", typeof(object), context);
 
         Assert.True(variableScope.TryGetValueByName("greeting", out var greeting));
         Assert.Equal("Hi", greeting);
@@ -65,13 +76,10 @@ public sealed class RunJavaScriptExecutionAccessorsTests
     [Fact]
     public async Task VariableWriteBack_ThroughDirectContainerAssignment_LandsInWorkflowScope()
     {
-        using var provider = JavaScriptRuntimeFeatureEvaluationTests.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptEvaluator>();
         var variableScope = NewWorkflowScope(("greeting", "Hello"));
-        var context = NewContext(scope.ServiceProvider, variableScope);
+        var context = NewContext(_scope.ServiceProvider, variableScope);
 
-        await evaluator.EvaluateAsync("variables.greeting = 'Direct'; 1", typeof(object), context);
+        await _evaluator.EvaluateAsync("variables.greeting = 'Direct'; 1", typeof(object), context);
 
         Assert.True(variableScope.TryGetValueByName("greeting", out var greeting));
         Assert.Equal("Direct", greeting);
@@ -82,16 +90,12 @@ public sealed class RunJavaScriptExecutionAccessorsTests
     {
         // Coexistence guard (SC-006): with the whole JavaScript runtime feature enabled, the execution-time
         // processors must no-op on the materialization carrier so input-materialization evaluation is unaffected.
-        using var provider = JavaScriptRuntimeFeatureEvaluationTests.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var serviceProvider = scope.ServiceProvider;
-
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: "wfexec-1",
             activityExecutionId: "actexec-1",
             durableValuesByValueId: new Dictionary<string, DurableValueState>(),
             activityOutputs: EmptyActivityOutputReader.Instance,
-            serviceProvider: serviceProvider,
+            serviceProvider: _scope.ServiceProvider,
             workflowVariables: new Dictionary<string, object?> { ["greeting"] = "Hello" },
             workflowInputs: new Dictionary<string, object?> { ["name"] = "World" },
             activityOutputValues: new Dictionary<string, object?>());
@@ -157,19 +161,5 @@ public sealed class RunJavaScriptExecutionAccessorsTests
         }
 
         public IReadOnlyCollection<ActiveActivityOutput> GetActivityOutputs(string workflowExecutionId, string activityExecutionId) => [];
-    }
-
-    private sealed class TestActivity : IActivity
-    {
-        public string Id { get; set; } = "activity-1";
-        public string NodeId { get; set; } = "node-1";
-        public string? Name { get; set; }
-        public string Type { get; set; } = "Test.Activity";
-        public string Version { get; set; } = "1.0.0";
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
-        public Dictionary<string, object> SyntheticProperties { get; set; } = new();
-        public Dictionary<string, object> Metadata { get; set; } = new();
-        public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
-        public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
     }
 }
