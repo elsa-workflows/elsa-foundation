@@ -28,6 +28,17 @@ An audit reconciled this file against the actual tree. Two drifts affect the **o
 
 **Remaining open:** T004, T018, T023, T025, T041, T042, T046, T050–T055 (a new `tests/Elsa/Activities/Primitives/Tests` project + binder/registration tests; the SC-proving architecture tests T050–T053; persistence/read-contract tests; JSON reconciliation field verify; feature docs; final `dotnet build Elsa.Server.slnx` + all-tests + quickstart validation). None depend on undecided design.
 
+### Code review (2026-07-02, xhigh)
+
+Fixed on `006-b1-port-adapter`: **soft-delete leak** — the adapter now skips `WorkflowDefinition.DeletedAt != null` (the list port doesn't filter soft-deleted rows; a deleted usable workflow was being re-catalogued permanently), with a regression test; **test DRY** — store fakes/builders extracted to `tests/.../Tests/TestSupport/WorkflowDesignStubs.cs`.
+
+Deferred for the architect / fresh pass (judgment calls, recorded so they aren't lost):
+- **Feature dependency not declared.** `ActivitiesCompositionDesign` needs a Workflows.Design persistence provider at runtime; a `DependsOn` is intentionally omitted because the stores are a provider-neutral contract with no single feature to name (documented on the feature). Decide whether composition validation should enforce it another way.
+- **Startup ordering.** Activity reconciler is `[Order(1)]`, workflow reconciler `[Order(2)]` — workflows provisioned at startup won't appear as activities until the second reconciliation.
+- **Tenancy.** The scan uses a tenant-scoped filter; a no-tenant startup reconciliation sees only the default tenant.
+- **Per-version category.** `ActivityCategory` is per-version but the reconciler collapses versions to one definition (first-seen wins).
+- **`SourceId` isolation.** `SourceId`/`SourceKind` are provenance only; a cross-source `ActivityTypeKey` collision would abort reconciliation (collision practically improbable — definition GUIDs vs CLR FullNames).
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)

@@ -1,17 +1,16 @@
 using Elsa.Activities.Composition.Design.Reconciliation;
+using Elsa.Activities.Composition.Tests.TestSupport;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Persistence.Core.Filters;
-using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
 
 namespace Elsa.Activities.Composition.Tests;
 
 /// <summary>
 /// The adapter is the single class that reaches into the Workflows Design read ports (§2.7). These tests
-/// pin the discovery contract: the usable-as-activity filter, and the projection of identity, category,
-/// and I/O off the authored workflow state. Uses store stubs — the reconciliation source above needs none.
+/// pin the discovery contract: the usable-as-activity filter, soft-delete exclusion, and the projection
+/// of identity, category, and I/O off the authored workflow state. Store fakes/builders come from
+/// <see cref="WorkflowDesignData"/> so this file carries no bespoke stub boilerplate.
 /// </summary>
 public sealed class WorkflowDefinitionUsableAsActivitySourceTests
 {
@@ -22,8 +21,9 @@ public sealed class WorkflowDefinitionUsableAsActivitySourceTests
     {
         var inputs = new List<InputDefinition>();
         var outputs = new List<OutputDefinition>();
-        var source = NewSource(NewDefinition("Approve Order", "Approval subflow"),
-            NewVersion("v1", "1.0.0", usableAsActivity: true, category: "Reusable", inputs: inputs, outputs: outputs));
+        var source = NewSource(
+            WorkflowDesignData.Definition(DefinitionId, "Approve Order", "Approval subflow"),
+            WorkflowDesignData.Version(DefinitionId, "v1", "1.0.0", usableAsActivity: true, category: "Reusable", inputs: inputs, outputs: outputs));
 
         var workflow = Assert.Single(await source.Read(default));
 
@@ -40,9 +40,20 @@ public sealed class WorkflowDefinitionUsableAsActivitySourceTests
     [Fact]
     public async Task Read_VersionNotUsableAsActivity_IsSkipped()
     {
-        var source = NewSource(NewDefinition("Internal Only", null),
-            NewVersion("v1", "1.0.0", usableAsActivity: false),
-            NewVersion("v2", "2.0.0", usableAsActivity: null));
+        var source = NewSource(
+            WorkflowDesignData.Definition(DefinitionId, "Internal Only"),
+            WorkflowDesignData.Version(DefinitionId, "v1", "1.0.0", usableAsActivity: false),
+            WorkflowDesignData.Version(DefinitionId, "v2", "2.0.0", usableAsActivity: null));
+
+        Assert.Empty(await source.Read(default));
+    }
+
+    [Fact]
+    public async Task Read_SoftDeletedDefinition_IsExcludedEvenWhenUsable()
+    {
+        var source = NewSource(
+            WorkflowDesignData.Definition(DefinitionId, "Approve Order", deletedAt: DateTimeOffset.UnixEpoch),
+            WorkflowDesignData.Version(DefinitionId, "v1", "1.0.0", usableAsActivity: true));
 
         Assert.Empty(await source.Read(default));
     }
@@ -50,9 +61,10 @@ public sealed class WorkflowDefinitionUsableAsActivitySourceTests
     [Fact]
     public async Task Read_MultipleUsableVersions_YieldOnePerVersion()
     {
-        var source = NewSource(NewDefinition("Approve Order", null),
-            NewVersion("v1", "1.0.0", usableAsActivity: true),
-            NewVersion("v2", "2.0.0", usableAsActivity: true));
+        var source = NewSource(
+            WorkflowDesignData.Definition(DefinitionId, "Approve Order"),
+            WorkflowDesignData.Version(DefinitionId, "v1", "1.0.0", usableAsActivity: true),
+            WorkflowDesignData.Version(DefinitionId, "v2", "2.0.0", usableAsActivity: true));
 
         var results = (await source.Read(default)).ToList();
 
@@ -61,47 +73,4 @@ public sealed class WorkflowDefinitionUsableAsActivitySourceTests
 
     private static WorkflowDefinitionUsableAsActivitySource NewSource(WorkflowDefinition definition, params WorkflowDefinitionVersion[] versions) =>
         new(new StubDefinitionStore(definition), new StubVersionStore(versions));
-
-    private static WorkflowDefinition NewDefinition(string name, string? description) =>
-        new() { Id = DefinitionId, Name = name, Description = description };
-
-    private static WorkflowDefinitionVersion NewVersion(
-        string id,
-        string version,
-        bool? usableAsActivity,
-        string? category = null,
-        IEnumerable<InputDefinition>? inputs = null,
-        IEnumerable<OutputDefinition>? outputs = null) =>
-        new(DefinitionId, version)
-        {
-            Id = id,
-            State = new WorkflowDefinitionState(
-                Variables: [],
-                RootActivity: null,
-                Inputs: inputs ?? [],
-                Outputs: outputs ?? [],
-                WorkflowActivityOptions: new WorkflowActivityOptions(usableAsActivity, null, category),
-                StrategyOptions: null),
-        };
-
-    private sealed class StubDefinitionStore(WorkflowDefinition definition) : IWorkflowDefinitionStore
-    {
-        public Task<IReadOnlyList<WorkflowDefinition>> ListAsync(WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinition>>([definition]);
-
-        public Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    }
-
-    private sealed class StubVersionStore(WorkflowDefinitionVersion[] versions) : IWorkflowDefinitionVersionStore
-    {
-        public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<WorkflowDefinitionVersion>>(versions);
-
-        public Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<WorkflowDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    }
 }

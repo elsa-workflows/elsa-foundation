@@ -15,6 +15,15 @@ namespace Elsa.Activities.Composition.Design;
 /// handler discovers from DI. Pair it with <c>ActivitiesCompositionRuntime</c> for construction and with
 /// a reconciliation feature to persist the rows.
 /// </summary>
+/// <remarks>
+/// <b>Runtime dependency (not declared via <c>DependsOn</c>).</b> The adapter requires
+/// <c>IWorkflowDefinitionStore</c> + <c>IWorkflowDefinitionVersionStore</c>, so a shell must also enable a
+/// Workflows.Design persistence provider (EF Core, Groundwork, …); otherwise reconciliation throws at
+/// startup when it resolves the source. This is intentionally <b>not</b> a <c>DependsOn</c> entry, because
+/// those stores are a provider-neutral contract with no single feature to name — pinning one provider
+/// (e.g. <c>WorkflowsDesignPersistenceEFCoreSqlite</c>) would break provider neutrality. Composition must
+/// ensure a design persistence provider is present; see spec 006 T029 / the review defer note.
+/// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Design")]

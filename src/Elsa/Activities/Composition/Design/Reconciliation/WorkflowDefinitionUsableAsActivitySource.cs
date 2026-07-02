@@ -14,6 +14,9 @@ namespace Elsa.Activities.Composition.Design.Reconciliation;
 /// rather than request-time, so a scan is acceptable. When a persisted usable-as-activity index lands
 /// (EF Core shadow column + Groundwork index), the targeted query replaces this scan here — the
 /// reconciliation source and its tests do not change.
+/// Soft-deleted definitions are excluded: the store's list port returns them (there is no global
+/// soft-delete query filter — callers filter <c>DeletedAt</c> themselves, as the management API does),
+/// so a scan that ignored it would re-catalog a deleted workflow as a live activity on every rebuild.
 /// </remarks>
 public sealed class WorkflowDefinitionUsableAsActivitySource(
     IWorkflowDefinitionStore definitionStore,
@@ -26,6 +29,11 @@ public sealed class WorkflowDefinitionUsableAsActivitySource(
 
         foreach (var definition in definitions)
         {
+            // The list port does not filter soft-deleted definitions; skip them so a deleted workflow
+            // is not re-catalogued (and re-made constructable) as an activity.
+            if (definition.DeletedAt is not null)
+                continue;
+
             var versions = await versionStore.ListByDefinitionAsync(definition.Id, cancellationToken);
 
             foreach (var version in versions)
