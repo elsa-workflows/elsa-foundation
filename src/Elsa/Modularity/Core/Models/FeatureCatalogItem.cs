@@ -21,10 +21,16 @@ public sealed record FeatureCatalogItem(
     string? ManifestPath,
     string? ManifestHash,
     string? ReadError,
-    IReadOnlyList<FeatureSettingDescriptor> Settings);
+    IReadOnlyList<FeatureSettingDescriptor> Settings,
+    IReadOnlyList<FeatureDependency> Dependencies);
+
+public sealed record FeatureDependency(string Id, bool Optional);
 
 public sealed class FeatureCatalogItemBuilder
 {
+    private static readonly JsonElement s_emptyObject = CreateEmptyObject();
+    private static JsonElement CreateEmptyObject() { using var d = JsonDocument.Parse("{}"); return d.RootElement.Clone(); }
+
     public string Id { get; init; } = "";
     public string? DisplayName { get; set; }
     public string? Description { get; set; }
@@ -33,13 +39,19 @@ public sealed class FeatureCatalogItemBuilder
     public string? PackageId { get; set; }
     public string? PackageVersion { get; set; }
     public bool Enabled { get; set; }
-    public JsonElement Configuration { get; set; } = JsonDocument.Parse("{}").RootElement.Clone();
+    public JsonElement Configuration { get; set; } = s_emptyObject;
     public bool Advanced { get; set; }
     public bool Experimental { get; set; }
     public string? ManifestPath { get; set; }
     public string? ManifestHash { get; set; }
     public string? ReadError { get; set; }
     public IReadOnlyList<FeatureSettingDescriptor> Settings { get; set; } = [];
+    public IReadOnlyList<FeatureDependency> Dependencies { get; set; } = [];
+
+    // Set by the runtime contributor when a live descriptor exists for this feature, so the manifest
+    // contributor can distinguish "runtime authoritatively resolved zero dependencies" from "no runtime
+    // info available" instead of treating an empty list as an unknown sentinel. Not part of ToItem().
+    public bool DependenciesResolved { get; set; }
 
     public FeatureCatalogItem ToItem() =>
         new(
@@ -57,5 +69,6 @@ public sealed class FeatureCatalogItemBuilder
             ManifestPath,
             ManifestHash,
             ReadError,
-            Settings);
+            Settings,
+            Dependencies);
 }

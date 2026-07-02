@@ -7,8 +7,29 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
+
+/// <summary>Builds an <see cref="IWellKnownTypeRegistry"/> seeded with the primitives these tests rely on.</summary>
+internal static class TestWellKnownTypeRegistry
+{
+    public static IWellKnownTypeRegistry Create()
+    {
+        var registry = new WellKnownTypeRegistry();
+        registry.RegisterType(typeof(string), "String");
+        registry.RegisterType(typeof(int), "Int32");
+        registry.RegisterType(typeof(bool), "Boolean");
+        registry.RegisterType(typeof(object), "Object");
+        registry.RegisterType(typeof(double), "Double");
+        registry.RegisterType(typeof(long), "Int64");
+        registry.RegisterType(typeof(decimal), "Decimal");
+        registry.RegisterType(typeof(DateTime), "DateTime");
+        registry.RegisterType(typeof(Guid), "Guid");
+        return registry;
+    }
+}
 
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>
 internal sealed class StubActivity : IActivity

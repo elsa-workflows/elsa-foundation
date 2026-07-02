@@ -19,13 +19,13 @@ public sealed class ConstructActivityRequestHandlerTests
     public async Task PassesTheRowsDescriptorTypeAndOpaquePayloadToTheFactory()
     {
         var payload = JsonSerializer.SerializeToElement(new { TypeName = "WriteLine" });
-        var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.TypeInformation", payload: payload);
+        var version = Version("v1", "def1", "1.0.0", descriptorType: "Elsa.Primitives.Models.ClrActivityDescriptor", payload: payload);
         var factory = new FakeActivityFactory(new StubActivity());
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), factory);
 
         await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
 
-        Assert.Equal("Elsa.Primitives.Models.TypeInformation", factory.LastDescriptorType);
+        Assert.Equal("Elsa.Primitives.Models.ClrActivityDescriptor", factory.LastDescriptorType);
         Assert.Equal("WriteLine", factory.LastPayload.GetProperty("TypeName").GetString());
         // Construct-only: no author values are bound yet.
         Assert.Null(factory.LastInputs);
@@ -38,8 +38,8 @@ public sealed class ConstructActivityRequestHandlerTests
         var version = Version("v1", "def1", "2.0.0",
             descriptorType: "Elsa.Workflows.Primitives.Models.WorkflowIdentity",
             payload: JsonSerializer.SerializeToElement(new { }),
-            inputs: [new InputDefinition("text", "Text", TypeInformation.String, null, "Text", null)],
-            outputs: [new OutputDefinition("result", "Result", TypeInformation.Object, null, "Result", null)]);
+            inputs: [new InputDefinition("text", "Text", new TypeReference("String"), null, "Text", null)],
+            outputs: [new OutputDefinition("result", "Result", new TypeReference("Object"), null, "Result", null)]);
         var handler = new ConstructActivityRequestHandler(new FakeActivityVersionStore([version]), new FakeActivityFactory(new StubActivity()));
 
         var view = await handler.Handle(new ConstructActivity("v1"), CancellationToken.None);
@@ -48,7 +48,7 @@ public sealed class ConstructActivityRequestHandlerTests
         Assert.Equal("Elsa.Workflows.Primitives.Models.WorkflowIdentity", view.DescriptorType);
         var input = Assert.Single(view.Inputs);
         Assert.Equal("text", input.ReferenceKey);
-        Assert.Equal("System.String", input.TypeName);
+        Assert.Equal("String", input.TypeName);
         Assert.Equal("result", Assert.Single(view.Outputs).ReferenceKey);
 
         // Runtime side.

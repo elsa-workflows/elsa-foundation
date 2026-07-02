@@ -27,7 +27,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 
 public sealed class WorkflowTestRunRequestHandlerTests
 {
-    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
+    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowTestRunStore _testRunStore = new();
@@ -158,7 +158,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     {
         var handler = Handler(
             WorkflowVersion(Node("write-one", Text("not-an-int"))),
-            activityVersions: [ActivityVersion("activity-write-line", "Text", TypeInformation.Integer)]);
+            activityVersions: [ActivityVersion("activity-write-line", "Text", new TypeReference("Int32"))]);
 
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
@@ -217,7 +217,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
             new WorkflowExecutableCompiler(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
-                _activityStructureService),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
             transientStore ?? new InMemoryTransientWorkflowExecutableStore(_executableStore),
             _testRunStore,
             dispatcher ?? Dispatcher(),
@@ -228,7 +229,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
             new WorkflowExecutableCompiler(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
-                _activityStructureService),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
             new InMemoryTransientWorkflowExecutableStore(_executableStore),
             _testRunStore,
             dispatcher ?? Dispatcher(),
@@ -254,7 +256,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
 
-    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
+    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         new("1.0.0", "activity-definition-1")
         {
             Id = id,
@@ -264,8 +266,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 ActivityTypeKey = "Test.WriteLine",
                 Category = "Test"
             },
-            DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(TypeInformation.FromType<object>()),
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]
         };
 

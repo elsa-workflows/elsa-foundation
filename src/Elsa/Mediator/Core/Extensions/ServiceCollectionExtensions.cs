@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddRequestHandler<THandler, TRequest, TResponse>(this IServiceCollection services)
         where THandler : class, IRequestHandler<TRequest, TResponse>
-        where TRequest : IRequest<TResponse>?
+        where TRequest : IRequest<TResponse>
     {
         return services.AddScoped<IRequestHandler, THandler>();
     }

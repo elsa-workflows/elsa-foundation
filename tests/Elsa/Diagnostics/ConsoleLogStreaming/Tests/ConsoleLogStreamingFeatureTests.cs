@@ -1,13 +1,11 @@
 using ConsoleLogStreaming.AspNetCore;
 using ConsoleLogStreaming.Core;
 using ConsoleLogStreaming.Core.Capture;
-using ConsoleLogStreaming.Core.Hosting;
 using ConsoleLogStreaming.Core.Options;
 using CShells.AspNetCore.Features;
+using CShells.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using System.Text;
 using Xunit;
 
@@ -30,131 +28,69 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
     }
 
     [Fact]
-    public void RegistersResolvableDiagnosticsServices()
+    public void IsAShellFeatureThatRegistersNothingPerShell()
     {
+        // Console log streaming is composed entirely at the application root (see Program.cs). The shell feature is
+        // only the enable/discover surface, so it must NOT be a web feature and must contribute nothing to the shell
+        // container — a runtime enable then has no half-applied effect.
+        var feature = new ConsoleLogStreamingFeature();
         var services = new ServiceCollection();
 
-        new ConsoleLogStreamingFeature(() => { }).ConfigureServices(services);
+        feature.ConfigureServices(services);
 
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConsoleLogCapture));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPostConfigureOptions<ConsoleLogOptions>));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IConfigureOptions<ConsoleLogStreamingAspNetCoreOptions>));
+        Assert.IsAssignableFrom<IShellFeature>(feature);
+        Assert.IsNotAssignableFrom<IWebShellFeature>(feature);
+        Assert.Empty(services);
     }
 
     [Fact]
-    public void RegistersHostLevelServicesOnlyOnce()
+    public void ConfigureHostAppliesDiagnosticsDefaults()
     {
-        var services = new ServiceCollection();
+        var options = new ConsoleLogOptions();
 
-        new ConsoleLogStreamingFeature(() => { })
-        {
-            ServiceName = "first-service",
-            RecentCapacity = 10,
-            EndpointPrefix = "/first"
-        }.ConfigureServices(services);
-        new ConsoleLogStreamingFeature(() => { })
-        {
-            ServiceName = "second-service",
-            RecentCapacity = 20,
-            EndpointPrefix = "/second"
-        }.ConfigureServices(services);
+        ConsoleLogStreamingFeature.ConfigureHost(options);
 
-        using var provider = services.BuildServiceProvider();
-        var hostOptions = provider.GetRequiredService<IOptions<ConsoleLogOptions>>().Value;
-        var aspNetCoreOptions = provider.GetRequiredService<IOptions<ConsoleLogStreamingAspNetCoreOptions>>().Value;
-
-        Assert.Equal("first-service", hostOptions.ServiceName);
-        Assert.Equal(10, hostOptions.RecentCapacity);
-        Assert.Equal("/first/recent", aspNetCoreOptions.RecentPath);
+        Assert.Equal("elsa-server", options.ServiceName);
+        Assert.Equal("Elsa.Server", options.SourceDisplayName);
+        Assert.Equal(2_000, options.RecentCapacity);
+        Assert.Equal(2_000, options.MaxRecentQuerySize);
+        Assert.True(options.PreserveAnsi);
     }
 
     [Fact]
-    public void ConfigureServicesDoesNotInstallRealConsoleStreamHookWhenHookDelegateIsInjected()
+    public void ConfigureEndpointsAppliesDefaultRoutes()
     {
-        var services = new ServiceCollection();
-        var originalOut = Console.Out;
-        var originalError = Console.Error;
+        var options = new ConsoleLogStreamingAspNetCoreOptions();
 
-        new ConsoleLogStreamingFeature(() => { }).ConfigureServices(services);
+        ConsoleLogStreamingFeature.ConfigureEndpoints(options);
 
-        Assert.Same(originalOut, Console.Out);
-        Assert.Same(originalError, Console.Error);
+        Assert.Equal(ConsoleLogStreamingFeature.DefaultRecentPath, options.RecentPath);
+        Assert.Equal(ConsoleLogStreamingFeature.DefaultSourcesPath, options.SourcesPath);
+        Assert.Equal(ConsoleLogStreamingFeature.DefaultHubPath, options.HubPath);
     }
 
     [Fact]
-    public void AppliesConfiguredOptions()
+    public void DefaultRoutesShareTheDiagnosticsEndpointPrefix()
     {
-        var services = new ServiceCollection();
-
-        new ConsoleLogStreamingFeature(() => { })
-        {
-            ServiceName = "custom-service",
-            SourceDisplayName = "Custom Source",
-            RecentCapacity = 123,
-            MaxRecentQuerySize = 45,
-            PreserveAnsi = false,
-            EndpointPrefix = "/custom/console"
-        }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        var hostOptions = provider.GetRequiredService<IOptions<ConsoleLogOptions>>().Value;
-        var aspNetCoreOptions = provider.GetRequiredService<IOptions<ConsoleLogStreamingAspNetCoreOptions>>().Value;
-
-        Assert.Equal("custom-service", hostOptions.ServiceName);
-        Assert.Equal("Custom Source", hostOptions.SourceDisplayName);
-        Assert.Equal(123, hostOptions.RecentCapacity);
-        Assert.Equal(45, hostOptions.MaxRecentQuerySize);
-        Assert.False(hostOptions.PreserveAnsi);
-        Assert.Equal("/custom/console/recent", aspNetCoreOptions.RecentPath);
-        Assert.Equal("/custom/console/sources", aspNetCoreOptions.SourcesPath);
-        Assert.Equal("/custom/console/hub", aspNetCoreOptions.HubPath);
+        // The Studio ConsoleStream client targets these fixed paths; pin them so a refactor can't silently move the
+        // host-mapped routes out from under the client.
+        Assert.Equal("/_elsa/server/diagnostics/console-logs/recent", ConsoleLogStreamingFeature.DefaultRecentPath);
+        Assert.Equal("/_elsa/server/diagnostics/console-logs/sources", ConsoleLogStreamingFeature.DefaultSourcesPath);
+        Assert.Equal("/_elsa/server/diagnostics/console-logs/hub", ConsoleLogStreamingFeature.DefaultHubPath);
     }
 
     [Fact]
-    public void ClampsConfiguredHostLimits()
+    public void IsFeatureEnabledReflectsFeatureConfiguration()
     {
-        var services = new ServiceCollection();
+        var enabled = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CShells:Shells:default:Features:DiagnosticsConsoleLogStreaming"] = ""
+            })
+            .Build();
 
-        new ConsoleLogStreamingFeature(() => { })
-        {
-            RecentCapacity = 0,
-            MaxRecentQuerySize = -1
-        }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        var hostOptions = provider.GetRequiredService<IOptions<ConsoleLogOptions>>().Value;
-
-        Assert.Equal(1, hostOptions.RecentCapacity);
-        Assert.Equal(1, hostOptions.MaxRecentQuerySize);
-    }
-
-    [Fact]
-    public void AppliesExplicitEndpointPaths()
-    {
-        var services = new ServiceCollection();
-
-        new ConsoleLogStreamingFeature(() => { })
-        {
-            RecentPath = "diagnostics/recent",
-            SourcesPath = "/diagnostics/sources",
-            HubPath = "diagnostics/hub"
-        }.ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        var options = provider.GetRequiredService<IOptions<ConsoleLogStreamingAspNetCoreOptions>>().Value;
-
-        Assert.Equal("/diagnostics/recent", options.RecentPath);
-        Assert.Equal("/diagnostics/sources", options.SourcesPath);
-        Assert.Equal("/diagnostics/hub", options.HubPath);
-    }
-
-    [Fact]
-    public void ExposesWebFeatureEndpointMapping()
-    {
-        var feature = new ConsoleLogStreamingFeature(() => { });
-
-        Assert.IsAssignableFrom<IWebShellFeature>(feature);
+        Assert.True(ConsoleLogStreamingFeature.IsFeatureEnabled(enabled));
+        Assert.False(ConsoleLogStreamingFeature.IsFeatureEnabled(new ConfigurationBuilder().Build()));
     }
 
     [Fact]
@@ -505,26 +441,6 @@ public sealed class ConsoleLogStreamingFeatureTests : IDisposable
         {
             ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
             contentRoot.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void InstallsConsoleStreamHookWhenFeatureActivatesAtRuntime()
-    {
-        ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
-        var installCount = 0;
-        var services = new ServiceCollection();
-
-        try
-        {
-            new ConsoleLogStreamingFeature(() => installCount++).ConfigureServices(services);
-            new ConsoleLogStreamingFeature(() => installCount++).ConfigureServices(new ServiceCollection());
-
-            Assert.Equal(1, installCount);
-        }
-        finally
-        {
-            ConsoleLogStreamingFeature.ResetConsoleStreamHookInstallStateForTests();
         }
     }
 

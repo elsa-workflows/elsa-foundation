@@ -8,7 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose the internal RegisterActivityTypesStartupTask test seam (baseline assembly source) to unit tests (§2.23). -->
+    <InternalsVisibleTo Include="Elsa.Activities.Design.Tests" />
   </ItemGroup>
 
   <ItemGroup>

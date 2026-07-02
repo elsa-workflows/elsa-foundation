@@ -27,6 +27,16 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions` — 
 - `Elsa.Expressions.JavaScript` — `JavaScriptExpressionDescriptorProvider` *(cross-domain — registers JS expression descriptor)*
 - `Elsa.Expressions.Liquid` — `LiquidExpressionDescriptorProvider` *(cross-domain — registers Liquid expression descriptor)*
 
+### `IVariableTypeDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
+- **Kind:** Source (returns a set of selectable argument-type descriptors — pull pattern).
+- **Signature:** `IEnumerable<TypeDescriptor> GetDescriptors();` where `TypeDescriptor` is `{ Alias, ClrType, DisplayName, Category, DefaultEditor }`.
+- **Register:** `services.AddSingleton<IVariableTypeDescriptorProvider, MyProvider>()`.
+- **Consumed by:** `VariableTypeDescriptorCatalog` (this feature) — aggregates all providers in its constructor (once, at DI build time; design-time presentation snapshot). Duplicate alias across providers throws `DuplicateTypeAliasException`. Separately, `SeedWellKnownTypesStartupTask` (`Elsa.Serialization.SystemText`) seeds the runtime `IWellKnownTypeRegistry` (alias ↔ CLR type) from the same providers' `(Alias, ClrType)` — the §2.6.4 design-time/runtime split sharing one `TypeDescriptor` shape record.
+- **Alias rule:** framework primitives use bare aliases (reserved); module types use dotted/reverse-DNS aliases (e.g. `Elsa.Http.HttpRequest`). The alias is a frozen contract — the CLR type behind it may be renamed/moved, the alias may not.
+
+**Known implementations (shipped):**
+- `Elsa.Expressions` — `DefaultVariableTypeDescriptorProvider` *(intra-domain — registers framework primitive types)*
+
 ### `IScopedVariableProvider` *(Core — `Elsa.Expressions.Core`)*
 - **Kind:** Optional capability implemented by an `IExpressionExecutionContext` (not DI-registered).
 - **Signature:** `bool TryGetScopedVariableValue(VariableReference reference, out object? value);` and `bool TrySetScopedVariableValue(VariableReference reference, object? value);`

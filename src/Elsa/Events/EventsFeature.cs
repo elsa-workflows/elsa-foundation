@@ -17,7 +17,7 @@ namespace Elsa.Events;
     DisplayName = "Events",
     Description = "Provides event publishing, event pipeline dispatch, and background event processing services."
 )]
-public class EventsFeature : IShellFeature
+public sealed class EventsFeature : IShellFeature
 {
     /// <summary>
     /// Default strategy applied when an <see cref="IEventPublisher.Publish"/> call doesn't pass

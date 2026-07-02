@@ -251,7 +251,7 @@ public sealed class SequenceContainerVariableRuntimeTests
             : new
             {
                 activities,
-                variables = new[] { new VariableDefinition(CounterReferenceKey, "Counter", TypeInformation.String, null, new ArgumentValue(variableDefault, "Literal")) }
+                variables = new[] { new VariableDefinition(CounterReferenceKey, "Counter", new TypeReference("String"), null, new ArgumentValue(variableDefault, "Literal")) }
             };
         var root = new ExecutableNode(
             executableNodeId: SequenceNodeId,

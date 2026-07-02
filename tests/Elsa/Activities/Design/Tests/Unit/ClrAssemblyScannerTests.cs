@@ -53,7 +53,7 @@ public sealed class ClrAssemblyScannerTests
     public void NonActivityAssembly_IsSilentlySkipped()
     {
         // Elsa.Primitives carries no IActivity implementations.
-        using var folder = TempAssemblyFolder.WithCopyOf(typeof(TypeInformation).Assembly);
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ClrActivityDescriptor).Assembly);
 
         Assert.Empty(CreateScanner().Scan(folder.Path));
     }
@@ -64,8 +64,8 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         File.WriteAllText(Path.Combine(folder.Path, "garbage.dll"), "this is not a portable executable");
 
-        // The junk DLL is skipped; the valid fixture assembly still yields its two activities.
-        Assert.Equal(2, CreateScanner().Scan(folder.Path).Count);
+        // The junk DLL is skipped; the valid fixture assembly still yields its three activities.
+        Assert.Equal(3, CreateScanner().Scan(folder.Path).Count);
     }
 
     [Fact]

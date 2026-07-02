@@ -1,7 +1,9 @@
 using CShells.Features;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Persistence.EFCore.Extensions;
+using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Handlers;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Services;
@@ -92,11 +94,12 @@ public abstract class EFCorePersistenceShellFeatureBase<TDbContext> : IShellFeat
 
         // The two single aggregating event handlers that dispatch the typed
         // IEntitySavingHandler<,> / IEntityLoadingHandler<,> contributors (the draft-validator
-        // shape). This base runs once per concrete persistence feature; TryAddEnumerable dedupes
-        // by implementation type so each aggregator lands exactly once even with multiple
-        // EF Core persistence features enabled (AddEventHandler is additive and would double-dispatch).
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IEventHandler, ApplyEntitySavingHandlers>());
-        services.TryAddEnumerable(ServiceDescriptor.Scoped<IEventHandler, ApplyEntityLoadingHandlers>());
+        // shape). This base runs once per concrete persistence feature; TryAddEventHandler is
+        // idempotent (TryAddEnumerable under the hood), so each aggregator lands exactly once even
+        // with multiple EF Core persistence features enabled, and is registered under both the
+        // closed generic (the dispatch path) and the non-generic marker.
+        services.TryAddEventHandler<OnEntitySaving, ApplyEntitySavingHandlers>();
+        services.TryAddEventHandler<OnEntityLoading, ApplyEntityLoadingHandlers>();
 
         // Resolve pooling and lifetime settings with fallback
         // Note: These are resolved at configuration time, not runtime, but they'll use defaults if not set

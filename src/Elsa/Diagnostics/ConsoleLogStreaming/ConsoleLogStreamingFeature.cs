@@ -1,14 +1,9 @@
-using ConsoleLogStreaming.AspNetCore.DependencyInjection;
-using ConsoleLogStreaming.Core;
+using ConsoleLogStreaming.AspNetCore;
 using ConsoleLogStreaming.Core.Capture;
-using ConsoleLogStreaming.Core.DependencyInjection;
-using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using ConsoleLogOptions = ConsoleLogStreaming.Core.Options.ConsoleLogOptions;
 
 namespace Elsa.Diagnostics.ConsoleLogStreaming;
@@ -16,6 +11,21 @@ namespace Elsa.Diagnostics.ConsoleLogStreaming;
 /// <summary>
 /// Captures process console output and exposes recent history, known sources, and a live SignalR stream.
 /// </summary>
+/// <remarks>
+/// Console capture is a process-global concern (a static tee on <see cref="System.Console.Out"/>), and the live
+/// stream is a long-lived SignalR connection. Both are therefore hosted once on the application root (see the
+/// composition in <c>Elsa.Server/Program.cs</c>) rather than inside a shell container — a shell-hosted hub would
+/// capture the shell's <see cref="IServiceScopeFactory"/> and throw <see cref="ObjectDisposedException"/> on
+/// disconnect when that shell is recycled on feature enable. The host owns the whole stack: the console hook, the
+/// capture options (<see cref="ConfigureHost"/>), and the recent/sources/hub endpoints (<see cref="ConfigureEndpoints"/>).
+/// This shell feature is purely the enable/discover surface and registers nothing in the shell container.
+/// <para>
+/// Two consequences of host-level composition: (1) because everything is wired once at startup, enabling the feature
+/// at runtime takes effect only after a process restart; and (2) capture is a single process-wide tee, so in a
+/// multi-shell host the recent/sources/hub endpoints live at one fixed root path and surface every shell's console
+/// output unscoped — stdout cannot be partitioned per shell.
+/// </para>
+/// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Diagnostics")]
 [ManifestFeatureCategory("Observability")]
@@ -24,49 +34,22 @@ namespace Elsa.Diagnostics.ConsoleLogStreaming;
     DisplayName = "Diagnostics: Console Log Streaming",
     Description = "Streams process console output over HTTP and SignalR for diagnostics views."
 )]
-public sealed class ConsoleLogStreamingFeature : IWebShellFeature
+public sealed class ConsoleLogStreamingFeature : IShellFeature
 {
     internal const string FeatureName = "DiagnosticsConsoleLogStreaming";
     private const string DefaultEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
+
+    /// <summary>Default route for recent console log entries (host-mapped).</summary>
+    public const string DefaultRecentPath = DefaultEndpointPrefix + "/recent";
+
+    /// <summary>Default route for known console log sources (host-mapped).</summary>
+    public const string DefaultSourcesPath = DefaultEndpointPrefix + "/sources";
+
+    /// <summary>Default route for the live console log SignalR hub (host-mapped).</summary>
+    public const string DefaultHubPath = DefaultEndpointPrefix + "/hub";
+
     private static readonly object ConsoleStreamHookLock = new();
     private static bool _consoleStreamHookInstalled;
-    private readonly Action _installConsoleStreamHook;
-
-    public ConsoleLogStreamingFeature() : this(ConsoleStreamHook.Install)
-    {
-    }
-
-    internal ConsoleLogStreamingFeature(Action installConsoleStreamHook)
-    {
-        _installConsoleStreamHook = installConsoleStreamHook;
-    }
-
-    [ManifestSetting(DisplayName = "Service name", Description = "Identifies the local console log source.", Category = "Diagnostics", DefaultValue = "elsa-server")]
-    public string ServiceName { get; set; } = "elsa-server";
-
-    [ManifestSetting(DisplayName = "Source display name", Description = "UI label for the local console log source.", Category = "Diagnostics", DefaultValue = "Elsa.Server")]
-    public string SourceDisplayName { get; set; } = "Elsa.Server";
-
-    [ManifestSetting(DisplayName = "Recent capacity", Description = "Maximum number of recent console log entries retained in memory.", Category = "Diagnostics", DefaultValue = "2000")]
-    public int RecentCapacity { get; set; } = 2_000;
-
-    [ManifestSetting(DisplayName = "Max recent query size", Description = "Upper clamp applied to a recent-history query result size.", Category = "Diagnostics", DefaultValue = "2000")]
-    public int MaxRecentQuerySize { get; set; } = 2_000;
-
-    [ManifestSetting(DisplayName = "Preserve ANSI", Description = "Preserve ANSI escape sequences in captured console output.", Category = "Diagnostics", DefaultValue = "true")]
-    public bool PreserveAnsi { get; set; } = true;
-
-    [ManifestSetting(DisplayName = "Endpoint prefix", Description = "Base route used when explicit endpoint paths are not configured.", Category = "Diagnostics", DefaultValue = DefaultEndpointPrefix)]
-    public string EndpointPrefix { get; set; } = DefaultEndpointPrefix;
-
-    [ManifestSetting(DisplayName = "Recent path", Description = "Optional explicit route for recent console log entries.", Category = "Diagnostics")]
-    public string? RecentPath { get; set; }
-
-    [ManifestSetting(DisplayName = "Sources path", Description = "Optional explicit route for known console log sources.", Category = "Diagnostics")]
-    public string? SourcesPath { get; set; }
-
-    [ManifestSetting(DisplayName = "Hub path", Description = "Optional explicit route for the live console log SignalR hub.", Category = "Diagnostics")]
-    public string? HubPath { get; set; }
 
     /// <summary>
     /// Installs the console stream hook before the host builder is created when the feature is enabled in shells.json.
@@ -75,10 +58,10 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
         InstallConsoleStreamHookIfEnabled(args, ConsoleStreamHook.Install);
 
     /// <summary>
-    /// Installs the console stream hook during startup when the feature is enabled in shell configuration.
+    /// Installs the process-wide console stream hook unconditionally. The host calls this once it has confirmed the
+    /// feature is enabled (see <see cref="IsFeatureEnabled(IConfiguration)"/>); installation is idempotent.
     /// </summary>
-    public static void InstallConsoleStreamHookIfEnabled(IConfiguration configuration) =>
-        InstallConsoleStreamHookIfEnabled(configuration, ConsoleStreamHook.Install);
+    public static void InstallConsoleStreamHook() => InstallConsoleStreamHook(ConsoleStreamHook.Install);
 
     internal static void InstallConsoleStreamHookIfEnabled(string[] args, Action install)
     {
@@ -102,7 +85,34 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             _consoleStreamHookInstalled = false;
     }
 
-    internal static bool IsFeatureEnabled(IConfiguration configuration)
+    /// <summary>
+    /// Configures the process-global console capture host. This is the single source of capture options; the host
+    /// composes it once at the application root.
+    /// </summary>
+    public static void ConfigureHost(ConsoleLogOptions options)
+    {
+        options.ServiceName = "elsa-server";
+        options.SourceDisplayName = "Elsa.Server";
+        options.RecentCapacity = 2_000;
+        options.MaxRecentQuerySize = 2_000;
+        options.PreserveAnsi = true;
+    }
+
+    /// <summary>
+    /// Configures the host-mapped console log endpoints (recent/sources HTTP routes and the live SignalR hub).
+    /// </summary>
+    public static void ConfigureEndpoints(ConsoleLogStreamingAspNetCoreOptions options)
+    {
+        options.RecentPath = DefaultRecentPath;
+        options.SourcesPath = DefaultSourcesPath;
+        options.HubPath = DefaultHubPath;
+    }
+
+    /// <summary>
+    /// Indicates whether the console log streaming feature is enabled in any shell in the given configuration. The
+    /// host uses this to decide whether to install the console hook and compose the root-hosted endpoints + hub.
+    /// </summary>
+    public static bool IsFeatureEnabled(IConfiguration configuration)
     {
         foreach (var shell in configuration.GetSection("CShells:Shells").GetChildren())
         {
@@ -206,53 +216,13 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
         return null;
     }
 
-    private void ConfigureHostOptions(ConsoleLogOptions options)
-    {
-        options.ServiceName = ServiceName;
-        options.SourceDisplayName = SourceDisplayName;
-        options.RecentCapacity = Math.Max(1, RecentCapacity);
-        options.MaxRecentQuerySize = Math.Max(1, MaxRecentQuerySize);
-        options.PreserveAnsi = PreserveAnsi;
-    }
-
+    // The entire stack (console hook, capture options, recent/sources endpoints, hub) is composed at the application
+    // root (see Program.cs), so the feature contributes nothing to the shell container. Keeping this a no-op — rather
+    // than installing the hook here — means a runtime feature-enable has no half-applied effect: nothing happens until
+    // the next startup re-composes the host, which is the documented behaviour.
     public void ConfigureServices(IServiceCollection services)
     {
-        InstallConsoleStreamHook(_installConsoleStreamHook);
-
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(ConsoleLogStreamingFeatureRegistrationMarker)))
-            return;
-
-        services.AddSingleton<ConsoleLogStreamingFeatureRegistrationMarker>();
-        services.AddConsoleLogStreamingHost(ConfigureHostOptions);
-
-        services.AddConsoleLogStreamingAspNetCore(options =>
-        {
-            options.RecentPath = ResolvePath(RecentPath, "recent");
-            options.SourcesPath = ResolvePath(SourcesPath, "sources");
-            options.HubPath = ResolvePath(HubPath, "hub");
-        });
     }
-
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => endpoints.MapConsoleLogStreaming();
-
-    private string ResolvePath(string? configuredPath, string segment)
-    {
-        if (!string.IsNullOrWhiteSpace(configuredPath))
-            return EnsureLeadingSlash(configuredPath.Trim());
-
-        var prefix = NormalizeEndpointPrefix(EndpointPrefix);
-        return prefix.Length == 0 ? $"/{segment}" : $"{prefix}/{segment}";
-    }
-
-    private static string NormalizeEndpointPrefix(string? prefix)
-    {
-        if (string.IsNullOrWhiteSpace(prefix))
-            return string.Empty;
-
-        return EnsureLeadingSlash(prefix.Trim()).TrimEnd('/');
-    }
-
-    private static string EnsureLeadingSlash(string path) => path.StartsWith('/') ? path : $"/{path}";
 
     private static void InstallConsoleStreamHook(Action install)
     {
@@ -265,6 +235,4 @@ public sealed class ConsoleLogStreamingFeature : IWebShellFeature
             _consoleStreamHookInstalled = true;
         }
     }
-
-    private sealed class ConsoleLogStreamingFeatureRegistrationMarker;
 }

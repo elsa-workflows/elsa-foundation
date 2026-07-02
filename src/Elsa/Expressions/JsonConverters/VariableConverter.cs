@@ -1,5 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Serialization.Core.Exceptions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -17,10 +18,20 @@ public sealed class VariableConverter(IVariableMapper variableMapper) : JsonConv
     public override IVariable Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var newOptions = GetClonedOptions(options);
-        var model = JsonSerializer.Deserialize<VariableDefinition>(ref reader, newOptions)!;
-        var variable = variableMapper.Map(model);
 
-        return variable;
+        VariableDefinition model;
+        try
+        {
+            model = JsonSerializer.Deserialize<VariableDefinition>(ref reader, newOptions)!;
+        }
+        catch (JsonException e)
+        {
+            // Wrap the raw infrastructure exception at the authored-argument boundary (§2.23.5) so callers see a
+            // domain exception instead of System.Text.Json internals; preserve the original cause.
+            throw new ArgumentDefinitionDeserializationException("Failed to deserialize the authored variable definition.", e);
+        }
+
+        return variableMapper.Map(model);
     }
 
     /// <inheritdoc />

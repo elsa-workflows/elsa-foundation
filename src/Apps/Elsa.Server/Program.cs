@@ -1,3 +1,5 @@
+using ConsoleLogStreaming.AspNetCore.DependencyInjection;
+using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
@@ -49,8 +51,22 @@ ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
-ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(builder.Configuration);
 var configuration = builder.Configuration;
+
+// Console log streaming is a process-global, host-level diagnostic: capture is a static tee on Console.Out and the
+// live stream is a long-lived SignalR connection. It is therefore composed once on the application root rather than
+// per-shell — a shell-hosted hub captures the shell container's IServiceScopeFactory and throws
+// ObjectDisposedException on disconnect when that shell is recycled on feature enable. The shell feature is only the
+// enable/discover surface (see ConsoleLogStreamingFeature); the host owns the console hook, capture options, the
+// recent/sources HTTP endpoints, and the hub. Because this is composed once at startup, enabling the feature at
+// runtime takes effect only after a restart. The enabled check + hook install are done once here and reused.
+var consoleLogStreamingEnabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+if (consoleLogStreamingEnabled)
+{
+    ConsoleLogStreamingFeature.InstallConsoleStreamHook();
+    builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingFeature.ConfigureHost);
+    builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingFeature.ConfigureEndpoints);
+}
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
 EndpointSecurityOptions.DisableSecurity();
@@ -89,17 +105,13 @@ builder.Services.AddScoped<IExtensionBuilderBuildRunner, ExtensionBuilderBuildRu
 builder.Services.AddScoped<IExtensionBuilderBuildExecutor, ExtensionBuilderBuildExecutor>();
 builder.Services.AddScoped<IExtensionBuilderPromotionService, ExtensionBuilderPromotionService>();
 builder.Services.AddScoped<IExtensionBuilderService, ExtensionBuilderService>();
-builder.Services.AddSingleton<DemoPackageEventStore>();
-builder.Services.AddSingleton<DemoNuplaneObserver>();
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-    nuplane.OnPackagesChanged<DemoNuplaneObserver>();
 });
 builder.Services.AddSingleton<NuplaneAssemblyProvider>();
-builder.Services.AddSingleton<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
 builder.Services.AddNuplaneFeatureCatalog();
 builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
@@ -121,6 +133,18 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
+
+            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
+            // and enablable via shell configuration.
+            typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
+            typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
+
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
@@ -167,20 +191,17 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
 var app = builder.Build();
 
-app.UseStaticFiles(new StaticFileOptions
-{
-    RequestPath = "/demo"
-});
-
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
-app.MapElsaDemoApi();
 app.MapElsaModuleManagementApi();
 app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
 app.MapShells();
 app.MapShellManagementApi("/_admin/shells");
-app.MapFallbackToFile("/demo", "index.html");
-app.MapFallbackToFile("/demo/{*path:nonfile}", "index.html");
+
+// Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
+// note above). Mapped after UseCors so the Studio cross-origin policy applies.
+if (consoleLogStreamingEnabled)
+    app.MapConsoleLogStreaming();
 app.Run();

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -86,14 +87,38 @@ public sealed class ActivityFaultIncidentRecorder
                             State: inspection,
                             Metadata: metadata)
                     ]),
-            PostCommitIntents: [],
+            PostCommitIntents: NewPostCommitIntents(request, occurredAt),
             Metadata: metadata);
 
         await request.CheckpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
+    /// <summary>
+    /// The deterministic incident id for a fault. Exposed so callers that schedule fault-propagation work
+    /// (child-fault parent evaluation) can reference the same incident id before the incident is committed.
+    /// </summary>
+    public static string IncidentId(string workItemId, string activityExecutionId, string subStatus) =>
+        $"incident:{workItemId}:{activityExecutionId}:{subStatus}";
+
     private static string NewIncidentId(ActivityFaultIncidentRecordRequest request) =>
-        $"incident:{request.WorkItem.WorkItemId}:{request.ActivityExecutionId}:{request.SubStatus}";
+        IncidentId(request.WorkItem.WorkItemId, request.ActivityExecutionId, request.SubStatus);
+
+    // Any work items the caller wants enqueued atomically with the incident (e.g. propagating the fault to a
+    // parent fork/join for evaluation) ride along as post-commit intents on the incident checkpoint.
+    private static IReadOnlyList<RuntimePostCommitIntent> NewPostCommitIntents(
+        ActivityFaultIncidentRecordRequest request,
+        DateTimeOffset occurredAt) =>
+        request.PostCommitSchedulerWorkItems
+            .Select(workItem => new RuntimePostCommitIntent(
+                intentId: $"{request.WorkItem.WorkItemId}:post-commit:{workItem.WorkItemId}",
+                workflowExecutionId: request.WorkItem.WorkflowExecutionId,
+                kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
+                recordedAt: occurredAt,
+                activityExecutionId: request.ActivityExecutionId,
+                idempotencyKey: $"{request.WorkItem.IdempotencyKey}:post-commit:{workItem.IdempotencyKey}",
+                payload: JsonSerializer.SerializeToElement(workItem),
+                metadata: request.WorkItem.CommandMetadata))
+            .ToArray();
 
     private static Dictionary<string, string> NewCommitMetadata(ActivityFaultIncidentRecordRequest request, string incidentId)
     {
@@ -177,4 +202,9 @@ public sealed record ActivityFaultIncidentRecordRequest(
     string SubStatus,
     IReadOnlyDictionary<string, string> ActivityMetadata,
     IReadOnlyDictionary<string, string> IncidentMetadata,
-    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? ValueSnapshots = null);
+    IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? ValueSnapshots = null,
+    IReadOnlyCollection<RuntimeSchedulerWorkItem>? PostCommitSchedulerWorkItemsOrNull = null)
+{
+    /// <summary>Scheduler work items to enqueue as post-commit intents on the incident checkpoint (never null).</summary>
+    public IReadOnlyCollection<RuntimeSchedulerWorkItem> PostCommitSchedulerWorkItems => PostCommitSchedulerWorkItemsOrNull ?? [];
+}

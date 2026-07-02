@@ -130,6 +130,7 @@ public sealed class ModuleManagementRegistryBuilderTests : IAsyncDisposable
             packageId is null ? null : "elsa-package.json",
             packageId is null ? null : "hash",
             readError,
+            [],
             []);
 
     private static JsonElement Json(string json) =>

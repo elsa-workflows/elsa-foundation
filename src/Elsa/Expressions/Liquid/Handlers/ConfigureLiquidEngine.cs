@@ -34,10 +34,10 @@ public sealed class ConfigureLiquidEngine(IConfiguration configuration, Configur
         memberAccessStrategy.Register<IExpressionExecutionContext, LiquidPropertyAccessor>("Variables", x => new LiquidPropertyAccessor(name => GetVariable(x, name, options)));
         memberAccessStrategy.Register<IExpressionExecutionContext, LiquidPropertyAccessor>("Input", x => new LiquidPropertyAccessor(name => GetInput(x, name, options)));
         memberAccessStrategy.Register<IExpressionExecutionContext, string?>("CorrelationId", x => x.GetCorrelationId());
-        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowDefinitionId", x => x.GetWorkfowDefinitionId());
-        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowDefinitionVersionId", x => x.GetWorkfowDefinitionVersionId());
-        memberAccessStrategy.Register<IExpressionExecutionContext, int>("WorkflowDefinitionVersion", x => x.GetWorkfowDefinitionVersion());
-        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowInstanceId", x => x.GetWorkfowInstanceId());
+        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowDefinitionId", x => x.GetWorkflowDefinitionId());
+        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowDefinitionVersionId", x => x.GetWorkflowDefinitionVersionId());
+        memberAccessStrategy.Register<IExpressionExecutionContext, int>("WorkflowDefinitionVersion", x => x.GetWorkflowDefinitionVersion());
+        memberAccessStrategy.Register<IExpressionExecutionContext, string>("WorkflowInstanceId", x => x.GetWorkflowInstanceId());
 
         if (_options.AllowConfigurationAccess)
         {

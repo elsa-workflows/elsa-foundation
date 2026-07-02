@@ -7,7 +7,7 @@ namespace Elsa.Activities.Composition.Runtime.Activities;
 /// <summary>
 /// The single backing CLR activity for every workflow-backed activity. It is itself an ordinary
 /// <see cref="IActivity"/> (an <see cref="ActivityBase"/>) — catalogued under a
-/// <c>TypeInformation</c> descriptor like any primitive. For a workflow-as-activity catalog row, the
+/// <c>ClrActivityDescriptor</c> like any primitive. For a workflow-as-activity catalog row, the
 /// <see cref="Constructors.WorkflowActivityConstructor"/> produces one of these configured with the
 /// row's <see cref="WorkflowIdentity"/> and author inputs/outputs.
 /// </summary>

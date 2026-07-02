@@ -23,7 +23,7 @@ public sealed class SampleNuplaneActivityReconciliationSource : IActivityReconci
             new InputDefinition(
                 ReferenceKey: nameof(SayHelloFromNuplane.Recipient),
                 Name: nameof(SayHelloFromNuplane.Recipient),
-                Type: TypeInformation.String,
+                Type: new TypeReference("String"),
                 StorageDriverType: null,
                 DisplayName: "Recipient",
                 Category: null,

@@ -66,7 +66,7 @@ public sealed class ActivityDefinitionIdentityTests
                 Id = v1Id,
                 DescriptorType = "Clr",
                 DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
-                    new Elsa.Primitives.Models.TypeInformation("Foo", "Acme.X", "Acme.X", "1.0.0.0")),
+                    new Elsa.Primitives.Models.ClrActivityDescriptor("Acme.X.Foo")),
                 SourceKind = "Json",
                 SourceId = "Elsa.Test"
             });
@@ -80,7 +80,7 @@ public sealed class ActivityDefinitionIdentityTests
                 Id = v2Id,
                 DescriptorType = "Clr",
                 DescriptorPayload = System.Text.Json.JsonSerializer.SerializeToElement(
-                    new Elsa.Primitives.Models.TypeInformation("FooRenamed", "Acme.Y", "Acme.Y", "2.0.0.0")),
+                    new Elsa.Primitives.Models.ClrActivityDescriptor("Acme.Y.FooRenamed")),
                 SourceKind = "Json",
                 SourceId = "Elsa.Test"
             });

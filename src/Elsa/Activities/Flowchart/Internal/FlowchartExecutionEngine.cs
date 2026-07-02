@@ -70,6 +70,28 @@ public sealed class FlowchartExecutionEngine(
             return;
         }
 
+        // Break propagation (#304): when any path inside the Flowchart reaches a Break outcome, the whole
+        // Flowchart ends — it completes itself with the Break outcome so the nearest enclosing loop
+        // (For/ForEach/While/Do) ends early, mirroring the linear/branch composites (Sequence/If/Switch).
+        // The breaking path is marked completed and every other in-flight path (e.g. sibling branches of a
+        // parallel fork that has not yet joined) is canceled so no further nodes are scheduled; the late
+        // completions of those canceled children are ignored because the Flowchart's activity execution is
+        // no longer Running by then. Matched by outcome name so the Flowchart takes no dependency on the
+        // (separate) Break activity module.
+        if (completionContext.OutcomeNames.Contains(ActivityOutcomes.Break, StringComparer.Ordinal))
+        {
+            state = UpdatePath(state, path with
+            {
+                Status = ExecutionPathStatus.Completed,
+                CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
+                LastOutcomeNames = completionContext.OutcomeNames
+            });
+            state = CancelPendingPathsForBreak(state, path, completionContext.CompletedChildExecutableNodeId);
+            await SaveStateAsync(context, state);
+            context.CompleteCompositeActivity([ActivityOutcomes.Break]);
+            return;
+        }
+
         if (scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Active)
             state = CompleteRaceScope(state, scope, path);
         var continuationScope = ResolveContinuationScope(state, scope);
@@ -170,6 +192,36 @@ public sealed class FlowchartExecutionEngine(
         state = ReleaseReadyWaitingJoins(context, state, graph);
 
         await PersistAndMaybeCompleteAsync(context, state);
+    }
+
+    /// <summary>
+    /// Handles a terminal fault of one Flowchart child (#308). A faulted child cannot complete, so its execution
+    /// path — and any downstream join that requires it (a Flowchart join needs <em>every</em> inbound branch) —
+    /// can never proceed. Rather than leave the Flowchart Running forever (waiting on a completion that will never
+    /// arrive), the Flowchart faults deterministically:
+    /// it records a <see cref="FlowchartDiagnosticKind.Faulted"/> diagnostic, persists it, then throws so the
+    /// runtime surfaces a composite incident on the Flowchart — mirroring the <c>Parallel</c> fork/join
+    /// composite's default-threshold behavior, where a single faulted branch faults the join. The faulted leaf
+    /// keeps its own blocking incident regardless.
+    /// </summary>
+    public async ValueTask OnChildFaultedAsync(IRuntimeActivityExecutionContext context, ActivityChildFaultedContext faultContext)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(faultContext);
+
+        var graph = FlowchartGraph.From(context.ExecutableNode);
+        var state = LoadState(context.ActivityExecutionState) ?? CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
+
+        var faultedNodeId = faultContext.FaultedChildExecutableNodeId;
+        var faultedChild = state.ActiveChildren.FirstOrDefault(child => StringComparer.Ordinal.Equals(child.NodeId, faultedNodeId));
+        if (faultedChild is not null)
+            state = RemoveActiveChild(state, faultedChild.ExecutionPathId, faultedNodeId);
+
+        var message = $"Flowchart faulted because child node '{faultedNodeId}' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it (a Flowchart join needs every inbound branch) — can no longer proceed.";
+        state = AddDiagnostic(state, FlowchartDiagnosticKind.Faulted, faultedNodeId, null, faultedChild?.ExecutionPathId, faultedChild?.ExecutionScopeId, message);
+        await SaveStateAsync(context, state);
+
+        throw new FlowchartExecutionException(message);
     }
 
     private async ValueTask PersistAndMaybeCompleteAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
@@ -428,6 +480,23 @@ public sealed class FlowchartExecutionEngine(
 
         return state.Scopes.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionScopeId, scope.ParentExecutionScopeId))
                ?? throw new FlowchartExecutionException($"Flowchart race parent scope '{scope.ParentExecutionScopeId}' was not found.");
+    }
+
+    private static FlowchartExecutionState CancelPendingPathsForBreak(FlowchartExecutionState state, ExecutionPath breakingPath, string breakNodeId)
+    {
+        state = AddDiagnostic(state, FlowchartDiagnosticKind.Completed, breakNodeId, null, breakingPath.ExecutionPathId, breakingPath.ExecutionScopeId, $"Flowchart ended early because node '{breakNodeId}' completed with a Break outcome.");
+
+        foreach (var pendingPath in state.ExecutionPaths
+                     .Where(path =>
+                         !StringComparer.Ordinal.Equals(path.ExecutionPathId, breakingPath.ExecutionPathId) &&
+                         (path.Status == ExecutionPathStatus.Active || path.Status == ExecutionPathStatus.Waiting))
+                     .ToArray())
+        {
+            state = UpdatePath(state, pendingPath with { Status = ExecutionPathStatus.Canceled });
+            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, pendingPath.CurrentNodeId, pendingPath.IncomingConnectionId, pendingPath.ExecutionPathId, pendingPath.ExecutionScopeId, $"Flowchart Break canceled pending path '{pendingPath.ExecutionPathId}'.");
+        }
+
+        return state with { ActiveChildren = [], Sequence = state.Sequence + 1 };
     }
 
     private static FlowchartExecutionState CompleteRaceScope(FlowchartExecutionState state, ExecutionScope raceScope, ExecutionPath winningPath)

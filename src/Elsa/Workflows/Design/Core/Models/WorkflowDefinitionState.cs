@@ -1,4 +1,4 @@
-﻿using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Workflows.Design.Core.Models;
@@ -47,4 +47,11 @@ public sealed record WorkflowDefinitionState(
     IEnumerable<OutputDefinition> Outputs,
     WorkflowActivityOptions? WorkflowActivityOptions,
     WorkflowStrategyOptions? StrategyOptions
-);
+)
+{
+    /// <summary>
+    /// The fallback used when a persisted state source is blank or fails to deserialize, so
+    /// callers always get a valid (if empty) state rather than a null reference.
+    /// </summary>
+    public static WorkflowDefinitionState Empty { get; } = new([], null, [], [], null, null);
+}

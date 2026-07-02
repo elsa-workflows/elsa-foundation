@@ -185,25 +185,12 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(continuationSchedulingPayload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(continuationSchedulingWorkItem, continuationSchedulingPayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(continuationSchedulingWorkItem, continuationSchedulingPayload.PinnedExecutable, executable.Identity);
 
         if (!executable.NodesById.ContainsKey(continuationSchedulingPayload.ExecutableNodeId))
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{continuationSchedulingWorkItem.WorkItemId}' references executable node '{continuationSchedulingPayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
 
         return DownstreamSchedulingResult.Terminal();
-    }
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"CompleteActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
     private async ValueTask EnqueueContinuationSchedulingAsync(

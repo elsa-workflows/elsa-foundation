@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime;
-using Elsa.Activities.ForEach;
-using Elsa.Activities.If;
+using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -139,8 +138,7 @@ public sealed class ActivityLibraryAcceptanceTests
         new Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services);
-        new ActivitiesForEachFeature().ConfigureServices(services);
-        new ActivitiesIfFeature().ConfigureServices(services);
+        new ActivitiesControlFlowFeature().ConfigureServices(services);
         // Surfaces variables/inputs/outputs to the engine at materialization time (self-contained).
         services.AddScoped<IScriptPreProcessor, MaterializationAccessorsPreProcessor>();
 
@@ -174,8 +172,7 @@ public sealed class ActivityLibraryAcceptanceTests
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesForEachFeature().ConfigureServices(services))
-            .WithFeature(services => new ActivitiesIfFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
             .WithConstructor<SequenceConstructor>()
             .WithConstructor<ForEachConstructor>()
             .WithConstructor<IfConstructor>()
@@ -287,8 +284,8 @@ public sealed class ActivityLibraryAcceptanceTests
             activities = children.Select(child => child.ExecutableNodeId).ToArray(),
             variables = new[]
             {
-                new VariableDefinition("var-count", "count", TypeInformation.Integer, null, new ArgumentValue(0, "Literal")),
-                new VariableDefinition("var-result", "result", TypeInformation.String, null, new ArgumentValue("none", "Literal"))
+                new VariableDefinition("var-count", "count", new TypeReference("Int32"), null, new ArgumentValue(0, "Literal")),
+                new VariableDefinition("var-result", "result", new TypeReference("String"), null, new ArgumentValue("none", "Literal"))
             }
         };
 
@@ -367,6 +364,10 @@ public sealed class ActivityLibraryAcceptanceTests
             var activity = new SetVariable();
             if (inputs is not null && inputs.TryGetValue("Variable", out var variableInput))
                 activity.Variable = (InputArgument<string>)variableInput;
+            // This hand-rolled constructor casts the materialized argument directly, so it requires the Value
+            // binding to be typed as System.Object (hence ObjectTypeName on every Value binding above). Typed
+            // (Int32/String) Value bindings through the *real* ClrActivityConstructor + ActivityArgumentBinder are
+            // covered by SetVariableTypedBindingTests (#313) — that path widens the argument to InputArgument<object>.
             if (inputs is not null && inputs.TryGetValue("Value", out var valueInput))
                 activity.Value = (InputArgument<object>)valueInput;
             return new(activity);

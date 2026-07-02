@@ -1,9 +1,6 @@
-using System.Reflection;
-using System.Text.Json;
 using CShells.Features;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
@@ -11,24 +8,9 @@ namespace Elsa.Modularity.Tests;
 public sealed class RuntimeFeatureCatalogTests
 {
     [Fact]
-    public async Task AccessorDiscoversFeatureDescriptorsFromAssemblyProviders()
-    {
-        var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        var assemblyProvider = new TestFeatureAssemblyProvider(typeof(RuntimeCatalogTestFeature).Assembly);
-        var accessor = new RuntimeFeatureCatalogAccessor([assemblyProvider], serviceProvider);
-
-        var snapshot = await accessor.RefreshAsync();
-
-        var descriptor = Assert.Single(snapshot.FeatureDescriptors, x => x.Id == "RuntimeCatalogTestFeature");
-        Assert.Same(serviceProvider, assemblyProvider.ServiceProvider);
-        Assert.Equal("Runtime Catalog Test Feature", descriptor.Metadata["DisplayName"]);
-        Assert.Equal("Runtime catalog test feature description.", descriptor.Metadata["Description"]);
-    }
-
-    [Fact]
     public async Task ContributorAddsRuntimeFeatureDescriptorMetadata()
     {
-        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalogAccessor(
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("RuntimeFeature")
             {
                 Metadata = new Dictionary<string, object>
@@ -37,7 +19,7 @@ public sealed class RuntimeFeatureCatalogTests
                     ["Description"] = "Runtime feature description."
                 }
             }));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -48,11 +30,44 @@ public sealed class RuntimeFeatureCatalogTests
     }
 
     [Fact]
+    public async Task ContributorSurfacesFeatureDependencies()
+    {
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
+            new ShellFeatureDescriptor("RuntimeFeature")
+            {
+                Dependencies = ["DependencyOne", "DependencyTwo"]
+            }));
+        var context = FeatureCatalogTestContext.Create();
+
+        await contributor.ContributeAsync(context);
+
+        var item = context.Items["RuntimeFeature"].ToItem();
+        Assert.Equal(["DependencyOne", "DependencyTwo"], item.Dependencies.Select(dependency => dependency.Id));
+        Assert.All(item.Dependencies, dependency => Assert.False(dependency.Optional));
+    }
+
+    [Fact]
+    public async Task ContributorMarksDependenciesResolvedEvenWhenDescriptorHasNone()
+    {
+        // A descriptor with zero dependencies still authoritatively resolves this feature's graph, so the flag must
+        // be set to stop the manifest contributor from backfilling a stale dependency list.
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
+            new ShellFeatureDescriptor("RuntimeFeature")));
+        var context = FeatureCatalogTestContext.Create();
+
+        await contributor.ContributeAsync(context);
+
+        var builder = context.Items["RuntimeFeature"];
+        Assert.True(builder.DependenciesResolved);
+        Assert.Empty(builder.Dependencies);
+    }
+
+    [Fact]
     public async Task ContributorDoesNotReplaceManifestSourceKind()
     {
-        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalogAccessor(
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("ManifestFeature")));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
         context.GetOrAdd("ManifestFeature").SourceKind = FeatureSourceKinds.Manifest;
 
         await contributor.ContributeAsync(context);
@@ -63,12 +78,12 @@ public sealed class RuntimeFeatureCatalogTests
     [Fact]
     public async Task ContributorSkipsDescriptorsWithoutFeatureIds()
     {
-        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalogAccessor(
+        var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor
             {
                 Id = " "
             }));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -78,51 +93,38 @@ public sealed class RuntimeFeatureCatalogTests
     [Fact]
     public async Task RefresherReturnsDescriptorCount()
     {
-        var accessor = new FakeRuntimeFeatureCatalogAccessor(
+        var catalog = new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("FeatureOne"),
             new ShellFeatureDescriptor("FeatureTwo"));
-        var refresher = new RuntimeFeatureCatalogRefresher(accessor);
+        var refresher = new RuntimeFeatureCatalogRefresher(catalog);
 
         var count = await refresher.RefreshAsync();
 
         Assert.Equal(2, count);
-        Assert.Equal(1, accessor.RefreshCount);
+        Assert.Equal(1, catalog.RefreshCount);
     }
 
-    private static FeatureCatalogContributionContext CreateContext() =>
-        new(new ShellFeatureConfigurationSnapshot("default", "revision", new Dictionary<string, JsonElement>()));
-
-    private sealed class FakeRuntimeFeatureCatalogAccessor(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalogAccessor
+    private sealed class FakeRuntimeFeatureCatalog(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
     {
         public int RefreshCount { get; private set; }
+
+        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Build());
 
         public Task<RuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
         {
             RefreshCount++;
-            return Task.FromResult(new RuntimeFeatureCatalogSnapshot(descriptors));
+            return Task.FromResult(Build());
         }
-    }
 
-    private sealed class TestFeatureAssemblyProvider(params Assembly[] assemblies) : IFeatureAssemblyProvider
-    {
-        public IServiceProvider? ServiceProvider { get; private set; }
-
-        public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
+        private RuntimeFeatureCatalogSnapshot Build()
         {
-            ServiceProvider = serviceProvider;
-            return Task.FromResult(assemblies.AsEnumerable());
-        }
-    }
-}
+            var map = new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase);
+            foreach (var descriptor in descriptors)
+                if (!string.IsNullOrWhiteSpace(descriptor.Id))
+                    map[descriptor.Id] = descriptor;
 
-[ShellFeature(
-    name: "RuntimeCatalogTestFeature",
-    DisplayName = "Runtime Catalog Test Feature",
-    Description = "Runtime catalog test feature description."
-)]
-public sealed class RuntimeCatalogTestFeature : IShellFeature
-{
-    public void ConfigureServices(IServiceCollection services)
-    {
+            return new RuntimeFeatureCatalogSnapshot(1, [], descriptors, map, DateTimeOffset.UnixEpoch);
+        }
     }
 }

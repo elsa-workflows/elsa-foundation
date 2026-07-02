@@ -115,7 +115,7 @@ public sealed class ClrAssemblyScanner(
                 inputs.Add(new InputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeInformation(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
@@ -125,7 +125,7 @@ public sealed class ClrAssemblyScanner(
                 outputs.Add(new OutputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeInformation(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
@@ -139,8 +139,8 @@ public sealed class ClrAssemblyScanner(
             DisplayName: null,
             Category: category,
             Description: null,
-            DescriptorType: typeof(TypeInformation).FullName!,
-            Descriptor: TypeInformation.FromType(type),
+            DescriptorType: typeof(ClrActivityDescriptor).FullName!,
+            Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,
             DesignFacets: []);
@@ -176,8 +176,15 @@ public sealed class ClrAssemblyScanner(
         return null;
     }
 
-    private static TypeInformation ToTypeInformation(Type? valueType) =>
-        valueType is null ? TypeInformation.Object : TypeInformation.FromType(valueType);
+    // Reflection-only path: types come from a MetadataLoadContext, so the runtime well-known type
+    // registry can't resolve them. The element alias is produced by the shared TypeAliasConvention —
+    // a reserved bare alias for BCL primitives (string→"String", int→"Int32"), else the dotted FullName.
+    // The framework's runtime registration pass registers activity I/O CLR types under the SAME
+    // convention, so these aliases resolve back to the real CLR type at compile time (FR-004b).
+    private static TypeReference ToTypeReference(Type? valueType) =>
+        valueType is null
+            ? new TypeReference("Object")
+            : TypeReferenceFactory.FromClrType(valueType, TypeAliasConvention.CanonicalAlias);
 
     private static Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {

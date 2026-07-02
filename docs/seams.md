@@ -76,7 +76,7 @@ flowchart TB
 
 A row's `DescriptorType` is the registry key that decides *which* constructor builds it:
 
-- `Elsa.Primitives.Models.TypeInformation` → the **CLR** kind (`ClrActivityConstructor`)
+- `Elsa.Primitives.Models.ClrActivityDescriptor` → the **CLR** kind (`ClrActivityConstructor`)
 - `Elsa.Workflows.Primitives.Models.WorkflowIdentity` → the **Workflow** kind (`WorkflowActivityConstructor`)
 
 ---

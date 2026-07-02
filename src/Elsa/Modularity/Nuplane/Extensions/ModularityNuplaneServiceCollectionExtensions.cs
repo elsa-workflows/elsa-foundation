@@ -10,9 +10,11 @@ public static class ModularityNuplaneServiceCollectionExtensions
     public static IServiceCollection AddNuplaneFeatureCatalog(this IServiceCollection services)
     {
         services.TryAddScoped<IFeatureManagementService, FeatureManagementService>();
+        // Bundled + host-referenced features are discovered by CShells' runtime feature catalog (IRuntimeFeatureCatalog,
+        // registered by AddCShells); this contributor projects that catalog into the feature listing. The package
+        // contributor adds features from installed Nuplane packages on top.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, RuntimeFeatureCatalogContributor>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, PackageManifestFeatureCatalogContributor>());
-        services.TryAddScoped<IRuntimeFeatureCatalogAccessor, RuntimeFeatureCatalogAccessor>();
         services.TryAddScoped<IRuntimeFeatureCatalogRefresher, RuntimeFeatureCatalogRefresher>();
         return services;
     }

@@ -1,13 +1,17 @@
 using System.Text.Json;
+using CShells.Features;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Tasks;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.Testing;
 
@@ -110,6 +114,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
+    /// <summary>Builds a leaf node that always faults during execution (see <see cref="FaultingActivity"/>).</summary>
+    public static ExecutableNode NewFaultingNode(string nodeId, string? message = null) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: FaultingActivity.FaultingActivityType,
+            activityTypeVersion: "1.0.0",
+            descriptorType: FaultingActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new FaultingDescriptor(message ?? $"Branch '{nodeId}' faulted.")),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
     private static WorkflowExecutionAgentActivationRequest NewActivationRequest() =>
         new(
             workflowExecutionId: WorkflowExecutionId,
@@ -146,6 +163,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         private readonly List<Action<IServiceCollection>> _featureConfigurators = [];
         private readonly List<Action<IServiceCollection>> _constructorRegistrations = [];
         private bool _probeRegistered;
+        private bool _faultingRegistered;
 
         internal Builder()
         {
@@ -182,6 +200,13 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             return this;
         }
 
+        /// <summary>Registers the shared <see cref="FaultingActivityConstructor"/> so faulting leaf nodes can be constructed.</summary>
+        public Builder WithFaultingLeaf()
+        {
+            _faultingRegistered = true;
+            return this;
+        }
+
         /// <summary>Escape hatch for additional service overrides (custom id generator, stubs, etc.).</summary>
         public Builder ConfigureServices(Action<IServiceCollection> configure)
         {
@@ -207,12 +232,30 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             if (_probeRegistered)
                 services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
 
+            if (_faultingRegistered)
+                services.AddSingleton<IActivityConstructor, FaultingActivityConstructor>();
+
             services.AddSingleton<IRuntimeExecutionIdGenerator>(new DeterministicRuntimeExecutionIdGenerator(activityExecutionIds));
 
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
 
-            return new WorkflowExecutionHarness(services.BuildServiceProvider());
+            var provider = services.BuildServiceProvider();
+
+            // The real host runs RegisterActivityTypesStartupTask at startup to register the loaded activity CLR
+            // types into the well-known type registry, so the CLR construction descriptor resolves an activity's
+            // stable alias back to its type. The harness builds the provider directly (no startup-task runner),
+            // so run that one registration pass here. Guarded on the registry being composed: only CLR-construction
+            // tests add the SerializationFeature that registers it; probe-only graphs don't need it.
+            if (provider.GetService<IWellKnownTypeRegistry>() is { } typeRegistry)
+                new RegisterActivityTypesStartupTask(
+                        typeRegistry,
+                        provider.GetServices<IFeatureAssemblyProvider>(),
+                        provider,
+                        NullLogger<RegisterActivityTypesStartupTask>.Instance)
+                    .ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+            return new WorkflowExecutionHarness(provider);
         }
     }
 }

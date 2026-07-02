@@ -18,7 +18,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// In-process execution coverage for the code &amp; I/O leaf activities (<c>WriteLines</c>, <c>ReadLine</c>,
 /// <c>Inline</c>) running through the real workflow agent via the shared <see cref="WorkflowExecutionHarness"/>
 /// (#258). Each activity is constructed by the production <see cref="ClrActivityConstructor"/> from its
-/// <see cref="TypeInformation"/> descriptor, exercising the full descriptor → construct → bind → execute
+/// <see cref="ClrActivityDescriptor"/> (stable-alias) descriptor, exercising the full descriptor → construct → bind → execute
 /// path. Asserts the leaf runs to completion, emits the default <c>Done</c> outcome, and that the run
 /// completes.
 /// </summary>
@@ -118,8 +118,8 @@ public sealed class CodeIoLeafRuntimeTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
-            descriptorType: typeof(TypeInformation).FullName!,
-            descriptorPayload: Serializer.SerializeToElement(TypeInformation.FromType(activityType)),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(Serializer, activityType),
             inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

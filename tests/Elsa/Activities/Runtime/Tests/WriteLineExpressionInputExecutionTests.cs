@@ -69,12 +69,12 @@ public sealed class WriteLineExpressionInputExecutionTests
     {
         var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
         var registry = new ActivityConstructorRegistry();
-        registry.Add(new ClrActivityConstructor(serviceProvider, new ActivityArgumentBinder(), serializer));
+        registry.Add(ClrConstruction.Constructor(serviceProvider, serializer, typeof(WriteLine)));
         var factory = new ActivityFactory(registry);
 
         var activity = await factory.Create(
-            typeof(TypeInformation).FullName!,
-            serializer.SerializeToElement(TypeInformation.FromType(typeof(WriteLine))),
+            ClrConstruction.DescriptorType,
+            ClrConstruction.Payload(serializer, typeof(WriteLine)),
             new Dictionary<string, InputArgument> { ["Text"] = textArgument },
             outputs: null);
 
@@ -101,9 +101,8 @@ public sealed class WriteLineExpressionInputExecutionTests
             authoredActivityId: $"authored-{nodeId}",
             activityType: "Test.WriteLine",
             activityTypeVersion: "1.0.0",
-            descriptorType: typeof(TypeInformation).FullName!,
-            descriptorPayload: new JsonPayloadSerializer(new JsonPayloadConverterRegistry())
-                .SerializeToElement(TypeInformation.FromType(typeof(WriteLine))),
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()), typeof(WriteLine)),
             inputBindings: new Dictionary<string, RuntimeInputBinding> { ["Text"] = textBinding },
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());

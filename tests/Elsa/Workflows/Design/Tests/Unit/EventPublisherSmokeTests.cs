@@ -25,11 +25,11 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <c>AddEventHandlersFrom</c> registers handlers only against the non-generic
-/// <see cref="IEventHandler"/> marker; the <see cref="EventHandlerInvokerMiddleware"/> resolves
-/// <c>IEnumerable&lt;IEventHandler&gt;</c> and filters by <c>IsInstanceOfType</c> (matching the
-/// request- and command-dispatcher pattern). This test guards against a regression where a
-/// closed-generic lookup would return empty and silently swallow every dispatch.
+/// Dispatch contract (see <c>Elsa.Events/EXTENSION_POINTS.md</c>): handlers are registered under both
+/// the closed generic <see cref="IEventHandler{TEvent}"/> and the non-generic <see cref="IEventHandler"/>
+/// marker, and the <c>EventHandlerInvokerMiddleware</c> resolves them exclusively through the closed
+/// generic. These tests guard both directions of the original bug: a handler registered through the
+/// supported paths must dispatch, and a handler registered only under the bare marker must not.
 /// </para>
 /// <para>
 /// Branch coverage of the strategy / invoker middleware is the deferred <c>Elsa.Events.Tests</c>
@@ -79,6 +79,63 @@ public sealed class EventPublisherSmokeTests
 
         var error = Assert.Single(evt.Errors);
         Assert.Equal("Stub/SmokeCheck", error.Type);
+    }
+
+    [Fact]
+    public async Task TryAddEventHandler_registers_a_dispatchable_handler()
+    {
+        // The path the EF Core persistence base uses for its aggregators.
+        await using var provider = BuildProvider(services =>
+        {
+            services.TryAddEventHandler<OnDraftValidating, StubValidator>();
+        });
+
+        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var evt = new OnDraftValidating(EmptyDraft());
+
+        await publisher.Publish(evt, cancellationToken: CancellationToken.None);
+
+        var error = Assert.Single(evt.Errors);
+        Assert.Equal("Stub/SmokeCheck", error.Type);
+    }
+
+    [Fact]
+    public async Task Registering_the_same_handler_more_than_once_dispatches_it_once()
+    {
+        // Registration is idempotent per (event, handler) pair, so a handler reached by both an
+        // explicit call and an aggregator/idempotent call still runs exactly once — the fix does not
+        // rely on the middleware's defensive DistinctBy.
+        await using var provider = BuildProvider(services =>
+        {
+            services.AddEventHandler<OnDraftValidating, StubValidator>();
+            services.TryAddEventHandler<OnDraftValidating, StubValidator>();
+        });
+
+        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var evt = new OnDraftValidating(EmptyDraft());
+
+        await publisher.Publish(evt, cancellationToken: CancellationToken.None);
+
+        Assert.Single(evt.Errors);
+    }
+
+    [Fact]
+    public async Task Handler_registered_only_under_the_bare_marker_does_not_dispatch()
+    {
+        // Locks the dispatch contract: the pipeline resolves the closed generic only, so a
+        // marker-only registration silently never fires. This is the exact regression that caused
+        // the EF Core saving/loading handlers to stop running.
+        await using var provider = BuildProvider(services =>
+        {
+            services.AddScoped<IEventHandler, StubValidator>();
+        });
+
+        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var evt = new OnDraftValidating(EmptyDraft());
+
+        await publisher.Publish(evt, cancellationToken: CancellationToken.None);
+
+        Assert.Empty(evt.Errors);
     }
 
     [Fact]

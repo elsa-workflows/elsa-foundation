@@ -127,6 +127,16 @@ Questions to validate:
 - Can an activity output link target an input on a non-immediate downstream activity?
 - How do output-to-input links interact with parallel branches, loops, retries, and activity completion order?
 
+### 8. Full-Source Review Additions
+
+Candidates discovered from `elsa-core` that were not part of the maintainer's initial list.
+
+#### 8.1 Expression-context propagation: DI injection vs. parameter threading
+
+Source-derived from an elsa-foundation defect investigation: five `IScriptPreProcessor`/`IScriptPostProcessor` implementations under `src/Elsa/Workflows/Runtime/JavaScript/` take `IWorkflowExecutionContext` via constructor injection, but nothing in production ever constructs or DI-registers that type, making them dead code. `elsa-core` solves the equivalent JS-globals problem with the same pub/sub handler-pipeline shape, but always threads the live execution context through as an explicit parameter (`ExpressionExecutionContext.TransientProperties`, retrieved via typed extension methods), never through DI.
+
+Source-backed topic note: [Elsa Core runtime expression-context wiring analysis](elsa-core-runtime-expression-context-wiring-analysis.md).
+
 ## Brainstorm Session Plan
 
 Use separate sessions for each major topic. Each session should end by updating this report or replacing its topic notes with a more specific linked report/spec.

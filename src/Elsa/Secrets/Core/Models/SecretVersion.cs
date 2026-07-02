@@ -4,7 +4,7 @@ public sealed class SecretVersion
 {
     public int Version { get; set; }
     public SecretStatus Status { get; set; } = SecretStatus.Active;
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UnixEpoch;
     public DateTimeOffset? ExpiresAt { get; set; }
     public SecretPayload Payload { get; set; } = new();
 

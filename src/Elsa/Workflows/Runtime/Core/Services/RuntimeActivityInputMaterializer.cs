@@ -267,10 +267,10 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         public bool TryGetWorkflowInput(string key, out object? value) => WorkflowInputs.TryGetValue(key, out value);
         public object? GetVariableValueOrDefault(string variableName) => WorkflowVariables.GetValueOrDefault(variableName);
         public string GetCorrelationId() => string.Empty;
-        public string GetWorkfowDefinitionId() => string.Empty;
-        public string GetWorkfowDefinitionVersionId() => string.Empty;
-        public int GetWorkfowDefinitionVersion() => 0;
-        public string GetWorkfowInstanceId() => resolutionContext.WorkflowExecutionId;
+        public string GetWorkflowDefinitionId() => string.Empty;
+        public string GetWorkflowDefinitionVersionId() => string.Empty;
+        public int GetWorkflowDefinitionVersion() => 0;
+        public string GetWorkflowInstanceId() => resolutionContext.WorkflowExecutionId;
 
         public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
         public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }

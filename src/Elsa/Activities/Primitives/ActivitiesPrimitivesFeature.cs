@@ -9,7 +9,7 @@ namespace Elsa.Activities.Primitives;
 
 /// <summary>
 /// Primitive activities + the CLR activity constructor (descriptor type
-/// <c>Elsa.Primitives.Models.TypeInformation</c>). A runtime feature — references no
+/// <c>Elsa.Primitives.Models.ClrActivityDescriptor</c>). A runtime feature — references no
 /// <c>Elsa.*.Design.*</c> project (Elsa §E2.2). Contributes its constructor to the runtime
 /// constructor registry via DI; the runtime feature's startup task aggregates it.
 /// </summary>

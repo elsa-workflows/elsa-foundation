@@ -47,22 +47,22 @@ internal sealed class ScriptExpressionContext(IServiceProvider serviceProvider)
         return null;
     }
 
-    public string GetWorkfowDefinitionId()
+    public string GetWorkflowDefinitionId()
     {
         return string.Empty;
     }
 
-    public int GetWorkfowDefinitionVersion()
+    public int GetWorkflowDefinitionVersion()
     {
         return 0;
     }
 
-    public string GetWorkfowDefinitionVersionId()
+    public string GetWorkflowDefinitionVersionId()
     {
         return string.Empty;
     }
 
-    public string GetWorkfowInstanceId()
+    public string GetWorkflowInstanceId()
     {
         return string.Empty;
     }

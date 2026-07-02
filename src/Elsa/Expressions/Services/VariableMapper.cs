@@ -14,16 +14,10 @@ public sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry,
     /// <inheritdoc />
     public IVariable Map(VariableDefinition source)
     {
-        var typeInfo = source.TypeInformation;
-        var typeName = typeInfo.GetTypeFullName();
+        var elementType = ResolveAlias(source.Type.Alias);
+        var closedType = TypeReferenceFactory.Close(elementType, source.Type.CollectionKind);
 
-        if (string.IsNullOrWhiteSpace(typeName))
-            typeName = wellKnownTypeRegistry.GetAliasOrDefault(typeof(object));
-
-        if (!wellKnownTypeRegistry.TryGetTypeOrDefault(typeName, out var type))
-            type = typeof(object);
-
-        var variableGenericType = typeof(Variable<>).MakeGenericType(type);
+        var variableGenericType = typeof(Variable<>).MakeGenericType(closedType);
         var variable = (Variable)Activator.CreateInstance(variableGenericType)!;
 
         // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
@@ -32,13 +26,13 @@ public sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry,
 
         var value = source.Default?.Value;
         objectConverter
-            .TryConvertTo(value, type)
+            .TryConvertTo(value, closedType)
             .OnSuccess(value => variable.DefaultValue = value)
-            .OnFailure(e => logger.LogWarning("Failed to convert {SourceValue} to {TargetType}", value, type.Name));
+            .OnFailure(e => logger.LogWarning("Failed to convert {SourceValue} to {TargetType}", value, closedType.Name));
 
-        var storageDriverTypeName = source.StorageDriverType?.GetTypeFullName();
-        variable.StorageDriverType = !string.IsNullOrWhiteSpace(storageDriverTypeName)
-            ? Type.GetType(storageDriverTypeName)
+        variable.StorageDriverType = !string.IsNullOrWhiteSpace(source.StorageDriverType)
+            && wellKnownTypeRegistry.TryGetTypeOrDefault(source.StorageDriverType, out var storageDriverType)
+            ? storageDriverType
             : null;
 
         return variable;
@@ -49,9 +43,21 @@ public sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry,
     {
         var variableType = source.GetType();
         var valueType = variableType.IsConstructedGenericType ? variableType.GetGenericArguments().FirstOrDefault() ?? typeof(object) : typeof(object);
-        var valueTypeInformation = TypeInformation.FromType(valueType);
-        var storageDriverType = source.StorageDriverType is not null ? TypeInformation.FromType(source.StorageDriverType) : null;
+        var typeReference = TypeReferenceFactory.FromClrType(valueType, wellKnownTypeRegistry.GetAliasOrDefault);
+        var storageDriverType = source.StorageDriverType is not null ? wellKnownTypeRegistry.GetAliasOrDefault(source.StorageDriverType) : null;
         var value = variableFormatter.Format(source);
-        return new VariableDefinition(source.Id, source.Name, valueTypeInformation, storageDriverType, value);
+        return new VariableDefinition(source.Id, source.Name, typeReference, storageDriverType, value);
+    }
+
+    private Type ResolveAlias(string? alias)
+    {
+        if (string.IsNullOrWhiteSpace(alias))
+            return typeof(object);
+
+        if (wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type))
+            return type;
+
+        logger.LogWarning("Could not resolve unknown type alias '{Alias}'; falling back to object.", alias);
+        return typeof(object);
     }
 }

@@ -11,12 +11,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 ### `WorkflowInvokeActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
-- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. Composite activities may request child executable-node scheduling through the runtime activity execution context; generic workflow-level edge traversal remains outside this handler. It does not load Design-owned authored workflow models.
+- **Usage:** handles `WorkflowExecutionCommandKind.InvokeActivity` work by constructing an activity from the runtime-owned executable node descriptor through `IActivityFactory`, invoking `CanExecuteAsync`/`ExecuteAsync`, and recording the targeted `ActivityExecutionState` as completed or faulted. When a faulted activity has a parent, it rides a child-fault parent-evaluation work item (`ChildFaultParentEvaluation`) on the fault incident checkpoint so a fork/join parent can resolve its join deterministically (#308). Composite activities may request child executable-node scheduling through the runtime activity execution context; generic workflow-level edge traversal remains outside this handler. It does not load Design-owned authored workflow models.
 
 ### `WorkflowParentActivityCompletionSchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
-- **Usage:** handles `ParentCompletionEvaluation` completion work by reconstructing the running parent activity and invoking `IActivityChildCompletionHandler` when implemented. The handler enqueues child `ScheduleActivity` work requested by the parent or completes the parent activity when the parent requests composite completion. It does not interpret workflow-level edges or load Design-owned authored workflow models.
+- **Usage:** handles `ParentCompletionEvaluation` completion work by reconstructing the running parent activity and invoking `IActivityChildCompletionHandler` for a completed child, or `IActivityChildFaultHandler` for a faulted child (work items tagged `runtime.childFaulted`, #308). For a faulted child whose parent does not implement `IActivityChildFaultHandler` the handler no-ops, leaving the fault a blocking incident. The handler enqueues child `ScheduleActivity` work requested by the parent or completes the parent activity when the parent requests composite completion. It does not interpret workflow-level edges or load Design-owned authored workflow models.
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
@@ -31,7 +31,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Aggregated by:** the single `RegisterActivityConstructors : IEventHandler<OnActivityConstructorsInitializing>` (this feature), which collects every registered constructor and adds it to the registry. The registry enforces one-constructor-per-`DescriptorType` (throws on a duplicate).
 
 **Known implementations (shipped):**
-- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.TypeInformation`; the default/primitive CLR kind)*
+- `Elsa.Activities.Primitives` — `ClrActivityConstructor` *(descriptor type `Elsa.Primitives.Models.ClrActivityDescriptor`; the default/primitive CLR kind — resolves the activity's stable alias via `IWellKnownTypeRegistry`)*
 - `Elsa.Activities.Composition.Runtime` — `WorkflowActivityConstructor` *(descriptor type `Elsa.Workflows.Primitives.Models.WorkflowIdentity`; the Workflow kind)*
 
 ### `IActivityChildCompletionHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
@@ -42,6 +42,16 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 **Known implementations (shipped):**
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
+- `Elsa.Activities.ControlFlow` — `Parallel` *(fork/join: counts branch completions toward the join threshold)* and the `If`/`Switch`/`For`/`ForEach`/`While`/`Do` control-flow composites
+
+### `IActivityChildFaultHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Activity-owned continuation handler (fault side of `IActivityChildCompletionHandler`).
+- **Signature:** `ValueTask OnChildFaultedAsync(ActivityChildFaultedContext context)`.
+- **Usage:** implemented by composite activities that must react to a child branch reaching a terminal `Faulted` state. The runtime invokes it for parent-completion evaluation work tagged `runtime.childFaulted` (raised by `ChildFaultParentEvaluation` on the branch fault incident). A composite that does not implement it is unaffected: a faulted child stays a blocking incident and is not propagated to the parent.
+
+**Known implementations (shipped):**
+- `Elsa.Activities.ControlFlow` — `Parallel` *(fault-aware fork/join: faults the composite once the join's success threshold is unreachable, #308)*
+- `Elsa.Activities.Flowchart` — `Flowchart` *(fault-aware fork/join: faults the flowchart when an inbound branch of an all-inbound join faults, #308)*
 
 ---
 

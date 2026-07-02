@@ -135,7 +135,7 @@ public sealed class SetVariableDurabilityExecutionTests
                 new VariableDefinition(
                     ReferenceKey: "var-greeting",
                     Name: "greeting",
-                    TypeInformation: TypeInformation.String,
+                    Type: new TypeReference("String"),
                     StorageDriverType: null,
                     Default: new ArgumentValue("unset", "Literal"))
             }

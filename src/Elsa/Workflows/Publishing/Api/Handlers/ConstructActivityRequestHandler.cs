@@ -47,8 +47,8 @@ public sealed class ConstructActivityRequestHandler(
             Properties: ReadConcreteProperties(activity),
             SyntheticProperties: activity.SyntheticProperties,
             CustomProperties: activity.CustomProperties,
-            Inputs: version.Inputs.Select(i => new ArgumentView(i.ReferenceKey, i.Name, i.Type.GetTypeFullName())).ToArray(),
-            Outputs: version.Outputs.Select(o => new ArgumentView(o.ReferenceKey, o.Name, o.Type.GetTypeFullName())).ToArray());
+            Inputs: version.Inputs.Select(i => new ArgumentView(i.ReferenceKey, i.Name, i.Type.Alias)).ToArray(),
+            Outputs: version.Outputs.Select(o => new ArgumentView(o.ReferenceKey, o.Name, o.Type.Alias)).ToArray());
     }
 
     /// <summary>

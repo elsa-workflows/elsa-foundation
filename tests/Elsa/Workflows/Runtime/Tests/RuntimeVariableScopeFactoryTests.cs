@@ -132,7 +132,7 @@ public sealed class RuntimeVariableScopeFactoryTests
                 variables = variables.Select(v => new VariableDefinition(
                     ReferenceKey: v.ReferenceKey,
                     Name: v.Name,
-                    TypeInformation: Elsa.Primitives.Models.TypeInformation.String,
+                    Type: new Elsa.Primitives.Models.TypeReference("String"),
                     StorageDriverType: null,
                     Default: new ArgumentValue(v.Default, "Literal"))).ToArray()
             },

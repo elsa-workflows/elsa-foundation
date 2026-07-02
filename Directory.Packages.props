@@ -8,14 +8,15 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="ConsoleLogStreaming.AspNetCore" Version="1.0.0-preview.13" />
-    <PackageVersion Include="CShells" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.FastEndpoints" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.Management.Api" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.FastEndpoints" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.Management.Api" Version="0.0.29-preview.144" />
     <PackageVersion Include="DistributedLock.FileSystem" Version="1.0.3" />
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
+    <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
     <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.10" />
     <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.10" />
@@ -55,10 +56,10 @@
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="Nuplane" Version="0.0.8" />
-    <PackageVersion Include="Nuplane.Admin" Version="0.0.8" />
-    <PackageVersion Include="Nuplane.Loading" Version="0.0.8" />
-    <PackageVersion Include="Nuplane.Sources.Directory" Version="0.0.8" />
+    <PackageVersion Include="Nuplane" Version="0.0.9-preview.61" />
+    <PackageVersion Include="Nuplane.Admin" Version="0.0.9-preview.61" />
+    <PackageVersion Include="Nuplane.Loading" Version="0.0.9-preview.61" />
+    <PackageVersion Include="Nuplane.Sources.Directory" Version="0.0.9-preview.61" />
     <PackageVersion Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />

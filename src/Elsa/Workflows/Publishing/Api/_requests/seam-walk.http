@@ -4,7 +4,7 @@
 ### Use with the REST Client (VS Code / Visual Studio / Rider).
 ###
 ### On boot, the CLR reconciliation source scans the host output folder and catalogs the two CLR
-### activities (WriteLine + WorkflowDefinitionActivity, DescriptorType = TypeInformation). Steps 1–2
+### activities (WriteLine + WorkflowDefinitionActivity, DescriptorType = ClrActivityDescriptor). Steps 1–2
 ### below add a *workflow-as-activity* row (DescriptorType = WorkflowIdentity). Step 3 lists the mix;
 ### step 4 crosses the construction seam for any row.
 ###
@@ -46,10 +46,10 @@ Content-Type: application/json
 }
 
 ### 3. List what the publishing surface can construct — see the descriptor-type mix:
-###    the WorkflowIdentity row from step 2 + the two CLR (TypeInformation) rows from reconciliation.
+###    the WorkflowIdentity row from step 2 + the two CLR (ClrActivityDescriptor) rows from reconciliation.
 GET {{host}}/publishing/activities
 
 ### 4. Cross the construction seam for one row. Paste an ActivityVersionId from step 3.
-###    - a TypeInformation row → ClrActivityConstructor → e.g. WriteLine (+ its typed Input/Output args)
+###    - a ClrActivityDescriptor row → ClrActivityConstructor → e.g. WriteLine (+ its typed Input/Output args)
 ###    - the WorkflowIdentity row → WorkflowActivityConstructor → WorkflowDefinitionActivity (carries the identity)
 GET {{host}}/publishing/activities/<paste ActivityVersionId>/construct

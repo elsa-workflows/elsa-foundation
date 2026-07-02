@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Activities.Design.Persistence.EFCore.EntityHandlers;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Core.Extensions;
 using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Persistence.EFCore.Handlers;
@@ -43,7 +44,7 @@ public sealed class SavingEventDispatchTests
 
         await handler.Handle(ctx, version, CancellationToken.None);
 
-        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.Equal(typeof(ClrActivityDescriptor).FullName, version.DescriptorType);
         Assert.False(string.IsNullOrWhiteSpace(version.DescriptorPayloadSource));
         Assert.Contains("Acme", version.DescriptorPayloadSource);
         Assert.False(string.IsNullOrWhiteSpace(version.DesignFacetsSource));
@@ -106,7 +107,7 @@ public sealed class SavingEventDispatchTests
         // Probe ran (fan-out reached every typed contributor)…
         Assert.True(probe.WasInvoked);
         // …and the real handler ran (shadow column populated).
-        Assert.Equal(typeof(TypeInformation).FullName, version.DescriptorType);
+        Assert.Equal(typeof(ClrActivityDescriptor).FullName, version.DescriptorType);
         Assert.Contains("Acme", version.DescriptorPayloadSource);
     }
 
@@ -140,14 +141,14 @@ public sealed class SavingEventDispatchTests
         // The audience for OnEntitySaving is the single aggregator — features contribute via the
         // typed interface, never their own IEventHandler<OnEntitySaving>.
         var services = new ServiceCollection();
-        services.AddScoped<IEventHandler, ApplyEntitySavingHandlers>();
+        services.TryAddEventHandler<OnEntitySaving, ApplyEntitySavingHandlers>();
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
+        // Resolve through the closed generic — the only service type the event pipeline dispatches.
         var savingSubscribers = scope.ServiceProvider
-            .GetServices<IEventHandler>()
-            .OfType<IEventHandler<OnEntitySaving>>()
+            .GetServices<IEventHandler<OnEntitySaving>>()
             .ToList();
 
         Assert.Single(savingSubscribers);
@@ -160,8 +161,8 @@ public sealed class SavingEventDispatchTests
         return new ActivityDefinitionVersion("1.0.0", defId)
         {
             Id = Guid.NewGuid().ToString("N"),
-            DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new TypeInformation("Foo", "Acme", "Acme", "1.0.0.0")),
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Acme.Foo")),
             DesignFacets =
             [
                 Facet("elsa.test.visual", """{ "lane": "left" }""")

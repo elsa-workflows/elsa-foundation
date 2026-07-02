@@ -80,9 +80,16 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Agent/Abstractions/EXTENSION_POINTS.md) |
-| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Identity/Abstractions/EXTENSION_POINTS.md) |
-| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/Agent/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/Agent/EXTENSION_POINTS.md) |
+| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/Elsa/Agent/Core/EXTENSION_POINTS.md`](src/Elsa/Agent/Core/EXTENSION_POINTS.md) |
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities, security guards) | [`src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Abstractions/EXTENSION_POINTS.md) |
+| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/Elsa/Agent/Workflows/EXTENSION_POINTS.md`](src/Elsa/Agent/Workflows/EXTENSION_POINTS.md) |
+
+### Secrets
+
+| Domain | Catalog |
+|---|---|
+| Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/Elsa/Secrets/Core/EXTENSION_POINTS.md`](src/Elsa/Secrets/Core/EXTENSION_POINTS.md) |
+| Secrets (default services + shell feature registration; service overrides for repository, value protector, audit sink, stores, type providers) | [`src/Elsa/Secrets/EXTENSION_POINTS.md`](src/Elsa/Secrets/EXTENSION_POINTS.md) |
 
 ### Persistence
 
@@ -97,6 +104,13 @@ not automatic constitution violations.
 | Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md`](src/Elsa/Activities/Flowchart/EXTENSION_POINTS.md) |
 | Activities runtime (activity constructors + resume target declarations) | [`src/Elsa/Activities/Runtime/EXTENSION_POINTS.md`](src/Elsa/Activities/Runtime/EXTENSION_POINTS.md) |
 | Activities sequence (runtime composite activity contracts) | [`src/Elsa/Activities/Sequence/EXTENSION_POINTS.md`](src/Elsa/Activities/Sequence/EXTENSION_POINTS.md) |
+| Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/If/EXTENSION_POINTS.md) |
+| Activities control-flow — Switch branches (per-case + default slots; `IActivityStructureHandler` contribution) | [`src/Elsa/Activities/ControlFlow/Switch/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/Switch/EXTENSION_POINTS.md) |
+| Activities control-flow — While loop (body slot, `Done` outcome, per-iteration `IterationId`; structure handler contribution) | [`src/Elsa/Activities/ControlFlow/While/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/While/EXTENSION_POINTS.md) |
+| Activities control-flow — Do loop (body slot, `Break`/`Done` outcomes, per-iteration `IterationId`; structure handler contribution) | [`src/Elsa/Activities/ControlFlow/Do/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/Do/EXTENSION_POINTS.md) |
+| Activities control-flow — For loop (counted iteration; structure handler + consumed runtime extensions) | [`src/Elsa/Activities/ControlFlow/For/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/For/EXTENSION_POINTS.md) |
+| Activities control-flow — ForEach loop (collection iteration; structure handler + runtime seam dependencies) | [`src/Elsa/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md) |
+| Activities control-flow — Parallel branches (fan-out/join; consumed runtime extension points + structure handler) | [`src/Elsa/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md`](src/Elsa/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md) |
 | Activities design — reconciliation sources | [`src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Activities design — CLR reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |

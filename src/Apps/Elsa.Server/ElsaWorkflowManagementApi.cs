@@ -9,6 +9,7 @@ using Elsa.Activities.Sequence.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
@@ -48,6 +49,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/definitions", ListDefinitionsAsync);
         group.MapGet("/definitions/{definitionId}", GetDefinitionAsync);
         group.MapPost("/definitions", CreateDefinitionAsync);
+        group.MapPatch("/definitions/{definitionId}", UpdateDefinitionMetadataAsync);
         group.MapDelete("/definitions/{definitionId}", DeleteDefinitionAsync);
         group.MapPost("/definitions/{definitionId}/restore", RestoreDefinitionAsync);
         group.MapDelete("/definitions/{definitionId}/permanent", DeleteDefinitionPermanentlyAsync);
@@ -67,6 +69,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/activities/availability/diagnostics", ListActivityAvailabilityDiagnosticsAsync);
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
         group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
+        group.MapGet("/descriptors/variables", ListVariableDescriptorsAsync);
 
         return endpoints;
     }
@@ -137,6 +140,29 @@ internal static class ElsaWorkflowManagementApi
             var submitted = await submit.Execute(request.Name.Trim(), request.Description, state, cancellationToken);
 
             return await LoadDefinitionResultAsync(services, submitted.DefinitionId, cancellationToken);
+        }, cancellationToken);
+
+    private static Task<IResult> UpdateDefinitionMetadataAsync(IShellRegistry shellRegistry, string definitionId, UpdateWorkflowDefinitionMetadataRequest request, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+            var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken);
+            if (definition is null || definition.DeletedAt is not null)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition '{definitionId}' was not found."));
+
+            // Partial update — only provided fields change.
+            if (request.Name is not null)
+            {
+                if (string.IsNullOrWhiteSpace(request.Name))
+                    return Results.BadRequest(new WorkflowManagementErrorResponse("A workflow name cannot be empty."));
+                definition.Name = request.Name.Trim();
+            }
+
+            if (request.Description is not null)
+                definition.Description = request.Description;
+
+            await SaveWorkflowDefinitionAsync(services, definition, cancellationToken);
+            return await LoadDefinitionResultAsync(services, definitionId, cancellationToken);
         }, cancellationToken);
 
     private static Task<IResult> DeleteDefinitionAsync(IShellRegistry shellRegistry, string definitionId, CancellationToken cancellationToken) =>
@@ -376,12 +402,13 @@ internal static class ElsaWorkflowManagementApi
             }
 
             var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ElsaWorkflowManagementApi));
+            var wellKnownTypeRegistry = services.GetRequiredService<IWellKnownTypeRegistry>();
             var response = versions
                 .Where(x => x.Definition is not null)
                 .OrderBy(x => x.Definition!.Category, StringComparer.Ordinal)
                 .ThenBy(x => x.Definition!.DisplayName, StringComparer.Ordinal)
                 .ThenBy(x => x.Id, StringComparer.Ordinal)
-                .Select(v => ToActivityDescriptorResponse(v, logger))
+                .Select(v => ToActivityDescriptorResponse(v, logger, wellKnownTypeRegistry))
                 .ToArray();
 
             return Results.Ok(new ActivityDescriptorsResponse(response));
@@ -400,6 +427,17 @@ internal static class ElsaWorkflowManagementApi
                 .ToArray();
 
             return Task.FromResult<IResult>(Results.Ok(new ExpressionDescriptorsResponse(response)));
+        }, cancellationToken);
+
+    private static Task<IResult> ListVariableDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services =>
+        {
+            var catalog = services.GetRequiredService<IVariableTypeDescriptorCatalog>();
+            var descriptors = catalog.GetDescriptors()
+                .Select(x => new VariableDescriptorResponse(x.Alias, x.DisplayName, x.Category, x.DefaultEditor))
+                .ToArray();
+
+            return Task.FromResult<IResult>(Results.Ok(new VariableDescriptorsResponse(descriptors)));
         }, cancellationToken);
 
     private static async Task<IResult> LoadDefinitionResultAsync(IServiceProvider services, string definitionId, CancellationToken cancellationToken)
@@ -605,7 +643,7 @@ internal static class ElsaWorkflowManagementApi
     private static bool IsSequenceActivity(string? activityTypeKey) =>
         activityTypeKey?.Contains(nameof(Sequence), StringComparison.Ordinal) == true;
 
-    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version, ILogger logger)
+    private static ActivityDescriptorResponse ToActivityDescriptorResponse(ActivityDefinitionVersion version, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
     {
         var definition = version.Definition!;
         var activityName = definition.ActivityTypeKey.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? definition.ActivityTypeKey;
@@ -618,7 +656,7 @@ internal static class ElsaWorkflowManagementApi
             definition.DisplayName ?? activityName,
             definition.Description,
             version.ExecutionType.ToString(),
-            version.Inputs.Select(input => ToInputDescriptorResponse(input, logger)).ToArray(),
+            version.Inputs.Select(input => ToInputDescriptorResponse(input, logger, wellKnownTypeRegistry)).ToArray(),
             version.Outputs.Select(ToOutputDescriptorResponse).ToArray(),
             version.DesignFacets.SelectMany(ToPortDescriptorResponses).ToArray(),
             new Dictionary<string, object>(),
@@ -629,7 +667,7 @@ internal static class ElsaWorkflowManagementApi
             false);
     }
 
-    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input, ILogger logger) =>
+    private static InputDescriptorResponse ToInputDescriptorResponse(Elsa.Activities.Design.Core.Models.InputDefinition input, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry) =>
         new(
             input.Name,
             GetTypeName(input.Type),
@@ -642,7 +680,7 @@ internal static class ElsaWorkflowManagementApi
             true,
             null,
             "Literal",
-            input.UISpecifications ?? GetUiSpecifications(input.Type, logger),
+            input.UISpecifications ?? GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
             input.IsRequired);
 
     private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
@@ -692,40 +730,30 @@ internal static class ElsaWorkflowManagementApi
         yield return new ExpressionDescriptorResponse("Input", "Input", null);
     }
 
-    private static string GetTypeName(TypeInformation type) => type.GetTypeFullName();
+    // The authored type is now a rename-proof alias (TypeReference); the descriptor response reports the alias.
+    private static string GetTypeName(TypeReference type) => type.Alias;
 
     private static int ParseMajorVersion(string version) =>
         int.TryParse(version.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(), out var major)
             ? major
             : 1;
 
-    private static string InferUiHint(TypeInformation type)
+    private static string InferUiHint(TypeReference type) =>
+        string.Equals(type.Alias, "Boolean", StringComparison.Ordinal) ? "checkbox" : "singleline";
+
+    // Restored (FR-004b / research D8 revised): the authored type is an alias, and the registry now resolves
+    // every referenceable element type (primitives + activity I/O types) back to its real CLR type — so an
+    // enum-typed input can again expose its option list. We resolve only the element type (collection-ness is
+    // irrelevant to whether the element is an enum) via IWellKnownTypeRegistry; unknown aliases yield no options.
+    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
     {
-        var typeName = GetTypeName(type);
-        if (string.Equals(typeName, typeof(bool).FullName, StringComparison.Ordinal))
-            return "checkbox";
-
-        return "singleline";
-    }
-
-    private static IDictionary<string, object>? GetUiSpecifications(TypeInformation type, ILogger logger)
-    {
-        try
-        {
-            var loadedType = type.LoadType();
-            if (!loadedType.IsEnum)
-                return null;
-
-            return new Dictionary<string, object>
-            {
-                ["options"] = Enum.GetNames(loadedType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
-            };
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not load UI specifications for type {TypeName}.", type.TypeName);
+        if (!wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var elementType) || !elementType.IsEnum)
             return null;
-        }
+
+        return new Dictionary<string, object>
+        {
+            ["options"] = Enum.GetNames(elementType).Select(name => new DescriptorOptionResponse(name, name)).ToArray()
+        };
     }
 
     private static bool IsContainerDesignFacet(Elsa.Activities.Design.Core.Models.ActivityDesignFacet facet) =>
@@ -842,6 +870,8 @@ internal sealed record WorkflowDraftResponse(
 
 internal sealed record CreateWorkflowDefinitionRequest(string Name, string? Description, string? RootKind, string? RootActivityVersionId);
 
+internal sealed record UpdateWorkflowDefinitionMetadataRequest(string? Name, string? Description);
+
 internal sealed record UpdateWorkflowDraftRequest(
     WorkflowDefinitionStateView State,
     IReadOnlyCollection<DesignMetadataRecord> Layout);
@@ -923,3 +953,7 @@ internal sealed record DescriptorOptionResponse(string Label, object Value);
 internal sealed record ExpressionDescriptorsResponse(IReadOnlyList<ExpressionDescriptorResponse> Items);
 
 internal sealed record ExpressionDescriptorResponse(string Type, string DisplayName, string? Description);
+
+internal sealed record VariableDescriptorsResponse(IReadOnlyList<VariableDescriptorResponse> Descriptors);
+
+internal sealed record VariableDescriptorResponse(string Alias, string DisplayName, string Category, string DefaultEditor);

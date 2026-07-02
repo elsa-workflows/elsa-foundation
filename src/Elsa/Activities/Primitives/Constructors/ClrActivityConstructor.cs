@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
@@ -9,34 +10,50 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Primitives.Constructors;
 
 /// <summary>
-/// Constructs CLR-backed activities. The descriptor is <see cref="TypeInformation"/> (the CLR
-/// descriptor, owned by <c>Elsa.Primitives</c>); construction loads the type and activates it, then
-/// binds the author arguments to its typed properties. Runtime-side, no Design dependency.
+/// Constructs CLR-backed activities. The descriptor is <see cref="ClrActivityDescriptor"/> (the stable
+/// alias identity, owned by <c>Elsa.Primitives</c>); construction resolves the alias to a live CLR type
+/// through the <see cref="IWellKnownTypeRegistry"/> and activates it, then binds the author arguments to
+/// its typed properties. Runtime-side, no Design dependency.
 /// </summary>
 /// <remarks>
-/// The payload is materialised with <see cref="IPayloadSerializer"/> — the same contract that wrote
-/// it on the design side — so casing/converter settings round-trip faithfully (raw
-/// <c>JsonSerializer</c> defaults would not match the camelCase-on-write convention).
+/// <para>
+/// Resolution is alias-based, never <c>Assembly.Load(name, version)</c>: the alias the reflection-only
+/// scanner emitted is the shared <see cref="TypeAliasConvention"/> canonical alias, and the framework's
+/// startup pass registers every loaded activity CLR type under that same convention, so the alias resolves
+/// back to the real type. An alias that resolves to nothing is a loud <see cref="UnknownActivityTypeException"/>
+/// (a missing assembly), never a silent fall-through to <c>object</c>.
+/// </para>
+/// <para>
+/// The payload is materialised with <see cref="IPayloadSerializer"/> — the same contract that wrote it on
+/// the design side — so casing/converter settings round-trip faithfully (raw <c>JsonSerializer</c> defaults
+/// would not match the camelCase-on-write convention).
+/// </para>
 /// </remarks>
-public sealed class ClrActivityConstructor(IServiceProvider serviceProvider, ActivityArgumentBinder binder, IPayloadSerializer payloadSerializer)
-    : IActivityConstructor<TypeInformation>
+public sealed class ClrActivityConstructor(
+    IServiceProvider serviceProvider,
+    ActivityArgumentBinder binder,
+    IPayloadSerializer payloadSerializer,
+    IWellKnownTypeRegistry typeRegistry)
+    : IActivityConstructor<ClrActivityDescriptor>
 {
-    public string DescriptorType => typeof(TypeInformation).FullName!;
+    public string DescriptorType => typeof(ClrActivityDescriptor).FullName!;
 
     ValueTask<IActivity> IActivityConstructor.Construct(
         JsonElement payload,
         IDictionary<string, InputArgument>? inputs,
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
-        => Construct(payloadSerializer.Deserialize<TypeInformation>(payload), inputs, outputs, cancellationToken);
+        => Construct(payloadSerializer.Deserialize<ClrActivityDescriptor>(payload), inputs, outputs, cancellationToken);
 
     public ValueTask<IActivity> Construct(
-        TypeInformation descriptor,
+        ClrActivityDescriptor descriptor,
         IDictionary<string, InputArgument>? inputs,
         IDictionary<string, OutputArgument>? outputs,
         CancellationToken cancellationToken)
     {
-        var type = descriptor.LoadType();
+        if (!typeRegistry.TryGetTypeOrDefault(descriptor.TypeAlias, out var type))
+            throw new UnknownActivityTypeException(descriptor.TypeAlias);
+
         var activity = (IActivity)ActivatorUtilities.CreateInstance(serviceProvider, type);
         binder.Bind(activity, inputs, outputs);
         return new(activity);

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Elsa.Primitives.Persistence;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Events;
@@ -64,7 +65,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || !lifecyclePolicy.EvaluatePublicVisibility(secret).Allowed)
+        if (!IsPubliclyVisible(secret))
             return null;
 
         return mapper.Map(secret);
@@ -165,7 +166,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
+        if (!IsPublicOperationAllowed(secret))
             return null;
 
         secret.Status = SecretStatus.Revoked;
@@ -183,7 +184,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
+        if (!IsPublicOperationAllowed(secret))
             return false;
 
         var store = storeRegistry.Get(secret.StoreName);
@@ -201,7 +202,7 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
+        if (!IsPublicOperationAllowed(secret))
             return SecretTestResult.Failure("not-found", "Secret not found.");
 
         var version = secret.LatestActiveVersion;
@@ -233,11 +234,17 @@ public sealed class DefaultSecretManager(
         var normalizedName = nameValidator.Normalize(name);
         var secret = await repository.FindAsync(normalizedName, cancellationToken);
 
-        if (secret is null || !lifecyclePolicy.EvaluatePublicOperation(secret).Allowed)
+        if (!IsPublicOperationAllowed(secret))
             throw new InvalidOperationException("Secret not found.");
 
         return secret;
     }
+
+    private bool IsPubliclyVisible([NotNullWhen(true)] Secret? secret)
+        => secret is not null && lifecyclePolicy.EvaluatePublicVisibility(secret).Allowed;
+
+    private bool IsPublicOperationAllowed([NotNullWhen(true)] Secret? secret)
+        => secret is not null && lifecyclePolicy.EvaluatePublicOperation(secret).Allowed;
 
     private static SecretPayload ToPayload(string? value, string? configurationKey, IDictionary<string, string> metadata)
     {

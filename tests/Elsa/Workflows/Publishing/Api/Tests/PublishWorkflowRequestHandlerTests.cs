@@ -36,7 +36,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     private const string UnknownStructureSchemaVersion = "1.0.0";
 
     private readonly InMemoryWorkflowExecutableStore _store = new();
-    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", TypeInformation.String);
+    private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
     private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
@@ -232,9 +232,9 @@ public sealed class PublishWorkflowRequestHandlerTests
     public async Task ComputesDifferentArtifactIdWhenLiteralInputTypeMetadataChanges()
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("1")));
-        var stringView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.String))
+        var stringView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("String")))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", TypeInformation.Integer))
+        var integerView = await Handler(workflowVersion, ActivityVersion("activity-write-line", "Text", new TypeReference("Int32")))
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
         Assert.NotEqual(stringView.ArtifactId, integerView.ArtifactId);
@@ -249,7 +249,8 @@ public sealed class PublishWorkflowRequestHandlerTests
             new WorkflowExecutableCompiler(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore(activityVersions.ToList()),
-                _activityStructureService),
+                _activityStructureService,
+                TestWellKnownTypeRegistry.Create()),
             _store);
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
@@ -305,7 +306,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     private static WorkflowArgumentState Text(string value) =>
         new("Text", new ArgumentValue(value, "Literal"), null, null, null, null);
 
-    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeInformation inputType) =>
+    private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string activityTypeKey) =>
@@ -321,8 +322,8 @@ public sealed class PublishWorkflowRequestHandlerTests
                 ActivityTypeKey = activityTypeKey,
                 Category = "Test"
             },
-            DescriptorType = typeof(TypeInformation).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(TypeInformation.FromType<object>()),
+            DescriptorType = typeof(ClrActivityDescriptor).FullName!,
+            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
             Inputs = inputs
         };
 

@@ -99,3 +99,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [077-workflow-instance-inspection](../../specs/077-workflow-instance-inspection/spec.md) | Workflow Instance Inspection | Draft | - | 31 | 0 | deferred, out of scope |
 | [078-package-first-module-registry](../../specs/078-package-first-module-registry/spec.md) | Package-First Module Registry | unknown | - | 0 | 0 | - |
 | [079-activity-execution-inspection](../../specs/079-activity-execution-inspection/spec.md) | Activity Execution Inspection | Draft | - | 51 | 0 | deferred, out of scope |
+| [079-secrets-module](../../specs/079-secrets-module/spec.md) | Secrets Module | Draft | - | 64 | 6 | out of scope |
+| [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |

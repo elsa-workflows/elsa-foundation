@@ -47,7 +47,7 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             }
             catch (Exception e) when (e is NotSupportedException or TargetException)
             {
-                return default!;
+                throw new JsonException($"Failed to deserialize polymorphic value into target type '{targetType}'.", e);
             }
         }
 
