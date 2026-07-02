@@ -57,7 +57,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(schedulePayload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, schedulePayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, schedulePayload.PinnedExecutable, executable.Identity);
 
         if (!executable.NodesById.TryGetValue(schedulePayload.ExecutableNodeId, out var executableNode))
             throw new InvalidOperationException($"ScheduleActivity scheduler work item '{workItem.WorkItemId}' references executable node '{schedulePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -112,19 +112,6 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             "reason" or
             "schedulingActivityExecutionId" or
             "parentActivityExecutionId";
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"ScheduleActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
 
     private ActivityExecutionState NewActivityExecutionState(
         RuntimeSchedulerWorkItem workItem,

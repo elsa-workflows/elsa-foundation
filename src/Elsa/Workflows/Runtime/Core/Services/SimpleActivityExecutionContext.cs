@@ -190,10 +190,10 @@ public sealed class SimpleActivityExecutionContext(
     public object? GetVariableValueOrDefault(string variableName) =>
         VariableScope is { } scope && scope.TryGetValueByName(variableName, out var value) ? value : null;
     public string GetCorrelationId() => string.Empty;
-    public string GetWorkfowDefinitionId() => string.Empty;
-    public string GetWorkfowDefinitionVersionId() => string.Empty;
-    public int GetWorkfowDefinitionVersion() => 0;
-    public string GetWorkfowInstanceId() => string.Empty;
+    public string GetWorkflowDefinitionId() => string.Empty;
+    public string GetWorkflowDefinitionVersionId() => string.Empty;
+    public int GetWorkflowDefinitionVersion() => 0;
+    public string GetWorkflowInstanceId() => string.Empty;
 
     public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => _memory.Declare(blockReference);
     public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => _memory.TryGetBlock(blockReference.Id, out block);

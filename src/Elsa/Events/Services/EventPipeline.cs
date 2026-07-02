@@ -8,7 +8,7 @@ namespace Elsa.Events.Services;
 /// <inheritdoc />
 public sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipeline
 {
-    private EventMiddlewareDelegate? _pipeline;
+    private volatile EventMiddlewareDelegate? _pipeline;
 
     public EventMiddlewareDelegate Pipeline => _pipeline ??= CreateDefaultPipeline();
 

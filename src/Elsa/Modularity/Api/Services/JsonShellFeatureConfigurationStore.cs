@@ -21,6 +21,9 @@ public sealed class JsonShellFeatureConfigurationStore(
         WriteIndented = true
     };
 
+    private static readonly JsonElement s_emptyObject = CreateEmptyObject();
+    private static JsonElement CreateEmptyObject() { using var d = JsonDocument.Parse("{}"); return d.RootElement.Clone(); }
+
     public async Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default)
     {
         var document = await ReadDocumentAsync(cancellationToken);
@@ -88,25 +91,17 @@ public sealed class JsonShellFeatureConfigurationStore(
             if (string.IsNullOrWhiteSpace(name) || configuration is null)
                 continue;
 
-            if (configuration is JsonValue value &&
-                value.TryGetValue<bool>(out var enabled) &&
-                !enabled)
+            if (configuration is JsonValue jsonBool && jsonBool.TryGetValue<bool>(out var flagEnabled))
             {
-                continue;
-            }
-
-            if (configuration is JsonValue boolValue &&
-                boolValue.TryGetValue<bool>(out var boolEnabled) &&
-                boolEnabled)
-            {
-                features[name] = JsonDocument.Parse("{}").RootElement.Clone();
+                if (flagEnabled)
+                    features[name] = s_emptyObject;
                 continue;
             }
 
             var element = JsonSerializer.Deserialize<JsonElement>(configuration.ToJsonString());
             features[name] = element.ValueKind is JsonValueKind.Object
                 ? element.Clone()
-                : JsonDocument.Parse("{}").RootElement.Clone();
+                : s_emptyObject;
         }
 
         var revision = CreateRevision(featuresNode.ToJsonString(JsonOptions));

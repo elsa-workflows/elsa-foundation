@@ -28,6 +28,9 @@ public sealed record FeatureDependency(string Id, bool Optional);
 
 public sealed class FeatureCatalogItemBuilder
 {
+    private static readonly JsonElement s_emptyObject = CreateEmptyObject();
+    private static JsonElement CreateEmptyObject() { using var d = JsonDocument.Parse("{}"); return d.RootElement.Clone(); }
+
     public string Id { get; init; } = "";
     public string? DisplayName { get; set; }
     public string? Description { get; set; }
@@ -36,7 +39,7 @@ public sealed class FeatureCatalogItemBuilder
     public string? PackageId { get; set; }
     public string? PackageVersion { get; set; }
     public bool Enabled { get; set; }
-    public JsonElement Configuration { get; set; } = JsonDocument.Parse("{}").RootElement.Clone();
+    public JsonElement Configuration { get; set; } = s_emptyObject;
     public bool Advanced { get; set; }
     public bool Experimental { get; set; }
     public string? ManifestPath { get; set; }

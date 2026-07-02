@@ -55,7 +55,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
 
         if (!executable.NodesById.ContainsKey(payload.ExecutableNodeId))
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -236,16 +236,4 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
     }
 
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"CreateBookmark scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
 }
