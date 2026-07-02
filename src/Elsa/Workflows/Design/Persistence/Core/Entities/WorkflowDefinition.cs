@@ -30,11 +30,24 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
     public IWorkflowDefinition ShallowClone() => (WorkflowDefinition)MemberwiseClone();
 
     /// <summary>Builds the persistence entity from any <see cref="IWorkflowDefinition"/> (e.g. a factory read-model).</summary>
-    public static WorkflowDefinition From(IWorkflowDefinition source) =>
-        new()
+    public static WorkflowDefinition From(IWorkflowDefinition source)
+    {
+        var definition = new WorkflowDefinition
         {
             Id = source.Id,
             Name = source.Name,
             Description = source.Description,
         };
+
+        // DeletedAt/DeletedReason are persistence-only fields (not on IWorkflowDefinition), so they can
+        // only be carried across when the source is itself a materialised entity. Preserving them keeps
+        // soft-deleted definitions from silently resurfacing when a store re-materialises reads through From.
+        if (source is WorkflowDefinition entity)
+        {
+            definition.DeletedAt = entity.DeletedAt;
+            definition.DeletedReason = entity.DeletedReason;
+        }
+
+        return definition;
+    }
 }
