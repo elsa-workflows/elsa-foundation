@@ -36,7 +36,7 @@ namespace Elsa.Activities.For.Internal;
 /// </description></item>
 /// </list>
 /// </remarks>
-internal readonly record struct ForRange
+public readonly record struct ForRange
 {
     private ForRange(int start, int end, int step, bool endInclusive)
     {

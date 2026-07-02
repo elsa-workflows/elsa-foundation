@@ -5,7 +5,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Ingestion.HttpProtobuf;
 
-internal static class OtlpHttpProtobufParser
+public static class OtlpHttpProtobufParser
 {
     public static OpenTelemetryBatch ParseTraces(ReadOnlySpan<byte> payload)
     {

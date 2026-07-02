@@ -60,8 +60,8 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
     }
 
     // Test seam: lets a unit test substitute the baseline (runtime-loaded) assembly source so the
-    // IFeatureAssemblyProvider path can be exercised in isolation from the host AppDomain.
-    internal RegisterActivityTypesStartupTask(
+    // IFeatureAssemblyProvider path can be exercised in isolation from the host AppDomain (§2.23.3).
+    public RegisterActivityTypesStartupTask(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IEnumerable<IFeatureAssemblyProvider> assemblyProviders,
         IServiceProvider serviceProvider,
