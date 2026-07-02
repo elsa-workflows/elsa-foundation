@@ -81,7 +81,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [061-runtime-activity-input-resolution](../../specs/061-runtime-activity-input-resolution/spec.md) | Runtime Activity Input Resolution | Draft | - | 10 | 0 | - |
 | [062-runtime-activity-fault-incidents](../../specs/062-runtime-activity-fault-incidents/spec.md) | Runtime Activity Fault Incidents | Draft | - | 9 | 0 | - |
 | [063-runtime-bookmark-resume-fault-incidents](../../specs/063-runtime-bookmark-resume-fault-incidents/spec.md) | Runtime Bookmark Resume Fault Incidents | Draft | - | 9 | 0 | - |
-| [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Draft | - | 7 | 0 | - |
+| [064-runtime-workflow-execution-context](../../specs/064-runtime-workflow-execution-context/spec.md) | Runtime Workflow Execution Context | Superseded (mechanism) by [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) — intent carried forward and implemented by [spec 083 (runtime execution-time expression carrier)](../083-runtime-execution-expression-carrier/spec.md) | - | 7 | 0 | superseded |
 | [065-runtime-remove-execution-pool](../../specs/065-runtime-remove-execution-pool/spec.md) | Runtime Remove Execution Pool | Draft | - | 7 | 0 | - |
 | [066-runtime-storage-driver-boundary](../../specs/066-runtime-storage-driver-boundary/spec.md) | Runtime Storage Driver Boundary | Draft | - | 9 | 0 | - |
 | [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Draft | - | 9 | 0 | - |
@@ -101,3 +101,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [079-activity-execution-inspection](../../specs/079-activity-execution-inspection/spec.md) | Activity Execution Inspection | Draft | - | 51 | 0 | deferred, out of scope |
 | [079-secrets-module](../../specs/079-secrets-module/spec.md) | Secrets Module | Draft | - | 64 | 6 | out of scope |
 | [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |
+| [081-typed-argument-model](../../specs/081-typed-argument-model/spec.md) | Typed Argument Model + Type Descriptor Registry (Backend) | Draft | - | 42 | 2 | retained, deferred, out of scope |
+| [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Draft | - | 0 | 25 | superseded |
