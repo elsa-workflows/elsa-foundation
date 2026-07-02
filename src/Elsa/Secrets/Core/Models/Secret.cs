@@ -11,7 +11,7 @@ public sealed class Secret
     public string? Scope { get; set; }
     public HashSet<string> Tags { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public SecretStatus Status { get; set; } = SecretStatus.Active;
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UnixEpoch;
     public DateTimeOffset? UpdatedAt { get; set; }
     public IList<SecretVersion> Versions { get; set; } = [];
 
