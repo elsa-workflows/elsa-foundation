@@ -72,9 +72,9 @@ A framework or third-party module registers its runtime middleware through a sin
 **Acceptance Scenarios**:
 
 1. **Given** a middleware annotated `[RuntimeMiddleware(slot, Order = -100)]` registered with `AddActivityRuntimeMiddleware<T>()`, **When** the pipeline is composed, **Then** it is placed at that slot/order; explicit arguments to the registration call override the attribute.
-2. **Given** two distinct middleware registered at the same `(slot, order)`, **When** the plan is built, **Then** composition fails with an error naming the conflict (and, when one is the built-in at order 0, guidance to choose a negative/positive order).
-3. **Given** the same set of middleware registered in different orders, **When** the plan is built, **Then** the resolved order is identical (deterministic by slot, order, then type name).
-4. **Given** `Replace<TOld,TNew>()` / `Remove<T>()` on the builder, **When** the plan is built, **Then** the built-in is swapped/dropped at its placement.
+2. **Given** a module registered at the built-in's slot with the default order 0, **When** the plan is built, **Then** it runs immediately after the built-in (no error); **and given** two distinct *module* middleware at the same `(slot, order)`, composition fails with an error naming the conflict.
+3. **Given** the same set of middleware registered in different orders, **When** the plan is built, **Then** the resolved order is identical (deterministic by slot, order, built-ins-first, then type name); an identical registration repeated collapses to one.
+4. **Given** `Replace<TOld,TNew>()` / idempotent `Remove<T>()` on the builder, **When** the plan is built, **Then** the built-in is swapped/dropped at its placement.
 
 ### Edge Cases
 
@@ -99,8 +99,8 @@ A framework or third-party module registers its runtime middleware through a sin
 - **FR-010**: The existing `RuntimePipelineContractTests` (the locked slot contract) MUST continue to pass unchanged.
 - **FR-011**: The runtime MUST expose a single DI contribution mechanism (`AddWorkflowRuntimeMiddleware<T>` / `AddActivityRuntimeMiddleware<T>`) that atomically registers the middleware type and its placement, usable identically by framework built-ins, first-party modules, and third-party modules (no privileged path). The feature MUST apply DI-registered contributions to the pipeline before composing it.
 - **FR-012**: Middleware placement MUST be declarative: a `[RuntimeMiddleware(slot, Order)]` attribute supplies the default slot/order/name, and explicit arguments to the registration call MUST override it. Registration with neither an attribute nor an explicit slot MUST fail with a clear error.
-- **FR-013**: The resolved pipeline order MUST be deterministic and independent of registration/module-load order (ordered by slot, then order, then a stable type key), and two distinct middleware sharing the same `(slot, order)` MUST be a build-time error that names the conflict (with before/after guidance when one is the built-in at order 0).
-- **FR-014**: The builder MUST support `Replace<TOld,TNew>()` and `Remove<T>()` for swapping or disabling middleware (including built-ins) at their placement, and the fully-resolved plan MUST be logged at Debug on composition so ordering is inspectable. Concrete-neighbour ("after middleware X") ordering MUST NOT be supported (slots + numeric order only).
+- **FR-013**: The resolved pipeline order MUST be deterministic and independent of registration/module-load order (ordered by slot, then order, then built-ins-first, then a stable type key). Built-ins run first at a given order, so a module at the built-in's order 0 runs after it (the zero-config default works); a module runs before the built-in only with a negative order. Two distinct **module** middleware sharing the same `(slot, order)` MUST be a build-time error naming the conflict; an identical registration repeated MUST be idempotent (collapse to one).
+- **FR-014**: The builder MUST support `Replace<TOld,TNew>()` (throws if the target is absent) and idempotent `Remove<T>()` for swapping or disabling middleware (including built-ins) at their placement, and the fully-resolved plan MUST be logged at Debug on composition so ordering is inspectable. Concrete-neighbour ("after middleware X") ordering MUST NOT be supported (slots + numeric order only).
 
 ### Key Entities *(include if feature involves data)*
 

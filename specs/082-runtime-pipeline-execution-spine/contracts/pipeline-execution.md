@@ -83,5 +83,6 @@ Builder Remove<TMiddleware>();
 **Guarantees**
 - Placement resolves to explicit args, else the `[RuntimeMiddleware]` attribute, else a thrown error (missing slot).
 - Built-ins, first-party, and third-party middleware use the same path; built-ins are marked `IsBuiltIn` and sit at order 0.
-- `BuildPlan()` orders by `(slot sort-order, order, type full-name)` — deterministic, load-order-independent — and throws `InvalidOperationException` on two distinct middleware sharing a `(slot, order)` (with before/after guidance when one is the built-in).
+- `BuildPlan()` orders by `(slot sort-order, order, built-ins-first, type full-name)` — deterministic, load-order-independent. A module at the built-in's order 0 runs after it; a negative order runs before. It throws `InvalidOperationException` on two distinct **module** middleware sharing a `(slot, order)`, and collapses an identical repeated registration to one (idempotent).
+- `Replace` throws if the target is absent; `Remove` is idempotent (no-op when absent).
 - The feature applies DI-collected contributions to the builder before composing, and logs the resolved plan at Debug on first composition. Concrete-neighbour ordering is not supported.

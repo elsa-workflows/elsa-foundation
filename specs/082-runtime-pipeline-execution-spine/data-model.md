@@ -43,11 +43,13 @@ New types (all `Elsa.Workflows.Runtime.Core.Middleware`, Runtime-owned):
 Builder additions (`RuntimePipelinePlanBuilder` + the two concrete builders):
 
 - `Use(Type, slot, order = 0, name = null)` — non-generic placement (used to apply contributions); validates the type implements the pipeline's middleware interface.
-- `Replace<TOld, TNew>()` / `Remove<T>()` — swap/drop a registration (including built-ins) at its placement; throw if the target is absent.
+- `Replace<TOld, TNew>()` — swap a registration (including a built-in) at its placement; throws if the target is absent.
+- `Remove<T>()` — drop a registration; **idempotent** (no-op when absent) so independent modules can each disable it.
 
 Ordering rule change in `BuildPlan()`:
 
-- Sort key changed from `(SortOrder, Order, RegistrationIndex)` to `(SortOrder, Order, MiddlewareType.FullName)` — deterministic, load-order-independent.
-- Two **distinct** middleware sharing the same `(slot, order)` → `InvalidOperationException` naming the conflict; built-ins occupy order 0, so a module at order 0 in a built-in slot collides and is told to pick a negative (before) or positive (after) order.
+- Sort key changed from `(SortOrder, Order, RegistrationIndex)` to `(SortOrder, Order, IsBuiltIn desc, MiddlewareType.FullName)` — deterministic and load-order-independent, with built-ins running first at a given order.
+- Built-ins occupy order 0 and run first, so a module left at the default order 0 runs **after** the slot's built-in (no collision); a negative order runs before it.
+- Two **distinct module** middleware sharing the same `(slot, order)` → `InvalidOperationException` naming the conflict. An identical `(slot, order, type)` registered more than once is **collapsed to one** (idempotent), so duplicate registration runs once, not once per registration.
 
 Feature wiring: the `IRuntimeWorkflow/ActivityExecutionPipeline` factory applies the DI-collected contributions to a fresh builder, builds the plan, logs the resolved plan at Debug, and constructs the pipeline. Built-ins and module contributions flow through the same builder (no privileged path).
