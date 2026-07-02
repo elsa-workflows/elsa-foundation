@@ -34,15 +34,36 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
 
     private static RuntimePipelineKind SelectCompleteActivityPipeline(RuntimeSchedulerWorkItem workItem)
     {
-        // Read only the completion-kind discriminator instead of deserializing the whole payload. Any absent property,
-        // absent/non-object payload, or malformed value falls through to the routing (workflow) default, matching
-        // WorkflowCompleteActivitySchedulerWorkHandler.CanHandle. Selection never throws.
-        return IsParentCompletionEvaluation(workItem.Payload)
+        // Fast path: if the discriminator is not parent-completion, the item is workflow routing work — decide from the
+        // cheap property read without deserializing the whole payload (absent/non-object payload → workflow too).
+        if (!ReadsAsParentCompletionKind(workItem.Payload))
+            return RuntimePipelineKind.Workflow;
+
+        // The discriminator reads as parent-completion; confirm with the *same* full deserialize the parent-completion
+        // handler's CanHandle performs. A payload that reads as parent-completion but fails validation is claimed by the
+        // workflow routing handler (whose CanHandle catches the same throw and returns true), so route it to workflow to
+        // keep selection in agreement with the handler that actually runs.
+        return DeserializesAsParentCompletion(workItem.Payload)
             ? RuntimePipelineKind.Activity
             : RuntimePipelineKind.Workflow;
     }
 
-    private static bool IsParentCompletionEvaluation(JsonElement? payload)
+    private static bool DeserializesAsParentCompletion(JsonElement? payload)
+    {
+        if (payload is not { } element)
+            return false;
+
+        try
+        {
+            return element.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ReadsAsParentCompletionKind(JsonElement? payload)
     {
         if (payload is not { ValueKind: JsonValueKind.Object } element)
             return false;

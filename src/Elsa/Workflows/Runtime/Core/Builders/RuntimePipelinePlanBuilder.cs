@@ -35,7 +35,7 @@ public abstract class RuntimePipelinePlanBuilder
 
     public RuntimePipelinePlan BuildPlan()
     {
-        var steps = _registrations
+        var ordered = _registrations
             .Select(registration => new RuntimePipelinePlanStep(
                 registration.PipelineKind,
                 registration.MiddlewareType,
@@ -44,15 +44,16 @@ public abstract class RuntimePipelinePlanBuilder
                 registration.Order,
                 registration.RegistrationIndex,
                 registration.IsBuiltIn))
-            // Deterministic order: slot, then coarse order, then a stable key (type name) so the resolved plan is
-            // independent of registration/module-load order. True (slot, order) ties between distinct middleware are
-            // rejected below rather than silently resolved.
+            // Deterministic order, independent of registration/module-load order: slot, then coarse order, then
+            // built-ins before modules at the same order (so a module at the built-in's order 0 runs *after* it), then
+            // a stable type key. Genuine ties between distinct module middleware are rejected below, not silently resolved.
             .OrderBy(step => step.Slot.SortOrder)
             .ThenBy(step => step.Order)
+            .ThenByDescending(step => step.IsBuiltIn)
             .ThenBy(step => step.MiddlewareType.FullName, StringComparer.Ordinal)
             .ToArray();
 
-        GuardAgainstSlotOrderCollisions(steps);
+        var steps = DedupAndGuard(ordered);
 
         return new RuntimePipelinePlan(PipelineKind, Array.AsReadOnly(steps));
     }
@@ -77,13 +78,15 @@ public abstract class RuntimePipelinePlanBuilder
             throw new InvalidOperationException($"Cannot replace {PipelineKind} runtime middleware '{oldType.Name}': it is not registered on this pipeline.");
     }
 
-    /// <summary>Removes every registration of <paramref name="middlewareType"/>.</summary>
+    /// <summary>
+    /// Removes every registration of <paramref name="middlewareType"/>. Idempotent: removing an absent middleware is a
+    /// no-op, so independent modules can each disable it without depending on composition order.
+    /// </summary>
     protected void RemoveRegistration(Type middlewareType)
     {
         ArgumentNullException.ThrowIfNull(middlewareType);
 
-        if (_registrations.RemoveAll(registration => registration.MiddlewareType == middlewareType) == 0)
-            throw new InvalidOperationException($"Cannot remove {PipelineKind} runtime middleware '{middlewareType.Name}': it is not registered on this pipeline.");
+        _registrations.RemoveAll(registration => registration.MiddlewareType == middlewareType);
     }
 
     protected void AddRegistration(
@@ -119,23 +122,32 @@ public abstract class RuntimePipelinePlanBuilder
                 nameof(middlewareType));
     }
 
-    private void GuardAgainstSlotOrderCollisions(IReadOnlyList<RuntimePipelinePlanStep> steps)
+    private RuntimePipelinePlanStep[] DedupAndGuard(IReadOnlyList<RuntimePipelinePlanStep> ordered)
     {
-        foreach (var collision in steps
-                     .GroupBy(step => (step.Slot.Name, step.Order))
-                     .Where(group => group.Select(step => step.MiddlewareType).Distinct().Count() > 1))
-        {
-            var builtIn = collision.FirstOrDefault(step => step.IsBuiltIn);
-            var types = string.Join(", ", collision.Select(step => step.MiddlewareType.Name).Distinct());
-            var placement = $"slot '{collision.Key.Name}' order {collision.Key.Order}";
+        // Idempotent registration: an identical (slot, order, type) registered more than once collapses to a single
+        // step so it runs once, not once per registration. `ordered` is already sorted and equal keys are adjacent,
+        // so first-occurrence grouping preserves the sort order.
+        var deduped = ordered
+            .GroupBy(step => (step.Slot.Name, step.Order, step.MiddlewareType))
+            .Select(group => group.First())
+            .ToArray();
 
-            var guidance = builtIn is not null
-                ? $"'{builtIn.MiddlewareType.Name}' is the built-in at order 0; choose a negative order to run before it or a positive order to run after it."
-                : "give each an explicit, distinct Order.";
+        // Ambiguous ordering is only a problem between distinct *module* middleware: built-ins deterministically run
+        // first at a given order, so a module sharing that order simply runs after the built-in. Two distinct modules
+        // at the same (slot, order) have no defined relative order → reject and make the author disambiguate.
+        foreach (var group in deduped.GroupBy(step => (step.Slot.Name, step.Order)))
+        {
+            var modules = group.Where(step => !step.IsBuiltIn).ToArray();
+            if (modules.Length <= 1)
+                continue;
+
+            var types = string.Join(", ", modules.Select(step => step.MiddlewareType.Name));
 
             throw new InvalidOperationException(
-                $"Ambiguous {PipelineKind} runtime pipeline ordering: {placement} is claimed by multiple middleware ({types}). {guidance}");
+                $"Ambiguous {PipelineKind} runtime pipeline ordering: slot '{group.Key.Name}' order {group.Key.Order} is claimed by multiple middleware ({types}). Give each a distinct order.");
         }
+
+        return deduped;
     }
 
     private RuntimePipelineSlotDefinition GetSlot(string slotName) => _slotsByName[slotName];

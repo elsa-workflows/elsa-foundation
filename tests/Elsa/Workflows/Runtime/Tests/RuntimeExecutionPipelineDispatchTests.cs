@@ -15,9 +15,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// dispatch through the drainer — not merely that the builder registers it — so the pipeline cannot silently re-orphan.
 /// Also covers the work-item → pipeline-kind selector.
 /// </summary>
-public sealed class RuntimeExecutionPipelineDispatchTests
+public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestSupport
 {
-    private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Drainer_RunsRegisteredActivityMiddlewareAroundHandler_OnRealActivityDispatch()
@@ -29,7 +28,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
         var drainer = NewDrainer(queue, handler, BuildDispatcher(provider, WorkflowPlan(), activityPlan));
-        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+        await queue.EnqueueAsync(NewWorkItem(WorkflowExecutionCommandKind.InvokeActivity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
@@ -48,7 +47,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
         var drainer = NewDrainer(queue, handler, BuildDispatcher(provider, workflowPlan, ActivityPlan()));
-        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.Checkpoint));
+        await queue.EnqueueAsync(NewWorkItem(WorkflowExecutionCommandKind.Checkpoint));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
@@ -68,7 +67,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
         var drainer = NewDrainer(queue, handler, BuildDispatcher(provider, WorkflowPlan(), activityPlan));
-        await queue.EnqueueAsync(NewWorkItem(1, WorkflowExecutionCommandKind.InvokeActivity));
+        await queue.EnqueueAsync(NewWorkItem(WorkflowExecutionCommandKind.InvokeActivity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
 
@@ -90,7 +89,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
     [InlineData(WorkflowExecutionCommandKind.CreateBookmark, RuntimePipelineKind.Activity)]
     public void Selector_MapsCommandKindToPipeline(WorkflowExecutionCommandKind commandKind, RuntimePipelineKind expected)
     {
-        var selected = new RuntimeSchedulerPipelineSelector().Select(NewWorkItem(1, commandKind));
+        var selected = new RuntimeSchedulerPipelineSelector().Select(NewWorkItem(commandKind));
 
         Assert.Equal(expected, selected);
     }
@@ -113,11 +112,23 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         var selector = new RuntimeSchedulerPipelineSelector();
         using var malformed = JsonDocument.Parse("""{"completionKind":"not-a-kind"}""");
 
-        var noPayload = NewWorkItem(1, WorkflowExecutionCommandKind.CompleteActivity, payload: null);
-        var malformedPayload = NewWorkItem(2, WorkflowExecutionCommandKind.CompleteActivity, payload: malformed.RootElement.Clone());
+        var noPayload = NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: null);
+        var malformedPayload = NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, index: 2, payload: malformed.RootElement.Clone());
 
         Assert.Equal(RuntimePipelineKind.Workflow, selector.Select(noPayload));
         Assert.Equal(RuntimePipelineKind.Workflow, selector.Select(malformedPayload));
+    }
+
+    [Fact]
+    public void Selector_RoutesInvalidParentCompletionPayloadToWorkflow_MatchingTheHandlerThatClaimsIt()
+    {
+        // The discriminator reads as parent-completion but the payload fails full validation (missing required fields).
+        // WorkflowParentActivityCompletionSchedulerWorkHandler.CanHandle rejects it (deserialize throws → false) and the
+        // workflow routing handler claims it, so the selector must agree and route to Workflow — not Activity.
+        using var invalid = JsonDocument.Parse($$"""{"CompletionKind":{{(int)SchedulerCompletionKind.ParentCompletionEvaluation}}}""");
+        var workItem = NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: invalid.RootElement.Clone());
+
+        Assert.Equal(RuntimePipelineKind.Workflow, new RuntimeSchedulerPipelineSelector().Select(workItem));
     }
 
     private WorkflowSchedulerDrainer NewDrainer(
@@ -127,7 +138,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         new(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
-            new FixedTimeProvider(_now),
+            new FixedTimeProvider(Now),
             pauseGate: null,
             NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowExecutionStateStore: null,
@@ -166,25 +177,6 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         return services.BuildServiceProvider();
     }
 
-    private RuntimeSchedulerWorkItem NewWorkItem(
-        int index,
-        WorkflowExecutionCommandKind commandKind,
-        JsonElement? payload = null)
-    {
-        using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
-        return new(
-            workItemId: $"work-{index}",
-            workflowExecutionId: "wfexec-1",
-            commandId: $"command-{index}",
-            commandKind: commandKind,
-            envelopeId: $"envelope-{index}",
-            idempotencyKey: $"wfexec-1:command-{index}",
-            enqueuedAt: _now,
-            recordedAt: _now,
-            sequence: index,
-            payload: payload ?? document.RootElement.Clone());
-    }
-
     private RuntimeSchedulerWorkItem NewCompleteActivityWorkItem(SchedulerCompletionKind completionKind)
     {
         var payload = new RuntimeCompleteActivityCommandPayload(
@@ -202,18 +194,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
                 ? "actexec-child"
                 : null);
 
-        return NewWorkItem(1, WorkflowExecutionCommandKind.CompleteActivity, JsonSerializer.SerializeToElement(payload));
-    }
-
-    private sealed class RecordingActivityMiddleware : ActivityRuntimeMiddlewareBase
-    {
-        public int Invocations { get; private set; }
-
-        public override ValueTask InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next)
-        {
-            Invocations++;
-            return next(context);
-        }
+        return NewWorkItem(WorkflowExecutionCommandKind.CompleteActivity, payload: JsonSerializer.SerializeToElement(payload));
     }
 
     private sealed class ShortCircuitActivityMiddleware : ActivityRuntimeMiddlewareBase
@@ -238,22 +219,4 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         }
     }
 
-    private sealed class RecordingHandler : IWorkflowSchedulerWorkHandler
-    {
-        public string Name => nameof(RecordingHandler);
-        public List<string> WorkItemIds { get; } = [];
-
-        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
-
-        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
-        {
-            WorkItemIds.Add(workItem.WorkItemId);
-            return ValueTask.CompletedTask;
-        }
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
-    }
 }

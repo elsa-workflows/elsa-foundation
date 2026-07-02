@@ -27,7 +27,8 @@ public sealed class RuntimeActivityExecutionPipeline : IRuntimeActivityExecution
         return RuntimeExecutionPipelineCore.Invoke(
             _middleware,
             context,
-            ctx => terminal(ctx),
-            (middleware, ctx, next) => middleware.InvokeAsync(ctx, pipelineContext => next(pipelineContext)));
+            terminal,
+            static (middleware, next) => (ActivityRuntimePipelineContext ctx) => middleware.InvokeAsync(ctx, next),
+            static (next, ctx) => next(ctx));
     }
 }

@@ -82,23 +82,21 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<RuntimeActivityCheckpointMiddleware>();
         services.TryAddSingleton<RuntimeActivityPostCommitMiddleware>();
         services.TryAddSingleton<IRuntimeWorkflowExecutionPipeline>(serviceProvider =>
-        {
-            var builder = new WorkflowRuntimePipelineBuilder();
-            foreach (var contribution in serviceProvider.GetServices<WorkflowRuntimeMiddlewareContribution>())
-                builder.Use(contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name);
-            var plan = builder.BuildPlan();
-            LogResolvedPipeline(serviceProvider, plan);
-            return new RuntimeWorkflowExecutionPipeline(plan, serviceProvider);
-        });
+            new RuntimeWorkflowExecutionPipeline(
+                ComposePlan(
+                    serviceProvider,
+                    new WorkflowRuntimePipelineBuilder(),
+                    serviceProvider.GetServices<WorkflowRuntimeMiddlewareContribution>()
+                        .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
+                serviceProvider));
         services.TryAddSingleton<IRuntimeActivityExecutionPipeline>(serviceProvider =>
-        {
-            var builder = new ActivityRuntimePipelineBuilder();
-            foreach (var contribution in serviceProvider.GetServices<ActivityRuntimeMiddlewareContribution>())
-                builder.Use(contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name);
-            var plan = builder.BuildPlan();
-            LogResolvedPipeline(serviceProvider, plan);
-            return new RuntimeActivityExecutionPipeline(plan, serviceProvider);
-        });
+            new RuntimeActivityExecutionPipeline(
+                ComposePlan(
+                    serviceProvider,
+                    new ActivityRuntimePipelineBuilder(),
+                    serviceProvider.GetServices<ActivityRuntimeMiddlewareContribution>()
+                        .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
+                serviceProvider));
         services.TryAddSingleton<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
         services.TryAddSingleton<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
 
@@ -134,6 +132,21 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
         services.TryAddSingleton<IWorkflowExecutionStartDispatcher, WorkflowExecutionStartDispatcher>();
         services.AddRequestHandlersFrom(GetType().Assembly);
+    }
+
+    // Applies the DI-collected module contributions to the (built-in-seeded) builder, builds the plan, and logs it.
+    // Shared by both pipeline kinds so the contribution-application contract lives in one place.
+    private static RuntimePipelinePlan ComposePlan(
+        IServiceProvider serviceProvider,
+        RuntimePipelinePlanBuilder builder,
+        IEnumerable<(Type MiddlewareType, string Slot, int Order, string? Name)> contributions)
+    {
+        foreach (var contribution in contributions)
+            builder.Use(contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name);
+
+        var plan = builder.BuildPlan();
+        LogResolvedPipeline(serviceProvider, plan);
+        return plan;
     }
 
     // Declarative slot ordering means the fully-resolved pipeline can be inspected instead of guessed. Dump it at Debug

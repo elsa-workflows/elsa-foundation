@@ -15,10 +15,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// override, the deterministic-ordering + collision contract, Replace/Remove, and the end-to-end DI path where a
 /// contributed middleware actually runs through the feature-composed pipeline.
 /// </summary>
-public sealed class RuntimeMiddlewareContributionTests
+public sealed class RuntimeMiddlewareContributionTests : RuntimePipelineTestSupport
 {
-    private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
-
     [Fact]
     public void AddActivityRuntimeMiddleware_UsesAttributePlacementByDefault()
     {
@@ -77,6 +75,25 @@ public sealed class RuntimeMiddlewareContributionTests
     }
 
     [Fact]
+    public async Task DuplicateContribution_RunsMiddlewareExactlyOnce()
+    {
+        // Registering the same middleware twice through DI must not double-run it (contributions are idempotent).
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddActivityRuntimeMiddleware<RecordingActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100);
+        services.AddActivityRuntimeMiddleware<RecordingActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100);
+        await using var provider = services.BuildServiceProvider();
+
+        var plan = provider.GetRequiredService<IRuntimeActivityExecutionPipeline>().Plan;
+        Assert.Single(plan.Steps, step => step.MiddlewareType == typeof(RecordingActivityMiddleware));
+
+        var dispatcher = provider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>();
+        await dispatcher.DispatchAsync(NewWorkItem(WorkflowExecutionCommandKind.InvokeActivity), new RecordingHandler());
+
+        Assert.Equal(1, provider.GetRequiredService<RecordingActivityMiddleware>().Invocations);
+    }
+
+    [Fact]
     public void BuildPlan_OrdersMiddlewareDeterministically_RegardlessOfRegistrationOrder()
     {
         var forward = new ActivityRuntimePipelineBuilder()
@@ -112,14 +129,31 @@ public sealed class RuntimeMiddlewareContributionTests
     }
 
     [Fact]
-    public void BuildPlan_ThrowsWhenModuleCollidesWithBuiltInAtOrderZero()
+    public void BuildPlan_PlacesModuleAfterBuiltInWhenSharingOrderZero()
     {
-        var builder = new ActivityRuntimePipelineBuilder()
-            .Use<FirstActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke); // order defaults to 0, same as the built-in
+        // Order 0 is the built-in's; a module at order 0 runs after it (no collision) — the zero-config default.
+        var invokeSteps = new ActivityRuntimePipelineBuilder()
+            .Use<FirstActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke) // order defaults to 0
+            .BuildPlan()
+            .Steps.Where(step => step.Slot.Name == RuntimeActivityPipelineSlots.Invoke)
+            .ToArray();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => builder.BuildPlan());
-        Assert.Contains(nameof(RuntimeActivityInvokeMiddleware), exception.Message);
-        Assert.Contains("negative order", exception.Message);
+        Assert.Equal(typeof(RuntimeActivityInvokeMiddleware), invokeSteps[0].MiddlewareType);
+        Assert.True(invokeSteps[0].IsBuiltIn);
+        Assert.Equal(typeof(FirstActivityMiddleware), invokeSteps[1].MiddlewareType);
+        Assert.False(invokeSteps[1].IsBuiltIn);
+    }
+
+    [Fact]
+    public void BuildPlan_CollapsesDuplicateRegistrationOfTheSameMiddleware()
+    {
+        // Registering the same middleware at the same placement twice is idempotent — it runs once, not twice.
+        var plan = new ActivityRuntimePipelineBuilder()
+            .Use<FirstActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100)
+            .Use<FirstActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100)
+            .BuildPlan();
+
+        Assert.Single(plan.Steps, step => step.MiddlewareType == typeof(FirstActivityMiddleware));
     }
 
     [Fact]
@@ -136,14 +170,14 @@ public sealed class RuntimeMiddlewareContributionTests
     }
 
     [Fact]
-    public void Builder_RemoveDropsMiddleware_AndThrowsWhenAbsent()
+    public void Builder_RemoveDropsMiddleware_AndIsIdempotentWhenAbsent()
     {
         var plan = new ActivityRuntimePipelineBuilder()
             .Remove<RuntimeActivityPostCommitMiddleware>()
+            .Remove<FirstActivityMiddleware>() // absent → no-op, no throw
             .BuildPlan();
 
         Assert.DoesNotContain(plan.Steps, step => step.MiddlewareType == typeof(RuntimeActivityPostCommitMiddleware));
-        Assert.Throws<InvalidOperationException>(() => new ActivityRuntimePipelineBuilder().Remove<FirstActivityMiddleware>());
     }
 
     [Fact]
@@ -154,22 +188,6 @@ public sealed class RuntimeMiddlewareContributionTests
         Assert.Throws<ArgumentException>(() => builder.Use(typeof(RuntimeWorkflowLoadStateMiddleware), RuntimeActivityPipelineSlots.Invoke, -1));
     }
 
-    private RuntimeSchedulerWorkItem NewWorkItem(WorkflowExecutionCommandKind commandKind)
-    {
-        using var document = JsonDocument.Parse("""{"workItemId":"work-1"}""");
-        return new(
-            workItemId: "work-1",
-            workflowExecutionId: "wfexec-1",
-            commandId: "command-1",
-            commandKind: commandKind,
-            envelopeId: "envelope-1",
-            idempotencyKey: "wfexec-1:command-1",
-            enqueuedAt: _now,
-            recordedAt: _now,
-            sequence: 1,
-            payload: document.RootElement.Clone());
-    }
-
     [RuntimeMiddleware(RuntimeActivityPipelineSlots.Invoke, Order = -100, Name = "attributed")]
     private sealed class AttributedActivityMiddleware : ActivityRuntimeMiddlewareBase;
 
@@ -178,29 +196,4 @@ public sealed class RuntimeMiddlewareContributionTests
     private sealed class FirstActivityMiddleware : ActivityRuntimeMiddlewareBase;
 
     private sealed class SecondActivityMiddleware : ActivityRuntimeMiddlewareBase;
-
-    private sealed class RecordingActivityMiddleware : ActivityRuntimeMiddlewareBase
-    {
-        public int Invocations { get; private set; }
-
-        public override ValueTask InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next)
-        {
-            Invocations++;
-            return next(context);
-        }
-    }
-
-    private sealed class RecordingHandler : IWorkflowSchedulerWorkHandler
-    {
-        public string Name => nameof(RecordingHandler);
-        public List<string> WorkItemIds { get; } = [];
-
-        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
-
-        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
-        {
-            WorkItemIds.Add(workItem.WorkItemId);
-            return ValueTask.CompletedTask;
-        }
-    }
 }

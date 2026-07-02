@@ -19,9 +19,10 @@ public sealed class RuntimeMiddlewareAttribute : Attribute
     public string Slot { get; }
 
     /// <summary>
-    /// Coarse order within the slot. Built-in middleware sit at order 0; choose a negative order to run before the
-    /// built-in in that slot or a positive order to run after it. Two distinct middleware sharing the same slot and
-    /// order are a build-time error, so pick an explicit order rather than relying on registration sequence.
+    /// Coarse order within the slot. Built-in middleware sit at order 0 and always run first at a given order, so the
+    /// default order 0 runs your middleware immediately after the slot's built-in; choose a negative order to run before
+    /// it. Two distinct <em>module</em> middleware sharing the same slot and order are a build-time error, so give them
+    /// distinct orders rather than relying on registration sequence.
     /// </summary>
     public int Order { get; init; }
 

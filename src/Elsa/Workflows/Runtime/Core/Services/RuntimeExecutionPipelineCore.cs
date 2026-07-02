@@ -43,20 +43,24 @@ internal static class RuntimeExecutionPipelineCore
     /// pass-through placeholders this reduces to <c>terminal(context)</c>. Callers guard <c>context</c> and
     /// <c>terminal</c> for null before invoking so argument names in thrown exceptions match the public signature.
     /// </summary>
-    public static ValueTask Invoke<TMiddleware, TContext>(
+    /// <remarks>
+    /// Generic over the pipeline's named delegate <typeparamref name="TDelegate"/> so the chain is built from and
+    /// invoked as those delegates directly — no per-dispatch <c>Func</c>-adapter closures. <paramref name="wrap"/> and
+    /// <paramref name="invoke"/> are passed as static (non-capturing) lambdas by the callers, so the only per-dispatch
+    /// allocations are the middleware frames themselves.
+    /// </remarks>
+    public static ValueTask Invoke<TMiddleware, TContext, TDelegate>(
         IReadOnlyList<TMiddleware> middleware,
         TContext context,
-        Func<TContext, ValueTask> terminal,
-        Func<TMiddleware, TContext, Func<TContext, ValueTask>, ValueTask> invokeMiddleware)
+        TDelegate terminal,
+        Func<TMiddleware, TDelegate, TDelegate> wrap,
+        Func<TDelegate, TContext, ValueTask> invoke)
+        where TDelegate : Delegate
     {
         var next = terminal;
         for (var index = middleware.Count - 1; index >= 0; index--)
-        {
-            var current = middleware[index];
-            var downstream = next;
-            next = pipelineContext => invokeMiddleware(current, pipelineContext, downstream);
-        }
+            next = wrap(middleware[index], next);
 
-        return next(context);
+        return invoke(next, context);
     }
 }
