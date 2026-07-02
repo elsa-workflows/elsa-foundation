@@ -47,10 +47,11 @@ public sealed class DefaultSecretValueProtector(IOptions<SecretsOptions> options
     private byte[] GetKey()
     {
         var configuredKey = options.Value.EncryptionKey;
-        var keyMaterial = string.IsNullOrWhiteSpace(configuredKey)
-            ? "elsa-foundation-default-secrets-key"
-            : configuredKey;
 
-        return SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial));
+        if (string.IsNullOrWhiteSpace(configuredKey))
+            throw new InvalidOperationException(
+                "Elsa:Secrets:EncryptionKey is not configured. Set a strong random key to protect secret values.");
+
+        return SHA256.HashData(Encoding.UTF8.GetBytes(configuredKey));
     }
 }

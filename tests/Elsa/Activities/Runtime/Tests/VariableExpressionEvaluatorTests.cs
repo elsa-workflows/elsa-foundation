@@ -81,13 +81,13 @@ public sealed class VariableExpressionEvaluatorTests
 
         public string GetCorrelationId() => string.Empty;
 
-        public string GetWorkfowDefinitionId() => string.Empty;
+        public string GetWorkflowDefinitionId() => string.Empty;
 
-        public string GetWorkfowDefinitionVersionId() => string.Empty;
+        public string GetWorkflowDefinitionVersionId() => string.Empty;
 
-        public int GetWorkfowDefinitionVersion() => 0;
+        public int GetWorkflowDefinitionVersion() => 0;
 
-        public string GetWorkfowInstanceId() => string.Empty;
+        public string GetWorkflowInstanceId() => string.Empty;
 
         public object? GetRequiredService(Type type) => throw new InvalidOperationException($"No service registered for '{type}'.");
 
