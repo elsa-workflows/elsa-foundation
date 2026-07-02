@@ -34,21 +34,60 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
 
     private static RuntimePipelineKind SelectCompleteActivityPipeline(RuntimeSchedulerWorkItem workItem)
     {
-        if (workItem.Payload is not { } payload)
-            return RuntimePipelineKind.Workflow;
+        // Read only the completion-kind discriminator instead of deserializing the whole payload. Any absent property,
+        // absent/non-object payload, or malformed value falls through to the routing (workflow) default, matching
+        // WorkflowCompleteActivitySchedulerWorkHandler.CanHandle. Selection never throws.
+        return IsParentCompletionEvaluation(workItem.Payload)
+            ? RuntimePipelineKind.Activity
+            : RuntimePipelineKind.Workflow;
+    }
 
+    private static bool IsParentCompletionEvaluation(JsonElement? payload)
+    {
+        if (payload is not { ValueKind: JsonValueKind.Object } element)
+            return false;
+
+        // Look the property up case-insensitively so both the PascalCase form produced by default serialization
+        // (JsonSerializer.SerializeToElement without Web defaults) and any camelCase form are honored.
+        if (!TryGetCompletionKindProperty(element, out var completionKind))
+            return false;
+
+        // The enum has no [JsonConverter], so default serialization writes the numeric ordinal. Accept both the ordinal
+        // and the case-insensitive enum name so routing stays correct regardless of the serialization format in effect.
         try
         {
-            var completionPayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
-            return completionPayload?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation
-                ? RuntimePipelineKind.Activity
-                : RuntimePipelineKind.Workflow;
+            return completionKind.ValueKind switch
+            {
+                JsonValueKind.Number => completionKind.TryGetInt32(out var ordinal)
+                    && ordinal == (int)SchedulerCompletionKind.ParentCompletionEvaluation,
+                JsonValueKind.String => Enum.TryParse<SchedulerCompletionKind>(completionKind.GetString(), ignoreCase: true, out var parsed)
+                    && parsed == SchedulerCompletionKind.ParentCompletionEvaluation,
+                _ => false
+            };
         }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        catch (Exception exception) when (exception is FormatException or InvalidOperationException or ArgumentException)
         {
-            // A malformed payload cannot be a parent-completion evaluation; fall back to the routing (workflow) default,
-            // matching WorkflowCompleteActivitySchedulerWorkHandler.CanHandle. Selection never throws.
-            return RuntimePipelineKind.Workflow;
+            return false;
         }
+    }
+
+    private static bool TryGetCompletionKindProperty(JsonElement element, out JsonElement completionKind)
+    {
+        const string propertyName = nameof(RuntimeCompleteActivityCommandPayload.CompletionKind);
+
+        if (element.TryGetProperty(propertyName, out completionKind))
+            return true;
+
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                completionKind = property.Value;
+                return true;
+            }
+        }
+
+        completionKind = default;
+        return false;
     }
 }

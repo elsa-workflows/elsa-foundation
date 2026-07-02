@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -13,16 +12,9 @@ public sealed class RuntimeActivityExecutionPipeline : IRuntimeActivityExecution
 
     public RuntimeActivityExecutionPipeline(RuntimePipelinePlan plan, IServiceProvider serviceProvider)
     {
-        ArgumentNullException.ThrowIfNull(plan);
-        ArgumentNullException.ThrowIfNull(serviceProvider);
-
-        if (plan.PipelineKind != RuntimePipelineKind.Activity)
-            throw new ArgumentException($"Expected an activity runtime pipeline plan but received '{plan.PipelineKind}'.", nameof(plan));
-
+        _middleware = RuntimeExecutionPipelineCore.ResolveMiddleware<IActivityRuntimeMiddleware>(
+            plan, serviceProvider, RuntimePipelineKind.Activity, "an activity");
         Plan = plan;
-        _middleware = plan.Steps
-            .Select(step => (IActivityRuntimeMiddleware)serviceProvider.GetRequiredService(step.MiddlewareType))
-            .ToArray();
     }
 
     public RuntimePipelinePlan Plan { get; }
@@ -32,16 +24,10 @@ public sealed class RuntimeActivityExecutionPipeline : IRuntimeActivityExecution
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(terminal);
 
-        // Fold the ordered middleware right-to-left so the first plan step is the outermost frame and the terminal
-        // (the scheduler work handler) is the innermost. With only pass-through placeholders this reduces to terminal(context).
-        var next = terminal;
-        for (var index = _middleware.Count - 1; index >= 0; index--)
-        {
-            var middleware = _middleware[index];
-            var downstream = next;
-            next = pipelineContext => middleware.InvokeAsync(pipelineContext, downstream);
-        }
-
-        return next(context);
+        return RuntimeExecutionPipelineCore.Invoke(
+            _middleware,
+            context,
+            ctx => terminal(ctx),
+            (middleware, ctx, next) => middleware.InvokeAsync(ctx, pipelineContext => next(pipelineContext)));
     }
 }
