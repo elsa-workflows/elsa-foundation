@@ -1,3 +1,5 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
@@ -12,10 +14,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public sealed record WorkflowRuntimePipelineContext(
     RuntimeSchedulerWorkItem WorkItem,
     WorkflowExecutionState? WorkflowExecution = null,
-    SchedulerState? Scheduler = null)
+    SchedulerState? Scheduler = null) : IRuntimePipelineContext
 {
     /// <summary>The workflow execution this dispatch belongs to.</summary>
     public string WorkflowExecutionId => WorkItem.WorkflowExecutionId;
+
+    /// <summary>Mutable per-dispatch workspace shared with the terminal handler and slot middleware.</summary>
+    public RuntimePipelineWorkspace Workspace { get; init; } = new();
 }
 
 /// <summary>
@@ -31,8 +36,11 @@ public sealed record ActivityRuntimePipelineContext(
     RuntimeSchedulerWorkItem WorkItem,
     WorkflowExecutionState? WorkflowExecution = null,
     ActivityExecutionState? ActivityExecution = null,
-    SchedulerState? Scheduler = null)
+    SchedulerState? Scheduler = null) : IRuntimePipelineContext
 {
     /// <summary>The workflow execution this dispatch belongs to.</summary>
     public string WorkflowExecutionId => WorkItem.WorkflowExecutionId;
+
+    /// <summary>Mutable per-dispatch workspace shared with the terminal handler and slot middleware.</summary>
+    public RuntimePipelineWorkspace Workspace { get; init; } = new();
 }

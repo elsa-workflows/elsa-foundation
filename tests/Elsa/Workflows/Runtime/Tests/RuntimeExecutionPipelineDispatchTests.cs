@@ -161,6 +161,11 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
     {
         var services = new ServiceCollection();
 
+        // The real Checkpoint slot middleware depends on the committer (Move 2); register it so the pipeline resolves.
+        services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
+        services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
+        services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
         services.AddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.AddSingleton<RuntimeWorkflowCheckpointMiddleware>();

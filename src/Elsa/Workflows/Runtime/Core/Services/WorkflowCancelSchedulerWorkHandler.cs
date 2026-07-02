@@ -12,6 +12,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator _inspectionAccumulator;
+    private readonly IRuntimePipelineContextAccessor _pipelineContextAccessor;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCancelSchedulerWorkHandler(
@@ -19,7 +20,8 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IRuntimePipelineContextAccessor? pipelineContextAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -31,6 +33,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
+        _pipelineContextAccessor = pipelineContextAccessor ?? NoopRuntimePipelineContextAccessor.Instance;
         _timeProvider = timeProvider;
     }
 
@@ -131,7 +134,13 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             });
 
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        // Move 2 (ADR 0029): when dispatched through the pipeline, stage the assembled commit for the Checkpoint slot to
+        // persist instead of committing inline. When there is no active pipeline context (e.g. the handler is exercised
+        // directly), commit here as before — behaviour-preserving on both paths.
+        if (_pipelineContextAccessor.Current is { } pipelineContext)
+            pipelineContext.Workspace.PendingCheckpointCommit = commit;
+        else
+            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     private static bool IsCancellable(ActivityExecutionState state) =>

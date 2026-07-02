@@ -12,11 +12,13 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
     private readonly IRuntimeSchedulerPipelineSelector _selector;
     private readonly IRuntimeWorkflowExecutionPipeline _workflowPipeline;
     private readonly IRuntimeActivityExecutionPipeline _activityPipeline;
+    private readonly IRuntimePipelineContextAccessor _pipelineContextAccessor;
 
     public RuntimeExecutionPipelineDispatcher(
         IRuntimeSchedulerPipelineSelector selector,
         IRuntimeWorkflowExecutionPipeline workflowPipeline,
-        IRuntimeActivityExecutionPipeline activityPipeline)
+        IRuntimeActivityExecutionPipeline activityPipeline,
+        IRuntimePipelineContextAccessor? pipelineContextAccessor = null)
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(workflowPipeline);
@@ -25,9 +27,10 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         _selector = selector;
         _workflowPipeline = workflowPipeline;
         _activityPipeline = activityPipeline;
+        _pipelineContextAccessor = pipelineContextAccessor ?? NoopRuntimePipelineContextAccessor.Instance;
     }
 
-    public ValueTask DispatchAsync(
+    public async ValueTask DispatchAsync(
         RuntimeSchedulerWorkItem workItem,
         IWorkflowSchedulerWorkHandler handler,
         CancellationToken cancellationToken = default)
@@ -35,13 +38,18 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         ArgumentNullException.ThrowIfNull(workItem);
         ArgumentNullException.ThrowIfNull(handler);
 
+        // Push the context so the terminal handler can reach the shared workspace (it is invoked as a bare delegate and
+        // gets no context by parameter). The scope spans the whole pipeline invocation, including the handler.
         if (_selector.Select(workItem) == RuntimePipelineKind.Activity)
-            return _activityPipeline.InvokeAsync(
-                new ActivityRuntimePipelineContext(workItem),
-                _ => handler.HandleAsync(workItem, cancellationToken));
+        {
+            var activityContext = new ActivityRuntimePipelineContext(workItem);
+            using (_pipelineContextAccessor.Push(activityContext))
+                await _activityPipeline.InvokeAsync(activityContext, _ => handler.HandleAsync(workItem, cancellationToken));
+            return;
+        }
 
-        return _workflowPipeline.InvokeAsync(
-            new WorkflowRuntimePipelineContext(workItem),
-            _ => handler.HandleAsync(workItem, cancellationToken));
+        var workflowContext = new WorkflowRuntimePipelineContext(workItem);
+        using (_pipelineContextAccessor.Push(workflowContext))
+            await _workflowPipeline.InvokeAsync(workflowContext, _ => handler.HandleAsync(workItem, cancellationToken));
     }
 }

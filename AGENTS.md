@@ -159,9 +159,10 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Active work unit: specs/082-runtime-pipeline-execution-spine (ADR 0029 Move 1 —
-route runtime execution through the workflow/activity pipelines at the scheduler
-dispatch point; behavior-preserving). Read specs/082-runtime-pipeline-execution-spine/plan.md
-for context on technologies, project structure, and shell commands. The last
-completed unit was specs/081-typed-argument-model (merged).
+Active work unit: specs/083-runtime-checkpoint-slot-decomposition (ADR 0029 Move 2,
+first slice — extract the shared Checkpoint phase into the workflow pipeline's
+Checkpoint slot, proven on the Cancel handler; behavior-preserving; establishes the
+Move 2 decomposition pattern for architect review). Read
+specs/083-runtime-checkpoint-slot-decomposition/plan.md for context. The last
+completed unit was specs/082-runtime-pipeline-execution-spine (ADR 0029 Move 1, merged #357).
 <!-- SPECKIT END -->
