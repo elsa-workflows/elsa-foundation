@@ -24,7 +24,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
     {
         await using var provider = BuildProvider(services => services.AddSingleton<RecordingActivityMiddleware>());
         var activityPlan = new ActivityRuntimePipelineBuilder()
-            .Use<RecordingActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke)
+            .Use<RecordingActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100)
             .BuildPlan();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
@@ -43,7 +43,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
     {
         await using var provider = BuildProvider(services => services.AddSingleton<RecordingWorkflowMiddleware>());
         var workflowPlan = new WorkflowRuntimePipelineBuilder()
-            .Use<RecordingWorkflowMiddleware>(RuntimeWorkflowPipelineSlots.Scheduling)
+            .Use<RecordingWorkflowMiddleware>(RuntimeWorkflowPipelineSlots.Scheduling, order: -100)
             .BuildPlan();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
@@ -63,7 +63,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests
         // Proves the handler is genuinely the pipeline's inner terminal delegate, not dispatched independently.
         await using var provider = BuildProvider(services => services.AddSingleton<ShortCircuitActivityMiddleware>());
         var activityPlan = new ActivityRuntimePipelineBuilder()
-            .Use<ShortCircuitActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke)
+            .Use<ShortCircuitActivityMiddleware>(RuntimeActivityPipelineSlots.Invoke, order: -100)
             .BuildPlan();
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingHandler();
