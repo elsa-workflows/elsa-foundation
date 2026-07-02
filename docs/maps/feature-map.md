@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 66
+- Discovered feature classes: 67
 
 ## Features
 
@@ -20,6 +20,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | SqliteOpenTelemetryPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite | EFCoreOpenTelemetryPersistenceFeatureBase | [SqliteOpenTelemetryPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/SqliteOpenTelemetryPersistenceShellFeature.cs) |
 | SqliteStructuredLogsPersistenceShellFeature | EF Core feature base | Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite | EFCoreStructuredLogsPersistenceFeatureBase | [SqliteStructuredLogsPersistenceShellFeature.cs](../../src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/SqliteStructuredLogsPersistenceShellFeature.cs) |
 | SqliteWorkflowsDesignPersistenceShellFeature | EF Core feature base | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | EFCoreWorkflowsPersistenceFeatureBase | [SqliteWorkflowsDesignPersistenceShellFeature.cs](../../src/Elsa/Workflows/Design/Persistence/EFCore/Sqlite/SqliteWorkflowsDesignPersistenceShellFeature.cs) |
+| ActivitiesCompositionDesignFeature | direct IShellFeature | Elsa.Activities.Composition.Design | IShellFeature | [ActivitiesCompositionDesignFeature.cs](../../src/Elsa/Activities/Composition/Design/ActivitiesCompositionDesignFeature.cs) |
 | ActivitiesCompositionRuntimeFeature | direct IShellFeature | Elsa.Activities.Composition.Runtime | IShellFeature | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignReconciliationFeature | direct IShellFeature | Elsa.Activities.Design.Reconciliation | IShellFeature | [ActivitiesDesignReconciliationFeature.cs](../../src/Elsa/Activities/Design/Reconciliation/ActivitiesDesignReconciliationFeature.cs) |

@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 66
+- Feature classes: 67
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 63
+- Feature-bearing source projects: 64
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -28,6 +28,7 @@ No duplicate explicit feature IDs were discovered.
 
 | Feature ID | Feature class | Abstract | Project | Public feature properties | Option/config signals | File |
 |---|---|---|---|---|---|---|
+| ActivitiesCompositionDesign | ActivitiesCompositionDesignFeature | False | Elsa.Activities.Composition.Design | - | - | [ActivitiesCompositionDesignFeature.cs](../../src/Elsa/Activities/Composition/Design/ActivitiesCompositionDesignFeature.cs) |
 | ActivitiesCompositionRuntime | ActivitiesCompositionRuntimeFeature | False | Elsa.Activities.Composition.Runtime | - | - | [ActivitiesCompositionRuntimeFeature.cs](../../src/Elsa/Activities/Composition/Runtime/ActivitiesCompositionRuntimeFeature.cs) |
 | ActivitiesControlFlow | ActivitiesControlFlowFeature | False | Elsa.Activities.ControlFlow | - | - | [ActivitiesControlFlowFeature.cs](../../src/Elsa/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignApi | ActivitiesDesignApiFeature | False | Elsa.Activities.Design.Api | ActivityAvailability: ActivityAvailabilityOptions | - | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
@@ -101,6 +102,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 
 | Feature ID | Project | Feature-project references | Core/helper project references | Direct external packages |
 |---|---|---|---|---|
+| ActivitiesCompositionDesign | Elsa.Activities.Composition.Design | - | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | ActivitiesCompositionRuntime | Elsa.Activities.Composition.Runtime | - | Elsa.Activities.Runtime.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | ActivitiesControlFlow | Elsa.Activities.ControlFlow | - | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | ActivitiesDesignApi | Elsa.Activities.Design.Api | - | Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Mediator.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
