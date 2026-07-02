@@ -41,7 +41,7 @@ public sealed class RequestHandlerInvokerMiddleware(RequestMiddlewareDelegate ne
         // Get result of task.
         var taskWithReturnType = typeof(Task<>).MakeGenericType(responseType);
         var resultProperty = taskWithReturnType.GetProperty(nameof(Task<>.Result));
-        context.Response = resultProperty?.GetValue(task)!;
+        context.Response = resultProperty?.GetValue(task);
 
         // Invoke next middleware.
         await next(context);
