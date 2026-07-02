@@ -159,8 +159,9 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-No Speckit plan is active right now. When a work unit is active, read its
-plan under specs/ for context on technologies, project structure, shell
-commands, and other important information. The last completed unit was
-specs/081-typed-argument-model (merged).
+Active work unit: specs/082-runtime-pipeline-execution-spine (ADR 0029 Move 1 —
+route runtime execution through the workflow/activity pipelines at the scheduler
+dispatch point; behavior-preserving). Read specs/082-runtime-pipeline-execution-spine/plan.md
+for context on technologies, project structure, and shell commands. The last
+completed unit was specs/081-typed-argument-model (merged).
 <!-- SPECKIT END -->
