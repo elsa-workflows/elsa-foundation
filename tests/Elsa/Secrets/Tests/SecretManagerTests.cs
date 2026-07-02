@@ -228,3 +228,82 @@ public sealed class SecretManagerTests : IDisposable
 
     public void Dispose() => _provider.Dispose();
 }
+
+public sealed class SecretManagerDeterministicClockTests : IDisposable
+{
+    private static readonly DateTimeOffset CreatedNow = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset RotatedNow = new(2026, 1, 2, 0, 0, 0, TimeSpan.Zero);
+
+    private readonly FixedTimeProvider _timeProvider = new(CreatedNow);
+    private readonly ServiceProvider _provider;
+    private readonly ISecretManager _manager;
+    private readonly ISecretRepository _repository;
+
+    public SecretManagerDeterministicClockTests()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Elsa:Secrets:EncryptionKey"] = "tests-only-secret-key" })
+            .Build();
+
+        // Registered before AddSecrets so the TryAddSingleton<TimeProvider> in AddSecrets is a no-op and this fake wins.
+        var services = new ServiceCollection()
+            .AddSingleton<TimeProvider>(_timeProvider)
+            .AddSecrets(configuration);
+        _provider = services.BuildServiceProvider();
+        _manager = _provider.GetRequiredService<ISecretManager>();
+        _repository = _provider.GetRequiredService<ISecretRepository>();
+    }
+
+    [Fact]
+    public async Task CreateAsync_Sets_CreatedAt_From_TimeProvider_Not_UnixEpoch()
+    {
+        var created = await _manager.CreateAsync(new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Value = "secret-value"
+        });
+
+        Assert.Equal(CreatedNow, created.CreatedAt);
+        Assert.NotEqual(DateTimeOffset.UnixEpoch, created.CreatedAt);
+
+        var stored = (await _repository.FindAsync("payments.api"))!;
+        Assert.Equal(CreatedNow, stored.CreatedAt);
+        var version = Assert.Single(stored.Versions);
+        Assert.Equal(CreatedNow, version.CreatedAt);
+        Assert.NotEqual(DateTimeOffset.UnixEpoch, version.CreatedAt);
+    }
+
+    [Fact]
+    public async Task RotateAsync_Sets_New_Version_CreatedAt_From_TimeProvider_Not_UnixEpoch()
+    {
+        await _manager.CreateAsync(new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Value = "old-value"
+        });
+
+        _timeProvider.Set(RotatedNow);
+        await _manager.RotateAsync("payments.api", new RotateSecretRequest { Value = "new-value" });
+
+        var stored = (await _repository.FindAsync("payments.api"))!;
+        var newVersion = Assert.Single(stored.Versions, x => x.Version == 2);
+        Assert.Equal(RotatedNow, newVersion.CreatedAt);
+        Assert.NotEqual(DateTimeOffset.UnixEpoch, newVersion.CreatedAt);
+
+        var originalVersion = Assert.Single(stored.Versions, x => x.Version == 1);
+        Assert.Equal(CreatedNow, originalVersion.CreatedAt);
+    }
+
+    public void Dispose() => _provider.Dispose();
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset _now = now;
+        public void Set(DateTimeOffset value) => _now = value;
+        public override DateTimeOffset GetUtcNow() => _now;
+    }
+}
