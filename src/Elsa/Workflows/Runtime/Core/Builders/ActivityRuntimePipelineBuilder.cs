@@ -18,6 +18,8 @@ public sealed class ActivityRuntimePipelineBuilder : RuntimePipelinePlanBuilder
         UseBuiltIn<RuntimeActivityPostCommitMiddleware>(RuntimeActivityPipelineSlots.PostCommit);
     }
 
+    protected override Type MiddlewareInterfaceType => typeof(IActivityRuntimeMiddleware);
+
     public ActivityRuntimePipelineBuilder Use<TMiddleware>(
         string slotName,
         int order = 0,
@@ -25,6 +27,23 @@ public sealed class ActivityRuntimePipelineBuilder : RuntimePipelinePlanBuilder
         where TMiddleware : IActivityRuntimeMiddleware
     {
         AddRegistration(typeof(TMiddleware), slotName, order, name, isBuiltIn: false);
+        return this;
+    }
+
+    /// <summary>Replaces middleware <typeparamref name="TOld"/> (e.g. a built-in placeholder) with <typeparamref name="TNew"/> at the same placement.</summary>
+    public ActivityRuntimePipelineBuilder Replace<TOld, TNew>()
+        where TOld : IActivityRuntimeMiddleware
+        where TNew : IActivityRuntimeMiddleware
+    {
+        ReplaceRegistration(typeof(TOld), typeof(TNew));
+        return this;
+    }
+
+    /// <summary>Removes middleware <typeparamref name="TMiddleware"/> from the pipeline.</summary>
+    public ActivityRuntimePipelineBuilder Remove<TMiddleware>()
+        where TMiddleware : IActivityRuntimeMiddleware
+    {
+        RemoveRegistration(typeof(TMiddleware));
         return this;
     }
 

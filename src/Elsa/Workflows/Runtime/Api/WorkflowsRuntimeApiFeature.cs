@@ -2,12 +2,15 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -63,6 +66,40 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<WorkflowExecutionDrainCoordinatorOptions>();
         services.TryAddSingleton<IWorkflowExecutionDrainCoordinator, WorkflowExecutionDrainCoordinator>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
+
+        // Runtime execution pipeline spine (ADR 0029, Move 1). The built-in placeholder middleware are registered so
+        // the executor can resolve them by type from the built plan; both pipelines start as no-op pass-throughs, so
+        // wrapping handler dispatch is behavior-preserving until modules register real middleware or Move 2 lands.
+        services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
+        services.TryAddSingleton<RuntimeActivityLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeActivityInputEvaluationMiddleware>();
+        services.TryAddSingleton<RuntimeActivityInvokeMiddleware>();
+        services.TryAddSingleton<RuntimeActivityOutputCaptureMiddleware>();
+        services.TryAddSingleton<RuntimeActivitySchedulingMiddleware>();
+        services.TryAddSingleton<RuntimeActivityCheckpointMiddleware>();
+        services.TryAddSingleton<RuntimeActivityPostCommitMiddleware>();
+        services.TryAddSingleton<IRuntimeWorkflowExecutionPipeline>(serviceProvider =>
+            new RuntimeWorkflowExecutionPipeline(
+                ComposePlan(
+                    serviceProvider,
+                    new WorkflowRuntimePipelineBuilder(),
+                    serviceProvider.GetServices<WorkflowRuntimeMiddlewareContribution>()
+                        .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
+                serviceProvider));
+        services.TryAddSingleton<IRuntimeActivityExecutionPipeline>(serviceProvider =>
+            new RuntimeActivityExecutionPipeline(
+                ComposePlan(
+                    serviceProvider,
+                    new ActivityRuntimePipelineBuilder(),
+                    serviceProvider.GetServices<ActivityRuntimeMiddlewareContribution>()
+                        .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
+                serviceProvider));
+        services.TryAddSingleton<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
+        services.TryAddSingleton<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
+
         services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>
             new WorkflowSchedulerDrainer(
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
@@ -70,7 +107,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 TimeProvider.System,
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
@@ -94,5 +132,36 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
         services.TryAddSingleton<IWorkflowExecutionStartDispatcher, WorkflowExecutionStartDispatcher>();
         services.AddRequestHandlersFrom(GetType().Assembly);
+    }
+
+    // Applies the DI-collected module contributions to the (built-in-seeded) builder, builds the plan, and logs it.
+    // Shared by both pipeline kinds so the contribution-application contract lives in one place.
+    private static RuntimePipelinePlan ComposePlan(
+        IServiceProvider serviceProvider,
+        RuntimePipelinePlanBuilder builder,
+        IEnumerable<(Type MiddlewareType, string Slot, int Order, string? Name)> contributions)
+    {
+        foreach (var contribution in contributions)
+            builder.Use(contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name);
+
+        var plan = builder.BuildPlan();
+        LogResolvedPipeline(serviceProvider, plan);
+        return plan;
+    }
+
+    // Declarative slot ordering means the fully-resolved pipeline can be inspected instead of guessed. Dump it at Debug
+    // once per pipeline (on first resolution) so a contributor can see the final order and source of each middleware.
+    private static void LogResolvedPipeline(IServiceProvider serviceProvider, RuntimePipelinePlan plan)
+    {
+        var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("Elsa.Workflows.Runtime.ExecutionPipeline");
+        if (logger is null || !logger.IsEnabled(LogLevel.Debug))
+            return;
+
+        var steps = string.Join(Environment.NewLine, plan.Steps.Select((step, index) =>
+            $"  [{index}] slot={step.Slot.Name}(#{step.Slot.SortOrder}) order={step.Order} {(step.IsBuiltIn ? "built-in" : "module")} {step.MiddlewareType.FullName}"));
+
+        logger.LogDebug(
+            "Resolved {PipelineKind} runtime execution pipeline with {Count} middleware:{NewLine}{Steps}",
+            plan.PipelineKind, plan.Steps.Count, Environment.NewLine, steps);
     }
 }

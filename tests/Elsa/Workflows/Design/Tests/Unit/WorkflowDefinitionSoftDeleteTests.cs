@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,39 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class WorkflowDefinitionSoftDeleteTests
 {
+    [Fact]
+    public void From_preserves_soft_delete_metadata_round_trip()
+    {
+        var deletedAt = DateTimeOffset.UtcNow;
+        var source = new WorkflowDefinition
+        {
+            Id = "def-1",
+            Name = "Deleted",
+            Description = "desc",
+            DeletedAt = deletedAt,
+            DeletedReason = "gone",
+        };
+
+        var copy = WorkflowDefinition.From(source);
+
+        Assert.Equal(source.Id, copy.Id);
+        Assert.Equal(source.Name, copy.Name);
+        Assert.Equal(source.Description, copy.Description);
+        Assert.Equal(deletedAt, copy.DeletedAt);
+        Assert.Equal("gone", copy.DeletedReason);
+    }
+
+    [Fact]
+    public void From_leaves_soft_delete_metadata_unset_for_non_deleted_source()
+    {
+        var source = new WorkflowDefinition { Id = "def-2", Name = "Active" };
+
+        var copy = WorkflowDefinition.From(source);
+
+        Assert.Null(copy.DeletedAt);
+        Assert.Null(copy.DeletedReason);
+    }
+
     [Fact]
     public async Task Soft_deleted_definitions_are_excluded_from_active_query_and_included_in_deleted_query()
     {
