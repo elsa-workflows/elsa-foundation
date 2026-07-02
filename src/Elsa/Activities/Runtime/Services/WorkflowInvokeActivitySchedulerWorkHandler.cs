@@ -17,10 +17,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
 
-    // System-metadata override key for the workflow definition version surfaced to execution-time expressions
-    // (ADR 0030 identity). Optional; absent for normal runs, where the pinned artifact-version major is used.
-    private const string DefinitionVersionMetadataKey = "runtime.definitionVersion";
-
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
@@ -155,16 +151,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyDictionary<string, object?> activityOutputValues;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
 
-        // Load the workflow-execution state once up front so both the execution-time expression carrier (ADR 0030
-        // identity: correlation id / name / definition version) and the control-leaf state change below read the
-        // same instance rather than loading twice. This is artifact-only identity (§E2.6): no authored model.
-        // Best-effort: when no state store is registered or the state is absent, carrier identity degrades to null
-        // (correlation id / name) rather than failing the invocation; the control-leaf path still requires the
-        // state when it mutates it.
-        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-        var workflowState = workflowExecutionStateStore is null
-            ? null
-            : await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        // Execution-time expression carrier identity (ADR 0030: correlation id / instance name) is threaded on the
+        // scheduler work item's command metadata (spec 083 follow-up), so a plain activity invocation populates the
+        // carrier without a per-invocation workflow-execution-state read. Identity is absent until a Correlate/SetName
+        // leaf assigns one; that leaf re-stamps the metadata on its completion work item (see the refresh below) and
+        // BookmarkResumeDispatcher re-seeds it from persisted state on resume, so a later activity still observes the
+        // current value. The definition version is artifact-only identity (§E2.6), resolved from the pinned executable.
+        // The control-leaf state change below is the only path that loads the workflow-execution state, and only when
+        // an intent actually mutates it.
+        var carrierCorrelationId = ReadCarrierMetadata(workItem, RuntimeMetadataKeys.CarrierCorrelationId);
+        var carrierInstanceName = ReadCarrierMetadata(workItem, RuntimeMetadataKeys.CarrierInstanceName);
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
@@ -230,12 +226,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                // Populate the live execution-time expression carrier (ADR 0030): identity from the workflow-execution
-                // state + pinned executable, and the durable-value projections for inputs/variables/outputs. These
+                // Populate the live execution-time expression carrier (ADR 0030): identity from the command-metadata
+                // carrier + pinned executable, and the durable-value projections for inputs/variables/outputs. These
                 // feed the re-pointed JavaScript pre/post-processors via the passed IExpressionExecutionContext.
-                correlationId: workflowState?.CorrelationId,
-                workflowName: workflowState is null ? null : ResolveInstanceName(workflowState),
-                workflowDefinitionVersion: ResolveWorkflowDefinitionVersion(workflowState, invokePayload.PinnedExecutable),
+                correlationId: carrierCorrelationId,
+                workflowName: carrierInstanceName,
+                workflowDefinitionVersion: ResolveWorkflowDefinitionVersion(invokePayload.PinnedExecutable),
                 workflowInputs: workflowInputValues,
                 workflowVariables: workflowVariables,
                 activityOutputValues: activityOutputValues);
@@ -416,9 +412,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         // Correlate updates the correlation id; SetName updates the instance name). All fold into the same
         // activity-completed commit so the workflow state is persisted atomically with the activity completion.
         var occurredAt = _timeProvider.GetUtcNow();
-        var workflowExecutionStateChange = BuildControlLeafWorkflowExecutionStateChange(
-            workflowState, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId,
-            instanceNameAssignmentRequested, requestedInstanceName, occurredAt);
+        var workflowExecutionStateChange = await BuildControlLeafWorkflowExecutionStateChangeAsync(
+            serviceProvider, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId,
+            instanceNameAssignmentRequested, requestedInstanceName, occurredAt, cancellationToken);
+
+        // When a Correlate/SetName leaf assigned a new identity, re-stamp it on the outgoing completion work item's
+        // command metadata so downstream activities' carriers observe the current value without a per-invocation
+        // state read (spec 083 follow-up). The metadata propagates verbatim through the completion → scheduling
+        // chain; unchanged for a plain activity, so this returns the same instance and allocates nothing.
+        var completionCommandMetadata = ApplyCarrierIdentityRefresh(
+            workItem.CommandMetadata, correlationIdAssignmentRequested, requestedCorrelationId,
+            instanceNameAssignmentRequested, requestedInstanceName);
 
         if (inspectionAccumulator is null)
         {
@@ -438,11 +442,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             // A Finish leaf ends the whole run: the activity is recorded and the workflow state is marked
             // completed above, but no further completion-propagation work is scheduled.
             if (!finishWorkflowRequested)
-                await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken);
+                await EnqueueCompletionWorkAsync(schedulerWorkQueue, workItem, invokePayload, completedState, cancellationToken, completionCommandMetadata);
             return;
         }
 
-        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, finishWorkflowRequested, occurredAt, cancellationToken);
+        await CommitCompletedActivityAsync(checkpointCommitter, inspectionAccumulator, workItem, invokePayload, completedState, ReadCompletionOutcomeNames(completedState), valueSnapshots, durableValueChanges, workflowExecutionStateChange, completionCommandMetadata, finishWorkflowRequested, occurredAt, cancellationToken);
     }
 
     // Concatenates the workflow-scope variable write-back and the SetOutput durable-value changes into the single
@@ -506,19 +510,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         }
     }
 
-    private static RuntimeStateChange<WorkflowExecutionState>? BuildControlLeafWorkflowExecutionStateChange(
-        WorkflowExecutionState? workflowState,
+    // Resolves the workflow-execution state change requested by a control-leaf intent (Finish/Correlate/SetName),
+    // loading the workflow-execution state only when an intent is actually present. This lazy guard is what keeps a
+    // plain activity invocation — the common case — free of any workflow-execution-state read (spec 083 follow-up):
+    // the carrier reads identity from command metadata instead, and only a mutating leaf pays the load here.
+    private static async ValueTask<RuntimeStateChange<WorkflowExecutionState>?> BuildControlLeafWorkflowExecutionStateChangeAsync(
+        IServiceProvider serviceProvider,
         RuntimeSchedulerWorkItem workItem,
         bool finishWorkflowRequested,
         bool correlationIdAssignmentRequested,
         string? requestedCorrelationId,
         bool instanceNameAssignmentRequested,
         string? requestedInstanceName,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
     {
         if (!finishWorkflowRequested && !correlationIdAssignmentRequested && !instanceNameAssignmentRequested)
             return null;
 
+        var workflowState = await serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workItem.WorkflowExecutionId, cancellationToken);
         if (workflowState is null)
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references missing workflow execution '{workItem.WorkflowExecutionId}'.");
 
@@ -560,24 +570,48 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return metadata;
     }
 
-    // Resolves the current workflow instance name for the execution-time expression carrier (ADR 0030) from the
-    // same system-metadata key SetName writes (see ApplyInstanceName). Null when no name has been assigned.
-    private static string? ResolveInstanceName(WorkflowExecutionState workflowState) =>
-        workflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var name) && !string.IsNullOrWhiteSpace(name)
-            ? name
-            : null;
+    // Reads a carrier-identity value threaded on the scheduler work item's command metadata (spec 083 follow-up).
+    // Null/blank is normalized to null so the carrier degrades to "no identity assigned" rather than an empty string.
+    private static string? ReadCarrierMetadata(RuntimeSchedulerWorkItem workItem, string key) =>
+        workItem.CommandMetadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
-    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
-    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
+    // Re-stamps the carrier-identity keys on the command metadata a Correlate/SetName leaf propagates to its
+    // completion work item, so downstream activities' carriers observe the new value without a state read. A cleared
+    // assignment (null id / name) removes the key. Returns the input untouched when no identity intent fired, so a
+    // plain activity's completion metadata is threaded verbatim and allocates nothing.
+    private static IReadOnlyDictionary<string, string> ApplyCarrierIdentityRefresh(
+        IReadOnlyDictionary<string, string> commandMetadata,
+        bool correlationIdAssignmentRequested,
+        string? requestedCorrelationId,
+        bool instanceNameAssignmentRequested,
+        string? requestedInstanceName)
     {
-        if (workflowState is not null
-            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
-            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
-            return overrideVersion;
+        if (!correlationIdAssignmentRequested && !instanceNameAssignmentRequested)
+            return commandMetadata;
 
+        var metadata = commandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (correlationIdAssignmentRequested)
+            SetOrRemoveCarrierMetadata(metadata, RuntimeMetadataKeys.CarrierCorrelationId, requestedCorrelationId);
+        if (instanceNameAssignmentRequested)
+            SetOrRemoveCarrierMetadata(metadata, RuntimeMetadataKeys.CarrierInstanceName, requestedInstanceName);
+
+        return metadata;
+    }
+
+    private static void SetOrRemoveCarrierMetadata(Dictionary<string, string> metadata, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            metadata.Remove(key);
+        else
+            metadata[key] = value;
+    }
+
+    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030) from the pinned
+    // executable's artifact-version major — artifact-only identity (§E2.6), independent of any workflow-execution-state
+    // read (spec 083 follow-up). A non-numeric value yields 0 (the default the accessor returned before this unit)
+    // rather than faulting the activity — the version is display identity for scripts, not an execution precondition.
+    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutableIdentity pinnedExecutable)
+    {
         var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
         return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
@@ -792,9 +826,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         RuntimeSchedulerWorkItem invokeWorkItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
         ActivityExecutionState completedState,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? completionCommandMetadata = null)
     {
-        var workItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
+        var workItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState, completionCommandMetadata ?? invokeWorkItem.CommandMetadata);
         await schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
     }
 
@@ -808,6 +843,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowExecutionStateChange,
+        IReadOnlyDictionary<string, string> completionCommandMetadata,
         bool finishWorkflowRequested,
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
@@ -836,7 +872,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             valueSnapshots: valueSnapshots,
             metadata: metadata,
             cancellationToken: cancellationToken);
-        var completionWorkItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState);
+        var completionWorkItem = NewCompletionWorkItem(invokeWorkItem, invokePayload, completedState, completionCommandMetadata);
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{invokeWorkItem.WorkItemId}:{(finishWorkflowRequested ? "workflow-completed" : "activity-completed")}:{invokePayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(
@@ -880,7 +916,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     private RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem invokeWorkItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
-        ActivityExecutionState completedState)
+        ActivityExecutionState completedState,
+        IReadOnlyDictionary<string, string> commandMetadata)
     {
         var now = _timeProvider.GetUtcNow();
         var payload = new RuntimeCompleteActivityCommandPayload(
@@ -903,7 +940,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             recordedAt: now,
             sequence: invokeWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: invokeWorkItem.CommandMetadata,
+            commandMetadata: commandMetadata,
             envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
     }
 

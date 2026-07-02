@@ -69,6 +69,99 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PlainActivity_DoesNotReadWorkflowExecutionState()
+    {
+        // The common case: a plain activity that requests no control-leaf intent (no Finish/Correlate/SetName).
+        // Its execution-time carrier identity is threaded on the command metadata, so the handler must not touch
+        // the workflow-execution-state store at all — the per-invocation read this unit removed (spec 083 follow-up).
+        var stateStore = new CountingWorkflowExecutionStateStore();
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(new RecordingActivity()), workflowExecutionStateStore: stateStore);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        Assert.Equal(0, stateStore.FindCount);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_PopulatesCarrierIdentityFromCommandMetadata_WithoutReadingState()
+    {
+        // The carrier's correlation id / instance name come from the threaded command metadata, so getCorrelationId()
+        // / getWorkflowInstanceName() are live at execution time without a workflow-execution-state read.
+        var stateStore = new CountingWorkflowExecutionStateStore();
+        var activity = new IdentityCapturingActivity();
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(new RecordingActivityFactory(activity), workflowExecutionStateStore: stateStore);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-123",
+            [RuntimeMetadataKeys.CarrierInstanceName] = "Order 123"
+        }));
+
+        Assert.Equal("order-123", activity.ObservedCorrelationId);
+        Assert.Equal("Order 123", activity.ObservedWorkflowName);
+        Assert.Equal(0, stateStore.FindCount);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CorrelateAndSetNameLeaf_RefreshesCompletionCommandMetadata_AndReadsStateOnce()
+    {
+        // A Correlate/SetName leaf mutates identity: it loads the workflow-execution state exactly once (to fold the
+        // control-leaf change) and re-stamps the new correlation id / instance name onto the completion work item's
+        // command metadata so downstream activities' carriers observe it without another read.
+        var stateStore = new CountingWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new SetIdentityActivity("order-99", "Order 99")),
+            workflowExecutionStateStore: stateStore);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-1"
+        }));
+
+        Assert.Equal(1, stateStore.FindCount);
+        var savedState = await stateStore.FindAsync("wfexec-1");
+        Assert.Equal("order-99", savedState?.CorrelationId);
+        Assert.Equal("Order 99", savedState?.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
+
+        var completionWork = await AssertCompletionSchedulerWorkAsync();
+        Assert.Equal("order-99", completionWork.CommandMetadata[RuntimeMetadataKeys.CarrierCorrelationId]);
+        Assert.Equal("Order 99", completionWork.CommandMetadata[RuntimeMetadataKeys.CarrierInstanceName]);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ClearingCorrelationId_RemovesCarrierMetadataFromCompletionWork()
+    {
+        // Clearing an assignment (SetCorrelationId(null)) removes the carrier key so downstream carriers read null.
+        var stateStore = new CountingWorkflowExecutionStateStore();
+        await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new SetIdentityActivity(correlationId: null, instanceName: null)),
+            workflowExecutionStateStore: stateStore);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
+        {
+            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-1"
+        }));
+
+        var completionWork = await AssertCompletionSchedulerWorkAsync();
+        Assert.False(completionWork.CommandMetadata.ContainsKey(RuntimeMetadataKeys.CarrierCorrelationId));
+    }
+
+    [Fact]
     public async Task HandleAsync_CheckpointsCompletedStateInspectionAndPostCommitCompletionWork()
     {
         var activity = new RecordingActivity();
@@ -716,10 +809,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         IActivityFactory factory,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
         bool includeInspection = false,
-        IRuntimePayloadCapturePolicy? payloadCapturePolicy = null)
+        IRuntimePayloadCapturePolicy? payloadCapturePolicy = null,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
+        if (workflowExecutionStateStore is not null)
+            services.AddSingleton(workflowExecutionStateStore);
         services.AddSingleton(_executableStore);
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton(_activityStateStore);
@@ -759,7 +855,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.InvokeActivity,
         string executableNodeId = "node-start",
         JsonElement? payload = null,
-        bool includePayload = true)
+        bool includePayload = true,
+        IReadOnlyDictionary<string, string>? commandMetadata = null)
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
@@ -780,7 +877,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             recordedAt: _now,
             sequence: 30,
             payload: resolvedPayload,
-            commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
+            commandMetadata: commandMetadata ?? new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
@@ -1014,6 +1111,30 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         }
     }
 
+    private sealed class IdentityCapturingActivity : RecordingActivity
+    {
+        public string? ObservedCorrelationId { get; private set; }
+        public string? ObservedWorkflowName { get; private set; }
+
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            base.Execute(context);
+            var carrier = (IExecutionExpressionState)context;
+            ObservedCorrelationId = carrier.CorrelationId;
+            ObservedWorkflowName = carrier.WorkflowName;
+        }
+    }
+
+    private sealed class SetIdentityActivity(string? correlationId, string? instanceName) : ActivityBase
+    {
+        protected override void Execute(IActivityExecutionContext context)
+        {
+            var runtimeContext = (IRuntimeActivityExecutionContext)context;
+            runtimeContext.SetCorrelationId(correlationId);
+            runtimeContext.SetInstanceName(instanceName);
+        }
+    }
+
     private sealed class BookmarkRequestingActivity(params ActivityBookmarkRequest[] requests) : RecordingActivity
     {
         protected override void Execute(IActivityExecutionContext context)
@@ -1068,6 +1189,48 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    // Counts FindAsync calls so a test can assert the common activity invocation performs zero workflow-execution-state
+    // reads while the control-leaf (Correlate/SetName/Finish) path still loads the state exactly once.
+    private sealed class CountingWorkflowExecutionStateStore : IWorkflowExecutionStateStore
+    {
+        private readonly InMemoryWorkflowExecutionStateStore _inner = new();
+
+        public int FindCount { get; private set; }
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            _inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        {
+            FindCount++;
+            return _inner.FindAsync(workflowExecutionId, cancellationToken);
+        }
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(cancellationToken);
+    }
+
+    private WorkflowExecutionState NewWorkflowExecutionState(string? correlationId = null, string? instanceName = null)
+    {
+        var systemMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (instanceName is not null)
+            systemMetadata[RuntimeMetadataKeys.InstanceName] = instanceName;
+
+        return new WorkflowExecutionState(
+            WorkflowExecutionId: "wfexec-1",
+            PinnedExecutable: NewIdentity(),
+            Status: WorkflowExecutionStatus.Running,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: null,
+            CorrelationId: correlationId,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: systemMetadata);
     }
 
     private sealed class CaptureAllRuntimePayloadCapturePolicy : IRuntimePayloadCapturePolicy

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -104,7 +105,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
                 lookup: lookup);
         }
 
-        var metadata = CreateMetadata(request, bookmark, workflowExecution.PinnedExecutable);
+        var metadata = CreateMetadata(request, bookmark, workflowExecution);
         var payload = JsonSerializer.SerializeToElement(new RuntimeResumeBookmarkCommandPayload(
             pinnedExecutable: workflowExecution.PinnedExecutable,
             bookmarkId: bookmark.BookmarkId,
@@ -156,8 +157,9 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     private static IReadOnlyDictionary<string, string> CreateMetadata(
         BookmarkResumeDispatchRequest request,
         BookmarkState bookmark,
-        WorkflowExecutableIdentity pinnedExecutable)
+        WorkflowExecutionState workflowExecution)
     {
+        var pinnedExecutable = workflowExecution.PinnedExecutable;
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata["runtime.dispatcher"] = nameof(BookmarkResumeDispatcher);
         metadata["runtime.bookmarkId"] = bookmark.BookmarkId;
@@ -169,6 +171,17 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         metadata["runtime.artifactId"] = pinnedExecutable.ArtifactId;
         metadata["runtime.artifactVersion"] = pinnedExecutable.ArtifactVersion;
         metadata["runtime.artifactHash"] = pinnedExecutable.ArtifactHash;
+
+        // Re-seed the execution-time expression carrier identity (ADR 0030) from persisted state on resume: a
+        // resumed run re-enters through a fresh command envelope, so without this the correlation id / instance
+        // name assigned before suspension would be lost and a post-resume activity's getCorrelationId() /
+        // getWorkflowInstanceName() would read null (spec 083 follow-up). The state is already loaded here, so this
+        // is a projection of it, not an extra read. Absent when no identity has been assigned.
+        if (!string.IsNullOrWhiteSpace(workflowExecution.CorrelationId))
+            metadata[RuntimeMetadataKeys.CarrierCorrelationId] = workflowExecution.CorrelationId;
+        if (workflowExecution.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var instanceName) && !string.IsNullOrWhiteSpace(instanceName))
+            metadata[RuntimeMetadataKeys.CarrierInstanceName] = instanceName;
+
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 

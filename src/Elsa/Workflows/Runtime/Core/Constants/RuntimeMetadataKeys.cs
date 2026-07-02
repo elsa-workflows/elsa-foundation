@@ -38,6 +38,23 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
+    /// Command-metadata key threading the workflow correlation id along the scheduler work chain so the
+    /// execution-time expression carrier (ADR 0030 identity) can populate <c>getCorrelationId()</c> without a
+    /// per-invocation workflow-execution-state read (spec 083 follow-up). Absent until a <c>Correlate</c> leaf
+    /// assigns one; the assigning invocation re-stamps this key on its completion work item so later activities
+    /// observe the new value, and <c>BookmarkResumeDispatcher</c> re-seeds it from persisted state on resume.
+    /// </summary>
+    public const string CarrierCorrelationId = "runtime.carrier.correlationId";
+
+    /// <summary>
+    /// Command-metadata key threading the workflow instance name along the scheduler work chain for the
+    /// execution-time expression carrier (ADR 0030 identity), mirroring <see cref="CarrierCorrelationId"/>.
+    /// Assigned by the <c>SetName</c> leaf; distinct from <see cref="InstanceName"/>, which is the persisted
+    /// system-metadata home read for querying.
+    /// </summary>
+    public const string CarrierInstanceName = "runtime.carrier.instanceName";
+
+    /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
     /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
