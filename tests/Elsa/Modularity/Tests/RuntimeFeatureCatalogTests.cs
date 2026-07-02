@@ -1,4 +1,3 @@
-using System.Text.Json;
 using CShells.Features;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Services;
@@ -20,7 +19,7 @@ public sealed class RuntimeFeatureCatalogTests
                     ["Description"] = "Runtime feature description."
                 }
             }));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -38,7 +37,7 @@ public sealed class RuntimeFeatureCatalogTests
             {
                 Dependencies = ["DependencyOne", "DependencyTwo"]
             }));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -54,7 +53,7 @@ public sealed class RuntimeFeatureCatalogTests
         // be set to stop the manifest contributor from backfilling a stale dependency list.
         var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("RuntimeFeature")));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -68,7 +67,7 @@ public sealed class RuntimeFeatureCatalogTests
     {
         var contributor = new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
             new ShellFeatureDescriptor("ManifestFeature")));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
         context.GetOrAdd("ManifestFeature").SourceKind = FeatureSourceKinds.Manifest;
 
         await contributor.ContributeAsync(context);
@@ -84,7 +83,7 @@ public sealed class RuntimeFeatureCatalogTests
             {
                 Id = " "
             }));
-        var context = CreateContext();
+        var context = FeatureCatalogTestContext.Create();
 
         await contributor.ContributeAsync(context);
 
@@ -104,9 +103,6 @@ public sealed class RuntimeFeatureCatalogTests
         Assert.Equal(2, count);
         Assert.Equal(1, catalog.RefreshCount);
     }
-
-    private static FeatureCatalogContributionContext CreateContext() =>
-        new(new ShellFeatureConfigurationSnapshot("default", "revision", new Dictionary<string, JsonElement>()));
 
     private sealed class FakeRuntimeFeatureCatalog(params ShellFeatureDescriptor[] descriptors) : IRuntimeFeatureCatalog
     {

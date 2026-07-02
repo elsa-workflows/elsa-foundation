@@ -95,9 +95,6 @@
                 "TypeFullName": "System.IO.Stream"
               },
               {
-                "TypeFullName": "System.Guid"
-              },
-              {
                 "TypeFullName": "System.DateOnly"
               },
               {
