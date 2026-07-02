@@ -2,7 +2,9 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -63,6 +65,28 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<WorkflowExecutionDrainCoordinatorOptions>();
         services.TryAddSingleton<IWorkflowExecutionDrainCoordinator, WorkflowExecutionDrainCoordinator>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
+
+        // Runtime execution pipeline spine (ADR 0029, Move 1). The built-in placeholder middleware are registered so
+        // the executor can resolve them by type from the built plan; both pipelines start as no-op pass-throughs, so
+        // wrapping handler dispatch is behavior-preserving until modules register real middleware or Move 2 lands.
+        services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
+        services.TryAddSingleton<RuntimeActivityLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeActivityInputEvaluationMiddleware>();
+        services.TryAddSingleton<RuntimeActivityInvokeMiddleware>();
+        services.TryAddSingleton<RuntimeActivityOutputCaptureMiddleware>();
+        services.TryAddSingleton<RuntimeActivitySchedulingMiddleware>();
+        services.TryAddSingleton<RuntimeActivityCheckpointMiddleware>();
+        services.TryAddSingleton<RuntimeActivityPostCommitMiddleware>();
+        services.TryAddSingleton<IRuntimeWorkflowExecutionPipeline>(serviceProvider =>
+            new RuntimeWorkflowExecutionPipeline(new WorkflowRuntimePipelineBuilder().BuildPlan(), serviceProvider));
+        services.TryAddSingleton<IRuntimeActivityExecutionPipeline>(serviceProvider =>
+            new RuntimeActivityExecutionPipeline(new ActivityRuntimePipelineBuilder().BuildPlan(), serviceProvider));
+        services.TryAddSingleton<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
+        services.TryAddSingleton<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
+
         services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>
             new WorkflowSchedulerDrainer(
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
@@ -70,7 +94,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 TimeProvider.System,
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();

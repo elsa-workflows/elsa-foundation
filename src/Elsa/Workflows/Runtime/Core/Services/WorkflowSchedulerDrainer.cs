@@ -13,6 +13,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
     private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
 
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -63,6 +64,18 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowSchedulerPauseGate? pauseGate,
         IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
         IWorkflowExecutionStateStore? workflowExecutionStateStore)
+        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher: null)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        TimeProvider timeProvider,
+        IWorkflowSchedulerPauseGate? pauseGate,
+        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -77,6 +90,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _pauseGate = pauseGate;
         _ambientServicesAccessor = ambientServicesAccessor;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _pipelineDispatcher = pipelineDispatcher;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -162,7 +176,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         try
         {
             handler = FindHandler(workItem);
-            await handler.HandleAsync(workItem, cancellationToken);
+
+            // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
+            // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
+            // the built-in pass-through middleware registered the two paths are behavior-identical.
+            if (_pipelineDispatcher is not null)
+                await _pipelineDispatcher.DispatchAsync(workItem, handler, cancellationToken);
+            else
+                await handler.HandleAsync(workItem, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
