@@ -17,12 +17,36 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 
 ---
 
+## Implementation Status Note (2026-07-02) — read before resuming
+
+An audit reconciled this file against the actual tree. Two drifts affect the **open** tasks below:
+
+1. **Layout is nested, not flat.** The repo was reorganised to `src/Elsa/Activities/...` after this file was authored. Translate every flat path: `src/Elsa.Activities.Primitives` → `src/Elsa/Activities/Primitives`; `tests/Elsa.Activities.Primitives.Tests` → `tests/Elsa/Activities/Primitives/Tests`; etc.
+2. **FR-009 CLR descriptor superseded by spec 081.** The CLR descriptor is **not** `TypeInformation`; the shipped scanner emits an alias-based `ClrActivityDescriptor` (`DescriptorType = typeof(ClrActivityDescriptor).FullName`, payload = `TypeAliasConvention.CanonicalAlias(type)`). Implement/verify against the current code, not FR-009's literal text. The Workflow kind still correctly uses `WorkflowIdentity`.
+
+**Done (verified green):** Phases 1–5 seam/CLR/Workflow-runtime/design-purge; plus T002/T028/T029/T031 — the `Composition.Design` reconciliation source + feature + host wiring landed on branch `006-activity-construction-seam` (commit `96e8072e`). Full solution built green as of this note.
+
+**Remaining open:** T004, T018, T023, T025, T041, T042, T046, T050–T055 (a new `tests/Elsa/Activities/Primitives/Tests` project + binder/registration tests; the SC-proving architecture tests T050–T053; persistence/read-contract tests; JSON reconciliation field verify; feature docs; final `dotnet build Elsa.Server.slnx` + all-tests + quickstart validation). None depend on undecided design.
+
+### Code review (2026-07-02, xhigh)
+
+Fixed on `006-b1-port-adapter`: **soft-delete leak** — the adapter now skips `WorkflowDefinition.DeletedAt != null` (the list port doesn't filter soft-deleted rows; a deleted usable workflow was being re-catalogued permanently), with a regression test; **test DRY** — store fakes/builders extracted to `tests/.../Tests/TestSupport/WorkflowDesignStubs.cs`.
+
+Deferred for the architect / fresh pass (judgment calls, recorded so they aren't lost):
+- **Feature dependency not declared.** `ActivitiesCompositionDesign` needs a Workflows.Design persistence provider at runtime; a `DependsOn` is intentionally omitted because the stores are a provider-neutral contract with no single feature to name (documented on the feature). Decide whether composition validation should enforce it another way.
+- **Startup ordering.** Activity reconciler is `[Order(1)]`, workflow reconciler `[Order(2)]` — workflows provisioned at startup won't appear as activities until the second reconciliation.
+- **Tenancy.** The scan uses a tenant-scoped filter; a no-tenant startup reconciliation sees only the default tenant.
+- **Per-version category.** `ActivityCategory` is per-version but the reconciler collapses versions to one definition (first-seen wins).
+- **`SourceId` isolation.** `SourceId`/`SourceKind` are provenance only; a cross-source `ActivityTypeKey` collision would abort reconciliation (collision practically improbable — definition GUIDs vs CLR FullNames).
+
+---
+
 ## Phase 1: Setup (Shared Infrastructure)
 
 **Purpose**: Create the new projects, the shared descriptor model, and test scaffolding.
 
 - [x] T001 Create project `src/Elsa.Activities.Primitives/Elsa.Activities.Primitives.csproj` (net10.0; runtime feature, **NO `Design.*` ref**; refs: `Elsa.Activities.Runtime.Core`, `Elsa.Primitives`, `CShells.Abstractions`, `Microsoft.Extensions.DependencyInjection.Abstractions`)
-- [ ] T002 [P] Create TWO projects (Workflow kind split per §E2.2): `src/Elsa.Activities.Composition.Runtime` (net10.0, Design-free; refs `Elsa.Activities.Runtime.Core`, `Elsa.Workflows.Primitives`, `Elsa.Workflows.Runtime.Core`, `CShells.Abstractions` — **NO `Design.*`**) and `src/Elsa.Activities.Composition.Design` (net10.0; refs `Elsa.Activities.Design.Reconciliation.Core`, `Elsa.Activities.Design.Core`, `Elsa.Workflows.Primitives`, `CShells.Abstractions`)
+- [x] T002 [P] Create TWO projects (Workflow kind split per §E2.2). **Actual nested paths** (repo reorganised since spec authored): `src/Elsa/Activities/Composition/Runtime` (Design-free) and `src/Elsa/Activities/Composition/Design`. **Dependency note:** Composition.Design also references `Elsa.Workflows.Design.Core` + `Elsa.Workflows.Design.Persistence.Core` beyond the originally-listed refs — required for T028 discovery (list definitions/versions, read authored `WorkflowActivityOptions`/I-O). This is Design→Design (contract/model libs only); no §E2.2 (Runtime→Design) or SC-006 (feature→feature) violation.
 - [x] T003 [P] Add `WorkflowIdentity` record `(string DefinitionId, string VersionId, string Version)` in `src/Elsa.Workflows.Primitives/Models/WorkflowIdentity.cs`
 - [ ] T004 [P] Create test projects `tests/Elsa.Activities.Runtime.Tests`, `tests/Elsa.Activities.Primitives.Tests`, `tests/Elsa.Activities.Composition.Tests` (xunit only, NO FluentAssertions); confirm `tests/Elsa.Activities.Design.Tests` exists for reshape tests
 - [ ] T005 Register the new src + test projects in `Elsa.Server.slnx` and add the two features to the host composition where appropriate
@@ -81,10 +105,14 @@ Modular .NET feature framework. Code under `src/<Project>/...`, tests under `tes
 
 - [x] T026 [US2] Implement `WorkflowDefinitionActivity` (public sealed, runtime-side, **no Design ref**) in `src/Elsa.Activities.Composition.Runtime/Activities/WorkflowDefinitionActivity.cs` — an ordinary CLR `IActivity` (so it is also catalogued under a `TypeInformation` descriptor); construct-only; typed `WorkflowIdentity`/version state + dynamic bag (`IActivity.SyntheticProperties`)
 - [x] T027 [US2] Implement `WorkflowActivityConstructor : IActivityConstructor<WorkflowIdentity>` (public sealed) in `src/Elsa.Activities.Composition.Runtime/Constructors/WorkflowActivityConstructor.cs` — produces a `WorkflowDefinitionActivity` configured from the identity (typed state) + author args pre-set in the bag; does its **own** bag-filling (no ref to `Primitives`' binder); one-line bridge
-- [ ] T028 [US2] Implement `WorkflowActivityReconciliationSource : IActivityReconciliationSource` in `src/Elsa.Activities.Composition.Design/Reconciliation/WorkflowActivityReconciliationSource.cs` — usable-as-activity workflow versions → models with `DescriptorType="Elsa.Workflows.Primitives.Models.WorkflowIdentity"`, descriptor `WorkflowIdentity(...)`, UI metadata + I/O mirrored; outcome/port visualization is future module-owned facet work (005 FR-005/006)
-- [ ] T029 [US2] Wire `src/Elsa.Activities.Composition.Runtime/ActivitiesCompositionRuntimeFeature.cs` (constructor + activity) and `src/Elsa.Activities.Composition.Design/ActivitiesCompositionDesignFeature.cs` (reconciliation source)
+- [x] T028 [US2] Implemented the Workflow-kind design side as a **port + adapter (§2.7)** so the reconciliation source carries no Workflows.Design dependency:
+  - `IUsableAsActivityWorkflowSource` port + neutral `UsableAsActivityWorkflow` record (I/O reuses `InputDefinition`/`OutputDefinition`).
+  - `WorkflowDefinitionUsableAsActivitySource` adapter — the **only** class touching Workflows.Design read ports. Discovery = full scan (`IWorkflowDefinitionStore.ListAsync` → `IWorkflowDefinitionVersionStore.ListByDefinitionAsync`) filtered on `WorkflowActivityOptions.UsableAsActivity`. **The confirmed Decision-1 follow-up (persisted `UsableAsActivity` shadow column for EF Core + index for Groundwork, plus a targeted store query) lands here — the reconciliation source and its tests do not change.**
+  - `WorkflowActivityReconciliationSource` is now a pure mapper over the port → one row per usable version (`ActivityTypeKey = definitionId`, `Version` = SemVer, `DescriptorType = typeof(WorkflowIdentity).FullName`, descriptor `WorkflowIdentity(defId, versionId, version)`, I/O mirrored).
+  - Tests: `WorkflowActivityReconciliationSourceTests` (mapper, fake port), `WorkflowDefinitionUsableAsActivitySourceTests` (adapter, store stubs). (outcome/port visualization is future module-owned facet work, 005 FR-005/006)
+- [x] T029 [US2] Wired `ActivitiesCompositionRuntimeFeature` (constructor + activity, pre-existing) and `ActivitiesCompositionDesignFeature` (registers the `IUsableAsActivityWorkflowSource` adapter + the `IActivityReconciliationSource`). Host wiring added: `Elsa.Server.slnx`, `Elsa.Server.csproj` project ref, `Program.cs` feature-assembly registration, and `shells.baseline.json` (`ActivitiesCompositionDesign`).
 - [x] T030 [P] [US2] Unit test: `WorkflowActivityConstructor` → `WorkflowDefinitionActivity` with identity applied + bag filled; two identities → distinct instances
-- [ ] T031 [P] Registration test: both Composition features resolve (G27)
+- [x] T031 [P] Registration test: Composition Design feature registers its reconciliation source (`ActivitiesCompositionDesignFeatureTests`); Composition Runtime constructor registration covered via `WorkflowActivityConstructorTests` + `BoundedContextReferenceTests` (G27)
 - [x] T032 [P] [US2] §E2.2 reference test: `Elsa.Activities.Composition.Runtime` references **no** `Elsa.*.Design.*` project (now a true project-reference test, enabled by the split)
 
 **Checkpoint**: Both kinds construct through one factory; no `Kind` string anywhere.

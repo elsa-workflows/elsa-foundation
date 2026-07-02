@@ -19,6 +19,7 @@
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Composition/">
+    <Project Path="src/Elsa/Activities/Composition/Design/Elsa.Activities.Composition.Design.csproj" />
     <Project Path="src/Elsa/Activities/Composition/Runtime/Elsa.Activities.Composition.Runtime.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Design/">

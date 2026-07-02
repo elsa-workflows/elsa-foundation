@@ -6,6 +6,7 @@ using CShells.DependencyInjection;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Server;
+using Elsa.Activities.Composition.Design;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
@@ -161,6 +162,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // populate the catalog with WriteLine + WorkflowDefinitionActivity as CLR rows at startup.
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
+            // Workflow kind (Design side): catalogs usable-as-activity workflow versions as WorkflowIdentity rows.
+            typeof(ActivitiesCompositionDesignFeature).Assembly,
 
             // The bridge: publishing endpoints that construct a live activity from a catalog row.
             typeof(WorkflowsPublishingApiFeature).Assembly,
