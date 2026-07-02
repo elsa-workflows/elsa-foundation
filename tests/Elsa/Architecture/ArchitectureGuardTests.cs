@@ -198,6 +198,23 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Projects_do_not_declare_duplicate_project_references()
+    {
+        var violations = ProjectFiles()
+            .SelectMany(project => XDocument.Load(project.FullPath)
+                .Descendants("ProjectReference")
+                .Select(x => x.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => include.Replace('\\', '/'))
+                .GroupBy(include => include, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => $"{project.Name}: duplicate ProjectReference {group.Key}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     private static bool IsRuntimeProject(ProjectInfo project) =>
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
