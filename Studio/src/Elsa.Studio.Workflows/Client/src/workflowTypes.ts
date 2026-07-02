@@ -207,6 +207,20 @@ export interface ArgumentValue {
   [key: string]: unknown;
 }
 
+// Collection-ness of an authored argument type (typed-argument-model wire contract).
+// `Single` is a scalar; the rest wrap the element type. Absent on the wire ⇒ treated as `Single`.
+export type CollectionKind = "Single" | "Array" | "List" | "HashSet";
+
+export const collectionKinds: CollectionKind[] = ["Single", "Array", "List", "HashSet"];
+
+// The type of an authored Variable/Input/Output. `alias` is a stable element-type identifier
+// (bare for framework primitives like "String"/"Int32"; dotted for module types like
+// "Elsa.Http.HttpRequest") — never a namespace/assembly/version. Unknown aliases round-trip unchanged.
+export interface ArgumentType {
+  alias: string;
+  collectionKind: CollectionKind;
+}
+
 // Canonical scoped-variable declaration (Elsa.Expressions.Core.Models.VariableDefinition, ADR-0027).
 // `referenceKey` is the stable identity; `name` is display-only. Workflow-scoped declarations live on
 // `WorkflowDefinitionState.variables`; container-scoped declarations live on a container node's
@@ -215,8 +229,8 @@ export interface ArgumentValue {
 export interface VariableDefinition {
   referenceKey: string;
   name: string;
-  typeInformation: TypeInformation;
-  storageDriverType?: TypeInformation | null;
+  type: ArgumentType;
+  storageDriverType?: string | null;
   default?: ArgumentValue | null;
   [key: string]: unknown;
 }
@@ -252,14 +266,14 @@ export interface ScopedVariableAnalysisResponse {
   shadowingWarnings: ScopedVariableShadowingWarning[];
 }
 
-// Workflow inputs carry the full argument-definition field set plus binding metadata.
+// Workflow inputs carry the full argument-definition field set plus binding metadata. Collection-ness
+// lives on `type.collectionKind` (the legacy `isArray` boolean is gone).
 export interface WorkflowInput {
   name: string;
-  type: string;
+  type: ArgumentType;
   displayName: string;
   description: string;
   category: string;
-  isArray: boolean;
   uiHint: string;
   storageDriverType: string | null;
   defaultValue: string | null;
@@ -268,21 +282,26 @@ export interface WorkflowInput {
   [key: string]: unknown;
 }
 
-// Outputs are produced by activities, so they have a smaller field set than inputs.
+// Outputs are produced by activities, so they have a smaller field set than inputs (no default/storage).
 export interface WorkflowOutput {
   name: string;
-  type: string;
+  type: ArgumentType;
   displayName: string;
   description: string;
   category: string;
-  isArray: boolean;
   [key: string]: unknown;
 }
 
+// A selectable argument element type from GET /descriptors/variables (typed-argument-model contract).
+// `alias` is the join key against a stored `type.alias`; `defaultEditor` is an open hint for the
+// default-value editor (text/number/checkbox/date/none — tolerate unknown values). `typeName` is a
+// legacy fallback for older backends that returned it instead of `alias`.
 export interface VariableTypeDescriptor {
-  typeName: string;
+  alias: string;
   displayName?: string | null;
   category?: string | null;
+  defaultEditor?: string | null;
+  typeName?: string | null;
   description?: string | null;
 }
 

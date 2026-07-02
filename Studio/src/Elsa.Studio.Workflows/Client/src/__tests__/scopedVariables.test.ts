@@ -15,7 +15,7 @@ import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "
 const variable = (referenceKey: string, name: string): VariableDefinition => ({
   referenceKey,
   name,
-  typeInformation: { typeName: "String", namespace: "System", assemblyName: "System.Private.CoreLib", assemblyVersion: "" },
+  type: { alias: "String", collectionKind: "Single" },
   storageDriverType: null,
   default: null
 });

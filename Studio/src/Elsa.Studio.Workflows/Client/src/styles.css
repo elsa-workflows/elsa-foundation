@@ -1979,6 +1979,23 @@
   word-break: break-word;
 }
 
+.wf-properties-info input[type="text"],
+.wf-properties-info textarea {
+  width: 100%;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--input, var(--wf-panel-muted));
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.wf-properties-info textarea {
+  resize: vertical;
+}
+
 .wf-properties-table {
   width: 100%;
   border-collapse: collapse;
@@ -2007,6 +2024,8 @@
 }
 
 .wf-properties-table input[type="text"],
+.wf-properties-table input[type="number"],
+.wf-properties-table input[type="date"],
 .wf-properties-table select {
   width: 100%;
   height: 30px;

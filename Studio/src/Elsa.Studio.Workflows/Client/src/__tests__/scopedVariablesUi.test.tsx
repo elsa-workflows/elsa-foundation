@@ -173,21 +173,21 @@ describe("variable picker", () => {
 describe("variable declaration editor", () => {
   it("adds a canonical VariableDefinition", () => {
     const onChange = vi.fn();
-    const container = render(<VariablesEditor items={[]} typeOptions={null} storageOptions={null} onChange={onChange} />);
+    const container = render(<VariablesEditor items={[]} typeOptions={null} storageOptions={null} editorForAlias={() => "text"} onChange={onChange} />);
 
     clickButton([...container.querySelectorAll("button")].find(button => button.textContent?.includes("Add variable"))! as HTMLButtonElement);
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const next = onChange.mock.calls[0][0] as Array<Record<string, unknown>>;
     expect(next).toHaveLength(1);
-    expect(next[0]).toMatchObject({ name: "Variable1", typeInformation: { typeName: "String" } });
+    expect(next[0]).toMatchObject({ name: "Variable1", type: { alias: "String", collectionKind: "Single" } });
     expect(next[0].referenceKey).toBeTypeOf("string");
   });
 
   it("edits a variable name without losing its reference key", () => {
     const onChange = vi.fn();
-    const items = [{ referenceKey: "ref-1", name: "Old", typeInformation: { typeName: "String", namespace: "System", assemblyName: "", assemblyVersion: "" }, storageDriverType: null, default: null }];
-    const container = render(<VariablesEditor items={items} typeOptions={null} storageOptions={null} onChange={onChange} />);
+    const items = [{ referenceKey: "ref-1", name: "Old", type: { alias: "String", collectionKind: "Single" }, storageDriverType: null, default: null }];
+    const container = render(<VariablesEditor items={items} typeOptions={null} storageOptions={null} editorForAlias={() => "text"} onChange={onChange} />);
 
     setInputValue(container.querySelector<HTMLInputElement>("input[aria-label='Variable name']")!, "Renamed");
 
@@ -197,8 +197,8 @@ describe("variable declaration editor", () => {
 
   it("removes a variable", () => {
     const onChange = vi.fn();
-    const items = [{ referenceKey: "ref-1", name: "Old", typeInformation: { typeName: "String", namespace: "System", assemblyName: "", assemblyVersion: "" }, storageDriverType: null, default: null }];
-    const container = render(<VariablesEditor items={items} typeOptions={null} storageOptions={null} onChange={onChange} />);
+    const items = [{ referenceKey: "ref-1", name: "Old", type: { alias: "String", collectionKind: "Single" }, storageDriverType: null, default: null }];
+    const container = render(<VariablesEditor items={items} typeOptions={null} storageOptions={null} editorForAlias={() => "text"} onChange={onChange} />);
 
     clickButton(container.querySelector<HTMLButtonElement>("button[aria-label^='Remove variable']")!);
 
@@ -206,12 +206,12 @@ describe("variable declaration editor", () => {
   });
 
   it("shows a non-blocking shadowing advisory for a flagged declaration", () => {
-    const items = [{ referenceKey: "ref-1", name: "Count", typeInformation: { typeName: "String", namespace: "System", assemblyName: "", assemblyVersion: "" }, storageDriverType: null, default: null }];
+    const items = [{ referenceKey: "ref-1", name: "Count", type: { alias: "String", collectionKind: "Single" }, storageDriverType: null, default: null }];
     const container = render(
       <VariablesEditor
         items={items}
         typeOptions={null}
-        storageOptions={null}
+        storageOptions={null} editorForAlias={() => "text"}
         warnings={new Map([["ref-1", 'Shadows "Count" declared in an outer scope.']])}
         onChange={vi.fn()}
       />

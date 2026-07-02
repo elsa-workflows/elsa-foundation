@@ -248,6 +248,25 @@ export async function deleteDefinitionPermanently(context: StudioEndpointContext
   await context.http.deleteJson<unknown>(`${basePath}/definitions/${encodeURIComponent(definitionId)}/permanent`);
 }
 
+// Updates a definition's name/description after creation (the draft save path only carries State+Layout).
+// The Studio SDK http client has no PATCH helper, so we use the generic requestJson escape hatch. The
+// backend endpoint (PATCH /definitions/{id}, a partial update) returns the same WorkflowDefinitionDetails
+// shape as GET /definitions/{id}; callers read `.definition` for the refreshed summary.
+export async function updateDefinitionMetadata(
+  context: StudioEndpointContext,
+  definitionId: string,
+  patch: { name: string; description?: string | null }
+): Promise<WorkflowDefinitionDetails> {
+  return context.http.requestJson<WorkflowDefinitionDetails>(
+    `${basePath}/definitions/${encodeURIComponent(definitionId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(patch)
+    }
+  );
+}
+
 export async function updateDraft(context: StudioEndpointContext, draft: WorkflowDraft) {
   const saved = await context.http.putJson<WorkflowDraft>(
     `${basePath}/drafts/${encodeURIComponent(draft.id)}`,
@@ -343,13 +362,24 @@ export async function listExpressionDescriptors(context: StudioEndpointContext):
 
 // Variable type descriptors populate the Type picker in the Properties tab. The backend proxies
 // the Elsa `descriptors/variables` endpoint; callers fall back to a free-text input when it 404s.
+// Items are keyed on a bare `alias` (typed-argument-model contract); `typeName` is tolerated for
+// older backends that predate the alias field.
 export async function listVariableTypeDescriptors(context: StudioEndpointContext): Promise<VariableTypeDescriptor[]> {
   const response = await getFirstAvailable<VariableTypeDescriptorsResponse | VariableTypeDescriptor[]>(context, [
     `${basePath}/descriptors/variables`,
     "/descriptors/variables"
   ]);
   const descriptors = Array.isArray(response) ? response : response.items ?? response.descriptors ?? [];
-  return descriptors.filter((descriptor): descriptor is VariableTypeDescriptor => isNonEmptyTypeName(descriptor));
+  return descriptors.filter((descriptor): descriptor is VariableTypeDescriptor => isSelectableDescriptor(descriptor));
+}
+
+// A descriptor is selectable if it carries a non-empty alias (or legacy typeName).
+function isSelectableDescriptor(value: unknown): value is VariableTypeDescriptor {
+  if (!value || typeof value !== "object") return false;
+  const descriptor = value as { alias?: unknown; typeName?: unknown };
+  const alias = typeof descriptor.alias === "string" && descriptor.alias.length > 0;
+  const typeName = typeof descriptor.typeName === "string" && descriptor.typeName.length > 0;
+  return alias || typeName;
 }
 
 // Storage driver descriptors populate the Storage picker. Same proxy/fallback contract as above.

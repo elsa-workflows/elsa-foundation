@@ -3,48 +3,53 @@ import {
   createInput,
   createOutput,
   createVariable,
-  defaultVariableType,
+  defaultEditorFor,
+  descriptorAlias,
   friendlyTypeLabel,
   generateUniqueName,
   literalDefault,
-  readBooleanField,
+  makeArgumentType,
+  readArgumentType,
   readStringField,
   readVariableDefault,
-  resolveStorageDriverType,
-  resolveTypeInformation,
   shortenTypeName,
-  typeInformationKey,
   updateInput,
   updateOutput,
-  updateVariable,
-  wellKnownVariableTypes
+  updateVariable
 } from "../workflowProperties";
-import type { VariableDefinition } from "../workflowTypes";
+import type { VariableDefinition, VariableTypeDescriptor } from "../workflowTypes";
 
 describe("variable shape construction", () => {
   it("creates a canonical VariableDefinition with a generated reference key and the expected keys", () => {
     const variable = createVariable({ name: "IsValid" });
 
     expect(Object.keys(variable).sort()).toEqual(
-      ["default", "name", "referenceKey", "storageDriverType", "typeInformation"].sort()
+      ["default", "name", "referenceKey", "storageDriverType", "type"].sort()
     );
     expect(variable.referenceKey).toBeTypeOf("string");
     expect(variable.referenceKey.length).toBeGreaterThan(0);
     expect(variable.name).toBe("IsValid");
-    expect(variable.typeInformation).toEqual(defaultVariableType);
+    expect(variable.type).toEqual({ alias: "String", collectionKind: "Single" });
     expect(variable.storageDriverType).toBeNull();
     expect(variable.default).toBeNull();
   });
 
-  it("resolves an explicit type key to its well-known TypeInformation", () => {
-    const variable = createVariable({ name: "Count", typeKey: "Int32" });
-    expect(variable.typeInformation).toEqual(wellKnownVariableTypes.find(type => type.typeName === "Int32"));
-    expect(typeInformationKey(variable.typeInformation)).toBe("System.Int32");
+  it("uses the supplied alias for an explicit type", () => {
+    const variable = createVariable({ name: "Count", alias: "Int32" });
+    expect(variable.type).toEqual({ alias: "Int32", collectionKind: "Single" });
   });
 
-  it("splits an unknown free-text type into namespace + type name", () => {
-    expect(resolveTypeInformation("My.Custom.Order")).toMatchObject({ typeName: "Order", namespace: "My.Custom" });
-    expect(resolveTypeInformation("Bare")).toMatchObject({ typeName: "Bare", namespace: "" });
+  it("builds an argument type, defaulting the collection kind to Single", () => {
+    expect(makeArgumentType("Boolean")).toEqual({ alias: "Boolean", collectionKind: "Single" });
+    expect(makeArgumentType("String", "List")).toEqual({ alias: "String", collectionKind: "List" });
+    expect(makeArgumentType("")).toEqual({ alias: "String", collectionKind: "Single" });
+  });
+
+  it("reads a stored argument type tolerantly", () => {
+    expect(readArgumentType({ type: { alias: "Guid", collectionKind: "HashSet" } })).toEqual({ alias: "Guid", collectionKind: "HashSet" });
+    expect(readArgumentType({ type: "String" })).toEqual({ alias: "String", collectionKind: "Single" });
+    expect(readArgumentType({ type: { alias: "X", collectionKind: "Nope" } })).toEqual({ alias: "X", collectionKind: "Single" });
+    expect(readArgumentType({})).toEqual({ alias: "", collectionKind: "Single" });
   });
 
   it("gives each created variable a unique reference key", () => {
@@ -58,21 +63,20 @@ describe("variable shape construction", () => {
     expect(readVariableDefault(null)).toBe("");
   });
 
-  it("resolves a storage driver key, or null when cleared", () => {
-    expect(resolveStorageDriverType("")).toBeNull();
-    expect(resolveStorageDriverType("Elsa.Storage.MemoryStorageDriver")).toMatchObject({
-      typeName: "MemoryStorageDriver",
-      namespace: "Elsa.Storage"
-    });
+  it("stores a storage driver as a bare alias string", () => {
+    expect(createVariable({ name: "V", storageDriver: "Elsa.Memory.MemoryStorageDriver" }).storageDriverType).toBe(
+      "Elsa.Memory.MemoryStorageDriver"
+    );
+    expect(createVariable({ name: "V", storageDriver: "" }).storageDriverType).toBeNull();
   });
 
   it("matches the canonical backend shape once fully edited", () => {
-    let variable = createVariable({ name: "IsValid", typeKey: "Boolean" });
+    let variable = createVariable({ name: "IsValid", alias: "Boolean" });
     variable = updateVariable(variable, { default: literalDefault("False") });
 
     expect(variable).toMatchObject({
       name: "IsValid",
-      typeInformation: { typeName: "Boolean", namespace: "System" },
+      type: { alias: "Boolean", collectionKind: "Single" },
       default: { value: "False", expressionType: "Literal" }
     });
     expect(typeof variable.referenceKey).toBe("string");
@@ -82,7 +86,7 @@ describe("variable shape construction", () => {
     const existing = {
       referenceKey: "abc",
       name: "Old",
-      typeInformation: resolveTypeInformation("Boolean"),
+      type: makeArgumentType("Boolean"),
       storageDriverType: null,
       default: null,
       // Field the editor does not know about — must survive the round-trip.
@@ -102,37 +106,36 @@ describe("input shape construction", () => {
     const input = createInput({ name: "OrderId" });
     expect(input).toMatchObject({
       name: "OrderId",
-      type: "String",
+      type: { alias: "String", collectionKind: "Single" },
       displayName: "OrderId",
       description: "",
       category: "",
-      isArray: false,
       uiHint: "singleline",
       storageDriverType: null,
       defaultValue: null,
       defaultSyntax: null,
       isReadOnly: null
     });
+    expect("isArray" in input).toBe(false);
   });
 
   it("preserves unknown fields when editing an input", () => {
     const existing = { ...createInput({ name: "OrderId" }), legacyFlag: true } as never;
-    const updated = updateInput(existing, { isArray: true });
-    expect(updated.isArray).toBe(true);
+    const updated = updateInput(existing, { defaultValue: "x" });
+    expect(updated.defaultValue).toBe("x");
     expect((updated as Record<string, unknown>).legacyFlag).toBe(true);
   });
 });
 
 describe("output shape construction", () => {
   it("creates a canonical output with the smaller field set", () => {
-    const output = createOutput({ name: "Result", type: "Boolean" });
+    const output = createOutput({ name: "Result", alias: "Boolean" });
     expect(output).toEqual({
       name: "Result",
-      type: "Boolean",
+      type: { alias: "Boolean", collectionKind: "Single" },
       displayName: "Result",
       description: "",
-      category: "",
-      isArray: false
+      category: ""
     });
   });
 
@@ -141,6 +144,28 @@ describe("output shape construction", () => {
     const updated = updateOutput(existing, { name: "Renamed" });
     expect(updated.name).toBe("Renamed");
     expect((updated as Record<string, unknown>).extra).toBe(1);
+  });
+});
+
+describe("descriptor helpers", () => {
+  const descriptors: VariableTypeDescriptor[] = [
+    { alias: "Boolean", displayName: "Boolean", category: "Primitives", defaultEditor: "checkbox" },
+    { alias: "DateTime", displayName: "Date/Time", category: "Primitives", defaultEditor: "date" },
+    { alias: "Int32", displayName: "Integer", category: "Primitives", defaultEditor: "" },
+    { typeName: "Legacy.Type", displayName: "Legacy" }
+  ];
+
+  it("resolves the default editor hint for an alias, falling back to text", () => {
+    expect(defaultEditorFor("Boolean", descriptors)).toBe("checkbox");
+    expect(defaultEditorFor("DateTime", descriptors)).toBe("date");
+    expect(defaultEditorFor("Int32", descriptors)).toBe("text");
+    expect(defaultEditorFor("Unknown", descriptors)).toBe("text");
+    expect(defaultEditorFor("Boolean", null)).toBe("text");
+  });
+
+  it("reads a descriptor's alias, tolerating legacy typeName", () => {
+    expect(descriptorAlias(descriptors[0])).toBe("Boolean");
+    expect(descriptorAlias(descriptors[3])).toBe("Legacy.Type");
   });
 });
 
@@ -168,12 +193,5 @@ describe("display + field helpers", () => {
     expect(readStringField({ TypeName: "Boolean" }, ["typeName", "TypeName"])).toBe("Boolean");
     expect(readStringField({ value: 12 }, ["value"])).toBe("12");
     expect(readStringField({}, ["missing"])).toBe("");
-  });
-
-  it("reads boolean fields across casings and string forms", () => {
-    expect(readBooleanField({ isArray: true }, ["isArray", "IsArray"])).toBe(true);
-    expect(readBooleanField({ IsArray: "true" }, ["isArray", "IsArray"])).toBe(true);
-    expect(readBooleanField({ isArray: false }, ["isArray"])).toBe(false);
-    expect(readBooleanField({}, ["isArray"])).toBe(false);
   });
 });

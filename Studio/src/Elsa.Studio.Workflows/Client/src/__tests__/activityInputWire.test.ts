@@ -101,6 +101,90 @@ describe("activity input wire adapter", () => {
   });
 });
 
+describe("argument collection wire adapter", () => {
+  it("emits the canonical type shape for variables/inputs/outputs and drops isArray/assembly", () => {
+    const state: WorkflowDefinitionState = {
+      variables: [{ referenceKey: "v1", name: "Items", type: { alias: "String", collectionKind: "List" }, storageDriverType: "Elsa.Memory.MemoryStorageDriver", default: null }],
+      inputs: [{ name: "Tags", type: { alias: "String", collectionKind: "HashSet" }, displayName: "Tags", storageDriverType: null }],
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result" }]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+
+    expect(wire.variables![0]).toMatchObject({
+      referenceKey: "v1",
+      name: "Items",
+      type: { alias: "String", collectionKind: "List" },
+      storageDriverType: "Elsa.Memory.MemoryStorageDriver"
+    });
+    expect(wire.inputs![0]).toMatchObject({ name: "Tags", type: { alias: "String", collectionKind: "HashSet" }, storageDriverType: null });
+    expect(wire.outputs![0]).toMatchObject({ name: "Result", type: { alias: "Boolean", collectionKind: "Single" } });
+    // Outputs are minimal — no storage driver.
+    expect("storageDriverType" in (wire.outputs![0] as object)).toBe(false);
+  });
+
+  it("converts a legacy variable (typeInformation + isArray + object storage) on read", () => {
+    const state: WorkflowDefinitionState = {
+      variables: [{
+        referenceKey: "v1",
+        name: "Numbers",
+        typeInformation: { typeName: "Int32", namespace: "System", assemblyName: "System.Private.CoreLib", assemblyVersion: "" },
+        isArray: true,
+        storageDriverType: { typeName: "MemoryStorageDriver", namespace: "Elsa.Memory" },
+        default: null
+      }] as unknown[]
+    };
+
+    const expanded = expandStateFromWire(state);
+    const variable = expanded.variables![0] as Record<string, unknown>;
+
+    expect(variable.type).toEqual({ alias: "Int32", collectionKind: "Array" });
+    expect(variable.storageDriverType).toBe("Elsa.Memory.MemoryStorageDriver");
+    expect("typeInformation" in variable).toBe(false);
+    expect("isArray" in variable).toBe(false);
+  });
+
+  it("converts a legacy input (bare-string type + isArray) and preserves an unknown alias", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ name: "Blob", type: "Some.Unresolved.Type", isArray: true, displayName: "Blob" }] as unknown[]
+    };
+
+    const input = expandStateFromWire(state).inputs![0] as Record<string, unknown>;
+
+    expect(input.type).toEqual({ alias: "Some.Unresolved.Type", collectionKind: "Array" });
+    expect("isArray" in input).toBe(false);
+  });
+
+  it("normalizes container-scoped variable declarations in the activity tree", () => {
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "sequence-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.sequence.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [],
+          variables: [{ referenceKey: "c1", name: "Scoped", typeInformation: { typeName: "Boolean", namespace: "System" }, isArray: false }]
+        }
+      }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+    const scoped = (wire.structure!.payload.variables as Record<string, unknown>[])[0];
+
+    expect(scoped.type).toEqual({ alias: "Boolean", collectionKind: "Single" });
+    expect("typeInformation" in scoped).toBe(false);
+  });
+
+  it("leaves state without argument collections untouched", () => {
+    const state = stateOf(writeLine("root", {}));
+    expect(canonicalizeStateForWire(state).variables).toBeUndefined();
+    expect(canonicalizeStateForWire(state).inputs).toBeUndefined();
+  });
+});
+
 function stateOf(rootActivity: ActivityNode): WorkflowDefinitionState {
   return { rootActivity };
 }

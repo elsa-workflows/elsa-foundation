@@ -9,7 +9,7 @@ const draft = (): WorkflowDraft => ({
     variables: [{
       referenceKey: "count-ref",
       name: "count",
-      typeInformation: { typeName: "Int32", namespace: "System", assemblyName: "System.Private.CoreLib", assemblyVersion: "" },
+      type: { alias: "Int32", collectionKind: "Single" },
       storageDriverType: null,
       default: null
     }],

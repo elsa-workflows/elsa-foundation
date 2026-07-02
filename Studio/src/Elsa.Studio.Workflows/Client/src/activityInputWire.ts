@@ -1,17 +1,22 @@
+import { readArgumentType } from "./workflowProperties";
 import type { ActivityNode, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
- * Bridges the Studio's in-memory activity model and the backend's canonical wire contract.
+ * Bridges the Studio's in-memory model and the backend's canonical wire contract.
  *
- * The editors keep input values as top-level camelCase properties on the activity node
- * (e.g. `activity.text = { typeName, expression: { type, value } }`). The backend
- * `ActivityNode` model has no place for those — it carries authored values in an `inputs`
- * array of `ArgumentState { referenceKey, value: { value, expressionType } }`. Anything else
- * is silently dropped on deserialization, which is what made WriteLine print blank lines.
+ * Two concerns live here:
  *
- * {@link canonicalizeStateForWire} folds the top-level wrapped properties into `inputs` before
- * we send state to the backend; {@link expandStateFromWire} reverses it on load so the existing
- * descriptor-aware editors keep working unchanged.
+ * 1. Activity input values. The editors keep them as top-level camelCase properties on the activity
+ *    node (e.g. `activity.text = { typeName, expression: { type, value } }`). The backend `ActivityNode`
+ *    model carries authored values in an `inputs` array of `ArgumentState { referenceKey, value }`;
+ *    anything else is dropped on deserialization. {@link canonicalizeStateForWire} folds the top-level
+ *    wrapped properties into `inputs`; {@link expandStateFromWire} reverses it on load.
+ *
+ * 2. Argument collections — the workflow-level `variables`/`inputs`/`outputs` and container-scoped
+ *    variables. The typed-argument-model contract carries each argument's type as
+ *    `type: { alias, collectionKind }` with a bare-alias `storageDriverType` (no `isArray`, no
+ *    assembly metadata). Both directions normalize to that exact shape, tolerating legacy drafts that
+ *    still hold `typeInformation`/`isArray`, so old and new documents round-trip identically.
  */
 
 const structuralKeys = new Set(["nodeId", "activityVersionId", "inputs", "outputs", "structure"]);
@@ -29,19 +34,27 @@ interface WireArgumentState {
 }
 
 export function canonicalizeStateForWire(state: WorkflowDefinitionState): WorkflowDefinitionState {
-  return mapStateActivities(state, canonicalizeActivityNode);
+  return mapState(state, canonicalizeActivityNode);
 }
 
 export function expandStateFromWire(state: WorkflowDefinitionState): WorkflowDefinitionState {
-  return mapStateActivities(state, expandActivityNode);
+  return mapState(state, expandActivityNode);
 }
 
-function mapStateActivities(
+// Argument-collection normalization is shape-identical in both directions (it reads any legacy/current
+// shape and emits the canonical wire shape), so only the per-activity transform differs.
+function mapState(
   state: WorkflowDefinitionState,
   transform: (node: ActivityNode) => ActivityNode
 ): WorkflowDefinitionState {
-  if (!state || !state.rootActivity) return state;
-  return { ...state, rootActivity: mapActivityTree(state.rootActivity, transform) };
+  if (!state) return state;
+  const next: WorkflowDefinitionState = { ...state };
+  if (state.rootActivity) next.rootActivity = mapActivityTree(state.rootActivity, transform);
+  // Variables and inputs both carry a storage driver; outputs are minimal (produced, not consumed).
+  if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument);
+  if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, normalizeStoredArgument);
+  if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentRecord(record, false));
+  return next;
 }
 
 function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => ActivityNode): ActivityNode {
@@ -58,7 +71,62 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
     }
   }
 
+  // Container-scoped variable declarations live on `structure.payload.variables` in the same shape as
+  // workflow-scoped ones, so normalize them here too (both directions).
+  if (Array.isArray(structure.payload.variables) && structure.payload.variables.length > 0) {
+    nextPayload.variables = mapArgumentRecords(structure.payload.variables, normalizeStoredArgument);
+    changed = true;
+  }
+
   return changed ? { ...transformed, structure: { ...structure, payload: nextPayload } } : transformed;
+}
+
+function mapArgumentRecords(
+  value: unknown[],
+  transform: (record: Record<string, unknown>) => Record<string, unknown>
+): unknown[] {
+  return value.map(item => (isRecord(item) && !Array.isArray(item) ? transform(item) : item));
+}
+
+// Variables and inputs share one normalizer (both keep a storage driver); outputs pass keepStorage=false.
+function normalizeStoredArgument(record: Record<string, unknown>): Record<string, unknown> {
+  return normalizeArgumentRecord(record, true);
+}
+
+// Emits the canonical argument shape: `type: { alias, collectionKind }` (via the shared
+// {@link readArgumentType}), plus a bare-alias `storageDriverType` for variables/inputs. Legacy
+// `typeInformation`/`isArray`/casing variants and assembly metadata are dropped; every other field
+// (name, displayName, default, referenceKey, …) is preserved untouched. Idempotent, so it is safe to
+// run on either wire or in-memory records.
+const droppedArgumentKeys = ["type", "Type", "typeInformation", "TypeInformation", "isArray", "IsArray", "storageDriverType", "StorageDriverType"];
+
+function normalizeArgumentRecord(record: Record<string, unknown>, keepStorage: boolean): Record<string, unknown> {
+  const next = omitKeys(record, droppedArgumentKeys);
+  next.type = readArgumentType(record);
+  if (keepStorage) next.storageDriverType = readWireStorageDriver(record.storageDriverType ?? record.StorageDriverType);
+  return next;
+}
+
+function omitKeys(record: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  const dropped = new Set(keys);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (!dropped.has(key)) out[key] = value;
+  }
+  return out;
+}
+
+// Reads a storage driver as a bare alias: a string passes through; a legacy TypeInformation object is
+// collapsed to `Namespace.TypeName` (or bare TypeName). Empty/absent ⇒ null (backend default).
+function readWireStorageDriver(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() ? value : null;
+  if (isRecord(value)) {
+    const typeName = typeof value.typeName === "string" ? value.typeName : "";
+    if (!typeName) return null;
+    const namespace = typeof value.namespace === "string" ? value.namespace : "";
+    return namespace ? `${namespace}.${typeName}` : typeName;
+  }
+  return null;
 }
 
 function canonicalizeActivityNode(node: ActivityNode): ActivityNode {
