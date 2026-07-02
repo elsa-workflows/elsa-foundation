@@ -56,3 +56,32 @@ public interface IRuntimeExecutionPipelineDispatcher
 - Gains one optional `IRuntimeExecutionPipelineDispatcher?` constructor parameter (defaulted null).
 - Dispatch line becomes: dispatcher present ⇒ `dispatcher.DispatchAsync(workItem, handler, ct)`; else ⇒ `handler.HandleAsync(workItem, ct)`.
 - All other drainer behavior (fault capture, result records, terminal-status re-check) unchanged.
+
+## Module contribution surface
+
+```csharp
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class RuntimeMiddlewareAttribute(string slot) : Attribute
+{
+    public string Slot { get; }
+    public int Order { get; init; }
+    public string? Name { get; init; }
+}
+
+// One atomic call: registers the type in DI AND records its placement.
+IServiceCollection AddWorkflowRuntimeMiddleware<TMiddleware>(this IServiceCollection, string? slot = null, int? order = null, string? name = null)
+    where TMiddleware : class, IWorkflowRuntimeMiddleware;
+IServiceCollection AddActivityRuntimeMiddleware<TMiddleware>(this IServiceCollection, string? slot = null, int? order = null, string? name = null)
+    where TMiddleware : class, IActivityRuntimeMiddleware;
+
+// Builder ops (both concrete builders):
+Use(Type middlewareType, string slot, int order = 0, string? name = null); // non-generic, validates the middleware interface
+Builder Replace<TOld, TNew>();
+Builder Remove<TMiddleware>();
+```
+
+**Guarantees**
+- Placement resolves to explicit args, else the `[RuntimeMiddleware]` attribute, else a thrown error (missing slot).
+- Built-ins, first-party, and third-party middleware use the same path; built-ins are marked `IsBuiltIn` and sit at order 0.
+- `BuildPlan()` orders by `(slot sort-order, order, type full-name)` — deterministic, load-order-independent — and throws `InvalidOperationException` on two distinct middleware sharing a `(slot, order)` (with before/after guidance when one is the built-in).
+- The feature applies DI-collected contributions to the builder before composing, and logs the resolved plan at Debug on first composition. Concrete-neighbour ordering is not supported.

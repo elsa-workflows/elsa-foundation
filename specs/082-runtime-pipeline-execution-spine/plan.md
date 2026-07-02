@@ -122,6 +122,20 @@ tests/Elsa/Workflows/Runtime/Tests/
 
 **Structure Decision**: Single library feature. New execution-spine services join the existing scheduler services under `Workflows/Runtime/Core`; DI wiring lives in the existing `WorkflowsRuntimeApiFeature` that already constructs the drainer.
 
+## Addendum — module contribution DX (folded into Move 1 during review)
+
+Per steward decision, the module-facing extension surface is completed in this unit (ADR 0029 amended). Added:
+
+- `Core/Middleware/RuntimeMiddlewareAttribute.cs` — `[RuntimeMiddleware(slot, Order, Name)]` default placement.
+- `Core/Middleware/RuntimeMiddlewareContributions.cs` — `Workflow/ActivityRuntimeMiddlewareContribution` DI records.
+- `Core/Middleware/RuntimeMiddlewareServiceCollectionExtensions.cs` — `AddWorkflow/ActivityRuntimeMiddleware<T>(slot?, order?, name?)` (atomic register-type + placement; explicit args override attribute; missing slot throws).
+- `Core/Builders/RuntimePipelinePlanBuilder.cs` — non-generic `Use(Type,…)`, `Replace`/`Remove` helpers, `MiddlewareInterfaceType` validation, and `BuildPlan()` deterministic sort (`slot, order, type-name`) + collision guard (throw on distinct middleware sharing `(slot, order)`; built-in-aware guidance).
+- `Core/Builders/{Workflow,Activity}RuntimePipelineBuilder.cs` — typed `Replace<TOld,TNew>()` / `Remove<T>()` + `MiddlewareInterfaceType`.
+- `Api/WorkflowsRuntimeApiFeature.cs` — pipeline factories apply DI-collected contributions to the builder, then log the resolved plan at Debug (`LogResolvedPipeline`).
+- Tests: `tests/.../RuntimeMiddlewareContributionTests.cs` (attribute default + override, missing-placement throw, end-to-end DI dispatch through the feature, deterministic order, collision + built-in-collision errors, Replace/Remove, interface validation).
+
+Design choices (from the review discussion): hybrid attribute+explicit placement; deterministic ordering with **error on true ties** (kills ASP.NET-style load-order fragility); one path for built-ins + modules; `Replace`/`Remove` + resolved-plan Debug log; **no** concrete-neighbour ordering (slots + numeric order only).
+
 ## Complexity Tracking
 
 No constitution violations. One deliberate deviation from "match the context shapes exactly": the context is refined to carry the work item and optional state (documented in FR-004 / Assumptions), because the non-nullable state shape is infeasible to satisfy at the dispatch point without extra I/O and handler-internal payload parsing. This is the minimal change that keeps the executor behavior-preserving and the contract test green.

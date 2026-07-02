@@ -59,6 +59,23 @@ The runtime routes each work item through the pipeline appropriate to its kind s
 2. **Given** a `ScheduleActivity`, `StartActivity`, `InvokeActivity`, `ResumeBookmark`, or `CreateBookmark` work item, **When** the selector runs, **Then** it selects the **activity** pipeline.
 3. **Given** a `CompleteActivity` work item whose payload `CompletionKind` is `ParentCompletionEvaluation`, **When** the selector runs, **Then** it selects the **activity** pipeline (matching the parent-completion handler); any other/absent completion kind selects the **workflow** pipeline (matching the routing handler).
 
+---
+
+### User Story 4 - A module contributes middleware through DI and controls its placement (Priority: P2)
+
+A framework or third-party module registers its runtime middleware through a single DI call and declares where it sits in the pipeline, without editing a central ordering list and without its placement depending on registration order.
+
+**Why this priority**: This makes User Story 1's extensibility reachable through the supported surface (not just hand-constructed pipelines). Folded into Move 1 (per ADR 0029) because it completes the change's stated value.
+
+**Independent Test**: Register a middleware via `AddActivityRuntimeMiddleware<T>(…)` on a feature-composed provider, dispatch a real work item, and assert it runs at the declared slot/order; separately assert the ordering/collision/replace rules on the builder.
+
+**Acceptance Scenarios**:
+
+1. **Given** a middleware annotated `[RuntimeMiddleware(slot, Order = -100)]` registered with `AddActivityRuntimeMiddleware<T>()`, **When** the pipeline is composed, **Then** it is placed at that slot/order; explicit arguments to the registration call override the attribute.
+2. **Given** two distinct middleware registered at the same `(slot, order)`, **When** the plan is built, **Then** composition fails with an error naming the conflict (and, when one is the built-in at order 0, guidance to choose a negative/positive order).
+3. **Given** the same set of middleware registered in different orders, **When** the plan is built, **Then** the resolved order is identical (deterministic by slot, order, then type name).
+4. **Given** `Replace<TOld,TNew>()` / `Remove<T>()` on the builder, **When** the plan is built, **Then** the built-in is swapped/dropped at its placement.
+
 ### Edge Cases
 
 - **Start before state exists**: A `Start` work item is dispatched before its `WorkflowExecutionState` exists. The pipeline must still run (the guardrail must hold for every dispatch), so the context cannot require a pre-loaded `WorkflowExecutionState`.
@@ -80,6 +97,10 @@ The runtime routes each work item through the pipeline appropriate to its kind s
 - **FR-008**: A guardrail test MUST assert that a registered marker middleware is **actually invoked during a real work-item dispatch** (not merely that the builder registers it), preventing silent re-orphaning of the pipeline.
 - **FR-009**: The change MUST NOT modify any scheduler work handler's body, MUST NOT introduce any `Elsa.Workflows.Design.*` dependency (constitution §E2.2/§E2.6), and MUST leave the scheduler (queue/drain/checkpoint) otherwise unchanged.
 - **FR-010**: The existing `RuntimePipelineContractTests` (the locked slot contract) MUST continue to pass unchanged.
+- **FR-011**: The runtime MUST expose a single DI contribution mechanism (`AddWorkflowRuntimeMiddleware<T>` / `AddActivityRuntimeMiddleware<T>`) that atomically registers the middleware type and its placement, usable identically by framework built-ins, first-party modules, and third-party modules (no privileged path). The feature MUST apply DI-registered contributions to the pipeline before composing it.
+- **FR-012**: Middleware placement MUST be declarative: a `[RuntimeMiddleware(slot, Order)]` attribute supplies the default slot/order/name, and explicit arguments to the registration call MUST override it. Registration with neither an attribute nor an explicit slot MUST fail with a clear error.
+- **FR-013**: The resolved pipeline order MUST be deterministic and independent of registration/module-load order (ordered by slot, then order, then a stable type key), and two distinct middleware sharing the same `(slot, order)` MUST be a build-time error that names the conflict (with before/after guidance when one is the built-in at order 0).
+- **FR-014**: The builder MUST support `Replace<TOld,TNew>()` and `Remove<T>()` for swapping or disabling middleware (including built-ins) at their placement, and the fully-resolved plan MUST be logged at Debug on composition so ordering is inspectable. Concrete-neighbour ("after middleware X") ordering MUST NOT be supported (slots + numeric order only).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -87,6 +108,9 @@ The runtime routes each work item through the pipeline appropriate to its kind s
 - **Pipeline selector**: Maps a scheduler work item to a `RuntimePipelineKind` using command kind and, for `CompleteActivity`, the payload completion kind.
 - **Pipeline dispatcher**: The seam invoked at the drainer's dispatch point; selects the pipeline, builds the context, and invokes the pipeline around the handler.
 - **Pipeline context (workflow / activity)**: The data carrier passed to middleware — the originating work item plus optional loaded runtime state.
+- **Middleware placement attribute**: `[RuntimeMiddleware(slot, Order, Name)]` — the default placement declared on a middleware type.
+- **Middleware contribution**: a DI-collected record of `(type, slot, order, name)` applied to the builder when the pipeline is composed.
+- **Registration extensions**: `AddWorkflow/ActivityRuntimeMiddleware<T>(slot?, order?, name?)` — the atomic register-type-plus-placement surface.
 
 ## Success Criteria *(mandatory)*
 
@@ -96,6 +120,7 @@ The runtime routes each work item through the pipeline appropriate to its kind s
 - **SC-002**: 100% of the pre-existing runtime test suite passes unchanged, including `RuntimePipelineContractTests` and all scheduler/drain/execution tests — demonstrating zero behavior change.
 - **SC-003**: Every command kind that can reach the drainer resolves to exactly one pipeline deterministically, with no selection path throwing.
 - **SC-004**: No new dependency from Workflows Runtime onto Workflows Design is introduced (verified by the existing structural dependency tests).
+- **SC-005**: A module-registered middleware (via the DI contribution surface) runs on a real dispatch through the feature-composed pipeline at its declared placement; resolved ordering is identical regardless of registration order; a same-`(slot, order)` collision fails composition. (All proven by tests.)
 
 ## Assumptions
 

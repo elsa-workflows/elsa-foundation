@@ -37,3 +37,12 @@ Ordering: contracts → context → executor → selector → dispatcher → dra
 
 - [ ] **T012** Update AGENTS.md SPECKIT pointer → `specs/082-runtime-pipeline-execution-spine/plan.md`.
 - [ ] **T013** Log completion into [Runtime Execution Seam](../../docs/program-goals/runtime-execution-seam.md) (Move 1 done; Move 2 remains, InvokeActivity last).
+
+## Phase 7 — Module contribution DX (folded into Move 1 during review; FR-011..FR-014)
+
+- [ ] **T014** Cleanups from the review: dedup pipeline runners into `RuntimeExecutionPipelineCore`; selector reads only the `CompletionKind` discriminator (no full deserialize).
+- [ ] **T015** Add `RuntimeMiddlewareAttribute`, `Workflow/ActivityRuntimeMiddlewareContribution`, and `AddWorkflow/ActivityRuntimeMiddleware<T>` extensions (attribute default + explicit override; missing slot throws).
+- [ ] **T016** Builder: non-generic `Use(Type,…)` + interface validation; `Replace`/`Remove`; `BuildPlan()` deterministic sort + collision error (built-in-aware).
+- [ ] **T017** Feature: apply DI contributions to the builder before composing; log resolved plan at Debug.
+- [ ] **T018** Tests: attribute/override/missing-placement, end-to-end DI dispatch through the feature, deterministic order, collision + built-in collision, Replace/Remove, interface validation. Update the earlier guardrail tests to place markers at a non-zero order (order 0 now collides with the built-in by design).
+- [ ] **T019** Amend ADR 0029 + spec 082 (spec/plan/data-model/contracts) + bucket note to record the contribution DX and deterministic-ordering decision.
