@@ -109,6 +109,7 @@ export function readVariableDefault(value: ArgumentValue | null | undefined): st
 
 export function createInput(options: { name: string; alias?: string; storageDriver?: string | null }): WorkflowInput {
   return {
+    referenceKey: generateId(),
     name: options.name,
     type: makeArgumentType(options.alias),
     displayName: options.name,
@@ -116,9 +117,7 @@ export function createInput(options: { name: string; alias?: string; storageDriv
     category: "",
     uiHint: defaultInputUiHint,
     storageDriverType: options.storageDriver ?? null,
-    defaultValue: null,
-    defaultSyntax: null,
-    isReadOnly: null
+    isRequired: false
   };
 }
 
@@ -128,6 +127,7 @@ export function updateInput(existing: WorkflowInput, patch: Partial<WorkflowInpu
 
 export function createOutput(options: { name: string; alias?: string }): WorkflowOutput {
   return {
+    referenceKey: generateId(),
     name: options.name,
     type: makeArgumentType(options.alias),
     displayName: options.name,
@@ -184,4 +184,4 @@ export function readStringField(record: Record<string, unknown>, keys: string[])
 export const variableNameKeys = ["name", "Name"];
 export const argumentNameKeys = ["name", "Name"];
 export const storageDriverKeys = ["storageDriverType", "StorageDriverType"];
-export const inputDefaultValueKeys = ["defaultValue", "DefaultValue"];
+export const referenceKeyKeys = ["referenceKey", "ReferenceKey"];

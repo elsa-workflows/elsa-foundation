@@ -266,9 +266,12 @@ export interface ScopedVariableAnalysisResponse {
   shadowingWarnings: ScopedVariableShadowingWarning[];
 }
 
-// Workflow inputs carry the full argument-definition field set plus binding metadata. Collection-ness
-// lives on `type.collectionKind` (the legacy `isArray` boolean is gone).
+// Workflow inputs carry the argument-definition field set plus binding metadata. Collection-ness lives
+// on `type.collectionKind` (the legacy `isArray` boolean is gone). `referenceKey` is the stable identity
+// (a required positional on the backend InputDefinition). The backend InputDefinition has no default
+// value member, so no `defaultValue`/`defaultSyntax` is carried; `isRequired` is a first-class flag.
 export interface WorkflowInput {
+  referenceKey: string;
   name: string;
   type: ArgumentType;
   displayName: string;
@@ -276,14 +279,14 @@ export interface WorkflowInput {
   category: string;
   uiHint: string;
   storageDriverType: string | null;
-  defaultValue: string | null;
-  defaultSyntax: string | null;
-  isReadOnly: boolean | null;
+  isRequired?: boolean;
   [key: string]: unknown;
 }
 
 // Outputs are produced by activities, so they have a smaller field set than inputs (no default/storage).
+// `referenceKey` is the stable identity (a required positional on the backend OutputDefinition).
 export interface WorkflowOutput {
+  referenceKey: string;
   name: string;
   type: ArgumentType;
   displayName: string;

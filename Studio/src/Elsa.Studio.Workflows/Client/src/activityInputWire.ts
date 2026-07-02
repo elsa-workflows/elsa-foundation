@@ -1,4 +1,4 @@
-import { readArgumentType } from "./workflowProperties";
+import { generateId, readArgumentType, readStringField, referenceKeyKeys } from "./workflowProperties";
 import type { ActivityNode, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
@@ -93,15 +93,25 @@ function normalizeStoredArgument(record: Record<string, unknown>): Record<string
   return normalizeArgumentRecord(record, true);
 }
 
-// Emits the canonical argument shape: `type: { alias, collectionKind }` (via the shared
-// {@link readArgumentType}), plus a bare-alias `storageDriverType` for variables/inputs. Legacy
-// `typeInformation`/`isArray`/casing variants and assembly metadata are dropped; every other field
-// (name, displayName, default, referenceKey, …) is preserved untouched. Idempotent, so it is safe to
-// run on either wire or in-memory records.
-const droppedArgumentKeys = ["type", "Type", "typeInformation", "TypeInformation", "isArray", "IsArray", "storageDriverType", "StorageDriverType"];
+// Emits the canonical argument shape: a stable `referenceKey`, `type: { alias, collectionKind }` (via
+// the shared {@link readArgumentType}), plus a bare-alias `storageDriverType` for variables/inputs.
+// Legacy `typeInformation`/`isArray`/casing variants and assembly metadata are dropped, as are the
+// Elsa-3 input-default leftovers (`defaultValue`/`defaultSyntax`/`isReadOnly`) — the backend Input/Output
+// records have no home for them. Every other field (name, displayName, default, …) is preserved
+// untouched. Idempotent, so it is safe to run on either wire or in-memory records.
+const droppedArgumentKeys = [
+  "type", "Type", "typeInformation", "TypeInformation", "isArray", "IsArray",
+  "storageDriverType", "StorageDriverType",
+  "defaultValue", "DefaultValue", "defaultSyntax", "DefaultSyntax", "isReadOnly", "IsReadOnly"
+];
 
 function normalizeArgumentRecord(record: Record<string, unknown>, keepStorage: boolean): Record<string, unknown> {
   const next = omitKeys(record, droppedArgumentKeys);
+  // Backfill a stable referenceKey when a legacy/foreign record lacks one (inputs/outputs authored before
+  // the typed-argument-model didn't carry it). Only-when-missing keeps this idempotent and lossless.
+  if (!readStringField(record, referenceKeyKeys).trim()) {
+    next.referenceKey = generateId();
+  }
   next.type = readArgumentType(record);
   if (keepStorage) next.storageDriverType = readWireStorageDriver(record.storageDriverType ?? record.StorageDriverType);
   return next;

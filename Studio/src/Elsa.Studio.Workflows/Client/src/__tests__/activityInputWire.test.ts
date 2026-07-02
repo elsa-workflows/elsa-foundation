@@ -123,6 +123,36 @@ describe("argument collection wire adapter", () => {
     expect("storageDriverType" in (wire.outputs![0] as object)).toBe(false);
   });
 
+  it("backfills a referenceKey and drops the Elsa-3 input-default leftovers", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId", defaultValue: "x", defaultSyntax: "Literal", isReadOnly: true }] as unknown[],
+      outputs: [{ name: "Result", type: { alias: "Boolean", collectionKind: "Single" }, displayName: "Result" }] as unknown[]
+    };
+
+    const wire = canonicalizeStateForWire(state);
+    const input = wire.inputs![0] as Record<string, unknown>;
+    const output = wire.outputs![0] as Record<string, unknown>;
+
+    expect(typeof input.referenceKey).toBe("string");
+    expect((input.referenceKey as string).length).toBeGreaterThan(0);
+    expect(typeof output.referenceKey).toBe("string");
+    expect("defaultValue" in input).toBe(false);
+    expect("defaultSyntax" in input).toBe(false);
+    expect("isReadOnly" in input).toBe(false);
+  });
+
+  it("preserves an existing referenceKey instead of regenerating it (idempotent)", () => {
+    const state: WorkflowDefinitionState = {
+      inputs: [{ referenceKey: "in-1", name: "OrderId", type: { alias: "String", collectionKind: "Single" }, displayName: "OrderId" }] as unknown[]
+    };
+
+    const once = canonicalizeStateForWire(state).inputs![0] as Record<string, unknown>;
+    const twice = canonicalizeStateForWire(canonicalizeStateForWire(state)).inputs![0] as Record<string, unknown>;
+
+    expect(once.referenceKey).toBe("in-1");
+    expect(twice.referenceKey).toBe("in-1");
+  });
+
   it("converts a legacy variable (typeInformation + isArray + object storage) on read", () => {
     const state: WorkflowDefinitionState = {
       variables: [{

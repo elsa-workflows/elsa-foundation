@@ -102,7 +102,7 @@ describe("variable shape construction", () => {
 });
 
 describe("input shape construction", () => {
-  it("creates a canonical input with the full argument field set", () => {
+  it("creates a canonical input with a reference key and no default/read-only leftovers", () => {
     const input = createInput({ name: "OrderId" });
     expect(input).toMatchObject({
       name: "OrderId",
@@ -112,31 +112,37 @@ describe("input shape construction", () => {
       category: "",
       uiHint: "singleline",
       storageDriverType: null,
-      defaultValue: null,
-      defaultSyntax: null,
-      isReadOnly: null
+      isRequired: false
     });
+    expect(input.referenceKey).toBeTypeOf("string");
+    expect(input.referenceKey.length).toBeGreaterThan(0);
+    // The backend InputDefinition has no default member; the Elsa-3 leftovers must not be emitted.
+    expect("defaultValue" in input).toBe(false);
+    expect("defaultSyntax" in input).toBe(false);
+    expect("isReadOnly" in input).toBe(false);
     expect("isArray" in input).toBe(false);
   });
 
   it("preserves unknown fields when editing an input", () => {
     const existing = { ...createInput({ name: "OrderId" }), legacyFlag: true } as never;
-    const updated = updateInput(existing, { defaultValue: "x" });
-    expect(updated.defaultValue).toBe("x");
+    const updated = updateInput(existing, { isRequired: true });
+    expect(updated.isRequired).toBe(true);
     expect((updated as Record<string, unknown>).legacyFlag).toBe(true);
   });
 });
 
 describe("output shape construction", () => {
-  it("creates a canonical output with the smaller field set", () => {
+  it("creates a canonical output with a reference key and the smaller field set", () => {
     const output = createOutput({ name: "Result", alias: "Boolean" });
-    expect(output).toEqual({
+    expect(output).toMatchObject({
       name: "Result",
       type: { alias: "Boolean", collectionKind: "Single" },
       displayName: "Result",
       description: "",
       category: ""
     });
+    expect(output.referenceKey).toBeTypeOf("string");
+    expect(output.referenceKey.length).toBeGreaterThan(0);
   });
 
   it("preserves unknown fields when editing an output", () => {
