@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCancelSchedulerWorkHandler);
     private const string CancellationReason = "WorkflowCancellation";
@@ -12,7 +12,6 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator _inspectionAccumulator;
-    private readonly IRuntimePipelineContextAccessor _pipelineContextAccessor;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCancelSchedulerWorkHandler(
@@ -20,8 +19,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
-        TimeProvider timeProvider,
-        IRuntimePipelineContextAccessor? pipelineContextAccessor = null)
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -33,7 +31,6 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
-        _pipelineContextAccessor = pipelineContextAccessor ?? NoopRuntimePipelineContextAccessor.Instance;
         _timeProvider = timeProvider;
     }
 
@@ -45,7 +42,21 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         return workItem.CommandKind == WorkflowExecutionCommandKind.Cancel;
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: build the cancellation commit and commit it inline.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        var commit = await BuildCommitAsync(workItem, cancellationToken);
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        pipelineContext.Workspace.PendingCheckpointCommit = await BuildCommitAsync(workItem, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> BuildCommitAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -134,13 +145,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             });
 
-        // Move 2 (ADR 0029): when dispatched through the pipeline, stage the assembled commit for the Checkpoint slot to
-        // persist instead of committing inline. When there is no active pipeline context (e.g. the handler is exercised
-        // directly), commit here as before — behaviour-preserving on both paths.
-        if (_pipelineContextAccessor.Current is { } pipelineContext)
-            pipelineContext.Workspace.PendingCheckpointCommit = commit;
-        else
-            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return commit;
     }
 
     private static bool IsCancellable(ActivityExecutionState state) =>

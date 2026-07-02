@@ -44,21 +44,19 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
     }
 
     [Fact]
-    public async Task CancelHandler_StagesCommitForTheCheckpointSlot_WhenAPipelineContextIsAmbient()
+    public async Task CancelHandler_StagesCommitForTheCheckpointSlot_WhenDispatchedThroughThePipeline()
     {
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         var activityStore = new InMemoryActivityExecutionStateStore();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
         await workflowStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await activityStore.SaveAsync(NewRunningActivityState());
-        var accessor = new AsyncLocalRuntimePipelineContextAccessor();
-        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore, accessor);
+        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore);
         var context = new WorkflowRuntimePipelineContext(NewCancelWorkItem());
 
-        using (accessor.Push(context))
-            await handler.HandleAsync(NewCancelWorkItem());
+        // The Invoke slot calls the context-aware overload; it stages the commit rather than committing inline.
+        await handler.HandleAsync(NewCancelWorkItem(), context);
 
-        // The handler staged the commit for the Checkpoint slot rather than committing inline.
         Assert.Empty(checkpointStore.ListCommits());
         var staged = context.Workspace.PendingCheckpointCommit;
         Assert.NotNull(staged);
@@ -67,15 +65,15 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
     }
 
     [Fact]
-    public async Task CancelHandler_CommitsInline_WhenNoPipelineContextIsAmbient()
+    public async Task CancelHandler_CommitsInline_OnDirectDispatch()
     {
-        // Behaviour-preserving fallback: constructed/dispatched without a pipeline, the handler commits as before.
+        // Behaviour-preserving fallback: dispatched without a pipeline (plain IWorkflowSchedulerWorkHandler), it commits.
         var workflowStore = new InMemoryWorkflowExecutionStateStore();
         var activityStore = new InMemoryActivityExecutionStateStore();
         var checkpointStore = new InMemoryRuntimeCheckpointCommitStore();
         await workflowStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await activityStore.SaveAsync(NewRunningActivityState());
-        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore, new AsyncLocalRuntimePipelineContextAccessor());
+        var handler = NewCancelHandler(workflowStore, activityStore, checkpointStore);
 
         await handler.HandleAsync(NewCancelWorkItem());
 
@@ -103,15 +101,13 @@ public sealed class RuntimeCheckpointSlotDecompositionTests
     private static WorkflowCancelSchedulerWorkHandler NewCancelHandler(
         IWorkflowExecutionStateStore workflowStore,
         IActivityExecutionStateStore activityStore,
-        IRuntimeCheckpointCommitStore checkpointStore,
-        IRuntimePipelineContextAccessor accessor) =>
+        IRuntimeCheckpointCommitStore checkpointStore) =>
         new(
             workflowStore,
             activityStore,
             NewCommitter(checkpointStore),
             new RuntimeActivityExecutionInspectionAccumulator(new InMemoryActivityExecutionInspectionStore()),
-            TimeProvider.System,
-            accessor);
+            TimeProvider.System);
 
     private static RuntimeCheckpointCommitter NewCommitter(IRuntimeCheckpointCommitStore store) =>
         new(new ImmediateRuntimeCheckpointPersistencePolicy(), store);

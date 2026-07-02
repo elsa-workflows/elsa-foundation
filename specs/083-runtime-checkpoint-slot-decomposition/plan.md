@@ -4,7 +4,7 @@
 
 ## Summary
 
-Extract the shared **Checkpoint** phase (`CommitAsync`) into the workflow pipeline's `Checkpoint` slot, proven on the single simplest handler (Cancel). Introduce the Move 2 foundation — a mutable per-dispatch workspace on the context + an ambient context accessor so the terminal handler can stage its commit — and make `RuntimeWorkflowCheckpointMiddleware` real. Behavior-preserving; one handler.
+Adopt the **slot-invoked handler model** (ADR 0029 addendum): the workflow pipeline gains a core `Invoke` slot whose built-in middleware runs the selected handler before-`next` (terminal becomes a no-op). Handlers opt into context-awareness via `IRuntimePipelineWorkHandler` (explicit context, no ambient accessor). Migrate the single simplest handler (Cancel) to stage its checkpoint commit in the `Invoke` slot; the `Checkpoint` slot commits it before-`next`. Behavior-preserving; one handler.
 
 ## Constitution Check
 
@@ -15,25 +15,30 @@ Extract the shared **Checkpoint** phase (`CommitAsync`) into the workflow pipeli
 ## Design
 
 ### New (Core)
-- `Models/RuntimePipelineWorkspace.cs` — mutable workspace: `RuntimeCheckpointCommit? PendingCheckpointCommit`.
+- `Models/RuntimePipelineWorkspace.cs` — mutable workspace: `Func<IRuntimePipelineContext, ValueTask>? InvokeHandler` (staged handler) + `RuntimeCheckpointCommit? PendingCheckpointCommit`.
 - `Contracts/IRuntimePipelineContext.cs` — `WorkItem` + `Workspace`; both context records implement it.
-- `Contracts/IRuntimePipelineContextAccessor.cs` + `Services/AsyncLocalRuntimePipelineContextAccessor.cs` (+ `Noop`) — AsyncLocal ambient bridge (mirrors `IWorkflowExecutionAmbientServicesAccessor`).
-- `Middleware/RuntimeWorkflowCheckpointMiddleware.cs` — real `Checkpoint` slot: `await next(context); if (workspace.PendingCheckpointCommit is {} c) await committer.CommitAsync(c);` (removed from the placeholders file).
+- `Contracts/IRuntimePipelineWorkHandler.cs` — opt-in context-aware handler method (`HandleAsync(workItem, IRuntimePipelineContext, ct)`).
+- `Middleware/RuntimeWorkflowInvokeMiddleware.cs` — workflow `Invoke` slot: `if (workspace.InvokeHandler is {} invoke) await invoke(context); await next(context);`.
+- `Middleware/RuntimeWorkflowCheckpointMiddleware.cs` — real `Checkpoint` slot: `if (workspace.PendingCheckpointCommit is {} c) await committer.CommitAsync(c); await next(context);` (removed from the placeholders file).
 
 ### Changed
+- `Constants/RuntimeWorkflowPipelineSlots.cs` — add `Invoke(150)` between `LoadState(100)` and `Scheduling(200)`.
+- `Builders/WorkflowRuntimePipelineBuilder.cs` — register the `Invoke` built-in.
 - `Models/RuntimePipelineContexts.cs` — implement `IRuntimePipelineContext`; add `Workspace { get; init; } = new()`.
-- `Services/RuntimeExecutionPipelineDispatcher.cs` — optional `IRuntimePipelineContextAccessor` (Noop default); push the context around `InvokeAsync`.
-- `Services/WorkflowCancelSchedulerWorkHandler.cs` — optional accessor param; stage the commit when a context is ambient, else commit inline.
-- `Api/WorkflowsRuntimeApiFeature.cs` — register `IRuntimePipelineContextAccessor`. (The committer and the Checkpoint middleware type are already registered; DI now injects the committer into the middleware and the accessor into the dispatcher/Cancel handler.)
+- `Services/RuntimeExecutionPipelineDispatcher.cs` — workflow: stage the handler invocation (aware vs plain) on the workspace, no-op terminal; activity: unchanged (terminal). No accessor.
+- `Services/WorkflowCancelSchedulerWorkHandler.cs` — implement `IRuntimePipelineWorkHandler`; factor `BuildCommitAsync`; plain path commits, aware path stages.
+- `Api/WorkflowsRuntimeApiFeature.cs` — register `RuntimeWorkflowInvokeMiddleware`; remove the (now-deleted) accessor registration.
 
-### Why these choices (see spec Assumptions)
-- **Ambient accessor** (not a handler-signature change) — least-invasive transition; mirrors existing precedent; flagged for architect review.
+### Removed
+- `IRuntimePipelineContextAccessor` + `AsyncLocalRuntimePipelineContextAccessor` — superseded by explicit context threading (the earlier draft of this slice used them; the ADR addendum replaced them).
+
+### Why these choices (see spec Assumptions + ADR addendum)
+- **Slot-invoked handler, explicit context** — clean before-`next` order; no ambient state; incremental via the opt-in interface.
 - **Checkpoint-slot-first** (not LoadState-first) — clean uniform tail; avoids the eager-vs-lazy load policy LoadState-first would need.
-- **After-`next` commit** — transitional while the handler is still the terminal; flips to before-`next` once assembly moves to `Invoke`.
 
 ## Sequencing after this slice (Move 2 remainder)
 Extract the shared `LoadState` slot; then migrate handlers easiest→hardest: Cancel (done) → Start → Checkpoint → CreateBookmark → ResumeBookmark → ParentCompletion → **InvokeActivity last**. Each is its own separately-approved change and carries the hazards (atomic checkpoint-commit folding #310, fault arms, control-leaf intents #260/#308, container scope-completion capture #210/ADR 0027, inspection toggle).
 
 ## Complexity Tracking
 
-The ambient AsyncLocal accessor is a deliberate transitional bridge (the handler is a bare terminal delegate and cannot receive the context by parameter). It is the one architecturally-significant decision in this slice and is surfaced for review; the alternative (explicit context threading through the handler signature) is recorded in the spec.
+Adds a slot to the workflow pipeline's locked contract (`Invoke`) — justified in the ADR 0029 addendum and reflected in `RuntimePipelineContractTests`. The handler-invocation model (handler runs in the `Invoke` slot, not as the terminal) is the architecturally-significant decision; it is pinned in the ADR addendum and proven behavior-preserving here (runtime suite 542/542; every workflow handler runs unchanged via the `Invoke` slot; activity pipeline untouched).

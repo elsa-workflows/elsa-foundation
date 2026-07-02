@@ -167,6 +167,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.AddSingleton<RuntimeWorkflowInvokeMiddleware>();
         services.AddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.AddSingleton<RuntimeWorkflowCheckpointMiddleware>();
         services.AddSingleton<RuntimeWorkflowPostCommitMiddleware>();

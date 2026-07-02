@@ -71,6 +71,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // the executor can resolve them by type from the built plan; both pipelines start as no-op pass-throughs, so
         // wrapping handler dispatch is behavior-preserving until modules register real middleware or Move 2 lands.
         services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowInvokeMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
@@ -98,9 +99,6 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                         .Select(contribution => (contribution.MiddlewareType, contribution.Slot, contribution.Order, contribution.Name))),
                 serviceProvider));
         services.TryAddSingleton<IRuntimeSchedulerPipelineSelector, RuntimeSchedulerPipelineSelector>();
-        // Ambient access to the running dispatch's pipeline context so a terminal handler can stage phase results
-        // (e.g. a checkpoint commit) for the owning slot to apply (ADR 0029, Move 2).
-        services.TryAddSingleton<IRuntimePipelineContextAccessor, AsyncLocalRuntimePipelineContextAccessor>();
         services.TryAddSingleton<IRuntimeExecutionPipelineDispatcher, RuntimeExecutionPipelineDispatcher>();
 
         services.TryAddSingleton<IWorkflowSchedulerDrainer>(serviceProvider =>

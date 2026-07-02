@@ -12,13 +12,11 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
     private readonly IRuntimeSchedulerPipelineSelector _selector;
     private readonly IRuntimeWorkflowExecutionPipeline _workflowPipeline;
     private readonly IRuntimeActivityExecutionPipeline _activityPipeline;
-    private readonly IRuntimePipelineContextAccessor _pipelineContextAccessor;
 
     public RuntimeExecutionPipelineDispatcher(
         IRuntimeSchedulerPipelineSelector selector,
         IRuntimeWorkflowExecutionPipeline workflowPipeline,
-        IRuntimeActivityExecutionPipeline activityPipeline,
-        IRuntimePipelineContextAccessor? pipelineContextAccessor = null)
+        IRuntimeActivityExecutionPipeline activityPipeline)
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(workflowPipeline);
@@ -27,10 +25,9 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         _selector = selector;
         _workflowPipeline = workflowPipeline;
         _activityPipeline = activityPipeline;
-        _pipelineContextAccessor = pipelineContextAccessor ?? NoopRuntimePipelineContextAccessor.Instance;
     }
 
-    public async ValueTask DispatchAsync(
+    public ValueTask DispatchAsync(
         RuntimeSchedulerWorkItem workItem,
         IWorkflowSchedulerWorkHandler handler,
         CancellationToken cancellationToken = default)
@@ -38,18 +35,20 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         ArgumentNullException.ThrowIfNull(workItem);
         ArgumentNullException.ThrowIfNull(handler);
 
-        // Push the context so the terminal handler can reach the shared workspace (it is invoked as a bare delegate and
-        // gets no context by parameter). The scope spans the whole pipeline invocation, including the handler.
+        // Activity pipeline: the handler still runs as the pipeline terminal (not yet decomposed into the Invoke slot).
         if (_selector.Select(workItem) == RuntimePipelineKind.Activity)
-        {
-            var activityContext = new ActivityRuntimePipelineContext(workItem);
-            using (_pipelineContextAccessor.Push(activityContext))
-                await _activityPipeline.InvokeAsync(activityContext, _ => handler.HandleAsync(workItem, cancellationToken));
-            return;
-        }
+            return _activityPipeline.InvokeAsync(
+                new ActivityRuntimePipelineContext(workItem),
+                _ => handler.HandleAsync(workItem, cancellationToken));
 
+        // Workflow pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
+        // Checkpoint slot; the terminal is a no-op. Context-aware (migrated) handlers get the context explicitly and
+        // stage their results; other handlers run their plain path unchanged.
         var workflowContext = new WorkflowRuntimePipelineContext(workItem);
-        using (_pipelineContextAccessor.Push(workflowContext))
-            await _workflowPipeline.InvokeAsync(workflowContext, _ => handler.HandleAsync(workItem, cancellationToken));
+        workflowContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
+            ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
+            : handler.HandleAsync(workItem, cancellationToken);
+
+        return _workflowPipeline.InvokeAsync(workflowContext, _ => ValueTask.CompletedTask);
     }
 }
