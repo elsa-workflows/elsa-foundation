@@ -159,10 +159,13 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Active work unit: specs/083-runtime-checkpoint-slot-decomposition (ADR 0029 Move 2,
-first slice — extract the shared Checkpoint phase into the workflow pipeline's
-Checkpoint slot, proven on the Cancel handler; behavior-preserving; establishes the
-Move 2 decomposition pattern for architect review). Read
-specs/083-runtime-checkpoint-slot-decomposition/plan.md for context. The last
-completed unit was specs/082-runtime-pipeline-execution-spine (ADR 0029 Move 1, merged #357).
+Active work unit: specs/084-runtime-move2-slot-decomposition-remainder (elsa-4 review
+unit W12 "Runtime structure" — completes ADR 0029 Move 2 across all remaining scheduler
+handlers via the slot-invoked model, and folds in the surrounding structural remediation:
+split the hosting-agnostic composition root out of the API feature (RT-4), remove the two
+ambient service locators from the drain path (RT-7), collapse the telescoping constructors
+(RT-8), and deserialize the CompleteActivity payload once (RT-11); behavior-preserving).
+Read specs/084-runtime-move2-slot-decomposition-remainder/plan.md for context. The last
+completed unit was specs/083-runtime-checkpoint-slot-decomposition (ADR 0029 Move 2, first
+slice — Cancel only, merged #366).
 <!-- SPECKIT END -->

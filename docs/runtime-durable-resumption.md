@@ -229,6 +229,40 @@ correct model. Two consequences are deliberately in scope, and one is deliberate
   the runtime host-agnostic. If a durable provider needs per-request scoping it overrides the specific
   store via `TryAdd` and owns that lifetime decision locally.
 
+## Drain-path ambient service location removed (RT-7)
+
+The drain path no longer resolves collaborators through ambient service locators. Two AsyncLocal
+smugglers were deleted: the `IWorkflowExecutionAmbientServicesAccessor` that the drainer used to reach a
+request-scoped `IServiceProvider`/state store, and the pipeline-context accessor that carried the mutable
+workspace to handlers. Both now flow **explicitly**: the drainer injects `IWorkflowExecutionStateStore`
+directly and passes the drain request's `AmbientServices` into
+`IRuntimeExecutionPipelineDispatcher.DispatchAsync`, which stages it on
+`RuntimePipelineWorkspace.AmbientServices`; the migrated nested-invoke handlers (`InvokeActivity`,
+`ParentActivityCompletion`) read it from that workspace member instead of an AsyncLocal `.Current`.
+
+Two ambients remain **by deliberate design**, and neither is a drain-path service locator:
+
+- `IRuntimeExecutionOwnershipContextAccessor` — a runtime-internal AsyncLocal lease scope (RT-2/W5
+  fencing) that carries the active lease from the drain coordinator to the single commit funnel.
+- `IRuntimeCoalescingSessionAccessor` (**W9**) — an **opt-in ambient session flag**, not service
+  location: it marks that a coalescing session is active so the decorators buffer intra-drain checkpoints
+  into the in-memory working set. It is registered only by `AddCoalescingRuntimeCheckpointPersistence`
+  and its gating semantics are preserved exactly ("the durable scheduler queue never advances past the
+  last flushed state"). It is a documented exception to "no AsyncLocal in the drain path", distinct in
+  kind from the removed service locators.
+
+## Slot-invoked handler model (ADR 0029 Move 2)
+
+Scheduler work handlers no longer commit inline from a terminal step. A migrated handler additionally
+implements `IRuntimePipelineWorkHandler`; the dispatcher stages it on the workspace, the pipeline's
+`Invoke` slot runs it, and the `Checkpoint` slot drains the handler-staged commit **list in order, one
+`RuntimeCheckpointCommitter.CommitAsync` call per staged entry** — byte-identical to the previous inline
+sequence. The slot never batches or folds staged commits (folding is the W9 coalescing decorators' job;
+batching would change W9 boundary detection and W5 fencing granularity). The two nested-invoke handlers
+are the deliberate exception: their commits go through a dynamically-resolved provider, so they commit
+**inline** in the `Invoke` slot and stage nothing — converting them to staged commits would not be
+behavior-preserving.
+
 ## Out of scope (owned elsewhere)
 
 - **Ack-based dequeue** that keeps a scheduler work item durably owned until the consuming handler's
