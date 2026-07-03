@@ -71,5 +71,22 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
         }
     }
 
+    public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Pending workflow execution listing limit must be greater than zero.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var executionIds = _queuesByWorkflowExecutionId.Keys
+                .Order(StringComparer.Ordinal)
+                .Take(limit)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<string>>(executionIds);
+        }
+    }
+
     private readonly record struct SchedulerWorkItemKey(string WorkflowExecutionId, string WorkItemId);
 }

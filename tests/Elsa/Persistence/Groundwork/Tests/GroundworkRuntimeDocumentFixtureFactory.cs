@@ -21,7 +21,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate);
 
-    // The 12 runtime document kinds, each paired with the deterministic ids a spot-check reads back by.
+    // The 13 runtime document kinds, each paired with the deterministic ids a spot-check reads back by.
     public static readonly IReadOnlyList<string> AllKinds =
     [
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
@@ -35,13 +35,14 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
-        ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind
+        ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
+        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind
     ];
 
     private const string Wf = "wf-1";
 
     // Captures the exact (SchemaVersion, ContentJson) the real store bridge writes for a kind's canonical
-    // instance. The 11 direct-save kinds are captured at the SaveDocumentRequest boundary through a
+    // instance. The 12 direct-save kinds are captured at the SaveDocumentRequest boundary through a
     // capturing store; the checkpoint marker is written only inside a full atomic commit, so it is driven
     // through the writer against an in-memory store and read back.
     public static async Task<(string SchemaVersion, string ContentJson)> CaptureAsync(string kind)
@@ -116,6 +117,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind:
                 await new GroundworkRuntimePostCommitOutboxStore(store, Serializer).SavePendingAsync(OutboxItem());
                 break;
+            case ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind:
+                await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer).EnqueueAsync(WorkItem());
+                break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
@@ -152,6 +156,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkRuntimePostCommitOutboxStore(store, Serializer)
                 .GetDeliverableAsync(new RuntimePostCommitOutboxQuery(DateTimeOffset.UnixEpoch, 10)))
                 .SingleOrDefault()?.OutboxItemId,
+        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind =>
+            (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
+                .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
+                .SingleOrDefault()?.WorkItemId,
         // The checkpoint marker has no typed domain store; the writer's dedup reads it via LoadAsync, so
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
@@ -173,6 +181,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind => Wf,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind => IncidentStatus.Open,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
+        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
@@ -410,6 +419,20 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         recordedAt: DateTimeOffset.UnixEpoch,
         availableAt: DateTimeOffset.UnixEpoch,
         retryPolicy: null);
+
+    private static RuntimeSchedulerWorkItem WorkItem() => new(
+        workItemId: "work-1",
+        workflowExecutionId: Wf,
+        commandId: "command-1",
+        commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+        envelopeId: "envelope-1",
+        idempotencyKey: "wf-1:command-1",
+        enqueuedAt: DateTimeOffset.UnixEpoch,
+        recordedAt: DateTimeOffset.UnixEpoch,
+        sequence: 1,
+        payload: JsonSerializer.SerializeToElement(new { command = "resume" }),
+        commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
+        envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
 
     private static RuntimeCheckpointCommit Commit()
     {

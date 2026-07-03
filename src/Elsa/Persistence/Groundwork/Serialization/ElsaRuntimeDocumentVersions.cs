@@ -38,7 +38,8 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.IncidentStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1
+        [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 1
     };
 
     /// <summary>The current versions of every runtime document kind, keyed by document kind.</summary>

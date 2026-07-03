@@ -68,10 +68,11 @@ boundary or the use needs options the payload serializer can't provide:
 ## Schema evolution (Groundwork runtime bridge)
 
 Runtime state persisted by the Groundwork bridge (bookmarks, executables, execution/scheduler/
-operational/control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox)
+operational/control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox,
+the durable scheduler work queue)
 must be able to evolve without silently breaking already-suspended workflows. The contract:
 
-- **Per-kind integer versions, hosted in the envelope.** Each of the 12 runtime document kinds has a
+- **Per-kind integer versions, hosted in the envelope.** Each of the 13 runtime document kinds has a
   current integer version declared in
   [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)
   (all `1` today). The version is stamped into the Groundwork **envelope** `SchemaVersion` field on

@@ -56,6 +56,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
         services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
+        // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
+        // process-local in-memory queue, and a crash after checkpoint commit loses the continuation
+        // even though state and outbox items were stored durably.
+        services.RemoveAll<IWorkflowSchedulerWorkQueue>();
+        services.AddSingleton<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
+
         return services;
     }
 }
