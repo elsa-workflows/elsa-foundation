@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Elsa\Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Events\Strategies\Elsa.Events.Strategies.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Locking\Core\Elsa.Locking.Core.csproj" />
+  </ItemGroup>
+
+</Project>

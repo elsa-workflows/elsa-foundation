@@ -7,10 +7,7 @@ public sealed class ParallelProcessingStrategy : IEventPublishingStrategy
 {
     public async Task PublishAsync(IEventStrategyContext context)
     {
-        var @event = context.EventContext.Event;
-        var handleMethod = @event.GetType().GetHandleAsync();
-
-        var tasks = context.Handlers.Select(handler => handler.InvokeAsync(handleMethod, context.EventContext));
+        var tasks = context.Handlers.Select(handler => handler.Invoke(context.EventContext));
         await Task.WhenAll(tasks);
     }
 }

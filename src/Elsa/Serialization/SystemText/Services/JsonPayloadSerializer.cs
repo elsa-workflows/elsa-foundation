@@ -13,6 +13,14 @@ namespace Elsa.Serialization.SystemText.Services;
 /// </summary>
 public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
 {
+    // System.Text.Json caches reflected JsonTypeInfo/converter metadata per JsonSerializerOptions
+    // instance. Rebuilding options on every Serialize/Deserialize call (this is a hot path —
+    // execution-log-record payloads) threw that cache away every call. Cache the built options and
+    // rebuild only when the converter registry's revision changes. _cachedRevision starts at a
+    // sentinel that can never equal a real revision so the first call always builds.
+    private readonly object _optionsLock = new();
+    private JsonSerializerOptions? _cachedOptions;
+    private int _cachedRevision = -1;
     /// <inheritdoc />
     public string Serialize(object payload)
     {
@@ -66,6 +74,31 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
 
     /// <inheritdoc />
     public JsonSerializerOptions GetOptions()
+    {
+        var registryRevision = converterRegistry.Revision;
+
+        // Fast path: options already built for the current registry revision. Volatile read pairs
+        // with the write under the lock so a stale cache is never observed after an invalidation.
+        var cached = Volatile.Read(ref _cachedOptions);
+        if (cached is not null && Volatile.Read(ref _cachedRevision) == registryRevision)
+            return cached;
+
+        lock (_optionsLock)
+        {
+            // Double-check inside the lock: another thread may have rebuilt while we waited, and the
+            // registry may have advanced again — re-read its revision so we build for the latest.
+            registryRevision = converterRegistry.Revision;
+            if (_cachedOptions is not null && _cachedRevision == registryRevision)
+                return _cachedOptions;
+
+            var options = BuildOptions();
+            _cachedRevision = registryRevision;
+            Volatile.Write(ref _cachedOptions, options);
+            return options;
+        }
+    }
+
+    private JsonSerializerOptions BuildOptions()
     {
         var options = new JsonSerializerOptions
         {
