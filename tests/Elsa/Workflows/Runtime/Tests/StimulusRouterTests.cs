@@ -31,10 +31,11 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_ResumeOnly_FansInToEveryWaitingInstanceAcrossExecutions()
     {
-        // Bookmarks are seeded directly into the store (not produced by running published workflows) on
-        // purpose: the publisher does not yet compile [ResumeTarget] declarations, so no published workflow
-        // can suspend to create a real waiting bookmark today (see the "Publisher resume-target compilation"
-        // entry in docs/reports/unfinished-work.md). Seeding lets this test still exercise the REAL router →
+        // Bookmarks are seeded directly into the store (not produced by running published workflows) as a
+        // test simplification: W7's Event trigger ships start-only by design, so this suite has no published
+        // suspending activity of its own to drive. (Published workflows CAN now suspend/resume — W8's
+        // WorkflowExecutableCompiler.BuildResumeTargets closed that gap — but wiring a full compile→publish→
+        // suspend cycle here would only add setup, not coverage.) Seeding keeps the focus on the REAL router →
         // GlobalBookmarkStimulusLookup → BookmarkResumeDispatcher → agent fan-in path end-to-end (E3-5).
         var bookmarkStore = new InMemoryBookmarkStateStore();
         await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));

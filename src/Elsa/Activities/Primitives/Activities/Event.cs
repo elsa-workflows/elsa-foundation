@@ -18,9 +18,10 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </para>
 /// <para>
 /// Scope note: this ships the START half of an event trigger (E3-1's acceptance: "an event-driven workflow
-/// starts from a stimulus"). Suspending mid-flow to WAIT for an event requires resume-target compilation in the
-/// publisher, which is tracked as follow-up; the cross-execution fan-in resume path (E3-5) is exercised through
-/// the stimulus router against waiting bookmarks directly.
+/// starts from a stimulus"), which is W7's approved scope. A mid-flow WAIT form (suspend until a named event
+/// arrives) is a straightforward follow-up now that the publisher compiles resume targets (W8): add a
+/// <c>[ResumeTarget]</c> resume path to this activity. It is intentionally out of W7's start-only scope. The
+/// cross-execution fan-in resume path (E3-5) is exercised through the stimulus router against waiting bookmarks.
 /// </para>
 /// </remarks>
 public sealed class Event : CodeActivity<string>
