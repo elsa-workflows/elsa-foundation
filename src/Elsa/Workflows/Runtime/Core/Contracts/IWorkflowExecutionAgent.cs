@@ -5,6 +5,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Active execution mailbox for one workflow execution id.
 /// </summary>
+/// <remarks>
+/// The mailbox is the single-writer serialization point (RT-2): it admits one command at a time for its workflow
+/// execution, so all dispatch MUST route through it. This is what makes at-most-one-drainer-per-execution hold for the
+/// drainer, scheduler queue, and checkpoint committer downstream.
+/// </remarks>
 public interface IWorkflowExecutionAgent
 {
     WorkflowExecutionAgentDescriptor Descriptor { get; }

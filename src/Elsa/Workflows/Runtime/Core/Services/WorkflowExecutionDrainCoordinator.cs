@@ -11,12 +11,25 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
     private readonly WorkflowExecutionDrainCoordinatorOptions _options;
+    private readonly IRuntimeExecutionOwnershipService? _ownershipService;
+    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
 
     public WorkflowExecutionDrainCoordinator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
         WorkflowExecutionDrainCoordinatorOptions? options = null)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService: null, ownershipContextAccessor: null)
+    {
+    }
+
+    public WorkflowExecutionDrainCoordinator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowExecutionDrainCoordinatorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -26,6 +39,8 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
         _options = options ?? new WorkflowExecutionDrainCoordinatorOptions();
+        _ownershipService = ownershipService;
+        _ownershipContextAccessor = ownershipContextAccessor;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -39,6 +54,33 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         if (!string.Equals(request.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain request workflow execution ID '{request.WorkflowExecutionId}' does not match command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
 
+        // Single-writer ownership (RT-2): claim a fencing lease for this drain and expose it as the active ownership
+        // scope so every checkpoint commit made during the drain is fenced against it. Acquiring writes a lease +
+        // heartbeat to operational state, giving the recovery scanner real data; a crash mid-drain leaves that lease in
+        // place (the finally never runs) so the interrupted execution stays detectable, while a clean or handled return
+        // releases it to avoid false-positive recovery.
+        if (_ownershipService is null || _ownershipContextAccessor is null)
+            return await DrainCoreAsync(envelope, request, cancellationToken);
+
+        var lease = await _ownershipService.AcquireAsync(request.WorkflowExecutionId, cancellationToken);
+        using (_ownershipContextAccessor.Push(lease))
+        {
+            try
+            {
+                return await DrainCoreAsync(envelope, request, cancellationToken);
+            }
+            finally
+            {
+                await _ownershipService.ReleaseAsync(lease, cancellationToken);
+            }
+        }
+    }
+
+    private async ValueTask<RuntimeSchedulerDrainResult> DrainCoreAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        RuntimeSchedulerDrainRequest request,
+        CancellationToken cancellationToken)
+    {
         var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
