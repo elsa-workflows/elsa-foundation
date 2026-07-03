@@ -9,7 +9,8 @@ namespace Elsa.Workflows.Publishing.Api.Handlers;
 
 public sealed class PublishWorkflowRequestHandler(
     IWorkflowExecutableCompiler compiler,
-    IWorkflowExecutableStore executableStore)
+    IWorkflowExecutableStore executableStore,
+    IWorkflowTriggerIndexer triggerIndexer)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -40,6 +41,11 @@ public sealed class PublishWorkflowRequestHandler(
         }
 
         await executableStore.SaveAsync(executable, cancellationToken);
+
+        // Index this artifact's start-triggers within the publish flow (W7, E3-1). A failure here propagates and
+        // fails the publish by design: a silently unindexed published trigger — one that can never start a
+        // workflow — is a worse outcome than a failed publish the caller can retry (indexing is idempotent).
+        await triggerIndexer.IndexAsync(executable, cancellationToken);
 
         return PublishedWorkflowView.From(executable);
     }

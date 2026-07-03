@@ -37,7 +37,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-        ElsaRuntimeStorageManifest.DurableTimerDocumentKind
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind
     ];
 
     private const string Wf = "wf-1";
@@ -124,6 +125,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.DurableTimerDocumentKind:
                 await new GroundworkDurableTimerStore(store, Serializer).SaveAsync(Timer());
                 break;
+            case ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind:
+                await new GroundworkWorkflowTriggerBindingStore(store, Serializer).SaveAsync(TriggerBinding());
+                break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
@@ -166,6 +170,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 .SingleOrDefault()?.WorkItemId,
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
             (await new GroundworkDurableTimerStore(store, Serializer).FindAsync(Wf, "timer-1"))?.StimulusHash,
+        ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind =>
+            (await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
+                .ListByArtifactAsync("artifact-1"))
+                .SingleOrDefault()?.StimulusType,
         // The checkpoint marker has no typed domain store; the writer's dedup reads it via LoadAsync, so
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
@@ -189,6 +197,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
         ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
+        ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
@@ -206,6 +215,19 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     // --- Canonical builders (deterministic ids and timestamps) ---
 
     private const string CommitId = "commit-1";
+
+    private static WorkflowTriggerBinding TriggerBinding() => new(
+        TriggerBindingId: WorkflowTriggerBinding.BuildId("artifact-1", "node-trigger"),
+        ArtifactId: "artifact-1",
+        DefinitionId: "definition-1",
+        ArtifactVersion: "1",
+        ArtifactHash: "hash-artifact-1",
+        ExecutableNodeId: "node-trigger",
+        StimulusType: "Event",
+        StimulusHash: "hash-order-approved",
+        CorrelationScope: "order-42",
+        Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
+        CreatedAt: DateTimeOffset.UnixEpoch);
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",

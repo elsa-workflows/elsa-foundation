@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 71
+- Discovered feature classes: 72
 
 ## Features
 
@@ -71,6 +71,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
 | WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
+| WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | FoundationAgentApiFeature | FastEndpoints feature | Elsa.Agent.Api | FastEndpointsFeatureBase | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationIdentityApiFeature | FastEndpoints feature | Elsa.Foundation.Identity.Api | FastEndpointsFeatureBase | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |

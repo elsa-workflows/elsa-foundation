@@ -1,0 +1,73 @@
+using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Xunit;
+
+namespace Elsa.Persistence.Groundwork.Tests;
+
+public sealed class GroundworkWorkflowTriggerBindingStoreTests
+{
+    // The same contract runs against the real Groundwork SQLite provider and an in-memory document store.
+    // Identical behavior proves the by-stimulus (cross-artifact) index and the by-artifact index are
+    // provider-neutral, which is the whole point of the trigger index (start any workflow from a stimulus,
+    // regardless of the persistence provider the host composed).
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SaveAndQuery_ByStimulusAndArtifact_RoundTrips(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
+        await store.SaveAsync(Binding("artifact-2", "node-b", "Event", "hash-order"));
+        await store.SaveAsync(Binding("artifact-3", "node-c", "Event", "hash-other"));
+
+        // Cross-artifact by-stimulus lookup returns every published artifact waiting on the same stimulus.
+        var byStimulus = await store.ListByStimulusAsync("Event", "hash-order");
+        Assert.Equal(new[] { "artifact-1", "artifact-2" }, byStimulus.Select(b => b.ArtifactId).OrderBy(x => x));
+
+        // Type post-filter narrows a shared hash so it can never cross-match a different stimulus type.
+        Assert.Empty(await store.ListByStimulusAsync("Signal", "hash-order"));
+
+        // Per-artifact lookup is scoped to the one artifact.
+        var byArtifact = await store.ListByArtifactAsync("artifact-1");
+        var single = Assert.Single(byArtifact);
+        Assert.Equal("node-a", single.ExecutableNodeId);
+        Assert.Equal("order-scope", single.CorrelationScope);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task DeleteByArtifact_RemovesOnlyThatArtifact(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        await store.SaveAsync(Binding("artifact-1", "node-a", "Event", "hash-order"));
+        await store.SaveAsync(Binding("artifact-1", "node-b", "Event", "hash-order2"));
+        await store.SaveAsync(Binding("artifact-2", "node-c", "Event", "hash-order"));
+
+        var deleted = await store.DeleteByArtifactAsync("artifact-1");
+
+        Assert.Equal(2, deleted);
+        Assert.Empty(await store.ListByArtifactAsync("artifact-1"));
+        var remaining = await store.ListByStimulusAsync("Event", "hash-order");
+        Assert.Equal("artifact-2", Assert.Single(remaining).ArtifactId);
+    }
+
+    private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
+        new(
+            WorkflowTriggerBinding.BuildId(artifactId, nodeId),
+            artifactId,
+            $"definition-{artifactId}",
+            "1.0.0",
+            $"hash-{artifactId}",
+            nodeId,
+            stimulusType,
+            stimulusHash,
+            "order-scope",
+            new Dictionary<string, string> { ["slice"] = "w7" },
+            new DateTimeOffset(2026, 7, 3, 0, 0, 0, TimeSpan.Zero));
+}

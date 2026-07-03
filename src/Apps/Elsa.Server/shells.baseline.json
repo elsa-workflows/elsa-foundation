@@ -35,6 +35,7 @@
           "DiagnosticsConsoleLogStreaming": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTriggers": {},
           "GroundworkRuntimePersistenceSqlite": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},

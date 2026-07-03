@@ -124,7 +124,8 @@
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {}
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {
           "WebRouting": {

@@ -11,7 +11,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// chosen by the host through feature composition and never leaks into this bridge or into runtime
 /// domain code.
 /// </summary>
-public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IBookmarkStateStore
+public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IBookmarkStateStore, IBookmarkStimulusIndex
 {
     public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
@@ -70,6 +70,27 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
             cancellationToken);
 
         return envelopes.Select(Map).ToArray();
+    }
+
+    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+
+        // The cross-execution index is keyed by stimulus hash only (every provider supports single-field
+        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
+        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
+        var envelopes = await store.QueryAsync(
+            new DocumentStoreQuery(
+                ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
+                ElsaRuntimeStorageManifest.BookmarkStateByStimulus,
+                stimulusHash),
+            cancellationToken);
+
+        return envelopes
+            .Select(Map)
+            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
+            .ToArray();
     }
 
     private BookmarkState Map(DocumentEnvelope envelope) =>
