@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -130,16 +129,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        var store = ResolveWorkflowExecutionStateStore();
-        if (store is null)
-            return false;
-
-        var state = await store.FindAsync(workflowExecutionId, cancellationToken);
+        // RT-7: the terminal-status guard reads the state store injected by construction — no AsyncLocal
+        // service-location in the drain path. The store is required (RT-8), so there is no null fallback.
+        var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
         return state is not null && state.Status.IsTerminal();
     }
-
-    private IWorkflowExecutionStateStore? ResolveWorkflowExecutionStateStore() =>
-        _ambientServicesAccessor.Current?.GetService<IWorkflowExecutionStateStore>() ?? _workflowExecutionStateStore;
 
     private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
