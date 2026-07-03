@@ -1,0 +1,13 @@
+{
+  "collection": "controlPlaneState",
+  "state": {
+    "activeHolds": [],
+    "controlPlaneStateId": "cp-1",
+    "metadata": {
+      "tag": "v1"
+    },
+    "releasedHolds": [],
+    "workflowExecutionId": "wf-1"
+  },
+  "workflowExecutionId": "wf-1"
+}

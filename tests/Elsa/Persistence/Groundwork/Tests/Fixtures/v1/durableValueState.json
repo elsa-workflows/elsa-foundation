@@ -1,0 +1,19 @@
+{
+  "capturedAt": "1970-01-01T00:00:00\u002B00:00",
+  "durableValueId": "dv-1",
+  "externalReference": null,
+  "inlineValue": 42,
+  "lifecycle": 1,
+  "metadata": {
+    "tag": "v1"
+  },
+  "sourceActivityExecutionId": null,
+  "storage": 1,
+  "type": {
+    "id": null,
+    "kind": "int",
+    "schema": null
+  },
+  "valueId": "value-dv-1",
+  "workflowExecutionId": "wf-1"
+}
