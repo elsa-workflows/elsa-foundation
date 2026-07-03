@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 105
-- Test projects: 35
+- Test projects: 36
 - Domains: 23
-- Direct cross-domain references: 316
+- Direct cross-domain references: 318
 
 ## Domains
 
@@ -17,7 +17,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 |---|---:|---:|---|
 | Elsa.Activities | 18 | 9 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Agent | 5 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Api | 1 | 0 | feature/implementation |
+| Elsa.Api | 1 | 1 | feature/implementation<br>test |
 | Elsa.Architecture | 0 | 1 | test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Diagnostics | 9 | 5 | contract<br>feature/implementation<br>provider/implementation<br>test |
@@ -158,6 +158,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | Sequence.Tests | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Expressions<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Testing](../../tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj) | test | Elsa.Activities | Testing | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Tests](../../tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj) | test | Elsa.Agent | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows |
+| [Elsa.Api.FastEndpoints.Tests](../../tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj) | test | Elsa.Api | FastEndpoints.Tests | test | Elsa.Api.FastEndpoints<br>Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Oidc |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | test | Elsa.Architecture | Tests | test | Elsa.Primitives.Hosting<br>Elsa.Serialization.Newtonsoft<br>Elsa.Tasks<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Mapping<br>Elsa3.Models |
 | [Elsa.Caching.Tests](../../tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj) | test | Elsa.Caching | Tests | test | Elsa.Caching.Core<br>Elsa.Caching.Memory |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | ConsoleLogStreaming.Tests | test | Elsa.Diagnostics.ConsoleLogStreaming |
@@ -271,6 +272,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Agent.Api](../../src/Elsa/Agent/Api/Elsa.Agent.Api.csproj) | Elsa.Agent | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api | [Elsa.Mediator.Core](../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator |
 | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Api.FastEndpoints.Tests](../../tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj) | Elsa.Api | [Elsa.Foundation.Identity.Abstractions](../../src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj) | Elsa.Foundation |
+| [Elsa.Api.FastEndpoints.Tests](../../tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj) | Elsa.Api | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | Elsa.Foundation |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Architecture | [Elsa.Primitives.Hosting](../../src/Elsa/Primitives/Hosting/Elsa.Primitives.Hosting.csproj) | Elsa.Primitives |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Architecture | [Elsa.Serialization.Newtonsoft](../../src/Elsa/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj) | Elsa.Serialization |
 | [Elsa.Architecture.Tests](../../tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj) | Elsa.Architecture | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | Elsa.Tasks |

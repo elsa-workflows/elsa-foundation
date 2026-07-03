@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 48
-- Source catalogs discovered: 47
-- Source catalogs indexed from root: 47
+- Catalog files discovered: 49
+- Source catalogs discovered: 48
+- Source catalogs indexed from root: 48
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 
