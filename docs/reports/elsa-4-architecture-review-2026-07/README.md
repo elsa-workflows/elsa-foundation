@@ -18,6 +18,7 @@ before implementing.
 | [review-naming.md](review-naming.md) | Naming-as-a-system audit; rename families A–E | NM-1..NM-14 |
 | [review-tests.md](review-tests.md) | Test quality, behavior-vs-implementation audit, gap list | TS-1..TS-10 |
 | [review-misc-domains.md](review-misc-domains.md) | Identity, secrets, agent, tenancy, telemetry, apps, security | MS-1..MS-24 |
+| [w9-checkpoint-coalescing-benchmark.md](w9-checkpoint-coalescing-benchmark.md) | **W9 results** — Immediate vs. coalescing vs. Elsa 3 commit counts; durability/cap trade | E3-6, RT-10 |
 
 ## Provenance and reliability
 

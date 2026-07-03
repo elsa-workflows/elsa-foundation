@@ -13,6 +13,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
     private readonly WorkflowExecutionDrainCoordinatorOptions _options;
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
+    private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
 
     public WorkflowExecutionDrainCoordinator(
         IWorkflowSchedulerDrainer schedulerDrainer,
@@ -30,6 +31,21 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         WorkflowExecutionDrainCoordinatorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
+        : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null)
+    {
+    }
+
+    // Greediest constructor: MS DI selects it only when the coalescing drain scope factory has been registered (the
+    // opt-in coalescing wiring). On the default path the factory is absent, this constructor is not selected, and the
+    // coordinator runs its existing ownership-only path byte-for-byte unchanged.
+    public WorkflowExecutionDrainCoordinator(
+        IWorkflowSchedulerDrainer schedulerDrainer,
+        IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
+        IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
+        WorkflowExecutionDrainCoordinatorOptions? options,
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory)
     {
         ArgumentNullException.ThrowIfNull(schedulerDrainer);
         ArgumentNullException.ThrowIfNull(postCommitOutboxProcessor);
@@ -41,6 +57,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         _options = options ?? new WorkflowExecutionDrainCoordinatorOptions();
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
+        _coalescingScopeFactory = coalescingScopeFactory;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(
@@ -81,7 +98,21 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
+        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence unchanged.
+        if (_coalescingScopeFactory is null)
+        {
+            var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
+            await NotifyObserversAsync(envelope, plainResult, cancellationToken);
+            return plainResult;
+        }
+
+        // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
+        // quiescence. The flush runs inside the active ownership scope so W5 fencing gates the single durable write. If
+        // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
+        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId);
         var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
+        await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
     }
