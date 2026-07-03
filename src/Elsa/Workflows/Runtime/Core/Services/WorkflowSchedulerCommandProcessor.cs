@@ -35,12 +35,12 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
         _timeProvider = timeProvider;
     }
 
-    public async ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+    public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
-        await ProcessAsync(envelope, WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
+        return await ProcessAsync(envelope, WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
     }
 
-    public async ValueTask ProcessAsync(
+    public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
         WorkflowExecutionCommandEnvelope envelope,
         WorkflowExecutionCommandDispatchOptions options,
         CancellationToken cancellationToken = default)
@@ -66,7 +66,7 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
 
         var drainRequest = _schedulerDrainPolicy.CreateDrainRequest(envelope, workItem);
         if (drainRequest is null)
-            return;
+            return WorkflowExecutionCommandProcessResult.NoDrain;
 
         if (!string.Equals(drainRequest.WorkflowExecutionId, envelope.WorkflowExecutionId, StringComparison.Ordinal))
             throw new InvalidOperationException($"Scheduler drain policy returned workflow execution ID '{drainRequest.WorkflowExecutionId}' for command envelope workflow execution ID '{envelope.WorkflowExecutionId}'.");
@@ -74,6 +74,7 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
         if (options.AmbientServices is not null)
             drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
-        await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+        var drainResult = await _drainCoordinator.DrainAsync(envelope, drainRequest, cancellationToken);
+        return WorkflowExecutionCommandProcessResult.FromDrain(drainResult);
     }
 }

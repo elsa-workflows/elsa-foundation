@@ -181,6 +181,10 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         status switch
         {
             WorkflowExecutionCommandDispatchStatus.Accepted => BookmarkResumeDispatchStatus.Dispatched,
+            // The resume was dispatched successfully; the workflow faulted during the ensuing drain. The fault is
+            // authoritatively surfaced on the dispatch result (status + reason) and via workflow status queries. A
+            // dedicated faulted bookmark-resume status is a follow-up; treat as dispatched here.
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted => BookmarkResumeDispatchStatus.Dispatched,
             WorkflowExecutionCommandDispatchStatus.Duplicate => BookmarkResumeDispatchStatus.Duplicate,
             WorkflowExecutionCommandDispatchStatus.Rejected => BookmarkResumeDispatchStatus.Rejected,
             WorkflowExecutionCommandDispatchStatus.Deferred => BookmarkResumeDispatchStatus.Deferred,

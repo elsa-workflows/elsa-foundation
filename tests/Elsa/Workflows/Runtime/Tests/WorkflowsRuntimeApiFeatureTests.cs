@@ -145,6 +145,15 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
             descriptor.ImplementationType == typeof(NoopWorkflowSchedulerDrainObserver));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
+            descriptor.ImplementationType == typeof(BlockingIncidentWorkflowFaultObserver));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeFaultCapturePolicy) &&
+            descriptor.ImplementationType == typeof(DefaultRuntimeFaultCapturePolicy));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowSchedulerPoisonStore) &&
+            descriptor.ImplementationType == typeof(InMemoryWorkflowSchedulerPoisonStore));
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
             descriptor.ImplementationType == typeof(WorkflowStartSchedulerWorkHandler));
         Assert.Contains(services, descriptor =>
@@ -222,6 +231,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<AsyncLocalRuntimeExecutionOwnershipContextAccessor>(provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>());
         Assert.IsType<RuntimeExecutionOwnershipService>(provider.GetRequiredService<IRuntimeExecutionOwnershipService>());
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
+        Assert.IsType<DefaultRuntimeFaultCapturePolicy>(provider.GetRequiredService<IRuntimeFaultCapturePolicy>());
+        Assert.IsType<InMemoryWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
         Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
         Assert.IsType<RuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
         Assert.IsType<WorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
@@ -240,6 +251,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
         Assert.IsType<WorkflowExecutionStartDispatcher>(provider.GetRequiredService<IWorkflowExecutionStartDispatcher>());
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
+        Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is BlockingIncidentWorkflowFaultObserver);
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowStartSchedulerWorkHandler);
         Assert.Contains(schedulerWorkHandlers, handler => handler is WorkflowScheduleActivitySchedulerWorkHandler);
@@ -291,6 +303,30 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
+    }
+
+    [Fact]
+    public void RegistersRuntimeFaultCapturePolicyAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IRuntimeFaultCapturePolicy>(new CustomRuntimeFaultCapturePolicy());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomRuntimeFaultCapturePolicy>(provider.GetRequiredService<IRuntimeFaultCapturePolicy>());
+    }
+
+    [Fact]
+    public void RegistersWorkflowSchedulerPoisonStoreAsOverridableDefault()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerPoisonStore>(new CustomWorkflowSchedulerPoisonStore());
+
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<CustomWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
     }
 
     [Fact]
@@ -805,6 +841,24 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 mode: RuntimeDomainRetryMode.Fault,
                 delay: null,
                 reason: "Custom policy owns domain retry decisions.");
+    }
+
+    private sealed class CustomRuntimeFaultCapturePolicy : IRuntimeFaultCapturePolicy
+    {
+        public RuntimeFaultInfo Capture(Exception exception) =>
+            new("Custom", "Custom policy owns fault capture.");
+    }
+
+    private sealed class CustomWorkflowSchedulerPoisonStore : IWorkflowSchedulerPoisonStore
+    {
+        public ValueTask<RuntimeSchedulerPoisonRecord> RecordAsync(RuntimeSchedulerPoisonRecord record, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(record);
+
+        public ValueTask<RuntimeSchedulerPoisonRecord?> FindAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<RuntimeSchedulerPoisonRecord?>(null);
+
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<RuntimeSchedulerPoisonRecord>>([]);
     }
 
     private sealed class CustomRuntimeVolatileWaitPolicy : IRuntimeVolatileWaitPolicy

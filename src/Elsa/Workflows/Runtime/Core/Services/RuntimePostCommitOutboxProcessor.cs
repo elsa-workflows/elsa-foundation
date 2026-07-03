@@ -9,6 +9,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
+    private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
 
     public RuntimePostCommitOutboxProcessor(
         IRuntimePostCommitOutboxStore outboxStore,
@@ -21,14 +22,25 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         IRuntimePostCommitOutboxStore outboxStore,
         IRuntimePostCommitIntentDispatcher intentDispatcher,
         TimeProvider timeProvider)
+        : this(outboxStore, intentDispatcher, timeProvider, new DefaultRuntimeFaultCapturePolicy())
+    {
+    }
+
+    public RuntimePostCommitOutboxProcessor(
+        IRuntimePostCommitOutboxStore outboxStore,
+        IRuntimePostCommitIntentDispatcher intentDispatcher,
+        TimeProvider timeProvider,
+        IRuntimeFaultCapturePolicy faultCapturePolicy)
     {
         ArgumentNullException.ThrowIfNull(outboxStore);
         ArgumentNullException.ThrowIfNull(intentDispatcher);
         ArgumentNullException.ThrowIfNull(timeProvider);
+        ArgumentNullException.ThrowIfNull(faultCapturePolicy);
 
         _outboxStore = outboxStore;
         _intentDispatcher = intentDispatcher;
         _timeProvider = timeProvider;
+        _faultCapturePolicy = faultCapturePolicy;
     }
 
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
@@ -68,7 +80,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         }
         catch (Exception exception)
         {
-            var failureMessage = RuntimeFailureMessages.For(exception);
+            var failureMessage = _faultCapturePolicy.Capture(exception).ToSummaryString();
             var recordingException = await TryRecordDeliveryResultAsync(
                 item,
                 RuntimePostCommitOutboxStatus.FailedRetryable,

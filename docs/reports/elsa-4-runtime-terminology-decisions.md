@@ -157,6 +157,18 @@ Lifecycle status meaning execution cannot continue normally.
 
 Use as status, not as a competing persisted problem object.
 
+**Lifecycle semantics (W1, RT-1/RT-5):**
+
+- **Not silently terminal.** `Faulted` records that the workflow ended its turn unable to continue normally because at least one blocking incident exists. It is a distinct, queryable resting status — not `Completed`, not `Running`. It is the runtime's answer to "this workflow is stuck on an operator-visible problem."
+- **Resumable via incident resolution.** `Faulted` is not a permanent grave. Once the blocking incident(s) are resolved, suppressed, or otherwise driven to a non-blocking state, the workflow can be re-driven (e.g. by an operator retry command or a resumption sweep) and can leave `Faulted`. Treat `Faulted` as "paused on a blocking incident" rather than "cancelled/aborted forever."
+- **Distinct from cancellation/completion.** Cancelled and Completed are the intentional terminal outcomes; `Faulted` is an *unplanned* resting status that demands attention and is expected to be transient in a healthy operation.
+
+**Fault-observer rule (`BlockingIncidentWorkflowFaultObserver`):**
+
+> If, after a drain turn, a workflow has one or more **blocking incidents** *and* its status is **non-terminal** (still `Running` / not already Completed/Cancelled/Faulted-terminal), the observer commits a `WorkflowFaulted` checkpoint that transitions the workflow to `Faulted`.
+
+This closes RT-1a: previously nothing assigned `Faulted`, so a workflow with a blocking incident stayed `Running` forever. The transition is committed through the checkpoint pipeline (the previously-defined-but-unused `WorkflowFaulted` checkpoint name is now live), keeping the status change durable and inspectable via the `ListIncidents` operator endpoint (RT-5).
+
 ### Failure
 
 Generic explanatory word for something going wrong.

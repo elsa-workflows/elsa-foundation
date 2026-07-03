@@ -7,9 +7,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutionCommandProcessor
 {
-    ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
+    ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
 
-    ValueTask ProcessAsync(
+    ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
         WorkflowExecutionCommandEnvelope envelope,
         WorkflowExecutionCommandDispatchOptions options,
         CancellationToken cancellationToken = default) =>
