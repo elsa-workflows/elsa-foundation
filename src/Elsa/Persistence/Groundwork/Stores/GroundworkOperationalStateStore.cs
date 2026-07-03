@@ -11,7 +11,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// collection partition (for the unfiltered <see cref="ListAllAsync"/>), so both lists run through the
 /// declared-index equality query every provider supports.
 /// </summary>
-public sealed class GroundworkOperationalStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IOperationalStateStore
+public sealed class GroundworkOperationalStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.OperationalStateDocumentKind), IOperationalStateStore
 {
     public async ValueTask<OperationalState> SaveAsync(OperationalState state, CancellationToken cancellationToken = default)
     {
@@ -23,15 +24,7 @@ public sealed class GroundworkOperationalStateStore(IDocumentStore store, IGroun
             ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
             state.WorkflowExecutionId,
             state);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.OperationalStateDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-                DocumentId.Compose(state.WorkflowExecutionId, state.OperationalStateId),
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(DocumentId.Compose(state.WorkflowExecutionId, state.OperationalStateId), document, cancellationToken);
 
         return state;
     }
@@ -41,42 +34,24 @@ public sealed class GroundworkOperationalStateStore(IDocumentStore store, IGroun
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationalStateId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-            DocumentId.Compose(workflowExecutionId, operationalStateId),
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<OperationalStateDocument, OperationalState>(
+            DocumentId.Compose(workflowExecutionId, operationalStateId), document => document.State, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<OperationalState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<OperationalStateDocument, OperationalState>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default)
-    {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.OperationalStateDocumentKind),
+    public async ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+        await QueryDocumentsAsync<OperationalStateDocument, OperationalState>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
+            document => document.State,
             cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
-    }
-
-    private OperationalState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<OperationalStateDocument>(envelope).State;
 
     private sealed record OperationalStateDocument(string Collection, string WorkflowExecutionId, OperationalState State);
 }

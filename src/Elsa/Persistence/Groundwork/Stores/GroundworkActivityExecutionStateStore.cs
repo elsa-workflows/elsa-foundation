@@ -11,7 +11,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// document is wrapped in a thin envelope that stamps a top-level <c>workflowExecutionId</c> for the
 /// declared per-workflow index every provider supports.
 /// </summary>
-public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IActivityExecutionStateStore
+public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind), IActivityExecutionStateStore
 {
     public async ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -20,14 +21,9 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
 
         var document = new ActivityExecutionStateDocument(state.Execution.WorkflowExecutionId, state);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
-                DocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
-                schemaVersion,
-                content),
+        await SaveDocumentAsync(
+            DocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
+            document,
             cancellationToken);
 
         return state;
@@ -38,30 +34,17 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
-            DocumentId.Compose(workflowExecutionId, activityExecutionId),
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
+            DocumentId.Compose(workflowExecutionId, activityExecutionId), document => document.State, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
     }
-
-    private ActivityExecutionState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<ActivityExecutionStateDocument>(envelope).State;
 
     private sealed record ActivityExecutionStateDocument(string WorkflowExecutionId, ActivityExecutionState State);
 }

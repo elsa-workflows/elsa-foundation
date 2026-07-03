@@ -12,7 +12,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// for <see cref="ListForWorkflowExecutionAsync"/>; global states carry a null id and are correctly
 /// excluded from the per-workflow index.
 /// </summary>
-public sealed class GroundworkControlPlaneStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IControlPlaneStateStore
+public sealed class GroundworkControlPlaneStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind), IControlPlaneStateStore
 {
     public async ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default)
     {
@@ -23,15 +24,7 @@ public sealed class GroundworkControlPlaneStateStore(IDocumentStore store, IGrou
             ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
             state.WorkflowExecutionId,
             state);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
-                state.ControlPlaneStateId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(state.ControlPlaneStateId, document, cancellationToken);
 
         return state;
     }
@@ -40,42 +33,24 @@ public sealed class GroundworkControlPlaneStateStore(IDocumentStore store, IGrou
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(controlPlaneStateId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
-            controlPlaneStateId,
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<ControlPlaneStateDocument, ControlPlaneState>(
+            controlPlaneStateId, document => document.State, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<ControlPlaneState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<ControlPlaneStateDocument, ControlPlaneState>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
     }
 
-    public async ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default)
-    {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind),
+    public async ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+        await QueryDocumentsAsync<ControlPlaneStateDocument, ControlPlaneState>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
+            document => document.State,
             cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
-    }
-
-    private ControlPlaneState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<ControlPlaneStateDocument>(envelope).State;
 
     private sealed record ControlPlaneStateDocument(string Collection, string? WorkflowExecutionId, ControlPlaneState State);
 }

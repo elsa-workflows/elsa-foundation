@@ -7,7 +7,8 @@ using Groundwork.Documents.Store;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
-public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
+public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind), IActivityExecutionInspectionStore, IActivityExecutionInspectionWriter
 {
     /// <exception cref="GroundworkActivityExecutionInspectionStoreException">Thrown when the Groundwork document store or JSON projection mapping fails.</exception>
     public async ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
@@ -23,15 +24,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
                 projection.AuthoredActivityId,
                 ActivityExecutionInspectionSummaryProjection.FromProjection(projection),
                 projection);
-            var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind, document);
 
-            await store.SaveAsync(
-                new SaveDocumentRequest(
-                    ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
-                    DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
-                    schemaVersion,
-                    content),
-                cancellationToken);
+            await SaveDocumentAsync(DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId), document, cancellationToken);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -47,12 +41,8 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
 
         try
         {
-            var envelope = await store.LoadAsync(
-                ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
-                DocumentId.Compose(workflowExecutionId, activityExecutionId),
-                cancellationToken);
-
-            return envelope is null ? null : Map(envelope);
+            return await LoadDocumentAsync<ActivityExecutionInspectionProjectionDocument, ActivityExecutionInspectionProjection>(
+                DocumentId.Compose(workflowExecutionId, activityExecutionId), document => document.Projection, cancellationToken);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -67,9 +57,9 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
 
         try
         {
-            var envelopes = await store.QueryAsync(
+            var envelopes = await Store.QueryAsync(
                 new DocumentStoreQuery(
-                    ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
+                    DocumentKind,
                     ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
                     workflowExecutionId),
                 cancellationToken);
@@ -89,21 +79,19 @@ public sealed class GroundworkActivityExecutionInspectionStore(IDocumentStore st
             .ThenBy(projection => projection.ActivityExecutionId, StringComparer.Ordinal)
             .ToArray();
 
-    private ActivityExecutionInspectionProjection Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<ActivityExecutionInspectionProjectionDocument>(envelope).Projection;
-
     private ActivityExecutionInspectionSummaryProjection MapSummary(DocumentEnvelope envelope)
     {
         // The summary fast path reads a fragment of ContentJson directly, so it is only valid for
-        // current-version documents; older versions go through Map so the upcaster chain applies.
-        if (serializer.IsCurrentVersion(envelope))
+        // current-version documents; older versions go through the full projection so the upcaster chain applies.
+        if (Serializer.IsCurrentVersion(envelope))
         {
             using var document = JsonDocument.Parse(envelope.ContentJson);
             if (document.RootElement.TryGetProperty("summary", out var summaryElement) && summaryElement.ValueKind is not JsonValueKind.Null)
-                return serializer.DeserializeElement<ActivityExecutionInspectionSummaryProjection>(summaryElement);
+                return Serializer.DeserializeElement<ActivityExecutionInspectionSummaryProjection>(summaryElement);
         }
 
-        return ActivityExecutionInspectionSummaryProjection.FromProjection(Map(envelope));
+        return ActivityExecutionInspectionSummaryProjection.FromProjection(
+            Serializer.Deserialize<ActivityExecutionInspectionProjectionDocument>(envelope).Projection);
     }
 
     private sealed record ActivityExecutionInspectionProjectionDocument(

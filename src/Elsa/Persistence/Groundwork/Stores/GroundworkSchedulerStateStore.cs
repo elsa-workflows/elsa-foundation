@@ -12,7 +12,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// a single constructor and rebuilds the domain instance through its canonical constructor. A constant
 /// collection partition lets the unfiltered <see cref="ListAsync"/> use the declared-index equality query.
 /// </summary>
-public sealed class GroundworkSchedulerStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : ISchedulerStateStore
+public sealed class GroundworkSchedulerStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerStateDocumentKind), ISchedulerStateStore
 {
     public async ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default)
     {
@@ -22,15 +23,7 @@ public sealed class GroundworkSchedulerStateStore(IDocumentStore store, IGroundw
         var document = new SchedulerStateDocument(
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             SchedulerStatePayload.From(state));
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
-                state.WorkflowExecutionId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(state.WorkflowExecutionId, document, cancellationToken);
 
         return state;
     }
@@ -39,28 +32,16 @@ public sealed class GroundworkSchedulerStateStore(IDocumentStore store, IGroundw
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelope = await store.LoadAsync(
+        return await LoadDocumentAsync<SchedulerStateDocument, SchedulerState>(
+            workflowExecutionId, document => document.State.ToDomain(), cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyCollection<SchedulerState>> ListAsync(CancellationToken cancellationToken = default) =>
+        await QueryDocumentsAsync<SchedulerStateDocument, SchedulerState>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
-            workflowExecutionId,
+            document => document.State.ToDomain(),
             cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
-    }
-
-    public async ValueTask<IReadOnlyCollection<SchedulerState>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.SchedulerStateDocumentKind),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
-    }
-
-    private SchedulerState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<SchedulerStateDocument>(envelope).State.ToDomain();
 
     private sealed record SchedulerStateDocument(string Collection, SchedulerStatePayload State);
 

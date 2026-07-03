@@ -11,21 +11,15 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// PostgreSQL, MongoDB) is chosen by the host through feature composition and never leaks into this bridge
 /// or into runtime domain code.
 /// </summary>
-public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowTriggerBindingStore
+public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind), IWorkflowTriggerBindingStore
 {
     public async ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentException.ThrowIfNullOrWhiteSpace(binding.TriggerBindingId);
 
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind, binding);
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
-                binding.TriggerBindingId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(binding.TriggerBindingId, binding, cancellationToken);
 
         return binding;
     }
@@ -39,11 +33,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
 
         foreach (var binding in existing)
         {
-            var result = await store.DeleteAsync(
-                new DeleteDocumentRequest(
-                    ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
-                    binding.TriggerBindingId),
-                cancellationToken);
+            var result = await DeleteDocumentAsync(binding.TriggerBindingId, cancellationToken);
 
             if (result.Status == DocumentStoreWriteStatus.Deleted)
                 deleted++;
@@ -60,15 +50,10 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         // The cross-artifact index is keyed by stimulus hash only (every provider supports single-field
         // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
         // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulus,
-                stimulusHash),
-            cancellationToken);
+        var bindings = await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByStimulus, stimulusHash, binding => binding, cancellationToken);
 
-        return envelopes
-            .Select(Map)
+        return bindings
             .Where(binding => StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
             .ToArray();
     }
@@ -77,16 +62,7 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifact,
-                artifactId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifact, artifactId, binding => binding, cancellationToken);
     }
-
-    private WorkflowTriggerBinding Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<WorkflowTriggerBinding>(envelope);
 }
