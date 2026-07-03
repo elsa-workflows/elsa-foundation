@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -13,7 +12,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// a single constructor and rebuilds the domain instance through its canonical constructor. A constant
 /// collection partition lets the unfiltered <see cref="ListAsync"/> use the declared-index equality query.
 /// </summary>
-public sealed class GroundworkSchedulerStateStore(IDocumentStore store) : ISchedulerStateStore
+public sealed class GroundworkSchedulerStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : ISchedulerStateStore
 {
     public async ValueTask<SchedulerState> SaveAsync(SchedulerState state, CancellationToken cancellationToken = default)
     {
@@ -23,13 +22,13 @@ public sealed class GroundworkSchedulerStateStore(IDocumentStore store) : ISched
         var document = new SchedulerStateDocument(
             ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
             SchedulerStatePayload.From(state));
-        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.SchedulerStateDocumentKind, document);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
                 state.WorkflowExecutionId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -60,8 +59,8 @@ public sealed class GroundworkSchedulerStateStore(IDocumentStore store) : ISched
         return envelopes.Select(Map).ToArray();
     }
 
-    private static SchedulerState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<SchedulerStateDocument>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.State.ToDomain();
+    private SchedulerState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<SchedulerStateDocument>(envelope).State.ToDomain();
 
     private sealed record SchedulerStateDocument(string Collection, SchedulerStatePayload State);
 

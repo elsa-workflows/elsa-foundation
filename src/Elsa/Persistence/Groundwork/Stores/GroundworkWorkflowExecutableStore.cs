@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -13,7 +12,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// collection value, which lets <see cref="ListAsync"/> be served through the same
 /// declared-index equality query every provider supports.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IWorkflowExecutableStore
+public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowExecutableStore
 {
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -90,19 +89,19 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store) : IW
     private async ValueTask SaveCoreAsync(WorkflowExecutable executable, CancellationToken cancellationToken)
     {
         var document = new ExecutableDocument(ElsaRuntimeStorageManifest.WorkflowExecutableCollection, executable);
-        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, document);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
                 executable.Identity.ArtifactId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
     }
 
-    private static WorkflowExecutable Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<ExecutableDocument>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.Executable;
+    private WorkflowExecutable Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<ExecutableDocument>(envelope).Executable;
 
     // Persistence envelope: stamps the constant collection partition used by ListAsync and carries the
     // provider-neutral executable payload.

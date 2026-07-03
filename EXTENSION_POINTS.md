@@ -102,6 +102,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
+| Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 

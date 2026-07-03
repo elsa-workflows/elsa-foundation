@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -13,7 +12,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// for <see cref="ListForWorkflowExecutionAsync"/>; global states carry a null id and are correctly
 /// excluded from the per-workflow index.
 /// </summary>
-public sealed class GroundworkControlPlaneStateStore(IDocumentStore store) : IControlPlaneStateStore
+public sealed class GroundworkControlPlaneStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IControlPlaneStateStore
 {
     public async ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default)
     {
@@ -24,13 +23,13 @@ public sealed class GroundworkControlPlaneStateStore(IDocumentStore store) : ICo
             ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
             state.WorkflowExecutionId,
             state);
-        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind, document);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
                 state.ControlPlaneStateId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -75,8 +74,8 @@ public sealed class GroundworkControlPlaneStateStore(IDocumentStore store) : ICo
         return envelopes.Select(Map).ToArray();
     }
 
-    private static ControlPlaneState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<ControlPlaneStateDocument>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.State;
+    private ControlPlaneState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<ControlPlaneStateDocument>(envelope).State;
 
     private sealed record ControlPlaneStateDocument(string Collection, string? WorkflowExecutionId, ControlPlaneState State);
 }
