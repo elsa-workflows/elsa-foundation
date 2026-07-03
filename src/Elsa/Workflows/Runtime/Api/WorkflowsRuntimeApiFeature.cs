@@ -71,6 +71,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // the executor can resolve them by type from the built plan; both pipelines start as no-op pass-throughs, so
         // wrapping handler dispatch is behavior-preserving until modules register real middleware or Move 2 lands.
         services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowInvokeMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
