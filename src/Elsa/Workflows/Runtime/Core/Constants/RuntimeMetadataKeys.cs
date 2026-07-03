@@ -30,6 +30,14 @@ public static class RuntimeMetadataKeys
     public const string OutputName = "runtime.outputName";
 
     /// <summary>
+    /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a
+    /// workflow execution (RT-2). Preserved across a lease release so a subsequent acquisition always issues a
+    /// strictly greater token and a token is never reused. See
+    /// <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeExecutionOwnershipService"/>.
+    /// </summary>
+    public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
+
+    /// <summary>
     /// System-metadata key on a workflow execution carrying the workflow instance name (#260). Set by the
     /// <c>SetName</c> leaf control activity through <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityExecutionContext.SetInstanceName"/>;
     /// the engine folds it into the activity-completed checkpoint's workflow-execution state change, mirroring
