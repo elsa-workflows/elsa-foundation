@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 107
-- Test projects: 39
+- Test projects: 41
 - Domains: 23
-- Direct cross-domain references: 327
+- Direct cross-domain references: 330
 
 ## Domains
 
@@ -21,8 +21,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Architecture | 0 | 1 | test |
 | Elsa.Caching | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Diagnostics | 9 | 5 | contract<br>feature/implementation<br>provider/implementation<br>test |
-| Elsa.Events | 3 | 0 | contract<br>feature/implementation<br>helper |
-| Elsa.Expressions | 10 | 1 | contract<br>feature/implementation<br>helper<br>provider/implementation<br>test |
+| Elsa.Events | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
+| Elsa.Expressions | 10 | 2 | contract<br>feature/implementation<br>helper<br>provider/implementation<br>test |
 | Elsa.Foundation | 5 | 1 | feature/implementation<br>test |
 | Elsa.Http | 3 | 0 | contract<br>feature/implementation |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
@@ -169,6 +169,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | OpenTelemetry.Tests | test | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Persistence.Tests | test | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Tests | test | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
+| [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | Tests | test | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
+| [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | JavaScript.Jint.Tests | test | Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint |
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | Tests | test | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
@@ -317,6 +319,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Events](../../src/Elsa/Events/Elsa.Events.csproj) | Elsa.Events | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events | [Elsa.Pipelines.Core](../../src/Elsa/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
 | [Elsa.Events.Strategies](../../src/Elsa/Events/Strategies/Elsa.Events.Strategies.csproj) | Elsa.Events | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | Elsa.Events | [Elsa.Locking.Core](../../src/Elsa/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
+| [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | Elsa.Events | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | Elsa.Tasks |
+| [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | Elsa.Events | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
 | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | Elsa.Workflows |

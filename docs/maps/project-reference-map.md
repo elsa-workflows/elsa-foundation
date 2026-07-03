@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 107
-- Test projects: 39
-- Direct project references: 535
+- Test projects: 41
+- Direct project references: 544
 
 ## Projects
 
@@ -140,6 +140,8 @@ Records direct project references only.
 | [Elsa.Diagnostics.OpenTelemetry.Tests](../../tests/Elsa/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Core |
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
+| [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | net10.0 | false | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
+| [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint |
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | net10.0 | false | Elsa.Mediator |
@@ -171,8 +173,8 @@ Records direct project references only.
 | Elsa.Architecture | 0 | 1 |
 | Elsa.Caching | 2 | 1 |
 | Elsa.Diagnostics | 9 | 5 |
-| Elsa.Events | 3 | 0 |
-| Elsa.Expressions | 10 | 1 |
+| Elsa.Events | 3 | 1 |
+| Elsa.Expressions | 10 | 2 |
 | Elsa.Foundation | 5 | 1 |
 | Elsa.Http | 3 | 0 |
 | Elsa.Locking | 2 | 0 |
