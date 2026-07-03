@@ -80,12 +80,13 @@ Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
 - **Event wait-form (mid-flow suspension)** (from W7): the `Event` activity ships
   start-only; a suspending wait-form ([ResumeTarget] resume path, dual start/wait modes)
   is a straightforward follow-up now that the publisher compiles resume targets.
-- **Groundwork added-index visibility** (from W7, verified empirically): adding an index to
-  an existing document unit does NOT backfill projections for pre-existing documents (even
-  across a manifest version bump) — they become visible to the new index only on their next
-  save. Bounded impact for short-lived kinds (bookmarks re-save each checkpoint); a backfill
-  mechanism is the follow-up if a long-lived kind ever gains an index. See
-  `docs/serialization.md`.
+- **Groundwork added-index backfill** (from W7; **fixed in Groundwork preview.16**, adopted via
+  GW-BUMP): adding an index to an existing document unit now backfills projections for
+  pre-existing documents on a manifest version bump (Groundwork PR #21 — delete-then-insert
+  inside the materialization transaction), so they are visible to the new index without a
+  re-save. The empirical probe that guarded the earlier gap was flipped into
+  `GroundworkAddedIndexBackfillRegressionTests`, and all four `Groundwork.*` packages were
+  bumped 0.0.1-preview.10 → preview.16. See `docs/serialization.md`.
 - **Start-path idempotency is process-local** (from W7): `IStimulusStartDeduplicator` is an
   in-memory default; without an idempotency key the start path is at-least-once (a duplicate
   stimulus delivery may double-start). A durable dedup ledger is the hardening follow-up.

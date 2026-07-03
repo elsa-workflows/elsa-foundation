@@ -127,20 +127,27 @@ serializer, versioning, and fixture gate as every other runtime kind.
   can resume *waiting instances across executions* (E3-5 fan-in), not only within one `workflowExecutionId`.
   No version bump or upcaster is needed: the state record shape is unchanged; only a new index was declared.
 
-### Condition 7 — added indexes are not retroactively backfilled
+### Condition 7 — added indexes backfill pre-existing documents (fixed in Groundwork preview.16)
 
-**Verified behavior** (see `GroundworkAddedIndexVisibilityProbeTests`): the Groundwork SQLite provider
-populates an index's physicalized projection only when a document is **written**. A document written
-*before* a new index was declared is **not** retroactively backfilled into that index — not even across a
-manifest version bump — so only documents saved after the index exists are visible through it. Re-saving a
-document makes it visible.
+**Previously** (Groundwork ≤ preview.10, guarded empirically by the probe test): the Groundwork SQLite
+provider populated an index's physicalized projection only when a document was **written**. A document
+written *before* a new index was declared was **not** retroactively backfilled into that index — not even
+across a manifest version bump — so only documents saved after the index existed were visible through it,
+and re-saving a document was required to make it visible.
+
+**Fixed in Groundwork preview.16** (Groundwork PR #21): when a manifest
+adds a portable index, `RelationalMaterializerBase` now backfills `groundwork_document_indexes` for
+pre-existing documents (delete-then-insert inside the materialization transaction, sharing single-field
+index semantics with save-time via `RelationalIndexValues.TryGetIndexValue`). A document written before the
+index was declared becomes visible to the new index on the next manifest version bump — no re-save required.
+The regression test `GroundworkAddedIndexBackfillRegressionTests` guards this behavior.
 
 Consequence for the additive `bookmarkState` `by-stimulus` index: a bookmark that already existed in a
-database at the moment this feature is deployed is invisible to cross-execution stimulus routing until it
-is next re-saved. This gap is **bounded and accepted** because bookmarks are short-lived — they are created
-and consumed within a single workflow's wait window and are rewritten on the next checkpoint — so in
-practice a suspended instance becomes routable again on its next persistence. New databases are unaffected.
-The brand-new `workflowTriggerBinding` kind has no pre-existing documents, so it has no gap.
+database at the moment this feature is deployed is now backfilled into the index on the manifest version
+bump, so it is routable for cross-execution stimulus routing without waiting for a re-save. (Even before the
+fix the impact was bounded because bookmarks are short-lived — created and consumed within a single
+workflow's wait window and rewritten on the next checkpoint.) New databases are unaffected, and the
+brand-new `workflowTriggerBinding` kind has no pre-existing documents.
 
 ### Stimulus START idempotency is at-least-once
 

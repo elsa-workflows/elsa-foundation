@@ -10,20 +10,26 @@ using Xunit.Abstractions;
 
 namespace Elsa.Persistence.Groundwork.Tests;
 
-// Condition 7 probe (W7): when a by-stimulus index is added to an already-populated unit, are documents
-// that were written BEFORE the index existed visible to the new index without being re-saved? This tests
-// the Groundwork SQLite provider directly with a minimal two-phase manifest so the answer is verified,
-// not assumed. The finding is documented in docs/serialization.md.
-public sealed class GroundworkAddedIndexVisibilityProbeTests(ITestOutputHelper output)
+// Condition 7 regression (W7 probe → GW-BUMP): when a by-stimulus index is added to an already-populated
+// unit, documents written BEFORE the index existed must become visible to the new index WITHOUT being
+// re-saved. This drives the Groundwork SQLite provider directly with a minimal two-phase manifest so the
+// backfill behavior is verified, not assumed.
+//
+// History: previously (Groundwork ≤ preview.10) added indexes were NOT backfilled — a document written
+// before a new index was declared stayed invisible to that index until its next save. That gap was guarded
+// by this test as a probe. Groundwork preview.16 (PR #21) added index-projection backfill: when a manifest
+// adds a portable index, RelationalMaterializerBase backfills the projection for pre-existing documents
+// inside the materialization transaction. This test now guards that fixed behavior. See docs/serialization.md.
+public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelper output)
 {
     private const string Kind = "probe";
     private const string StimulusField = "stimulusHash";
     private const string ByStimulus = "by-stimulus";
 
     [Fact]
-    public async Task AddedIndex_PreexistingDocumentVisibility_IsVerified()
+    public async Task AddedIndex_BackfillsPreexistingDocuments()
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-probe-{Guid.NewGuid():N}.db");
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-backfill-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={dbPath}";
 
         try
@@ -49,13 +55,14 @@ public sealed class GroundworkAddedIndexVisibilityProbeTests(ITestOutputHelper o
 
                 output.WriteLine($"Documents visible via added index for 'hash-order': [{string.Join(", ", ids)}]");
 
-                // VERIFIED BEHAVIOR (Condition 7): the Groundwork SQLite provider populates an index's
-                // physicalized projection only when a document is written. A document written BEFORE the
-                // index was declared is NOT retroactively backfilled — even across a manifest version bump —
-                // so only the post-index document is visible through the new index. Re-saving the document
-                // makes it visible. Documented in docs/serialization.md; the bookmark by-stimulus gap this
-                // implies is bounded because bookmarks are short-lived.
-                Assert.Equal(new[] { "doc-2" }, ids);
+                // REGRESSION GUARD (Groundwork preview.16, PR #21): adding an index across a manifest version
+                // bump now backfills the index's physicalized projection for documents that were written BEFORE
+                // the index was declared. So BOTH the pre-existing document (doc-1, written under the no-index
+                // manifest) AND the post-index document (doc-2) are visible through the new index — no re-save
+                // required. Prior to preview.16 only doc-2 was returned; this test guarded that gap as a probe.
+                // Backfill runs inside the materialization transaction (RelationalMaterializerBase), sharing
+                // single-field index semantics with save-time via RelationalIndexValues.TryGetIndexValue.
+                Assert.Equal(new[] { "doc-1", "doc-2" }, ids);
             }
         }
         finally
