@@ -11,6 +11,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)`.
 - **Usage:** separates checkpoint semantics from persistence timing. The checkpoint name says what changed; the policy decides immediate, deferred, or skipped flush.
 - **Default implementation:** `ImmediateRuntimeCheckpointPersistencePolicy` *(intra-domain default)*.
+- **Alternative implementation:** `CoalescingRuntimeCheckpointPersistencePolicy` *(opt-in, W9/E3-6/RT-10)* — burst-coalescing folding of intra-drain checkpoints into one flush at quiescence; enable with `services.AddCoalescingRuntimeCheckpointPersistence()` (see the Coalescing checkpoint persistence section below).
 
 ### `IRuntimeCheckpointWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one writer owns persistence of checkpoint envelopes for a runtime composition).
@@ -340,6 +341,29 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - `Elsa.Workflows.Runtime.JavaScript` — `ActivityCompletionHandler` *(cross-domain — test implementation for JS-context activity completion)*
 
 ---
+
+## Coalescing checkpoint persistence *(opt-in — W9 / E3-6 / RT-10)*
+
+The burst-coalescing persistence policy is an **opt-in** durability/throughput trade, enabled with
+`services.AddCoalescingRuntimeCheckpointPersistence()` (in `Elsa.Workflows.Runtime.Api.Coalescing`). It is
+**not** registered by default: the default runtime keeps `ImmediateRuntimeCheckpointPersistencePolicy` and
+the contracts/decorators below are absent, so the default path is byte-identical. When enabled, it swaps the
+policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session decorators over the
+checkpoint commit store, scheduler queue, post-commit outbox, and state stores. See
+[`docs/runtime-durable-resumption.md`](../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
+and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
+
+### `IRuntimeCoalescingSessionAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one ambient accessor exposes the active coalescing session to the decorators).
+- **Signature:** `RuntimeCoalescingSession? Current { get; }`, `IDisposable Push(RuntimeCoalescingSession? session)`.
+- **Usage:** an `AsyncLocal` push/pop stack that makes the current drain segment's in-memory working set ambient to the coalescing store/queue/outbox decorators, mirroring the existing ambient ownership-scope resolution. Only registered by the opt-in extension.
+- **Default implementation:** `AsyncLocalRuntimeCoalescingSessionAccessor` *(opt-in only)*.
+
+### `IRuntimeCoalescingDrainScopeFactory` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
+- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`.
+- **Usage:** `WorkflowExecutionDrainCoordinator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.
+- **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
 
 ## Cross-references
 

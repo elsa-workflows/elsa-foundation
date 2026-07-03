@@ -142,6 +142,60 @@ sweep, the pump is bounded on two axes:
   throttles after consecutive sweep failures. One poisoned execution therefore cannot monopolise the
   sweep or block healthy executions.
 
+## Coalescing checkpoint persistence — the deferred-flush window (E3-6 / RT-10)
+
+Everything above describes the **default** `ImmediateRuntimeCheckpointPersistencePolicy`: every named
+checkpoint flushes to the durable store the moment it is decided. `AddCoalescingRuntimeCheckpointPersistence`
+swaps in `CoalescingRuntimeCheckpointPersistencePolicy` — an **opt-in** durability/throughput trade,
+selectable exactly like Elsa 3's commit strategies. It folds a *drain segment* of non-suspending intra-drain
+checkpoints into **one atomic flush commit at quiescence**, matching Elsa 3's one-write-per-burst behaviour.
+The default runtime keeps Immediate, so nothing below applies unless coalescing is explicitly enabled.
+
+**Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
+coalesced segment, intra-drain checkpoints are buffered in an ambient in-memory working set (an overlay over
+the real state stores, scheduler queue, and outbox). The segment-entry work item is **only** dequeued from the
+durable queue as part of the atomic flush commit — never durably dequeued before the flush lands. So at every
+instant the durable queue's frontier equals the last flushed checkpoint. A crash mid-segment discards the
+in-memory buffer and leaves the segment-entry item exactly where the last flush left it, so the standard Window
+B recovery (backlog discovery → re-drive) replays the entire segment from the last durable state.
+
+**What is buffered.** Workflow-execution, activity-execution, durable-value and scheduler state writes, plus
+continuation intents (`EnqueueSchedulerWork`) which are consumed **in-segment** from the overlay so a folded
+segment does not durably re-record its own continuation. **What is never buffered** (condition E): W5's
+lease/heartbeat/ownership operational writes and `EnsureOwnershipAsync` fencing go straight to the operational
+store as today, and the single folded flush still goes through `RuntimeCheckpointCommitter.CommitAsync`, so
+ownership fencing gates the coalesced flush exactly as it gates an immediate commit — a stale writer is rejected
+before anything persists.
+
+**Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
+every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
+`WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A
+bookmark-suspend (including `Delay`/timer-style suspensions) flushes so an external stimulus always finds a
+**durable** bookmark and can never race an in-memory-only one; a decided fault is durable at the moment it is
+decided. End-of-drain quiescence also flushes even when the workflow is still `Running`/waiting. A
+boundary-forced flush is **complete** (condition C): it atomically persists the folded state + the boundary
+checkpoint itself + any remaining unconsumed in-memory queue items (durably re-enqueued) + undelivered outbox
+intents. Nothing buffered is lost at a boundary.
+
+**Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) bounds a
+segment: once the buffered checkpoint count reaches the cap, an intermediate flush is forced. This bounds both
+replay cost (a crash re-runs at most one segment) and memory (the working set holds at most one segment). See
+the benchmark results doc for the replay-cost trade.
+
+**The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
+checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
+recovery generation re-drives the segment-entry item and re-executes the whole buffered segment. This means
+**in-segment activity re-execution after a crash is expected**: the crashed generation persisted no checkpoint,
+so activities in the lost segment run again on recovery. This is the same at-least-once-after-persist guarantee
+the Immediate path already gives on the enqueue side (§The idempotency / durability contract); coalescing simply
+widens the replay window from one checkpoint to one segment. External-facing outbox intents are still delivered
+**only post-flush**, so an activity's external effect is never delivered before its durable commit. Convergence
+and the absence of duplicate *terminal* effects are proven by
+`GroundworkCoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`
+(two generations over a shared store: gen-1 crashes mid-segment with the queue still holding the segment entry;
+gen-2's honest sweep converges to the crash-free control snapshot) and the queue-retention half by
+`RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
+
 ## Out of scope (owned elsewhere)
 
 - **Ack-based dequeue** that keeps a scheduler work item durably owned until the consuming handler's
