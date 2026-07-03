@@ -315,8 +315,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
         var workflowInputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
         var activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
-        var correlationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
-        var instanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
+        var identity = RuntimeIdentityStateProjection.Project(durableValues);
 
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: workItem.WorkflowExecutionId,
@@ -336,7 +335,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             BuildOutputArguments(executableNode),
             cancellationToken);
 
-        return new ConstructedActivity(activity, inputs, workflowInputs, workflowVariables, activityOutputValues, correlationId, instanceName);
+        return new ConstructedActivity(activity, inputs, workflowInputs, workflowVariables, activityOutputValues, identity.CorrelationId, identity.InstanceName);
     }
 
     private async ValueTask EnqueueChildActivityScheduleWorkAsync(

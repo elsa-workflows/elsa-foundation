@@ -146,8 +146,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
             workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
             activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
-            carrierCorrelationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
-            carrierInstanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
+            var identity = RuntimeIdentityStateProjection.Project(durableValues);
+            carrierCorrelationId = identity.CorrelationId;
+            carrierInstanceName = identity.InstanceName;
 
             // Build the visible container-scope chain (ADR 0027) anchored from the current durable-value variable
             // projection, so a resume callback's freehand expressions read container/workflow-scoped variables and

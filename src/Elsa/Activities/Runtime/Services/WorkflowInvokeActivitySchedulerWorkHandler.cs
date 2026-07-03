@@ -167,8 +167,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
             workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
             activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
-            carrierCorrelationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
-            carrierInstanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
+            var identity = RuntimeIdentityStateProjection.Project(durableValues);
+            carrierCorrelationId = identity.CorrelationId;
+            carrierInstanceName = identity.InstanceName;
 
             // Build the scope with the workflow-scope variables anchored from the current durable-value
             // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow

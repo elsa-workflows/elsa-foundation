@@ -35,7 +35,13 @@ public static class RuntimeInputBindingStateProjection
     public static IReadOnlyDictionary<string, object?> ProjectWorkflowInputs(IEnumerable<DurableValueState> durableValues) =>
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
-    private static IReadOnlyDictionary<string, object?> ProjectByMetadataKey(IEnumerable<DurableValueState> durableValues, string nameMetadataKey)
+    /// <summary>
+    /// Builds a name → value snapshot from the durable values tagged with <paramref name="nameMetadataKey"/>, most
+    /// recent <see cref="DurableValueState.CapturedAt"/> per name winning. Shared by the variable/input/output
+    /// projections above and by <see cref="RuntimeIdentityStateProjection"/> so the last-capture-wins rule lives in
+    /// one place. A cleared value persists as a JSON-null inline value and is retained (callers unwrap as needed).
+    /// </summary>
+    internal static IReadOnlyDictionary<string, object?> ProjectByMetadataKey(IEnumerable<DurableValueState> durableValues, string nameMetadataKey)
     {
         ArgumentNullException.ThrowIfNull(durableValues);
 
@@ -63,35 +69,33 @@ public static class RuntimeInputBindingStateProjection
 /// </summary>
 public static class RuntimeIdentityStateProjection
 {
+    /// <summary>
+    /// Resolves both identity slots (correlation id / instance name) in a single pass over the durable values,
+    /// reusing the shared <see cref="RuntimeInputBindingStateProjection.ProjectByMetadataKey"/> most-recent-wins
+    /// projection over the <see cref="RuntimeMetadataKeys.IdentityName"/> tag, then unwrapping each slot's inline
+    /// JSON. A cleared assignment persists as a JSON-null value, so the latest capture may legitimately be null.
+    /// Handlers on the hot path call this once rather than scanning the list per slot.
+    /// </summary>
+    public static RuntimeWorkflowIdentity Project(IEnumerable<DurableValueState> durableValues)
+    {
+        var slots = RuntimeInputBindingStateProjection.ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.IdentityName);
+        return new RuntimeWorkflowIdentity(
+            CorrelationId: Unwrap(slots, RuntimeWorkflowStateSeed.IdentityCorrelationIdName),
+            InstanceName: Unwrap(slots, RuntimeWorkflowStateSeed.IdentityInstanceNameName));
+    }
+
     /// <summary>Resolves the current correlation id for the execution-time carrier, or null when unassigned/cleared.</summary>
-    public static string? ProjectCorrelationId(IEnumerable<DurableValueState> durableValues) =>
-        Project(durableValues, RuntimeWorkflowStateSeed.IdentityCorrelationIdName);
+    public static string? ProjectCorrelationId(IEnumerable<DurableValueState> durableValues) => Project(durableValues).CorrelationId;
 
     /// <summary>Resolves the current instance name for the execution-time carrier, or null when unassigned/cleared.</summary>
-    public static string? ProjectInstanceName(IEnumerable<DurableValueState> durableValues) =>
-        Project(durableValues, RuntimeWorkflowStateSeed.IdentityInstanceNameName);
+    public static string? ProjectInstanceName(IEnumerable<DurableValueState> durableValues) => Project(durableValues).InstanceName;
 
-    private static string? Project(IEnumerable<DurableValueState> durableValues, string identitySlotName)
-    {
-        ArgumentNullException.ThrowIfNull(durableValues);
-
-        // Most-recent capture of the requested slot wins (mirrors ProjectByMetadataKey ordering). A cleared
-        // assignment is persisted as a JSON-null inline value, so the latest capture may legitimately be null.
-        var latest = durableValues
-            .Where(value => value.InlineValue.HasValue
-                            && value.Metadata.TryGetValue(RuntimeMetadataKeys.IdentityName, out var slot)
-                            && StringComparer.Ordinal.Equals(slot, identitySlotName))
-            .OrderBy(value => value.CapturedAt)
-            .Select(value => value.InlineValue)
-            .LastOrDefault();
-
-        if (latest is not { } inline)
-            return null;
-
-        return inline.ValueKind switch
-        {
-            JsonValueKind.String => inline.GetString(),
-            _ => null // Null / Undefined (cleared or absent) → no identity.
-        };
-    }
+    private static string? Unwrap(IReadOnlyDictionary<string, object?> slots, string slotName) =>
+        slots.TryGetValue(slotName, out var value) && value is JsonElement { ValueKind: JsonValueKind.String } inline
+            ? inline.GetString()
+            : null; // Absent, or a JSON-null (cleared) inline value → no identity.
 }
+
+/// <summary>The workflow identity projected for the execution-time expression carrier (ADR 0030): the two
+/// runtime-mutable slots a <c>Correlate</c>/<c>SetName</c> leaf assigns. Both null until first assigned.</summary>
+public readonly record struct RuntimeWorkflowIdentity(string? CorrelationId, string? InstanceName);
