@@ -9,6 +9,45 @@ This file preserves raw Elsa constitution provenance. It is historical report ma
 Sync Impact Report — Elsa Workflow Engine Constitution
 ========================================================
 
+Version change: 3.0.0 (draft) → 3.1.0 (draft)
+Date: 2026-07-02
+Unit: W6 repo hygiene (Elsa 4 architecture review 2026-07, findings MD-2 + MD-4).
+  SemVer: MINOR — pinned domain tree materially refreshed; a documented
+  exception added to the §E2.2 hard rule. No rule removed or redefined
+  backward-incompatibly.
+
+MD-4 — §E2.1 domain tree refreshed to match the shipped tree:
+  - Removed domains with no code: `Elsa.Scheduling`, `Elsa.Messaging`,
+    `Elsa.Notifications` (the latter shipped as `Elsa.Events` under the
+    framework §2.6 unified event model).
+  - Added real domains previously absent: `Elsa.Activities`, `Elsa.Agent`,
+    `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Events`, `Elsa.Foundation`,
+    `Elsa.Mediator`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Secrets`,
+    `Elsa.Workflows.Publishing`, `Elsa.Workflows.Primitives`, `Elsa3`.
+  - Corrected stale surface-package listings (e.g. `Elsa.Workflows.Runtime.Core`
+    no longer "(stub)"; `Elsa.Workflows.Runtime.StorageDrivers` does not exist).
+  - Table now points to the generated docs/maps/domain-map.md as the
+    always-fresh enumeration.
+  - §E2.1 naming example `Elsa.Scheduling.Quartz` replaced with the real
+    `Elsa.Locking.FileSystem`.
+
+MD-2 — §E2.2 hard rule (no Runtime→Design dependency) now records the single
+  tracked allow-list exception `Elsa.Workflows.Runtime.JavaScript →
+  Elsa.Workflows.Design.Core` (ArchitectureGuardTests.DeferredRuntimeDesignReferences;
+  runtime-execution-seam program goal) and requires the same treatment for any
+  future exception. §E2.2.2's flat "Runtime does not reference Design.Core"
+  statement qualified accordingly; its stale stub package list refreshed.
+
+Ratification status unchanged: draft, pending Joey Barten, Sipke Schoorstra,
+Frans van Ek.
+-->
+~~~
+
+~~~markdown
+<!--
+Sync Impact Report — Elsa Workflow Engine Constitution
+========================================================
+
 Version change: 2.0.0 (draft, never ratified) → 3.0.0 (draft)
 Derives from: framework constitution v3.0.0 (was v2.0.0).
   SemVer: MAJOR.

@@ -38,6 +38,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static readonly DateTimeOffset Now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
 
     private readonly ServiceProvider _provider;
+    private bool _activityTypesRegistered;
 
     private WorkflowExecutionHarness(ServiceProvider provider) => _provider = provider;
 
@@ -67,6 +68,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// </param>
     public async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, bool allowPendingWorkOnTerminalCompletion)
     {
+        // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
+        // The CLR construction descriptor resolves an activity's stable alias back to its type through this
+        // registry, and RegisterActivityTypesStartupTask discovers types by scanning the loaded assemblies. A
+        // caller materializes its activity graph (the `typeof(ForActivity)`/`typeof(While)`/... in the node
+        // builders that force those assemblies to load) *between* Build() and this call, so scanning at Build()
+        // time races the AppDomain load order: an activity whose assembly a prior test happened to load already
+        // resolves, one it did not faults with UnknownActivityTypeException. Running the (idempotent) scan here —
+        // after the graph, and therefore every activity assembly it references, is loaded — makes construction
+        // deterministic regardless of test order. Guarded on the registry being composed: only CLR-construction
+        // tests add the SerializationFeature that registers it; probe-only graphs don't need it.
+        EnsureActivityTypesRegistered();
+
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var agent = await _provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
             .GetAgentAsync(NewActivationRequest());
@@ -89,6 +102,26 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         return new WorkflowExecutionRun(states, workflowState);
+    }
+
+    // Runs RegisterActivityTypesStartupTask once, on first RunAsync. The real host runs it at startup after every
+    // feature assembly is composed; the harness builds the provider directly (no startup-task runner) and its
+    // caller loads the activity assemblies lazily via the graph builders, so it runs here — when they are all
+    // loaded — rather than in Build(). Idempotent by design, but flagged so repeat RunAsync calls don't re-scan.
+    private void EnsureActivityTypesRegistered()
+    {
+        if (_activityTypesRegistered)
+            return;
+
+        _activityTypesRegistered = true;
+
+        if (_provider.GetService<IWellKnownTypeRegistry>() is { } typeRegistry)
+            new RegisterActivityTypesStartupTask(
+                    typeRegistry,
+                    _provider.GetServices<IFeatureAssemblyProvider>(),
+                    _provider,
+                    NullLogger<RegisterActivityTypesStartupTask>.Instance)
+                .ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
     }
 
     /// <summary>Convenience: wrap a root node in a <see cref="WorkflowExecutable"/> with the harness identity.</summary>
@@ -242,19 +275,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
             var provider = services.BuildServiceProvider();
 
-            // The real host runs RegisterActivityTypesStartupTask at startup to register the loaded activity CLR
-            // types into the well-known type registry, so the CLR construction descriptor resolves an activity's
-            // stable alias back to its type. The harness builds the provider directly (no startup-task runner),
-            // so run that one registration pass here. Guarded on the registry being composed: only CLR-construction
-            // tests add the SerializationFeature that registers it; probe-only graphs don't need it.
-            if (provider.GetService<IWellKnownTypeRegistry>() is { } typeRegistry)
-                new RegisterActivityTypesStartupTask(
-                        typeRegistry,
-                        provider.GetServices<IFeatureAssemblyProvider>(),
-                        provider,
-                        NullLogger<RegisterActivityTypesStartupTask>.Instance)
-                    .ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
-
+            // Activity CLR types are registered into the well-known type registry lazily, on first RunAsync (see
+            // EnsureActivityTypesRegistered), not here — the caller loads the activity assemblies via its graph
+            // builders after Build() returns, so scanning them at Build() time would be order-dependent.
             return new WorkflowExecutionHarness(provider);
         }
     }

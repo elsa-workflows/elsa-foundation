@@ -5,7 +5,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 3.0.0 (draft)
+**Version:** 3.1.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v3.0.0**.
@@ -80,31 +80,52 @@ and the Elsa-specific decomposition in §E2.
 
 ### §E2.1 The Elsa domain tree
 
-Applying framework §2.18's methodology to Elsa, the root-level domains are:
+Applying framework §2.18's methodology to Elsa, the root-level domains are
+*(table refreshed 2026-07-02 to match the shipped tree — MD-4, Elsa 4
+architecture review; the generated [domain map](../../docs/maps/domain-map.md)
+owns always-fresh enumeration and project counts)*:
 
 | Domain | Purpose (one verb-led sentence) | Surface package(s) |
 |---|---|---|
-| `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.Persistence.{Core,EFCore,EFCore.Sqlite}` |
-| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution log, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core` *(stub)*, `Elsa.Workflows.Runtime.StorageDrivers` *(stub)* |
-| `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks.Schedules` (helper) |
-| `Elsa.Scheduling` | Schedules workflow activations on time/event triggers. | `Elsa.Scheduling.Core`, `Elsa.Scheduling.<Provider>` |
-| `Elsa.Serialization` | Serialises payloads and workflow models. | `Elsa.Serialization.Core`, `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` |
+| `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, composition, runtime activity handling, and the built-in activity libraries. | `Elsa.Activities.Design.*`, `Elsa.Activities.Runtime{,.Core}`, `Elsa.Activities.Composition.*`, `Elsa.Activities.{ControlFlow,Flowchart,Primitives,Sequence,Testing}` |
+| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. | `Elsa.Agent.Core`, `Elsa.Agent.Api`, `Elsa.Agent.{Anthropic,GitHubCopilot,Workflows}` |
 | `Elsa.Api` | Exposes application APIs through endpoint-framework adapters. | `Elsa.Api.FastEndpoints` |
-| `Elsa.Persistence` | Persists application state (generic CQS-style commands and queries). | `Elsa.Persistence.Core` |
+| `Elsa.Caching` | Provides caching contracts and providers. | `Elsa.Caching.Core`, `Elsa.Caching.Memory` |
+| `Elsa.Diagnostics` | Streams and persists diagnostics: console logs, structured logs, and OpenTelemetry ingestion. | `Elsa.Diagnostics.ConsoleLogStreaming`, `Elsa.Diagnostics.StructuredLogs{,.*}`, `Elsa.Diagnostics.OpenTelemetry{,.*}` |
+| `Elsa.Events` | Publishes and delivers in-process events (framework §2.6 unified event model). | `Elsa.Events.Core`, `Elsa.Events`, `Elsa.Events.Strategies` |
+| `Elsa.Expressions` | Evaluates expressions inside workflow steps. | `Elsa.Expressions.Core`, `Elsa.Expressions`, `Elsa.Expressions.JavaScript.*` |
+| `Elsa.Foundation` | Provides application-foundation services such as identity. | `Elsa.Foundation.Identity.*` |
+| `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. | `Elsa.Http.Core`, `Elsa.Http`, `Elsa.Http.JavaScript` |
 | `Elsa.Locking` | Provides distributed locking. | `Elsa.Locking.Core`, `Elsa.Locking.FileSystem`, `Elsa.Locking.<Provider>` |
-| `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. | `Elsa.Modularity.Core`, `Elsa.Modularity.Nuplane` |
-| `Elsa.Expressions` | Evaluates expressions inside workflow steps. | `Elsa.Expressions.Core`, `Elsa.Expressions.JavaScript`, `Elsa.Expressions.Liquid` |
-| `Elsa.Messaging` | Integrates with external message brokers. | `Elsa.Messaging.Core`, `Elsa.Messaging.MassTransit` |
-| `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. | `Elsa.Http`, `Elsa.Http.Activities` |
-| `Elsa.Notifications` | In-process pub/sub. | `Elsa.Notifications` *(charter pending — see §E2.3)* |
+| `Elsa.Mediator` | Routes commands and requests in-process. | `Elsa.Mediator.Core`, `Elsa.Mediator` |
+| `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. | `Elsa.Modularity.Core`, `Elsa.Modularity.Api`, `Elsa.Modularity.Nuplane` |
+| `Elsa.Persistence` | Persists application state (generic CQS-style commands and queries). | `Elsa.Persistence.Core`, `Elsa.Persistence.EFCore{,.Sqlite}`, `Elsa.Persistence.Groundwork.*` |
+| `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. | `Elsa.Pipelines.Core` |
+| `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). | `Elsa.Primitives`, `Elsa.Primitives.Hosting` |
+| `Elsa.Secrets` | Stores and resolves secrets. | `Elsa.Secrets.Core`, `Elsa.Secrets`, `Elsa.Secrets.Api`, `Elsa.Secrets.Persistence.Groundwork` |
+| `Elsa.Serialization` | Serialises payloads and workflow models. | `Elsa.Serialization.Core`, `Elsa.Serialization.Newtonsoft`, `Elsa.Serialization.SystemText` |
+| `Elsa.Tasks` | Schedules background work inside the host. | `Elsa.Tasks.Core`, `Elsa.Tasks`, `Elsa.Tasks.Schedules` (helper) |
+| `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. | `Elsa.Workflows.Design.Core`, `Elsa.Workflows.Design.{Api,JavaScript}`, `Elsa.Workflows.Design.{Reconciliation,Validations}.*`, `Elsa.Workflows.Design.Persistence.*` |
+| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. | `Elsa.Workflows.Runtime.Core`, `Elsa.Workflows.Runtime.{Api,Http,JavaScript}` |
+| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. | `Elsa.Workflows.Publishing.Api` |
+| `Elsa.Workflows.Primitives` | Shares workflow primitives used by both Design and Runtime. | `Elsa.Workflows.Primitives` |
+| `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). | `Elsa3.Models`, `Elsa3.Mapping`, `Elsa3.Activities.Design.Import` |
 
-Sub-domain decomposition follows framework §2.1's naming convention. Variation suffixes are added only when a domain hosts more than one implementation (e.g. `Elsa.Serialization.Newtonsoft` vs `Elsa.Serialization.SystemText`) or when a single implementation already implies a variation choice (e.g. `Elsa.Scheduling.Quartz`).
+Three domains listed in earlier drafts — `Elsa.Scheduling`, `Elsa.Messaging`,
+and `Elsa.Notifications` — do not exist in code and are removed from the pinned
+tree; they may return as planned domains when work starts. In-process pub/sub
+(formerly `Elsa.Notifications`) shipped as `Elsa.Events` under the framework
+§2.6 unified event model.
+
+Sub-domain decomposition follows framework §2.1's naming convention. Variation suffixes are added only when a domain hosts more than one implementation (e.g. `Elsa.Serialization.Newtonsoft` vs `Elsa.Serialization.SystemText`) or when a single implementation already implies a variation choice (e.g. `Elsa.Locking.FileSystem`).
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 
 **framework §2.18 — Elsa specialization:** `Elsa.Workflows.*` is split into **two dedicated sub-domains with separate persistence layers**: `.Design.*` (designs and persists workflow definitions) and `.Runtime.*` (executes workflows and persists runtime state). The asymmetry is load-bearing for Elsa's deployment shapes (§E2.2.3) and is the agreed boundary.
 
 **Hard rule.** There **must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.** The two sub-domains are co-equal — neither owns the other; the dependency direction is enforced (or at least audited) in CI via project references.
+
+**One tracked exception is currently allow-listed** *(amended 2026-07-02 — MD-2, Elsa 4 architecture review)*: `Elsa.Workflows.Runtime.JavaScript → Elsa.Workflows.Design.Core`, held in the architecture-guard allow-list (`ArchitectureGuardTests.DeferredRuntimeDesignReferences`) while JavaScript function-declaration ownership across designer and runtime surfaces is unstable. The follow-up is tracked in the [runtime-execution-seam program goal](../../docs/program-goals/runtime-execution-seam.md). Any new exception requires the same treatment: an explicit guard-test allow-list entry plus program-goal tracking — silent drift stays forbidden.
 
 **The seam between Design and Runtime is deferred.** The mechanism by which a workflow flows from Design into Runtime for execution — the carrier type, the activity-contract surfacing, the role of publication, the implications for an `ActivityRegistry` — is **not pinned by this constitution**. It is scheduled for the workflow execution seam follow-up and resurfaces when the Runtime refactor begins; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
 
@@ -123,12 +144,12 @@ Packages:
 
 Runtime owns the *runtime representation* of workflow execution and its own dedicated persistence layer, separate from Design.
 
-Packages (currently stubs; the specific runtime contracts and entities are deferred to the workflow execution seam follow-up recorded in [unfinished work](../../docs/reports/unfinished-work.md)):
+Packages (the specific runtime contracts and entities remain governed by the workflow execution seam follow-up recorded in [unfinished work](../../docs/reports/unfinished-work.md)):
 
-- `Elsa.Workflows.Runtime.Core` — runtime contracts.
-- `Elsa.Workflows.Runtime.StorageDrivers` — runtime persistence.
+- `Elsa.Workflows.Runtime.Core` — runtime contracts and the execution engine.
+- `Elsa.Workflows.Runtime.Api`, `Elsa.Workflows.Runtime.Http`, `Elsa.Workflows.Runtime.JavaScript` — runtime surface modules.
 
-Runtime does **not** reference `Elsa.Workflows.Design.Core`.
+Runtime does **not** reference `Elsa.Workflows.Design.Core`, except for the single tracked allow-list exception recorded in §E2.2.
 
 #### §E2.2.3 Deployment-shape gate
 
@@ -404,4 +425,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-03 | **Derives from framework constitution:** v3.0.0
+**Version:** 3.1.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-02 | **Derives from framework constitution:** v3.0.0
