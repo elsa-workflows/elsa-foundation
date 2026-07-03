@@ -270,19 +270,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             {
                 await activity.ExecuteAsync(context);
 
-                // Persist any container-scoped variable assignments the activity made back to the owning
-                // container executions' snapshots, so sibling branches and later activities observe them
-                // and resume restores them (ADR 0027).
-                await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
-
-                // Capture any workflow-scope variable the activity mutated as VariableName-tagged durable-value
-                // changes (#286), so later activities re-project the current value through `variables.*` rather
-                // than the start-time seed — making variable-driven While/Do loops terminate and SetVariable
-                // durable. Dirty-tracked against the start-of-activity projection: a read-only activity over a
-                // workflow that declares variables produces no change. The changes are folded into the activity
-                // completion below so they commit on the activity's checkpoint boundary rather than out-of-band.
-                workflowVariableWriteBackChanges = scopeService.BuildWorkflowScopeWriteBackChanges(
-                    variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, workflowVariables, _timeProvider.GetUtcNow());
+                // Write back the activity's variable mutations: container-scope assignments persist to their
+                // owning execution snapshots so sibling branches and later activities observe them and resume
+                // restores them (ADR 0027), and the returned workflow-scope changes (#286) are folded into the
+                // activity completion below so they commit on the activity's checkpoint boundary rather than
+                // out-of-band — making variable-driven While/Do loops terminate and SetVariable durable.
+                // Dirty-tracked against the start-of-activity projection, so a read-only activity produces no
+                // change. Shared with the resume path so both stay in lockstep.
+                workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
+                    variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
 
                 // Control-leaf intents (Finish/Complete, Correlate, SetName, SetOutput): captured here and
                 // drained below so the engine ends the run or persists the new correlation id / instance name /
