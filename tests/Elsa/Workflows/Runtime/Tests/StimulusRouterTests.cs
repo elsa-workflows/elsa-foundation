@@ -31,6 +31,11 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_ResumeOnly_FansInToEveryWaitingInstanceAcrossExecutions()
     {
+        // Bookmarks are seeded directly into the store (not produced by running published workflows) on
+        // purpose: the publisher does not yet compile [ResumeTarget] declarations, so no published workflow
+        // can suspend to create a real waiting bookmark today (see the "Publisher resume-target compilation"
+        // entry in docs/reports/unfinished-work.md). Seeding lets this test still exercise the REAL router →
+        // GlobalBookmarkStimulusLookup → BookmarkResumeDispatcher → agent fan-in path end-to-end (E3-5).
         var bookmarkStore = new InMemoryBookmarkStateStore();
         await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));
         await bookmarkStore.SaveAsync(Bookmark("bk-2", "wfexec-2"));
