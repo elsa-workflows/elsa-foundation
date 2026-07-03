@@ -203,7 +203,7 @@ public sealed class AgentAuditQueryRequest
     public int? Take { get; init; }
 }
 
-internal static class AgentApiMapping
+public static class AgentApiMapping
 {
     public static AgentProblemDetails ToProblem(this AgentError error, string? title = null)
         => new(title ?? "Agent request failed", error.Message, error.StatusCode, error.Code);

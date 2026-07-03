@@ -35,6 +35,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Feature Composition Readiness](feature-composition-readiness.md) | Active | Feature composition / CShells and Nuplane shell readiness | Joey plus active architects/agents | Classify bounded feature/settings slices before generator work |
 | [Workspace Split Readiness](workspace-split-readiness.md) | Active | Future `elsa-workspace` extraction / portable feature-development flow | Joey plus active architects/agents | Keep feature-development flows portable without blocking launch |
 | [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Active | Diagnostics observability port (structured logs + OpenTelemetry) across foundation + studio | Joey plus active architects/agents | Port structured logs and OTEL to foundation architecture (EFCore persistence, studio bottom-panel tabs) |
+| [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Active | Cross-domain remediation of the 2026-07 review findings (W1–W21) | Sipke plus active architects/agents | Phase 0 first wave (W2/W3/W4/W6); W1/W5 held for specs/083 Move 2 |
 
 ## Goal File Rules
 
