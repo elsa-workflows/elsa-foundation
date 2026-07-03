@@ -21,7 +21,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate);
 
-    // The 13 runtime document kinds, each paired with the deterministic ids a spot-check reads back by.
+    // The 14 runtime document kinds, each paired with the deterministic ids a spot-check reads back by.
     public static readonly IReadOnlyList<string> AllKinds =
     [
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
@@ -36,7 +36,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
-        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind
+        ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind
     ];
 
     private const string Wf = "wf-1";
@@ -120,6 +121,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind:
                 await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer).EnqueueAsync(WorkItem());
                 break;
+            case ElsaRuntimeStorageManifest.DurableTimerDocumentKind:
+                await new GroundworkDurableTimerStore(store, Serializer).SaveAsync(Timer());
+                break;
             case ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind:
                 await CheckpointWriter(store).CommitAsync(Commit(), ImmediateDecision);
                 break;
@@ -160,6 +164,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
                 .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
                 .SingleOrDefault()?.WorkItemId,
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
+            (await new GroundworkDurableTimerStore(store, Serializer).FindAsync(Wf, "timer-1"))?.StimulusHash,
         // The checkpoint marker has no typed domain store; the writer's dedup reads it via LoadAsync, so
         // that is the appropriate read path. The spot value is the commitId parsed from the loaded content.
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind =>
@@ -182,6 +188,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind => IncidentStatus.Open,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
     };
@@ -433,6 +440,16 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         payload: JsonSerializer.SerializeToElement(new { command = "resume" }),
         commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
         envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+
+    private static DurableTimer Timer() => new(
+        TimerId: "timer-1",
+        WorkflowExecutionId: Wf,
+        StimulusType: "DurableTimer",
+        StimulusHash: "timer-hash-1",
+        DueTime: DateTimeOffset.UnixEpoch.AddMinutes(5),
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        Input: JsonSerializer.SerializeToElement(new { reason = "delay" }),
+        Metadata: new Dictionary<string, string> { ["tag"] = "v1" });
 
     private static RuntimeCheckpointCommit Commit()
     {

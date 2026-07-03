@@ -6,16 +6,16 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 105
-- Test projects: 36
+- Source projects: 107
+- Test projects: 38
 - Domains: 23
-- Direct cross-domain references: 318
+- Direct cross-domain references: 327
 
 ## Domains
 
 | Domain | Source projects | Test projects | Roles |
 |---|---:|---:|---|
-| Elsa.Activities | 18 | 9 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Activities | 19 | 10 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Agent | 5 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Api | 1 | 1 | feature/implementation<br>test |
 | Elsa.Architecture | 0 | 1 | test |
@@ -36,7 +36,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Server | 1 | 0 | host |
 | Elsa.Tasks | 3 | 0 | contract<br>feature/implementation<br>helper |
-| Elsa.Workflows | 18 | 5 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Workflows | 19 | 6 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa3 | 3 | 1 | feature/implementation<br>test |
 
 ## Projects
@@ -61,6 +61,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | Elsa.Activities | Primitives | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | Runtime.Core | contract | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Scheduling](../../src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj) | source | Elsa.Activities | Scheduling | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | Sequence | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Anthropic](../../src/Elsa/Agent/Anthropic/Elsa.Agent.Anthropic.csproj) | source | Elsa.Agent | Anthropic | feature/implementation | Elsa.Agent.Core |
 | [Elsa.Agent.Api](../../src/Elsa/Agent/Api/Elsa.Agent.Api.csproj) | source | Elsa.Agent | Api | feature/implementation | Elsa.Agent.Core<br>Elsa.Api.FastEndpoints |
@@ -145,6 +146,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives |
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | Runtime.JavaScript | feature/implementation | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | source | Elsa.Workflows | Runtime.Resumption | feature/implementation | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | source | Elsa.Workflows | Runtime.Scheduling | feature/implementation | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models |
 | [Elsa3.Models](../../src/Elsa3/Models/Elsa3.Models.csproj) | source | Elsa3 | - | feature/implementation | - |
@@ -155,6 +157,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | Design.Tests | test | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Elsa.Activities | Flowchart.Tests | test | Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Testing<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Elsa.Activities | Runtime.Tests | test | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.JavaScript |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | test | Elsa.Activities | Scheduling.Tests | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Testing<br>Elsa.Persistence.Groundwork<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | Sequence.Tests | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Expressions<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Testing](../../tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj) | test | Elsa.Activities | Testing | test | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Tests](../../tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj) | test | Elsa.Agent | Tests | test | Elsa.Agent.Anthropic<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows |
@@ -182,6 +185,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | Design.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | Publishing.Api.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | test | Elsa.Workflows | Runtime.Resumption.Tests | test | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
+| [Elsa.Workflows.Runtime.Scheduling.Tests](../../tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj) | test | Elsa.Workflows | Runtime.Scheduling.Tests | test | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | Runtime.Tests | test | Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa3.Mapping.Tests](../../tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | test | Elsa.Serialization.SystemText<br>Elsa3.Mapping |
 
@@ -262,6 +266,13 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | Elsa.Activities | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | Elsa.Tasks |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows |
+| [Elsa.Activities.Scheduling](../../src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj) | Elsa.Activities | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Activities.Scheduling](../../src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | Elsa.Activities | [Elsa.Persistence.Groundwork](../../src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj) | Elsa.Persistence |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | Elsa.Activities | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | Elsa.Activities | [Elsa.Serialization.SystemText](../../src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | Elsa.Serialization |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | Elsa.Workflows |
+| [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | Elsa.Activities | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | Elsa.Activities | [Elsa.Expressions](../../src/Elsa/Expressions/Elsa.Expressions.csproj) | Elsa.Expressions |
@@ -501,6 +512,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | Elsa.Workflows | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | Elsa.Workflows | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
+| [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | Elsa.Workflows | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
+| [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | Elsa.Workflows | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | Elsa3 | [Elsa.Activities.Design.Reconciliation.Core](../../src/Elsa/Activities/Design/Reconciliation/Core/Elsa.Activities.Design.Reconciliation.Core.csproj) | Elsa.Activities |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | Elsa3 | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | Elsa3 | [Elsa.Serialization.Core](../../src/Elsa/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

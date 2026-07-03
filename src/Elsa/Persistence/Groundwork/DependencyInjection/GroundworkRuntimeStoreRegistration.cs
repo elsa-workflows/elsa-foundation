@@ -62,6 +62,11 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddSingleton<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
 
+        // Durable timer store. Without this swap timers live only in the process-local in-memory store and
+        // are lost on restart, so a Delay would never resume after a crash.
+        services.RemoveAll<IDurableTimerStore>();
+        services.AddSingleton<IDurableTimerStore, GroundworkDurableTimerStore>();
+
         return services;
     }
 }
