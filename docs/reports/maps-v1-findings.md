@@ -23,7 +23,7 @@ No direct package ID has multiple direct versions.
 
 ## Spec 006 State
 
-- `006-activity-construction-seam`: 41 tasks done, 14 tasks open; notes: retained, deferred, out of scope, construct-only.
+- `006-activity-construction-seam`: 54 tasks done, 1 tasks open; notes: retained, deferred, out of scope, construct-only.
 
 ## Runtime/Design Reference Signal
 
