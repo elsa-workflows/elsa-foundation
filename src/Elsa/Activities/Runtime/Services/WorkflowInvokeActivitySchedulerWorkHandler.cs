@@ -156,16 +156,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         // Best-effort: when no state store is registered or the state is absent, carrier identity degrades to null
         // (correlation id / name) rather than failing the invocation; the control-leaf path still requires the
         // state when it mutates it.
-        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-        var workflowState = workflowExecutionStateStore is null
-            ? null
-            : await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
-            workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-            activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+            var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            workflowVariables = projections.WorkflowVariables;
+            workflowInputValues = projections.WorkflowInputs;
+            activityOutputValues = projections.ActivityOutputValues;
 
             // Build the scope with the workflow-scope variables anchored from the current durable-value
             // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
@@ -217,7 +215,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
             var carrier = RuntimeExecutionExpressionCarrier.Create(
                 workflowState, invokePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
-            context = new SimpleActivityExecutionContext(
+            // Build the execution-time context through the single carrier-bearing factory (ADR 0030): identity from
+            // the workflow-execution state + pinned executable, and the durable-value projections for
+            // inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the passed
+            // IExpressionExecutionContext. The resume and parent-completion handlers build it the same way.
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
                 cancellationToken,
@@ -227,16 +229,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                // Populate the live execution-time expression carrier (ADR 0030) via the shared helper: identity
-                // from the workflow-execution state + pinned executable, and the durable-value projections for
-                // inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the passed
-                // IExpressionExecutionContext. The resume and parent-completion handlers populate it the same way.
-                correlationId: carrier.CorrelationId,
-                workflowName: carrier.WorkflowName,
-                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
-                workflowInputs: carrier.WorkflowInputs,
-                workflowVariables: carrier.WorkflowVariables,
-                activityOutputValues: carrier.ActivityOutputValues);
+                carrier);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
