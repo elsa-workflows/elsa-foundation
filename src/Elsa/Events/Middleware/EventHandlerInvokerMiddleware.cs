@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Contexts;
+using Elsa.Pipelines.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 
@@ -9,7 +10,7 @@ namespace Elsa.Events.Middleware;
 /// Resolves all <c>IEventHandler&lt;TEvent&gt;</c> for the event type then hands off to the
 /// chosen <see cref="IEventPublishingStrategy"/>.
 /// </summary>
-public sealed class EventHandlerInvokerMiddleware(EventMiddlewareDelegate next)
+public sealed class EventHandlerInvokerMiddleware(PipelineDelegate<IEventContext> next)
     : IEventMiddleware
 {
     // The closed IEventHandler<TEvent> type is stable per event type; cache it so a hot publish path
