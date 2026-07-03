@@ -212,6 +212,30 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
     }
 
     /// <summary>
+    /// Performs the post-execution write-back for an activity that has just run (invoke) or resumed: it writes
+    /// back container-scope assignments to their owning execution snapshots (ADR 0027) via
+    /// <see cref="PersistScopeMutationsAsync"/>, then captures the workflow-scope variable mutations (#286) via
+    /// <see cref="BuildWorkflowScopeWriteBackChanges"/> and returns them as durable-value changes for the caller
+    /// to fold into the activity's checkpoint. Combines the two calls so the invoke and resume handlers share one
+    /// write-back contract rather than duplicating the pair — keeping the two paths in lockstep. Dirty-tracked, so
+    /// an activity/callback that reads but does not mutate produces no container write and an empty change set.
+    /// </summary>
+    public async ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PersistAndCaptureWorkflowScopeWriteBackAsync(
+        VariableScope? scope,
+        WorkflowExecutable executable,
+        string workflowExecutionId,
+        IReadOnlyDictionary<string, object?> sourceValuesByName,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+
+        await PersistScopeMutationsAsync(scope, workflowExecutionId, cancellationToken);
+        return BuildWorkflowScopeWriteBackChanges(
+            scope, workflowExecutionId, executable.RootActivity.ExecutableNodeId, sourceValuesByName, capturedAt);
+    }
+
+    /// <summary>
     /// Maps a name-keyed value projection (e.g. the current <c>variables.*</c> durable-value projection) onto
     /// the reference-key-addressed value store a <see cref="VariableScope"/> expects, using the declared
     /// variables to translate each authored name to its reference key. Reference keys with no projected value

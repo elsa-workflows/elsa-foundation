@@ -48,7 +48,7 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
         var catalog = provider.GetRequiredService<IVariableTypeDescriptorCatalog>();
 
-        Assert.IsType<VariableTypeDescriptorCatalog>(catalog);
+        // TS-1 (§2.23.1): resolvability + behaviour, not concrete-type pinning of the catalog implementation.
         Assert.Contains(catalog.GetDescriptors(), d => d.Alias == "String");
     }
 

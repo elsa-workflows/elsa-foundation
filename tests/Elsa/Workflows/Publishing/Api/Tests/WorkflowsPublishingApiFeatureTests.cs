@@ -18,18 +18,12 @@ public sealed class WorkflowsPublishingApiFeatureTests
 
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
 
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutableStore) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutableCompiler) &&
-            descriptor.ImplementationType == typeof(WorkflowExecutableCompiler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowTestRunStore) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowTestRunStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(ITransientWorkflowExecutableStore) &&
-            descriptor.ImplementationType == typeof(InMemoryTransientWorkflowExecutableStore));
+        // TS-1 (§2.23.1): registration presence, not implementation-type pinning, so swapping an equivalent
+        // implementation no longer breaks this test.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableCompiler));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestRunStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITransientWorkflowExecutableStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TimeProvider));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
     }

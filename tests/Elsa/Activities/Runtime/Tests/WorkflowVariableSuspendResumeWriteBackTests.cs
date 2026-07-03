@@ -142,6 +142,53 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
         Assert.Equal(9, ProjectedVariableValue()); // durable through that checkpoint
     }
 
+    [Fact]
+    public async Task ResumeCallbackMutation_CommitsWriteBackAtomicallyWithBookmarkConsumption_AndDownstreamReadSeesMutatedValue()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        // The seed durable value: counter = 1, unchanged through suspend/bookmark; the mutation happens on resume.
+        await SeedVariableAsync(1);
+        await _activityStateStore.SaveAsync(NewRunningState(RootNodeId, "actexec-root", parentActivityExecutionId: null));
+
+        // --- Phase 1: a child suspends on a bookmark WITHOUT mutating the variable. ---
+        await _activityStateStore.SaveAsync(NewRunningState(WaitNodeId, "actexec-wait", parentActivityExecutionId: "actexec-root"));
+        await using (var invokeProvider = NewProvider(new RecordingActivityFactory(new SuspendingActivity(NewBookmarkRequest()))))
+        {
+            await NewInvokeHandler(invokeProvider).HandleAsync(NewInvokeWorkItem(WaitNodeId, "actexec-wait"));
+        }
+        var createBookmarkWork = Assert.Single(
+            await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(WorkflowExecutionId)),
+            work => work.CommandKind == WorkflowExecutionCommandKind.CreateBookmark);
+
+        // --- Phase 2: create the bookmark; the variable is still the seed (the mutation is on resume). ---
+        await using (var bookmarkProvider = NewProvider(new RecordingActivityFactory(new ResumeTargetActivity())))
+        {
+            await NewCreateBookmarkHandler(bookmarkProvider).HandleAsync(createBookmarkWork);
+        }
+        Assert.NotNull(await _bookmarkStateStore.FindAsync(WorkflowExecutionId, "bookmark-1"));
+        Assert.Equal(1, ProjectedVariableValue());
+
+        // --- Phase 3: resume; the resume callback mutates counter -> 42. The write-back must commit atomically
+        // with the bookmark-consumed checkpoint (the boundary under test). ---
+        await using (var resumeProvider = NewProvider(new RecordingActivityFactory(new MutatingResumeTargetActivity(VariableName, 42))))
+        {
+            await NewResumeHandler(resumeProvider).HandleAsync(NewResumeWorkItem());
+        }
+        Assert.Null(await _bookmarkStateStore.FindAsync(WorkflowExecutionId, "bookmark-1")); // bookmark consumed
+        Assert.Equal(42, ProjectedVariableValue()); // now durable — committed in the same checkpoint as the consumption
+
+        // --- Phase 4: a downstream child reads counter and must see the value the resume callback mutated,
+        // persisted across the resume boundary, not the pre-resume seed. ---
+        var downstreamActivity = new RecordingCounterActivity();
+        await _activityStateStore.SaveAsync(NewRunningState(DownstreamNodeId, "actexec-down", parentActivityExecutionId: "actexec-root"));
+        await using (var downProvider = NewProvider(new RecordingActivityFactory(downstreamActivity)))
+        {
+            await NewInvokeHandler(downProvider).HandleAsync(NewInvokeWorkItem(DownstreamNodeId, "actexec-down"));
+        }
+
+        Assert.Equal(42, downstreamActivity.ObservedValue);
+    }
+
     private int ProjectedVariableValue()
     {
         var durableValues = _durableValueStateStore.ListAsync(WorkflowExecutionId).AsTask().GetAwaiter().GetResult();
@@ -384,6 +431,25 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
         {
             context.ExpressionExecutionContext.SetVariable(variableName, value);
             ((IRuntimeActivityExecutionContext)context).ScheduleChildActivity(childNodeId);
+        }
+    }
+
+    // Suspends on a bookmark without touching any variable — the pre-resume state whose seed the resume-time
+    // write-back must overwrite.
+    private sealed class SuspendingActivity(ActivityBookmarkRequest request) : ActivityBase
+    {
+        protected override void Execute(IActivityExecutionContext context) => context.CreateBookmark(request);
+    }
+
+    // Mutates a workflow-scope variable by name from inside the resume callback — the exact shape the
+    // bookmark-consumption write-back must persist durably across the resume boundary.
+    private sealed class MutatingResumeTargetActivity(string variableName, int value) : ActivityBase
+    {
+        [ResumeTarget("resume-target:delivery")]
+        private ValueTask ResumeAsync(IActivityExecutionContext context)
+        {
+            context.ExpressionExecutionContext.SetVariable(variableName, value);
+            return ValueTask.CompletedTask;
         }
     }
 
