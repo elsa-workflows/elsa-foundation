@@ -17,7 +17,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task RoundTrips_Across_Providers(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore);
+        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         var a1 = Bookmark("wf-1", "bm-a", stimulus: "Http", payload: new { url = "/orders" });
         var a2 = Bookmark("wf-1", "bm-b", stimulus: "Timer");
@@ -50,7 +50,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Save_Replaces_Existing_State(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore);
+        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Http"));
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Timer"));
@@ -66,7 +66,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Delete_Removes_State_And_Reports_Existence(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore);
+        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "Http"));
 
@@ -82,7 +82,7 @@ public sealed class GroundworkBookmarkStateStoreTests
     public async Task Find_Returns_Null_When_Absent(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore);
+        IBookmarkStateStore store = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         Assert.Null(await store.FindAsync("missing", "missing"));
         Assert.Empty(await store.ListAsync("missing"));

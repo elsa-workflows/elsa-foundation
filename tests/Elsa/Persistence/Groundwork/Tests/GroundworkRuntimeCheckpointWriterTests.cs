@@ -36,13 +36,13 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
             await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
                 var store = fixture.DocumentStore;
-                Assert.Equal(WorkflowExecutionStatus.Running, (await new GroundworkWorkflowExecutionStateStore(store).FindAsync("wf-1"))!.Status);
-                Assert.Equal(7L, (await new GroundworkSchedulerStateStore(store).FindAsync("wf-1"))!.Version);
-                Assert.NotNull(await new GroundworkActivityExecutionStateStore(store).FindAsync("wf-1", "ae-1"));
-                Assert.NotNull(await new GroundworkBookmarkStateStore(store).FindAsync("wf-1", "bm-1"));
-                Assert.NotNull(await new GroundworkDurableValueStateStore(store).FindAsync("wf-1", "dv-1"));
-                Assert.NotNull(await new GroundworkOperationalStateStore(store).FindAsync("wf-1", "op-1"));
-                Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store).FindAsync("wf-1", "inc-1"))!.Status);
+                Assert.Equal(WorkflowExecutionStatus.Running, (await new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1"))!.Status);
+                Assert.Equal(7L, (await new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1"))!.Version);
+                Assert.NotNull(await new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "ae-1"));
+                Assert.NotNull(await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1"));
+                Assert.NotNull(await new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "dv-1"));
+                Assert.NotNull(await new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "op-1"));
+                Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "inc-1"))!.Status);
 
                 // The durable commit marker proves the commit is recorded as applied.
                 Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
@@ -65,7 +65,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         // Same CommitId, different content. The marker must short-circuit the second write so the original wins.
         await writer.CommitAsync(BuildCommit("commit-1", bookmarkNode: "node-v2"), Decision);
 
-        var bookmark = await new GroundworkBookmarkStateStore(store).FindAsync("wf-1", "bm-1");
+        var bookmark = await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1");
         Assert.Equal("node-v1", bookmark!.ExecutableNodeId);
     }
 
@@ -82,19 +82,20 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         await store.DeleteAsync(new DeleteDocumentRequest(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
         await writer.CommitAsync(BuildCommit("commit-1"), Decision);
 
-        Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store).FindAsync("wf-1", "inc-1"))!.Status);
+        Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "inc-1"))!.Status);
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, "commit-1"));
     }
 
     private static GroundworkRuntimeCheckpointWriter CreateWriter(IDocumentStore store) => new(
         store,
-        new GroundworkWorkflowExecutionStateStore(store),
-        new GroundworkSchedulerStateStore(store),
-        new GroundworkActivityExecutionStateStore(store),
-        new GroundworkBookmarkStateStore(store),
-        new GroundworkDurableValueStateStore(store),
-        new GroundworkIncidentStateStore(store),
-        new GroundworkOperationalStateStore(store));
+        GroundworkTestSerialization.Serializer,
+        new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
+        new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer));
 
     private static RuntimeCheckpointCommit BuildCommit(string commitId, string bookmarkNode = "node-bm-1")
     {

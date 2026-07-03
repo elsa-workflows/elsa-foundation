@@ -1,0 +1,22 @@
+{
+  "collection": "operationalState",
+  "state": {
+    "drain": null,
+    "executionLease": {
+      "acquiredAt": "1970-01-01T00:00:00\u002B00:00",
+      "expiresAt": "1970-01-01T00:05:00\u002B00:00",
+      "fencingToken": 1,
+      "leaseId": "lease-1",
+      "metadata": {},
+      "ownerId": "owner-1",
+      "workflowExecutionId": "wf-1"
+    },
+    "heartbeat": null,
+    "interruptedExecution": null,
+    "metadata": {},
+    "operationalStateId": "op-1",
+    "pendingPostCommitIntentIds": [],
+    "workflowExecutionId": "wf-1"
+  },
+  "workflowExecutionId": "wf-1"
+}

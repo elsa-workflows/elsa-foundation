@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +49,12 @@ public static class GroundworkRuntimeStoreRegistration
 
         services.RemoveAll<IRuntimePostCommitOutboxStore>();
         services.AddSingleton<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();
+
+        // Versioned document serialization: every bridge store routes its content JSON through the
+        // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
+        // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
+        services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
+        services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
         return services;
     }

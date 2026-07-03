@@ -1,0 +1,17 @@
+{
+  "activityExecutionId": "ae-1",
+  "bookmarkId": "bm-1",
+  "createdAt": "1970-01-01T00:00:00\u002B00:00",
+  "executableNodeId": "node-1",
+  "expiresAt": "1970-01-02T00:00:00\u002B00:00",
+  "metadata": {
+    "tag": "v1"
+  },
+  "payload": {
+    "url": "/orders"
+  },
+  "resumeTargetId": "resume-1",
+  "stimulusHash": "hash-1",
+  "stimulusType": "Http",
+  "workflowExecutionId": "wf-1"
+}
