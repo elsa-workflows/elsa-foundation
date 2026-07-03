@@ -1091,6 +1091,9 @@ public sealed class RuntimeSchedulerDrainTests
 
         public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             new(dequeued);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
+            new((IReadOnlyCollection<string>)[]);
     }
 
 

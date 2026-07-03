@@ -189,6 +189,52 @@ public sealed class RuntimeResumptionServiceTests
             () => harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(), cancelled.Token).AsTask());
     }
 
+    [Fact]
+    public async Task SweepAsync_DiscoversWindowCExecution_FromOwnershipLeaseLeftByCrash()
+    {
+        // Window C (RT-2 × W2): a drain acquired a single-writer lease and then crashed before releasing it
+        // (the item had already been dequeue-deleted, so the durable backlog is empty). W5's lease population is
+        // exactly what makes this interrupted execution visible: the real recovery scanner reads the persisted
+        // lease from operational state, the sweep discovers it, and re-drives it through the agent mailbox.
+        var operationalStore = new InMemoryOperationalStateStore();
+        var leaseDuration = TimeSpan.FromMinutes(1);
+        var ownership = new RuntimeExecutionOwnershipService(
+            operationalStore,
+            new FixedTimeProvider(Now),
+            new RuntimeExecutionOwnershipOptions { OwnerId = "owner-under-test", LeaseDuration = leaseDuration });
+
+        // Acquire but never release: this is the crash mid-drain.
+        await ownership.AcquireAsync("wfexec-window-c");
+
+        var outboxProcessor = new FakeOutboxProcessor();
+        var workQueue = new FakeWorkQueue(); // empty backlog — the item was already dequeue-deleted.
+        var recoveryScanner = new InMemoryRuntimeRecoveryScanner(operationalStore);
+        var agentProvider = new FakeAgentProvider();
+        var afterLeaseExpiry = Now + leaseDuration + TimeSpan.FromSeconds(1);
+        var service = new RuntimeResumptionService(
+            outboxProcessor,
+            workQueue,
+            recoveryScanner,
+            agentProvider,
+            new GuidRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(afterLeaseExpiry));
+
+        var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
+            leaseTimeout: leaseDuration,
+            heartbeatTimeout: leaseDuration));
+
+        var dispatch = Assert.Single(result.Dispatches);
+        Assert.Equal("wfexec-window-c", dispatch.WorkflowExecutionId);
+        Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, dispatch.Outcome);
+
+        var activation = Assert.Single(agentProvider.Activations);
+        Assert.Equal(WorkflowExecutionAgentActivationReason.Recovery, activation.Reason);
+
+        var envelope = Assert.Single(agentProvider.Agent.Envelopes);
+        Assert.Equal("wfexec-window-c", envelope.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, envelope.Command.Kind);
+    }
+
     private static RuntimeRecoveryCandidate NewCandidate(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
