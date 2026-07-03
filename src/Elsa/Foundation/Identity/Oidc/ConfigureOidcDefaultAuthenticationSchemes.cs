@@ -16,6 +16,10 @@ public sealed class ConfigureOidcDefaultAuthenticationSchemes(IOptions<OidcAuthe
     {
         var value = options.Value;
 
+        // IsDefault is a single-winner signal: with only one OIDC provider composed per shell it
+        // maps cleanly to the shell's default challenge scheme. Multiple providers each marking
+        // themselves default is effectively last-wins today; coherent multi-provider default-scheme
+        // selection (precedence, explicit host override arbitration) is W18 scope, not W4.
         if (!value.IsDefault || target.DefaultScheme is not null)
             return;
 

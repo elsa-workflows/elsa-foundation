@@ -250,6 +250,9 @@
   <Folder Name="/tests/Elsa/Agent/">
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Api/FastEndpoints/">
+    <Project Path="tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
   </Folder>
