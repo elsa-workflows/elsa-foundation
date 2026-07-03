@@ -11,7 +11,9 @@ public sealed class RuntimeResumptionSweepRequest
         int backlogBatchSize = 100,
         int recoveryScanBatchSize = 100,
         TimeSpan? leaseTimeout = null,
-        TimeSpan? heartbeatTimeout = null)
+        TimeSpan? heartbeatTimeout = null,
+        int? maxExecutionsPerSweep = null,
+        IReadOnlySet<string>? excludedWorkflowExecutionIds = null)
     {
         if (outboxBatchSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(outboxBatchSize), "Outbox batch size must be greater than zero.");
@@ -28,18 +30,40 @@ public sealed class RuntimeResumptionSweepRequest
         if (heartbeatTimeout is { } heartbeat && heartbeat <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(heartbeatTimeout), "Heartbeat timeout must be greater than zero.");
 
+        if (maxExecutionsPerSweep <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maxExecutionsPerSweep), "Max executions per sweep must be greater than zero when provided.");
+
         OutboxBatchSize = outboxBatchSize;
         BacklogBatchSize = backlogBatchSize;
         RecoveryScanBatchSize = recoveryScanBatchSize;
         LeaseTimeout = leaseTimeout ?? TimeSpan.FromMinutes(5);
         HeartbeatTimeout = heartbeatTimeout ?? TimeSpan.FromMinutes(5);
+        MaxExecutionsPerSweep = maxExecutionsPerSweep;
+        ExcludedWorkflowExecutionIds = excludedWorkflowExecutionIds ?? EmptySet;
     }
+
+    private static readonly IReadOnlySet<string> EmptySet = new HashSet<string>(StringComparer.Ordinal);
 
     public int OutboxBatchSize { get; }
     public int BacklogBatchSize { get; }
     public int RecoveryScanBatchSize { get; }
     public TimeSpan LeaseTimeout { get; }
     public TimeSpan HeartbeatTimeout { get; }
+
+    /// <summary>
+    /// Hard cap on how many workflow executions a single sweep re-drives, applied after backlog and
+    /// recovery-candidate discovery. Bounds the work the pump does per tick so a large backlog cannot
+    /// produce an unbounded burst of command dispatches. <c>null</c> means "no additional cap beyond
+    /// the discovery batch sizes".
+    /// </summary>
+    public int? MaxExecutionsPerSweep { get; }
+
+    /// <summary>
+    /// Workflow execution IDs the sweep must skip this pass. The resumption pump populates this with
+    /// executions in per-execution failure backoff so one poisoned execution cannot occupy a re-drive
+    /// slot on every tick and starve healthy executions out of the capped set.
+    /// </summary>
+    public IReadOnlySet<string> ExcludedWorkflowExecutionIds { get; }
 }
 
 /// <summary>

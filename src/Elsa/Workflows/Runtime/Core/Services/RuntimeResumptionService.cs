@@ -72,8 +72,10 @@ public sealed class RuntimeResumptionService(
 
         return backlog
             .Concat(candidates.Select(candidate => candidate.WorkflowExecutionId))
+            .Where(id => !request.ExcludedWorkflowExecutionIds.Contains(id))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
+            .Take(request.MaxExecutionsPerSweep ?? int.MaxValue)
             .ToArray();
     }
 

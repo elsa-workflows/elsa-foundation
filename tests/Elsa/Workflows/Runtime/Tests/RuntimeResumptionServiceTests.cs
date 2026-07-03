@@ -97,6 +97,34 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     [Fact]
+    public async Task SweepAsync_ExcludesRequestedExecutionIds()
+    {
+        var harness = new Harness();
+        harness.WorkQueue.PendingExecutionIds = ["wfexec-a", "wfexec-b", "wfexec-c"];
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(
+            excludedWorkflowExecutionIds: new HashSet<string>(StringComparer.Ordinal) { "wfexec-b" }));
+
+        Assert.Equal(
+            new[] { "wfexec-a", "wfexec-c" },
+            result.Dispatches.Select(dispatch => dispatch.WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task SweepAsync_CapsExecutionsPerSweep()
+    {
+        var harness = new Harness();
+        harness.WorkQueue.PendingExecutionIds = ["wfexec-a", "wfexec-b", "wfexec-c", "wfexec-d"];
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest(maxExecutionsPerSweep: 2));
+
+        // Deterministic ordinal order, capped to the first two.
+        Assert.Equal(
+            new[] { "wfexec-a", "wfexec-b" },
+            result.Dispatches.Select(dispatch => dispatch.WorkflowExecutionId));
+    }
+
+    [Fact]
     public async Task SweepAsync_FaultedRedriveIsRecordedAndDoesNotAbortTheSweep()
     {
         var harness = new Harness();
@@ -153,6 +181,7 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeResumptionSweepRequest(leaseTimeout: TimeSpan.Zero));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeResumptionSweepRequest(heartbeatTimeout: TimeSpan.Zero));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeResumptionSweepRequest(maxExecutionsPerSweep: 0));
 
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
