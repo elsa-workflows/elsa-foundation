@@ -156,22 +156,25 @@ Sandbox defaults are documented on the `JintFeature` ManifestSettings.
 
 ## Baselines — all green, before and after (unmodified except added tests)
 
-Branched from `origin/main` `b6a29b15`; full `dotnet build Elsa.Server.slnx` reports **0 errors**.
+Branched from `origin/main` `b6a29b15`; later merged `origin/main` `5ebcfd91` (second-lander rule) and
+re-ran **all** suites. Full `dotnet build Elsa.Server.slnx` reports **0 errors** post-merge. The merge
+raised two baselines it owns (Architecture +4 guard tests, Activities Runtime +10 ADR-0030 carrier tests);
+both are green with W11 applied.
 
-| Suite | Baseline | After W11 |
-|---|---|---|
-| Architecture guards | 37 | 37 |
-| Runtime | 642 | 642 |
-| Groundwork (`Persistence/Groundwork/Tests`) | 150 | 150 |
-| Publishing API | 52 | 52 |
-| Activities Runtime | 145 | 145 |
-| Resumption | 12 | 12 |
-| Scheduling runtime | 19 | 19 |
-| Activities Scheduling | 8 | 8 |
-| Modularity | 104 | 104 |
-| Serialization | 24 | **28** (+4 IN-3) |
-| Events *(new)* | — | **8** (IN-2/IN-5/IN-10) |
-| Jint *(new)* | — | **9** (DS-9/DS-10) |
+| Suite | Baseline (b6a29b15) | Post-merge baseline (5ebcfd91) | After W11 |
+|---|---|---|---|
+| Architecture guards | 37 | 41 | 41 |
+| Runtime | 642 | 642 | 642 |
+| Groundwork (`Persistence/Groundwork/Tests`) | 150 | 150 | 150 |
+| Publishing API | 52 | 52 | 52 |
+| Activities Runtime | 145 | 155 | 155 |
+| Resumption | 12 | 12 | 12 |
+| Scheduling runtime | 19 | 19 | 19 |
+| Activities Scheduling | 8 | 8 | 8 |
+| Modularity | 104 | 104 | 104 |
+| Serialization | 24 | 24 | **28** (+4 IN-3) |
+| Events *(new)* | — | — | **8** (IN-2/IN-5/IN-10) |
+| Jint *(new)* | — | — | **9** (DS-9/DS-10) |
 
 Every pre-existing baseline stays green **unmodified**: IN-2/IN-5/IN-10 are behaviour-preserving on the
 default path, IN-3 preserves serialize/deserialize output while removing per-call allocation, and DS-9's
