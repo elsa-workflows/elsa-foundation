@@ -1,3 +1,4 @@
+using DotNet.Testcontainers.Builders;
 using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -54,7 +55,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
             await _container.StartAsync();
             IsAvailable = true;
         }
-        catch (Exception exception)
+        catch (DockerUnavailableException exception)
         {
             IsAvailable = false;
             SkipReason = $"Docker/PostgreSQL container unavailable: {exception.Message}";
