@@ -3,6 +3,8 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -25,9 +27,12 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class RuntimeParentCompletionExecutionCarrierTests
 {
     private const string WorkflowExecutionId = ExecutionCarrierTestData.WorkflowExecutionId;
+    private const string OuterNodeId = "node-outer";
     private const string ParentNodeId = "node-parent";
     private const string ChildNodeId = "node-child";
     private const string VariableName = ExecutionCarrierTestData.VariableName;
+    private const string OuterVariableReferenceKey = "var-greeting";
+    private const string IterationItemName = "loopItem";
 
     private readonly DateTimeOffset _now = ExecutionCarrierTestData.Now;
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
@@ -76,13 +81,49 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         Assert.Equal(7, composite.ObservedWorkflowDefinitionVersion);
         Assert.Equal("order-1", ExecutionCarrierTestData.AsString(composite.ObservedInput));
         // Workflow variables read through the carrier's durable-value projection (empty before this unit). Scope-
-        // based / named variable access and write-back on the parent-completion path — where the container is
-        // evaluated as its own scope owner, so ADR-0027 does not expose its own variables to itself by name — plus
-        // durable persistence of any such mutation, is a documented follow-up (see the handler comment).
+        // based / named resolution of enclosing-container and workflow variables now lands too, through the threaded
+        // self-owner scope — see ChildCompletionHandler_ResolvesEnclosingContainerVariableByName_AndSuppressesTheIterationLayer;
+        // named-variable write-back on this path remains a documented follow-up (see the handler comment).
         Assert.Equal("Hello", ExecutionCarrierTestData.AsString(composite.ObservedVariable));
         Assert.Equal("prior-value", ExecutionCarrierTestData.AsString(composite.ObservedOutput));
 
         // The container still completed normally — the carrier population is additive to the existing flow.
+        var projection = await _inspectionStore.FindAsync(WorkflowExecutionId, "actexec-parent");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
+    }
+
+    [Fact]
+    public async Task ChildCompletionHandler_ResolvesEnclosingContainerVariableByName_AndSuppressesTheIterationLayer()
+    {
+        // ADR 0030 follow-up: the parent-completion context now threads a self-owner variable scope, so a nested
+        // container's OnChildCompleted resolves an enclosing-container/workflow variable *by name* through the
+        // visible chain (previously it could only read the flat carrier projection). The `evaluateAsSelf` mode
+        // suppresses the per-iteration loop layer: the container's own scheduling provenance carries the iteration
+        // values of the loop it is a body of (ADR 0028), which is the wrong innermost scope when the container
+        // evaluates itself and broke loop/break control flow during development — so that iteration variable must
+        // NOT be visible to the container's self-evaluation.
+        await _executableStore.SaveAsync(NewNestedExecutable());
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await ExecutionCarrierTestData.SeedVariableAsync(_durableValueStateStore, _now, "enclosing-hello");
+        await _activityStateStore.SaveAsync(NewState("actexec-outer", OuterNodeId, ActivityExecutionStatus.Running));
+        await _activityStateStore.SaveAsync(NewLoopBodyParentState("actexec-parent", "actexec-outer"));
+        await _activityStateStore.SaveAsync(NewState("actexec-child", ChildNodeId, ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
+
+        var composite = new NamedVariableObservingCompositeActivity();
+        await using var provider = NewProvider(new RecordingActivityFactory(composite));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewParentCompletionWorkItem());
+
+        Assert.True(composite.ChildCompletionInvoked);
+        // The enclosing container's variable resolves by name through the threaded self-owner scope.
+        Assert.True(composite.EnclosingVariableResolved);
+        Assert.Equal("enclosing-hello", ExecutionCarrierTestData.AsString(composite.ObservedEnclosingVariable));
+        // The iteration layer is suppressed on the self-evaluation path, so the loop item the container's own
+        // provenance carries is not visible to itself — the exact interaction that regressed loop/break control flow.
+        Assert.False(composite.IterationVariableResolved);
+
         var projection = await _inspectionStore.FindAsync(WorkflowExecutionId, "actexec-parent");
         Assert.NotNull(projection);
         Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
@@ -165,14 +206,44 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
             AggregateFaultCount: 0,
             Metadata: new Dictionary<string, string>());
 
-    private WorkflowExecutable NewExecutable()
-    {
+    private WorkflowExecutable NewExecutable() =>
         // The parent-completion path reads workflow variables from the carrier's durable-value projection (the
         // seeded `greeting`), not through a variable scope, so no structure/variable declaration is needed here.
-        var child = NewNode(ChildNodeId);
-        var parent = new ExecutableNode(
-            executableNodeId: ParentNodeId,
-            authoredActivityId: $"authored-{ParentNodeId}",
+        NewExecutable(ContainerNode(ParentNodeId, NewNode(ChildNodeId)));
+
+    // A three-level nesting — enclosing container (workflow root, declares `greeting`) → composite parent → child —
+    // so the parent-completion path evaluates the composite as its own scope owner with a real enclosing scope to
+    // resolve by name. The enclosing container is the workflow root, so its value is anchored from the durable-value
+    // variable projection the handler passes into BuildScopeAsync (#286), not a local snapshot.
+    private WorkflowExecutable NewNestedExecutable()
+    {
+        var greetingStructure = new ExecutableActivityStructure("test.structure", "1.0.0", JsonSerializer.SerializeToElement(
+            new
+            {
+                variables = new[]
+                {
+                    new VariableDefinition(OuterVariableReferenceKey, VariableName, new TypeReference("String"), null, new ArgumentValue("default-greeting", "Literal"))
+                }
+            },
+            new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+        var parent = ContainerNode(ParentNodeId, NewNode(ChildNodeId));
+        return NewExecutable(ContainerNode(OuterNodeId, parent, greetingStructure));
+    }
+
+    private WorkflowExecutable NewExecutable(ExecutableNode root) =>
+        new(
+            identity: ExecutionCarrierTestData.NewIdentity(),
+            rootActivity: root,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: _now,
+            publishedAt: _now,
+            compatibilityMetadata: new Dictionary<string, string>());
+
+    private static ExecutableNode ContainerNode(string nodeId, ExecutableNode child, ExecutableActivityStructure? structure = null) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
             activityType: "test/container",
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
@@ -180,15 +251,36 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot("children", [child])]);
+            childSlots: [new ExecutableChildSlot("children", [child])],
+            structure: structure);
 
-        return new(
-            identity: ExecutionCarrierTestData.NewIdentity(),
-            rootActivity: parent,
-            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
-            createdAt: _now,
-            publishedAt: _now,
-            compatibilityMetadata: new Dictionary<string, string>());
+    // The composite parent's execution state carrying the scheduling provenance of the loop it is a body of
+    // (ADR 0028): an IterationId plus the loop owner's published per-pass item. On the leaf/resume path this
+    // layers an iteration scope; on the self-evaluation path `evaluateAsSelf` must suppress it.
+    private ActivityExecutionState NewLoopBodyParentState(string activityExecutionId, string parentActivityExecutionId)
+    {
+        var iterationMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = OuterNodeId,
+            [RuntimeMetadataKeys.LoopIterationItemName] = IterationItemName,
+            [RuntimeMetadataKeys.LoopIterationItemValue] = "\"pass-value\""
+        };
+        var provenance = ActivitySchedulingProvenance.From(
+            WorkflowExecutionId,
+            parentActivityExecutionId: parentActivityExecutionId,
+            schedulingActivityExecutionId: null,
+            branchId: null,
+            iterationId: "loop:iteration:0",
+            executionPathId: null,
+            executionScopeId: null,
+            schedulingCause: null,
+            metadata: iterationMetadata);
+
+        return NewState(activityExecutionId, ParentNodeId, ActivityExecutionStatus.Running, parentActivityExecutionId) with
+        {
+            IterationId = "loop:iteration:0",
+            Provenance = provenance
+        };
     }
 
     private static ExecutableNode NewNode(string nodeId) =>
@@ -203,7 +295,9 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
-    private sealed class CarrierObservingCompositeActivity : IActivity, IActivityChildCompletionHandler
+    // Shared IActivity stub for the child-completion test doubles: subclasses implement only the observation
+    // performed inside OnChildCompleted (each completes the composite so the handler advances normally).
+    private abstract class ObservingCompositeActivityBase : IActivity, IActivityChildCompletionHandler
     {
         public string Id { get; set; } = string.Empty;
         public string NodeId { get; set; } = string.Empty;
@@ -215,12 +309,6 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         public Dictionary<string, object> Metadata { get; set; } = new();
 
         public bool ChildCompletionInvoked { get; private set; }
-        public string? ObservedCorrelationId { get; private set; }
-        public string? ObservedWorkflowName { get; private set; }
-        public int ObservedWorkflowDefinitionVersion { get; private set; }
-        public object? ObservedInput { get; private set; }
-        public object? ObservedVariable { get; private set; }
-        public object? ObservedOutput { get; private set; }
 
         public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => ValueTask.FromResult(true);
         public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
@@ -228,7 +316,25 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
         {
             ChildCompletionInvoked = true;
-            var parentContext = context.ParentContext;
+            Observe(context.ParentContext);
+            ((IRuntimeActivityExecutionContext)context.ParentContext).CompleteCompositeActivity([ActivityOutcomes.Done]);
+            return ValueTask.CompletedTask;
+        }
+
+        protected abstract void Observe(IActivityExecutionContext parentContext);
+    }
+
+    private sealed class CarrierObservingCompositeActivity : ObservingCompositeActivityBase
+    {
+        public string? ObservedCorrelationId { get; private set; }
+        public string? ObservedWorkflowName { get; private set; }
+        public int ObservedWorkflowDefinitionVersion { get; private set; }
+        public object? ObservedInput { get; private set; }
+        public object? ObservedVariable { get; private set; }
+        public object? ObservedOutput { get; private set; }
+
+        protected override void Observe(IActivityExecutionContext parentContext)
+        {
             var state = (IExecutionExpressionState)parentContext;
             ObservedCorrelationId = state.CorrelationId;
             ObservedWorkflowName = state.WorkflowName;
@@ -236,9 +342,23 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
             ObservedInput = state.WorkflowInputs.GetValueOrDefault("orderId");
             ObservedVariable = state.WorkflowVariables.GetValueOrDefault(VariableName);
             ObservedOutput = state.ActivityOutputValues.GetValueOrDefault("prior");
+        }
+    }
 
-            ((IRuntimeActivityExecutionContext)parentContext).CompleteCompositeActivity([ActivityOutcomes.Done]);
-            return ValueTask.CompletedTask;
+    // Reads variables by name through the parent context's visible scope chain (IScopedVariableProvider) rather
+    // than the flat carrier projection, so the assertions exercise the threaded self-owner scope directly.
+    private sealed class NamedVariableObservingCompositeActivity : ObservingCompositeActivityBase
+    {
+        public bool EnclosingVariableResolved { get; private set; }
+        public object? ObservedEnclosingVariable { get; private set; }
+        public bool IterationVariableResolved { get; private set; }
+
+        protected override void Observe(IActivityExecutionContext parentContext)
+        {
+            var scoped = (IScopedVariableProvider)parentContext;
+            EnclosingVariableResolved = scoped.TryGetVariableValueByName(VariableName, out var enclosing);
+            ObservedEnclosingVariable = enclosing;
+            IterationVariableResolved = scoped.TryGetVariableValueByName(IterationItemName, out _);
         }
     }
 }

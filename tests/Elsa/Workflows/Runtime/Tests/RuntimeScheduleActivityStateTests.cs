@@ -78,6 +78,41 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     [Fact]
+    public async Task HandleAsync_ThroughPipeline_StagesTheCommitForTheCheckpointSlot_InsteadOfCommittingInline()
+    {
+        // Move 2: the pipeline overload runs in the Invoke slot and stages its commit; the Checkpoint slot commits it.
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
+        var handler = NewCheckpointingHandler(checkpointWriter);
+        var context = new ActivityRuntimePipelineContext(NewScheduleWorkItem(executable.Identity));
+
+        await handler.HandleAsync(NewScheduleWorkItem(executable.Identity), context);
+
+        Assert.Empty(checkpointWriter.ListCommits());
+        var staged = Assert.Single(context.Workspace.PendingCheckpointCommits);
+        Assert.Equal(RuntimeCheckpointNames.ActivityScheduled, staged.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ThroughPipeline_StagesNothing_WhenTheHandlerProducesNoCommit()
+    {
+        // Behaviour-preserving no-op path (already-scheduled activity re-enqueues start work but produces no checkpoint).
+        var executable = NewExecutable();
+        await _executableStore.SaveAsync(executable);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(null, _activityStateStore, null, null, null, null, null, _inspectionStore);
+        var handler = NewCheckpointingHandler(checkpointWriter);
+        await _activityStateStore.SaveAsync(NewScheduledState());
+        var context = new ActivityRuntimePipelineContext(NewScheduleWorkItem(executable.Identity));
+
+        await handler.HandleAsync(NewScheduleWorkItem(executable.Identity), context);
+
+        Assert.Empty(context.Workspace.PendingCheckpointCommits);
+        Assert.Empty(checkpointWriter.ListCommits());
+        Assert.Single(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
     public async Task HandleAsync_DoesNotOverwriteExistingActivityExecutionStateForRepeatedScheduleWork()
     {
         var executable = NewExecutable();

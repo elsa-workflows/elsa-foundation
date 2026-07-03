@@ -17,7 +17,9 @@ public sealed class RuntimeWorkflowCheckpointMiddleware(RuntimeCheckpointCommitt
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(next);
 
-        if (context.Workspace.PendingCheckpointCommit is { } commit)
+        // Drain in stage order, one committer call per staged entry — never fold or batch (that is the coalescing
+        // layer's job; batching here would change W9 boundary detection and W5 fencing granularity).
+        foreach (var commit in context.Workspace.PendingCheckpointCommits)
             await checkpointCommitter.CommitAsync(commit, context.Workspace.CancellationToken);
 
         await next(context);

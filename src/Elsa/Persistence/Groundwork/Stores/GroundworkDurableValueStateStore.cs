@@ -10,7 +10,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <c>workflowExecutionId</c>, so the document is stored directly and indexed by that field for the
 /// per-workflow list.
 /// </summary>
-public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IDurableValueStateStore
+public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableValueStateDocumentKind), IDurableValueStateStore
 {
     public async ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
@@ -18,15 +19,7 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGrou
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.DurableValueId);
 
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, state);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-                DocumentId.Compose(state.WorkflowExecutionId, state.DurableValueId),
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(DocumentId.Compose(state.WorkflowExecutionId, state.DurableValueId), state, cancellationToken);
 
         return state;
     }
@@ -36,11 +29,7 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGrou
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(durableValueId);
 
-        var result = await store.DeleteAsync(
-            new DeleteDocumentRequest(
-                ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-                DocumentId.Compose(workflowExecutionId, durableValueId)),
-            cancellationToken);
+        var result = await DeleteDocumentAsync(DocumentId.Compose(workflowExecutionId, durableValueId), cancellationToken);
 
         return result.Status == DocumentStoreWriteStatus.Deleted;
     }
@@ -50,28 +39,15 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGrou
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(durableValueId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-            DocumentId.Compose(workflowExecutionId, durableValueId),
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<DurableValueState, DurableValueState>(
+            DocumentId.Compose(workflowExecutionId, durableValueId), state => state, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<DurableValueState, DurableValueState>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, state => state, cancellationToken);
     }
-
-    private DurableValueState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<DurableValueState>(envelope);
 }

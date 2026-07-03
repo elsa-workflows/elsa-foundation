@@ -1,0 +1,64 @@
+# .dockerignore (repo root) — applies to Docker builds that use the repository
+# root as context (e.g. src/Apps/Elsa.Server/Dockerfile).
+#
+# Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
+# config (Directory.Packages.props, NuGet.config, *.slnx) and the src/ tree with
+# its committed wwwroot assets; drop build output, tests, docs and local dev state.
+
+# --- Build output -----------------------------------------------------------
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# --- VCS / tooling / IDE ----------------------------------------------------
+.git/
+.gitignore
+.gitattributes
+.github/
+.vs/
+.vscode/
+.idea/
+**/*.user
+**/*.suo
+**/*.DotSettings*
+
+# --- Repo areas not needed to build the server host -------------------------
+tests/
+docs/
+samples/
+specs/
+tools/
+.specify/
+.agents/
+.agent-prefs/
+.claude/
+
+# --- Local dev / runtime state that must never leak into the image ----------
+# SQLite fallback stores and Groundwork runtime files
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+# Nuplane reconciliation state and directory-feed contents
+**/.nuplane/
+src/Apps/Elsa.Server/packages/
+# ExtensionBuilder runtime workspace (lowercase; source lives in ExtensionBuilder/)
+src/Apps/Elsa.Server/extension-builder/
+# GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
+src/Apps/Elsa.Server/.elsa/
+
+# --- Docker / compose assets ------------------------------------------------
+docker/
+# ...but the build-only NuGet config must reach the build context.
+!docker/nuget.docker.config
+**/Dockerfile
+**/.dockerignore
+**/docker-compose*.yml
+
+# --- Misc -------------------------------------------------------------------
+**/.DS_Store
+README.md
+LICENSE

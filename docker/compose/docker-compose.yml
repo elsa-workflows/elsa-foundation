@@ -1,0 +1,109 @@
+# =============================================================================
+# Elsa reference stack: PostgreSQL + Elsa.Server + Elsa Studio
+#
+# This is THE reference example for running the full stack with Postgres-backed
+# persistence. Bring it up from this directory:
+#
+#   docker compose up --build            # postgres + elsa-server
+#   docker compose --profile studio up   # also start Elsa Studio (see notes below)
+#
+# URLs (host):
+#   Elsa.Server : http://localhost:13000   (root returns Healthy JSON)
+#   Elsa Studio : http://localhost:14000
+#
+# Persistence: elsa-server is composed with GroundworkUnifiedPersistencePostgreSql
+# via the mounted ./elsa-server.shells.json, so runtime + workflows-design +
+# activities-design all live in the 'postgres' service's database.
+#
+# Verify Postgres is actually used:
+#   docker compose exec postgres psql -U elsa -d elsa -c '\dt'
+# =============================================================================
+
+name: elsa-reference-stack
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      # Demo-only credentials. Change for anything beyond local experimentation.
+      POSTGRES_USER: elsa
+      POSTGRES_PASSWORD: elsa
+      POSTGRES_DB: elsa
+    ports:
+      # Exposed for local inspection (psql/GUI). Not required by the other services.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elsa -d elsa"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  elsa-server:
+    build:
+      # Build context MUST be the repository root (two levels up from docker/compose).
+      context: ../..
+      dockerfile: src/Apps/Elsa.Server/Dockerfile
+    image: elsa-server:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Module-management API key. MUST match Studio's Studio__BackendModuleManagementApiKey.
+      Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
+      # CORS: allow the browser origin the Studio app is served from (host-published port).
+      Cors__AllowedOrigins__0: "http://localhost:14000"
+      # The connection string is supplied by the mounted shells.json below. To override
+      # it without editing that file, uncomment the next line:
+      # CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString: "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
+    ports:
+      - "13000:8080"
+    volumes:
+      # Curated demo composition (Postgres unified persistence). Read-only.
+      - ./elsa-server.shells.json:/app/shells.json:ro
+      # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
+      - server-packages:/app/packages
+
+  # ---------------------------------------------------------------------------
+  # Elsa Studio (management UI).
+  #
+  # The image is NOT built from this repository. Build it once from the sibling
+  # repo elsa-foundation-studio (branch: sfmskywalker-studio-docker-image), whose
+  # Dockerfile also uses its repo root as build context:
+  #
+  #   cd ../elsa-foundation-studio          # sibling checkout
+  #   git checkout sfmskywalker-studio-docker-image
+  #   docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+  #
+  # Then start it with the 'studio' profile:
+  #   docker compose --profile studio up
+  #
+  # If the sibling repo is checked out next to this one you can instead let compose
+  # build it by uncommenting the build: block below (adjust the relative path).
+  # ---------------------------------------------------------------------------
+  elsa-studio:
+    image: elsa-studio-web:local
+    profiles: ["studio"]
+    # build:
+    #   context: ../../../elsa-foundation-studio
+    #   dockerfile: src/Elsa.Studio.Web/Dockerfile
+    depends_on:
+      elsa-server:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # BackendBaseUrl is consumed by the Blazor WebAssembly client IN THE BROWSER
+      # (surfaced via /studio-runtime.js), so it must be reachable from the host,
+      # NOT the compose service name. Use the server's published host port.
+      Studio__BackendBaseUrl: "http://localhost:13000"
+      # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
+      Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
+    ports:
+      - "14000:8080"
+
+volumes:
+  pgdata:
+  server-packages:

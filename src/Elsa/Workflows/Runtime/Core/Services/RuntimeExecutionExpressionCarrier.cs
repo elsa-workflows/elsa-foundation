@@ -1,6 +1,8 @@
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -16,47 +18,57 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// that constructs an execution-time context needs — so the invoke, resume, and parent-completion paths stay in
 /// lockstep rather than each re-deriving it. All state is Runtime-owned (the durable-value projections and the
 /// pinned executable identity); nothing here touches <c>Elsa.Workflows.Design.*</c>, so the carrier remains
-/// Design-free (constitution §E2.2 / §E2.6). Correlation id and instance name are projected from the
-/// <see cref="RuntimeMetadataKeys.IdentityName"/>-tagged durable values every handler already re-lists
-/// (spec 083 review: <see cref="RuntimeIdentityStateProjection"/>), so a <c>Correlate</c>/<c>SetName</c> in one
-/// branch is visible to a concurrent sibling branch and no path pays a per-invocation workflow-execution-state
-/// read. Every input is best-effort: absent identity degrades to null and the version to the pinned
-/// artifact-version major rather than faulting the activity.
+/// Design-free (constitution §E2.2 / §E2.6). Correlation id and instance name come from the durable-value identity
+/// projection every handler already computes (spec 083 review: <see cref="RuntimeIdentityStateProjection"/>), so a
+/// <c>Correlate</c>/<c>SetName</c> in one branch is visible to a concurrent sibling branch and no path pays a
+/// per-invocation workflow-execution-state read for the carrier. Every input is best-effort: absent identity
+/// degrades to null and the version to the pinned artifact-version major rather than faulting the activity.
 /// </remarks>
 public static class RuntimeExecutionExpressionCarrier
 {
     /// <summary>
-    /// Assembles the carrier state from the identity projected off the durable values (correlation id / instance
-    /// name), the pinned executable identity, and the caller's already-computed durable-value projections for
-    /// inputs/variables/outputs. Callers pass projections they already hold (each handler projects them once for
-    /// its input-binding resolution context) so nothing is projected twice.
+    /// Assembles the carrier state from the durable-value projection set (identity + inputs/variables/outputs, all
+    /// projected once from the handler's single <c>ListAsync</c>) and the pinned executable identity. Nothing is
+    /// projected twice — the caller passes the <see cref="RuntimeInputBindingStateProjectionSet"/> it already holds.
     /// </summary>
     public static RuntimeExecutionExpressionCarrierState Create(
-        string? correlationId,
-        string? instanceName,
-        WorkflowExecutableIdentity pinnedExecutable,
-        IReadOnlyDictionary<string, object?> workflowInputs,
-        IReadOnlyDictionary<string, object?> workflowVariables,
-        IReadOnlyDictionary<string, object?> activityOutputValues)
+        RuntimeInputBindingStateProjectionSet projections,
+        WorkflowExecutableIdentity pinnedExecutable)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
-        ArgumentNullException.ThrowIfNull(workflowInputs);
-        ArgumentNullException.ThrowIfNull(workflowVariables);
-        ArgumentNullException.ThrowIfNull(activityOutputValues);
 
         return new RuntimeExecutionExpressionCarrierState(
-            CorrelationId: string.IsNullOrWhiteSpace(correlationId) ? null : correlationId,
-            WorkflowName: string.IsNullOrWhiteSpace(instanceName) ? null : instanceName,
+            CorrelationId: string.IsNullOrWhiteSpace(projections.CorrelationId) ? null : projections.CorrelationId,
+            WorkflowName: string.IsNullOrWhiteSpace(projections.InstanceName) ? null : projections.InstanceName,
             WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(pinnedExecutable),
-            WorkflowInputs: workflowInputs,
-            WorkflowVariables: workflowVariables,
-            ActivityOutputValues: activityOutputValues);
+            WorkflowInputs: projections.WorkflowInputs,
+            WorkflowVariables: projections.WorkflowVariables,
+            ActivityOutputValues: projections.ActivityOutputValues);
+    }
+
+    /// <summary>
+    /// Best-effort load of the workflow-execution state for the paths that still need it — the invoke handler's
+    /// control-leaf change (Finish/Correlate/SetName mutates the authoritative queryable state). Carrier identity no
+    /// longer uses this (it projects from durable values), so a plain activity invocation never calls it. Returns
+    /// null when no <see cref="IWorkflowExecutionStateStore"/> is registered or the state is absent.
+    /// </summary>
+    public static async ValueTask<WorkflowExecutionState?> LoadWorkflowStateAsync(
+        IServiceProvider serviceProvider,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
+        return workflowExecutionStateStore is null
+            ? null
+            : await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
     }
 
     // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030) from the pinned
-    // executable's artifact-version major — artifact-only identity (§E2.6), independent of any workflow-execution-state
-    // read (spec 083 follow-up). A non-numeric value yields 0 (the default the accessor returned before this unit)
-    // rather than faulting the activity — the version is display identity for scripts, not an execution precondition.
+    // executable's artifact-version major. A non-numeric value yields 0 (the default the accessor returned before
+    // this unit) rather than faulting the activity — the version is display identity for scripts, not an execution
+    // precondition, so a display-version format must not throw.
     private static int ResolveWorkflowDefinitionVersion(WorkflowExecutableIdentity pinnedExecutable)
     {
         var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];

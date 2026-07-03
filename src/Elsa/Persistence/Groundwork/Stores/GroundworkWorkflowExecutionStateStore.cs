@@ -10,7 +10,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// is served through a constant collection partition stamped on every document, so it relies only on the
 /// declared-index equality query every provider supports.
 /// </summary>
-public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowExecutionStateStore
+public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind), IWorkflowExecutionStateStore
 {
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -18,15 +19,7 @@ public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, 
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
 
         var document = new WorkflowExecutionStateDocument(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, state);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                state.WorkflowExecutionId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(state.WorkflowExecutionId, document, cancellationToken);
 
         return state;
     }
@@ -35,28 +28,16 @@ public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, 
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelope = await store.LoadAsync(
+        return await LoadDocumentAsync<WorkflowExecutionStateDocument, WorkflowExecutionState>(
+            workflowExecutionId, document => document.State, cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+        await QueryDocumentsAsync<WorkflowExecutionStateDocument, WorkflowExecutionState>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-            workflowExecutionId,
+            document => document.State,
             cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
-    }
-
-    public async ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
-    }
-
-    private WorkflowExecutionState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<WorkflowExecutionStateDocument>(envelope).State;
 
     private sealed record WorkflowExecutionStateDocument(string Collection, WorkflowExecutionState State);
 }

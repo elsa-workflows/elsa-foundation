@@ -90,17 +90,29 @@ public sealed class JavaScriptRuntimeFeatureEvaluationTests : IDisposable
         string? correlationId = null,
         IReadOnlyDictionary<string, object?>? workflowInputs = null,
         IReadOnlyDictionary<string, object?>? workflowVariables = null,
-        IReadOnlyDictionary<string, object?>? activityOutputValues = null) =>
-        new(
+        IReadOnlyDictionary<string, object?>? activityOutputValues = null)
+    {
+        var empty = new Dictionary<string, object?>();
+        var carrier = new RuntimeExecutionExpressionCarrierState(
+            CorrelationId: correlationId,
+            WorkflowName: null,
+            WorkflowDefinitionVersion: 0,
+            WorkflowInputs: workflowInputs ?? empty,
+            WorkflowVariables: workflowVariables ?? empty,
+            ActivityOutputValues: activityOutputValues ?? empty);
+
+        return SimpleActivityExecutionContext.ForExecution(
             serviceProvider,
             new TestActivity(),
             CancellationToken.None,
             workflowExecutionId: "wfexec-1",
             pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-7", "7.0.0", "hash-1"),
-            correlationId: correlationId,
-            workflowInputs: workflowInputs,
-            workflowVariables: workflowVariables,
-            activityOutputValues: activityOutputValues);
+            schedulerWorkItem: null,
+            executableNode: null,
+            activityExecutionState: null,
+            variableScope: null,
+            executionCarrier: carrier);
+    }
 
     internal static ServiceProvider BuildServiceProvider()
     {

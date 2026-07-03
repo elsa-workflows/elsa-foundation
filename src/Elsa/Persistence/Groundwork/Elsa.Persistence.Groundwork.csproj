@@ -24,6 +24,12 @@
     <Compile Remove="Querying/**/*" />
     <EmbeddedResource Remove="Querying/**/*" />
     <None Remove="Querying/**/*" />
+    <Compile Remove="Unified/**/*" />
+    <EmbeddedResource Remove="Unified/**/*" />
+    <None Remove="Unified/**/*" />
+    <Compile Remove="PostgreSql/**/*" />
+    <EmbeddedResource Remove="PostgreSql/**/*" />
+    <None Remove="PostgreSql/**/*" />
   </ItemGroup>
 
 </Project>

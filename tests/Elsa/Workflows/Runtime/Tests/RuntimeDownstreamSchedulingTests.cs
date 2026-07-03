@@ -52,7 +52,7 @@ public sealed class RuntimeDownstreamSchedulingTests
             queue,
             executableStore,
             new FixedTimeProvider(_now));
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [completeHandler, NewCheckpointHandler(activityStateStore, checkpointWriter, queue)],
             new FixedTimeProvider(_now));

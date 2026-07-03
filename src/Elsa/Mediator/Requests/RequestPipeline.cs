@@ -1,33 +1,18 @@
-﻿using Elsa.Mediator.Core.Contracts;
-using Elsa.Mediator.Core.Extensions;
-using Elsa.Mediator.Core.Middleware;
+using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Core.Services;
+using Elsa.Mediator.Middleware;
+using Elsa.Pipelines.Core.Contracts;
+using Elsa.Pipelines.Core.Extensions;
 
 namespace Elsa.Mediator.Requests;
 
-/// <inheritdoc />
 /// <summary>
-/// Initializes a new instance of the <see cref="RequestPipeline"/> class.
+/// The request dispatch pipeline: handler invoker only (no logging middleware, preserving the prior
+/// request behaviour). A thin default composition over the shared <see cref="MessagePipeline"/>.
 /// </summary>
-public sealed class RequestPipeline(IServiceProvider serviceProvider) : IRequestPipeline
+public sealed class RequestPipeline(IServiceProvider serviceProvider) : MessagePipeline(serviceProvider)
 {
-    private RequestMiddlewareDelegate? _pipeline;
-
     /// <inheritdoc />
-    public RequestMiddlewareDelegate Pipeline => _pipeline ??= CreateDefaultPipeline();
-
-    /// <inheritdoc />
-    public RequestMiddlewareDelegate Setup(Action<IRequestPipelineBuilder>? setup = default)
-    {
-        var builder = new RequestPipelineBuilder(serviceProvider);
-        setup?.Invoke(builder);
-        _pipeline = builder.Build();
-        return _pipeline;
-    }
-
-    /// <inheritdoc />
-    public async Task Execute(IRequestContext context) => await Pipeline(context);
-
-    private RequestMiddlewareDelegate CreateDefaultPipeline() => Setup(
-        x => x.UseMiddleware<RequestHandlerInvokerMiddleware>()
-    );
+    protected override PipelineDelegate<IMessageContext> CreateDefaultPipeline() => Setup(builder => builder
+        .UseMiddleware<IMessageContext, HandlerInvokerMiddleware>());
 }

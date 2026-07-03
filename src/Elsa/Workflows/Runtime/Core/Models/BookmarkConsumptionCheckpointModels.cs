@@ -11,7 +11,8 @@ public sealed class BookmarkConsumptionCheckpointRequest
         BookmarkState bookmark,
         ActivityExecutionState completedActivityExecutionState,
         RuntimeSchedulerWorkItem? completionWorkItem = null,
-        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null)
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? valueSnapshots = null,
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValueChanges = null)
     {
         ArgumentNullException.ThrowIfNull(resumeWorkItem);
         ArgumentNullException.ThrowIfNull(resumePayload);
@@ -35,6 +36,7 @@ public sealed class BookmarkConsumptionCheckpointRequest
         CompletedActivityExecutionState = completedActivityExecutionState;
         CompletionWorkItem = completionWorkItem;
         ValueSnapshots = valueSnapshots ?? [];
+        DurableValueChanges = durableValueChanges ?? [];
     }
 
     public RuntimeSchedulerWorkItem ResumeWorkItem { get; }
@@ -43,6 +45,15 @@ public sealed class BookmarkConsumptionCheckpointRequest
     public ActivityExecutionState CompletedActivityExecutionState { get; }
     public RuntimeSchedulerWorkItem? CompletionWorkItem { get; }
     public IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> ValueSnapshots { get; }
+
+    /// <summary>
+    /// Durable-value changes (e.g. the resume callback's workflow-scope variable write-back, #286/#310) to commit
+    /// atomically with the bookmark-consumed checkpoint. Mirrors how the invoke path folds
+    /// <see cref="Services.RuntimeContainerScopeService.BuildWorkflowScopeWriteBackChanges"/> output into its completion
+    /// commit, so a variable a resume callback mutated is durably re-projected for downstream activities rather
+    /// than being lost when the in-memory scope is discarded. Empty unless the resume callback mutated a variable.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges { get; }
 
     private static void ValidateBookmarkMatchesResumePayload(
         string workflowExecutionId,

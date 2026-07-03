@@ -40,6 +40,7 @@ using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
+using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -47,6 +48,7 @@ using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Resumption;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -155,6 +157,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
 
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 
@@ -178,6 +181,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+
+            // Durable-resumption pump. Every Groundwork persistence provider DependsOn this feature, so
+            // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
+            // composed; without it the shell fails to activate with a FeatureNotFoundException.
+            typeof(WorkflowsRuntimeResumptionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
             typeof(FoundationAgentAbstractionsFeature).Assembly,

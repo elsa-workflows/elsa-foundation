@@ -1,6 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -11,102 +10,41 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
-    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
-    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
     private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
 
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers)
-        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        IWorkflowSchedulerPauseGate pauseGate)
-        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate)
-    {
-    }
-
+    /// <summary>
+    /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
+    /// three required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
+    /// <paramref name="workflowExecutionStateStore"/>) followed by optional collaborators that default to their
+    /// no-op/system implementations. The workflow execution state store is <b>required by construction</b> so the W5
+    /// terminal-status guard (which stops sibling work once an execution reaches a terminal status) can never be
+    /// silently disabled by picking a narrower constructor.
+    /// </summary>
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, NoopWorkflowExecutionAmbientServicesAccessor.Instance)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher, faultCapturePolicy: null, poisonStore: null, retryPolicy: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher,
-        IRuntimeFaultCapturePolicy? faultCapturePolicy,
-        IWorkflowSchedulerPoisonStore? poisonStore,
-        IRuntimeDomainRetryPolicy? retryPolicy)
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        TimeProvider? timeProvider = null,
+        IWorkflowSchedulerPauseGate? pauseGate = null,
+        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
+        IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
+        IWorkflowSchedulerPoisonStore? poisonStore = null,
+        IRuntimeDomainRetryPolicy? retryPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
-        ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
         _customHandlers = handlerSnapshot.Where(handler => handler is not IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _pauseGate = pauseGate;
-        _ambientServicesAccessor = ambientServicesAccessor;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _pipelineDispatcher = pipelineDispatcher;
         _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();
@@ -118,7 +56,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var ambientServices = _ambientServicesAccessor.Push(request.AmbientServices);
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
         var remaining = request.MaxWorkItems ?? int.MaxValue;
@@ -160,7 +97,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     $"peeked work item '{nextWorkItem.WorkItemId}' but dequeued '{workItem.WorkItemId}'. A concurrent drainer " +
                     "interleaved between the pause-gate peek and the dequeue; all dispatch must route through the agent mailbox.");
 
-            var result = await DispatchAsync(workItem, cancellationToken);
+            var result = await DispatchAsync(workItem, request.AmbientServices, cancellationToken);
             results.Add(result);
             remaining--;
 
@@ -188,18 +125,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
     private async ValueTask<bool> IsWorkflowTerminatedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        var store = ResolveWorkflowExecutionStateStore();
-        if (store is null)
-            return false;
-
-        var state = await store.FindAsync(workflowExecutionId, cancellationToken);
+        // RT-7: the terminal-status guard reads the state store injected by construction — no AsyncLocal
+        // service-location in the drain path. The store is required (RT-8), so there is no null fallback.
+        var state = await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
         return state is not null && state.Status.IsTerminal();
     }
 
-    private IWorkflowExecutionStateStore? ResolveWorkflowExecutionStateStore() =>
-        _ambientServicesAccessor.Current?.GetService<IWorkflowExecutionStateStore>() ?? _workflowExecutionStateStore;
-
-    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
     {
         IWorkflowSchedulerWorkHandler? handler = null;
         var startedAt = _timeProvider.GetUtcNow();
@@ -210,9 +142,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
             // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
             // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
-            // the built-in pass-through middleware registered the two paths are behavior-identical.
+            // the built-in pass-through middleware registered the two paths are behavior-identical. RT-7: the drain's
+            // ambient services flow explicitly into the pipeline dispatcher, which stages them on the dispatch workspace
+            // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             if (_pipelineDispatcher is not null)
-                await _pipelineDispatcher.DispatchAsync(workItem, handler, cancellationToken);
+                await _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, cancellationToken);
             else
                 await handler.HandleAsync(workItem, cancellationToken);
 

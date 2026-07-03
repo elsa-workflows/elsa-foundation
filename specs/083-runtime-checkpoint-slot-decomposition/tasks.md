@@ -16,4 +16,4 @@ Reflects the **slot-invoked handler model** (ADR 0029 addendum). An earlier draf
 - [x] **T010** Build + full runtime suite green (542). (FR-006/SC-002) Activities.Runtime flaky test (`BreakPropagation…`) confirmed pre-existing/order-dependent — tracked separately.
 - [x] **T011** ADR 0029 addendum (slot-invoked model) + spec/plan/bucket synced.
 - [x] **T012** Update `.specify/feature.json` + AGENTS.md SPECKIT pointer → spec 083.
-- [ ] **T013** Draft PR reworked onto the approved model.
+- [x] **T013** Draft PR reworked onto the approved model.

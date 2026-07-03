@@ -233,7 +233,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 ### `IRuntimeExecutionOwnershipContextAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one accessor owns the ambient current-lease scope for a runtime composition).
 - **Signature:** `RuntimeExecutionLease? Current { get; }`, `Push(RuntimeExecutionLease lease) : IDisposable`.
-- **Usage:** an AsyncLocal push/pop scope (mirroring `AsyncLocalWorkflowExecutionAmbientServicesAccessor`) that carries the active drain's lease from `IWorkflowExecutionDrainCoordinator` down to `RuntimeCheckpointCommitter` without threading it through every command/handler signature. It is a runtime-internal ambient accessor, not the ADR-0029-discouraged pipeline-context ambient.
+- **Usage:** an AsyncLocal push/pop scope that carries the active drain's lease from `IWorkflowExecutionDrainCoordinator` down to `RuntimeCheckpointCommitter` without threading it through every command/handler signature. It is a runtime-internal ambient accessor, not the ADR-0029-discouraged pipeline-context ambient. (This is a deliberately retained runtime-internal ambient — distinct from the pipeline-context/ambient-services service locators RT-7 removed from the drain path, whose services now flow explicitly via `RuntimePipelineWorkspace.AmbientServices`.)
 - **Default implementation:** `AsyncLocalRuntimeExecutionOwnershipContextAccessor`.
 
 ### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -364,14 +364,25 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `InvokeAsync(WorkflowRuntimePipelineContext context, WorkflowRuntimeMiddlewareDelegate next)`.
 - **Register:** via `WorkflowRuntimePipelineBuilder.Use<TMiddleware>(slotName, order, name)`.
 - **Usage:** registers workflow execution middleware into stable slots from `RuntimeWorkflowPipelineSlots`. Plans are inspectable through `BuildPlan()`.
-- **Known implementations (shipped):** no-op built-in placeholders for load state, scheduling, checkpoint, and post-commit.
+- **Known implementations (shipped):** built-in load-state / scheduling / post-commit steps; the `Invoke` slot (`RuntimeWorkflowInvokeMiddleware`) runs the dispatcher-staged handler before `next`, and the `Checkpoint` slot (`RuntimeWorkflowCheckpointMiddleware`) drains the handler-staged commit list (ADR 0029 Move 2 — slot-invoked handler model).
 
 ### `IActivityRuntimeMiddleware` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (activity runtime pipeline step).
 - **Signature:** `InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next)`.
 - **Register:** via `ActivityRuntimePipelineBuilder.Use<TMiddleware>(slotName, order, name)`.
 - **Usage:** registers activity execution middleware into stable slots from `RuntimeActivityPipelineSlots`. Plans are inspectable through `BuildPlan()`.
-- **Known implementations (shipped):** no-op built-in placeholders for load state, input evaluation, invoke, output capture, scheduling, checkpoint, and post-commit.
+- **Known implementations (shipped):** built-in load-state / input-evaluation / output-capture / scheduling / post-commit steps; the `Invoke` slot (`RuntimeActivityInvokeMiddleware`) runs the dispatcher-staged handler before `next`, and the `Checkpoint` slot (`RuntimeActivityCheckpointMiddleware`) drains the handler-staged commit list (ADR 0029 Move 2 — slot-invoked handler model).
+
+### `IRuntimePipelineWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor opt-in (a migrated scheduler work handler's context-aware overload).
+- **Signature:** `HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken)`.
+- **Usage:** ADR 0029 Move 2 slot-invoked handler model. A scheduler work handler additionally implements this interface to run inside the pipeline's `Invoke` slot with the per-dispatch context threaded **explicitly** (no ambient/AsyncLocal accessor). The handler either **stages** its assembled `RuntimeCheckpointCommit`(s) on `IRuntimePipelineContext.Workspace` for the `Checkpoint` slot to commit **in order, one committer call per staged entry** (never folded — folding is the coalescing decorators' job), or, for the nested-invoke handlers whose commits must go through a dynamically-resolved provider, commits **inline** in the `Invoke` slot and stages nothing. Handlers that have not migrated keep only `IWorkflowSchedulerWorkHandler` and run their plain path unchanged. `RuntimeExecutionPipelineDispatcher` stages the selected handler on the workspace and any migrated handler is picked up by a runtime cast.
+- **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, and `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator).
+- **Known implementations (shipped):** workflow `Cancel` + `Checkpoint`; activity `CreateBookmark`, `ScheduleActivity`, `StartActivity` (stage), and the nested-invoke `InvokeActivity` + `ParentActivityCompletion` (inline-commit, stage nothing).
+
+### `AddWorkflowRuntimeCore(IServiceCollection)` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Composition root (host-agnostic runtime registration).
+- **Usage:** RT-4. Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store; the reference stores/handlers are process-global **singletons** by design (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).

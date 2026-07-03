@@ -11,46 +11,31 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowInvokeActivitySchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory)
-        : this(inputMaterializer, serviceScopeFactory, TimeProvider.System)
-    {
-    }
-
-    public WorkflowInvokeActivitySchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory,
-        TimeProvider timeProvider)
-        : this(inputMaterializer, serviceScopeFactory, NoopWorkflowExecutionAmbientServicesAccessor.Instance, timeProvider)
-    {
-    }
-
+    /// <summary>
+    /// Creates the handler. RT-8: collapsed to a single primary constructor (the former ambient-services-accessor
+    /// overload is gone — RT-7 replaced that AsyncLocal service locator with the explicit
+    /// <see cref="IRuntimePipelineContext"/> workspace carrier).
+    /// </summary>
     public WorkflowInvokeActivitySchedulerWorkHandler(
         IRuntimeActivityInputMaterializer inputMaterializer,
         IServiceScopeFactory serviceScopeFactory,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(inputMaterializer);
         ArgumentNullException.ThrowIfNull(serviceScopeFactory);
-        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
-        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _inputMaterializer = inputMaterializer;
         _serviceScopeFactory = serviceScopeFactory;
-        _ambientServicesAccessor = ambientServicesAccessor;
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string Name => HandlerName;
@@ -62,15 +47,39 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
     }
 
+    /// <summary>
+    /// Direct (no-pipeline) dispatch: runs against a fresh scope. RT-7: the former AsyncLocal ambient-services read is
+    /// gone; the pipeline overload carries the drain's services explicitly on the workspace.
+    /// </summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
+        await ExecuteAsync(workItem, ambientServices: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pipeline dispatch (Move 2 / RT-7): run in the Invoke slot reading the drain's ambient services from the workspace
+    /// (staged explicitly by the dispatcher) instead of an AsyncLocal service locator. The nested-invoke commits stay
+    /// inline through the resolved provider so W9 coalescing boundary detection and W5 fencing granularity are preserved
+    /// exactly — this handler stages nothing, so the Checkpoint slot is a no-op for it.
+    /// </summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+    }
+
+    private async ValueTask ExecuteAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    {
         var invokePayload = DeserializeInvokePayload(workItem);
-        if (_ambientServicesAccessor.Current is { } ambientServices)
+        if (ambientServices is { } provider)
         {
-            await HandleWithServicesAsync(workItem, invokePayload, ambientServices, cancellationToken);
+            await HandleWithServicesAsync(workItem, invokePayload, provider, cancellationToken);
             return;
         }
 
@@ -145,31 +154,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         VariableScope? variableScope;
+        RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyDictionary<string, object?> workflowInputValues;
         IReadOnlyDictionary<string, object?> activityOutputValues;
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges = [];
 
-        // Execution-time expression carrier identity (ADR 0030: correlation id / instance name) is projected from the
-        // tagged durable values this invocation already re-lists (spec 083 review), so a plain activity populates the
-        // carrier without a per-invocation workflow-execution-state read. A Correlate/SetName leaf projects the new
-        // value into a durable value (see the identity fold below), which every activity invocation — including a
-        // concurrent sibling branch — re-lists, so cross-branch visibility is restored over the per-branch-lineage
-        // command-metadata channel it replaced. The definition version is artifact-only identity (§E2.6), resolved
-        // from the pinned executable. The control-leaf state change below is the only path that loads the
-        // workflow-execution state, and only when an intent actually mutates it. Hoisted out of the try like the
-        // workflow-variable projection so it is in scope for the carrier construction below.
-        string? carrierCorrelationId;
-        string? carrierInstanceName;
+        // Carrier identity (ADR 0030: correlation id / instance name) is projected from the IdentityName-tagged durable
+        // values this invocation already re-lists (spec 083 review), so a plain activity populates the carrier without
+        // a per-invocation workflow-execution-state read. A Correlate/SetName leaf writes the new value as a durable
+        // value (see the identity fold below), which every activity invocation — including a concurrent sibling
+        // branch — re-lists, so cross-branch visibility holds. The control-leaf state change below is the only path
+        // that loads the workflow-execution state, and only when an intent actually mutates it.
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
-            workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-            activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
-            var identity = RuntimeIdentityStateProjection.Project(durableValues);
-            carrierCorrelationId = identity.CorrelationId;
-            carrierInstanceName = identity.InstanceName;
+            projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            workflowVariables = projections.WorkflowVariables;
+            workflowInputValues = projections.WorkflowInputs;
+            activityOutputValues = projections.ActivityOutputValues;
 
             // Build the scope with the workflow-scope variables anchored from the current durable-value
             // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
@@ -219,14 +222,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = invokePayload.ActivityExecutionId;
 
-            // Populate the live execution-time expression carrier (ADR 0030) via the shared helper: identity from the
-            // IdentityName-tagged durable-value projection (spec 083 review — no per-invocation workflow-execution-state
-            // read, and a Correlate/SetName is visible to concurrent sibling branches), and the durable-value
-            // projections for inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the
-            // passed IExpressionExecutionContext. The resume and parent-completion handlers populate it the same way.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(
-                carrierCorrelationId, carrierInstanceName, invokePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
-            context = new SimpleActivityExecutionContext(
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, invokePayload.PinnedExecutable);
+            // Build the execution-time context through the single carrier-bearing factory (ADR 0030): identity + the
+            // durable-value projections for inputs/variables/outputs all come from the one ProjectAll above, so a
+            // Correlate/SetName is visible to a concurrent sibling branch and no workflow-execution-state read is
+            // paid. These feed the re-pointed JavaScript pre/post-processors via the passed IExpressionExecutionContext.
+            // The resume and parent-completion handlers build it the same way.
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
                 cancellationToken,
@@ -236,12 +238,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                correlationId: carrier.CorrelationId,
-                workflowName: carrier.WorkflowName,
-                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
-                workflowInputs: carrier.WorkflowInputs,
-                workflowVariables: carrier.WorkflowVariables,
-                activityOutputValues: carrier.ActivityOutputValues);
+                carrier);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
@@ -275,19 +272,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             {
                 await activity.ExecuteAsync(context);
 
-                // Persist any container-scoped variable assignments the activity made back to the owning
-                // container executions' snapshots, so sibling branches and later activities observe them
-                // and resume restores them (ADR 0027).
-                await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
-
-                // Capture any workflow-scope variable the activity mutated as VariableName-tagged durable-value
-                // changes (#286), so later activities re-project the current value through `variables.*` rather
-                // than the start-time seed — making variable-driven While/Do loops terminate and SetVariable
-                // durable. Dirty-tracked against the start-of-activity projection: a read-only activity over a
-                // workflow that declares variables produces no change. The changes are folded into the activity
-                // completion below so they commit on the activity's checkpoint boundary rather than out-of-band.
-                workflowVariableWriteBackChanges = scopeService.BuildWorkflowScopeWriteBackChanges(
-                    variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, workflowVariables, _timeProvider.GetUtcNow());
+                // Write back the activity's variable mutations: container-scope assignments persist to their
+                // owning execution snapshots so sibling branches and later activities observe them and resume
+                // restores them (ADR 0027), and the returned workflow-scope changes (#286) are folded into the
+                // activity completion below so they commit on the activity's checkpoint boundary rather than
+                // out-of-band — making variable-driven While/Do loops terminate and SetVariable durable.
+                // Dirty-tracked against the start-of-activity projection, so a read-only activity produces no
+                // change. Shared with the resume path so both stay in lockstep.
+                workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
+                    variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
 
                 // Control-leaf intents (Finish/Complete, Correlate, SetName, SetOutput): captured here and
                 // drained below so the engine ends the run or persists the new correlation id / instance name /
@@ -415,17 +408,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (workflowOutputChanges.Count > 0)
             durableValueChanges = durableValueChanges.Concat(workflowOutputChanges).ToArray();
 
-        // Fold a Correlate/SetName leaf's identity into the same change set as an IdentityName-tagged durable-value
+        var occurredAt = _timeProvider.GetUtcNow();
+
+        // Fold a Correlate/SetName leaf's identity into the durable-value change set as an IdentityName-tagged
         // projection (spec 083 review), alongside SetOutput. Every activity invocation re-lists durable values, so a
         // concurrent sibling branch observes the new correlation id / instance name — the cross-branch visibility the
-        // per-branch-lineage command-metadata channel dropped. This is an additional projection channel; the
-        // control-leaf state change below keeps WorkflowExecutionState.CorrelationId / system-metadata InstanceName as
-        // the authoritative queryable home, and both commit in the same activity-completed commit so they stay
-        // consistent. A cleared assignment writes a JSON-null durable value so the clear propagates. NOTE: the suspend
-        // paths above (bookmark-creation / child-scheduling) return before reaching here, so an activity that assigns
-        // identity AND suspends drops the projection — consistent with the state change below, which those paths also
-        // skip (a pre-existing gap, out of scope for this unit).
-        var occurredAt = _timeProvider.GetUtcNow();
+        // per-branch-lineage channel could not provide. This is an additional projection channel; the control-leaf
+        // state change below keeps WorkflowExecutionState.CorrelationId / system-metadata InstanceName as the
+        // authoritative queryable home, and both commit in the same activity-completed commit so they stay consistent.
+        // A cleared assignment writes a JSON-null durable value so the clear propagates. NOTE: the suspend paths above
+        // (bookmark-creation / child-scheduling) return before reaching here, so an activity that assigns identity AND
+        // suspends drops the projection — consistent with the state change, which those paths also skip (pre-existing).
         if (correlationIdAssignmentRequested || instanceNameAssignmentRequested)
         {
             var identityChanges = RuntimeWorkflowStateSeed.BuildIdentityChanges(
@@ -436,7 +429,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
         // Resolve a workflow-execution state change requested by a control-leaf intent (Finish ends the run;
         // Correlate updates the correlation id; SetName updates the instance name). All fold into the same
-        // activity-completed commit so the workflow state is persisted atomically with the activity completion.
+        // activity-completed commit so the workflow state is persisted atomically with the activity completion. The
+        // state is loaded lazily here — only when an intent mutates it — so a plain activity pays no state read.
         var workflowExecutionStateChange = await BuildControlLeafWorkflowExecutionStateChangeAsync(
             serviceProvider, workItem, finishWorkflowRequested, correlationIdAssignmentRequested, requestedCorrelationId,
             instanceNameAssignmentRequested, requestedInstanceName, occurredAt, cancellationToken);
@@ -530,7 +524,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
     // Resolves the workflow-execution state change requested by a control-leaf intent (Finish/Correlate/SetName),
     // loading the workflow-execution state only when an intent is actually present. This lazy guard is what keeps a
     // plain activity invocation — the common case — free of any workflow-execution-state read (spec 083 follow-up):
-    // the carrier reads identity from command metadata instead, and only a mutating leaf pays the load here.
+    // the carrier reads identity from the durable-value projection instead, and only a mutating leaf pays the load.
     private static async ValueTask<RuntimeStateChange<WorkflowExecutionState>?> BuildControlLeafWorkflowExecutionStateChangeAsync(
         IServiceProvider serviceProvider,
         RuntimeSchedulerWorkItem workItem,
@@ -545,7 +539,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (!finishWorkflowRequested && !correlationIdAssignmentRequested && !instanceNameAssignmentRequested)
             return null;
 
-        var workflowState = await serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
         if (workflowState is null)
             throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references missing workflow execution '{workItem.WorkflowExecutionId}'.");
 

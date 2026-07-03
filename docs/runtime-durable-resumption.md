@@ -202,6 +202,67 @@ coalescing never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (s
 *and* bookmark both persist directly, never through the buffer) by
 `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`.
 
+## Runtime composition root and lifetimes (RT-4)
+
+The hosting-agnostic runtime execution spine is registered by
+`RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntimeCore(this IServiceCollection)` in
+`Elsa.Workflows.Runtime.Core`. The FastEndpoints `WorkflowsRuntimeApiFeature` no longer owns those
+registrations — it composes the Core root and then adds only its HTTP request handlers. This makes the
+runtime usable from a non-HTTP host (a worker, another module, a test harness) without pulling in the
+API feature. The host-agnostic guard is `RuntimeCoreCompositionRootTests`: it composes
+`AddWorkflowRuntimeCore` into a bare `ServiceCollection` and drives a real Cancel drain end-to-end with
+no API feature present.
+
+**Lifetime story — deliberate, not incidental.** The reference in-memory stores, handlers, pipelines and
+the drainer are registered **singleton** (process-global). That matches the reference implementation:
+the in-memory stores *are* the durable state for the reference host, so a single shared instance is the
+correct model. Two consequences are deliberately in scope, and one is deliberately out:
+
+- **Overridability is preserved.** Every Core registration uses `TryAdd*`, so a durable provider package
+  (EF Core, Mongo, etc.) can register its own store *before or after* `AddWorkflowRuntimeCore` and win,
+  including choosing its own lifetime for that store. Composition order does not matter for correctness.
+- **W9 coalescing decorators still wrap.** The opt-in `AddCoalescingRuntimeCheckpointPersistence`
+  decorates the commit store / queue / outbox / state stores registered here; the Core root does not
+  change their registration *shape*, so those decorators keep composing unchanged.
+- **Scoped/per-request lifetimes are out of scope.** Moving stores to scoped would ripple
+  captive-dependency semantics through the singleton drainer and pipelines and is not required to make
+  the runtime host-agnostic. If a durable provider needs per-request scoping it overrides the specific
+  store via `TryAdd` and owns that lifetime decision locally.
+
+## Drain-path ambient service location removed (RT-7)
+
+The drain path no longer resolves collaborators through ambient service locators. Two AsyncLocal
+smugglers were deleted: the `IWorkflowExecutionAmbientServicesAccessor` that the drainer used to reach a
+request-scoped `IServiceProvider`/state store, and the pipeline-context accessor that carried the mutable
+workspace to handlers. Both now flow **explicitly**: the drainer injects `IWorkflowExecutionStateStore`
+directly and passes the drain request's `AmbientServices` into
+`IRuntimeExecutionPipelineDispatcher.DispatchAsync`, which stages it on
+`RuntimePipelineWorkspace.AmbientServices`; the migrated nested-invoke handlers (`InvokeActivity`,
+`ParentActivityCompletion`) read it from that workspace member instead of an AsyncLocal `.Current`.
+
+Two ambients remain **by deliberate design**, and neither is a drain-path service locator:
+
+- `IRuntimeExecutionOwnershipContextAccessor` — a runtime-internal AsyncLocal lease scope (RT-2/W5
+  fencing) that carries the active lease from the drain coordinator to the single commit funnel.
+- `IRuntimeCoalescingSessionAccessor` (**W9**) — an **opt-in ambient session flag**, not service
+  location: it marks that a coalescing session is active so the decorators buffer intra-drain checkpoints
+  into the in-memory working set. It is registered only by `AddCoalescingRuntimeCheckpointPersistence`
+  and its gating semantics are preserved exactly ("the durable scheduler queue never advances past the
+  last flushed state"). It is a documented exception to "no AsyncLocal in the drain path", distinct in
+  kind from the removed service locators.
+
+## Slot-invoked handler model (ADR 0029 Move 2)
+
+Scheduler work handlers no longer commit inline from a terminal step. A migrated handler additionally
+implements `IRuntimePipelineWorkHandler`; the dispatcher stages it on the workspace, the pipeline's
+`Invoke` slot runs it, and the `Checkpoint` slot drains the handler-staged commit **list in order, one
+`RuntimeCheckpointCommitter.CommitAsync` call per staged entry** — byte-identical to the previous inline
+sequence. The slot never batches or folds staged commits (folding is the W9 coalescing decorators' job;
+batching would change W9 boundary detection and W5 fencing granularity). The two nested-invoke handlers
+are the deliberate exception: their commits go through a dynamically-resolved provider, so they commit
+**inline** in the `Invoke` slot and stage nothing — converting them to staged commits would not be
+behavior-preserving.
+
 ## Out of scope (owned elsewhere)
 
 - **Ack-based dequeue** that keeps a scheduler work item durably owned until the consuming handler's

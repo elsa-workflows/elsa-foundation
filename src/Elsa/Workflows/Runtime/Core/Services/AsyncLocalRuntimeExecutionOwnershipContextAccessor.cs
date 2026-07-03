@@ -4,9 +4,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// <see cref="AsyncLocal{T}"/>-backed ownership scope accessor. Mirrors
-/// <see cref="AsyncLocalWorkflowExecutionAmbientServicesAccessor"/>: pushes form a stack so nested scopes restore
-/// their prior frame on dispose, and the flow is confined to the pushing async context.
+/// <see cref="AsyncLocal{T}"/>-backed ownership scope accessor. Pushes form a stack so nested scopes restore their
+/// prior frame on dispose, and the flow is confined to the pushing async context.
 /// </summary>
 public sealed class AsyncLocalRuntimeExecutionOwnershipContextAccessor : IRuntimeExecutionOwnershipContextAccessor
 {

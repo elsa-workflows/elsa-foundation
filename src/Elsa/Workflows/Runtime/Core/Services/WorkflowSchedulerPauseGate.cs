@@ -14,20 +14,14 @@ public sealed class WorkflowSchedulerPauseGate : IWorkflowSchedulerPauseGate
     private readonly IRuntimePauseDecisionProvider _pauseDecisionProvider;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowSchedulerPauseGate(IRuntimePauseDecisionProvider pauseDecisionProvider)
-        : this(pauseDecisionProvider, TimeProvider.System)
-    {
-    }
-
     public WorkflowSchedulerPauseGate(
         IRuntimePauseDecisionProvider pauseDecisionProvider,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(pauseDecisionProvider);
-        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _pauseDecisionProvider = pauseDecisionProvider;
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<SchedulerPauseDecision?> EvaluateAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)

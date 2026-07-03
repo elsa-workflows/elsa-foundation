@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Sequence.Exceptions;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -8,7 +7,6 @@ namespace Elsa.Activities.Sequence.Internal;
 
 internal sealed class SequenceNavigator
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, int> _indexesByNodeId;
 
     private SequenceNavigator(IReadOnlyList<ExecutableNode> children)
@@ -30,7 +28,8 @@ internal sealed class SequenceNavigator
         if (children.Length == 0 && executableNode.Structure is null)
             return new SequenceNavigator([]);
 
-        var orderedIds = ReadStructure(executableNode).Activities.ToArray();
+        var orderedIds = ExecutableStructureReader.ReadStructure<SequenceExecutableStructure>(
+            executableNode, "Sequence", SequenceActivity.StructureKind, SequenceActivity.StructureSchemaVersion, Fail).Activities.ToArray();
         var duplicateStructureId = orderedIds.GroupBy(id => id, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1)?.Key;
         if (duplicateStructureId is not null)
             throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' structure contains duplicate child '{duplicateStructureId}'.");
@@ -66,29 +65,7 @@ internal sealed class SequenceNavigator
         return nextIndex >= Children.Count ? null : Children[nextIndex];
     }
 
-    private static SequenceExecutableStructure ReadStructure(ExecutableNode executableNode)
-    {
-        if (executableNode.Structure is null)
-            throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' requires structure '{SequenceActivity.StructureKind}'.");
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.Kind, SequenceActivity.StructureKind))
-            throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' has unsupported structure kind '{executableNode.Structure.Kind}'.");
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.SchemaVersion, SequenceActivity.StructureSchemaVersion))
-            throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' has unsupported structure schema version '{executableNode.Structure.SchemaVersion}'.");
-
-        try
-        {
-            return executableNode.Structure.Payload.Deserialize<SequenceExecutableStructure>(SerializerOptions)
-                   ?? throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' structure resolved to null.");
-        }
-        catch (SequenceExecutionException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
-        {
-            throw new SequenceExecutionException($"Sequence executable node '{executableNode.ExecutableNodeId}' structure is not a valid Sequence structure payload.", exception);
-        }
-    }
+    private static SequenceExecutionException Fail(string message, Exception? inner) =>
+        inner is null ? new(message) : new(message, inner);
 }
+
