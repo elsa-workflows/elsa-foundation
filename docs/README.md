@@ -17,6 +17,7 @@ This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer th
 
 - [Seams and bridges](seams.md) - worked activities/workflows boundary example.
 - [Serialization rule](serialization.md) - canonical payload-serialization rule and exceptions.
+- [Durable resumption](runtime-durable-resumption.md) - durable storage vs durable resumption, crash windows A/B/C, and the at-least-once/at-most-once asymmetry.
 
 ## Documentation rule
 
