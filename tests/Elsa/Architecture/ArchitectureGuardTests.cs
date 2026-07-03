@@ -175,6 +175,55 @@ public sealed class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact] // spec 006 T050 (SC-001) — no project in the activity-construction runtime path references any Design project.
+    public void Activity_construction_runtime_path_has_no_design_reference() =>
+        AssertNoForbiddenProjectReferences(
+            [
+                "Elsa.Activities.Runtime",
+                "Elsa.Activities.Runtime.Core",
+                "Elsa.Activities.Primitives",
+                "Elsa.Activities.Composition.Runtime",
+            ],
+            IsDesignReference);
+
+    [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
+    public void Activity_construction_feature_projects_do_not_reference_each_other()
+    {
+        string[] featureProjects =
+        [
+            "Elsa.Activities.Primitives",
+            "Elsa.Activities.Composition.Runtime",
+            "Elsa.Activities.Composition.Design",
+            "Elsa.Activities.Design.Reconciliation.Clr",
+        ];
+        var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
+
+        // Scoped to cross-references *among* the seam features (SC-006). A new seam feature must be added
+        // to this list to be covered — the check under-covers silently as the seam grows.
+        AssertNoForbiddenProjectReferences(featureProjects, reference => featureSet.Contains(reference.Name));
+    }
+
+    // Shared skeleton for the two SC-001/SC-006 project-reference facts: verify every named project exists,
+    // then assert none of them declares a <ProjectReference> the predicate forbids. Only DIRECT edges are
+    // checked — transitive pulls are the reference graph's own concern (and, for the runtime side, are also
+    // covered by Runtime_projects_do_not_add_design_references, which spans every runtime project).
+    private static void AssertNoForbiddenProjectReferences(string[] projectNames, Func<ProjectInfo, bool> isForbidden)
+    {
+        var nameSet = projectNames.ToHashSet(StringComparer.Ordinal);
+        var found = ProjectFiles().Where(p => nameSet.Contains(p.Name)).ToList();
+
+        var missing = nameSet.Except(found.Select(p => p.Name)).ToList();
+        Assert.True(missing.Count == 0, "Missing expected projects: " + string.Join(", ", missing));
+
+        var violations = found
+            .SelectMany(project => ProjectReferences(project)
+                .Where(isForbidden)
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
     [Fact]
     public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
     {
@@ -213,6 +262,96 @@ public sealed class ArchitectureGuardTests
             .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact] // spec 006 T052 (SC-002) — the deleted 005 implementation-descriptor family is gone from production code.
+    public void No_production_code_references_deleted_implementation_descriptor_types()
+    {
+        // Each token is a distinct deleted identifier; "ImplementationDescriptor" / "ActivityImplementationResolver"
+        // subsume the Clr*/Workflow*/registry/source/resolver variants via substring match.
+        string[] forbiddenTokens =
+        [
+            "IImplementationDescriptor",
+            "ImplementationDescriptor",
+            "IImplementationDescriptorSource",
+            "ImplementationDescriptorRegistry",
+            "OnImplementationDescriptorsInitializing",
+            "IActivityImplementationResolver",
+            "ActivityImplementationResolver",
+        ];
+
+        var sourceRoot = Path.Combine(RepoRoot, "src");
+        var violations = Directory.EnumerateFiles(sourceRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !IsGeneratedScratchFile(file) && !IsBuildArtifactFile(file))
+            .SelectMany(file =>
+            {
+                var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
+                return forbiddenTokens
+                    .Where(token => code.Contains(token, StringComparison.Ordinal))
+                    .Select(token => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {token}");
+            })
+            .Distinct()
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact] // spec 006 T051 (SC-004) — construction + reconciliation dispatch on the DescriptorType key alone; no per-kind branch.
+    public void Construction_and_reconciliation_contain_no_per_descriptor_type_branch()
+    {
+        string[] relativePaths =
+        [
+            "src/Elsa/Activities/Runtime/Services/ActivityFactory.cs",
+            "src/Elsa/Activities/Runtime/Services/ActivityConstructorRegistry.cs",
+            // The task's "ActivityVersionsReconcilingHandler" is CollectActivityVersions in the current tree.
+            "src/Elsa/Activities/Design/Reconciliation/Handlers/CollectActivityVersions.cs",
+        ];
+
+        // A per-kind branch would surface as a switch, an equality test against the descriptor-type/kind
+        // string, or a reference to a concrete descriptor type / the deleted kind discriminator. These three
+        // dispatchers key purely on the DescriptorType string (registry lookup), never branch on its value.
+        // NB: a lexical scan can't catch every conceivable rewrite (e.g. `.Equals(...)` or a lookup table
+        // keyed on kind); it pins the common forms and the concrete-type references.
+        string[] forbiddenTokens =
+        [
+            "switch",
+            "descriptorType ==",
+            "DescriptorType ==",
+            "ImplementationKind",
+            "ImplementationDescriptor",
+            "ClrActivityDescriptor",
+            "WorkflowIdentity",
+            "TypeInformation",
+        ];
+
+        var violations = new List<string>();
+        foreach (var relativePath in relativePaths)
+        {
+            var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(fullPath), $"Expected source file '{relativePath}' to exist.");
+
+            var code = StripCommentsAndStringLiterals(File.ReadAllText(fullPath));
+            violations.AddRange(forbiddenTokens
+                .Where(token => code.Contains(token, StringComparison.Ordinal))
+                .Select(token => $"{relativePath}: {token}"));
+        }
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    private static bool IsDesignReference(ProjectInfo reference) =>
+        reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
+        reference.Name.Contains(".Design", StringComparison.Ordinal);
+
+    private static bool IsGeneratedScratchFile(string filePath) =>
+        filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
+
+    // Build output under src/**/obj and src/**/bin (AssemblyInfo, GlobalUsings.g.cs, EF/source-generator
+    // scaffolds) is not source; scanning it would make a token sweep depend on build state.
+    private static bool IsBuildArtifactFile(string filePath)
+    {
+        var normalized = filePath.Replace(Path.DirectorySeparatorChar, '/');
+        return normalized.Contains("/obj/", StringComparison.Ordinal) || normalized.Contains("/bin/", StringComparison.Ordinal);
     }
 
     private static bool IsRuntimeProject(ProjectInfo project) =>

@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -107,7 +108,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -123,23 +124,47 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         BookmarkState bookmark,
+        WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
+        // Load the workflow-execution state once, best-effort, for the execution-time expression carrier (ADR 0030
+        // identity: correlation id / name / definition version). Absent state degrades identity to null rather than
+        // failing the resume; a resume callback that evaluates no expressions is unaffected either way.
+        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+
+        var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
+
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        VariableScope? variableScope;
+        IReadOnlyDictionary<string, object?> workflowVariables;
+        IReadOnlyDictionary<string, object?> workflowInputValues;
+        IReadOnlyDictionary<string, object?> activityOutputValues;
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            workflowVariables = projections.WorkflowVariables;
+            workflowInputValues = projections.WorkflowInputs;
+            activityOutputValues = projections.ActivityOutputValues;
+
+            // Build the visible container-scope chain (ADR 0027) anchored from the current durable-value variable
+            // projection, so a resume callback's freehand expressions read container/workflow-scoped variables and
+            // in-evaluation write-back lands in the declaring scope — parity with the invoke path. The post-callback
+            // write-back below persists any resume-time mutation durably across the bookmark-consumption checkpoint.
+            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+
             var resolutionContext = new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: resumePayload.ActivityExecutionId,
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
-                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
-                workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
-                activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+                workflowVariables: workflowVariables,
+                workflowInputs: workflowInputValues,
+                activityOutputValues: activityOutputValues,
+                variableScope: variableScope);
             inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -174,7 +199,24 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = resumePayload.ActivityExecutionId;
 
-            context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
+            // Populate the live execution-time expression carrier (ADR 0030) for the resume callback: workflow
+            // identity, the visible variable scope, and the durable-value projections for inputs/variables/outputs.
+            // Previously the resume context was built with none of these, so a resume callback that evaluated
+            // JavaScript/Liquid saw empty getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no
+            // scope to write variables into. Populated identically to the invoke path via the shared helper.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                workflowState, resumePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
+            context = SimpleActivityExecutionContext.ForExecution(
+                serviceProvider,
+                activity,
+                cancellationToken,
+                workItem.WorkflowExecutionId,
+                resumePayload.PinnedExecutable,
+                workItem,
+                executableNode,
+                state,
+                variableScope,
+                carrier);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
@@ -187,10 +229,20 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
+        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> workflowVariableWriteBackChanges = [];
         try
         {
             var resumeMethod = ResolveResumeMethod(activity.GetType(), resumePayload.ResumeTargetId);
             await InvokeResumeMethodAsync(resumeMethod, activity, context, resumePayload.Input, cancellationToken);
+
+            // Write back the resume callback's variable mutations, mirroring the invoke path's post-execution
+            // write-back: container-scope assignments persist to their owning execution snapshots so sibling
+            // branches and later activities observe them and a subsequent resume restores them (ADR 0027), and the
+            // returned workflow-scope changes (#286) are folded into the bookmark-consumption checkpoint below so
+            // they commit atomically with the consumption rather than out-of-band (#310). Dirty-tracked against the
+            // start-of-resume projection, so a callback that reads but does not mutate produces no change.
+            workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
+                variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -205,7 +257,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
         var completedState = CompleteActivity(workItem, resumePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots), cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, workflowVariableWriteBackChanges), cancellationToken);
     }
 
     private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>

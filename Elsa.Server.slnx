@@ -347,4 +347,13 @@
   <Folder Name="/tests/Elsa3/Mapping/">
     <Project Path="tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Events/">
+    <Project Path="tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Expressions/JavaScript/Jint/">
+    <Project Path="tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Mediator/">
+    <Project Path="tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -8,8 +8,8 @@ Provider-agnostic EF Core persistence layer for the activity catalog. Inherits t
 - **EF Core configurations** for each entity (composite unique indexes, foreign keys, max-length conventions).
 - **`IAddActivityDefinitionCommand`** → `AddActivityDefinitionCommand` (transactional parent+version insert).
 - **`IActivityDefinitionLookup`** → `ActivityDefinitionLookup` — the picker query (Model X: catalog membership only; no removal filter).
-- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`DesignFacets` + the implementation descriptor; derives `ImplementationKind` from `descriptor.Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
-- **`ActivityDefinitionVersionLoadingHandler`** — a typed `IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor. Deserialises `*Source` columns + the `ImplementationDescriptorPayload` (using the descriptor registry's kind→type lookup) back into rich projections. Dispatched by the single `ApplyEntityLoadingHandlers` aggregator on `OnEntityLoading`. Failures throw `ActivityDescriptorDeserialisationException` with version id + kind context.
+- **`ActivityDefinitionVersionSavingHandler`** — a typed `IEntitySavingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor (framework §2.6.1, action-named handler). Serialises `Inputs`/`Outputs`/`DesignFacets` and writes the opaque descriptor payload from the `DescriptorPayload` `JsonElement` into `DescriptorPayloadSource`. `DescriptorType` is set by the producer (reconciler / design API), never derived here — the design domain has no `Kind`. The single `ApplyEntitySavingHandlers` aggregator (registered once by the EF Core base feature) dispatches it when `OnEntitySaving` fires.
+- **`ActivityDefinitionVersionLoadingHandler`** — a typed `IEntityLoadingHandler<ActivitiesDesignDbContext, ActivityDefinitionVersion>` contributor. Deserialises `*Source` columns and parses `DescriptorPayloadSource` into a `JsonElement` (`DescriptorPayload`). It resolves **no** descriptor CLR type — there is no kind→type registry — so it needs no descriptor-type dependency (Elsa §E2.2). Dispatched by the single `ApplyEntityLoadingHandlers` aggregator on `OnEntityLoading`.
 
 ## Cross-domain contributions
 
@@ -29,14 +29,18 @@ See [`Elsa.Persistence.EFCore/EXTENSION_POINTS.md`](../Elsa.Persistence.EFCore/E
 | Entity | Notes |
 |---|---|
 | `ActivityDefinition` | Identity layer. Immutable: `ActivityTypeKey`, `SourceKind`, `SourceId`, `ReconciledAt`, `ReconciledBy`. Unique composite index `(SourceKind, SourceId, ActivityTypeKey)`. |
-| `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `ActivityTypeKey`, `ImplementationKind`, `ImplementationDescriptorPayload`, `ExecutionType`, `Inputs/Outputs/DesignFacetsSource`, `ProvisioningHash`. `ImplementationDescriptor` is `[NotMapped]` — hydrated by the loading handler from the payload. |
+| `ActivityDefinitionVersion` | Append-only. Immutable: `Version`, `DefinitionId`, `DescriptorType`, `DescriptorPayloadSource`, `ExecutionType`, `Inputs/Outputs/DesignFacetsSource`, `SourceKind`, `SourceId`, `Hash`. `DescriptorPayload` (`JsonElement`) is `[NotMapped]` — hydrated by the loading handler by parsing `DescriptorPayloadSource`. |
 
 ## Persistence invariants
 
 - `Entity.RowNumber` and `Entity.CreatedAt` are write-once on every entity; enforced centrally via `ApplyBaseEntityImmutability` in `ElsaDbContextBase`.
-- Domain-specific write-once properties (e.g. `ActivityTypeKey`, `ImplementationKind`) are declared via `PropertySaveBehavior.Throw` in each entity's `IEntityTypeConfiguration<T>`.
+- Domain-specific write-once properties (e.g. `ActivityTypeKey`, `DescriptorType`, `DescriptorPayloadSource`) are declared via `PropertySaveBehavior.Throw` in each entity's `IEntityTypeConfiguration<T>`.
 - `TenantId` index registered centrally via `ApplyTenantIdIndex` on every `TenantEntity` descendant.
 
 ## Owned exception surface
 
-- **`ActivityDescriptorDeserialisationException`** (in `Elsa.Activities.Design.Persistence.Core/Exceptions/`) — raised by the loading handler when the persisted descriptor payload cannot be deserialised. Carries version id + kind. Replaces raw `JsonException` per framework §2.23.5.
+None. The loading handler resolves no descriptor CLR type and never deserialises the descriptor into a
+concrete type, so there is no descriptor-deserialisation failure to surface here — the design domain treats
+the payload as opaque JSON. (The former `ActivityDescriptorDeserialisationException` was removed with the
+descriptor-opaque reshape; the only descriptor deserialisation failure now occurs runtime-side, inside the
+owning constructor's deserialize bridge.)

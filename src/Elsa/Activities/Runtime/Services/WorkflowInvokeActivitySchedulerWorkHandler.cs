@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -16,10 +15,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 {
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
-
-    // System-metadata override key for the workflow definition version surfaced to execution-time expressions
-    // (ADR 0030 identity). Optional; absent for normal runs, where the pinned artifact-version major is used.
-    private const string DefinitionVersionMetadataKey = "runtime.definitionVersion";
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -170,16 +165,14 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         // Best-effort: when no state store is registered or the state is absent, carrier identity degrades to null
         // (correlation id / name) rather than failing the invocation; the control-leaf path still requires the
         // state when it mutates it.
-        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-        var workflowState = workflowExecutionStateStore is null
-            ? null
-            : await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
-            workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-            activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+            var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            workflowVariables = projections.WorkflowVariables;
+            workflowInputValues = projections.WorkflowInputs;
+            activityOutputValues = projections.ActivityOutputValues;
 
             // Build the scope with the workflow-scope variables anchored from the current durable-value
             // projection (#286), so workflow-scope reads see prior mutations and writes land in the workflow
@@ -229,7 +222,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = invokePayload.ActivityExecutionId;
 
-            context = new SimpleActivityExecutionContext(
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                workflowState, invokePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
+            // Build the execution-time context through the single carrier-bearing factory (ADR 0030): identity from
+            // the workflow-execution state + pinned executable, and the durable-value projections for
+            // inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the passed
+            // IExpressionExecutionContext. The resume and parent-completion handlers build it the same way.
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
                 cancellationToken,
@@ -239,15 +238,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                // Populate the live execution-time expression carrier (ADR 0030): identity from the workflow-execution
-                // state + pinned executable, and the durable-value projections for inputs/variables/outputs. These
-                // feed the re-pointed JavaScript pre/post-processors via the passed IExpressionExecutionContext.
-                correlationId: workflowState?.CorrelationId,
-                workflowName: workflowState is null ? null : ResolveInstanceName(workflowState),
-                workflowDefinitionVersion: ResolveWorkflowDefinitionVersion(workflowState, invokePayload.PinnedExecutable),
-                workflowInputs: workflowInputValues,
-                workflowVariables: workflowVariables,
-                activityOutputValues: activityOutputValues);
+                carrier);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
@@ -281,19 +272,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             {
                 await activity.ExecuteAsync(context);
 
-                // Persist any container-scoped variable assignments the activity made back to the owning
-                // container executions' snapshots, so sibling branches and later activities observe them
-                // and resume restores them (ADR 0027).
-                await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
-
-                // Capture any workflow-scope variable the activity mutated as VariableName-tagged durable-value
-                // changes (#286), so later activities re-project the current value through `variables.*` rather
-                // than the start-time seed — making variable-driven While/Do loops terminate and SetVariable
-                // durable. Dirty-tracked against the start-of-activity projection: a read-only activity over a
-                // workflow that declares variables produces no change. The changes are folded into the activity
-                // completion below so they commit on the activity's checkpoint boundary rather than out-of-band.
-                workflowVariableWriteBackChanges = scopeService.BuildWorkflowScopeWriteBackChanges(
-                    variableScope, workItem.WorkflowExecutionId, executable.RootActivity.ExecutableNodeId, workflowVariables, _timeProvider.GetUtcNow());
+                // Write back the activity's variable mutations: container-scope assignments persist to their
+                // owning execution snapshots so sibling branches and later activities observe them and resume
+                // restores them (ADR 0027), and the returned workflow-scope changes (#286) are folded into the
+                // activity completion below so they commit on the activity's checkpoint boundary rather than
+                // out-of-band — making variable-driven While/Do loops terminate and SetVariable durable.
+                // Dirty-tracked against the start-of-activity projection, so a read-only activity produces no
+                // change. Shared with the resume path so both stay in lockstep.
+                workflowVariableWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
+                    variableScope, executable, workItem.WorkflowExecutionId, workflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
 
                 // Control-leaf intents (Finish/Complete, Correlate, SetName, SetOutput): captured here and
                 // drained below so the engine ends the run or persists the new correlation id / instance name /
@@ -567,28 +554,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
 
         return metadata;
-    }
-
-    // Resolves the current workflow instance name for the execution-time expression carrier (ADR 0030) from the
-    // same system-metadata key SetName writes (see ApplyInstanceName). Null when no name has been assigned.
-    private static string? ResolveInstanceName(WorkflowExecutionState workflowState) =>
-        workflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var name) && !string.IsNullOrWhiteSpace(name)
-            ? name
-            : null;
-
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
-    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
-    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
-    {
-        if (workflowState is not null
-            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
-            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
-            return overrideVersion;
-
-        var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
-        return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(

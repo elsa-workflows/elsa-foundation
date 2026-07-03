@@ -11,8 +11,8 @@ activity abstractions and the `[Version]` attribute it reads).
 
 - **`ClrActivityReconciliationSource`** — `IActivityReconciliationSource` with `SourceKind => "CLR"`.
   Its `Read` drives the scanner and emits one `ActivityVersionReconciliationModel` per activity, each
-  carrying `ImplementationKind = ClrImplementationDescriptor.KindValue` and a populated
-  `ClrImplementationDescriptor`.
+  carrying `DescriptorType = typeof(ClrActivityDescriptor).FullName` and a `ClrActivityDescriptor`
+  wrapping the activity's stable alias (`TypeAliasConvention.CanonicalAlias(type)`).
 - **`ClrAssemblyScanner`** — reflection-only scanner (R5) built on `MetadataLoadContext` +
   `PathAssemblyResolver`. Discovers `IActivity` implementations by metadata, never loads author code
   into the execution context, and never pollutes the default `AssemblyLoadContext`. Resilient
@@ -52,7 +52,7 @@ from assembly identity (not an author UI string), so it is structural metadata t
 ## Registration
 
 Compose the feature alongside `ActivitiesDesignReconciliationFeature`; the universal
-`ActivityVersionsReconcilingHandler` discovers the source from DI:
+`CollectActivityVersions` discovers the source from DI:
 
 ```csharp
 shell.AddFeature(new ClrActivityReconciliationFeature

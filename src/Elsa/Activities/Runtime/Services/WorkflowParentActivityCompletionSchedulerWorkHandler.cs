@@ -152,6 +152,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
+        // One scope service serves both the self-owner scope built for the child-completion evaluation below
+        // and the completed-scope evidence capture on the completion path (ADR 0027/0030).
+        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
+
         SimpleActivityExecutionContext context;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots = [];
         try
@@ -183,10 +187,34 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 return;
             }
 
+            // Load the workflow-execution state once, best-effort, for the execution-time expression carrier (ADR 0030
+            // identity: correlation id / name / definition version) surfaced to a composite container's child-completion
+            // logic. Absent state degrades identity to null rather than failing the evaluation. The load is deferred
+            // past the handler-type gates above so non-composite parents don't pay for the FindAsync round-trip.
+            var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
+
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
 
-            context = new SimpleActivityExecutionContext(
+            // Build the container's self-owner scope (ADR 0030 parent-completion path): the enclosing container
+            // chain, anchored by the workflow-scope variables from the current durable-value projection (#286), so
+            // an OnChildCompleted/OnChildFaulted expression resolves enclosing-container/workflow variables by name
+            // rather than falling back to the flat carrier projection. `evaluateAsSelf` suppresses the per-iteration
+            // loop layer: the container's own provenance carries the iteration values of the loop it is a body of
+            // (ADR 0028), which is the wrong innermost scope when the container evaluates itself and broke loop/break
+            // control flow during development.
+            var variableScope = await scopeService.BuildScopeAsync(
+                executable, workItem.WorkflowExecutionId, parentState, cancellationToken, constructedParent.WorkflowVariables, evaluateAsSelf: true);
+
+            // Populate the live execution-time expression carrier (ADR 0030) for the container's child-completion
+            // logic: workflow identity and the durable-value projections for inputs/variables/outputs. Previously
+            // this context carried identity but none of the carrier state, so an OnChildCompleted/OnChildFaulted
+            // handler evaluating an expression saw empty getCorrelationId()/getInput()/getVariable()/getOutput().
+            // The carrier's WorkflowVariables projection serves flat getVariable reads; the threaded self-owner
+            // scope above serves named/structured resolution of enclosing-container and workflow variables.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                workflowState, payload.PinnedExecutable, constructedParent.WorkflowInputs, constructedParent.WorkflowVariables, constructedParent.ActivityOutputValues);
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 parentActivity,
                 cancellationToken,
@@ -194,7 +222,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 payload.PinnedExecutable,
                 workItem,
                 parentExecutableNode,
-                parentState);
+                parentState,
+                variableScope,
+                carrier);
             RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
             if (childFaulted)
@@ -219,6 +249,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
                 await ((IActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
             }
+
+            // Persist any enclosing-container variable the child-completion/fault logic assigned by name back to
+            // the owning container executions' snapshots, so sibling branches and resume observe it (ADR 0027) —
+            // mirroring the leaf-invoke path. This covers the container scopes in the visible chain; write-back of
+            // the workflow-root scope to durable-value state (which must fold into the checkpoint commit) remains a
+            // documented follow-up, so a mutation of a workflow-level variable here is not yet durable.
+            await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
 
             var scheduledChildren = context.GetChildActivityScheduleRequests();
             if (context.CompositeCompletionRequested && scheduledChildren.Count > 0)
@@ -267,7 +304,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         // A completing container's scope is no longer live for runtime expressions; mark it completed
         // and retain its final variable values as inspection evidence only through the configured
         // capture/retention policy (ADR 0027, #210).
-        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
         var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
             payloadCapturePolicy, scopeService, parentExecutableNode, latestParentState,
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
@@ -299,15 +335,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         CancellationToken cancellationToken)
     {
         var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+        var workflowVariables = projections.WorkflowVariables;
+        var workflowInputs = projections.WorkflowInputs;
+        var activityOutputValues = projections.ActivityOutputValues;
+
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: workItem.WorkflowExecutionId,
             activityExecutionId: payload.ActivityExecutionId,
             durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
             activityOutputs: activityOutputRegister,
             serviceProvider: serviceProvider,
-            workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
-            workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
-            activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+            workflowVariables: workflowVariables,
+            workflowInputs: workflowInputs,
+            activityOutputValues: activityOutputValues);
         var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
 
         var activity = await activityFactory.Create(
@@ -317,7 +358,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             BuildOutputArguments(executableNode),
             cancellationToken);
 
-        return new ConstructedActivity(activity, inputs);
+        return new ConstructedActivity(activity, inputs, workflowInputs, workflowVariables, activityOutputValues);
     }
 
     private async ValueTask EnqueueChildActivityScheduleWorkAsync(
@@ -848,5 +889,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private sealed record ConstructedActivity(
         IActivity Activity,
-        IReadOnlyList<RuntimeMaterializedActivityInput> Inputs);
+        IReadOnlyList<RuntimeMaterializedActivityInput> Inputs,
+        IReadOnlyDictionary<string, object?> WorkflowInputs,
+        IReadOnlyDictionary<string, object?> WorkflowVariables,
+        IReadOnlyDictionary<string, object?> ActivityOutputValues);
 }
