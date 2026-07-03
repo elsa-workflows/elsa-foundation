@@ -14,6 +14,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
+    private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
+    private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
+    private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
 
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -76,6 +79,21 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
         IWorkflowExecutionStateStore? workflowExecutionStateStore,
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher)
+        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher, faultCapturePolicy: null, poisonStore: null, retryPolicy: null)
+    {
+    }
+
+    public WorkflowSchedulerDrainer(
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
+        TimeProvider timeProvider,
+        IWorkflowSchedulerPauseGate? pauseGate,
+        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher,
+        IRuntimeFaultCapturePolicy? faultCapturePolicy,
+        IWorkflowSchedulerPoisonStore? poisonStore,
+        IRuntimeDomainRetryPolicy? retryPolicy)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -91,6 +109,9 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _ambientServicesAccessor = ambientServicesAccessor;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _pipelineDispatcher = pipelineDispatcher;
+        _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();
+        _poisonStore = poisonStore;
+        _retryPolicy = retryPolicy;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
@@ -200,16 +221,88 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (Exception exception)
         {
+            var faultInfo = _faultCapturePolicy.Capture(exception);
+            var handlerName = handler?.Name ?? nameof(WorkflowSchedulerDrainer);
+            await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
+
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 commandKind: workItem.CommandKind,
                 status: RuntimeSchedulerWorkItemResultStatus.Faulted,
-                handlerName: handler?.Name ?? nameof(WorkflowSchedulerDrainer),
+                handlerName: handlerName,
                 startedAt: startedAt,
                 completedAt: _timeProvider.GetUtcNow(),
-                error: exception.ToString());
+                error: faultInfo.ToSummaryString());
         }
+    }
+
+    // A dispatched handler threw. The work item was already dequeued (:128), so without this it would be dropped:
+    // no retry, no record, no incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the
+    // default (Noop → DoNotRetry) parks it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the
+    // queue's public contract; RetryAfter records a NextRetryAt for a recovery pump (W2) to re-drive and does NOT
+    // re-enqueue here, since immediate re-enqueue would ignore the delay and hot-loop. This lives entirely in the
+    // crash path — it does not touch the peek/pause-gate/dequeue sequence.
+    private async ValueTask HandleHandlerCrashAsync(
+        RuntimeSchedulerWorkItem workItem,
+        string handlerName,
+        RuntimeFaultInfo faultInfo,
+        CancellationToken cancellationToken)
+    {
+        if (_poisonStore is null)
+            return;
+
+        var now = _timeProvider.GetUtcNow();
+        var existing = await _poisonStore.FindAsync(workItem.WorkflowExecutionId, workItem.WorkItemId, cancellationToken);
+        var priorFailureCount = existing?.FailureCount ?? 0;
+        var failureCount = priorFailureCount + 1;
+        var firstFailedAt = existing?.FirstFailedAt ?? now;
+
+        var decision = _retryPolicy?.Decide(new RuntimeDomainRetryRequest(
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            activityExecutionId: null,
+            failureType: faultInfo.ExceptionType,
+            failureCount: priorFailureCount,
+            requestedAt: now));
+
+        var disposition = RuntimeSchedulerPoisonDisposition.Poisoned;
+        DateTimeOffset? nextRetryAt = null;
+
+        switch (decision?.Mode)
+        {
+            case RuntimeDomainRetryMode.RetryNow:
+                await _schedulerWorkQueue.EnqueueAsync(workItem, cancellationToken);
+                disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
+                nextRetryAt = now;
+                break;
+            case RuntimeDomainRetryMode.RetryAfter:
+                disposition = RuntimeSchedulerPoisonDisposition.RetryScheduled;
+                nextRetryAt = now + (decision.Delay ?? TimeSpan.Zero);
+                break;
+            case RuntimeDomainRetryMode.DoNotRetry:
+            case RuntimeDomainRetryMode.Fault:
+            case null:
+                disposition = RuntimeSchedulerPoisonDisposition.Poisoned;
+                break;
+        }
+
+        await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
+            workflowExecutionId: workItem.WorkflowExecutionId,
+            workItemId: workItem.WorkItemId,
+            commandKind: workItem.CommandKind,
+            handlerName: handlerName,
+            fault: faultInfo,
+            failureCount: failureCount,
+            disposition: disposition,
+            firstFailedAt: firstFailedAt,
+            lastFailedAt: now,
+            nextRetryAt: nextRetryAt,
+            metadata: decision is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["runtime.poison.retryMode"] = decision.Mode.ToString(),
+                ["runtime.poison.retryReason"] = decision.Reason
+            }),
+            cancellationToken);
     }
 
     private async ValueTask<RuntimeSchedulerWorkItem?> PeekAsync(string workflowExecutionId, CancellationToken cancellationToken)
