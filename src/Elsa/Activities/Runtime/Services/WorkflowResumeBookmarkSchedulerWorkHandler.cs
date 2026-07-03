@@ -129,22 +129,20 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
-        // Load the workflow-execution state once, best-effort, for the execution-time expression carrier (ADR 0030
-        // identity: correlation id / name / definition version). Absent state degrades identity to null rather than
-        // failing the resume; a resume callback that evaluates no expressions is unaffected either way.
-        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
-
+        // The resumed activity's carrier identity (ADR 0030) is projected from the durable values below (spec 083
+        // review) — no per-resume workflow-execution-state read, and a Correlate/SetName in this run is visible here.
         var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
 
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
         VariableScope? variableScope;
+        RuntimeInputBindingStateProjectionSet projections;
         IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyDictionary<string, object?> workflowInputValues;
         IReadOnlyDictionary<string, object?> activityOutputValues;
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
             workflowVariables = projections.WorkflowVariables;
             workflowInputValues = projections.WorkflowInputs;
             activityOutputValues = projections.ActivityOutputValues;
@@ -204,8 +202,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // Previously the resume context was built with none of these, so a resume callback that evaluated
             // JavaScript/Liquid saw empty getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no
             // scope to write variables into. Populated identically to the invoke path via the shared helper.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(
-                workflowState, resumePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,

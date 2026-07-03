@@ -53,6 +53,17 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
+    /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the
+    /// execution-time expression carrier (ADR 0030 identity), tagged with the slot name (<c>"correlationId"</c> or
+    /// <c>"instanceName"</c>). A <c>Correlate</c>/<c>SetName</c> leaf projects the assigned value into a durable
+    /// value under a reserved <c>identity:</c> value id, so any activity invocation — including a concurrent sibling
+    /// branch — re-lists it and populates <c>getCorrelationId()</c> / <c>getWorkflowInstanceName()</c> without a
+    /// per-invocation workflow-execution-state read (spec 083 review). Distinct from <see cref="InstanceName"/>,
+    /// which is the persisted system-metadata home read for querying; both are written in the same commit.
+    /// </summary>
+    public const string IdentityName = "runtime.identityName";
+
+    /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
     /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by

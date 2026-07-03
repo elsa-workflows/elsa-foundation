@@ -187,12 +187,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 return;
             }
 
-            // Load the workflow-execution state once, best-effort, for the execution-time expression carrier (ADR 0030
-            // identity: correlation id / name / definition version) surfaced to a composite container's child-completion
-            // logic. Absent state degrades identity to null rather than failing the evaluation. The load is deferred
-            // past the handler-type gates above so non-composite parents don't pay for the FindAsync round-trip.
-            var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
-
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
 
@@ -204,16 +198,17 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             // (ADR 0028), which is the wrong innermost scope when the container evaluates itself and broke loop/break
             // control flow during development.
             var variableScope = await scopeService.BuildScopeAsync(
-                executable, workItem.WorkflowExecutionId, parentState, cancellationToken, constructedParent.WorkflowVariables, evaluateAsSelf: true);
+                executable, workItem.WorkflowExecutionId, parentState, cancellationToken, constructedParent.Projections.WorkflowVariables, evaluateAsSelf: true);
 
             // Populate the live execution-time expression carrier (ADR 0030) for the container's child-completion
-            // logic: workflow identity and the durable-value projections for inputs/variables/outputs. Previously
-            // this context carried identity but none of the carrier state, so an OnChildCompleted/OnChildFaulted
-            // handler evaluating an expression saw empty getCorrelationId()/getInput()/getVariable()/getOutput().
-            // The carrier's WorkflowVariables projection serves flat getVariable reads; the threaded self-owner
-            // scope above serves named/structured resolution of enclosing-container and workflow variables.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(
-                workflowState, payload.PinnedExecutable, constructedParent.WorkflowInputs, constructedParent.WorkflowVariables, constructedParent.ActivityOutputValues);
+            // logic: identity + the durable-value projections for inputs/variables/outputs, all from the single
+            // ProjectAll computed while constructing the parent (spec 083 review — no per-invocation
+            // workflow-execution-state read; identity is visible across concurrent sibling branches). Previously this
+            // context carried identity but none of the carrier state, so an OnChildCompleted/OnChildFaulted handler
+            // evaluating an expression saw empty getCorrelationId()/getInput()/getVariable()/getOutput(). The carrier's
+            // WorkflowVariables projection serves flat getVariable reads; the threaded self-owner scope above serves
+            // named/structured resolution of enclosing-container and workflow variables.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(constructedParent.Projections, payload.PinnedExecutable);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 parentActivity,
@@ -358,7 +353,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             BuildOutputArguments(executableNode),
             cancellationToken);
 
-        return new ConstructedActivity(activity, inputs, workflowInputs, workflowVariables, activityOutputValues);
+        return new ConstructedActivity(activity, inputs, projections);
     }
 
     private async ValueTask EnqueueChildActivityScheduleWorkAsync(
@@ -890,7 +885,5 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
     private sealed record ConstructedActivity(
         IActivity Activity,
         IReadOnlyList<RuntimeMaterializedActivityInput> Inputs,
-        IReadOnlyDictionary<string, object?> WorkflowInputs,
-        IReadOnlyDictionary<string, object?> WorkflowVariables,
-        IReadOnlyDictionary<string, object?> ActivityOutputValues);
+        RuntimeInputBindingStateProjectionSet Projections);
 }

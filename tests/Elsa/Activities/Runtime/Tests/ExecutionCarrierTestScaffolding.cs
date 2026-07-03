@@ -50,6 +50,15 @@ internal static class ExecutionCarrierTestData
     public static Task SeedOutputAsync(InMemoryDurableValueStateStore store, DateTimeOffset now, string name, string value) =>
         SeedDurableValueAsync(store, now, $"output:{name}", RuntimeMetadataKeys.OutputName, name, value);
 
+    // Seeds the workflow identity (correlation id / instance name) as IdentityName-tagged durable values, the
+    // channel the execution-time carrier projects identity from (spec 083 review). Mirrors
+    // RuntimeWorkflowStateSeed.BuildIdentityChanges so the handlers' RuntimeIdentityStateProjection surfaces these.
+    public static async Task SeedIdentityAsync(InMemoryDurableValueStateStore store, DateTimeOffset now, string correlationId, string instanceName)
+    {
+        await SeedDurableValueAsync(store, now, $"{RuntimeWorkflowStateSeed.IdentityValueIdPrefix}{RuntimeWorkflowStateSeed.IdentityCorrelationIdName}", RuntimeMetadataKeys.IdentityName, RuntimeWorkflowStateSeed.IdentityCorrelationIdName, correlationId);
+        await SeedDurableValueAsync(store, now, $"{RuntimeWorkflowStateSeed.IdentityValueIdPrefix}{RuntimeWorkflowStateSeed.IdentityInstanceNameName}", RuntimeMetadataKeys.IdentityName, RuntimeWorkflowStateSeed.IdentityInstanceNameName, instanceName);
+    }
+
     public static async Task SeedDurableValueAsync(
         InMemoryDurableValueStateStore store,
         DateTimeOffset now,

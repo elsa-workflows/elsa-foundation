@@ -60,6 +60,7 @@ public sealed class RuntimeResumeExecutionCarrierTests
     {
         await _executableStore.SaveAsync(NewExecutable());
         await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await ExecutionCarrierTestData.SeedIdentityAsync(_durableValueStateStore, _now, "corr-1", "Instance A");
         await ExecutionCarrierTestData.SeedInputAsync(_durableValueStateStore, _now, "orderId", "order-1");
         await ExecutionCarrierTestData.SeedVariableAsync(_durableValueStateStore, _now, "Hello");
         await ExecutionCarrierTestData.SeedOutputAsync(_durableValueStateStore, _now, "prior", "prior-value");

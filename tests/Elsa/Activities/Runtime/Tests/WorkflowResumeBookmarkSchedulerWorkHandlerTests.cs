@@ -72,6 +72,30 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_PopulatesResumedActivityCarrierIdentityFromDurableValues()
+    {
+        // The resumed activity's own execution-time carrier (ADR 0030) reads identity from the IdentityName-tagged
+        // durable values the resume path already lists (spec 083 review), so getCorrelationId() /
+        // getWorkflowInstanceName() are live inside the resume target too.
+        var activity = new ResumeTargetActivity { Outcomes = ["Resumed"] };
+        foreach (var change in RuntimeWorkflowStateSeed.BuildIdentityChanges(
+                     "wfexec-1", correlationIdAssignmentRequested: true, "order-123",
+                     instanceNameAssignmentRequested: true, "Order 123", _now))
+            await _durableValueStateStore.SaveAsync(change.State!);
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewSuspendedState());
+        await SaveBookmarkAsync();
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        Assert.Equal("order-123", activity.ObservedCorrelationId);
+        Assert.Equal("Order 123", activity.ObservedWorkflowName);
+        await AssertCompletionWorkAsync();
+    }
+
+    [Fact]
     public async Task HandleAsync_PassesJsonInputToResumeTarget()
     {
         var activity = new ResumeTargetActivity();
@@ -718,11 +742,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         public string[]? Outcomes { get; set; }
         public bool ContextResumeInvoked { get; private set; }
         public string? ObservedOrderId { get; private set; }
+        public string? ObservedCorrelationId { get; private set; }
+        public string? ObservedWorkflowName { get; private set; }
 
         [ResumeTarget("resume-target:delivery")]
         private ValueTask ResumeAsync(IActivityExecutionContext context)
         {
             ContextResumeInvoked = true;
+            var carrier = (IExecutionExpressionState)context;
+            ObservedCorrelationId = carrier.CorrelationId;
+            ObservedWorkflowName = carrier.WorkflowName;
             if (Outcomes is not null)
                 context.SetOutcomes(Outcomes);
 
