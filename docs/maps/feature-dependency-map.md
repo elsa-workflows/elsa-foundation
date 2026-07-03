@@ -6,7 +6,7 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 69
+- Feature classes: 70
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
 - Feature-bearing source projects: 66
@@ -90,6 +90,7 @@ No duplicate explicit feature IDs were discovered.
 | WorkflowDesignValidations | WorkflowDesignValidationsFeature | False | Elsa.Workflows.Design.Validations | MaxRecursionDepth: int | code default | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsPublishingApi | WorkflowsPublishingApiFeature | False | Elsa.Workflows.Publishing.Api | - | - | [WorkflowsPublishingApiFeature.cs](../../src/Elsa/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | WorkflowsRuntimeApi | WorkflowsRuntimeApiFeature | False | Elsa.Workflows.Runtime.Api | - | - | [WorkflowsRuntimeApiFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |
+| WorkflowsRuntimeTriggers | WorkflowsRuntimeTriggersFeature | False | Elsa.Workflows.Runtime.Api | - | - | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | WorkflowsRuntimeHttp | WorkflowsRuntimeHttpFeature | False | Elsa.Workflows.Runtime.Http | AuthorizationHandlerType: string<br>BasePath: string<br>FaultHandlerType: string<br>RouteResolverType: string | code default<br>type-name selection signal | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | JavaScriptEndpoints | JavaScriptActivitiesEndpointsFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |
 | JavaScriptActivities | JavaScriptActivitiesFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
@@ -161,6 +162,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeApi | Elsa.Workflows.Runtime.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| WorkflowsRuntimeTriggers | Elsa.Workflows.Runtime.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | - | Elsa.Http.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
 | JavaScriptEndpoints | Elsa.Workflows.Runtime.JavaScript | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | JavaScriptActivities | Elsa.Workflows.Runtime.JavaScript | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
