@@ -132,10 +132,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         // Load the workflow-execution state once, best-effort, for the execution-time expression carrier (ADR 0030
         // identity: correlation id / name / definition version). Absent state degrades identity to null rather than
         // failing the resume; a resume callback that evaluates no expressions is unaffected either way.
-        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-        var workflowState = workflowExecutionStateStore is null
-            ? null
-            : await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
 
         var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
 
@@ -147,9 +144,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
-            workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-            activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+            var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+            workflowVariables = projections.WorkflowVariables;
+            workflowInputValues = projections.WorkflowInputs;
+            activityOutputValues = projections.ActivityOutputValues;
 
             // Build the visible container-scope chain (ADR 0027) anchored from the current durable-value variable
             // projection, so a resume callback's freehand expressions read container/workflow-scoped variables and
@@ -208,7 +206,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // scope to write variables into. Populated identically to the invoke path via the shared helper.
             var carrier = RuntimeExecutionExpressionCarrier.Create(
                 workflowState, resumePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
-            context = new SimpleActivityExecutionContext(
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
                 cancellationToken,
@@ -218,12 +216,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                correlationId: carrier.CorrelationId,
-                workflowName: carrier.WorkflowName,
-                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
-                workflowInputs: carrier.WorkflowInputs,
-                workflowVariables: carrier.WorkflowVariables,
-                activityOutputValues: carrier.ActivityOutputValues);
+                carrier);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)

@@ -19,16 +19,72 @@ public sealed class SimpleActivityExecutionContext(
     RuntimeSchedulerWorkItem? schedulerWorkItem = null,
     ExecutableNode? executableNode = null,
     ActivityExecutionState? activityExecutionState = null,
-    VariableScope? variableScope = null,
-    string? correlationId = null,
-    string? workflowName = null,
-    int workflowDefinitionVersion = 0,
-    IReadOnlyDictionary<string, object?>? workflowInputs = null,
-    IReadOnlyDictionary<string, object?>? workflowVariables = null,
-    IReadOnlyDictionary<string, object?>? activityOutputValues = null)
+    VariableScope? variableScope = null)
     : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
 {
     private static readonly IReadOnlyDictionary<string, object?> EmptyExpressionState = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+    // The live execution-time expression carrier (ADR 0030), or null for a lightweight/non-execution context.
+    // Populated only through ForExecution, which takes the carrier as a single non-nullable value: there is no
+    // way to supply a partial or empty carrier, closing the empty-accessor footgun where a caller hand-spread the
+    // six carrier fields and could silently omit some. The primary constructor deliberately keeps no carrier
+    // parameter — a context built through it (e.g. a non-execution test context) simply has no carrier and its
+    // accessors return empty. See RuntimeExecutionExpressionCarrier.
+    private readonly RuntimeExecutionExpressionCarrierState? _executionCarrier;
+
+    // The single construction path for an execution-time context (leaf invoke, resume callback, composite
+    // child-completion). Requires the resolved carrier state — a non-nullable value type, so it is always
+    // present — alongside the runtime identity handles and (optionally) the visible variable scope. All three
+    // scheduler work handlers route through here so identity, inputs, variables, and prior activity outputs are
+    // populated identically and no production site can reproduce the empty-accessor bug (ADR 0030).
+    public static SimpleActivityExecutionContext ForExecution(
+        IServiceProvider serviceProvider,
+        IActivity activity,
+        CancellationToken cancellationToken,
+        string workflowExecutionId,
+        WorkflowExecutableIdentity pinnedExecutable,
+        RuntimeSchedulerWorkItem? schedulerWorkItem,
+        ExecutableNode? executableNode,
+        ActivityExecutionState? activityExecutionState,
+        VariableScope? variableScope,
+        RuntimeExecutionExpressionCarrierState executionCarrier)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentNullException.ThrowIfNull(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(pinnedExecutable);
+
+        return new SimpleActivityExecutionContext(
+            serviceProvider,
+            activity,
+            cancellationToken,
+            workflowExecutionId,
+            pinnedExecutable,
+            schedulerWorkItem,
+            executableNode,
+            activityExecutionState,
+            variableScope,
+            executionCarrier);
+    }
+
+    // Carrier-bearing constructor invoked only by ForExecution; chains the primary constructor for the shared
+    // runtime handles and then pins the ADR 0030 carrier state. The runtime handles mirror the primary
+    // constructor's nullability so throw-on-access members (SchedulerWorkItem, ExecutableNode, ...) stay lazy.
+    private SimpleActivityExecutionContext(
+        IServiceProvider serviceProvider,
+        IActivity activity,
+        CancellationToken cancellationToken,
+        string workflowExecutionId,
+        WorkflowExecutableIdentity pinnedExecutable,
+        RuntimeSchedulerWorkItem? schedulerWorkItem,
+        ExecutableNode? executableNode,
+        ActivityExecutionState? activityExecutionState,
+        VariableScope? variableScope,
+        RuntimeExecutionExpressionCarrierState executionCarrier)
+        : this(serviceProvider, activity, cancellationToken, workflowExecutionId, pinnedExecutable, schedulerWorkItem, executableNode, activityExecutionState, variableScope)
+    {
+        _executionCarrier = executionCarrier;
+    }
 
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
@@ -211,14 +267,14 @@ public sealed class SimpleActivityExecutionContext(
     // Reflect a pending script assignment (setCorrelationId/setWorkflowInstanceName) so a read-after-write within
     // the same evaluation observes the new value, even though the durable change is folded at the checkpoint
     // via the control-leaf intent path (spec 064 scenario 3, carried forward by ADR 0030).
-    public string? CorrelationId => CorrelationIdAssignmentRequested ? RequestedCorrelationId : correlationId;
-    public string? WorkflowName => InstanceNameAssignmentRequested ? RequestedInstanceName : workflowName;
+    public string? CorrelationId => CorrelationIdAssignmentRequested ? RequestedCorrelationId : _executionCarrier?.CorrelationId;
+    public string? WorkflowName => InstanceNameAssignmentRequested ? RequestedInstanceName : _executionCarrier?.WorkflowName;
     public string WorkflowDefinitionId => pinnedExecutable?.DefinitionId ?? string.Empty;
     public string WorkflowDefinitionVersionId => pinnedExecutable?.DefinitionVersionId ?? string.Empty;
-    public int WorkflowDefinitionVersion { get; } = workflowDefinitionVersion;
-    public IReadOnlyDictionary<string, object?> WorkflowInputs { get; } = workflowInputs ?? EmptyExpressionState;
-    public IReadOnlyDictionary<string, object?> WorkflowVariables { get; } = workflowVariables ?? EmptyExpressionState;
-    public IReadOnlyDictionary<string, object?> ActivityOutputValues { get; } = activityOutputValues ?? EmptyExpressionState;
+    public int WorkflowDefinitionVersion => _executionCarrier?.WorkflowDefinitionVersion ?? 0;
+    public IReadOnlyDictionary<string, object?> WorkflowInputs => _executionCarrier?.WorkflowInputs ?? EmptyExpressionState;
+    public IReadOnlyDictionary<string, object?> WorkflowVariables => _executionCarrier?.WorkflowVariables ?? EmptyExpressionState;
+    public IReadOnlyDictionary<string, object?> ActivityOutputValues => _executionCarrier?.ActivityOutputValues ?? EmptyExpressionState;
 
     public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => _memory.Declare(blockReference);
     public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => _memory.TryGetBlock(blockReference.Id, out block);

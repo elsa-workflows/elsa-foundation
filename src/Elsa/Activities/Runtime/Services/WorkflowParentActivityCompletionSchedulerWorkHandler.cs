@@ -179,10 +179,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             // identity: correlation id / name / definition version) surfaced to a composite container's child-completion
             // logic. Absent state degrades identity to null rather than failing the evaluation. The load is deferred
             // past the handler-type gates above so non-composite parents don't pay for the FindAsync round-trip.
-            var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
-            var workflowState = workflowExecutionStateStore is null
-                ? null
-                : await workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
+            var workflowState = await RuntimeExecutionExpressionCarrier.LoadWorkflowStateAsync(serviceProvider, workItem.WorkflowExecutionId, cancellationToken);
 
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
@@ -198,7 +195,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             // reads; scope-based/named variable access and write-back on this path is a documented follow-up.
             var carrier = RuntimeExecutionExpressionCarrier.Create(
                 workflowState, payload.PinnedExecutable, constructedParent.WorkflowInputs, constructedParent.WorkflowVariables, constructedParent.ActivityOutputValues);
-            context = new SimpleActivityExecutionContext(
+            context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 parentActivity,
                 cancellationToken,
@@ -208,12 +205,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 parentExecutableNode,
                 parentState,
                 variableScope: null,
-                correlationId: carrier.CorrelationId,
-                workflowName: carrier.WorkflowName,
-                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
-                workflowInputs: carrier.WorkflowInputs,
-                workflowVariables: carrier.WorkflowVariables,
-                activityOutputValues: carrier.ActivityOutputValues);
+                carrier);
             RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
             if (childFaulted)
@@ -318,9 +310,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         CancellationToken cancellationToken)
     {
         var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
-        var workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
-        var workflowInputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
-        var activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+        var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
+        var workflowVariables = projections.WorkflowVariables;
+        var workflowInputs = projections.WorkflowInputs;
+        var activityOutputValues = projections.ActivityOutputValues;
 
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: workItem.WorkflowExecutionId,

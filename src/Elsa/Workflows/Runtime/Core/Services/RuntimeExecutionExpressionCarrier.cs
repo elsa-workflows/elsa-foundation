@@ -1,6 +1,8 @@
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -46,6 +48,26 @@ public static class RuntimeExecutionExpressionCarrier
             WorkflowInputs: workflowInputs,
             WorkflowVariables: workflowVariables,
             ActivityOutputValues: activityOutputValues);
+    }
+
+    /// <summary>
+    /// Best-effort load of the workflow-execution state used to resolve carrier identity (correlation id / name /
+    /// definition version). Every scheduler work handler that builds an execution-time context needs the same load,
+    /// so it lives here rather than being re-derived at each site. Returns null when no <see
+    /// cref="IWorkflowExecutionStateStore"/> is registered or the state is absent, degrading identity to null rather
+    /// than faulting the activity — matching the invoke, resume, and parent-completion paths.
+    /// </summary>
+    public static async ValueTask<WorkflowExecutionState?> LoadWorkflowStateAsync(
+        IServiceProvider serviceProvider,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
+        return workflowExecutionStateStore is null
+            ? null
+            : await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
     }
 
     // Resolves the current workflow instance name for the execution-time expression carrier (ADR 0030) from the
