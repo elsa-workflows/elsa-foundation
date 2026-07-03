@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.PostgreSql" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Unified provider project lives under this domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Unified/**/*" />
+    <EmbeddedResource Remove="Unified/**/*" />
+    <None Remove="Unified/**/*" />
+  </ItemGroup>
+
+</Project>

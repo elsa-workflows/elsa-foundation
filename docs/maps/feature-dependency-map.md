@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 72
+- Feature classes: 74
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 68
+- Feature-bearing source projects: 70
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -59,7 +59,7 @@ No duplicate explicit feature IDs were discovered.
 | Events | EventsFeature | False | Elsa.Events | DefaultEventPublishingStrategy: IEventPublishingStrategy | - | [EventsFeature.cs](../../src/Elsa/Events/EventsFeature.cs) |
 | Expressions | ExpressionsFeature | False | Elsa.Expressions | EvaluatorOptions: ExpressionEvaluatorOptions | - | [ExpressionsFeature.cs](../../src/Elsa/Expressions/ExpressionsFeature.cs) |
 | JavaScriptExpressions | JavaScriptFeature | False | Elsa.Expressions.JavaScript | GetConfigurationFunction: ConfigurationAccessFunctionProviderOptions?<br>TypeDescriptors: IEnumerable<JavaScriptTypeDescriptor> | - | [JavaScriptFeature.cs](../../src/Elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
-| JavaScriptJintEngine | JintFeature | False | Elsa.Expressions.JavaScript.Jint | AllowClrAccess: bool<br>ScriptCacheTimeout: TimeSpan? | code default | [JintFeature.cs](../../src/Elsa/Expressions/JavaScript/Jint/JintFeature.cs) |
+| JavaScriptJintEngine | JintFeature | False | Elsa.Expressions.JavaScript.Jint | AllowClrAccess: bool<br>ExecutionTimeout: TimeSpan?<br>MaxRecursionDepth: int?<br>MaxStatements: int?<br>ScriptCacheTimeout: TimeSpan? | code default | [JintFeature.cs](../../src/Elsa/Expressions/JavaScript/Jint/JintFeature.cs) |
 | JavaScriptLibraries | JavaScriptLibrariesFeature | False | Elsa.Expressions.JavaScript.Libraries | FullModuleResourceName: string?<br>ModuleName: string? | code default<br>validation/requiredness guard in code | [JavaScriptLibrariesFeature.cs](../../src/Elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |
 | JavaScriptRenderingEndpoints | JavaScriptRenderingEndpointsFeature | False | Elsa.Expressions.JavaScript.Rendering | - | - | [JavaScriptRenderingEndpointsFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingEndpointsFeature.cs) |
 | JavaScriptRendering | JavaScriptRenderingFeature | False | Elsa.Expressions.JavaScript.Rendering | FunctionDeclarations: IEnumerable<JavaScriptFunctionDeclaration><br>TypeDeclarations: IEnumerable<JavaScriptTypeDeclaration><br>VariableDeclarations: IEnumerable<JavaScriptVariableDeclaration> | - | [JavaScriptRenderingFeature.cs](../../src/Elsa/Expressions/JavaScript/Rendering/JavaScriptRenderingFeature.cs) |
@@ -74,6 +74,8 @@ No duplicate explicit feature IDs were discovered.
 | FileSystemDistributedLocking | FileSystemLockingFeature | False | Elsa.Locking.FileSystem | LockAcquisitionTimeoutMinutes: double<br>LocksFolderPath: string | code default<br>filesystem path signal | [FileSystemLockingFeature.cs](../../src/Elsa/Locking/FileSystem/FileSystemLockingFeature.cs) |
 | Mediator | MediatorFeature | False | Elsa.Mediator | - | - | [MediatorFeature.cs](../../src/Elsa/Mediator/MediatorFeature.cs) |
 | ModularityApi | ModularityApiFeature | False | Elsa.Modularity.Api | ShellsJsonPath: string | - | [ModularityApiFeature.cs](../../src/Elsa/Modularity/Api/ModularityApiFeature.cs) |
+| GroundworkRuntimePersistencePostgreSql | PostgreSqlGroundworkRuntimePersistenceShellFeature | False | Elsa.Persistence.Groundwork.PostgreSql | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [PostgreSqlGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs) |
+| GroundworkUnifiedPersistencePostgreSql | PostgreSqlGroundworkUnifiedPersistenceShellFeature | False | Elsa.Persistence.Groundwork.PostgreSql.Unified | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs) |
 | GroundworkRuntimePersistenceSqlite | SqliteGroundworkRuntimePersistenceShellFeature | False | Elsa.Persistence.Groundwork.Sqlite | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [SqliteGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs) |
 | GroundworkUnifiedPersistenceSqlite | SqliteGroundworkUnifiedPersistenceShellFeature | False | Elsa.Persistence.Groundwork.Sqlite.Unified | ConnectionString: string? | code default<br>sensitive or deployment-specific value signal | [SqliteGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/Sqlite/Unified/SqliteGroundworkUnifiedPersistenceShellFeature.cs) |
 | Primitives | PrimitivesFeature | False | Elsa.Primitives.Hosting | - | - | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
@@ -150,8 +152,10 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | FileSystemDistributedLocking | Elsa.Locking.FileSystem | - | Elsa.Locking.Core | CShells.Abstractions 0.0.29-preview.144<br>DistributedLock.FileSystem 1.0.3<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | Mediator | Elsa.Mediator | - | Elsa.Mediator.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | ModularityApi | Elsa.Modularity.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| GroundworkRuntimePersistencePostgreSql | Elsa.Persistence.Groundwork.PostgreSql | - | Elsa.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.PostgreSql 0.0.1-preview.10<br>Npgsql 10.0.3 |
+| GroundworkUnifiedPersistencePostgreSql | Elsa.Persistence.Groundwork.PostgreSql.Unified | Elsa.Persistence.Groundwork.PostgreSql (GroundworkRuntimePersistencePostgreSql) | Elsa.Persistence.Groundwork.Unified | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.PostgreSql 0.0.1-preview.10<br>Npgsql 10.0.3 |
 | GroundworkRuntimePersistenceSqlite | Elsa.Persistence.Groundwork.Sqlite | - | Elsa.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Sqlite 0.0.1-preview.10<br>Microsoft.Data.Sqlite 10.0.8 |
-| GroundworkUnifiedPersistenceSqlite | Elsa.Persistence.Groundwork.Sqlite.Unified | Elsa.Persistence.Groundwork.Sqlite (GroundworkRuntimePersistenceSqlite) | Elsa.Activities.Design.Persistence.Groundwork<br>Elsa.Workflows.Design.Persistence.Groundwork | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Core 0.0.1-preview.10<br>Groundwork.Documents 0.0.1-preview.10<br>Microsoft.Extensions.DependencyInjection 10.0.8 |
+| GroundworkUnifiedPersistenceSqlite | Elsa.Persistence.Groundwork.Sqlite.Unified | Elsa.Persistence.Groundwork.Sqlite (GroundworkRuntimePersistenceSqlite) | Elsa.Persistence.Groundwork.Unified | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Groundwork.Core 0.0.1-preview.10<br>Groundwork.Documents 0.0.1-preview.10<br>Microsoft.Extensions.DependencyInjection 10.0.8 |
 | Primitives | Elsa.Primitives.Hosting | - | Elsa.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | Secrets | Elsa.Secrets | - | Elsa.Expressions.Core<br>Elsa.Secrets.Core<br>Elsa.Serialization.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Configuration.Abstractions 10.0.8<br>Microsoft.Extensions.DependencyInjection 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | SecretsApi | Elsa.Secrets.Api | Elsa.Api.FastEndpoints (ApiSecurity)<br>Elsa.Secrets (Secrets) | Elsa.Mediator.Core<br>Elsa.Secrets.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
