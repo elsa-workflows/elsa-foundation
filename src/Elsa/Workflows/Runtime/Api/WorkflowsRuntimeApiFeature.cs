@@ -53,6 +53,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
+        services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
         services.TryAddSingleton<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
         services.TryAddSingleton<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
@@ -109,7 +111,10 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
-                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>()));
+                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
+                serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
+                serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
@@ -118,6 +123,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
