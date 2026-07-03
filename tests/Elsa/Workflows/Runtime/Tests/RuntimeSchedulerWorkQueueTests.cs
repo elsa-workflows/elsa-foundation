@@ -46,6 +46,23 @@ public sealed class RuntimeSchedulerWorkQueueTests
     }
 
     [Fact]
+    public async Task ListPendingWorkflowExecutionIdsAsync_ReturnsDistinctOrderedBacklog()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-b"));
+        await queue.EnqueueAsync(NewWorkItem(2, workflowExecutionId: "wfexec-b"));
+        await queue.EnqueueAsync(NewWorkItem(3, workflowExecutionId: "wfexec-a"));
+
+        Assert.Equal(new[] { "wfexec-a", "wfexec-b" }, await queue.ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Equal(new[] { "wfexec-a" }, await queue.ListPendingWorkflowExecutionIdsAsync(1));
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.ListPendingWorkflowExecutionIdsAsync(0).AsTask());
+    }
+
+    [Fact]
     public async Task DequeueAsync_IsolatesWorkflowExecutionQueues()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();

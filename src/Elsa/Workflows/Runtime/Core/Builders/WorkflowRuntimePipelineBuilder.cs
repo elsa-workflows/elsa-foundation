@@ -10,6 +10,7 @@ public sealed class WorkflowRuntimePipelineBuilder : RuntimePipelinePlanBuilder
     public WorkflowRuntimePipelineBuilder() : base(RuntimePipelineKind.Workflow, RuntimeWorkflowPipelineSlots.All)
     {
         UseBuiltIn<RuntimeWorkflowLoadStateMiddleware>(RuntimeWorkflowPipelineSlots.LoadState);
+        UseBuiltIn<RuntimeWorkflowInvokeMiddleware>(RuntimeWorkflowPipelineSlots.Invoke);
         UseBuiltIn<RuntimeWorkflowSchedulingMiddleware>(RuntimeWorkflowPipelineSlots.Scheduling);
         UseBuiltIn<RuntimeWorkflowCheckpointMiddleware>(RuntimeWorkflowPipelineSlots.Checkpoint);
         UseBuiltIn<RuntimeWorkflowPostCommitMiddleware>(RuntimeWorkflowPipelineSlots.PostCommit);

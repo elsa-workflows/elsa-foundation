@@ -4,6 +4,6 @@ public sealed class RuntimeWorkflowLoadStateMiddleware : WorkflowRuntimeMiddlewa
 
 public sealed class RuntimeWorkflowSchedulingMiddleware : WorkflowRuntimeMiddlewareBase;
 
-public sealed class RuntimeWorkflowCheckpointMiddleware : WorkflowRuntimeMiddlewareBase;
+// RuntimeWorkflowCheckpointMiddleware is a real (non-placeholder) middleware — see RuntimeWorkflowCheckpointMiddleware.cs.
 
 public sealed class RuntimeWorkflowPostCommitMiddleware : WorkflowRuntimeMiddlewareBase;

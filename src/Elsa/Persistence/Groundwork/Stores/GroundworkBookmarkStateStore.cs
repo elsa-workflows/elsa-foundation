@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -12,7 +11,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// chosen by the host through feature composition and never leaks into this bridge or into runtime
 /// domain code.
 /// </summary>
-public sealed class GroundworkBookmarkStateStore(IDocumentStore store) : IBookmarkStateStore
+public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IBookmarkStateStore, IBookmarkStimulusIndex
 {
     public async ValueTask<BookmarkState> SaveAsync(BookmarkState state, CancellationToken cancellationToken = default)
     {
@@ -20,12 +19,12 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store) : IBookma
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.BookmarkId);
 
-        var content = JsonSerializer.Serialize(state, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.BookmarkStateDocumentKind, state);
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
                 BuildId(state.WorkflowExecutionId, state.BookmarkId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -73,8 +72,29 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store) : IBookma
         return envelopes.Select(Map).ToArray();
     }
 
-    private static BookmarkState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<BookmarkState>(envelope.ContentJson, GroundworkRuntimeJson.Options)!;
+    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+
+        // The cross-execution index is keyed by stimulus hash only (every provider supports single-field
+        // equality). Post-filter by stimulus type in code so a hash shared across two stimulus types can
+        // never cross-match; the hash is type-derived in practice so this is a defensive narrowing.
+        var envelopes = await store.QueryAsync(
+            new DocumentStoreQuery(
+                ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
+                ElsaRuntimeStorageManifest.BookmarkStateByStimulus,
+                stimulusHash),
+            cancellationToken);
+
+        return envelopes
+            .Select(Map)
+            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
+            .ToArray();
+    }
+
+    private BookmarkState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<BookmarkState>(envelope);
 
     // Deterministic, collision-free composite document id. Parts are escaped so a separator inside
     // an id cannot forge a different (workflowExecutionId, bookmarkId) pair.

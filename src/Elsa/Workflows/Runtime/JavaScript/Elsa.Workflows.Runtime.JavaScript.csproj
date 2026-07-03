@@ -19,7 +19,6 @@
 		<ProjectReference Include="..\..\Primitives\Elsa.Workflows.Primitives.csproj" />
 		<ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
 
-		<ProjectReference Include="..\..\..\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
 		<ProjectReference Include="..\..\..\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
 		<ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
 	</ItemGroup>

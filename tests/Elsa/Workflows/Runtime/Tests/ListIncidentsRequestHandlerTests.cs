@@ -1,0 +1,90 @@
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
+using Xunit;
+
+namespace Elsa.Workflows.Runtime.Tests;
+
+/// <summary>
+/// Guardrails for RT-5: the operator incident query surface returns recorded incidents for a workflow execution,
+/// supports a blocking-only filter, and signals a missing workflow so the endpoint can answer 404.
+/// </summary>
+public sealed class ListIncidentsRequestHandlerTests
+{
+    private readonly DateTimeOffset _now = new(2026, 7, 2, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Handle_ReturnsAllIncidents_ForExistingWorkflow()
+    {
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        await workflowStore.SaveAsync(NewWorkflowState());
+        await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
+        await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
+        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore);
+
+        var response = await handler.Handle(new ListIncidents("wfexec-1"), CancellationToken.None);
+
+        Assert.True(response.WorkflowExists);
+        Assert.Equal(2, response.Count);
+    }
+
+    [Fact]
+    public async Task Handle_WithBlockingOnly_ReturnsOnlyBlockingIncidents()
+    {
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        await workflowStore.SaveAsync(NewWorkflowState());
+        await incidentStore.TryAddAsync(NewIncident("incident-open", IncidentStatus.Open));
+        await incidentStore.TryAddAsync(NewIncident("incident-blocking", IncidentStatus.Blocking));
+        var handler = new ListIncidentsRequestHandler(workflowStore, incidentStore);
+
+        var response = await handler.Handle(new ListIncidents("wfexec-1", BlockingOnly: true), CancellationToken.None);
+
+        Assert.True(response.WorkflowExists);
+        var view = Assert.Single(response.Incidents);
+        Assert.Equal("incident-blocking", view.IncidentId);
+        Assert.True(view.IsBlocking);
+    }
+
+    [Fact]
+    public async Task Handle_ForMissingWorkflow_ReportsWorkflowDoesNotExist()
+    {
+        var handler = new ListIncidentsRequestHandler(new InMemoryWorkflowExecutionStateStore(), new InMemoryIncidentStateStore());
+
+        var response = await handler.Handle(new ListIncidents("missing"), CancellationToken.None);
+
+        Assert.False(response.WorkflowExists);
+        Assert.Empty(response.Incidents);
+    }
+
+    private WorkflowExecutionState NewWorkflowState() =>
+        new(
+            WorkflowExecutionId: "wfexec-1",
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: WorkflowExecutionStatus.Faulted,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: _now,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
+    private IncidentState NewIncident(string incidentId, IncidentStatus status) =>
+        new(
+            incidentId: incidentId,
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "actexec-1",
+            executableNodeId: "node-1",
+            severity: IncidentSeverity.Error,
+            status: status,
+            resolutionAction: IncidentResolutionAction.WaitForIntervention,
+            failureType: "System.InvalidOperationException",
+            message: "boom",
+            createdAt: _now,
+            resolvedAt: null);
+}

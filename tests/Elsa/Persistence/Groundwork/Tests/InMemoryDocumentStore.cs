@@ -45,6 +45,12 @@ internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumen
     public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
 
+    // Test-only: enumerate the stored envelopes of a kind. The golden-fixture compatibility test uses
+    // this to discover the composite document id the bridge assigned, so it can re-seed the same id under
+    // the legacy schema stamp without re-implementing each store's id-composition scheme.
+    public IReadOnlyCollection<DocumentEnvelope> Snapshot(string documentKind) =>
+        _docs.Values.Where(d => d.DocumentKind == documentKind).ToArray();
+
     public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
         lock (_gate)

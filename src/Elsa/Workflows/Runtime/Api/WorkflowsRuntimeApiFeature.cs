@@ -53,10 +53,19 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
+        services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
+        services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
         services.TryAddSingleton<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();
         services.TryAddSingleton<IWorkflowSchedulerPauseGate, WorkflowSchedulerPauseGate>();
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
+        services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
+        services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
+        services.TryAddSingleton<IRuntimeExecutionOwnershipService>(serviceProvider =>
+            new RuntimeExecutionOwnershipService(
+                serviceProvider.GetRequiredService<IOperationalStateStore>(),
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
@@ -71,6 +80,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // the executor can resolve them by type from the built plan; both pipelines start as no-op pass-throughs, so
         // wrapping handler dispatch is behavior-preserving until modules register real middleware or Move 2 lands.
         services.TryAddSingleton<RuntimeWorkflowLoadStateMiddleware>();
+        services.TryAddSingleton<RuntimeWorkflowInvokeMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowSchedulingMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowCheckpointMiddleware>();
         services.TryAddSingleton<RuntimeWorkflowPostCommitMiddleware>();
@@ -108,7 +118,10 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
-                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>()));
+                serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
+                serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
+                serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();
@@ -117,6 +130,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IRuntimeInputBindingResolver, RuntimeInputBindingResolver>();
         services.TryAddSingleton<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, BlockingIncidentWorkflowFaultObserver>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());

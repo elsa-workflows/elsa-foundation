@@ -18,7 +18,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task SavePending_Then_GetDeliverable_Returns_Item(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1"));
 
@@ -32,7 +32,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task SavePending_Is_Idempotent_For_Same_Intent(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1"));
         await store.SavePendingAsync(Pending("item-1", "wf-1")); // no throw
@@ -46,7 +46,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task SavePending_With_Conflicting_Intent_Throws(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1", kind: "a"));
 
@@ -60,7 +60,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task RecordDelivered_Makes_Item_Terminal_And_Undeliverable(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1"));
         await store.RecordDeliveryResultAsync(new RuntimePostCommitOutboxDeliveryResult("item-1", RuntimePostCommitOutboxStatus.Delivered, Now));
@@ -77,7 +77,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task RetryableFailure_Becomes_Deliverable_After_Delay_Then_Final(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         var retry = new RuntimePostCommitRetryPolicy(maxAttempts: 2, delay: TimeSpan.FromMinutes(5));
         await store.SavePendingAsync(Pending("item-1", "wf-1", retryPolicy: retry));
@@ -101,7 +101,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task GetDeliverable_Filters_By_Workflow_Execution(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1"));
         await store.SavePendingAsync(Pending("item-2", "wf-2"));
@@ -116,7 +116,7 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
     public async Task GetDeliverable_Filters_By_Intent_Kind(string provider)
     {
         await using var fixture = CreateStore(provider);
-        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+        var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SavePendingAsync(Pending("item-1", "wf-1", kind: "scheduler"));
         await store.SavePendingAsync(Pending("item-2", "wf-1", kind: "signal"));
@@ -134,13 +134,13 @@ public sealed class GroundworkRuntimePostCommitOutboxStoreTests
         {
             await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
-                var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+                var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
                 await store.SavePendingAsync(Pending("item-1", "wf-1"));
             }
 
             await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
             {
-                var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore);
+                var store = new GroundworkRuntimePostCommitOutboxStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
                 var deliverable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(Now, 10));
                 Assert.Equal(new[] { "item-1" }, deliverable.Select(x => x.OutboxItemId));
             }

@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -11,7 +10,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// <c>workflowExecutionId</c>, so the document is stored directly and indexed by that field for the
 /// per-workflow list.
 /// </summary>
-public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDurableValueStateStore
+public sealed class GroundworkDurableValueStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IDurableValueStateStore
 {
     public async ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
@@ -19,13 +18,13 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDu
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.DurableValueId);
 
-        var content = JsonSerializer.Serialize(state, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.DurableValueStateDocumentKind, state);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
                 DocumentId.Compose(state.WorkflowExecutionId, state.DurableValueId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -73,6 +72,6 @@ public sealed class GroundworkDurableValueStateStore(IDocumentStore store) : IDu
         return envelopes.Select(Map).ToArray();
     }
 
-    private static DurableValueState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<DurableValueState>(envelope.ContentJson, GroundworkRuntimeJson.Options)!;
+    private DurableValueState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<DurableValueState>(envelope);
 }

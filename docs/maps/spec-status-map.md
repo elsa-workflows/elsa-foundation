@@ -13,7 +13,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
 | [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
-| [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 37 | 18 | retained, deferred, out of scope, construct-only |
+| [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 41 | 14 | retained, deferred, out of scope, construct-only |
 | [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Draft | - | 18 | 0 | deferred, out of scope |
 | [008-checkpoint-commit-envelope](../../specs/008-checkpoint-commit-envelope/spec.md) | Checkpoint Commit Envelope And Post-Commit Intent Boundary | Draft | - | 6 | 0 | deferred, out of scope |
 | [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Draft | - | 7 | 0 | out of scope |
@@ -102,4 +102,6 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [079-secrets-module](../../specs/079-secrets-module/spec.md) | Secrets Module | Draft | - | 64 | 6 | out of scope |
 | [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |
 | [081-typed-argument-model](../../specs/081-typed-argument-model/spec.md) | Typed Argument Model + Type Descriptor Registry (Backend) | Draft | - | 42 | 2 | retained, deferred, out of scope |
-| [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Draft | - | 0 | 25 | superseded |
+| [082-runtime-pipeline-execution-spine](../../specs/082-runtime-pipeline-execution-spine/spec.md) | Runtime Pipeline Execution Spine (ADR 0029 Move 1) | Draft | - | 0 | 0 | out of scope |
+| [083-runtime-checkpoint-slot-decomposition](../../specs/083-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Draft — establishes the Move 2 decomposition pattern; **seeks architect approval of the pattern before the remaining handlers**. | - | 0 | 0 | retained, out of scope |
+| [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Draft | - | 25 | 0 | superseded |

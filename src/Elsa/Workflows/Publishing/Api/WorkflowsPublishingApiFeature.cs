@@ -27,7 +27,8 @@ namespace Elsa.Workflows.Publishing.Api;
 [ShellFeature(
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
-    Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam)."
+    Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam).",
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {

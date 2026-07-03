@@ -201,6 +201,10 @@ public sealed class StartWorkflowTestRunRequestHandler(
         status switch
         {
             WorkflowExecutionCommandDispatchStatus.Accepted => WorkflowTestRunStatus.DispatchAccepted,
+            // Dispatch was accepted; the workflow faulted during the ensuing drain. The fault is authoritatively surfaced
+            // on the dispatch result and via workflow status queries. Treat as accepted here (a dedicated test-run faulted
+            // status is a follow-up).
+            WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted => WorkflowTestRunStatus.DispatchAccepted,
             WorkflowExecutionCommandDispatchStatus.Duplicate => WorkflowTestRunStatus.DispatchDuplicate,
             WorkflowExecutionCommandDispatchStatus.Rejected => WorkflowTestRunStatus.DispatchRejected,
             WorkflowExecutionCommandDispatchStatus.Deferred => WorkflowTestRunStatus.DispatchDeferred,

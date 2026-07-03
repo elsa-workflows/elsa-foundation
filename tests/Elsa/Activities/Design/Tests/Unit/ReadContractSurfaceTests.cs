@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Xunit;
 
@@ -86,6 +87,32 @@ public sealed class ReadContractSurfaceTests
 
         Assert.NotNull(versionProperty);
         Assert.Equal(typeof(string), versionProperty!.PropertyType);
+    }
+
+    [Fact] // T042 (SC-002) — the descriptor read surface is the opaque (DescriptorType, DescriptorPayload) pair.
+    public void IActivityDefinitionVersion_ExposesDescriptorTypeAndPayload()
+    {
+        var descriptorType = typeof(IActivityDefinitionVersion).GetProperty(nameof(IActivityDefinitionVersion.DescriptorType));
+        Assert.NotNull(descriptorType);
+        Assert.Equal(typeof(string), descriptorType!.PropertyType);
+
+        var descriptorPayload = typeof(IActivityDefinitionVersion).GetProperty(nameof(IActivityDefinitionVersion.DescriptorPayload));
+        Assert.NotNull(descriptorPayload);
+        Assert.Equal(typeof(JsonElement), descriptorPayload!.PropertyType);
+    }
+
+    [Fact] // T042 (SC-002) — the deleted 005 descriptor surface must not reappear on the read contract.
+    public void IActivityDefinitionVersion_DoesNotExposeImplementationKindOrDescriptor()
+    {
+        var properties = typeof(IActivityDefinitionVersion).GetProperties();
+        var propertyNames = properties.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("ImplementationKind", propertyNames);
+        Assert.DoesNotContain("ImplementationDescriptor", propertyNames);
+
+        // The IImplementationDescriptor type is deleted, so it cannot be referenced directly — pin its
+        // absence by property-type name so a resurrected descriptor interface fails loudly here.
+        Assert.DoesNotContain(properties, p => p.PropertyType.Name == "IImplementationDescriptor");
     }
 
     [Fact]

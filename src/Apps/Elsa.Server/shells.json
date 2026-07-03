@@ -30,6 +30,8 @@
           "FileSystemDistributedLocking": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityOidc": {},
           "FoundationWorkflowsAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
@@ -122,7 +124,8 @@
           "WorkflowsDesignApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
-          "WorkflowsRuntimeApi": {}
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {
           "WebRouting": {

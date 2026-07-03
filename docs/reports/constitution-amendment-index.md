@@ -25,6 +25,7 @@ This index summarizes the preserved provenance blocks. It is a finding/navigatio
 
 | Provenance block | Date | Status signal | Raw history |
 |---|---:|---|---|
+| Version change `3.0.0` draft to `3.1.0` draft (W6: MD-2/MD-4 drift fixes) | 2026-07-02 | MINOR draft change; §E2.1 domain tree refreshed to shipped reality; §E2.2 hard rule records the tracked Runtime→Design allow-list exception | [Elsa history](constitution-history-elsa.md) |
 | Version change `2.0.0` draft to `3.0.0` draft | 2026-06-02 | Major draft change deriving from framework v3.0.0 | [Elsa history](constitution-history-elsa.md) |
 | v2.0.0 consolidated provenance fold | 2026-05-19 to 2026-05-26 | Prior Elsa/entity-design decisions folded into later draft | [Elsa history](constitution-history-elsa.md) |
 | Unit B amendment: activity reconciliation | 2026-05-28 | Draft pending ratification; Model X lineage | [Elsa history](constitution-history-elsa.md) |

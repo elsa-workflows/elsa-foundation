@@ -18,7 +18,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     public async Task Store_RoundTrips_And_Lists_In_Execution_Sequence_Order()
     {
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var store = new GroundworkActivityExecutionInspectionStore(documentStore);
+        var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         await store.SaveAsync(Projection("wf-1", "ae-2", sequence: 2));
         await store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1));
 
@@ -37,7 +37,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     public async Task ListSummariesAsync_Returns_Lightweight_Summaries_With_Evidence_Counts()
     {
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var store = new GroundworkActivityExecutionInspectionStore(documentStore);
+        var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         await store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1) with
         {
             ValueSnapshots =
@@ -93,8 +93,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
                 ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
                 DocumentId.Compose(projection.WorkflowExecutionId, projection.ActivityExecutionId),
                 ElsaRuntimeStorageManifest.SchemaVersion,
-                JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options)));
-        var store = new GroundworkActivityExecutionInspectionStore(documentStore);
+                GroundworkTestSerialization.Serializer.SerializeForComparison(document)));
+        var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
         var summary = Assert.Single(await store.ListSummariesAsync("wf-1"));
 
@@ -106,17 +106,18 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     public async Task CheckpointWriter_Persists_Inspection_Projection()
     {
         var documentStore = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
-        var inspectionStore = new GroundworkActivityExecutionInspectionStore(documentStore);
+        var inspectionStore = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
         var writer = new GroundworkRuntimeCheckpointWriter(
             documentStore,
-            new GroundworkWorkflowExecutionStateStore(documentStore),
-            new GroundworkSchedulerStateStore(documentStore),
-            new GroundworkActivityExecutionStateStore(documentStore),
+            GroundworkTestSerialization.Serializer,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
             inspectionStore,
-            new GroundworkBookmarkStateStore(documentStore),
-            new GroundworkDurableValueStateStore(documentStore),
-            new GroundworkIncidentStateStore(documentStore),
-            new GroundworkOperationalStateStore(documentStore));
+            new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkOperationalStateStore(documentStore, GroundworkTestSerialization.Serializer));
         var projection = Projection("wf-1", "ae-1", sequence: 1);
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -154,7 +155,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task SaveAsync_Wraps_DocumentStore_Exception()
     {
-        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")));
+        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")), GroundworkTestSerialization.Serializer);
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.SaveAsync(Projection("wf-1", "ae-1", sequence: 1)).AsTask());
@@ -174,7 +175,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
                 DocumentId.Compose("wf-1", "ae-1"),
                 ElsaRuntimeStorageManifest.SchemaVersion,
                 "{"));
-        var store = new GroundworkActivityExecutionInspectionStore(documentStore);
+        var store = new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer);
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.FindAsync("wf-1", "ae-1").AsTask());
@@ -187,7 +188,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     [Fact]
     public async Task ListSummariesAsync_Wraps_DocumentStore_Exception()
     {
-        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")));
+        var store = new GroundworkActivityExecutionInspectionStore(new ThrowingDocumentStore(new InvalidOperationException("Provider failure.")), GroundworkTestSerialization.Serializer);
 
         var exception = await Assert.ThrowsAsync<GroundworkActivityExecutionInspectionStoreException>(
             () => store.ListSummariesAsync("wf-1").AsTask());
@@ -353,14 +354,15 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private static GroundworkRuntimeCheckpointWriter NewCheckpointWriter(IDocumentStore documentStore) =>
         new(
             documentStore,
-            new GroundworkWorkflowExecutionStateStore(documentStore),
-            new GroundworkSchedulerStateStore(documentStore),
-            new GroundworkActivityExecutionStateStore(documentStore),
-            new GroundworkActivityExecutionInspectionStore(documentStore),
-            new GroundworkBookmarkStateStore(documentStore),
-            new GroundworkDurableValueStateStore(documentStore),
-            new GroundworkIncidentStateStore(documentStore),
-            new GroundworkOperationalStateStore(documentStore));
+            GroundworkTestSerialization.Serializer,
+            new GroundworkWorkflowExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkSchedulerStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkActivityExecutionStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkActivityExecutionInspectionStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            new GroundworkOperationalStateStore(documentStore, GroundworkTestSerialization.Serializer));
 
     private static RuntimeCheckpointCommit InspectionCommit(ActivityExecutionInspectionProjection projection) =>
         new(

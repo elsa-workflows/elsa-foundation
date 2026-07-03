@@ -223,7 +223,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         public List<string> EnvelopeIds { get; } = [];
         public int MaxConcurrency { get; private set; }
 
-        public async ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
             lock (_syncRoot)
             {
@@ -243,6 +243,8 @@ public sealed class RuntimeInProcessAgentProviderTests
                 lock (_syncRoot)
                     _currentConcurrency--;
             }
+
+            return WorkflowExecutionCommandProcessResult.NoDrain;
         }
     }
 
@@ -251,10 +253,11 @@ public sealed class RuntimeInProcessAgentProviderTests
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
         {
             _started.TrySetResult();
             await _release.Task.WaitAsync(cancellationToken);
+            return WorkflowExecutionCommandProcessResult.NoDrain;
         }
 
         public Task WaitUntilStartedAsync() => _started.Task;

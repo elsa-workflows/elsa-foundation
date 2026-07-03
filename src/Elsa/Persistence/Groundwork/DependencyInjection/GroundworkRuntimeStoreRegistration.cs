@@ -1,3 +1,4 @@
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +49,29 @@ public static class GroundworkRuntimeStoreRegistration
 
         services.RemoveAll<IRuntimePostCommitOutboxStore>();
         services.AddSingleton<IRuntimePostCommitOutboxStore, GroundworkRuntimePostCommitOutboxStore>();
+
+        // Versioned document serialization: every bridge store routes its content JSON through the
+        // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
+        // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
+        services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
+        services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
+
+        // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the
+        // process-local in-memory queue, and a crash after checkpoint commit loses the continuation
+        // even though state and outbox items were stored durably.
+        services.RemoveAll<IWorkflowSchedulerWorkQueue>();
+        services.AddSingleton<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
+
+        // Durable timer store. Without this swap timers live only in the process-local in-memory store and
+        // are lost on restart, so a Delay would never resume after a crash.
+        services.RemoveAll<IDurableTimerStore>();
+        services.AddSingleton<IDurableTimerStore, GroundworkDurableTimerStore>();
+
+        // Durable trigger index (W7, E3-1). Without this swap the trigger bindings written at publish time
+        // live only in the process-local in-memory store, so a restart loses the ability to start workflows
+        // from a stimulus even though the published executable is durable.
+        services.RemoveAll<IWorkflowTriggerBindingStore>();
+        services.AddSingleton<IWorkflowTriggerBindingStore, GroundworkWorkflowTriggerBindingStore>();
 
         return services;
     }
