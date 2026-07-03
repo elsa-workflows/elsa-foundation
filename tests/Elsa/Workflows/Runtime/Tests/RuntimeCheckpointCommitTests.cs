@@ -16,7 +16,7 @@ public sealed class RuntimeCheckpointCommitTests
     private readonly SchedulerState _schedulerState;
     private readonly DurableValueState _durableValueState;
     private readonly IncidentState _incidentState;
-    private readonly OperationalState _operationalState;
+    private readonly ExecutionLivenessState _operationalState;
 
     public RuntimeCheckpointCommitTests()
     {
@@ -104,7 +104,7 @@ public sealed class RuntimeCheckpointCommitTests
             createdAt: _now,
             resolvedAt: null,
             metadata: new Dictionary<string, string>());
-        _operationalState = new OperationalState(
+        _operationalState = new ExecutionLivenessState(
             operationalStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: new RuntimeExecutionLease(
@@ -408,7 +408,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenOperationalStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, new ThrowingOperationalStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, new ThrowingExecutionLivenessStateStore());
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
 
@@ -951,7 +951,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_ProjectsOperationalStateChanges()
     {
-        var operationalStateStore = new InMemoryOperationalStateStore();
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var recorded = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
@@ -982,7 +982,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedOperationalStateProjectionBeforeRecordingWrite()
     {
-        var operationalStateStore = new InMemoryOperationalStateStore();
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
@@ -1003,7 +1003,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_RejectsOperationalStateFromDifferentWorkflowBeforeRecordingWrite()
     {
-        var operationalStateStore = new InMemoryOperationalStateStore();
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
@@ -1025,7 +1025,7 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingOperationalReplay()
     {
-        var operationalStateStore = new InMemoryOperationalStateStore();
+        var operationalStateStore = new InMemoryExecutionLivenessStateStore();
         var writer = new InMemoryRuntimeCheckpointCommitStore(null, null, null, null, null, operationalStateStore);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded);
@@ -1097,7 +1097,7 @@ public sealed class RuntimeCheckpointCommitTests
     {
         var invalidOperational = new[]
         {
-            new RuntimeStateChange<OperationalState>(
+            new RuntimeStateChange<ExecutionLivenessState>(
                 StateId: "lease-1",
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: _operationalState,
@@ -1106,7 +1106,7 @@ public sealed class RuntimeCheckpointCommitTests
 
         var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(operational: invalidOperational));
 
-        Assert.Contains("OperationalState.OperationalStateId", exception.Message);
+        Assert.Contains("ExecutionLivenessState.OperationalStateId", exception.Message);
     }
 
     private RuntimeCheckpointCommit NewCommit(
@@ -1148,7 +1148,7 @@ public sealed class RuntimeCheckpointCommitTests
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>>? bookmarks = null,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>>? durableValues = null,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>>? incidents = null,
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>>? operational = null) =>
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>>? operational = null) =>
         new(
             workflowExecution: workflowStateChange ?? new RuntimeStateChange<WorkflowExecutionState>(
                 StateId: (workflowState ?? _workflowState).WorkflowExecutionId,
@@ -1183,7 +1183,7 @@ public sealed class RuntimeCheckpointCommitTests
             ],
             operational: operational ??
             [
-                new RuntimeStateChange<OperationalState>(
+                new RuntimeStateChange<ExecutionLivenessState>(
                     StateId: _operationalState.OperationalStateId,
                     Operation: RuntimeStateChangeOperation.Upsert,
                     State: _operationalState,
@@ -1258,7 +1258,7 @@ public sealed class RuntimeCheckpointCommitTests
                 metadata: _durableValueState.Metadata),
             Metadata: new Dictionary<string, string>());
 
-    private RuntimeStateChange<OperationalState> NewOperationalChange(
+    private RuntimeStateChange<ExecutionLivenessState> NewOperationalChange(
         string stateId,
         string operationalStateId,
         RuntimeStateChangeOperation operation = RuntimeStateChangeOperation.Upsert,
@@ -1268,7 +1268,7 @@ public sealed class RuntimeCheckpointCommitTests
         new(
             StateId: stateId,
             Operation: operation,
-            State: new OperationalState(
+            State: new ExecutionLivenessState(
                 operationalStateId: operationalStateId,
                 workflowExecutionId: workflowExecutionId,
                 executionLease: new RuntimeExecutionLease(
@@ -1412,18 +1412,18 @@ public sealed class RuntimeCheckpointCommitTests
             ValueTask.FromResult<IReadOnlyCollection<IncidentState>>([]);
     }
 
-    private sealed class ThrowingOperationalStateStore : IOperationalStateStore
+    private sealed class ThrowingExecutionLivenessStateStore : IExecutionLivenessStateStore
     {
-        public ValueTask<OperationalState> SaveAsync(OperationalState state, CancellationToken cancellationToken = default) =>
+        public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("operational state projection failed");
 
-        public ValueTask<OperationalState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<OperationalState?>(null);
+        public ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<ExecutionLivenessState?>(null);
 
-        public ValueTask<IReadOnlyCollection<OperationalState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<OperationalState>>([]);
+        public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<ExecutionLivenessState>>([]);
 
-        public ValueTask<IReadOnlyCollection<OperationalState>> ListAllAsync(CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<OperationalState>>([]);
+        public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<ExecutionLivenessState>>([]);
     }
 }

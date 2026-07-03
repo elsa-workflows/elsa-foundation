@@ -12,7 +12,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
     [Fact]
     public void OperationalState_SeparatesLeaseHeartbeatDrainAndInterruptionFromDomainRetry()
     {
-        var state = new OperationalState(
+        var state = new ExecutionLivenessState(
             operationalStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: new RuntimeExecutionLease(
@@ -49,7 +49,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
         Assert.True(state.Drain!.StopsNewWork);
         Assert.Equal("checkpoint-1", state.InterruptedExecution!.LastCheckpointId);
         Assert.DoesNotContain(
-            typeof(OperationalState).GetProperties().Select(property => property.Name),
+            typeof(ExecutionLivenessState).GetProperties().Select(property => property.Name),
             name => name.Contains("Retry", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -139,7 +139,7 @@ public sealed class RuntimeOperationalRecoveryOutboxContractTests
             expiresAt: _now.AddMinutes(5),
             fencingToken: 7);
 
-        var exception = Assert.Throws<ArgumentException>(() => new OperationalState(
+        var exception = Assert.Throws<ArgumentException>(() => new ExecutionLivenessState(
             operationalStateId: "operational-1",
             workflowExecutionId: "wfexec-1",
             executionLease: lease,

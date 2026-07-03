@@ -31,8 +31,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind,
-        ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
-        ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind,
+        ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
@@ -107,11 +107,11 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.SchedulerStateDocumentKind:
                 await new GroundworkSchedulerStateStore(store, Serializer).SaveAsync(Scheduler());
                 break;
-            case ElsaRuntimeStorageManifest.OperationalStateDocumentKind:
-                await new GroundworkOperationalStateStore(store, Serializer).SaveAsync(Operational());
+            case ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind:
+                await new GroundworkExecutionLivenessStateStore(store, Serializer).SaveAsync(Operational());
                 break;
-            case ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind:
-                await new GroundworkControlPlaneStateStore(store, Serializer).SaveAsync(ControlPlane());
+            case ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind:
+                await new GroundworkWorkflowHoldStateStore(store, Serializer).SaveAsync(ControlPlane());
                 break;
             case ElsaRuntimeStorageManifest.IncidentStateDocumentKind:
                 await new GroundworkIncidentStateStore(store, Serializer).SaveAsync(Incident());
@@ -154,10 +154,10 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkDurableValueStateStore(store, Serializer).FindAsync(Wf, "dv-1"))?.ValueId,
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind =>
             (await new GroundworkSchedulerStateStore(store, Serializer).FindAsync(Wf))?.Version,
-        ElsaRuntimeStorageManifest.OperationalStateDocumentKind =>
-            (await new GroundworkOperationalStateStore(store, Serializer).FindAsync(Wf, "op-1"))?.OperationalStateId,
-        ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind =>
-            (await new GroundworkControlPlaneStateStore(store, Serializer).FindAsync("cp-1"))?.WorkflowExecutionId,
+        ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind =>
+            (await new GroundworkExecutionLivenessStateStore(store, Serializer).FindAsync(Wf, "op-1"))?.OperationalStateId,
+        ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind =>
+            (await new GroundworkWorkflowHoldStateStore(store, Serializer).FindAsync("cp-1"))?.WorkflowExecutionId,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind =>
             (await new GroundworkIncidentStateStore(store, Serializer).FindAsync(Wf, "inc-1"))?.Status,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind =>
@@ -191,8 +191,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind => WorkflowExecutionStatus.Completed,
         ElsaRuntimeStorageManifest.DurableValueStateDocumentKind => "value-dv-1",
         ElsaRuntimeStorageManifest.SchedulerStateDocumentKind => 7L,
-        ElsaRuntimeStorageManifest.OperationalStateDocumentKind => "op-1",
-        ElsaRuntimeStorageManifest.ControlPlaneStateDocumentKind => Wf,
+        ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind => "op-1",
+        ElsaRuntimeStorageManifest.WorkflowHoldStateDocumentKind => Wf,
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind => IncidentStatus.Open,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
@@ -402,7 +402,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 Reason: "scheduled")
         ]);
 
-    private static OperationalState Operational() => new(
+    private static ExecutionLivenessState Operational() => new(
         "op-1",
         Wf,
         executionLease: new RuntimeExecutionLease(
@@ -416,7 +416,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         drain: null,
         interruptedExecution: null);
 
-    private static ControlPlaneState ControlPlane() => new(
+    private static WorkflowHoldState ControlPlane() => new(
         "cp-1",
         Wf,
         metadata: new Dictionary<string, string> { ["tag"] = "v1" });
@@ -500,7 +500,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         new GroundworkBookmarkStateStore(store, Serializer),
         new GroundworkDurableValueStateStore(store, Serializer),
         new GroundworkIncidentStateStore(store, Serializer),
-        new GroundworkOperationalStateStore(store, Serializer));
+        new GroundworkExecutionLivenessStateStore(store, Serializer));
 
     private static JsonElement Json(string json)
     {

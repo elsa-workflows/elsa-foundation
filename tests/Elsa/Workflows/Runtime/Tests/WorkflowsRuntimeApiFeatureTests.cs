@@ -40,8 +40,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityOutputRegister));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IIncidentStateStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IOperationalStateStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IControlPlaneStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IExecutionLivenessStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowHoldStateStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePauseDecisionProvider));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeRecoveryScanner));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipContextAccessor));
@@ -103,8 +103,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IDurableValueStateStore>();
         provider.GetRequiredService<IRuntimeActivityOutputRegister>();
         provider.GetRequiredService<IIncidentStateStore>();
-        provider.GetRequiredService<IOperationalStateStore>();
-        provider.GetRequiredService<IControlPlaneStateStore>();
+        provider.GetRequiredService<IExecutionLivenessStateStore>();
+        provider.GetRequiredService<IWorkflowHoldStateStore>();
         provider.GetRequiredService<IRuntimePauseDecisionProvider>();
         provider.GetRequiredService<IRuntimeRecoveryScanner>();
         provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>();
@@ -257,15 +257,15 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
-    public void RegistersControlPlaneStateStoreAsOverridableDefault()
+    public void RegistersWorkflowHoldStateStoreAsOverridableDefault()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IControlPlaneStateStore>(new CustomControlPlaneStateStore());
+        services.AddSingleton<IWorkflowHoldStateStore>(new CustomWorkflowHoldStateStore());
 
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        Assert.IsType<CustomControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+        Assert.IsType<CustomWorkflowHoldStateStore>(provider.GetRequiredService<IWorkflowHoldStateStore>());
     }
 
     [Fact]
@@ -312,13 +312,13 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
-        var store = provider.GetRequiredService<IControlPlaneStateStore>();
+        var store = provider.GetRequiredService<IWorkflowHoldStateStore>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var drainer = provider.GetRequiredService<IWorkflowSchedulerDrainer>();
-        await store.SaveAsync(new ControlPlaneState(
+        await store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
-            activeHolds: [ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", now, "operator", "Paused for maintenance.")]));
+            activeHolds: [WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", now, "operator", "Paused for maintenance.")]));
         await queue.EnqueueAsync(new RuntimeSchedulerWorkItem(
             workItemId: "work-1",
             workflowExecutionId: "wfexec-1",
@@ -589,7 +589,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
-    public async Task DefaultCheckpointWriterProjectsOperationalStateIntoRegisteredStateStore()
+    public async Task DefaultCheckpointWriterProjectsExecutionLivenessStateIntoRegisteredStateStore()
     {
         var services = new ServiceCollection();
         var now = new DateTimeOffset(2026, 6, 11, 13, 0, 0, TimeSpan.Zero);
@@ -597,7 +597,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         using var provider = services.BuildServiceProvider();
         var writer = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
-        var operationalStateStore = provider.GetRequiredService<IOperationalStateStore>();
+        var operationalStateStore = provider.GetRequiredService<IExecutionLivenessStateStore>();
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
             Checkpoint: new RuntimeCheckpoint(
@@ -616,10 +616,10 @@ public sealed class WorkflowsRuntimeApiFeatureTests
                 incidents: [],
                 operational:
                 [
-                    new RuntimeStateChange<OperationalState>(
+                    new RuntimeStateChange<ExecutionLivenessState>(
                         StateId: "operational-1",
                         Operation: RuntimeStateChangeOperation.Upsert,
-                        State: new OperationalState(
+                        State: new ExecutionLivenessState(
                             operationalStateId: "operational-1",
                             workflowExecutionId: "wfexec-1",
                             executionLease: new RuntimeExecutionLease(
@@ -794,17 +794,17 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             new((SchedulerPauseDecision?)null);
     }
 
-    private sealed class CustomControlPlaneStateStore : IControlPlaneStateStore
+    private sealed class CustomWorkflowHoldStateStore : IWorkflowHoldStateStore
     {
-        public ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default) => new(state);
+        public ValueTask<WorkflowHoldState> SaveAsync(WorkflowHoldState state, CancellationToken cancellationToken = default) => new(state);
 
-        public ValueTask<ControlPlaneState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) => new((ControlPlaneState?)null);
+        public ValueTask<WorkflowHoldState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) => new((WorkflowHoldState?)null);
 
-        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            new(Array.Empty<ControlPlaneState>());
+        public ValueTask<IReadOnlyCollection<WorkflowHoldState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new(Array.Empty<WorkflowHoldState>());
 
-        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default) =>
-            new(Array.Empty<ControlPlaneState>());
+        public ValueTask<IReadOnlyCollection<WorkflowHoldState>> ListAllAsync(CancellationToken cancellationToken = default) =>
+            new(Array.Empty<WorkflowHoldState>());
     }
 
     private sealed class CustomBookmarkStimulusLookup : IBookmarkStimulusLookup

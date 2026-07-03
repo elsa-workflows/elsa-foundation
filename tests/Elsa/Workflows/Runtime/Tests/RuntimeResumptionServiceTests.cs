@@ -196,7 +196,7 @@ public sealed class RuntimeResumptionServiceTests
         // (the item had already been dequeue-deleted, so the durable backlog is empty). W5's lease population is
         // exactly what makes this interrupted execution visible: the real recovery scanner reads the persisted
         // lease from operational state, the sweep discovers it, and re-drives it through the agent mailbox.
-        var operationalStore = new InMemoryOperationalStateStore();
+        var operationalStore = new InMemoryExecutionLivenessStateStore();
         var leaseDuration = TimeSpan.FromMinutes(1);
         var ownership = new RuntimeExecutionOwnershipService(
             operationalStore,

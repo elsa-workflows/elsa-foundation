@@ -204,26 +204,26 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DispatchesQueuedWorkAfterPauseHoldIsReleased()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var store = new InMemoryControlPlaneStateStore();
+        var store = new InMemoryWorkflowHoldStateStore();
         var handler = new RecordingSchedulerWorkHandler();
         var pauseGate = new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(store), new FixedTimeProvider(_now));
         var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
-        await store.SaveAsync(new ControlPlaneState(
+        await store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
-            activeHolds: [ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "Paused for maintenance.")]));
+            activeHolds: [WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "Paused for maintenance.")]));
         await queue.EnqueueAsync(NewStartActivityWorkItem(1));
 
         var pausedResult = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
-        await store.SaveAsync(new ControlPlaneState(
+        await store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             releasedHolds:
             [
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "pause-1",
-                    scope: ControlPlaneHoldScope.WorkflowExecution,
-                    status: ControlPlaneHoldStatus.Released,
+                    scope: WorkflowHoldScope.WorkflowExecution,
+                    status: WorkflowHoldStatus.Released,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "Paused for maintenance.",

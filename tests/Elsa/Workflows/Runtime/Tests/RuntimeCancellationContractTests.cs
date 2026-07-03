@@ -290,7 +290,7 @@ public sealed class RuntimeCancellationContractTests
                 OwnerId = "owner-under-test",
                 LeaseDuration = TimeSpan.FromMinutes(1)
             };
-            var ownership = new RuntimeExecutionOwnershipService(new InMemoryOperationalStateStore(), _timeProvider, options);
+            var ownership = new RuntimeExecutionOwnershipService(new InMemoryExecutionLivenessStateStore(), _timeProvider, options);
             var accessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
             _ownershipService = ownership;
             _ownershipAccessor = accessor;

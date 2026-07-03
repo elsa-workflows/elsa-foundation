@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimePauseDecisionProviderTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 14, 30, 0, TimeSpan.Zero);
-    private readonly InMemoryControlPlaneStateStore _store = new();
+    private readonly InMemoryWorkflowHoldStateStore _store = new();
     private readonly RuntimePauseDecisionProvider _provider;
 
     public RuntimePauseDecisionProviderTests()
@@ -41,20 +41,20 @@ public sealed class RuntimePauseDecisionProviderTests
         Assert.Equal("pause-1", decision.HoldId);
         Assert.Equal("maintenance", decision.Reason);
         Assert.Equal(RuntimePauseContinuationPolicy.StrictPause, decision.ContinuationPolicy);
-        Assert.Equal(nameof(ControlPlaneHoldScope.WorkflowExecution), decision.Metadata["runtime.pause.holdScope"]);
+        Assert.Equal(nameof(WorkflowHoldScope.WorkflowExecution), decision.Metadata["runtime.pause.holdScope"]);
     }
 
     [Fact]
     public async Task DecideAsync_PrefersOldestMatchingHoldThenHoldId()
     {
-        await _store.SaveAsync(new ControlPlaneState(
+        await _store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds:
             [
-                ControlPlaneHold.ForWorkflowExecution("pause-b", "wfexec-1", _now.AddMinutes(1), "operator", "later"),
-                ControlPlaneHold.ForWorkflowExecution("pause-c", "wfexec-1", _now, "operator", "same-time-c"),
-                ControlPlaneHold.ForWorkflowExecution("pause-a", "wfexec-1", _now, "operator", "same-time-a")
+                WorkflowHold.ForWorkflowExecution("pause-b", "wfexec-1", _now.AddMinutes(1), "operator", "later"),
+                WorkflowHold.ForWorkflowExecution("pause-c", "wfexec-1", _now, "operator", "same-time-c"),
+                WorkflowHold.ForWorkflowExecution("pause-a", "wfexec-1", _now, "operator", "same-time-a")
             ]));
 
         var decision = await _provider.DecideAsync(NewRequest(workflowExecutionId: "wfexec-1"));
@@ -67,15 +67,15 @@ public sealed class RuntimePauseDecisionProviderTests
     [Fact]
     public async Task DecideAsync_IgnoresReleasedHolds()
     {
-        await _store.SaveAsync(new ControlPlaneState(
+        await _store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             releasedHolds:
             [
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "pause-1",
-                    scope: ControlPlaneHoldScope.WorkflowExecution,
-                    status: ControlPlaneHoldStatus.Released,
+                    scope: WorkflowHoldScope.WorkflowExecution,
+                    status: WorkflowHoldStatus.Released,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "maintenance",
@@ -94,7 +94,7 @@ public sealed class RuntimePauseDecisionProviderTests
     [Fact]
     public async Task DecideAsync_UsesWorkflowScopedQueryForWorkflowOnlyTargets()
     {
-        var store = new TrackingControlPlaneStateStore([NewWorkflowState("control-1", "wfexec-1", "pause-1")]);
+        var store = new TrackingWorkflowHoldStateStore([NewWorkflowState("control-1", "wfexec-1", "pause-1")]);
         var provider = new RuntimePauseDecisionProvider(store);
 
         await provider.DecideAsync(NewRequest(workflowExecutionId: "wfexec-1", activityExecutionId: "actexec-1"));
@@ -106,7 +106,7 @@ public sealed class RuntimePauseDecisionProviderTests
     [Fact]
     public async Task DecideAsync_UsesAllStateQueryWhenRequestIncludesGlobalTargets()
     {
-        var store = new TrackingControlPlaneStateStore([]);
+        var store = new TrackingWorkflowHoldStateStore([]);
         var provider = new RuntimePauseDecisionProvider(store);
 
         await provider.DecideAsync(NewRequest(workflowExecutionId: "wfexec-1", hostId: "host-1"));
@@ -118,58 +118,58 @@ public sealed class RuntimePauseDecisionProviderTests
     [Fact]
     public async Task DecideAsync_MatchesActivityGeneratorIngressWorkerAndHostScopes()
     {
-        await _store.SaveAsync(new ControlPlaneState(
+        await _store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "activity-control",
             workflowExecutionId: "wfexec-1",
             activeHolds:
             [
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "activity-pause",
-                    scope: ControlPlaneHoldScope.ActivityExecution,
-                    status: ControlPlaneHoldStatus.Requested,
+                    scope: WorkflowHoldScope.ActivityExecution,
+                    status: WorkflowHoldStatus.Requested,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "activity maintenance",
                     workflowExecutionId: "wfexec-1",
                     activityExecutionId: "actexec-1")
             ]));
-        await _store.SaveAsync(new ControlPlaneState(
+        await _store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "generator-control",
             workflowExecutionId: "wfexec-1",
             activeHolds:
             [
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "generator-pause",
-                    scope: ControlPlaneHoldScope.Generator,
-                    status: ControlPlaneHoldStatus.Requested,
+                    scope: WorkflowHoldScope.Generator,
+                    status: WorkflowHoldStatus.Requested,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "generator maintenance",
                     workflowExecutionId: "wfexec-1",
                     generatorId: "generator-1")
             ]));
-        await _store.SaveAsync(new ControlPlaneState(
+        await _store.SaveAsync(new WorkflowHoldState(
             controlPlaneStateId: "global-control",
             activeHolds:
             [
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "ingress-pause",
-                    scope: ControlPlaneHoldScope.Ingress,
-                    status: ControlPlaneHoldStatus.Requested,
+                    scope: WorkflowHoldScope.Ingress,
+                    status: WorkflowHoldStatus.Requested,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "ingress maintenance",
                     ingressSourceId: "http-1",
                     ingressPolicy: IngressPausePolicy.DefaultFor(RuntimeIngressSourceKind.HttpEndpoint)),
-                new ControlPlaneHold(
+                new WorkflowHold(
                     holdId: "worker-pause",
-                    scope: ControlPlaneHoldScope.WorkerDispatcher,
-                    status: ControlPlaneHoldStatus.Requested,
+                    scope: WorkflowHoldScope.WorkerDispatcher,
+                    status: WorkflowHoldStatus.Requested,
                     requestedAt: _now,
                     requestedBy: "operator",
                     reason: "worker maintenance",
                     workerId: "worker-1"),
-                ControlPlaneHold.ForHostDrain("host-drain", "host-1", _now, "operator", "shutdown")
+                WorkflowHold.ForHostDrain("host-drain", "host-1", _now, "operator", "shutdown")
             ]));
 
         Assert.Equal("activity-pause", (await _provider.DecideAsync(NewRequest(workflowExecutionId: "wfexec-1", activityExecutionId: "actexec-1"))).HoldId);
@@ -203,13 +203,13 @@ public sealed class RuntimePauseDecisionProviderTests
             workerId: workerId,
             hostId: hostId);
 
-    private ControlPlaneState NewWorkflowState(string controlPlaneStateId, string workflowExecutionId, string holdId) =>
+    private WorkflowHoldState NewWorkflowState(string controlPlaneStateId, string workflowExecutionId, string holdId) =>
         new(
             controlPlaneStateId: controlPlaneStateId,
             workflowExecutionId: workflowExecutionId,
             activeHolds:
             [
-                ControlPlaneHold.ForWorkflowExecution(
+                WorkflowHold.ForWorkflowExecution(
                     holdId: holdId,
                     workflowExecutionId: workflowExecutionId,
                     requestedAt: _now,
@@ -217,11 +217,11 @@ public sealed class RuntimePauseDecisionProviderTests
                     reason: "maintenance")
             ]);
 
-    private sealed class TrackingControlPlaneStateStore : IControlPlaneStateStore
+    private sealed class TrackingWorkflowHoldStateStore : IWorkflowHoldStateStore
     {
-        private readonly InMemoryControlPlaneStateStore _inner = new();
+        private readonly InMemoryWorkflowHoldStateStore _inner = new();
 
-        public TrackingControlPlaneStateStore(IEnumerable<ControlPlaneState> states)
+        public TrackingWorkflowHoldStateStore(IEnumerable<WorkflowHoldState> states)
         {
             foreach (var state in states)
                 _inner.SaveAsync(state).AsTask().GetAwaiter().GetResult();
@@ -230,19 +230,19 @@ public sealed class RuntimePauseDecisionProviderTests
         public int WorkflowScopedQueryCount { get; private set; }
         public int ListAllQueryCount { get; private set; }
 
-        public ValueTask<ControlPlaneState> SaveAsync(ControlPlaneState state, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowHoldState> SaveAsync(WorkflowHoldState state, CancellationToken cancellationToken = default) =>
             _inner.SaveAsync(state, cancellationToken);
 
-        public ValueTask<ControlPlaneState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) =>
+        public ValueTask<WorkflowHoldState?> FindAsync(string controlPlaneStateId, CancellationToken cancellationToken = default) =>
             _inner.FindAsync(controlPlaneStateId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<WorkflowHoldState>> ListForWorkflowExecutionAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
         {
             WorkflowScopedQueryCount++;
             return _inner.ListForWorkflowExecutionAsync(workflowExecutionId, cancellationToken);
         }
 
-        public ValueTask<IReadOnlyCollection<ControlPlaneState>> ListAllAsync(CancellationToken cancellationToken = default)
+        public ValueTask<IReadOnlyCollection<WorkflowHoldState>> ListAllAsync(CancellationToken cancellationToken = default)
         {
             ListAllQueryCount++;
             return _inner.ListAllAsync(cancellationToken);

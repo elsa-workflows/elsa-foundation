@@ -16,7 +16,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IBookmarkStateStore? _bookmarkStateStore;
     private readonly IDurableValueStateStore? _durableValueStateStore;
     private readonly IIncidentStateStore? _incidentStateStore;
-    private readonly IOperationalStateStore? _operationalStateStore;
+    private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IBookmarkStateStore? bookmarkStateStore = null,
         IDurableValueStateStore? durableValueStateStore = null,
         IIncidentStateStore? incidentStateStore = null,
-        IOperationalStateStore? operationalStateStore = null,
+        IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
         IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null)
     {
@@ -346,7 +346,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     }
 
     private async ValueTask ApplyOperationalStateChangesAsync(
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>> stateChanges,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> stateChanges,
         CancellationToken cancellationToken)
     {
         if (_operationalStateStore is null)
@@ -498,7 +498,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             // RuntimeCheckpointStateChangeSet also enforces this; the commit store repeats it to keep the projection boundary self-validating.
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.OperationalStateId))
-                throw new InvalidOperationException("Operational state change StateId must match OperationalState.OperationalStateId.");
+                throw new InvalidOperationException("Operational state change StateId must match ExecutionLivenessState.OperationalStateId.");
 
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");

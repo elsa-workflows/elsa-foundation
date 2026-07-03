@@ -37,7 +37,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IOperationalStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore)
         : this(
             commitLedger,
             serializer,
@@ -62,7 +62,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IOperationalStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
         ArgumentNullException.ThrowIfNull(serializer);
@@ -146,7 +146,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             await ApplyBookmarkStateChangesAsync(stores.BookmarkStateStore, commit.StateChanges.Bookmarks, cancellationToken);
             await ApplyDurableValueStateChangesAsync(stores.DurableValueStateStore, commit.StateChanges.DurableValues, cancellationToken);
             await ApplyIncidentStateChangesAsync(stores.IncidentStateStore, commit.StateChanges.Incidents, cancellationToken);
-            await ApplyOperationalStateChangesAsync(stores.OperationalStateStore, commit.StateChanges.Operational, cancellationToken);
+            await ApplyOperationalStateChangesAsync(stores.ExecutionLivenessStateStore, commit.StateChanges.Operational, cancellationToken);
             await ApplyPostCommitOutboxAsync(stores.PostCommitOutboxStore, commit.StateChanges.PostCommitOutbox, cancellationToken);
             await MarkCommittedAsync(transactionalStore, commit, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
@@ -166,7 +166,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
             ElsaRuntimeStorageManifest.DurableValueStateDocumentKind,
             ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-            ElsaRuntimeStorageManifest.OperationalStateDocumentKind,
+            ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind,
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
 
@@ -294,8 +294,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     }
 
     private static async ValueTask ApplyOperationalStateChangesAsync(
-        IOperationalStateStore store,
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>> stateChanges,
+        IExecutionLivenessStateStore store,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> stateChanges,
         CancellationToken cancellationToken)
     {
         foreach (var stateChange in stateChanges)
@@ -397,7 +397,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             if (stateChange.Operation != RuntimeStateChangeOperation.Upsert)
                 throw new InvalidOperationException($"The Groundwork checkpoint writer can only project operational state '{RuntimeStateChangeOperation.Upsert}' changes.");
             if (!StringComparer.Ordinal.Equals(stateChange.StateId, stateChange.State.OperationalStateId))
-                throw new InvalidOperationException("Operational state change StateId must match OperationalState.OperationalStateId.");
+                throw new InvalidOperationException("Operational state change StateId must match ExecutionLivenessState.OperationalStateId.");
             if (!StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, stateChange.State.WorkflowExecutionId))
                 throw new InvalidOperationException("Operational state change WorkflowExecutionId must match the checkpoint workflow execution ID.");
         }
@@ -413,7 +413,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore BookmarkStateStore,
         IDurableValueStateStore DurableValueStateStore,
         IIncidentStateStore IncidentStateStore,
-        IOperationalStateStore OperationalStateStore,
+        IExecutionLivenessStateStore ExecutionLivenessStateStore,
         GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore)
     {
         public static GroundworkApplyStores Create(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) =>
@@ -425,7 +425,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
                 new GroundworkBookmarkStateStore(store, serializer),
                 new GroundworkDurableValueStateStore(store, serializer),
                 new GroundworkIncidentStateStore(store, serializer),
-                new GroundworkOperationalStateStore(store, serializer),
+                new GroundworkExecutionLivenessStateStore(store, serializer),
                 new GroundworkRuntimePostCommitOutboxStore(store, serializer));
     }
 

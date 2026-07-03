@@ -173,9 +173,9 @@ public sealed class RuntimeExecutionOwnershipTests
         Assert.Empty(candidates);
     }
 
-    private RuntimeExecutionOwnershipService NewOwnership(out InMemoryOperationalStateStore store, out RuntimeExecutionOwnershipOptions options)
+    private RuntimeExecutionOwnershipService NewOwnership(out InMemoryExecutionLivenessStateStore store, out RuntimeExecutionOwnershipOptions options)
     {
-        store = new InMemoryOperationalStateStore();
+        store = new InMemoryExecutionLivenessStateStore();
         options = new RuntimeExecutionOwnershipOptions
         {
             OwnerId = "owner-under-test",

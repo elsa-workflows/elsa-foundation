@@ -58,8 +58,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
-        services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
-        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+        services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
@@ -73,7 +73,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
-                serviceProvider.GetRequiredService<IOperationalStateStore>(),
+                serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();

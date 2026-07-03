@@ -16,17 +16,17 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershipService
 {
     private readonly SemaphoreSlim _writeGate = new(1, 1);
-    private readonly IOperationalStateStore _operationalStateStore;
+    private readonly IExecutionLivenessStateStore _operationalStateStore;
     private readonly TimeProvider _timeProvider;
     private readonly RuntimeExecutionOwnershipOptions _options;
 
-    public RuntimeExecutionOwnershipService(IOperationalStateStore operationalStateStore)
+    public RuntimeExecutionOwnershipService(IExecutionLivenessStateStore operationalStateStore)
         : this(operationalStateStore, TimeProvider.System, new RuntimeExecutionOwnershipOptions())
     {
     }
 
     public RuntimeExecutionOwnershipService(
-        IOperationalStateStore operationalStateStore,
+        IExecutionLivenessStateStore operationalStateStore,
         TimeProvider timeProvider,
         RuntimeExecutionOwnershipOptions options)
     {
@@ -150,7 +150,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         long highestIssuedToken,
         CancellationToken cancellationToken)
     {
-        var state = new OperationalState(
+        var state = new ExecutionLivenessState(
             operationalStateId: OwnershipStateId(workflowExecutionId),
             workflowExecutionId: workflowExecutionId,
             executionLease: executionLease,
@@ -165,10 +165,10 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
         await _operationalStateStore.SaveAsync(state, cancellationToken);
     }
 
-    private ValueTask<OperationalState?> FindOwnershipStateAsync(string workflowExecutionId, CancellationToken cancellationToken) =>
+    private ValueTask<ExecutionLivenessState?> FindOwnershipStateAsync(string workflowExecutionId, CancellationToken cancellationToken) =>
         _operationalStateStore.FindAsync(workflowExecutionId, OwnershipStateId(workflowExecutionId), cancellationToken);
 
-    private static long ReadHighestIssuedToken(OperationalState? state)
+    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
     {
         if (state is null)
             return 0;

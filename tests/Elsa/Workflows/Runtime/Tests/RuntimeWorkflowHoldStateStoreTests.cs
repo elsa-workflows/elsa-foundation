@@ -4,14 +4,14 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeControlPlaneStateStoreTests
+public sealed class RuntimeWorkflowHoldStateStoreTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 14, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task InMemoryControlPlaneStateStore_SavesFindsAndListsByWorkflowExecution()
     {
-        var store = new InMemoryControlPlaneStateStore();
+        var store = new InMemoryWorkflowHoldStateStore();
         var first = NewWorkflowState("control-1", "wfexec-1", "pause-1");
         var second = NewWorkflowState("control-2", "wfexec-1", "pause-2");
         var otherWorkflow = NewWorkflowState("control-3", "wfexec-2", "pause-3");
@@ -32,7 +32,7 @@ public sealed class RuntimeControlPlaneStateStoreTests
     [Fact]
     public async Task InMemoryControlPlaneStateStore_UpsertsByControlPlaneStateId()
     {
-        var store = new InMemoryControlPlaneStateStore();
+        var store = new InMemoryWorkflowHoldStateStore();
         var original = NewWorkflowState("control-1", "wfexec-1", "pause-1");
         var replacement = NewWorkflowState("control-1", "wfexec-2", "pause-2");
 
@@ -48,12 +48,12 @@ public sealed class RuntimeControlPlaneStateStoreTests
     [Fact]
     public async Task InMemoryControlPlaneStateStore_ListsGlobalRecordContainingWorkflowScopedHold()
     {
-        var store = new InMemoryControlPlaneStateStore();
-        var state = new ControlPlaneState(
+        var store = new InMemoryWorkflowHoldStateStore();
+        var state = new WorkflowHoldState(
             controlPlaneStateId: "control-global",
             activeHolds:
             [
-                ControlPlaneHold.ForWorkflowExecution(
+                WorkflowHold.ForWorkflowExecution(
                     holdId: "pause-1",
                     workflowExecutionId: "wfexec-1",
                     requestedAt: _now,
@@ -66,13 +66,13 @@ public sealed class RuntimeControlPlaneStateStoreTests
         Assert.Same(state, Assert.Single(await store.ListForWorkflowExecutionAsync("wfexec-1")));
     }
 
-    private ControlPlaneState NewWorkflowState(string controlPlaneStateId, string workflowExecutionId, string holdId) =>
+    private WorkflowHoldState NewWorkflowState(string controlPlaneStateId, string workflowExecutionId, string holdId) =>
         new(
             controlPlaneStateId: controlPlaneStateId,
             workflowExecutionId: workflowExecutionId,
             activeHolds:
             [
-                ControlPlaneHold.ForWorkflowExecution(
+                WorkflowHold.ForWorkflowExecution(
                     holdId: holdId,
                     workflowExecutionId: workflowExecutionId,
                     requestedAt: _now,
@@ -80,12 +80,12 @@ public sealed class RuntimeControlPlaneStateStoreTests
                     reason: "maintenance")
             ]);
 
-    private ControlPlaneState NewHostDrainState() =>
+    private WorkflowHoldState NewHostDrainState() =>
         new(
             controlPlaneStateId: "control-host",
             activeHolds:
             [
-                ControlPlaneHold.ForHostDrain(
+                WorkflowHold.ForHostDrain(
                     holdId: "drain-1",
                     hostId: "host-1",
                     requestedAt: _now,

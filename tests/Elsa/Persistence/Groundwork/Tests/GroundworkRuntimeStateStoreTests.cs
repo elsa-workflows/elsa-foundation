@@ -110,7 +110,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task OperationalState_RoundTrips_Lists_By_Workflow_And_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IOperationalStateStore store = new GroundworkOperationalStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IExecutionLivenessStateStore store = new GroundworkExecutionLivenessStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Operational("wf-1", "op-1"));
         await store.SaveAsync(Operational("wf-1", "op-2"));
@@ -131,11 +131,11 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task ControlPlaneState_RoundTrips_Scoped_And_Global(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IControlPlaneStateStore store = new GroundworkControlPlaneStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        IWorkflowHoldStateStore store = new GroundworkWorkflowHoldStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
-        await store.SaveAsync(new ControlPlaneState("cp-1", "wf-1"));
-        await store.SaveAsync(new ControlPlaneState("cp-2", "wf-1"));
-        await store.SaveAsync(new ControlPlaneState("cp-global", workflowExecutionId: null));
+        await store.SaveAsync(new WorkflowHoldState("cp-1", "wf-1"));
+        await store.SaveAsync(new WorkflowHoldState("cp-2", "wf-1"));
+        await store.SaveAsync(new WorkflowHoldState("cp-global", workflowExecutionId: null));
 
         var found = await store.FindAsync("cp-1");
         Assert.NotNull(found);
@@ -239,7 +239,7 @@ public sealed class GroundworkRuntimeStateStoreTests
                 Reason: "scheduled")
         ]);
 
-    private static OperationalState Operational(string workflowExecutionId, string operationalStateId) => new(
+    private static ExecutionLivenessState Operational(string workflowExecutionId, string operationalStateId) => new(
         operationalStateId,
         workflowExecutionId,
         executionLease: null,

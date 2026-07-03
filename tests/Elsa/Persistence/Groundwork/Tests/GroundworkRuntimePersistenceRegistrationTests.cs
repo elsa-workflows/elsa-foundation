@@ -38,8 +38,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
-        services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
-        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+        services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
@@ -57,8 +57,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
         Assert.IsType<GroundworkSchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
-        Assert.IsType<GroundworkOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
-        Assert.IsType<GroundworkControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
+        Assert.IsType<GroundworkExecutionLivenessStateStore>(provider.GetRequiredService<IExecutionLivenessStateStore>());
+        Assert.IsType<GroundworkWorkflowHoldStateStore>(provider.GetRequiredService<IWorkflowHoldStateStore>());
         Assert.IsType<GroundworkIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
@@ -78,8 +78,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
-        services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
-        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+        services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());

@@ -41,7 +41,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
                 Assert.NotNull(await new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "ae-1"));
                 Assert.NotNull(await new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "bm-1"));
                 Assert.NotNull(await new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "dv-1"));
-                Assert.NotNull(await new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "op-1"));
+                Assert.NotNull(await new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "op-1"));
                 Assert.Equal(IncidentStatus.Open, (await new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer).FindAsync("wf-1", "inc-1"))!.Status);
 
                 // The durable commit marker proves the commit is recorded as applied.
@@ -95,7 +95,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
         new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
         new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer));
+        new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer));
 
     private static RuntimeCheckpointCommit BuildCommit(string commitId, string bookmarkNode = "node-bm-1")
     {
@@ -203,7 +203,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         capturedAt: DateTimeOffset.UnixEpoch,
         metadata: new Dictionary<string, string>());
 
-    private static OperationalState Operational(string workflowExecutionId, string operationalStateId) => new(
+    private static ExecutionLivenessState Operational(string workflowExecutionId, string operationalStateId) => new(
         operationalStateId,
         workflowExecutionId,
         executionLease: null,

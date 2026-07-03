@@ -54,8 +54,11 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string DurableValueStateDocumentKind = "durableValueState";
     public const string SchedulerStateDocumentKind = "schedulerState";
-    public const string OperationalStateDocumentKind = "operationalState";
-    public const string ControlPlaneStateDocumentKind = "controlPlaneState";
+    // Persisted wire identifiers — the string values predate the W14 type renames
+    // (ExecutionLivenessState was OperationalState; WorkflowHoldState was ControlPlaneState).
+    // Do not change the literal values: they are the durable Groundwork document-kind discriminators.
+    public const string ExecutionLivenessStateDocumentKind = "operationalState";
+    public const string WorkflowHoldStateDocumentKind = "controlPlaneState";
     public const string IncidentStateDocumentKind = "incidentState";
 
     // Durable idempotency ledger for the checkpoint writer. A marker document keyed by CommitId records
@@ -137,7 +140,7 @@ public static class ElsaRuntimeStorageManifest
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
             Unit(
-                OperationalStateDocumentKind,
+                ExecutionLivenessStateDocumentKind,
                 "Operational state",
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
@@ -148,7 +151,7 @@ public static class ElsaRuntimeStorageManifest
                     Query("list-all", ByCollectionIndex)
                 ]),
             Unit(
-                ControlPlaneStateDocumentKind,
+                WorkflowHoldStateDocumentKind,
                 "Control plane state",
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),

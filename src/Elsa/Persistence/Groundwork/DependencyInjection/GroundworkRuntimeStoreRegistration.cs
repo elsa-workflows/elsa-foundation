@@ -35,10 +35,10 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IDurableValueStateStore, GroundworkDurableValueStateStore>();
         services.RemoveAll<ISchedulerStateStore>();
         services.AddSingleton<ISchedulerStateStore, GroundworkSchedulerStateStore>();
-        services.RemoveAll<IOperationalStateStore>();
-        services.AddSingleton<IOperationalStateStore, GroundworkOperationalStateStore>();
-        services.RemoveAll<IControlPlaneStateStore>();
-        services.AddSingleton<IControlPlaneStateStore, GroundworkControlPlaneStateStore>();
+        services.RemoveAll<IExecutionLivenessStateStore>();
+        services.AddSingleton<IExecutionLivenessStateStore, GroundworkExecutionLivenessStateStore>();
+        services.RemoveAll<IWorkflowHoldStateStore>();
+        services.AddSingleton<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>();
         services.RemoveAll<IIncidentStateStore>();
         services.AddSingleton<IIncidentStateStore, GroundworkIncidentStateStore>();
 
