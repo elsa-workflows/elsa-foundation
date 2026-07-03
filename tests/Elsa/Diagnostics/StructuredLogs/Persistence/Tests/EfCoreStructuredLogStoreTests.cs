@@ -110,7 +110,7 @@ public sealed class EfCoreStructuredLogStoreTests
             message: "boom",
             properties: [new LogProperty("user", "alice")],
             scopes: [new LogScope([new LogProperty("op", "checkout")], "scope-text")],
-            exception: new LogExceptionInfo("System.InvalidOperationException", "bad state", "at X"));
+            exception: new LogExceptionDetails("System.InvalidOperationException", "bad state", "at X"));
 
         store.Append(entry);
 

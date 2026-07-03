@@ -12,5 +12,5 @@ public interface IWorkflowDefinitionLookup
 
     Task<IWorkflowDefinitionVersion?> FindLatestVersion(string definitionId, CancellationToken cancellationToken = default);
 
-    Task<IEnumerable<WorkflowDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<WorkflowDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
 }

@@ -85,7 +85,7 @@ public sealed class ListDefinitionsRequestHandlerTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("This test only supports ListDefinitions.");
 
-        public Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("This test only supports ListDefinitions.");
     }
 }

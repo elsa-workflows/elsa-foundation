@@ -372,7 +372,7 @@ public sealed record AgentToolCallRequest(string ToolCallId, string ToolName, st
 public sealed record AgentTurnStarted(string TurnId, int MaxSteps);
 
 /// <summary>Payload for <see cref="AgentStreamEventKind.StepStarted"/> / <see cref="AgentStreamEventKind.StepCompleted"/>.</summary>
-public sealed record AgentStepInfo(int StepIndex, int MaxSteps);
+public sealed record AgentStepDescriptor(int StepIndex, int MaxSteps);
 
 /// <summary>Payload for <see cref="AgentStreamEventKind.ToolCallStarted"/> / <see cref="AgentStreamEventKind.ToolCallCompleted"/>.</summary>
 public sealed record AgentToolCallOutcome(string ToolCallId, string ToolName, bool Succeeded, string Summary, object? Result = null);

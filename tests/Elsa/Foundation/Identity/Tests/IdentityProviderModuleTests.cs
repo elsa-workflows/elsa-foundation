@@ -53,7 +53,7 @@ public sealed class IdentityProviderModuleTests
         });
 
         using var provider = services.BuildServiceProvider();
-        var manager = provider.GetRequiredService<IAuthenticationProviderManager>();
+        var manager = provider.GetRequiredService<IAuthenticationProviderResolver>();
 
         var providers = await manager.ListAsync();
 

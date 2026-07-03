@@ -269,7 +269,7 @@ public sealed class DefaultAgentTurnOrchestrator(
                     foreach (var queued in await CollectQueuedUserMessagesAsync(session.Id, seenMessageIds, token))
                     {
                         history = Append(history, new AgentTurnMessage(AgentRole.User, queued.Content));
-                        yield return new AgentStreamEvent(NewId(), AgentStreamEventKind.Progress, $"Incorporating follow-up: {queued.Content}", null, null, DateTimeOffset.UtcNow, null, new AgentStepInfo(step, maxSteps));
+                        yield return new AgentStreamEvent(NewId(), AgentStreamEventKind.Progress, $"Incorporating follow-up: {queued.Content}", null, null, DateTimeOffset.UtcNow, null, new AgentStepDescriptor(step, maxSteps));
                     }
                 }
 
@@ -521,7 +521,7 @@ public sealed class DefaultAgentTurnOrchestrator(
         => new(NewId(), kind, null, null, null, DateTimeOffset.UtcNow, null, payload);
 
     private static AgentStreamEvent StepEvent(AgentStreamEventKind kind, int step, int maxSteps)
-        => new(NewId(), kind, null, null, null, DateTimeOffset.UtcNow, null, new AgentStepInfo(step, maxSteps));
+        => new(NewId(), kind, null, null, null, DateTimeOffset.UtcNow, null, new AgentStepDescriptor(step, maxSteps));
 
     private static AgentStreamEvent ToolEvent(AgentStreamEventKind kind, string toolCallId, AgentToolCallRequest request)
         => new(NewId(), kind, null, toolCallId, null, DateTimeOffset.UtcNow, null, request);

@@ -103,19 +103,19 @@ internal static class StructuredLogEntryFactory
         return scopes;
     }
 
-    private static LogExceptionInfo? MapException(Exception? exception, int maxDepth)
+    private static LogExceptionDetails? MapException(Exception? exception, int maxDepth)
     {
         if (exception is null)
             return null;
 
         return Map(exception, depth: 0, maxDepth);
 
-        static LogExceptionInfo? Map(Exception? ex, int depth, int maxDepth)
+        static LogExceptionDetails? Map(Exception? ex, int depth, int maxDepth)
         {
             if (ex is null || depth >= maxDepth)
                 return null;
 
-            return new LogExceptionInfo(
+            return new LogExceptionDetails(
                 ex.GetType().FullName ?? ex.GetType().Name,
                 ex.Message,
                 ex.StackTrace,

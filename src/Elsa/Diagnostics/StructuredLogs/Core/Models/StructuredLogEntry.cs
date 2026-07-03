@@ -39,7 +39,7 @@ public sealed record StructuredLogEntry
     public IReadOnlyList<LogScope> Scopes { get; init; } = [];
 
     /// <summary>The captured exception, when the event carried one.</summary>
-    public LogExceptionInfo? Exception { get; init; }
+    public LogExceptionDetails? Exception { get; init; }
 
     /// <summary>The id of the originating <see cref="LogSource"/>.</summary>
     public string SourceId { get; init; } = string.Empty;

@@ -26,7 +26,7 @@ public sealed class GetDefinitionRequestHandler(
         return new WorkflowDefinitionDetailsView(
             definition.ToView(),
             draft?.State.ToStateView(),
-            versions.Select(e => new WorkflowDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt))
+            versions.Select(e => new WorkflowDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt))
         );
     }
 }

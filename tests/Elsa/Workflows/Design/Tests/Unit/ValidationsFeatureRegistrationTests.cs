@@ -101,7 +101,7 @@ public sealed class ValidationsFeatureRegistrationTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
     }
 }

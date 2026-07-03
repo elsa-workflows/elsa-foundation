@@ -6,11 +6,11 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 namespace Elsa.Workflows.Design.Api.Handlers;
 
 public sealed class ListDefinitionVersionsRequestHandler(IWorkflowDefinitionVersionStore store)
-    : IRequestHandler<ListDefinitionVersions, IEnumerable<WorkflowDefinitionVersionInfo>>
+    : IRequestHandler<ListDefinitionVersions, IEnumerable<WorkflowDefinitionVersionSummary>>
 {
-    public async Task<IEnumerable<WorkflowDefinitionVersionInfo>> Handle(ListDefinitionVersions request, CancellationToken cancellationToken)
+    public async Task<IEnumerable<WorkflowDefinitionVersionSummary>> Handle(ListDefinitionVersions request, CancellationToken cancellationToken)
     {
         var versions = await store.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
-        return versions.Select(e => new WorkflowDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt));
+        return versions.Select(e => new WorkflowDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt));
     }
 }

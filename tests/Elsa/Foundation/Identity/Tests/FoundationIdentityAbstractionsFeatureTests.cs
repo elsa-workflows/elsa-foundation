@@ -18,7 +18,7 @@ public sealed class FoundationIdentityAbstractionsFeatureTests
         new FoundationIdentityAbstractionsFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.NotNull(provider.GetRequiredService<IAuthenticationProviderManager>());
+        Assert.NotNull(provider.GetRequiredService<IAuthenticationProviderResolver>());
         Assert.NotNull(provider.GetRequiredService<IPermissionCatalog>());
         Assert.NotNull(provider.GetRequiredService<IPermissionEvaluator>());
         Assert.NotNull(provider.GetRequiredService<IClaimsNormalizer>());
@@ -31,7 +31,7 @@ public sealed class FoundationIdentityAbstractionsFeatureTests
     [Fact]
     public async Task ProviderManagerComposesEnabledProviderModules()
     {
-        var manager = new DefaultAuthenticationProviderManager(
+        var manager = new DefaultAuthenticationProviderResolver(
         [
             new TestProviderModule(new("external", "External", "external-oidc", ProviderCapabilities.ExternalOidcDefault, Enabled: true)),
             new TestProviderModule(new("disabled", "Disabled", "external-oidc", ProviderCapabilities.ExternalOidcDefault, Enabled: false)),
@@ -51,7 +51,7 @@ public sealed class FoundationIdentityAbstractionsFeatureTests
     [Fact]
     public async Task ProviderManagerRequiresExplicitGlobalFallbackForTenantLookup()
     {
-        var manager = new DefaultAuthenticationProviderManager(
+        var manager = new DefaultAuthenticationProviderResolver(
         [
             new TestProviderModule(new("entra", "Global Entra", "external-oidc", ProviderCapabilities.ExternalOidcDefault)),
             new TestProviderModule(new("entra", "Tenant Entra", "external-oidc", ProviderCapabilities.ExternalOidcDefault, TenantId: "tenant-a"))

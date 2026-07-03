@@ -41,7 +41,7 @@ public sealed class StructuredLogEntrySerializerTests
         {
             Properties = [new LogProperty("Name", "Value")],
             Scopes = [new LogScope([new LogProperty("Key", "V")])],
-            Exception = new LogExceptionInfo("System.Exception", "boom")
+            Exception = new LogExceptionDetails("System.Exception", "boom")
         };
 
         using var doc = JsonDocument.Parse(_serializer.Serialize(entry));

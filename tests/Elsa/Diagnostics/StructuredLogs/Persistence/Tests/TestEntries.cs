@@ -13,7 +13,7 @@ internal static class TestEntries
         string message = "message",
         IReadOnlyList<LogProperty>? properties = null,
         IReadOnlyList<LogScope>? scopes = null,
-        LogExceptionInfo? exception = null) =>
+        LogExceptionDetails? exception = null) =>
         new()
         {
             Sequence = sequence,

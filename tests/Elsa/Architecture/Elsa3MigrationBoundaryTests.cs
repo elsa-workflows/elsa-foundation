@@ -277,7 +277,7 @@ public sealed class Elsa3MigrationBoundaryTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("The malformed definition test should fail before resolving activity versions.");
 
-        public Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Enumerable.Empty<ActivityDefinitionVersionInfo>());
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Enumerable.Empty<ActivityDefinitionVersionSummary>());
     }
 }
