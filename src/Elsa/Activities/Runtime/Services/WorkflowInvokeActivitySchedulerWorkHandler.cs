@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -16,10 +15,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 {
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
-
-    // System-metadata override key for the workflow definition version surfaced to execution-time expressions
-    // (ADR 0030 identity). Optional; absent for normal runs, where the pinned artifact-version major is used.
-    private const string DefinitionVersionMetadataKey = "runtime.definitionVersion";
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -220,6 +215,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = invokePayload.ActivityExecutionId;
 
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                workflowState, invokePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
             context = new SimpleActivityExecutionContext(
                 serviceProvider,
                 activity,
@@ -230,15 +227,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                // Populate the live execution-time expression carrier (ADR 0030): identity from the workflow-execution
-                // state + pinned executable, and the durable-value projections for inputs/variables/outputs. These
-                // feed the re-pointed JavaScript pre/post-processors via the passed IExpressionExecutionContext.
-                correlationId: workflowState?.CorrelationId,
-                workflowName: workflowState is null ? null : ResolveInstanceName(workflowState),
-                workflowDefinitionVersion: ResolveWorkflowDefinitionVersion(workflowState, invokePayload.PinnedExecutable),
-                workflowInputs: workflowInputValues,
-                workflowVariables: workflowVariables,
-                activityOutputValues: activityOutputValues);
+                // Populate the live execution-time expression carrier (ADR 0030) via the shared helper: identity
+                // from the workflow-execution state + pinned executable, and the durable-value projections for
+                // inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the passed
+                // IExpressionExecutionContext. The resume and parent-completion handlers populate it the same way.
+                correlationId: carrier.CorrelationId,
+                workflowName: carrier.WorkflowName,
+                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
+                workflowInputs: carrier.WorkflowInputs,
+                workflowVariables: carrier.WorkflowVariables,
+                activityOutputValues: carrier.ActivityOutputValues);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
@@ -558,28 +556,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
 
         return metadata;
-    }
-
-    // Resolves the current workflow instance name for the execution-time expression carrier (ADR 0030) from the
-    // same system-metadata key SetName writes (see ApplyInstanceName). Null when no name has been assigned.
-    private static string? ResolveInstanceName(WorkflowExecutionState workflowState) =>
-        workflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.InstanceName, out var name) && !string.IsNullOrWhiteSpace(name)
-            ? name
-            : null;
-
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
-    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
-    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
-    {
-        if (workflowState is not null
-            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
-            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
-            return overrideVersion;
-
-        var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
-        return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(
