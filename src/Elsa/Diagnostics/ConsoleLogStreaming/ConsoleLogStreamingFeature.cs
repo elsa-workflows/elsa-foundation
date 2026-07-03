@@ -36,7 +36,8 @@ namespace Elsa.Diagnostics.ConsoleLogStreaming;
 )]
 public sealed class ConsoleLogStreamingFeature : IShellFeature
 {
-    internal const string FeatureName = "DiagnosticsConsoleLogStreaming";
+    /// <summary>Feature name used in shells.json feature configuration. Exposed for tests (§2.23.3).</summary>
+    public const string FeatureName = "DiagnosticsConsoleLogStreaming";
     private const string DefaultEndpointPrefix = "/_elsa/server/diagnostics/console-logs";
 
     /// <summary>Default route for recent console log entries (host-mapped).</summary>
@@ -63,7 +64,8 @@ public sealed class ConsoleLogStreamingFeature : IShellFeature
     /// </summary>
     public static void InstallConsoleStreamHook() => InstallConsoleStreamHook(ConsoleStreamHook.Install);
 
-    internal static void InstallConsoleStreamHookIfEnabled(string[] args, Action install)
+    /// <summary>Install seam for tests: injects the hook install action (§2.23.3).</summary>
+    public static void InstallConsoleStreamHookIfEnabled(string[] args, Action install)
     {
         if (!IsFeatureEnabled(ResolveShellsJsonPath(args), args))
             return;
@@ -71,7 +73,8 @@ public sealed class ConsoleLogStreamingFeature : IShellFeature
         InstallConsoleStreamHook(install);
     }
 
-    internal static void InstallConsoleStreamHookIfEnabled(IConfiguration configuration, Action install)
+    /// <summary>Install seam for tests: injects the hook install action (§2.23.3).</summary>
+    public static void InstallConsoleStreamHookIfEnabled(IConfiguration configuration, Action install)
     {
         if (!IsFeatureEnabled(configuration))
             return;
@@ -79,7 +82,8 @@ public sealed class ConsoleLogStreamingFeature : IShellFeature
         InstallConsoleStreamHook(install);
     }
 
-    internal static void ResetConsoleStreamHookInstallStateForTests()
+    /// <summary>Resets the process-wide hook-installed flag so tests can exercise installation repeatedly (§2.23.3).</summary>
+    public static void ResetConsoleStreamHookInstallStateForTests()
     {
         lock (ConsoleStreamHookLock)
             _consoleStreamHookInstalled = false;
