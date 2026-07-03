@@ -38,12 +38,22 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
     /// loop scope (#259, ADR 0028) on top when the activity was scheduled as a loop body, or <c>null</c>
     /// when neither contributes any variable.
     /// </summary>
+    /// <param name="evaluateAsSelf">
+    /// When <c>true</c>, the container whose <paramref name="activityState"/> this is is being evaluated as
+    /// its own scope owner (the parent-completion path, ADR 0030) rather than as the enclosing scope of a leaf
+    /// descendant. In that mode the per-iteration loop layer is suppressed: <paramref name="activityState"/>'s
+    /// own scheduling provenance carries the iteration values of the loop the container is a body of (ADR 0028),
+    /// which is the wrong innermost scope for the container's self-evaluation and broke loop/break control flow.
+    /// The ancestor container chain (the container's enclosing scopes) is still returned so an
+    /// OnChildCompleted/OnChildFaulted expression resolves enclosing-container/workflow variables by name.
+    /// </param>
     public async ValueTask<VariableScope?> BuildScopeAsync(
         WorkflowExecutable executable,
         string workflowExecutionId,
         ActivityExecutionState activityState,
         CancellationToken cancellationToken = default,
-        IReadOnlyDictionary<string, object?>? workflowVariableValues = null)
+        IReadOnlyDictionary<string, object?>? workflowVariableValues = null,
+        bool evaluateAsSelf = false)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(activityState);
@@ -94,6 +104,12 @@ public sealed class RuntimeContainerScopeService(IActivityExecutionStateStore ac
         layers.Reverse();
 
         var containerScope = layers.Count == 0 ? null : _scopeFactory.BuildChain(layers);
+
+        // Self-owner evaluation (ADR 0030 parent-completion path) returns only the enclosing container chain:
+        // the container's own provenance carries the iteration values of the loop it is a body of, which is the
+        // wrong innermost scope when the container evaluates itself, so the iteration layer is suppressed here.
+        if (evaluateAsSelf)
+            return containerScope;
 
         // The loop body resolves its current item/index through an innermost iteration scope chained on
         // top of the enclosing container chain (ADR 0028). The loop owner publishes the iteration values

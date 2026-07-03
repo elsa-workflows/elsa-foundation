@@ -144,6 +144,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
+        // One scope service serves both the self-owner scope built for the child-completion evaluation below
+        // and the completed-scope evidence capture on the completion path (ADR 0027/0030).
+        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
+
         SimpleActivityExecutionContext context;
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots = [];
         try
@@ -184,15 +188,22 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
 
+            // Build the container's self-owner scope (ADR 0030 parent-completion path): the enclosing container
+            // chain, anchored by the workflow-scope variables from the current durable-value projection (#286), so
+            // an OnChildCompleted/OnChildFaulted expression resolves enclosing-container/workflow variables by name
+            // rather than falling back to the flat carrier projection. `evaluateAsSelf` suppresses the per-iteration
+            // loop layer: the container's own provenance carries the iteration values of the loop it is a body of
+            // (ADR 0028), which is the wrong innermost scope when the container evaluates itself and broke loop/break
+            // control flow during development.
+            var variableScope = await scopeService.BuildScopeAsync(
+                executable, workItem.WorkflowExecutionId, parentState, cancellationToken, constructedParent.WorkflowVariables, evaluateAsSelf: true);
+
             // Populate the live execution-time expression carrier (ADR 0030) for the container's child-completion
             // logic: workflow identity and the durable-value projections for inputs/variables/outputs. Previously
             // this context carried identity but none of the carrier state, so an OnChildCompleted/OnChildFaulted
             // handler evaluating an expression saw empty getCorrelationId()/getInput()/getVariable()/getOutput().
-            // No VariableScope is threaded here (unlike the leaf-invoke and resume paths): a container is evaluated
-            // as its own scope owner on this path, so BuildScopeAsync would return the body's iteration scope (ADR
-            // 0028) — the wrong scope for the container's self-evaluation — and it would not expose the container's
-            // own variables by name anyway (ADR 0027). The carrier's WorkflowVariables projection serves getVariable
-            // reads; scope-based/named variable access and write-back on this path is a documented follow-up.
+            // The carrier's WorkflowVariables projection serves flat getVariable reads; the threaded self-owner
+            // scope above serves named/structured resolution of enclosing-container and workflow variables.
             var carrier = RuntimeExecutionExpressionCarrier.Create(
                 workflowState, payload.PinnedExecutable, constructedParent.WorkflowInputs, constructedParent.WorkflowVariables, constructedParent.ActivityOutputValues);
             context = SimpleActivityExecutionContext.ForExecution(
@@ -204,7 +215,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 workItem,
                 parentExecutableNode,
                 parentState,
-                variableScope: null,
+                variableScope,
                 carrier);
             RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
@@ -230,6 +241,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
                 await ((IActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
             }
+
+            // Persist any enclosing-container variable the child-completion/fault logic assigned by name back to
+            // the owning container executions' snapshots, so sibling branches and resume observe it (ADR 0027) —
+            // mirroring the leaf-invoke path. This covers the container scopes in the visible chain; write-back of
+            // the workflow-root scope to durable-value state (which must fold into the checkpoint commit) remains a
+            // documented follow-up, so a mutation of a workflow-level variable here is not yet durable.
+            await scopeService.PersistScopeMutationsAsync(variableScope, workItem.WorkflowExecutionId, cancellationToken);
 
             var scheduledChildren = context.GetChildActivityScheduleRequests();
             if (context.CompositeCompletionRequested && scheduledChildren.Count > 0)
@@ -278,7 +296,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         // A completing container's scope is no longer live for runtime expressions; mark it completed
         // and retain its final variable values as inspection evidence only through the configured
         // capture/retention policy (ADR 0027, #210).
-        var scopeService = new RuntimeContainerScopeService(activityExecutionStateStore);
         var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
             payloadCapturePolicy, scopeService, parentExecutableNode, latestParentState,
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, _timeProvider.GetUtcNow());
