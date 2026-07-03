@@ -1,6 +1,8 @@
 using System.Globalization;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -22,10 +24,6 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </remarks>
 public static class RuntimeExecutionExpressionCarrier
 {
-    // System-metadata override key for the workflow definition version surfaced to execution-time expressions
-    // (ADR 0030 identity). Optional; absent for normal runs, where the pinned artifact-version major is used.
-    private const string DefinitionVersionMetadataKey = "runtime.definitionVersion";
-
     /// <summary>
     /// Assembles the carrier state from the workflow-execution state, the pinned executable identity, and the
     /// caller's already-computed durable-value projections. Callers pass projections they already hold (each
@@ -46,10 +44,30 @@ public static class RuntimeExecutionExpressionCarrier
         return new RuntimeExecutionExpressionCarrierState(
             CorrelationId: workflowState?.CorrelationId,
             WorkflowName: workflowState is null ? null : ResolveInstanceName(workflowState),
-            WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(workflowState, pinnedExecutable),
+            WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(pinnedExecutable),
             WorkflowInputs: workflowInputs,
             WorkflowVariables: workflowVariables,
             ActivityOutputValues: activityOutputValues);
+    }
+
+    /// <summary>
+    /// Best-effort load of the workflow-execution state used to resolve carrier identity (correlation id / name /
+    /// definition version). Every scheduler work handler that builds an execution-time context needs the same load,
+    /// so it lives here rather than being re-derived at each site. Returns null when no <see
+    /// cref="IWorkflowExecutionStateStore"/> is registered or the state is absent, degrading identity to null rather
+    /// than faulting the activity — matching the invoke, resume, and parent-completion paths.
+    /// </summary>
+    public static async ValueTask<WorkflowExecutionState?> LoadWorkflowStateAsync(
+        IServiceProvider serviceProvider,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
+        var workflowExecutionStateStore = serviceProvider.GetService<IWorkflowExecutionStateStore>();
+        return workflowExecutionStateStore is null
+            ? null
+            : await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
     }
 
     // Resolves the current workflow instance name for the execution-time expression carrier (ADR 0030) from the
@@ -60,17 +78,12 @@ public static class RuntimeExecutionExpressionCarrier
             ? name
             : null;
 
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
-    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
-    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
+    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030) from the pinned
+    // executable's artifact-version major. A non-numeric value yields 0 (the default the accessor returned before
+    // this unit) rather than faulting the activity — the version is display identity for scripts, not an execution
+    // precondition, so a display-version format must not throw.
+    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutableIdentity pinnedExecutable)
     {
-        if (workflowState is not null
-            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
-            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
-            return overrideVersion;
-
         var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
         return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }

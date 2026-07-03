@@ -34,6 +34,22 @@ public static class RuntimeInputBindingStateProjection
     public static IReadOnlyDictionary<string, object?> ProjectWorkflowInputs(IEnumerable<DurableValueState> durableValues) =>
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
+    /// <summary>
+    /// Projects the workflow-input, workflow-variable, and prior-activity-output snapshots in one call. Every
+    /// scheduler work handler needs all three from the same durable-value list before building its resolution
+    /// context and execution-time expression carrier, so this collapses the repeated three-projection block.
+    /// </summary>
+    public static RuntimeInputBindingStateProjectionSet ProjectAll(IEnumerable<DurableValueState> durableValues)
+    {
+        ArgumentNullException.ThrowIfNull(durableValues);
+
+        var materialized = durableValues as IReadOnlyCollection<DurableValueState> ?? durableValues.ToArray();
+        return new RuntimeInputBindingStateProjectionSet(
+            WorkflowInputs: ProjectWorkflowInputs(materialized),
+            WorkflowVariables: ProjectWorkflowVariables(materialized),
+            ActivityOutputValues: ProjectActivityOutputValues(materialized));
+    }
+
     private static IReadOnlyDictionary<string, object?> ProjectByMetadataKey(IEnumerable<DurableValueState> durableValues, string nameMetadataKey)
     {
         ArgumentNullException.ThrowIfNull(durableValues);
@@ -51,3 +67,12 @@ public static class RuntimeInputBindingStateProjection
         return result;
     }
 }
+
+/// <summary>
+/// The workflow-input, workflow-variable, and prior-activity-output snapshots projected together from a single
+/// durable-value list (see <see cref="RuntimeInputBindingStateProjection.ProjectAll"/>).
+/// </summary>
+public readonly record struct RuntimeInputBindingStateProjectionSet(
+    IReadOnlyDictionary<string, object?> WorkflowInputs,
+    IReadOnlyDictionary<string, object?> WorkflowVariables,
+    IReadOnlyDictionary<string, object?> ActivityOutputValues);

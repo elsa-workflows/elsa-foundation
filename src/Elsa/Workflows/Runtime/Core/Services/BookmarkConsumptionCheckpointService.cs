@@ -107,7 +107,10 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                         State: request.Bookmark,
                         Metadata: metadata)
                 ],
-                durableValues: [],
+                // The resume callback's workflow-scope variable write-back (#286/#310) commits in the same
+                // transactional unit as the bookmark-consumed checkpoint, so a variable mutated inside a resume
+                // callback is durably re-projected for downstream activities iff the bookmark is consumed.
+                durableValues: request.DurableValueChanges,
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: inspection is null

@@ -16,17 +16,16 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
 
         new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
 
-        AssertSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>(services);
-        AssertSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>(services);
-        AssertSingleton<IWorkflowTriggerIndexer, WorkflowTriggerIndexer>(services);
-        AssertSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>(services);
-        AssertSingleton<IStimulusStartDeduplicator, InMemoryStimulusStartDeduplicator>(services);
-        AssertSingleton<IStimulusRouter, StimulusRouter>(services);
+        AssertRegistered<IWorkflowTriggerBindingStore>(services);
+        AssertRegistered<IWorkflowTriggerBindingExtractor>(services);
+        AssertRegistered<IWorkflowTriggerIndexer>(services);
+        AssertRegistered<IGlobalBookmarkStimulusLookup>(services);
+        AssertRegistered<IStimulusStartDeduplicator>(services);
+        AssertRegistered<IStimulusRouter>(services);
 
         // The cross-execution index is bridged onto the bookmark state store via a factory, so assert by service type.
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkStimulusIndex) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
+            descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
     }
 
     [Fact]
@@ -56,9 +55,8 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         Assert.Contains("WorkflowsRuntimeApi", attribute.DependsOn.Select(dependency => dependency?.ToString()));
     }
 
-    private static void AssertSingleton<TService, TImplementation>(IServiceCollection services) =>
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(TService) &&
-            descriptor.ImplementationType == typeof(TImplementation) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
+    // TS-1 (§2.23.1): assert single-implementation services by registration presence, not implementation-type or
+    // lifetime pinning, so swapping an equivalent implementation no longer trips this test.
+    private static void AssertRegistered<TService>(IServiceCollection services) =>
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TService));
 }
