@@ -32,16 +32,33 @@ flight, or done, and which sessions/branches own them.
 
 ## Active Objectives
 
-Phase 0 (safety & correctness) — first wave launched 2026-07-02:
+Phase 0 (safety & correctness) — **COMPLETE 2026-07-03**; all six units merged to main:
 
-1. W2 Durable resumption chain (PS-2, RT-3) — in flight.
-2. W3 State versioning contract (PS-1, PS-3) — in flight.
-3. W4 Endpoint security model (MS-12/13/16) — in flight.
-4. W6 Repo hygiene quick wins (MD-1/2/3/4/7, IN-12) — in flight.
-5. W1 Fault semantics end-to-end — **held** until specs/083 Move 2 lands (same runtime-spine surface).
-6. W5 Ownership enforcement — **held** until specs/083 Move 2 lands (same reason).
+1. W6 Repo hygiene quick wins (MD-1/2/3/4/7, IN-12) — **done** ([#373](https://github.com/elsa-workflows/elsa-foundation/pull/373); constitution v3.1.0 + expanded guard suite).
+2. W3 State versioning contract (PS-1, PS-3) — **done** ([#426](https://github.com/elsa-workflows/elsa-foundation/pull/426) → re-delivered to main via [#428](https://github.com/elsa-workflows/elsa-foundation/pull/428); `IGroundworkRuntimeDocumentSerializer`, per-kind versions, upcaster registry, v1 golden fixtures, schema-evolution contract in `docs/serialization.md`).
+3. W4 Endpoint security model (MS-12/13/16) — **done** ([#429](https://github.com/elsa-workflows/elsa-foundation/pull/429); endpoints secured by construction, per-shell `ApiSecurityFeature` opt-out, OIDC 401 fix, Elsa.Server secured in all environments).
+4. W2 Durable resumption chain (PS-2, RT-3) — **done** ([#427](https://github.com/elsa-workflows/elsa-foundation/pull/427); durable Groundwork scheduler work queue on the W3 serializer, `IRuntimeResumptionService` + resumption pump feature, `docs/runtime-durable-resumption.md`).
+5. W5 Ownership enforcement (RT-2) — **done** ([#430](https://github.com/elsa-workflows/elsa-foundation/pull/430); fencing at the checkpoint-commit funnel, monotonic lease tokens surviving release, drain-scoped lease/heartbeat closing window C's visibility half, drainer TOCTOU tripwire).
+6. W1 Fault semantics end-to-end (RT-1/5/12/14) — **done** ([#431](https://github.com/elsa-workflows/elsa-foundation/pull/431); Running→Faulted via `BlockingIncidentWorkflowFaultObserver`, poison store + retry policy in the drainer crash path, `AcceptedButFaulted` drain-result propagation, structured fault capture, `ListIncidents` operator endpoint).
 
-Phases 1–3 (W7–W21): queued; see the roadmap's dependency graph.
+Phases 1–3 (W7–W21): queued; see the roadmap's dependency graph. Next wave candidates:
+W7 (trigger subsystem), W8 (durable timers — depends on W2's pump), W9 (checkpoint
+coalescing — depends on W5's fencing).
+
+### Follow-up findings recorded during Phase 0 execution
+
+- **Ack-based dequeue for full window-C closure** (from W5): guaranteed item-level replay
+  requires the durable scheduler work queue to hold a dequeued item until the consuming
+  handler's checkpoint commits (release-on-ack), instead of load-then-delete. W5's lease
+  primitive unblocks this; see the "still open" increment in
+  [docs/runtime-durable-resumption.md](../runtime-durable-resumption.md). Candidate new unit.
+- **Design endpoints bypass endpoint security** (from W4, pre-existing): 15 endpoints under
+  `src/Elsa/Activities/Design/Api/` and `src/Elsa/Workflows/Design/Api/` call
+  `AllowAnonymous()` explicitly and serve anonymously even on secured shells. Candidate new
+  unit (or fold into W18 identity work).
+- **Durable poison store** (from W1): `IWorkflowSchedulerPoisonStore` ships with an
+  in-memory default; a Groundwork-backed implementation (through the W3 serializer) is the
+  natural follow-up so poison records survive restarts.
 
 ## Linked Surfaces
 
@@ -57,6 +74,10 @@ Phases 1–3 (W7–W21): queued; see the roadmap's dependency graph.
 
 - One unit per branch/PR; reference finding IDs; follow the roadmap's execution protocol
   (Speckit flow, constitution gates, skill routing, map refresh).
-- W2 touches `WorkflowsRuntimeApiFeature.cs` registration, which specs/083 also edits —
-  keep the registration diff minimal to ease merging.
+- **PR-base pitfall (learned in Phase 0):** PRs created by worker sessions can default their
+  base to the session's base branch instead of `main`. Always create with
+  `gh pr create --base main` and verify `baseRefName == main` before review/merge.
+- **Second-lander rule (learned in Phase 0):** when parallel units touch the same runtime
+  files, whoever lands second merges main and re-runs all affected suites before their PR
+  is reviewed.
 - Update this bucket as units complete or move; link PRs next to each objective.
