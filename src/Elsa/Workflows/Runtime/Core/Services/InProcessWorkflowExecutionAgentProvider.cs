@@ -11,21 +11,21 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
 
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _lifecycleLocks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, InProcessWorkflowExecutionAgent> _agents = new(StringComparer.Ordinal);
-    private readonly IWorkflowExecutionCommandProcessor _commandProcessor;
+    private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
     private readonly int _maxProcessedIdempotencyKeysPerAgent;
     private long _activationCounter;
 
     public InProcessWorkflowExecutionAgentProvider()
-        : this(NoopWorkflowExecutionCommandProcessor.Instance)
+        : this(NoopWorkflowExecutionCommandExecutor.Instance)
     {
     }
 
-    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandProcessor commandProcessor)
+    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandExecutor commandProcessor)
         : this(commandProcessor, DefaultMaxProcessedIdempotencyKeysPerAgent)
     {
     }
 
-    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandProcessor commandProcessor, int maxProcessedIdempotencyKeysPerAgent)
+    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeysPerAgent)
     {
         ArgumentNullException.ThrowIfNull(commandProcessor);
 
@@ -96,7 +96,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         private readonly SemaphoreSlim _mailbox = new(1, 1);
         private readonly HashSet<string> _processedIdempotencyKeys = new(StringComparer.Ordinal);
         private readonly Queue<string> _processedIdempotencyKeyOrder = new();
-        private readonly IWorkflowExecutionCommandProcessor _commandProcessor;
+        private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
         private readonly string _workflowExecutionId;
         private readonly string _agentId;
         private readonly DateTimeOffset _activatedAt;
@@ -104,7 +104,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         private readonly int _maxProcessedIdempotencyKeys;
         private WorkflowExecutionAgentStatus _status = WorkflowExecutionAgentStatus.Active;
 
-        public InProcessWorkflowExecutionAgent(string workflowExecutionId, long activationId, IWorkflowExecutionCommandProcessor commandProcessor, int maxProcessedIdempotencyKeys)
+        public InProcessWorkflowExecutionAgent(string workflowExecutionId, long activationId, IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeys)
         {
             _workflowExecutionId = workflowExecutionId;
             _agentId = $"inprocess:{workflowExecutionId}:{activationId}";

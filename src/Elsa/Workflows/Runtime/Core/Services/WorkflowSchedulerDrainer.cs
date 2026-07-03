@@ -166,6 +166,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         catch (Exception exception)
         {
             var faultInfo = _faultCapturePolicy.Capture(exception);
+            // Persisted handler-name — this value is written into poison/drain records (RuntimeSchedulerPoisonRecord.HandlerName,
+            // RuntimeSchedulerDrain.HandlerName). Do not rename WorkflowSchedulerDrainer without preserving this literal wire value.
             var handlerName = handler?.Name ?? nameof(WorkflowSchedulerDrainer);
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 

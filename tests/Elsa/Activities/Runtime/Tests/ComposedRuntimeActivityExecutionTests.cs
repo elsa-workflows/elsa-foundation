@@ -147,7 +147,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.InvokeActivity) >= 2);
         Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.CompleteActivity) >= 3);
 
-        var rerunResult = await provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>()
+        var rerunResult = await provider.GetRequiredService<IWorkflowDrainOrchestrator>()
             .DrainAsync(startEnvelope, new RuntimeSchedulerDrainRequest("wfexec-1"));
         var rerunStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var rerunQueuedItems = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()

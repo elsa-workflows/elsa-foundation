@@ -47,7 +47,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
-            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowStartDispatcher>(),
             provider.GetRequiredService<IWorkflowExecutableStore>());
 
         var view = await handler.Handle(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
@@ -69,7 +69,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
-            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowStartDispatcher>(),
             provider.GetRequiredService<IWorkflowExecutableStore>());
 
         var view = await handler.Handle(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
@@ -93,7 +93,7 @@ public sealed class SeededVariableEndToEndExecutionTests
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
 
         var handler = new ExecuteWorkflowRequestHandler(
-            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowStartDispatcher>(),
             provider.GetRequiredService<IWorkflowExecutableStore>());
 
         var request = new ExecuteWorkflow(

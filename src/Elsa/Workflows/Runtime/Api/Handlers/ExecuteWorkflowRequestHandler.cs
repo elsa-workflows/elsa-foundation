@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core.Services;
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 public sealed class ExecuteWorkflowRequestHandler(
-    IWorkflowExecutionStartDispatcher startDispatcher,
+    IWorkflowStartDispatcher startDispatcher,
     IWorkflowExecutableStore executableStore)
     : IRequestHandler<ExecuteWorkflow, WorkflowExecutionStartDispatchView>
 {

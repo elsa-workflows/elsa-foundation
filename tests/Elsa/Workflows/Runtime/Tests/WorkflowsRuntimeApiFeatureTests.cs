@@ -54,9 +54,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(InMemoryRuntimeCheckpointCommitStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxProcessor));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionDrainCoordinator));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutionDrainCoordinatorOptions));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionCommandExecutor));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowDrainOrchestrator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowDrainOrchestratorOptions));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy));
@@ -77,7 +77,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IStorageDriverContext");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeExecutionIdGenerator));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowStartDispatcher));
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
@@ -86,9 +86,9 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
-        provider.GetRequiredService<IWorkflowExecutionCommandProcessor>();
-        provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>();
-        provider.GetRequiredService<WorkflowExecutionDrainCoordinatorOptions>();
+        provider.GetRequiredService<IWorkflowExecutionCommandExecutor>();
+        provider.GetRequiredService<IWorkflowDrainOrchestrator>();
+        provider.GetRequiredService<WorkflowDrainOrchestratorOptions>();
         provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         provider.GetRequiredService<IWorkflowExecutionStateStore>();
         provider.GetRequiredService<IActivityExecutionStateStore>();
@@ -128,7 +128,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         provider.GetRequiredService<IRuntimeInputBindingResolver>();
         provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
         provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
-        provider.GetRequiredService<IWorkflowExecutionStartDispatcher>();
+        provider.GetRequiredService<IWorkflowStartDispatcher>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is BlockingIncidentWorkflowFaultObserver);
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();

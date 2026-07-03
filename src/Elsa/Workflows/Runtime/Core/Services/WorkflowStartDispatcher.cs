@@ -5,14 +5,14 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDispatcher
+public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     private readonly IWorkflowExecutableStore _executableStore;
     private readonly IWorkflowExecutionAgentProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowExecutionStartDispatcher(
+    public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
         IWorkflowExecutionAgentProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
@@ -20,7 +20,7 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
     {
     }
 
-    public WorkflowExecutionStartDispatcher(
+    public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
         IWorkflowExecutionAgentProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
@@ -128,7 +128,8 @@ public sealed class WorkflowExecutionStartDispatcher : IWorkflowExecutionStartDi
         WorkflowExecutableIdentity identity)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["runtime.dispatcher"] = nameof(WorkflowExecutionStartDispatcher);
+        // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
+        metadata["runtime.dispatcher"] = nameof(WorkflowStartDispatcher);
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;

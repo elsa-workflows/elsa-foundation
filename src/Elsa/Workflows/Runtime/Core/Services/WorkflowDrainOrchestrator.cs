@@ -5,30 +5,30 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainCoordinator
+public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
 {
     private readonly IWorkflowSchedulerDrainer _schedulerDrainer;
     private readonly IRuntimePostCommitOutboxProcessor _postCommitOutboxProcessor;
     private readonly IReadOnlyCollection<IWorkflowSchedulerDrainObserver> _schedulerDrainObservers;
-    private readonly WorkflowExecutionDrainCoordinatorOptions _options;
+    private readonly WorkflowDrainOrchestratorOptions _options;
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
 
-    public WorkflowExecutionDrainCoordinator(
+    public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowExecutionDrainCoordinatorOptions? options = null)
+        WorkflowDrainOrchestratorOptions? options = null)
         : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService: null, ownershipContextAccessor: null)
     {
     }
 
-    public WorkflowExecutionDrainCoordinator(
+    public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowExecutionDrainCoordinatorOptions? options,
+        WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor)
         : this(schedulerDrainer, postCommitOutboxProcessor, schedulerDrainObservers, options, ownershipService, ownershipContextAccessor, coalescingScopeFactory: null)
@@ -38,11 +38,11 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
     // Greediest constructor: MS DI selects it only when the coalescing drain scope factory has been registered (the
     // opt-in coalescing wiring). On the default path the factory is absent, this constructor is not selected, and the
     // coordinator runs its existing ownership-only path byte-for-byte unchanged.
-    public WorkflowExecutionDrainCoordinator(
+    public WorkflowDrainOrchestrator(
         IWorkflowSchedulerDrainer schedulerDrainer,
         IRuntimePostCommitOutboxProcessor postCommitOutboxProcessor,
         IEnumerable<IWorkflowSchedulerDrainObserver> schedulerDrainObservers,
-        WorkflowExecutionDrainCoordinatorOptions? options,
+        WorkflowDrainOrchestratorOptions? options,
         IRuntimeExecutionOwnershipService? ownershipService,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory)
@@ -54,7 +54,7 @@ public sealed class WorkflowExecutionDrainCoordinator : IWorkflowExecutionDrainC
         _schedulerDrainer = schedulerDrainer;
         _postCommitOutboxProcessor = postCommitOutboxProcessor;
         _schedulerDrainObservers = schedulerDrainObservers.ToArray();
-        _options = options ?? new WorkflowExecutionDrainCoordinatorOptions();
+        _options = options ?? new WorkflowDrainOrchestratorOptions();
         _ownershipService = ownershipService;
         _ownershipContextAccessor = ownershipContextAccessor;
         _coalescingScopeFactory = coalescingScopeFactory;

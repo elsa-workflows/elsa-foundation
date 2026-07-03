@@ -65,7 +65,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
         var published = await Handler(workflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var dispatcher = new WorkflowExecutionStartDispatcher(
+        var dispatcher = new WorkflowStartDispatcher(
             _store,
             new InProcessWorkflowExecutionAgentProvider(),
             new GuidRuntimeExecutionIdGenerator());

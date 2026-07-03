@@ -23,13 +23,13 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
 
         // The whole dispatch graph must resolve from the Core composition root alone.
         Assert.NotNull(provider.GetService<IWorkflowSchedulerDrainer>());
-        Assert.NotNull(provider.GetService<IWorkflowExecutionCommandProcessor>());
-        Assert.NotNull(provider.GetService<IWorkflowExecutionDrainCoordinator>());
+        Assert.NotNull(provider.GetService<IWorkflowExecutionCommandExecutor>());
+        Assert.NotNull(provider.GetService<IWorkflowDrainOrchestrator>());
         Assert.NotNull(provider.GetService<IRuntimeExecutionPipelineDispatcher>());
         Assert.NotNull(provider.GetService<IRuntimeWorkflowExecutionPipeline>());
         Assert.NotNull(provider.GetService<IRuntimeActivityExecutionPipeline>());
         Assert.NotNull(provider.GetService<IWorkflowExecutionAgentProvider>());
-        Assert.NotNull(provider.GetService<IWorkflowExecutionStartDispatcher>());
+        Assert.NotNull(provider.GetService<IWorkflowStartDispatcher>());
         Assert.NotEmpty(provider.GetServices<IWorkflowSchedulerWorkHandler>());
     }
 

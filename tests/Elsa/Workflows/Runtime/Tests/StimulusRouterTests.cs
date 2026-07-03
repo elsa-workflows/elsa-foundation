@@ -182,7 +182,7 @@ public sealed class StimulusRouterTests
             ExpiresAt: null);
     }
 
-    private sealed class RecordingStartDispatcher(Action<string>? onStart = null) : IWorkflowExecutionStartDispatcher
+    private sealed class RecordingStartDispatcher(Action<string>? onStart = null) : IWorkflowStartDispatcher
     {
         private int _counter;
         public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];

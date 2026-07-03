@@ -1,11 +1,11 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-public sealed class WorkflowExecutionDrainCoordinatorOptions
+public sealed class WorkflowDrainOrchestratorOptions
 {
     public const int DefaultMaxDrainCycles = 64;
     public const int DefaultOutboxDeliveryBatchSize = 64;
 
-    public WorkflowExecutionDrainCoordinatorOptions(
+    public WorkflowDrainOrchestratorOptions(
         int maxDrainCycles = DefaultMaxDrainCycles,
         int outboxDeliveryBatchSize = DefaultOutboxDeliveryBatchSize)
     {

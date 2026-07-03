@@ -210,7 +210,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
 
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
-        IWorkflowExecutionStartDispatcher? dispatcher = null,
+        IWorkflowStartDispatcher? dispatcher = null,
         ITransientWorkflowExecutableStore? transientStore = null,
         IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null) =>
         new(
@@ -224,7 +224,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             dispatcher ?? Dispatcher(),
             TimeProvider.System);
 
-    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowExecutionStartDispatcher? dispatcher = null) =>
+    private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null) =>
         new(
             new WorkflowExecutableCompiler(
                 new ThrowingVersionStore(),
@@ -236,7 +236,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             dispatcher ?? Dispatcher(),
             TimeProvider.System);
 
-    private WorkflowExecutionStartDispatcher Dispatcher() =>
+    private WorkflowStartDispatcher Dispatcher() =>
         new(
             _executableStore,
             new InProcessWorkflowExecutionAgentProvider(),

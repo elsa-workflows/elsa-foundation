@@ -92,7 +92,7 @@ public sealed class RuntimeAgentProviderContractTests
 
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor"));
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Services.SequentialWorkflowExecutor"));
-        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStartDispatcher"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher"));
         Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionAgentProvider"));
     }
 

@@ -755,8 +755,8 @@ public sealed class RuntimeSchedulerDrainTests
 
         Assert.Throws<ArgumentException>(() => new RuntimeSchedulerDrainRequest(" "));
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowExecutionDrainCoordinatorOptions(maxDrainCycles: 0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowExecutionDrainCoordinatorOptions(outboxDeliveryBatchSize: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowDrainOrchestratorOptions(maxDrainCycles: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkflowDrainOrchestratorOptions(outboxDeliveryBatchSize: 0));
         Assert.Throws<ArgumentNullException>(() => new RuntimeSchedulerWorkItemResult(
             workItemId: "work-1",
             workflowExecutionId: "wfexec-1",

@@ -284,7 +284,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     public async Task ProcessAsync_ThrowsDomainExceptionWhenCycleCapIsExceeded()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var options = new WorkflowExecutionDrainCoordinatorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
+        var options = new WorkflowDrainOrchestratorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
         var processor = NewProcessor(
             queue,
             new DequeuingSchedulerDrainer(queue, _now),
@@ -513,18 +513,18 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             completedAt: _now,
             items: []);
 
-    private static WorkflowSchedulerCommandProcessor NewProcessor(
+    private static WorkflowSchedulerCommandRouter NewProcessor(
         IWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerDrainer drainer,
         IWorkflowSchedulerDrainPolicy drainPolicy,
         IEnumerable<IWorkflowSchedulerDrainObserver> observers,
         TimeProvider timeProvider,
         IRuntimePostCommitOutboxProcessor? outboxProcessor = null,
-        WorkflowExecutionDrainCoordinatorOptions? options = null) =>
+        WorkflowDrainOrchestratorOptions? options = null) =>
         new(
             queue,
             drainPolicy,
-            new WorkflowExecutionDrainCoordinator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
+            new WorkflowDrainOrchestrator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
             timeProvider);
 
     private RuntimeSchedulerWorkItem FollowUpWorkItem() =>

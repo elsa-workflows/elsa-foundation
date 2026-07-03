@@ -150,7 +150,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("artifact-1", envelope.Command.Metadata["runtime.artifactId"]);
     }
 
-    private WorkflowExecutionStartDispatcher NewDispatcher(
+    private WorkflowStartDispatcher NewDispatcher(
         InMemoryWorkflowExecutableStore store,
         RecordingAgentProvider agentProvider) =>
         new(

@@ -3,11 +3,11 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class NoopWorkflowExecutionCommandProcessor : IWorkflowExecutionCommandProcessor
+public sealed class NoopWorkflowExecutionCommandExecutor : IWorkflowExecutionCommandExecutor
 {
-    public static readonly NoopWorkflowExecutionCommandProcessor Instance = new();
+    public static readonly NoopWorkflowExecutionCommandExecutor Instance = new();
 
-    public NoopWorkflowExecutionCommandProcessor()
+    public NoopWorkflowExecutionCommandExecutor()
     {
     }
 

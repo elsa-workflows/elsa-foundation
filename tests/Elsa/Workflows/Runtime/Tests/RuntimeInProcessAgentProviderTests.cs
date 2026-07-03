@@ -215,7 +215,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.Equal(expectedStatus, agent.Descriptor.Status);
     }
 
-    private sealed class RecordingCommandProcessor : IWorkflowExecutionCommandProcessor
+    private sealed class RecordingCommandProcessor : IWorkflowExecutionCommandExecutor
     {
         private readonly object _syncRoot = new();
         private int _currentConcurrency;
@@ -248,7 +248,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         }
     }
 
-    private sealed class BlockingCommandProcessor : IWorkflowExecutionCommandProcessor
+    private sealed class BlockingCommandProcessor : IWorkflowExecutionCommandExecutor
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -31,7 +31,7 @@ public sealed class StimulusRouter : IStimulusRouter
 {
     private readonly IWorkflowTriggerBindingStore _triggerBindingStore;
     private readonly IGlobalBookmarkStimulusLookup _globalBookmarkStimulusLookup;
-    private readonly IWorkflowExecutionStartDispatcher _startDispatcher;
+    private readonly IWorkflowStartDispatcher _startDispatcher;
     private readonly IBookmarkResumeDispatcher _resumeDispatcher;
     private readonly IStimulusStartDeduplicator _startDeduplicator;
     private readonly TimeProvider _timeProvider;
@@ -39,7 +39,7 @@ public sealed class StimulusRouter : IStimulusRouter
     public StimulusRouter(
         IWorkflowTriggerBindingStore triggerBindingStore,
         IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
-        IWorkflowExecutionStartDispatcher startDispatcher,
+        IWorkflowStartDispatcher startDispatcher,
         IBookmarkResumeDispatcher resumeDispatcher,
         IStimulusStartDeduplicator startDeduplicator)
         : this(triggerBindingStore, globalBookmarkStimulusLookup, startDispatcher, resumeDispatcher, startDeduplicator, TimeProvider.System)
@@ -49,7 +49,7 @@ public sealed class StimulusRouter : IStimulusRouter
     public StimulusRouter(
         IWorkflowTriggerBindingStore triggerBindingStore,
         IGlobalBookmarkStimulusLookup globalBookmarkStimulusLookup,
-        IWorkflowExecutionStartDispatcher startDispatcher,
+        IWorkflowStartDispatcher startDispatcher,
         IBookmarkResumeDispatcher resumeDispatcher,
         IStimulusStartDeduplicator startDeduplicator,
         TimeProvider timeProvider)

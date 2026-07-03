@@ -42,7 +42,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     [Fact]
     public void ExecuteWorkflowHandler_DoesNotDependOnInlineExecutor()
     {
-        var runtimeCoreAssembly = typeof(IWorkflowExecutionStartDispatcher).Assembly;
+        var runtimeCoreAssembly = typeof(IWorkflowStartDispatcher).Assembly;
         var constructorParameters = typeof(ExecuteWorkflowRequestHandler)
             .GetConstructors()
             .SelectMany(constructor => constructor.GetParameters())
@@ -53,7 +53,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor"));
     }
 
-    private static WorkflowExecutionStartDispatcher NewDispatcher(InMemoryWorkflowExecutableStore store) =>
+    private static WorkflowStartDispatcher NewDispatcher(InMemoryWorkflowExecutableStore store) =>
         new(
             store,
             new RecordingAgentProvider(),
