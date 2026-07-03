@@ -149,6 +149,43 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_ReturnsFaultedProcessResultWhenDrainFaults()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var processor = NewProcessor(
+            queue,
+            new FaultingResultSchedulerDrainer(_now),
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FixedTimeProvider(_now));
+
+        // RT-14: the drain result must not be discarded — the processor surfaces the fault verdict to its caller.
+        var result = await processor.ProcessAsync(NewEnvelope(1));
+
+        Assert.True(result.IsFaulted);
+        Assert.True(result.Faulted);
+        Assert.Equal(RuntimeSchedulerDrainStopReason.Faulted, result.StopReason);
+        Assert.Contains("Faulted for test.", result.FaultReason);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ReturnsNoDrainWhenPolicyDefers()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var processor = NewProcessor(
+            queue,
+            new RecordingSchedulerDrainer(queue, _now),
+            DeferredSchedulerDrainPolicy.Instance,
+            [],
+            new FixedTimeProvider(_now));
+
+        var result = await processor.ProcessAsync(NewEnvelope(1));
+
+        Assert.False(result.DrainPerformed);
+        Assert.False(result.IsFaulted);
+    }
+
+    [Fact]
     public async Task ProcessAsync_ReportsOutboxDeliveryFailureStopReasonToObservers()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -328,6 +365,27 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task InProcessAgent_ReturnsAcceptedButFaultedWhenDrainFaults()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowSchedulerWorkHandler, AlwaysFaultingSchedulerWorkHandler>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+        var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
+
+        var result = await agent.EnqueueAsync(NewEnvelope(1));
+
+        // RT-14 acceptance: a faulting turn yields a non-success dispatch outcome (not silent Accepted)...
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, result.Status);
+        Assert.False(string.IsNullOrWhiteSpace(result.Reason));
+        // ...and RT-1 gap b: the crashed handler's work item is recorded to the poison store, not dropped.
+        var poison = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(RuntimeSchedulerPoisonDisposition.Poisoned, poison.Disposition); // Default Noop retry policy.
+    }
+
+    [Fact]
     public async Task InProcessAgent_StartCommandProcessesPostCommitSchedulerWorkAndRecordsActivityState()
     {
         var observer = new RecordingSchedulerDrainObserver();
@@ -351,7 +409,9 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var drainResult = Assert.Single(observer.ObservedResults);
         var rootState = Assert.Single(activityStates);
 
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+        // The missing-activity handler faults the turn, so RT-14 surfaces AcceptedButFaulted instead of
+        // masking the fault as a plain Accepted (the drain still records activity state + delivers the outbox).
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted, result.Status);
         Assert.Empty(queuedItems);
         Assert.Empty(pending);
         Assert.Equal("node-start", rootState.Execution.ExecutableNodeId);
@@ -803,5 +863,14 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class AlwaysFaultingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => workItem.CommandKind == WorkflowExecutionCommandKind.RunSchedulerWork;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
     }
 }

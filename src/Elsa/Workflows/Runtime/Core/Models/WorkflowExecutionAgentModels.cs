@@ -59,7 +59,7 @@ public sealed class WorkflowExecutionCommandDispatchResult
         if (reason is not null && string.IsNullOrWhiteSpace(reason))
             throw new ArgumentException("Command dispatch reason cannot be blank when provided.", nameof(reason));
 
-        if (status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred)
+        if (status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)
             ArgumentNullException.ThrowIfNull(reason);
 
         if (status == WorkflowExecutionCommandDispatchStatus.Accepted && reason is not null)
@@ -211,6 +211,15 @@ public enum WorkflowExecutionCommandDeliveryMode
 public enum WorkflowExecutionCommandDispatchStatus
 {
     Accepted,
+
+    /// <summary>
+    /// The command was accepted and its drain ran, but the workflow ended the turn faulted — a handler faulted or the
+    /// post-commit outbox failed to deliver. Dispatch + drain succeeded mechanically; the workflow did not. This is a
+    /// deliberately non-success status so callers that pattern-match success do not silently treat a faulted turn as
+    /// healthy. The accompanying <see cref="WorkflowExecutionCommandDispatchResult.Reason"/> describes the fault.
+    /// </summary>
+    AcceptedButFaulted,
+
     Duplicate,
     Rejected,
     Deferred

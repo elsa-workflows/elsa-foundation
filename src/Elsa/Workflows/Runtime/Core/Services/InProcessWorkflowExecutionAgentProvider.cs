@@ -155,8 +155,23 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Duplicate, "Idempotency key was already processed.");
 
-                await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
+                var processResult = await _commandProcessor.ProcessAsync(envelope, options, cancellationToken);
                 RememberProcessedIdempotencyKey(envelope.IdempotencyKey);
+
+                if (processResult.IsFaulted)
+                {
+                    var faultMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
+                    if (processResult.StopReason is { } stopReason)
+                        faultMetadata["runtime.dispatch.drainStopReason"] = stopReason.ToString();
+                    if (processResult.OutboxDeliveryFailed)
+                        faultMetadata["runtime.dispatch.outboxDeliveryFailed"] = "true";
+
+                    return DispatchResult(
+                        envelope,
+                        WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted,
+                        processResult.FaultReason ?? "Workflow execution faulted during command processing.",
+                        faultMetadata);
+                }
 
                 return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Accepted);
             }
@@ -211,12 +226,14 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         private static WorkflowExecutionCommandDispatchResult DispatchResult(
             WorkflowExecutionCommandEnvelope envelope,
             WorkflowExecutionCommandDispatchStatus status,
-            string? reason = null) =>
+            string? reason = null,
+            IReadOnlyDictionary<string, string>? metadata = null) =>
             new(
                 envelopeId: envelope.EnvelopeId,
                 workflowExecutionId: envelope.WorkflowExecutionId,
                 status: status,
                 recordedAt: DateTimeOffset.UtcNow,
-                reason: reason);
+                reason: reason,
+                metadata: metadata);
     }
 }

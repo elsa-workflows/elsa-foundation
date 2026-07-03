@@ -11,14 +11,14 @@ public sealed class NoopWorkflowExecutionCommandProcessor : IWorkflowExecutionCo
     {
     }
 
-    public ValueTask ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+    public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(envelope);
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(WorkflowExecutionCommandProcessResult.NoDrain);
     }
 
-    public ValueTask ProcessAsync(
+    public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
         WorkflowExecutionCommandEnvelope envelope,
         WorkflowExecutionCommandDispatchOptions options,
         CancellationToken cancellationToken = default)
@@ -26,6 +26,6 @@ public sealed class NoopWorkflowExecutionCommandProcessor : IWorkflowExecutionCo
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(options);
 
-        return ValueTask.CompletedTask;
+        return ValueTask.FromResult(WorkflowExecutionCommandProcessResult.NoDrain);
     }
 }
