@@ -7,7 +7,7 @@ This is a point-in-time report from direct repo facts. It is not a constitution 
 ## Summary
 
 - Source projects: 107
-- Test projects: 38
+- Test projects: 39
 - Discovered CShells feature classes: 72
 - Specs: 97
 - Direct package IDs with multiple versions: 0
@@ -23,7 +23,7 @@ No direct package ID has multiple direct versions.
 
 ## Spec 006 State
 
-- `006-activity-construction-seam`: 41 tasks done, 14 tasks open; notes: retained, deferred, out of scope, construct-only.
+- `006-activity-construction-seam`: 54 tasks done, 1 tasks open; notes: retained, deferred, out of scope, construct-only.
 
 ## Runtime/Design Reference Signal
 

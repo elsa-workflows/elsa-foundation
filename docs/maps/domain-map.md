@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 107
-- Test projects: 38
+- Test projects: 39
 - Domains: 23
 - Direct cross-domain references: 327
 
@@ -26,7 +26,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Foundation | 5 | 1 | feature/implementation<br>test |
 | Elsa.Http | 3 | 0 | contract<br>feature/implementation |
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
-| Elsa.Mediator | 2 | 0 | contract<br>feature/implementation |
+| Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Modularity | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Persistence | 7 | 5 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
@@ -171,6 +171,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Tests | test | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | Tests | test | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
+| [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | Tests | test | Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Server |
 | [Elsa.Persistence.Core.Tests](../../tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj) | test | Elsa.Persistence | Core.Tests | test | Elsa.Persistence.Core |
 | [Elsa.Persistence.EFCore.Tests](../../tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj) | test | Elsa.Persistence | EFCore.Tests | test | Elsa.Persistence.Core<br>Elsa.Persistence.EFCore |

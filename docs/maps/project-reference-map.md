@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 107
-- Test projects: 38
-- Direct project references: 534
+- Test projects: 39
+- Direct project references: 535
 
 ## Projects
 
@@ -142,6 +142,7 @@ Records direct project references only.
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
+| [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | net10.0 | false | Elsa.Mediator |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | net10.0 | false | Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Server |
 | [Elsa.Persistence.Core.Tests](../../tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Core |
 | [Elsa.Persistence.EFCore.Tests](../../tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Core<br>Elsa.Persistence.EFCore |
@@ -175,7 +176,7 @@ Records direct project references only.
 | Elsa.Foundation | 5 | 1 |
 | Elsa.Http | 3 | 0 |
 | Elsa.Locking | 2 | 0 |
-| Elsa.Mediator | 2 | 0 |
+| Elsa.Mediator | 2 | 1 |
 | Elsa.Modularity | 3 | 1 |
 | Elsa.Persistence | 7 | 5 |
 | Elsa.Pipelines | 1 | 0 |
