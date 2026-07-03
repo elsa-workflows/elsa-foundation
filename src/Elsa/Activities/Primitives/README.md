@@ -26,7 +26,8 @@ The **CLR activity kind**: primitive hand-written activities plus the constructo
 
 ## Registration & tests
 
-`ClrActivityConstructor` and `ActivityArgumentBinder` are registered against their contracts so the CLR
+`ClrActivityConstructor` is registered against the `IActivityConstructor` contract (the binder is
+feature-internal — registered as its concrete `ActivityArgumentBinder` type, no interface), so the CLR
 round-trip is provable end-to-end through `IActivityFactory`. Coverage lives in
 `tests/Elsa/Activities/Runtime/Tests` (`ClrActivityConstructorTests`, `ActivityArgumentBinderTests`,
 `ActivitiesPrimitivesFeatureTests`) — the Primitives tests colocate there rather than in a separate project.
