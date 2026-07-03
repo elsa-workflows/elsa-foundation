@@ -19,15 +19,14 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
 
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
 
-        Assert.Contains(services, d =>
-            d.ServiceType == typeof(IRuntimeResumptionService) &&
-            d.ImplementationType == typeof(RuntimeResumptionService) &&
-            d.Lifetime == ServiceLifetime.Singleton);
+        // TS-1 (§2.23.1): single-implementation service asserted by registration presence, not implementation-type
+        // or lifetime pinning. The resumption pump task is a named participant in the multi-implementation
+        // IRecurringTask collection, preserved as a composition contract.
+        Assert.Contains(services, d => d.ServiceType == typeof(IRuntimeResumptionService));
 
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IRecurringTask) &&
-            d.ImplementationType == typeof(RuntimeResumptionPumpTask) &&
-            d.Lifetime == ServiceLifetime.Singleton);
+            d.ImplementationType == typeof(RuntimeResumptionPumpTask));
     }
 
     [Fact]
