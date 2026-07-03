@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -107,7 +108,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         ValidateBookmarkMatchesPayload(workItem, resumePayload, bookmark);
 
-        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executableNode, state, cancellationToken);
+        await ResumeActivityAsync(scope.ServiceProvider, activityFactory, checkpointCommitter, activityFaultIncidentRecorder, bookmarkConsumptionCheckpointService, schedulerWorkQueue, activityOutputRegister, durableValueStateStore, payloadCapturePolicy, workItem, resumePayload, bookmark, executable, executableNode, state, cancellationToken);
     }
 
     private async ValueTask ResumeActivityAsync(
@@ -123,18 +124,20 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         BookmarkState bookmark,
+        WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        VariableScope? variableScope;
         IReadOnlyDictionary<string, object?> workflowVariables;
         IReadOnlyDictionary<string, object?> workflowInputValues;
         IReadOnlyDictionary<string, object?> activityOutputValues;
         // Hoisted out of the try (like the invoke path) so they populate the resumed activity's execution-time
-        // expression carrier (ADR 0030) below, projected from the tagged durable values this resume already re-lists
-        // (spec 083 review) — so the RESUMED activity's own getCorrelationId() / getWorkflowInstanceName() observe the
-        // current identity too, without a workflow-execution-state read.
+        // expression carrier (ADR 0030) below, projected from the IdentityName-tagged durable values this resume
+        // already re-lists (spec 083 review) — so the RESUMED activity's own getCorrelationId() /
+        // getWorkflowInstanceName() observe the current identity too, without a workflow-execution-state read.
         string? carrierCorrelationId;
         string? carrierInstanceName;
         try
@@ -145,6 +148,15 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
             carrierCorrelationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
             carrierInstanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
+
+            // Build the visible container-scope chain (ADR 0027) anchored from the current durable-value variable
+            // projection, so a resume callback's freehand expressions read container/workflow-scoped variables and
+            // in-evaluation write-back lands in the declaring scope — parity with the invoke path. (Durable
+            // persistence of resume-time variable mutations across the bookmark-consumption checkpoint is a
+            // separate follow-up: BookmarkConsumptionCheckpointRequest does not yet carry durable-value changes.)
+            var scopeService = new RuntimeContainerScopeService(serviceProvider.GetRequiredService<IActivityExecutionStateStore>());
+            variableScope = await scopeService.BuildScopeAsync(executable, workItem.WorkflowExecutionId, state, cancellationToken, workflowVariables);
+
             var resolutionContext = new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: resumePayload.ActivityExecutionId,
@@ -153,7 +165,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 serviceProvider: serviceProvider,
                 workflowVariables: workflowVariables,
                 workflowInputs: workflowInputValues,
-                activityOutputValues: activityOutputValues);
+                activityOutputValues: activityOutputValues,
+                variableScope: variableScope);
             inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -188,10 +201,14 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = resumePayload.ActivityExecutionId;
 
-            // Populate the resumed activity's execution-time expression carrier (ADR 0030) from the same runtime state
-            // the invoke path uses: identity + inputs/variables/outputs are the tagged durable-value projections
-            // (spec 083 review), and the workflow-execution id / pinned executable come from the resume work item /
-            // payload. No container scope is rebuilt on this path, so variableScope stays null.
+            // Populate the live execution-time expression carrier (ADR 0030) for the resume callback via the shared
+            // helper: identity from the IdentityName-tagged durable-value projection (spec 083 review — no per-resume
+            // workflow-execution-state read, and a Correlate/SetName in this run is visible here too), the visible
+            // variable scope, and the durable-value projections for inputs/variables/outputs. Previously the resume
+            // context was built with none of these, so a resume callback that evaluated JavaScript/Liquid saw empty
+            // getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no scope to write variables into.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                carrierCorrelationId, carrierInstanceName, resumePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
             context = new SimpleActivityExecutionContext(
                 serviceProvider,
                 activity,
@@ -201,12 +218,13 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 workItem,
                 executableNode,
                 state,
-                variableScope: null,
-                correlationId: carrierCorrelationId,
-                workflowName: carrierInstanceName,
-                workflowInputs: workflowInputValues,
-                workflowVariables: workflowVariables,
-                activityOutputValues: activityOutputValues);
+                variableScope,
+                correlationId: carrier.CorrelationId,
+                workflowName: carrier.WorkflowName,
+                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
+                workflowInputs: carrier.WorkflowInputs,
+                workflowVariables: carrier.WorkflowVariables,
+                activityOutputValues: carrier.ActivityOutputValues);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)

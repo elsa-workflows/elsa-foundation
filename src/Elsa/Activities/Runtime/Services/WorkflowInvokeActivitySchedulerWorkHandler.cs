@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Expressions.Core.Models;
@@ -219,6 +218,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = invokePayload.ActivityExecutionId;
 
+            // Populate the live execution-time expression carrier (ADR 0030) via the shared helper: identity from the
+            // IdentityName-tagged durable-value projection (spec 083 review — no per-invocation workflow-execution-state
+            // read, and a Correlate/SetName is visible to concurrent sibling branches), and the durable-value
+            // projections for inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the
+            // passed IExpressionExecutionContext. The resume and parent-completion handlers populate it the same way.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                carrierCorrelationId, carrierInstanceName, invokePayload.PinnedExecutable, workflowInputValues, workflowVariables, activityOutputValues);
             context = new SimpleActivityExecutionContext(
                 serviceProvider,
                 activity,
@@ -229,16 +235,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 executableNode,
                 state,
                 variableScope,
-                // Populate the live execution-time expression carrier (ADR 0030): identity from the tagged
-                // durable-value projection + pinned executable, and the durable-value projections for
-                // inputs/variables/outputs. These feed the re-pointed JavaScript pre/post-processors via the
-                // passed IExpressionExecutionContext.
-                correlationId: carrierCorrelationId,
-                workflowName: carrierInstanceName,
-                workflowDefinitionVersion: ResolveWorkflowDefinitionVersion(invokePayload.PinnedExecutable),
-                workflowInputs: workflowInputValues,
-                workflowVariables: workflowVariables,
-                activityOutputValues: activityOutputValues);
+                correlationId: carrier.CorrelationId,
+                workflowName: carrier.WorkflowName,
+                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
+                workflowInputs: carrier.WorkflowInputs,
+                workflowVariables: carrier.WorkflowVariables,
+                activityOutputValues: carrier.ActivityOutputValues);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)
@@ -582,16 +584,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             metadata[RuntimeMetadataKeys.InstanceName] = instanceName;
 
         return metadata;
-    }
-
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030) from the pinned
-    // executable's artifact-version major — artifact-only identity (§E2.6), independent of any workflow-execution-state
-    // read (spec 083 follow-up). A non-numeric value yields 0 (the default the accessor returned before this unit)
-    // rather than faulting the activity — the version is display identity for scripts, not an execution precondition.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutableIdentity pinnedExecutable)
-    {
-        var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
-        return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
 
     private async ValueTask EnqueueBookmarkCreationWorkAsync(

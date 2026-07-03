@@ -178,6 +178,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             parentActivity.NodeId = parentExecutableNode.ExecutableNodeId;
             parentActivity.Id = payload.ActivityExecutionId;
 
+            // Populate the live execution-time expression carrier (ADR 0030) for the container's child-completion
+            // logic via the shared helper: workflow identity from the IdentityName-tagged durable-value projection
+            // (spec 083 review — no per-invocation workflow-execution-state read; the projection was computed once
+            // with the input/variable/output projections while constructing the parent) and those projections.
+            // Previously this context carried identity but none of the carrier state, so an OnChildCompleted/
+            // OnChildFaulted handler evaluating an expression saw empty getCorrelationId()/getInput()/getVariable()/
+            // getOutput(). No VariableScope is threaded here (unlike the leaf-invoke and resume paths): a container is
+            // evaluated as its own scope owner on this path, so BuildScopeAsync would return the body's iteration
+            // scope (ADR 0028) — the wrong scope for the container's self-evaluation — and it would not expose the
+            // container's own variables by name anyway (ADR 0027). The carrier's WorkflowVariables projection serves
+            // getVariable reads; scope-based/named variable access and write-back on this path is a documented follow-up.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(
+                constructedParent.CorrelationId, constructedParent.InstanceName, payload.PinnedExecutable,
+                constructedParent.WorkflowInputs, constructedParent.WorkflowVariables, constructedParent.ActivityOutputValues);
             context = new SimpleActivityExecutionContext(
                 serviceProvider,
                 parentActivity,
@@ -186,7 +200,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                 payload.PinnedExecutable,
                 workItem,
                 parentExecutableNode,
-                parentState);
+                parentState,
+                variableScope: null,
+                correlationId: carrier.CorrelationId,
+                workflowName: carrier.WorkflowName,
+                workflowDefinitionVersion: carrier.WorkflowDefinitionVersion,
+                workflowInputs: carrier.WorkflowInputs,
+                workflowVariables: carrier.WorkflowVariables,
+                activityOutputValues: carrier.ActivityOutputValues);
             RuntimeActivityInputMemory.Seed(context, constructedParent.Inputs);
 
             if (childFaulted)
@@ -291,15 +312,21 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         CancellationToken cancellationToken)
     {
         var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+        var workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+        var workflowInputs = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
+        var activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+        var correlationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
+        var instanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
+
         var resolutionContext = new RuntimeInputBindingResolutionContext(
             workflowExecutionId: workItem.WorkflowExecutionId,
             activityExecutionId: payload.ActivityExecutionId,
             durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
             activityOutputs: activityOutputRegister,
             serviceProvider: serviceProvider,
-            workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
-            workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
-            activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+            workflowVariables: workflowVariables,
+            workflowInputs: workflowInputs,
+            activityOutputValues: activityOutputValues);
         var inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
 
         var activity = await activityFactory.Create(
@@ -309,7 +336,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             BuildOutputArguments(executableNode),
             cancellationToken);
 
-        return new ConstructedActivity(activity, inputs);
+        return new ConstructedActivity(activity, inputs, workflowInputs, workflowVariables, activityOutputValues, correlationId, instanceName);
     }
 
     private async ValueTask EnqueueChildActivityScheduleWorkAsync(
@@ -839,5 +866,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private sealed record ConstructedActivity(
         IActivity Activity,
-        IReadOnlyList<RuntimeMaterializedActivityInput> Inputs);
+        IReadOnlyList<RuntimeMaterializedActivityInput> Inputs,
+        IReadOnlyDictionary<string, object?> WorkflowInputs,
+        IReadOnlyDictionary<string, object?> WorkflowVariables,
+        IReadOnlyDictionary<string, object?> ActivityOutputValues,
+        string? CorrelationId,
+        string? InstanceName);
 }
