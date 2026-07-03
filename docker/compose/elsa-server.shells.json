@@ -1,0 +1,98 @@
+{
+  "//": "Curated DEMO shell composition for the docker-compose reference stack.",
+  "//_purpose": "Mounted into the Elsa.Server container at /app/shells.json. It replaces the repo default (SQLite) composition with the single Groundwork PostgreSQL unified document store. The repo default src/Apps/Elsa.Server/shells.json is intentionally left untouched.",
+  "//_persistence": "GroundworkUnifiedPersistencePostgreSql backs the runtime, workflows-design and activities-design lanes from one Postgres database, so the SQLite EFCore design lanes (WorkflowsDesignPersistenceEFCoreSqlite, ActivitiesDesignPersistenceEFCoreSqlite) and the SQLite runtime lane (GroundworkRuntimePersistenceSqlite) are removed. The diagnostics EFCore lanes only ship SQLite providers, so they are omitted here to keep this a pure-Postgres persistence demo; the diagnostics features themselves remain enabled.",
+  "//_connectionstring": "GroundworkUnifiedPersistencePostgreSql binds its ConnectionString property directly from this feature section (the feature exposes a top-level ConnectionString property, not an Options wrapper). Points at the compose 'postgres' service. Demo-only credentials. Override without editing this file via env var CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString.",
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "ActivitiesControlFlow": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignReconciliation": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesSequence": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": ""
+            }
+          },
+          "DiagnosticsConsoleLogStreaming": {},
+          "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsStructuredLogs": {},
+          "Events": {},
+          "Expressions": {},
+          "FastEndpoints": {
+            "EndpointRoutePrefix": ""
+          },
+          "FileSystemDistributedLocking": {},
+          "FoundationAgentAbstractions": {},
+          "FoundationAgentApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityOidc": {},
+          "FoundationWorkflowsAgent": {},
+          "GitHubCopilotAgent": {
+            "Enabled": true,
+            "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
+            "Model": "auto",
+            "BaseDirectory": ".elsa/copilot"
+          },
+          "GroundworkUnifiedPersistencePostgreSql": {
+            "ConnectionString": "Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa"
+          },
+          "HttpJavaScript": {},
+          "JavaScriptActivities": {},
+          "JavaScriptEndpoints": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              { "TypeFullName": "System.DateTime" },
+              { "TypeFullName": "System.DateTimeOffset" },
+              { "TypeFullName": "System.TimeSpan" },
+              { "TypeFullName": "System.Guid" },
+              { "TypeFullName": "System.Random" },
+              { "TypeFullName": "System.Object" },
+              { "TypeFullName": "System.Dynamic.ExpandoObject" },
+              { "TypeFullName": "System.String" },
+              { "TypeFullName": "System.Boolean" },
+              { "TypeFullName": "System.Int16" },
+              { "TypeFullName": "System.Int32" },
+              { "TypeFullName": "System.Int64" },
+              { "TypeFullName": "System.Decimal" },
+              { "TypeFullName": "System.Single" },
+              { "TypeFullName": "System.Double" },
+              { "TypeFullName": "System.Byte[]" },
+              { "TypeFullName": "System.IO.Stream" },
+              { "TypeFullName": "System.DateOnly" },
+              { "TypeFullName": "System.TimeOnly" },
+              { "TypeFullName": "System.Collections.Generic.IDictionary\u00602[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]" }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptWorkflowsDesign": {},
+          "JavaScriptWorkflowsRuntime": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "ModularityApi": {},
+          "Primitives": {},
+          "Secrets": {},
+          "SecretsApi": {},
+          "SecretsGroundworkPersistence": {},
+          "Serialization": {},
+          "Tasks": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTriggers": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}
