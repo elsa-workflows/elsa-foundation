@@ -62,6 +62,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddSingleton<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>();
 
+        // Durable trigger index (W7, E3-1). Without this swap the trigger bindings written at publish time
+        // live only in the process-local in-memory store, so a restart loses the ability to start workflows
+        // from a stimulus even though the published executable is durable.
+        services.RemoveAll<IWorkflowTriggerBindingStore>();
+        services.AddSingleton<IWorkflowTriggerBindingStore, GroundworkWorkflowTriggerBindingStore>();
+
         return services;
     }
 }
