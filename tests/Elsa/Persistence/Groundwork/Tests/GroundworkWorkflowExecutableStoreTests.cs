@@ -18,7 +18,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     public async Task RoundTrips_Across_Providers(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Executable("artifact-1"));
         await store.SaveAsync(Executable("artifact-2"));
@@ -63,7 +63,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     public async Task Save_Replaces_Existing_Executable(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Executable("artifact-1", artifactVersion: "1"));
         await store.SaveAsync(Executable("artifact-1", artifactVersion: "2"));
@@ -79,7 +79,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     public async Task Find_Returns_Null_When_Absent(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         Assert.Null(await store.FindAsync("missing"));
         Assert.Empty(await store.ListAsync());
@@ -91,7 +91,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     public async Task List_Excludes_Transient_Test_Run_Executables_And_Delete_Removes_Them(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Executable("artifact-1"));
         await store.SaveAsync(Executable("test-artifact-1", scope: WorkflowExecutableScope.TransientTestRun, expiresAt: DateTimeOffset.UtcNow.AddMinutes(30)));
@@ -107,7 +107,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     [Fact]
     public void Serialization_Omits_Derived_Node_Projections()
     {
-        var json = JsonSerializer.Serialize(Executable("artifact-1"), GroundworkRuntimeJson.Options);
+        var json = GroundworkTestSerialization.Serializer.SerializeForComparison(Executable("artifact-1"));
 
         // RootActivity is the single source of truth; Nodes/NodesById are rebuilt on load (asserted in
         // RoundTrips_Across_Providers) and must not be persisted.
