@@ -33,6 +33,23 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_TripsSingleWriterInvariant_WhenDequeueDoesNotMatchPeekedHead()
+    {
+        // Single-writer TOCTOU tripwire (RT-2): peek returns work-1 (the pause-gate decision is computed for it) but a
+        // concurrent writer interleaves so the dequeue returns work-2. The drainer must fail fast rather than gate
+        // work-2's dequeue on work-1's decision.
+        var queue = new PeekDequeueMismatchWorkQueue(peeked: NewWorkItem(1), dequeued: NewWorkItem(2));
+        var drainer = new WorkflowSchedulerDrainer(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
+
+        Assert.Contains("Single-writer invariant violation", exception.Message);
+        Assert.Contains("work-1", exception.Message);
+        Assert.Contains("work-2", exception.Message);
+    }
+
+    [Fact]
     public async Task DrainAsync_RespectsMaxWorkItems()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -1063,6 +1080,19 @@ public sealed class RuntimeSchedulerDrainTests
     {
         public override DateTimeOffset GetUtcNow() => now;
     }
+
+    private sealed class PeekDequeueMismatchWorkQueue(RuntimeSchedulerWorkItem peeked, RuntimeSchedulerWorkItem dequeued) : IWorkflowSchedulerWorkQueue
+    {
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+            new(new[] { peeked });
+
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            new(dequeued);
+    }
+
 
     private sealed class IncrementingRuntimeExecutionIdGenerator : IRuntimeExecutionIdGenerator
     {
