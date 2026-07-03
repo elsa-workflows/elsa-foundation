@@ -86,7 +86,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
         var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
-            throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}).");
+            throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
         var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
         var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);

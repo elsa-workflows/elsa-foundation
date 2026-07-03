@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
@@ -300,6 +301,78 @@ public sealed class WorkflowExecutableCompilerTests
         var materializedVariable = Assert.Single(executableStructure!.Variables);
         Assert.Equal("var-counter", materializedVariable.ReferenceKey);
         Assert.Equal("Counter", materializedVariable.Name);
+    }
+
+    [Fact]
+    public async Task IndexesResumeTargetHandlerIntoExecutable()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = ResumeCompiler(WorkflowVersion(ResumeNode("delay-1")), _resumeProbeActivity);
+
+        var executable = await compiler.CompileAsync(NewRequest(now));
+
+        var resumeTarget = Assert.Contains(
+            "resume-target:probe",
+            (IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>)executable.ResumeTargets);
+        Assert.Equal("delay-1", resumeTarget.ExecutableNodeId);
+        Assert.Equal(nameof(ResumeProbeActivity.OnResumeAsync), resumeTarget.HandlerKey);
+    }
+
+    [Fact]
+    public async Task ActivitiesWithoutResumeTargetsProduceEmptyResumeTargetMap()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello"))));
+
+        var executable = await compiler.CompileAsync(NewRequest(now));
+
+        Assert.Empty(executable.ResumeTargets);
+    }
+
+    [Fact]
+    public async Task DuplicateResumeTargetIdAcrossNodesFailsCompilation()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = ResumeCompiler(
+            WorkflowVersion(SequenceNode("seq", [ResumeNode("delay-1"), ResumeNode("delay-2")])),
+            _resumeProbeActivity,
+            _sequenceActivity);
+
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(NewRequest(now)).AsTask());
+    }
+
+    private static WorkflowExecutableCompileRequest NewRequest(DateTimeOffset now) =>
+        new(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-");
+
+    private WorkflowExecutableCompiler ResumeCompiler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activities)
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(typeof(ResumeProbeActivity), typeof(ResumeProbeActivity).FullName!);
+        registry.RegisterType(typeof(SequenceActivity), typeof(SequenceActivity).FullName!);
+
+        return new WorkflowExecutableCompiler(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([.. activities]),
+            _activityStructureService,
+            registry);
+    }
+
+    private static ActivityNode ResumeNode(string nodeId) => new(nodeId, "activity-probe", Inputs: [], Outputs: []);
+
+    private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
+
+    // A minimal type carrying a [ResumeTarget] handler. The compiler reflects the attribute off the node's
+    // resolved CLR type, so the type need not be a full activity for this indexing test.
+    private sealed class ResumeProbeActivity
+    {
+        [ResumeTarget("resume-target:probe")]
+        public ValueTask OnResumeAsync() => ValueTask.CompletedTask;
     }
 
     private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion) =>
