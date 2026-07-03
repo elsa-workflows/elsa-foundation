@@ -97,22 +97,37 @@ The outbox row is `Delivered` and the scheduler work is durably queued, but it w
 restart, the sweep's **backlog discovery** (`ListPendingWorkflowExecutionIdsAsync`) finds the
 execution and re-drives, draining the queue. ✅
 
-### Window C — after dequeue-delete, before handler checkpoint commit *(residual — NOT closed by W2)*
+### Window C — after dequeue-delete, before handler checkpoint commit *(detectable via W5; item-level replay still needs dequeue-ack)*
 
 A work item is dequeued (removed from the durable queue) and its handler begins, but the process
 crashes **before** the handler commits the checkpoint that would record the resulting progress. The
-item is already gone from the queue and nothing re-delivers a dequeued item, so the continuation is
-**lost and unrecoverable**. This is the direct consequence of the at-most-once dequeue described
-above.
+item is already gone from the queue and nothing re-delivers a dequeued item. This is the direct
+consequence of the at-most-once dequeue described above.
 
-**Why W2 does not fix it:** closing window C requires **drainer acknowledgement semantics** — the item
-must stay durably owned (not deleted) until the consuming handler's checkpoint commits, with a
-lease/heartbeat so a crashed owner's item becomes visible to another drainer instead of being lost.
-That is drainer-ack / lease ownership work, which lives in the runtime spine and is owned by roadmap
-unit **W5** (lease/heartbeat ownership). Nothing writes `ExecutionLease`/`Heartbeat` during normal
-execution today, so the recovery scanner only yields candidates once W5 populates operational state.
-Adding an ad-hoc fix here would fork ownership semantics ahead of that design, so window C is
-documented as the **known residual gap** and left for W5.
+**What W5 changes.** W5 (single-writer ownership fencing, RT-2) makes the interrupted execution
+**detectable** instead of silently lost. `WorkflowExecutionDrainCoordinator` now acquires a
+`RuntimeExecutionLease` at the start of a drain (writing `ExecutionLease` + `Heartbeat` to operational
+state), pushes it onto the ambient ownership scope, and releases it only in a `finally`. A crash mid-drain
+therefore never runs the release, so the lease/heartbeat **persist**. Once the lease's timeout elapses,
+`IRuntimeRecoveryScanner` yields the execution as a `LeaseLost`/`HeartbeatExpired` candidate — this is the
+operational-state data W2 said the scanner needs — and the sweep's discovery step (§What W2 adds) unions
+it with the durable backlog and **re-drives the execution through the agent mailbox** with a
+`RunSchedulerWork` recovery envelope. So the execution is no longer invisible: the crash surfaces, the
+single-writer discipline is preserved (re-drive goes through the mailbox), and a clean drain releases the
+lease so a *completed* execution is never mistaken for an interrupted one. This is covered by
+`RuntimeResumptionServiceTests.SweepAsync_DiscoversWindowCExecution_FromOwnershipLeaseLeftByCrash`
+(real scanner + real ownership lease, empty backlog) plus lease-detectability/no-false-positive tests in
+`RuntimeExecutionOwnershipTests`.
+
+**What is still open.** W5 delivers the *visibility* half of the closure W2 described (lease/heartbeat +
+scanner detection + re-drive). It deliberately does **not** change the dequeue itself, which remains
+load-first-then-delete on `IWorkflowSchedulerWorkQueue` (owned by W2). Guaranteed *item-level* replay — so
+the exact dequeued-but-uncommitted continuation is re-run rather than merely surfaced for re-drive — still
+requires **drainer acknowledgement semantics**: the item must stay durably owned (not deleted) until the
+consuming handler's checkpoint commits, at which point ownership is released. W5 supplies the
+lease/heartbeat ownership primitive that makes such an ack-based dequeue implementable without forking
+ownership semantics; wiring the dequeue to hold-until-commit is the remaining increment on W2's durable
+queue. Until then, window C is **detected and re-driven** rather than **replayed at item granularity**.
 
 ## Bounding the pump
 
@@ -129,8 +144,9 @@ sweep, the pump is bounded on two axes:
 
 ## Out of scope (owned elsewhere)
 
-- Populating `ExecutionLease`/`Heartbeat` during execution and drainer-ack ownership — **W5** (this is
-  also the closure path for window C).
+- **Ack-based dequeue** that keeps a scheduler work item durably owned until the consuming handler's
+  checkpoint commits — the remaining increment for item-level window-C replay, layered on W5's
+  lease/heartbeat ownership primitive over W2's durable queue.
 - Drainer/handler refactors — **W1**. Runtime-spine decomposition — specs/083. Serializer-policy
   remediation (PS-3) — **W3**. Multi-node outbox delivery-ownership fencing — the Groundwork outbox
   store rejects `OwnerId` filters today, and the sweep passes none.

@@ -129,6 +129,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (workItem is null)
                 break;
 
+            // Single-writer TOCTOU tripwire (RT-2): the pause decision above was computed for the peeked head; the
+            // dequeue must return that same head. A mismatch means another writer drained this execution concurrently
+            // between the peek and the dequeue — a violation of the single-writer ownership invariant (all dispatch
+            // MUST route through the agent mailbox). Fail fast rather than gate item B's dequeue on item A's decision.
+            if (!StringComparer.Ordinal.Equals(workItem.WorkItemId, nextWorkItem.WorkItemId))
+                throw new InvalidOperationException(
+                    $"Single-writer invariant violation: scheduler drain for workflow execution '{request.WorkflowExecutionId}' " +
+                    $"peeked work item '{nextWorkItem.WorkItemId}' but dequeued '{workItem.WorkItemId}'. A concurrent drainer " +
+                    "interleaved between the pause-gate peek and the dequeue; all dispatch must route through the agent mailbox.");
+
             var result = await DispatchAsync(workItem, cancellationToken);
             results.Add(result);
             remaining--;
