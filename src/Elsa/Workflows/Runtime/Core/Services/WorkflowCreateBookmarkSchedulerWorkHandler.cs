@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCreateBookmarkSchedulerWorkHandler);
     private const string SuspendedSubStatus = "BookmarkWaiting";
@@ -45,7 +45,24 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         return workItem.CommandKind == WorkflowExecutionCommandKind.CreateBookmark;
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: build the bookmark-created commit and commit it inline.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        var commit = await ExecuteAsync(workItem, cancellationToken);
+        if (commit is not null)
+            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>Pipeline dispatch (Move 2): run the handler in the Invoke slot and stage its commit for the Checkpoint slot.</summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        var commit = await ExecuteAsync(workItem, cancellationToken);
+        if (commit is not null)
+            pipelineContext.Workspace.StageCheckpointCommit(commit);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit?> ExecuteAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -74,15 +91,14 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{payload.ExecutableNodeId}', but activity execution '{payload.ActivityExecutionId}' belongs to executable node '{state.Execution.ExecutableNodeId}'.");
 
         if (state.Status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered)
-            return;
+            return null;
 
         if (state.Status is not ActivityExecutionStatus.Running and not ActivityExecutionStatus.Suspended)
             throw new InvalidOperationException($"CreateBookmark scheduler work item '{workItem.WorkItemId}' cannot create a durable bookmark for activity execution '{payload.ActivityExecutionId}' while it is '{state.Status}'.");
 
         var bookmark = NewBookmark(workItem, payload);
         var suspendedState = SuspendActivity(workItem, payload, state);
-        var commit = await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return await NewCommitAsync(workItem, payload, suspendedState, bookmark, cancellationToken);
     }
 
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
