@@ -132,6 +132,41 @@ public sealed class RuntimeActivitySlotDecompositionTests : RuntimePipelineTestS
         Assert.Contains(RuntimeActivityPipelineSlots.Invoke, exception.Message);
     }
 
+    [Fact]
+    public async Task Dispatch_StagesAmbientServicesOnTheWorkspace_ForPipelineHandlersToReadExplicitly()
+    {
+        // RT-7: the drain's ambient services flow explicitly through the dispatcher onto the workspace, replacing the
+        // former AsyncLocal service locator. A pipeline-aware handler reads them from the context it is handed.
+        await using var provider = BuildActivityProvider();
+        var dispatcher = new RuntimeExecutionPipelineDispatcher(
+            new RuntimeSchedulerPipelineSelector(),
+            new PassThroughWorkflowPipeline(),
+            new RuntimeActivityExecutionPipeline(new ActivityRuntimePipelineBuilder().BuildPlan(), provider));
+        var ambientServices = new ServiceCollection().BuildServiceProvider();
+        var handler = new AmbientCapturingHandler();
+
+        await dispatcher.DispatchAsync(NewWorkItem(WorkflowExecutionCommandKind.ScheduleActivity), handler, ambientServices);
+
+        Assert.Same(ambientServices, handler.ObservedAmbientServices);
+    }
+
+    private sealed class AmbientCapturingHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
+    {
+        public string Name => nameof(AmbientCapturingHandler);
+        public IServiceProvider? ObservedAmbientServices { get; private set; }
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+        {
+            ObservedAmbientServices = pipelineContext.Workspace.AmbientServices;
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private static RuntimeCheckpointCommitter NewCommitter(IRuntimeCheckpointCommitStore store) =>
         new(new ImmediateRuntimeCheckpointPersistencePolicy(), store);
 

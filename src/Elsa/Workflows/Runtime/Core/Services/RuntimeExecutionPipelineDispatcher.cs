@@ -32,6 +32,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
     public ValueTask DispatchAsync(
         RuntimeSchedulerWorkItem workItem,
         IWorkflowSchedulerWorkHandler handler,
+        IServiceProvider? ambientServices = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -45,6 +46,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         {
             var activityContext = new ActivityRuntimePipelineContext(workItem);
             activityContext.Workspace.CancellationToken = cancellationToken;
+            activityContext.Workspace.AmbientServices = ambientServices;
             activityContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
                 ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
                 : handler.HandleAsync(workItem, cancellationToken);
@@ -65,6 +67,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         // staged, the Invoke slot was missing from the plan and the handler would silently not run — so fail loudly.
         var workflowContext = new WorkflowRuntimePipelineContext(workItem);
         workflowContext.Workspace.CancellationToken = cancellationToken;
+        workflowContext.Workspace.AmbientServices = ambientServices;
         workflowContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
             ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
             : handler.HandleAsync(workItem, cancellationToken);

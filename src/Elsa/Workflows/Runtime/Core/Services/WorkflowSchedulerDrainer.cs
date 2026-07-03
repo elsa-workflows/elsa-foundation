@@ -101,7 +101,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                     $"peeked work item '{nextWorkItem.WorkItemId}' but dequeued '{workItem.WorkItemId}'. A concurrent drainer " +
                     "interleaved between the pause-gate peek and the dequeue; all dispatch must route through the agent mailbox.");
 
-            var result = await DispatchAsync(workItem, cancellationToken);
+            var result = await DispatchAsync(workItem, request.AmbientServices, cancellationToken);
             results.Add(result);
             remaining--;
 
@@ -135,7 +135,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         return state is not null && state.Status.IsTerminal();
     }
 
-    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeSchedulerWorkItemResult> DispatchAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
     {
         IWorkflowSchedulerWorkHandler? handler = null;
         var startedAt = _timeProvider.GetUtcNow();
@@ -146,9 +146,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
 
             // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
             // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
-            // the built-in pass-through middleware registered the two paths are behavior-identical.
+            // the built-in pass-through middleware registered the two paths are behavior-identical. RT-7: the drain's
+            // ambient services flow explicitly into the pipeline dispatcher, which stages them on the dispatch workspace
+            // for slot-invoked handlers to read — no AsyncLocal service location in the drain path.
             if (_pipelineDispatcher is not null)
-                await _pipelineDispatcher.DispatchAsync(workItem, handler, cancellationToken);
+                await _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, cancellationToken);
             else
                 await handler.HandleAsync(workItem, cancellationToken);
 

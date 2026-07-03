@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowParentActivityCompletionSchedulerWorkHandler);
 
@@ -77,18 +77,37 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         }
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: resolve the drain's ambient services (or a fresh scope) and run.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
+        await ExecuteAsync(workItem, _ambientServicesAccessor.Current, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pipeline dispatch (Move 2 / RT-7): run in the Invoke slot reading the drain's ambient services from the workspace
+    /// (staged explicitly by the dispatcher) instead of an AsyncLocal service locator.
+    /// </summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+    }
+
+    private async ValueTask ExecuteAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    {
         var payload = DeserializeCompletePayload(workItem);
         if (payload.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation)
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{workItem.WorkItemId}' is not parent completion evaluation work.");
 
-        if (_ambientServicesAccessor.Current is { } ambientServices)
+        if (ambientServices is { } provider)
         {
-            await HandleWithServicesAsync(workItem, payload, ambientServices, cancellationToken);
+            await HandleWithServicesAsync(workItem, payload, provider, cancellationToken);
             return;
         }
 
