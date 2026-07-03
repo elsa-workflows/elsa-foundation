@@ -99,7 +99,6 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
             pauseGate: null,
-            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowExecutionStateStore: null,
             pipelineDispatcher: null,
             faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(),

@@ -146,7 +146,6 @@ public sealed class RuntimeSchedulerDrainTests
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
             pauseGate: null,
-            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowStateStore);
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(2));
@@ -183,7 +182,6 @@ public sealed class RuntimeSchedulerDrainTests
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
             pauseGate: null,
-            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowStateStore);
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(1));
         await queue.EnqueueAsync(NewInvokeActivityWorkItem(2));

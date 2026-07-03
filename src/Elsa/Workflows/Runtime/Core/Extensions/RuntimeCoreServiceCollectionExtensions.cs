@@ -81,7 +81,6 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
-        services.TryAddSingleton<IWorkflowExecutionAmbientServicesAccessor, AsyncLocalWorkflowExecutionAmbientServicesAccessor>();
         services.TryAddSingleton<WorkflowExecutionDrainCoordinatorOptions>();
         services.TryAddSingleton<IWorkflowExecutionDrainCoordinator, WorkflowExecutionDrainCoordinator>();
         services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
@@ -127,7 +126,6 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 TimeProvider.System,
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
                 serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),

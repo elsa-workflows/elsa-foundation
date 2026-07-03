@@ -140,7 +140,6 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(Now),
             pauseGate: null,
-            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowExecutionStateStore: null,
             dispatcher);
 

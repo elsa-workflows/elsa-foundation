@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowInvokeActivitySchedulerWorkHandler);
     private const string SkippedSubStatus = "Skipped";
@@ -23,39 +23,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowInvokeActivitySchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory)
-        : this(inputMaterializer, serviceScopeFactory, TimeProvider.System)
-    {
-    }
-
-    public WorkflowInvokeActivitySchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory,
-        TimeProvider timeProvider)
-        : this(inputMaterializer, serviceScopeFactory, NoopWorkflowExecutionAmbientServicesAccessor.Instance, timeProvider)
-    {
-    }
-
+    /// <summary>
+    /// Creates the handler. RT-8: collapsed to a single primary constructor (the former ambient-services-accessor
+    /// overload is gone — RT-7 replaced that AsyncLocal service locator with the explicit
+    /// <see cref="IRuntimePipelineContext"/> workspace carrier).
+    /// </summary>
     public WorkflowInvokeActivitySchedulerWorkHandler(
         IRuntimeActivityInputMaterializer inputMaterializer,
         IServiceScopeFactory serviceScopeFactory,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(inputMaterializer);
         ArgumentNullException.ThrowIfNull(serviceScopeFactory);
-        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
-        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _inputMaterializer = inputMaterializer;
         _serviceScopeFactory = serviceScopeFactory;
-        _ambientServicesAccessor = ambientServicesAccessor;
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string Name => HandlerName;
@@ -67,15 +52,39 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         return workItem.CommandKind == WorkflowExecutionCommandKind.InvokeActivity;
     }
 
+    /// <summary>
+    /// Direct (no-pipeline) dispatch: runs against a fresh scope. RT-7: the former AsyncLocal ambient-services read is
+    /// gone; the pipeline overload carries the drain's services explicitly on the workspace.
+    /// </summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
+        await ExecuteAsync(workItem, ambientServices: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pipeline dispatch (Move 2 / RT-7): run in the Invoke slot reading the drain's ambient services from the workspace
+    /// (staged explicitly by the dispatcher) instead of an AsyncLocal service locator. The nested-invoke commits stay
+    /// inline through the resolved provider so W9 coalescing boundary detection and W5 fencing granularity are preserved
+    /// exactly — this handler stages nothing, so the Checkpoint slot is a no-op for it.
+    /// </summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+    }
+
+    private async ValueTask ExecuteAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    {
         var invokePayload = DeserializeInvokePayload(workItem);
-        if (_ambientServicesAccessor.Current is { } ambientServices)
+        if (ambientServices is { } provider)
         {
-            await HandleWithServicesAsync(workItem, invokePayload, ambientServices, cancellationToken);
+            await HandleWithServicesAsync(workItem, invokePayload, provider, cancellationToken);
             return;
         }
 

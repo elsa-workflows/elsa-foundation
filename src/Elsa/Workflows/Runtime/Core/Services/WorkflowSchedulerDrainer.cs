@@ -10,7 +10,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IReadOnlyCollection<IWorkflowSchedulerWorkHandler> _fallbackHandlers;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
-    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
@@ -31,7 +30,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         TimeProvider? timeProvider = null,
         IWorkflowSchedulerPauseGate? pauseGate = null,
-        IWorkflowExecutionAmbientServicesAccessor? ambientServicesAccessor = null,
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IWorkflowSchedulerPoisonStore? poisonStore = null,
@@ -47,7 +45,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _pauseGate = pauseGate;
-        _ambientServicesAccessor = ambientServicesAccessor ?? NoopWorkflowExecutionAmbientServicesAccessor.Instance;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _pipelineDispatcher = pipelineDispatcher;
         _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();
@@ -59,7 +56,6 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        using var ambientServices = _ambientServicesAccessor.Push(request.AmbientServices);
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
         var remaining = request.MaxWorkItems ?? int.MaxValue;
