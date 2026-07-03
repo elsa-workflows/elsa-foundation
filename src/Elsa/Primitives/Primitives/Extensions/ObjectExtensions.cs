@@ -13,8 +13,10 @@ public static class ObjectExtensions
         if (obj is not IEnumerable enumerable || obj is string || obj is IDictionary)
             return obj;
 
-        // If this is an async enumerable, return as-is.
-        if (obj.GetType().Name == "AsyncIListEnumerableAdapter`1")
+        // Async enumerables (e.g. EF Core query results that implement both IEnumerable<T>
+        // and IAsyncEnumerable<T>) must not be materialized synchronously here; return as-is
+        // so the caller can enumerate them appropriately.
+        if (IsAsyncEnumerable(obj))
             return obj;
 
         // Use LINQ to convert the IEnumerable to an array.
@@ -30,4 +32,13 @@ public static class ObjectExtensions
             enumerable
         ])!;
     }
+
+    /// <summary>
+    /// Returns <c>true</c> when the object implements <see cref="IAsyncEnumerable{T}"/>.
+    /// Used instead of matching provider-internal type names (e.g. EF Core's
+    /// <c>AsyncIListEnumerableAdapter&lt;T&gt;</c>) so this primitives layer stays free of
+    /// knowledge about specific data-access implementations.
+    /// </summary>
+    private static bool IsAsyncEnumerable(object obj) =>
+        obj.GetType().GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>));
 }
