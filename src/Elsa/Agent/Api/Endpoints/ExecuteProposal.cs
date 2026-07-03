@@ -17,7 +17,7 @@ internal sealed class ExecuteProposal(IAgentProposalService proposals, IAgentSes
 
     public override async Task HandleAsync(AgentProposalDecisionRequest req, CancellationToken ct)
     {
-        var access = await AuthorizeProposalAsync(req.ProposalId, ct);
+        var access = await AgentProposalAuthorization.AuthorizeAsync(proposals, sessions, User, req.ProposalId, ct);
         if (access is not null)
         {
             await Send.ResponseAsync(AgentApiResponse<AgentProposalExecutionResult>.Failure(access), access.StatusCode, cancellation: ct);
@@ -32,20 +32,5 @@ internal sealed class ExecuteProposal(IAgentProposalService proposals, IAgentSes
         }
 
         await Send.OkAsync(AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!), ct);
-    }
-
-    private async Task<AgentError?> AuthorizeProposalAsync(string proposalId, CancellationToken ct)
-    {
-        var proposal = await proposals.FindAsync(proposalId, ct);
-        if (proposal is null)
-            return new("agent.proposal.not_found", $"Proposal '{proposalId}' was not found.", 404);
-
-        var session = await sessions.FindAsync(proposal.SessionId, ct);
-        if (session is null)
-            return new("agent.session.not_found", $"Agent session '{proposal.SessionId}' was not found.", 404);
-
-        return AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User)
-            ? null
-            : new("agent.proposal.forbidden", "The agent proposal is not available to the current principal.", 403);
     }
 }
