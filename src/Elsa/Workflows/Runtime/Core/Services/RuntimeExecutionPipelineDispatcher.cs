@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -35,13 +36,29 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         ArgumentNullException.ThrowIfNull(workItem);
         ArgumentNullException.ThrowIfNull(handler);
 
+        // Activity pipeline: the handler still runs as the pipeline terminal (not yet decomposed into the Invoke slot).
         if (_selector.Select(workItem) == RuntimePipelineKind.Activity)
             return _activityPipeline.InvokeAsync(
                 new ActivityRuntimePipelineContext(workItem),
                 _ => handler.HandleAsync(workItem, cancellationToken));
 
-        return _workflowPipeline.InvokeAsync(
-            new WorkflowRuntimePipelineContext(workItem),
-            _ => handler.HandleAsync(workItem, cancellationToken));
+        // Workflow pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
+        // Checkpoint slot. Context-aware (migrated) handlers get the context explicitly and stage their results; other
+        // handlers run their plain path unchanged. The terminal is a guard: if it is reached with the handler still
+        // staged, the Invoke slot was missing from the plan and the handler would silently not run — so fail loudly.
+        var workflowContext = new WorkflowRuntimePipelineContext(workItem);
+        workflowContext.Workspace.CancellationToken = cancellationToken;
+        workflowContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
+            ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
+            : handler.HandleAsync(workItem, cancellationToken);
+
+        return _workflowPipeline.InvokeAsync(workflowContext, static pipelineContext =>
+        {
+            if (pipelineContext.Workspace.InvokeHandler is not null)
+                throw new InvalidOperationException(
+                    $"The workflow runtime pipeline completed without running the staged handler for work item '{pipelineContext.WorkItem.WorkItemId}': the '{RuntimeWorkflowPipelineSlots.Invoke}' slot middleware is missing from the plan.");
+
+            return ValueTask.CompletedTask;
+        });
     }
 }

@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCancelSchedulerWorkHandler);
     private const string CancellationReason = "WorkflowCancellation";
@@ -42,7 +42,21 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         return workItem.CommandKind == WorkflowExecutionCommandKind.Cancel;
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: build the cancellation commit and commit it inline.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        var commit = await BuildCommitAsync(workItem, cancellationToken);
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        pipelineContext.Workspace.PendingCheckpointCommit = await BuildCommitAsync(workItem, cancellationToken);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit> BuildCommitAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -131,7 +145,7 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 [RuntimeMetadataKeys.CommandKind] = workItem.CommandKind.ToString()
             });
 
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return commit;
     }
 
     private static bool IsCancellable(ActivityExecutionState state) =>
