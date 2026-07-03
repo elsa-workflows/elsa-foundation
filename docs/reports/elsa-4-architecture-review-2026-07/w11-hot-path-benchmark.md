@@ -156,15 +156,20 @@ Sandbox defaults are documented on the `JintFeature` ManifestSettings.
 
 ## Baselines — all green, before and after (unmodified except added tests)
 
-Branched from `origin/main` `b6a29b15`; later merged `origin/main` `5ebcfd91` (second-lander rule) and
-re-ran **all** suites. Full `dotnet build Elsa.Server.slnx` reports **0 errors** post-merge. The merge
-raised two baselines it owns (Architecture +4 guard tests, Activities Runtime +10 ADR-0030 carrier tests);
-both are green with W11 applied.
+Branched from `origin/main` `b6a29b15`; second-lander rule applied twice — merged `5ebcfd91`, then
+`c97b09e6` (adds W15 #441 and W10 #442). Only conflict across both merges: `Elsa.Server.slnx` additive
+tail (resolved as a union of the W10 Mediator.Tests entry and the two W11 test-project entries). All 11
+W11 source files are disjoint from W10/W15. Full `dotnet build Elsa.Server.slnx` reports **0 errors**
+post-merge, and W11's IN-10 caching + Events tests compose cleanly with W10's unified
+`PipelineBuilder<TContext>` / `PipelineDelegate<IEventContext>` migration.
 
-| Suite | Baseline (b6a29b15) | Post-merge baseline (5ebcfd91) | After W11 |
+Merged commits raise baselines they own: Architecture 37→41→47 (+4 guard tests, then +6 from W15),
+Activities Runtime 145→155 (ADR-0030 carrier), Runtime 642→658 (W10/W15). All green with W11 applied.
+
+| Suite | Baseline (b6a29b15) | Post-merge baseline (c97b09e6) | After W11 |
 |---|---|---|---|
-| Architecture guards | 37 | 41 | 41 |
-| Runtime | 642 | 642 | 642 |
+| Architecture guards | 37 | 47 | 47 |
+| Runtime | 642 | 658 | 658 |
 | Groundwork (`Persistence/Groundwork/Tests`) | 150 | 150 | 150 |
 | Publishing API | 52 | 52 | 52 |
 | Activities Runtime | 145 | 155 | 155 |
