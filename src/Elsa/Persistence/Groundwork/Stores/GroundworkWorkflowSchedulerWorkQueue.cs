@@ -25,33 +25,25 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// (<see cref="WorkflowExecutionCommandDeliveryMode.AtLeastOnce"/>) — consumers dedupe by idempotency key.
 /// </para>
 /// </remarks>
-public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowSchedulerWorkQueue
+public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind), IWorkflowSchedulerWorkQueue
 {
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var documentId = BuildId(workItem.WorkflowExecutionId, workItem.WorkItemId);
-        var existing = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-            documentId,
-            cancellationToken);
+        var documentId = GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId);
+        var existing = await LoadDocumentAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
+            documentId, envelope => envelope.Item, cancellationToken);
         if (existing is not null)
-            return Map(existing);
+            return existing;
 
-        var envelope = new WorkQueueEnvelope(
+        var document = new WorkQueueEnvelope(
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             workItem.WorkflowExecutionId,
             workItem);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, envelope);
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-                documentId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(documentId, document, cancellationToken);
 
         return workItem;
     }
@@ -78,11 +70,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
         if (workItem is null)
             return null;
 
-        await store.DeleteAsync(
-            new DeleteDocumentRequest(
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-                BuildId(workItem.WorkflowExecutionId, workItem.WorkItemId)),
-            cancellationToken);
+        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workItem.WorkflowExecutionId, workItem.WorkItemId), cancellationToken);
 
         return workItem;
     }
@@ -93,15 +81,14 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
             throw new ArgumentOutOfRangeException(nameof(limit), "Pending workflow execution listing limit must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind),
+        var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+            envelope => envelope.Item,
             cancellationToken);
 
-        return envelopes
-            .Select(envelope => Map(envelope).WorkflowExecutionId)
+        return items
+            .Select(item => item.WorkflowExecutionId)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .Take(limit)
@@ -110,30 +97,15 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, I
 
     private async ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListOrderedAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
+        var items = await QueryDocumentsAsync<WorkQueueEnvelope, RuntimeSchedulerWorkItem>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, envelope => envelope.Item, cancellationToken);
 
-        return envelopes
-            .Select(Map)
+        return items
             .OrderBy(item => item.RecordedAt)
             .ThenBy(item => item.Sequence ?? long.MaxValue)
             .ThenBy(item => item.WorkItemId, StringComparer.Ordinal)
             .ToArray();
     }
-
-    private RuntimeSchedulerWorkItem Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<WorkQueueEnvelope>(envelope).Item;
-
-    // Deterministic, collision-free composite document id. Parts are escaped so a separator inside
-    // an id cannot forge a different (workflowExecutionId, workItemId) pair.
-    private static string BuildId(string workflowExecutionId, string workItemId) =>
-        $"{Escape(workflowExecutionId)}:{Escape(workItemId)}";
-
-    private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
 
     // The constant collection partition lets the system-wide pending-executions sweep use a keyword
     // equality index instead of a provider-wide scan, mirroring the other list-capable bridges.

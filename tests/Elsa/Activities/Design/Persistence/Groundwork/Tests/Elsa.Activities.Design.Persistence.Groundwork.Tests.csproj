@@ -21,4 +21,9 @@
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <Using Include="Elsa.Persistence.Groundwork.Testing" />
+  </ItemGroup>
+
 </Project>

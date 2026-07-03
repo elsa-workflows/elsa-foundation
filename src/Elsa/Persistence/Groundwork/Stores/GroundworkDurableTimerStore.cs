@@ -25,33 +25,25 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// shift a committed deadline.
 /// </para>
 /// </remarks>
-public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IDurableTimerStore
+public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.DurableTimerDocumentKind), IDurableTimerStore
 {
     public async ValueTask<DurableTimer> SaveAsync(DurableTimer timer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(timer);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var documentId = BuildId(timer.WorkflowExecutionId, timer.TimerId);
-        var existing = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-            documentId,
-            cancellationToken);
+        var documentId = GroundworkCompositeDocumentId.From(timer.WorkflowExecutionId, timer.TimerId);
+        var existing = await LoadDocumentAsync<DurableTimerEnvelope, DurableTimer>(
+            documentId, envelope => envelope.Timer, cancellationToken);
         if (existing is not null)
-            return Map(existing);
+            return existing;
 
-        var envelope = new DurableTimerEnvelope(
+        var document = new DurableTimerEnvelope(
             ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
             timer.WorkflowExecutionId,
             timer);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.DurableTimerDocumentKind, envelope);
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-                documentId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(documentId, document, cancellationToken);
 
         return timer;
     }
@@ -62,15 +54,13 @@ public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundwor
             throw new ArgumentOutOfRangeException(nameof(limit), "Due-timer listing limit must be greater than zero.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-                ElsaRuntimeStorageManifest.ByCollectionIndex,
-                ElsaRuntimeStorageManifest.DurableTimerDocumentKind),
+        var timers = await QueryDocumentsAsync<DurableTimerEnvelope, DurableTimer>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
+            envelope => envelope.Timer,
             cancellationToken);
 
-        return envelopes
-            .Select(Map)
+        return timers
             .Where(timer => timer.DueTime <= asOf)
             .OrderBy(timer => timer.DueTime)
             .ThenBy(timer => timer.TimerId, StringComparer.Ordinal)
@@ -84,12 +74,8 @@ public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundwor
         ArgumentException.ThrowIfNullOrWhiteSpace(timerId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-            BuildId(workflowExecutionId, timerId),
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<DurableTimerEnvelope, DurableTimer>(
+            GroundworkCompositeDocumentId.From(workflowExecutionId, timerId), envelope => envelope.Timer, cancellationToken);
     }
 
     public async ValueTask DeleteAsync(string workflowExecutionId, string timerId, CancellationToken cancellationToken = default)
@@ -98,22 +84,8 @@ public sealed class GroundworkDurableTimerStore(IDocumentStore store, IGroundwor
         ArgumentException.ThrowIfNullOrWhiteSpace(timerId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await store.DeleteAsync(
-            new DeleteDocumentRequest(
-                ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
-                BuildId(workflowExecutionId, timerId)),
-            cancellationToken);
+        await DeleteDocumentAsync(GroundworkCompositeDocumentId.From(workflowExecutionId, timerId), cancellationToken);
     }
-
-    private DurableTimer Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<DurableTimerEnvelope>(envelope).Timer;
-
-    // Deterministic, collision-free composite document id. Parts are escaped so a separator inside an id
-    // cannot forge a different (workflowExecutionId, timerId) pair.
-    private static string BuildId(string workflowExecutionId, string timerId) =>
-        $"{Escape(workflowExecutionId)}:{Escape(timerId)}";
-
-    private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
 
     // The constant collection partition lets the due-timer sweep use a keyword equality index instead of a
     // provider-wide scan, mirroring the other list-capable bridges.

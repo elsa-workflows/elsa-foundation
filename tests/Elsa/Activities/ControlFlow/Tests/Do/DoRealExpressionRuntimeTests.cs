@@ -13,6 +13,7 @@ using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.JavaScript.PreProcessors;
@@ -33,8 +34,10 @@ namespace Elsa.Activities.Do.Tests;
 ///
 /// It also covers the post-test contract (the body runs at least once even when the condition is false on
 /// entry), the <c>Break</c> early-exit, and documents the #286 boundary: a condition over a
-/// <b>workflow-scope</b> variable the body mutates does NOT yet terminate (workflow variables are seeded
-/// at start only, with no mid-run write-back), so a bounded run still reports the loop never completing.
+/// <b>workflow-scope</b> variable the body mutates does NOT yet terminate. #286 mid-run write-back has
+/// landed on the leaf-invoke path, but a Do loop re-evaluates its condition on the parent-completion path,
+/// where named-variable write-back is still a documented follow-up — so a bounded run exhausts its
+/// deterministic id budget without the loop ever completing.
 /// </summary>
 public sealed class DoRealExpressionRuntimeTests
 {
@@ -90,24 +93,40 @@ public sealed class DoRealExpressionRuntimeTests
     [Fact]
     public async Task WorkflowScopeVariableCondition_DoesNotYetTerminate_DocumentingThe286Limitation()
     {
-        // The body writes a workflow-scope variable, but Seam C seeds workflow variables at start only with
-        // no mid-run write-back (#286). The JS condition `variables.counter < 3` keeps seeing the start-time
-        // seed, so the loop runs every pass the id budget allows and never satisfies its exit condition. We
-        // hand out a budget of 5 body passes — well past the limit of 3 a terminating loop would stop at —
-        // and assert the budget is fully consumed and the workflow never reaches Completed, locking the
-        // boundary until #286 (mid-run workflow-variable write-back) lands.
-        const int budget = 5;
+        // The body writes a workflow-scope variable each pass. #286 mid-run workflow-variable write-back has
+        // landed on the leaf-invoke path, but a Do loop re-evaluates its condition on the parent-completion
+        // path, where named-variable write-back is still a documented follow-up (see the carrier comment in
+        // WorkflowParentActivityCompletionSchedulerWorkHandler). So the JS condition `variables.counter < 3`
+        // keeps seeing the start-time seed (0) and the loop never satisfies its exit condition.
+        //
+        // We prove that by handing out exactly `limit` body activity-execution ids — precisely what a
+        // terminating do-while would consume (passes at counter 0→1, 1→2, 2→3, then 3 < 3 is false). A loop
+        // that observed the write-back would complete inside that budget. Instead it asks for a `limit`+1'th
+        // pass and faults on id exhaustion, locking the boundary until write-back reaches this path.
         const int limit = 3;
-        var bodyIds = Enumerable.Range(0, budget).Select(i => $"actexec-body-{i}").ToArray();
+        var bodyIds = Enumerable.Range(0, limit).Select(i => $"actexec-body-{i}").ToArray();
         await using var harness = NewHarness("actexec-do", bodyIds);
 
-        var run = await harness.RunAsync(NewWorkflowVariableDrivenExecutable(limit));
+        // The loop asks for a `limit`+1'th body pass; the deterministic-id generator runs dry, and the harness
+        // surfaces that as an AcceptedButFaulted dispatch which RunAsync rethrows (wrapping the inner reason).
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => harness.RunAsync(NewWorkflowVariableDrivenExecutable(limit)));
+        Assert.Contains("No deterministic activity execution ID is available", ex.Message);
 
-        // A terminating loop would stop at `limit` (3) passes; instead it consumes the whole budget ...
-        Assert.Equal(budget, run.States("node-body").Count);
-        Assert.True(run.States("node-body").Count > limit, "workflow-scope condition unexpectedly terminated at the limit");
-        // ... and the composite/workflow never completes, because the condition never observes the change.
-        Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        // Tie the fault to genuine non-termination rather than a stray early id request: the body persisted
+        // exactly `limit` states before the fault, so the loop ran the full budget and only THEN requested one
+        // pass too many. A loop that observed the write-back would have stopped at `limit` and completed
+        // instead. (RunAsync throws before it can return the run, so read the persisted states directly.)
+        Assert.Equal(limit, await CountPersistedStatesAsync(harness, "node-body"));
+    }
+
+    // Counts how many execution states a node persisted, read straight from the store. Used when RunAsync
+    // faults mid-run (id-budget exhaustion) and cannot return a WorkflowExecutionRun to assert against.
+    private static async Task<int> CountPersistedStatesAsync(WorkflowExecutionHarness harness, string executableNodeId)
+    {
+        var store = harness.Services.GetRequiredService<IActivityExecutionStateStore>();
+        var states = await store.ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        return states.Count(state => state.Execution.ExecutableNodeId == executableNodeId);
     }
 
     private static WorkflowExecutionHarness NewHarness(string compositeId, params string[][] bodyIdGroups)

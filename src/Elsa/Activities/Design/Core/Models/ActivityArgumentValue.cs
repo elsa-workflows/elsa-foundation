@@ -7,4 +7,4 @@ namespace Elsa.Activities.Design.Core.Models;
 /// The expression-type string is registry-resolved at runtime; each evaluator module owns its
 /// own well-known value (e.g. "Literal", "JavaScript", "Liquid").
 /// </summary>
-public sealed record ArgumentValue(object? Value, string ExpressionType);
+public sealed record ActivityArgumentValue(object? Value, string ExpressionType);
