@@ -83,7 +83,7 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         // Workflow variables read through the carrier's durable-value projection (empty before this unit). Scope-
         // based / named resolution of enclosing-container and workflow variables now lands too, through the threaded
         // self-owner scope — see ChildCompletionHandler_ResolvesEnclosingContainerVariableByName_AndSuppressesTheIterationLayer;
-        // named-variable write-back on this path remains a documented follow-up (see the handler comment).
+        // durable named-variable write-back lands too — see ChildCompletionHandler_AssignsWorkflowRootVariableByName_IsDurablyPersisted.
         Assert.Equal("Hello", ExecutionCarrierTestData.AsString(composite.ObservedVariable));
         Assert.Equal("prior-value", ExecutionCarrierTestData.AsString(composite.ObservedOutput));
 
@@ -123,6 +123,42 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         // The iteration layer is suppressed on the self-evaluation path, so the loop item the container's own
         // provenance carries is not visible to itself — the exact interaction that regressed loop/break control flow.
         Assert.False(composite.IterationVariableResolved);
+
+        var projection = await _inspectionStore.FindAsync(WorkflowExecutionId, "actexec-parent");
+        Assert.NotNull(projection);
+        Assert.Equal(ActivityExecutionStatus.Completed, projection.Status);
+    }
+
+    [Fact]
+    public async Task ChildCompletionHandler_AssignsWorkflowRootVariableByName_IsDurablyPersisted()
+    {
+        // ADR 0030 follow-up to #448: a workflow-root (workflow-level) variable assigned by name inside
+        // OnChildCompleted lands in the threaded self-owner scope's in-memory store, but was previously dropped at
+        // the checkpoint boundary because the workflow-root write-back was not folded into the commit's durableValues.
+        // The handler now captures BuildWorkflowScopeWriteBackChanges output and threads it into the completion
+        // commit, so the assignment is durable and re-projected on the next materialization.
+        await _executableStore.SaveAsync(NewNestedExecutable());
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await ExecutionCarrierTestData.SeedVariableAsync(_durableValueStateStore, _now, "start-value");
+        await _activityStateStore.SaveAsync(NewState("actexec-outer", OuterNodeId, ActivityExecutionStatus.Running));
+        await _activityStateStore.SaveAsync(NewLoopBodyParentState("actexec-parent", "actexec-outer"));
+        await _activityStateStore.SaveAsync(NewState("actexec-child", ChildNodeId, ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
+
+        var composite = new WorkflowRootVariableAssigningCompositeActivity("reassigned-value");
+        await using var provider = NewProvider(new RecordingActivityFactory(composite));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewParentCompletionWorkItem());
+
+        Assert.True(composite.ChildCompletionInvoked);
+        Assert.True(composite.AssignmentAccepted);
+
+        // Re-project the workflow variables from durable-value state as the next materialization would: the
+        // by-name assignment must be visible, proving it survived the checkpoint boundary rather than staying
+        // in the in-memory scope only.
+        var durableValues = await _durableValueStateStore.ListAsync(WorkflowExecutionId);
+        var workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+        Assert.Equal("reassigned-value", ExecutionCarrierTestData.AsString(workflowVariables.GetValueOrDefault(VariableName)));
 
         var projection = await _inspectionStore.FindAsync(WorkflowExecutionId, "actexec-parent");
         Assert.NotNull(projection);
@@ -360,5 +396,15 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
             ObservedEnclosingVariable = enclosing;
             IterationVariableResolved = scoped.TryGetVariableValueByName(IterationItemName, out _);
         }
+    }
+
+    // Assigns a workflow-root variable by name inside OnChildCompleted through the visible scope chain, exercising
+    // the workflow-root write-back fold into the completion checkpoint.
+    private sealed class WorkflowRootVariableAssigningCompositeActivity(string newValue) : ObservingCompositeActivityBase
+    {
+        public bool AssignmentAccepted { get; private set; }
+
+        protected override void Observe(IActivityExecutionContext parentContext) =>
+            AssignmentAccepted = ((IScopedVariableProvider)parentContext).TrySetVariableValueByName(VariableName, newValue);
     }
 }
