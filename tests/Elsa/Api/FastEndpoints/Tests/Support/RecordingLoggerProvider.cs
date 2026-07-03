@@ -25,7 +25,10 @@ public sealed class RecordingLoggerProvider : ILoggerProvider
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            logs.Enqueue(new RecordedLog(category, logLevel, formatter(state, exception)));
+            var message = formatter(state, exception);
+            if (exception is not null)
+                message += " || EX: " + exception;
+            logs.Enqueue(new RecordedLog(category, logLevel, message));
         }
     }
 }
