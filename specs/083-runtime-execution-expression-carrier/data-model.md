@@ -13,7 +13,7 @@ The live execution-time expression carrier. Read by the re-pointed processors af
 | `WorkflowName` | `string?` | `WorkflowExecutionState.SystemMetadata[InstanceName]` | `getWorkflowInstanceName` |
 | `WorkflowDefinitionId` | `string` | `PinnedExecutable.DefinitionId` | `getWorkflowDefinitionId` |
 | `WorkflowDefinitionVersionId` | `string` | `PinnedExecutable.DefinitionVersionId` | `getWorkflowDefinitionVersionId` |
-| `WorkflowDefinitionVersion` | `int` | SystemMetadata version key or `PinnedExecutable.ArtifactVersion` major | `getWorkflowDefinitionVersion`; resolution mirrors retired `WorkflowExecutionContext.ResolveWorkflowDefinitionVersion` |
+| `WorkflowDefinitionVersion` | `int` | `PinnedExecutable.ArtifactVersion` major (non-numeric → 0) | `getWorkflowDefinitionVersion`; display identity for scripts, never faults |
 | `WorkflowInputs` | `IReadOnlyDictionary<string, object?>` | `RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues)` | `getInput`, named `get{Name}` inputs |
 | `WorkflowVariables` | `IReadOnlyDictionary<string, object?>` | `ProjectWorkflowVariables(durableValues)` | fallback source for `getVariable`/named getters when no scope chain |
 | `ActivityOutputValues` | `IReadOnlyDictionary<string, object?>` | `ProjectActivityOutputValues(durableValues)` | `getOutput`, `getOutputFrom` (see R4) |
