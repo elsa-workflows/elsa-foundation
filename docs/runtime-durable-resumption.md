@@ -202,6 +202,33 @@ coalescing never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (s
 *and* bookmark both persist directly, never through the buffer) by
 `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`.
 
+## Runtime composition root and lifetimes (RT-4)
+
+The hosting-agnostic runtime execution spine is registered by
+`RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntimeCore(this IServiceCollection)` in
+`Elsa.Workflows.Runtime.Core`. The FastEndpoints `WorkflowsRuntimeApiFeature` no longer owns those
+registrations — it composes the Core root and then adds only its HTTP request handlers. This makes the
+runtime usable from a non-HTTP host (a worker, another module, a test harness) without pulling in the
+API feature. The host-agnostic guard is `RuntimeCoreCompositionRootTests`: it composes
+`AddWorkflowRuntimeCore` into a bare `ServiceCollection` and drives a real Cancel drain end-to-end with
+no API feature present.
+
+**Lifetime story — deliberate, not incidental.** The reference in-memory stores, handlers, pipelines and
+the drainer are registered **singleton** (process-global). That matches the reference implementation:
+the in-memory stores *are* the durable state for the reference host, so a single shared instance is the
+correct model. Two consequences are deliberately in scope, and one is deliberately out:
+
+- **Overridability is preserved.** Every Core registration uses `TryAdd*`, so a durable provider package
+  (EF Core, Mongo, etc.) can register its own store *before or after* `AddWorkflowRuntimeCore` and win,
+  including choosing its own lifetime for that store. Composition order does not matter for correctness.
+- **W9 coalescing decorators still wrap.** The opt-in `AddCoalescingRuntimeCheckpointPersistence`
+  decorates the commit store / queue / outbox / state stores registered here; the Core root does not
+  change their registration *shape*, so those decorators keep composing unchanged.
+- **Scoped/per-request lifetimes are out of scope.** Moving stores to scoped would ripple
+  captive-dependency semantics through the singleton drainer and pipelines and is not required to make
+  the runtime host-agnostic. If a durable provider needs per-request scoping it overrides the specific
+  store via `TryAdd` and owns that lifetime decision locally.
+
 ## Out of scope (owned elsewhere)
 
 - **Ack-based dequeue** that keeps a scheduler work item durably owned until the consuming handler's
