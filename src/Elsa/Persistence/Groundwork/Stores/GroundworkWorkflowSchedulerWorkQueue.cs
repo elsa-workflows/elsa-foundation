@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -26,7 +25,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// (<see cref="WorkflowExecutionCommandDeliveryMode.AtLeastOnce"/>) — consumers dedupe by idempotency key.
 /// </para>
 /// </remarks>
-public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store) : IWorkflowSchedulerWorkQueue
+public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowSchedulerWorkQueue
 {
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
@@ -45,12 +44,12 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store) :
             ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
             workItem.WorkflowExecutionId,
             workItem);
-        var content = JsonSerializer.Serialize(envelope, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind, envelope);
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
                 documentId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -126,8 +125,8 @@ public sealed class GroundworkWorkflowSchedulerWorkQueue(IDocumentStore store) :
             .ToArray();
     }
 
-    private static RuntimeSchedulerWorkItem Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<WorkQueueEnvelope>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.Item;
+    private RuntimeSchedulerWorkItem Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<WorkQueueEnvelope>(envelope).Item;
 
     // Deterministic, collision-free composite document id. Parts are escaped so a separator inside
     // an id cannot forge a different (workflowExecutionId, workItemId) pair.

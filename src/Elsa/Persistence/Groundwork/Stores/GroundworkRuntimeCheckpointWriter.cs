@@ -6,7 +6,6 @@ using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -27,9 +26,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 {
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly IDocumentStore _commitLedger;
+    private readonly IGroundworkRuntimeDocumentSerializer _serializer;
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
+        IGroundworkRuntimeDocumentSerializer serializer,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         ISchedulerStateStore schedulerStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -39,10 +40,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IOperationalStateStore operationalStateStore)
         : this(
             commitLedger,
+            serializer,
             workflowExecutionStateStore,
             schedulerStateStore,
             activityExecutionStateStore,
-            new GroundworkActivityExecutionInspectionStore(commitLedger),
+            new GroundworkActivityExecutionInspectionStore(commitLedger, serializer),
             bookmarkStateStore,
             durableValueStateStore,
             incidentStateStore,
@@ -52,6 +54,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
+        IGroundworkRuntimeDocumentSerializer serializer,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         ISchedulerStateStore schedulerStateStore,
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -62,6 +65,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IOperationalStateStore operationalStateStore)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
+        ArgumentNullException.ThrowIfNull(serializer);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerStateStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -71,6 +75,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ArgumentNullException.ThrowIfNull(incidentStateStore);
         ArgumentNullException.ThrowIfNull(operationalStateStore);
         _commitLedger = commitLedger;
+        _serializer = serializer;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -133,7 +138,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         {
             await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
             var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, unitOfWork);
-            var stores = GroundworkApplyStores.Create(transactionalStore);
+            var stores = GroundworkApplyStores.Create(transactionalStore, _serializer);
             await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
             await ApplyActivityExecutionStateChangesAsync(stores.ActivityExecutionStateStore, commit.StateChanges.ActivityExecutions, cancellationToken);
@@ -165,17 +170,17 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind);
 
-    private static async ValueTask MarkCommittedAsync(IDocumentStore store, RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    private async ValueTask MarkCommittedAsync(IDocumentStore store, RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
     {
         try
         {
             var marker = new CheckpointCommitMarker(commit.CommitId, commit.WorkflowExecutionId, commit.Checkpoint.OccurredAt);
-            var content = JsonSerializer.Serialize(marker, GroundworkRuntimeJson.Options);
+            var (schemaVersion, content) = _serializer.Serialize(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind, marker);
             await store.SaveAsync(
                 new SaveDocumentRequest(
                     ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
                     commit.CommitId,
-                    ElsaRuntimeStorageManifest.SchemaVersion,
+                    schemaVersion,
                     content),
                 cancellationToken);
         }
@@ -411,17 +416,17 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IOperationalStateStore OperationalStateStore,
         GroundworkRuntimePostCommitOutboxStore PostCommitOutboxStore)
     {
-        public static GroundworkApplyStores Create(IDocumentStore store) =>
+        public static GroundworkApplyStores Create(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) =>
             new(
-                new GroundworkWorkflowExecutionStateStore(store),
-                new GroundworkSchedulerStateStore(store),
-                new GroundworkActivityExecutionStateStore(store),
-                new GroundworkActivityExecutionInspectionStore(store),
-                new GroundworkBookmarkStateStore(store),
-                new GroundworkDurableValueStateStore(store),
-                new GroundworkIncidentStateStore(store),
-                new GroundworkOperationalStateStore(store),
-                new GroundworkRuntimePostCommitOutboxStore(store));
+                new GroundworkWorkflowExecutionStateStore(store, serializer),
+                new GroundworkSchedulerStateStore(store, serializer),
+                new GroundworkActivityExecutionStateStore(store, serializer),
+                new GroundworkActivityExecutionInspectionStore(store, serializer),
+                new GroundworkBookmarkStateStore(store, serializer),
+                new GroundworkDurableValueStateStore(store, serializer),
+                new GroundworkIncidentStateStore(store, serializer),
+                new GroundworkOperationalStateStore(store, serializer),
+                new GroundworkRuntimePostCommitOutboxStore(store, serializer));
     }
 
     private sealed class DocumentUnitOfWorkStore(

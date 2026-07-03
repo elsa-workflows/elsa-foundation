@@ -18,7 +18,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
     public async Task Enqueue_List_Dequeue_PreservesFifoOrderPerWorkflowExecution(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
@@ -46,7 +46,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
     public async Task Enqueue_IsIdempotentPerWorkflowExecutionAndWorkItemId(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         var first = NewWorkItem(1, commandId: "command-1");
         var duplicate = NewWorkItem(1, commandId: "command-duplicate");
@@ -68,12 +68,12 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
         await using var fixture = CreateStore(provider);
 
         // First "process": enqueue and crash (bridge instance discarded, documents remain).
-        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
 
         // Second "process": a fresh bridge over the same store sees the full backlog.
-        IWorkflowSchedulerWorkQueue restarted = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue restarted = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
         var recovered = await restarted.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
 
         Assert.Equal(new[] { "work-1", "work-2" }, recovered.Select(item => item.WorkItemId));
@@ -94,7 +94,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
     public async Task ListPendingWorkflowExecutionIds_ReturnsDistinctOrderedBacklog(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
 
@@ -117,7 +117,7 @@ public sealed class GroundworkWorkflowSchedulerWorkQueueTests
     public async Task Ids_WithSeparatorCharacters_DoNotCollide(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         // "a:b" + "c" and "a" + "b:c" would collide without id escaping.
         await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "a:b", workItemId: "c"));

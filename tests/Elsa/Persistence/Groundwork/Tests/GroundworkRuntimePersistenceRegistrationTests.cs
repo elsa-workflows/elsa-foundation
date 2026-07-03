@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -62,6 +63,40 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+    }
+
+    // Constitution §2.23.1: the versioned-document serialization services must be registered as their
+    // sealed defaults, and the upcaster registry must construct cleanly when no upcasters are contributed
+    // (the state today — every kind is at version 1, so there are no historical versions to upcast).
+    [Fact]
+    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Empty_Upcaster_Registry()
+    {
+        var services = new ServiceCollection();
+        services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
+        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
+        services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
+        services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
+        services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
+        services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
+        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
+        services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
+        services.TryAddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+
+        services.AddGroundworkRuntimeStores();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
+        Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
+
+        // With no contributed upcasters the enumerable is empty, yet the registry still constructs (its
+        // eager validation over an empty set is a no-op).
+        Assert.Empty(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 
     [Fact]

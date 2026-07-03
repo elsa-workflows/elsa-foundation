@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 47
-- Source catalogs discovered: 46
-- Source catalogs indexed from root: 46
+- Catalog files discovered: 48
+- Source catalogs discovered: 47
+- Source catalogs indexed from root: 47
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 
@@ -48,6 +48,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [src/Elsa/Mediator/EXTENSION_POINTS.md](../../src/Elsa/Mediator/EXTENSION_POINTS.md) | Elsa.Mediator | Elsa.Mediator | Implementable contributor interfaces<br>Implementable pipeline middleware | `ICommandHandler<TCommand>` / `ICommandHandler<TCommand, TResult>` *(Core — `Elsa.Mediator.Core`)*<br>`IRequestHandler<TRequest, TResponse>` *(Core — `Elsa.Mediator.Core`)*<br>`ICommandMiddleware` *(Core — `Elsa.Mediator.Core`)*<br>`IRequestMiddleware` *(Core — `Elsa.Mediator.Core`)* | Contributor (handles a specific command type — one handler per command).<br>Contributor (handles a specific request type — one handler per request, returns a response).<br>Pipeline middleware for the command pipeline.<br>Pipeline middleware for the request pipeline. | 2 | yes |
 | [src/Elsa/Modularity/Api/EXTENSION_POINTS.md](../../src/Elsa/Modularity/Api/EXTENSION_POINTS.md) | Elsa.Modularity.Api | Elsa.Modularity | Overridable contracts<br>Implementable contributor interfaces | 0 | yes |  |  |
 | [src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md](../../src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) | Elsa.Persistence.EFCore | Elsa.Persistence | Overridable contracts<br>Implementable contributor interfaces<br>Writing a persistence feature (`EFCorePersistenceShellFeatureBase<TDbContext>`)<br>Events | Named read ports + `EFCoreReadStore<TDbContext, TEntity>` *(closed-query read surface)*<br>`IUpsertCommandGenerator` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IElsaDbContextSchema` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntitySavingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>`IEntityLoadingHandler<TDbContext, TEntity>` *(Feature contract — `Elsa.Persistence.EFCore`)*<br>Out-of-band hooks (NOT event-dispatched)<br>OnEntitySaving<br>OnEntityLoading | entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`).<br>entity Handler (action-named contributor). **Lives in:** `Elsa.Persistence.EFCore` (`Contracts/`). | 2 | yes |
+| [src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md](../../src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) | Elsa.Persistence.Groundwork | Elsa.Persistence | Override — replacement contracts<br>Extend — contribution (fan-in)<br>Schema-version model | 0 | yes |  |  |
 | [src/Elsa/Pipelines/Core/EXTENSION_POINTS.md](../../src/Elsa/Pipelines/Core/EXTENSION_POINTS.md) | Elsa.Pipelines.Core | Elsa.Pipelines | Implementable contributor interfaces | `IMiddleware` *(Core — `Elsa.Pipelines.Core`)* | Contributor (pipeline middleware step). | 1 | yes |
 | [src/Elsa/Secrets/Core/EXTENSION_POINTS.md](../../src/Elsa/Secrets/Core/EXTENSION_POINTS.md) | Elsa.Secrets.Core | Elsa.Secrets | Contracts<br>Safety Rules | 0 | yes |  |  |
 | [src/Elsa/Secrets/EXTENSION_POINTS.md](../../src/Elsa/Secrets/EXTENSION_POINTS.md) | Elsa.Secrets | Elsa.Secrets | Service Overrides<br>Built-In Stores<br>Runtime Integration | 0 | yes |  |  |
