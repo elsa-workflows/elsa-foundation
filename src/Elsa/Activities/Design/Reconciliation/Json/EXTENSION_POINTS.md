@@ -11,14 +11,13 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
 - **Implementation:** `JsonActivityReconciliationSource` (`SourceKind => "Json"`).
 - **What it does:** reads either the single `JsonReconciliationOptions.FilePath` or each
   `JsonReconciliationOptions.Files` entry (in ascending `Order`) via `IJsonActivityCatalogReader` and
-  returns the concatenated `ActivityVersionReconciliationModel[]`. Each model's polymorphic
-  `ImplementationDescriptor` is left as a raw `JsonElement` carrying its `ImplementationKind`
-  discriminator — the reconciliation handler resolves the concrete descriptor type downstream. Ordering
-  lets an author stage dependencies (e.g. plain activities first, `Workflow`-kind activities that
-  reference them second).
+  returns the concatenated `ActivityVersionReconciliationModel[]`. Each model's `Descriptor` is left as
+  a raw `JsonElement` paired with its `DescriptorType` string — the reconciliation handler persists that
+  pair opaquely and never resolves the descriptor type. Ordering lets an author stage dependencies
+  (e.g. plain activities first, workflow-backed activities that reference them second).
 - **Register:** `services.AddScoped<IActivityReconciliationSource, JsonActivityReconciliationSource>()`
   (done by `JsonActivityReconciliationFeature`).
-- **Consumed by:** `ActivityVersionsReconcilingHandler` in `Elsa.Activities.Design.Reconciliation`,
+- **Consumed by:** `CollectActivityVersions` in `Elsa.Activities.Design.Reconciliation`,
   which injects every `IActivityReconciliationSource` and reconciles the returned versions.
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
