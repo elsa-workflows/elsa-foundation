@@ -41,9 +41,13 @@ Phase 0 (safety & correctness) — **COMPLETE 2026-07-03**; all six units merged
 5. W5 Ownership enforcement (RT-2) — **done** ([#430](https://github.com/elsa-workflows/elsa-foundation/pull/430); fencing at the checkpoint-commit funnel, monotonic lease tokens surviving release, drain-scoped lease/heartbeat closing window C's visibility half, drainer TOCTOU tripwire).
 6. W1 Fault semantics end-to-end (RT-1/5/12/14) — **done** ([#431](https://github.com/elsa-workflows/elsa-foundation/pull/431); Running→Faulted via `BlockingIncidentWorkflowFaultObserver`, poison store + retry policy in the drainer crash path, `AcceptedButFaulted` drain-result propagation, structured fault capture, `ListIncidents` operator endpoint).
 
-Phases 1–3 (W7–W21): queued; see the roadmap's dependency graph. Next wave candidates:
-W7 (trigger subsystem), W8 (durable timers — depends on W2's pump), W9 (checkpoint
-coalescing — depends on W5's fencing).
+Phase 1 (feature parity) — in flight (launched 2026-07-03):
+
+1. W8 Durable timers (E3-2) — **done** ([#433](https://github.com/elsa-workflows/elsa-foundation/pull/433); `durableTimer` document kind + `IDurableTimerStore` (in-memory + Groundwork), `DurableTimerPumpTask` in the new Scheduling package, `Delay` activity in the new Activities.Scheduling package, `[ResumeTarget]` compilation in `WorkflowExecutableCompiler` — the first suspending activity through the real publish pipeline; `docs/runtime-durable-timers.md`). Timer/Cron START triggers deferred to a W7-dependent follow-up.
+2. W7 Trigger subsystem + global stimulus routing (E3-1, E3-5) — in progress.
+3. W9 Checkpoint coalescing persistence policy (E3-6, RT-10) — in progress.
+
+Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
 
 ### Follow-up findings recorded during Phase 0 execution
 
@@ -59,6 +63,19 @@ coalescing — depends on W5's fencing).
 - **Durable poison store** (from W1): `IWorkflowSchedulerPoisonStore` ships with an
   in-memory default; a Groundwork-backed implementation (through the W3 serializer) is the
   natural follow-up so poison records survive restarts.
+
+### Follow-up findings recorded during Phase 1 execution
+
+- **Node-scoped resume targets** (from W8): executable resume targets are keyed by the
+  `[ResumeTarget]` attribute id, so a workflow supports only one instance of a given
+  resume-target activity (duplicates fail compilation loudly). Node-scoped ids
+  (`ExecutableNodeId` + attribute id) lift the limit and require a matching resume-resolver
+  change; see `docs/runtime-durable-timers.md`.
+- **Native due-time range index in Groundwork** (from W8): Groundwork queries are
+  equality-only, so the timer pump's `ListDueAsync` loads the whole timer partition and
+  filters in memory; a native range index is the scale follow-up.
+- **Timer/Cron start triggers** (from W8 scope cut): deferred until W7's trigger index
+  lands; the `durableTimer` kind is shaped to plug into it.
 
 ## Linked Surfaces
 
