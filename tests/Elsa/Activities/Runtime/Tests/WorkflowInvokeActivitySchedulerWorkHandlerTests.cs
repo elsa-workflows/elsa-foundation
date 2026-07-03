@@ -72,8 +72,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     public async Task HandleAsync_PlainActivity_DoesNotReadWorkflowExecutionState()
     {
         // The common case: a plain activity that requests no control-leaf intent (no Finish/Correlate/SetName).
-        // Its execution-time carrier identity is threaded on the command metadata, so the handler must not touch
-        // the workflow-execution-state store at all — the per-invocation read this unit removed (spec 083 follow-up).
+        // Its execution-time carrier identity is projected from the tagged durable values it already re-lists, so the
+        // handler must not touch the workflow-execution-state store at all — the per-invocation read this unit removed.
         var stateStore = new CountingWorkflowExecutionStateStore();
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
@@ -87,22 +87,20 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_PopulatesCarrierIdentityFromCommandMetadata_WithoutReadingState()
+    public async Task HandleAsync_PopulatesCarrierIdentityFromDurableValues_WithoutReadingState()
     {
-        // The carrier's correlation id / instance name come from the threaded command metadata, so getCorrelationId()
-        // / getWorkflowInstanceName() are live at execution time without a workflow-execution-state read.
+        // The carrier's correlation id / instance name are projected from the IdentityName-tagged durable values the
+        // invocation lists, so getCorrelationId() / getWorkflowInstanceName() are live at execution time without a
+        // workflow-execution-state read.
         var stateStore = new CountingWorkflowExecutionStateStore();
         var activity = new IdentityCapturingActivity();
+        await SeedIdentityDurableValuesAsync(correlationId: "order-123", instanceName: "Order 123");
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
         await using var provider = NewProvider(new RecordingActivityFactory(activity), workflowExecutionStateStore: stateStore);
         var handler = NewHandler(provider);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
-        {
-            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-123",
-            [RuntimeMetadataKeys.CarrierInstanceName] = "Order 123"
-        }));
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
         Assert.Equal("order-123", activity.ObservedCorrelationId);
         Assert.Equal("Order 123", activity.ObservedWorkflowName);
@@ -110,55 +108,95 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_CorrelateAndSetNameLeaf_RefreshesCompletionCommandMetadata_AndReadsStateOnce()
+    public async Task HandleAsync_CorrelateAndSetNameLeaf_ProjectsIdentity_VisibleToConcurrentSiblingBranch()
     {
-        // A Correlate/SetName leaf mutates identity: it loads the workflow-execution state exactly once (to fold the
-        // control-leaf change) and re-stamps the new correlation id / instance name onto the completion work item's
-        // command metadata so downstream activities' carriers observe it without another read.
+        // Fork-visibility regression (spec 083 review): a Correlate/SetName leaf loads the workflow-execution state
+        // exactly once (to fold the authoritative control-leaf change) AND projects the new identity into
+        // IdentityName-tagged durable values. Because every activity invocation re-lists durable values, a concurrent
+        // sibling branch that carries NO identity in its command metadata still observes the new correlation id /
+        // instance name — the cross-branch visibility the per-branch-lineage command-metadata channel dropped.
         var stateStore = new CountingWorkflowExecutionStateStore();
         await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
+        await using var setProvider = NewProvider(
             new RecordingActivityFactory(new SetIdentityActivity("order-99", "Order 99")),
             workflowExecutionStateStore: stateStore);
-        var handler = NewHandler(provider);
+        var setHandler = NewHandler(setProvider);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
-        {
-            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-1"
-        }));
+        await setHandler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
+        // Authoritative queryable home is updated with exactly one state read.
         Assert.Equal(1, stateStore.FindCount);
         var savedState = await stateStore.FindAsync("wfexec-1");
         Assert.Equal("order-99", savedState?.CorrelationId);
         Assert.Equal("Order 99", savedState?.SystemMetadata[RuntimeMetadataKeys.InstanceName]);
 
-        var completionWork = await AssertCompletionSchedulerWorkAsync();
-        Assert.Equal("order-99", completionWork.CommandMetadata[RuntimeMetadataKeys.CarrierCorrelationId]);
-        Assert.Equal("Order 99", completionWork.CommandMetadata[RuntimeMetadataKeys.CarrierInstanceName]);
+        // Identity is also projected as IdentityName-tagged durable values in the store, the additional channel the
+        // read side consumes.
+        var listed = await _durableValueStateStore.ListAsync("wfexec-1");
+        Assert.Equal("order-99", RuntimeIdentityStateProjection.ProjectCorrelationId(listed));
+        Assert.Equal("Order 99", RuntimeIdentityStateProjection.ProjectInstanceName(listed));
+
+        // A SECOND, independent invocation (fresh work item, different activity execution on node-other, plain
+        // activity, NO identity in its command metadata) observes the new identity purely via the durable-value
+        // projection — proving a concurrent sibling branch sees it.
+        var siblingActivity = new IdentityCapturingActivity();
+        await _activityStateStore.SaveAsync(NewRunningState(activityExecutionId: "actexec-2", executableNodeId: "node-other"));
+        await using var siblingProvider = NewProvider(
+            new RecordingActivityFactory(siblingActivity),
+            workflowExecutionStateStore: stateStore);
+        var siblingHandler = NewHandler(siblingProvider);
+
+        await siblingHandler.HandleAsync(NewInvokeWorkItem(
+            NewIdentity(), executableNodeId: "node-other", workItemId: "invoke-sibling", activityExecutionId: "actexec-2"));
+
+        Assert.Equal("order-99", siblingActivity.ObservedCorrelationId);
+        Assert.Equal("Order 99", siblingActivity.ObservedWorkflowName);
     }
 
     [Fact]
-    public async Task HandleAsync_ClearingCorrelationId_RemovesCarrierMetadataFromCompletionWork()
+    public async Task HandleAsync_ClearingCorrelationId_ProjectsNullForSubsequentInvocation()
     {
-        // Clearing an assignment (SetCorrelationId(null)) removes the carrier key so downstream carriers read null.
+        // Clearing an assignment (SetCorrelationId(null)) writes a JSON-null identity durable value, so a subsequent
+        // invocation's projection yields null rather than the previously assigned value.
         var stateStore = new CountingWorkflowExecutionStateStore();
         await stateStore.SaveAsync(NewWorkflowExecutionState(correlationId: "order-1"));
+        await SeedIdentityDurableValuesAsync(correlationId: "order-1");
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
-        await using var provider = NewProvider(
+        await using var clearProvider = NewProvider(
             new RecordingActivityFactory(new SetIdentityActivity(correlationId: null, instanceName: null)),
+            includeInspection: true,
             workflowExecutionStateStore: stateStore);
-        var handler = NewHandler(provider);
+        var clearHandler = NewHandler(clearProvider);
 
-        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity(), commandMetadata: new Dictionary<string, string>
-        {
-            [RuntimeMetadataKeys.CarrierCorrelationId] = "order-1"
-        }));
+        await clearHandler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
 
-        var completionWork = await AssertCompletionSchedulerWorkAsync();
-        Assert.False(completionWork.CommandMetadata.ContainsKey(RuntimeMetadataKeys.CarrierCorrelationId));
+        // With inspection enabled the cleared identity rides the activity's checkpoint as a JSON-null durable-value
+        // change (never skipped, so the clear propagates) and is persisted to the store.
+        var clearCommit = Assert.Single(_checkpointWriter.ListCommits());
+        Assert.Contains(
+            clearCommit.Commit.StateChanges.DurableValues,
+            change => change.State!.Metadata.TryGetValue(RuntimeMetadataKeys.IdentityName, out var slot)
+                      && slot == RuntimeWorkflowStateSeed.IdentityCorrelationIdName);
+        Assert.Null(ProjectIdentityChange(clearCommit, RuntimeWorkflowStateSeed.IdentityCorrelationIdName));
+
+        var listed = await _durableValueStateStore.ListAsync("wfexec-1");
+        Assert.Null(RuntimeIdentityStateProjection.ProjectCorrelationId(listed));
+
+        // A later invocation observes the cleared (null) identity through the projection.
+        var observingActivity = new IdentityCapturingActivity();
+        await _activityStateStore.SaveAsync(NewRunningState(activityExecutionId: "actexec-2", executableNodeId: "node-other"));
+        await using var observeProvider = NewProvider(
+            new RecordingActivityFactory(observingActivity),
+            workflowExecutionStateStore: stateStore);
+        var observeHandler = NewHandler(observeProvider);
+
+        await observeHandler.HandleAsync(NewInvokeWorkItem(
+            NewIdentity(), executableNodeId: "node-other", workItemId: "invoke-observe", activityExecutionId: "actexec-2"));
+
+        Assert.Null(observingActivity.ObservedCorrelationId);
     }
 
     [Fact]
@@ -856,23 +894,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         string executableNodeId = "node-start",
         JsonElement? payload = null,
         bool includePayload = true,
-        IReadOnlyDictionary<string, string>? commandMetadata = null)
+        IReadOnlyDictionary<string, string>? commandMetadata = null,
+        string workItemId = "invoke-work",
+        string activityExecutionId = "actexec-1")
     {
         var resolvedPayload = includePayload
             ? payload ?? JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
                 pinnedExecutable ?? NewIdentity(),
                 executableNodeId,
-                "actexec-1",
+                activityExecutionId,
                 RuntimeInvokeActivityCommandPayload.StartedActivityReason))
             : (JsonElement?)null;
 
         return new RuntimeSchedulerWorkItem(
-            workItemId: "invoke-work",
+            workItemId: workItemId,
             workflowExecutionId: "wfexec-1",
             commandId: "command-1",
             commandKind: commandKind,
             envelopeId: "envelope-1",
-            idempotencyKey: "wfexec-1:invoke:actexec-1",
+            idempotencyKey: $"wfexec-1:invoke:{activityExecutionId}",
             enqueuedAt: _now,
             recordedAt: _now,
             sequence: 30,
@@ -881,13 +921,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static ActivityExecutionState NewRunningState() =>
+    private static ActivityExecutionState NewRunningState(
+        string activityExecutionId = "actexec-1",
+        string executableNodeId = "node-start") =>
         new(
             Execution: new ActivityExecution(
-                ActivityExecutionId: "actexec-1",
+                ActivityExecutionId: activityExecutionId,
                 WorkflowExecutionId: "wfexec-1",
-                ExecutableNodeId: "node-start",
-                AuthoredActivityId: "authored-node-start",
+                ExecutableNodeId: executableNodeId,
+                AuthoredActivityId: $"authored-{executableNodeId}",
                 ActivityType: "test/activity",
                 ActivityTypeVersion: "1.0.0"),
             Status: ActivityExecutionStatus.Running,
@@ -1210,6 +1252,31 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             _inner.ListAsync(cancellationToken);
+    }
+
+    // Seeds the IdentityName-tagged durable values a Correlate/SetName leaf would have projected, so a plain
+    // activity invocation observes them through the read-side projection without a workflow-execution-state read.
+    private async Task SeedIdentityDurableValuesAsync(string? correlationId = null, string? instanceName = null)
+    {
+        var changes = RuntimeWorkflowStateSeed.BuildIdentityChanges(
+            "wfexec-1",
+            correlationIdAssignmentRequested: correlationId is not null,
+            correlationId,
+            instanceNameAssignmentRequested: instanceName is not null,
+            instanceName,
+            _now);
+
+        foreach (var change in changes)
+            await _durableValueStateStore.SaveAsync(change.State!);
+    }
+
+    // Projects a named identity slot out of a checkpoint commit's IdentityName-tagged durable-value changes.
+    private static string? ProjectIdentityChange(RuntimeCheckpointCommitRecord commit, string identitySlotName)
+    {
+        var states = commit.Commit.StateChanges.DurableValues.Select(change => change.State!);
+        return identitySlotName == RuntimeWorkflowStateSeed.IdentityCorrelationIdName
+            ? RuntimeIdentityStateProjection.ProjectCorrelationId(states)
+            : RuntimeIdentityStateProjection.ProjectInstanceName(states);
     }
 
     private WorkflowExecutionState NewWorkflowExecutionState(string? correlationId = null, string? instanceName = null)

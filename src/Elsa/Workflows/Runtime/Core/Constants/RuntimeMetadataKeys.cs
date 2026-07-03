@@ -38,21 +38,15 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
-    /// Command-metadata key threading the workflow correlation id along the scheduler work chain so the
-    /// execution-time expression carrier (ADR 0030 identity) can populate <c>getCorrelationId()</c> without a
-    /// per-invocation workflow-execution-state read (spec 083 follow-up). Absent until a <c>Correlate</c> leaf
-    /// assigns one; the assigning invocation re-stamps this key on its completion work item so later activities
-    /// observe the new value, and <c>BookmarkResumeDispatcher</c> re-seeds it from persisted state on resume.
+    /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the
+    /// execution-time expression carrier (ADR 0030 identity), tagged with the slot name (<c>"correlationId"</c> or
+    /// <c>"instanceName"</c>). A <c>Correlate</c>/<c>SetName</c> leaf projects the assigned value into a durable
+    /// value under a reserved <c>identity:</c> value id, so any activity invocation — including a concurrent sibling
+    /// branch — re-lists it and populates <c>getCorrelationId()</c> / <c>getWorkflowInstanceName()</c> without a
+    /// per-invocation workflow-execution-state read (spec 083 review). Distinct from <see cref="InstanceName"/>,
+    /// which is the persisted system-metadata home read for querying; both are written in the same commit.
     /// </summary>
-    public const string CarrierCorrelationId = "runtime.carrier.correlationId";
-
-    /// <summary>
-    /// Command-metadata key threading the workflow instance name along the scheduler work chain for the
-    /// execution-time expression carrier (ADR 0030 identity), mirroring <see cref="CarrierCorrelationId"/>.
-    /// Assigned by the <c>SetName</c> leaf; distinct from <see cref="InstanceName"/>, which is the persisted
-    /// system-metadata home read for querying.
-    /// </summary>
-    public const string CarrierInstanceName = "runtime.carrier.instanceName";
+    public const string IdentityName = "runtime.identityName";
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable

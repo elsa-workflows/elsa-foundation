@@ -128,18 +128,32 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         CancellationToken cancellationToken)
     {
         IReadOnlyList<RuntimeMaterializedActivityInput> inputs;
+        IReadOnlyDictionary<string, object?> workflowVariables;
+        IReadOnlyDictionary<string, object?> workflowInputValues;
+        IReadOnlyDictionary<string, object?> activityOutputValues;
+        // Hoisted out of the try (like the invoke path) so they populate the resumed activity's execution-time
+        // expression carrier (ADR 0030) below, projected from the tagged durable values this resume already re-lists
+        // (spec 083 review) — so the RESUMED activity's own getCorrelationId() / getWorkflowInstanceName() observe the
+        // current identity too, without a workflow-execution-state read.
+        string? carrierCorrelationId;
+        string? carrierInstanceName;
         try
         {
             var durableValues = await durableValueStateStore.ListAsync(workItem.WorkflowExecutionId, cancellationToken);
+            workflowVariables = RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues);
+            workflowInputValues = RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues);
+            activityOutputValues = RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues);
+            carrierCorrelationId = RuntimeIdentityStateProjection.ProjectCorrelationId(durableValues);
+            carrierInstanceName = RuntimeIdentityStateProjection.ProjectInstanceName(durableValues);
             var resolutionContext = new RuntimeInputBindingResolutionContext(
                 workflowExecutionId: workItem.WorkflowExecutionId,
                 activityExecutionId: resumePayload.ActivityExecutionId,
                 durableValuesByValueId: durableValues.ToDictionary(value => value.ValueId, StringComparer.Ordinal),
                 activityOutputs: activityOutputRegister,
                 serviceProvider: serviceProvider,
-                workflowVariables: RuntimeInputBindingStateProjection.ProjectWorkflowVariables(durableValues),
-                workflowInputs: RuntimeInputBindingStateProjection.ProjectWorkflowInputs(durableValues),
-                activityOutputValues: RuntimeInputBindingStateProjection.ProjectActivityOutputValues(durableValues));
+                workflowVariables: workflowVariables,
+                workflowInputs: workflowInputValues,
+                activityOutputValues: activityOutputValues);
             inputs = await _inputMaterializer.MaterializeInputsAsync(executableNode, resolutionContext, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -174,7 +188,25 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             activity.NodeId = executableNode.ExecutableNodeId;
             activity.Id = resumePayload.ActivityExecutionId;
 
-            context = new SimpleActivityExecutionContext(serviceProvider, activity, cancellationToken);
+            // Populate the resumed activity's execution-time expression carrier (ADR 0030) from the same runtime state
+            // the invoke path uses: identity + inputs/variables/outputs are the tagged durable-value projections
+            // (spec 083 review), and the workflow-execution id / pinned executable come from the resume work item /
+            // payload. No container scope is rebuilt on this path, so variableScope stays null.
+            context = new SimpleActivityExecutionContext(
+                serviceProvider,
+                activity,
+                cancellationToken,
+                workItem.WorkflowExecutionId,
+                resumePayload.PinnedExecutable,
+                workItem,
+                executableNode,
+                state,
+                variableScope: null,
+                correlationId: carrierCorrelationId,
+                workflowName: carrierInstanceName,
+                workflowInputs: workflowInputValues,
+                workflowVariables: workflowVariables,
+                activityOutputValues: activityOutputValues);
             RuntimeActivityInputMemory.Seed(context, inputs);
         }
         catch (OperationCanceledException)

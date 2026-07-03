@@ -31,6 +31,13 @@ public static class RuntimeWorkflowStateSeed
     public const string OutputValueIdPrefix = "output:";
     private const string DurableValueIdPrefix = "durable-";
 
+    // Reserved durable-value-id namespace for the workflow-identity projection (correlation id / instance name).
+    // The identity slot name is the suffix (e.g. "identity:correlationId"); it doubles as the IdentityName tag
+    // value the read-side projection filters on. Kept distinct from the variable/input/output namespaces above.
+    public const string IdentityValueIdPrefix = "identity:";
+    public const string IdentityCorrelationIdName = "correlationId";
+    public const string IdentityInstanceNameName = "instanceName";
+
     /// <summary>
     /// Builds the durable-value state changes that persist the supplied workflow variables and inputs for a
     /// workflow execution. Variable and input names share no key space because they are stored under distinct
@@ -98,6 +105,38 @@ public static class RuntimeWorkflowStateSeed
 
         foreach (var (name, value) in outputs ?? EmptyValues)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.OutputName, OutputValueIdPrefix, name, value, capturedAt));
+
+        return changes;
+    }
+
+    /// <summary>
+    /// Builds the durable-value changes that project the workflow identity (correlation id / instance name)
+    /// assigned by a <c>Correlate</c>/<c>SetName</c> leaf (spec 083 review). Each requested slot is upserted under
+    /// its reserved <see cref="IdentityValueIdPrefix"/> value id, tagged with <see cref="RuntimeMetadataKeys.IdentityName"/>
+    /// so <c>RuntimeIdentityStateProjection</c> can surface it to a later — including a concurrent sibling-branch —
+    /// activity invocation without a workflow-execution-state read. This is an additional projection channel for
+    /// expressions; <see cref="WorkflowExecutionState.CorrelationId"/> / system metadata remain the authoritative
+    /// queryable home, written in the same commit. A cleared assignment (null value) is written as a JSON-null
+    /// inline value under the same value id — the clear must propagate, so it is never skipped. Only requested
+    /// slots are emitted; an unrequested slot leaves any prior projection untouched.
+    /// </summary>
+    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildIdentityChanges(
+        string workflowExecutionId,
+        bool correlationIdAssignmentRequested,
+        string? correlationId,
+        bool instanceNameAssignmentRequested,
+        string? instanceName,
+        DateTimeOffset capturedAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+
+        var changes = new List<RuntimeStateChange<DurableValueState>>();
+
+        if (correlationIdAssignmentRequested)
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.IdentityName, IdentityValueIdPrefix, IdentityCorrelationIdName, correlationId, capturedAt));
+
+        if (instanceNameAssignmentRequested)
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.IdentityName, IdentityValueIdPrefix, IdentityInstanceNameName, instanceName, capturedAt));
 
         return changes;
     }
