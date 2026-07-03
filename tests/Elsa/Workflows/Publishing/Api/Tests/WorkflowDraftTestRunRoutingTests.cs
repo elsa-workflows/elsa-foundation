@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
@@ -28,8 +27,6 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        EndpointSecurityOptions.DisableSecurity();
-
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
@@ -37,7 +34,9 @@ public sealed class WorkflowDraftTestRunRoutingTests : IAsyncLifetime
         builder.Services.AddFastEndpoints(o => o.Assemblies = [typeof(StartWorkflowTestRun).Assembly]);
 
         _app = builder.Build();
-        _app.UseFastEndpoints();
+        // This test exercises route matching only; relax endpoint security the FastEndpoints way
+        // instead of composing authentication.
+        _app.UseFastEndpoints(c => c.Endpoints.Configurator = ep => ep.AllowAnonymous());
         await _app.StartAsync();
 
         _client = new HttpClient { BaseAddress = new Uri(_app.Urls.First()) };

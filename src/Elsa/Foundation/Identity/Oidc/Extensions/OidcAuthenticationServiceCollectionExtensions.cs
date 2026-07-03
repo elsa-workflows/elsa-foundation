@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +22,7 @@ public static class OidcAuthenticationServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthenticationProviderModule, OidcAuthenticationProviderModule>());
         services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, ConfigureOidcOptions>();
         services.AddSingleton<IConfigureOptions<JwtBearerOptions>, ConfigureOidcJwtBearerOptions>();
+        services.AddSingleton<IConfigureOptions<AuthenticationOptions>, ConfigureOidcDefaultAuthenticationSchemes>();
 
         var options = new OidcAuthenticationOptions();
         configure?.Invoke(options);

@@ -30,6 +30,9 @@
           "FileSystemDistributedLocking": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityOidc": {},
           "FoundationWorkflowsAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,

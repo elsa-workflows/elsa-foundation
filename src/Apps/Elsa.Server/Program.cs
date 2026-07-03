@@ -4,7 +4,7 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Management.Api;
-using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Api.FastEndpoints;
 using Elsa.Server;
 using Elsa.Activities.Composition.Design;
 using Elsa.Activities.Composition.Runtime;
@@ -27,6 +27,11 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Foundation.Identity.Abstractions;
+using Elsa.Foundation.Identity.Api;
+using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.Oidc;
+using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Locking.FileSystem;
 using Elsa.Mediator;
 using Elsa.Modularity.Api;
@@ -69,8 +74,6 @@ if (consoleLogStreamingEnabled)
     builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingFeature.ConfigureEndpoints);
 }
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
-
-EndpointSecurityOptions.DisableSecurity();
 
 const string studioCorsPolicy = "ElsaStudio";
 
@@ -123,6 +126,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
     shells
         .WithHostAssemblies()
         .WithAssemblyProvider<NuplaneAssemblyProvider>()
+
+        // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
+        // request time, so each shell's Identity composition (schemes, permission policies) is honored
+        // by the root UseAuthentication/UseAuthorization middleware.
+        .WithAuthenticationAndAuthorization()
 
         .WithAssemblies(
             typeof(PrimitivesFeature).Assembly,
@@ -177,6 +185,16 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationWorkflowsAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
 
+            // Identity surface: provider-agnostic auth/IAM contracts, identity API endpoints, and
+            // authentication provider modules. Composed in the default shell so the API is secured;
+            // the per-shell ApiSecurity feature is the only way to opt a shell out (never enabled here).
+            typeof(FoundationIdentityAbstractionsFeature).Assembly,
+            typeof(FoundationIdentityApiFeature).Assembly,
+            typeof(OidcAuthenticationFeature).Assembly,
+            typeof(AspNetCoreIdentityFeature).Assembly,
+            typeof(OpenIddictIdentityFeature).Assembly,
+            typeof(ApiSecurityFeature).Assembly,
+
             typeof(ModularityApiFeature).Assembly,
             typeof(ConsoleLogStreamingFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
@@ -192,6 +210,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .ConfigureAllShells(shell => shell.WithFeature<ModularityApiFeature>());
 });
 
+// Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
+// delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both
+// AddAuthentication and AddAuthorization use TryAdd semantics for those services.
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 app.UseCors(studioCorsPolicy);
@@ -201,6 +225,14 @@ app.MapElsaModuleManagementApi();
 app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
 app.MapShells();
+
+// Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps
+// HttpContext.RequestServices to the shell scope first, so authentication/authorization resolve
+// each shell's schemes and permission policies. Explicit calls also suppress WebApplication's
+// automatic insertion of these middleware earlier in the pipeline.
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapShellManagementApi("/_admin/shells");
 
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
