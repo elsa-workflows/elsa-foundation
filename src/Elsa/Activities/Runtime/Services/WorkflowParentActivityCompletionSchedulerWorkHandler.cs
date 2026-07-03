@@ -253,7 +253,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             // below, so a workflow-level variable assigned by name in OnChildCompleted/OnChildFaulted is durably
             // persisted and re-projected on the next materialization rather than dropped at the checkpoint boundary.
             workflowScopeWriteBackChanges = await scopeService.PersistAndCaptureWorkflowScopeWriteBackAsync(
-                variableScope, executable, workItem.WorkflowExecutionId, constructedParent.WorkflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
+                variableScope, executable, workItem.WorkflowExecutionId, constructedParent.Projections.WorkflowVariables, _timeProvider.GetUtcNow(), cancellationToken);
 
             var scheduledChildren = context.GetChildActivityScheduleRequests();
             if (context.CompositeCompletionRequested && scheduledChildren.Count > 0)
