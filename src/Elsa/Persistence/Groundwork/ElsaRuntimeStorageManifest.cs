@@ -69,6 +69,11 @@ public static class ElsaRuntimeStorageManifest
     // restarts; the by-collection partition supports the system-wide pending-executions sweep.
     public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
 
+    // Durable timer store. Each pending timer is a document so timers survive process restarts; the
+    // by-collection partition serves the due-timer sweep through an equality index (Groundwork is
+    // equality-only, so due-time filtering/ordering happens in memory — see GroundworkDurableTimerStore).
+    public const string DurableTimerDocumentKind = "durableTimer";
+
     // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
     // published executable becomes one document, so an external stimulus with no execution id can be
     // routed to start a new workflow instance. Indexed by stimulus hash (cross-artifact router lookup)
@@ -185,6 +190,11 @@ public static class ElsaRuntimeStorageManifest
                     Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
                     Query("list-all", ByCollectionIndex)
                 ]),
+            Unit(
+                DurableTimerDocumentKind,
+                "Durable timer",
+                [Keyword(ByCollectionIndex, CollectionField)],
+                [Query("list-all", ByCollectionIndex)]),
             Unit(
                 WorkflowTriggerBindingDocumentKind,
                 "Workflow trigger binding",

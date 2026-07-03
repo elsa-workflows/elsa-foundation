@@ -1,8 +1,11 @@
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -71,7 +74,7 @@ public sealed class WorkflowExecutableCompiler(
                     ArtifactHash: artifactHash,
                     Source: source.SourceReference),
                 rootActivity: compiledRoot,
-                resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+                resumeTargets: BuildResumeTargets(compiledRoot),
                 createdAt: request.CreatedAt,
                 publishedAt: request.PublishedAt,
                 compatibilityMetadata: metadata,
@@ -143,6 +146,70 @@ public sealed class WorkflowExecutableCompiler(
             },
             childSlots: childSlots,
             structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
+    }
+
+    private IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(ExecutableNode root)
+    {
+        // Index [ResumeTarget] handlers declared by each node's activity CLR type into the executable's
+        // resume-target map. Suspending activities (e.g. Delay) create a durable bookmark against a resume
+        // target id; the CreateBookmark handler validates that id against this map, and the resume handler
+        // reflects the matching method back at resume time. Activities without resume targets (all existing
+        // activities) contribute nothing, so the map stays empty for them.
+        var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
+
+        foreach (var node in FlattenExecutableNodes(root))
+        {
+            if (!wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var activityType) || activityType is null || activityType == typeof(object))
+                continue;
+
+            foreach (var method in activityType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                var attribute = method.GetCustomAttribute<ResumeTargetAttribute>();
+                if (attribute is null)
+                    continue;
+
+                ValidateResumeTargetSignature(activityType, method);
+
+                var resumeTargetId = attribute.ResumeTargetId;
+                if (resumeTargets.TryGetValue(resumeTargetId, out var existing))
+                    throw new ArgumentException(
+                        $"Resume target '{resumeTargetId}' is declared by executable nodes '{existing.ExecutableNodeId}' and '{node.ExecutableNodeId}'. A resume target id must be unique within a workflow executable; multiple instances of the same resume-target activity in one workflow are not yet supported.");
+
+                resumeTargets[resumeTargetId] = new WorkflowExecutableResumeTarget(
+                    ResumeTargetId: resumeTargetId,
+                    ExecutableNodeId: node.ExecutableNodeId,
+                    HandlerKey: method.Name,
+                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
+            }
+        }
+
+        return resumeTargets;
+    }
+
+    private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        var hasSupportedParameter =
+            parameters.Length == 0 ||
+            parameters.Length == 1 && (parameters[0].ParameterType == typeof(IActivityExecutionContext) || parameters[0].ParameterType == typeof(JsonElement));
+        var hasSupportedReturn =
+            method.ReturnType == typeof(void) ||
+            method.ReturnType == typeof(Task) ||
+            method.ReturnType == typeof(ValueTask);
+
+        if (!hasSupportedParameter || !hasSupportedReturn)
+            throw new ArgumentException(
+                $"Resume target method '{activityType.FullName}.{method.Name}' has an unsupported signature. A resume target must take no parameters or a single {nameof(IActivityExecutionContext)}/{nameof(JsonElement)} parameter and return void, Task, or ValueTask.");
+    }
+
+    private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)
+    {
+        yield return root;
+
+        foreach (var slot in root.ChildSlots)
+            foreach (var child in slot.Activities)
+                foreach (var descendant in FlattenExecutableNodes(child))
+                    yield return descendant;
     }
 
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(

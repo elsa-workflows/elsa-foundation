@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 70
+- Discovered feature classes: 71
 
 ## Features
 
@@ -27,6 +27,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesFlowchartFeature | direct IShellFeature | Elsa.Activities.Flowchart | IShellFeature | [ActivitiesFlowchartFeature.cs](../../src/Elsa/Activities/Flowchart/ActivitiesFlowchartFeature.cs) |
 | ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../src/Elsa/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../src/Elsa/Activities/Runtime/ActivitiesRuntimeFeature.cs) |
+| ActivitiesSchedulingFeature | direct IShellFeature | Elsa.Activities.Scheduling | IShellFeature | [ActivitiesSchedulingFeature.cs](../../src/Elsa/Activities/Scheduling/ActivitiesSchedulingFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../src/Elsa/Activities/Sequence/ActivitiesSequenceFeature.cs) |
 | AnthropicAgentFeature | direct IShellFeature | Elsa.Agent.Anthropic | IShellFeature | [AnthropicAgentFeature.cs](../../src/Elsa/Agent/Anthropic/AnthropicAgentFeature.cs) |
 | ApiSecurityFeature | direct IShellFeature | Elsa.Api.FastEndpoints | IShellFeature | [ApiSecurityFeature.cs](../../src/Elsa/Api/FastEndpoints/ApiSecurityFeature.cs) |
@@ -69,7 +70,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
-| WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
+| WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | FoundationAgentApiFeature | FastEndpoints feature | Elsa.Agent.Api | FastEndpointsFeatureBase | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationIdentityApiFeature | FastEndpoints feature | Elsa.Foundation.Identity.Api | FastEndpointsFeatureBase | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |

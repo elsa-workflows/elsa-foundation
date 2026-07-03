@@ -37,6 +37,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind,
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind
     ];
 
@@ -121,6 +122,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind:
                 await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer).EnqueueAsync(WorkItem());
                 break;
+            case ElsaRuntimeStorageManifest.DurableTimerDocumentKind:
+                await new GroundworkDurableTimerStore(store, Serializer).SaveAsync(Timer());
+                break;
             case ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind:
                 await new GroundworkWorkflowTriggerBindingStore(store, Serializer).SaveAsync(TriggerBinding());
                 break;
@@ -164,6 +168,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkWorkflowSchedulerWorkQueue(store, Serializer)
                 .ListAsync(new RuntimeSchedulerWorkQuery(Wf)))
                 .SingleOrDefault()?.WorkItemId,
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind =>
+            (await new GroundworkDurableTimerStore(store, Serializer).FindAsync(Wf, "timer-1"))?.StimulusHash,
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind =>
             (await new GroundworkWorkflowTriggerBindingStore(store, Serializer)
                 .ListByArtifactAsync("artifact-1"))
@@ -190,6 +196,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         ElsaRuntimeStorageManifest.IncidentStateDocumentKind => IncidentStatus.Open,
         ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind => "item-1",
         ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind => "work-1",
+        ElsaRuntimeStorageManifest.DurableTimerDocumentKind => "timer-hash-1",
         ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind => "Event",
         ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind => CommitId,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown runtime document kind.")
@@ -455,6 +462,16 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         payload: JsonSerializer.SerializeToElement(new { command = "resume" }),
         commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
         envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+
+    private static DurableTimer Timer() => new(
+        TimerId: "timer-1",
+        WorkflowExecutionId: Wf,
+        StimulusType: "DurableTimer",
+        StimulusHash: "timer-hash-1",
+        DueTime: DateTimeOffset.UnixEpoch.AddMinutes(5),
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        Input: JsonSerializer.SerializeToElement(new { reason = "delay" }),
+        Metadata: new Dictionary<string, string> { ["tag"] = "v1" });
 
     private static RuntimeCheckpointCommit Commit()
     {
