@@ -13,6 +13,7 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
 
     public SemaphoreSlim Gate => _gate;
     internal List<Task> RunningBackgroundTasks { get; } = [];
+    internal List<IBackgroundTask> BackgroundTasks { get; } = [];
     internal List<IScheduledTaskExecution> ScheduledTaskExecutions { get; } = [];
     internal List<IRecurringTask> RecurringTasks { get; } = [];
     public CancellationTokenSource? CancellationTokenSource { get; internal set; } = cancellationTokenSource;
@@ -27,11 +28,34 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
 
     public async ValueTask Stop()
     {
+        // Graceful stop for background tasks (IN-5): signal each IBackgroundTask to stop BEFORE the
+        // lifetime token is cancelled, then await the running loops so anything already queued drains.
+        // BackgroundEventPublisher.StopAsync completes its channel writer, which makes the drain bounded
+        // (the read loop ends once the channel empties), so this can never hang on a still-filling
+        // channel — and the token cancel below remains the hard-stop safety net.
+        await StopBackgroundTasks();
+        await DisposeBackgroundRunningTasks();
         await CancelCancellationTokenSource();
         await DisposeRecurringTasks();
         await DisposeScheduledExecutions();
-        await DisposeBackgroundRunningTasks();
         await DisposeCancellationTokenSource();
+    }
+
+    private async ValueTask StopBackgroundTasks()
+    {
+        foreach (var task in BackgroundTasks)
+        {
+            try
+            {
+                await task.StopAsync(CancellationToken.None);
+            }
+            catch (Exception e) when (!e.IsFatal())
+            {
+                logger.LogError(e, "Failed to stop background task {TaskType}", task.GetType().Name);
+            }
+        }
+
+        BackgroundTasks.Clear();
     }
 
     private async ValueTask DisposeCancellationTokenSource()

@@ -15,6 +15,16 @@ namespace Elsa.Events.Channels;
 /// Handler exceptions are caught + logged + swallowed; the loop continues. This is where
 /// fire-and-forget resilience lives: a flaky handler can't stall the queue or break the
 /// publisher. The default Sequential strategy carries no such shielding by design.
+///
+/// Lifetime: dispatch is tied to the host/tenant lifetime token passed to <see cref="ExecuteAsync"/>.
+/// The enqueue-time caller token carried on the queued context is deliberately NOT linked into
+/// dispatch (IN-2): by the time a fire-and-forget event is dequeued its originating scope (e.g. an
+/// HTTP request) may already be gone, and linking its since-cancelled token would abort — and then
+/// misreport — a dispatch that should run to completion under host lifetime.
+///
+/// Graceful shutdown (IN-5): <see cref="StopAsync"/> completes the channel writer so the read loop
+/// drains everything already queued and then exits cleanly, instead of dropping in-flight events.
+/// It is invoked by the background-task host before the lifetime token is cancelled.
 /// </remarks>
 public sealed class BackgroundEventPublisher(
     IEventChannel channel,
@@ -40,7 +50,18 @@ public sealed class BackgroundEventPublisher(
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    /// <summary>
+    /// Graceful stop: complete the channel writer so <see cref="ExecuteAsync"/>'s
+    /// <see cref="System.Threading.Channels.ChannelReader{T}.ReadAllAsync"/> drains the remaining
+    /// queued events and then completes normally. Bounded by construction — completing the writer
+    /// forbids further enqueues, so the drain can never chase a still-filling channel and hang.
+    /// Never throws (<c>TryComplete</c> is idempotent across concurrent shutdown paths).
+    /// </summary>
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        channel.Writer.TryComplete();
+        return Task.CompletedTask;
+    }
 
     private async Task DispatchOneAsync(IEventContext queuedContext, CancellationToken cancellationToken)
     {
@@ -49,15 +70,12 @@ public sealed class BackgroundEventPublisher(
             using var scope = scopeFactory.CreateScope();
             var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
-            using var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken,
-                queuedContext.CancellationToken
-            );
-
+            // Dispatch under host lifetime only. The queued context's own CancellationToken (captured
+            // at enqueue time) is intentionally NOT linked here — see the class remarks (IN-2).
             await publisher.Publish(
                 queuedContext.Event,
                 EventPublishingStrategy.Sequential,
-                linkedTokenSource.Token
+                cancellationToken
             );
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

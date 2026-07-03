@@ -99,6 +99,9 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
 
         foreach (var backgroundTask in backgroundTasks)
         {
+            // Track the instance so TaskStateManager can signal it to stop gracefully on shutdown (IN-5).
+            stateManager.BackgroundTasks.Add(backgroundTask);
+
             var task = backgroundTaskStarter
                 .StartAsync(backgroundTask, tenantCancellationToken)
                 .ContinueWith(

@@ -11,10 +11,7 @@ public sealed class SequentialProcessingStrategy : IEventPublishingStrategy
 {
     public async Task PublishAsync(IEventStrategyContext context)
     {
-        var @event = context.EventContext.Event;
-        var handleMethod = @event.GetType().GetHandleAsync();
-
         foreach (var handler in context.Handlers)
-            await handler.InvokeAsync(handleMethod, context.EventContext);
+            await handler.Invoke(context.EventContext);
     }
 }
