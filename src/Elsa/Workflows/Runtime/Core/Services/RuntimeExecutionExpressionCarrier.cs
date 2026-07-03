@@ -22,10 +22,6 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </remarks>
 public static class RuntimeExecutionExpressionCarrier
 {
-    // System-metadata override key for the workflow definition version surfaced to execution-time expressions
-    // (ADR 0030 identity). Optional; absent for normal runs, where the pinned artifact-version major is used.
-    private const string DefinitionVersionMetadataKey = "runtime.definitionVersion";
-
     /// <summary>
     /// Assembles the carrier state from the workflow-execution state, the pinned executable identity, and the
     /// caller's already-computed durable-value projections. Callers pass projections they already hold (each
@@ -46,7 +42,7 @@ public static class RuntimeExecutionExpressionCarrier
         return new RuntimeExecutionExpressionCarrierState(
             CorrelationId: workflowState?.CorrelationId,
             WorkflowName: workflowState is null ? null : ResolveInstanceName(workflowState),
-            WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(workflowState, pinnedExecutable),
+            WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(pinnedExecutable),
             WorkflowInputs: workflowInputs,
             WorkflowVariables: workflowVariables,
             ActivityOutputValues: activityOutputValues);
@@ -60,17 +56,12 @@ public static class RuntimeExecutionExpressionCarrier
             ? name
             : null;
 
-    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030): prefer the
-    // system-metadata override key, otherwise the pinned executable's artifact-version major. A non-numeric value
-    // yields 0 (the default the accessor returned before this unit) rather than faulting the activity — the version
-    // is display identity for scripts, not an execution precondition, so a display-version format must not throw.
-    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutionState? workflowState, WorkflowExecutableIdentity pinnedExecutable)
+    // Resolves the workflow definition version for the execution-time expression carrier (ADR 0030) from the pinned
+    // executable's artifact-version major. A non-numeric value yields 0 (the default the accessor returned before
+    // this unit) rather than faulting the activity — the version is display identity for scripts, not an execution
+    // precondition, so a display-version format must not throw.
+    private static int ResolveWorkflowDefinitionVersion(WorkflowExecutableIdentity pinnedExecutable)
     {
-        if (workflowState is not null
-            && workflowState.SystemMetadata.TryGetValue(DefinitionVersionMetadataKey, out var versionText)
-            && int.TryParse(versionText, NumberStyles.None, CultureInfo.InvariantCulture, out var overrideVersion))
-            return overrideVersion;
-
         var majorVersion = pinnedExecutable.ArtifactVersion.Split('.', 2)[0];
         return int.TryParse(majorVersion, NumberStyles.None, CultureInfo.InvariantCulture, out var version) ? version : 0;
     }
