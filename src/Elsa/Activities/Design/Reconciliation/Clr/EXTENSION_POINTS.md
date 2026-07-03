@@ -13,7 +13,7 @@ lifecycle anchored at `Elsa.Activities.Design.Reconciliation`; it owns no catalo
   one `ActivityVersionReconciliationModel` per discovered `IActivity` implementation.
 - **Register:** `services.AddScoped<IActivityReconciliationSource, ClrActivityReconciliationSource>()`
   (done by `ClrActivityReconciliationFeature`).
-- **Consumed by:** `ActivityVersionsReconcilingHandler` in `Elsa.Activities.Design.Reconciliation`,
+- **Consumed by:** `CollectActivityVersions` in `Elsa.Activities.Design.Reconciliation`,
   which injects every `IActivityReconciliationSource` and reconciles the returned versions.
 - **Catalog:** [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 
