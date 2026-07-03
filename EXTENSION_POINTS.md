@@ -76,6 +76,12 @@ not automatic constitution violations.
 |---|---|
 | HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
+### API
+
+| Domain | Catalog |
+|---|---|
+| FastEndpoints (secure-by-construction endpoint bases, per-shell API security, endpoint configurators/filters) | [`src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md`](src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md) |
+
 ### Agent and Identity
 
 | Domain | Catalog |
