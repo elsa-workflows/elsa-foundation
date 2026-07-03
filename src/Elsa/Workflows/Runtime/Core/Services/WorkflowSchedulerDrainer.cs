@@ -12,101 +12,43 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowSchedulerPauseGate? _pauseGate;
     private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
-    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IRuntimeExecutionPipelineDispatcher? _pipelineDispatcher;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
     private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
 
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers)
-        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        IWorkflowSchedulerPauseGate pauseGate)
-        : this(schedulerWorkQueue, handlers, TimeProvider.System, pauseGate)
-    {
-    }
-
+    /// <summary>
+    /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
+    /// three required collaborators (<paramref name="schedulerWorkQueue"/>, <paramref name="handlers"/>,
+    /// <paramref name="workflowExecutionStateStore"/>) followed by optional collaborators that default to their
+    /// no-op/system implementations. The workflow execution state store is <b>required by construction</b> so the W5
+    /// terminal-status guard (which stops sibling work once an execution reaches a terminal status) can never be
+    /// silently disabled by picking a narrower constructor.
+    /// </summary>
     public WorkflowSchedulerDrainer(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, NoopWorkflowExecutionAmbientServicesAccessor.Instance)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher)
-        : this(schedulerWorkQueue, handlers, timeProvider, pauseGate, ambientServicesAccessor, workflowExecutionStateStore, pipelineDispatcher, faultCapturePolicy: null, poisonStore: null, retryPolicy: null)
-    {
-    }
-
-    public WorkflowSchedulerDrainer(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IEnumerable<IWorkflowSchedulerWorkHandler> handlers,
-        TimeProvider timeProvider,
-        IWorkflowSchedulerPauseGate? pauseGate,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher,
-        IRuntimeFaultCapturePolicy? faultCapturePolicy,
-        IWorkflowSchedulerPoisonStore? poisonStore,
-        IRuntimeDomainRetryPolicy? retryPolicy)
+        IWorkflowExecutionStateStore workflowExecutionStateStore,
+        TimeProvider? timeProvider = null,
+        IWorkflowSchedulerPauseGate? pauseGate = null,
+        IWorkflowExecutionAmbientServicesAccessor? ambientServicesAccessor = null,
+        IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
+        IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
+        IWorkflowSchedulerPoisonStore? poisonStore = null,
+        IRuntimeDomainRetryPolicy? retryPolicy = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
-        ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         var handlerSnapshot = handlers.ToArray();
         _customHandlers = handlerSnapshot.Where(handler => handler is not IFallbackWorkflowSchedulerWorkHandler).ToArray();
         _fallbackHandlers = handlerSnapshot.Where(handler => handler is IFallbackWorkflowSchedulerWorkHandler).ToArray();
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _pauseGate = pauseGate;
-        _ambientServicesAccessor = ambientServicesAccessor;
+        _ambientServicesAccessor = ambientServicesAccessor ?? NoopWorkflowExecutionAmbientServicesAccessor.Instance;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _pipelineDispatcher = pipelineDispatcher;
         _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();

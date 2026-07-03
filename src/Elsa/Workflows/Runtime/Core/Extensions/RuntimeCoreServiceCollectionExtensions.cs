@@ -124,10 +124,10 @@ public static class RuntimeCoreServiceCollectionExtensions
             new WorkflowSchedulerDrainer(
                 serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
                 serviceProvider.GetServices<IWorkflowSchedulerWorkHandler>(),
+                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 TimeProvider.System,
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPauseGate>(),
                 serviceProvider.GetRequiredService<IWorkflowExecutionAmbientServicesAccessor>(),
-                serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
                 serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
                 serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),

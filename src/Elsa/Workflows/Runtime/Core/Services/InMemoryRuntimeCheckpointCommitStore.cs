@@ -19,65 +19,21 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IOperationalStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
 
+    /// <summary>
+    /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
+    /// constructor with every backing store optional. All parameters default to <c>null</c> so both the terse test
+    /// constructions and the DI activation (which injects every registered backing store, unchanged) resolve to the same
+    /// shape — W9's coalescing decorators keep wrapping this registration without modification.
+    /// </summary>
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IActivityExecutionStateStore? activityExecutionStateStore = null,
-        IBookmarkStateStore? bookmarkStateStore = null)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IOperationalStateStore? operationalStateStore)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, operationalStateStore, null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IOperationalStateStore? operationalStateStore,
-        ISchedulerStateStore? schedulerStateStore)
-        : this(workflowExecutionStateStore, activityExecutionStateStore, bookmarkStateStore, durableValueStateStore, incidentStateStore, operationalStateStore, schedulerStateStore, null)
-    {
-    }
-
-    public InMemoryRuntimeCheckpointCommitStore(
-        IWorkflowExecutionStateStore? workflowExecutionStateStore,
-        IActivityExecutionStateStore? activityExecutionStateStore,
-        IBookmarkStateStore? bookmarkStateStore,
-        IDurableValueStateStore? durableValueStateStore,
-        IIncidentStateStore? incidentStateStore,
-        IOperationalStateStore? operationalStateStore,
-        ISchedulerStateStore? schedulerStateStore,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter)
+        IBookmarkStateStore? bookmarkStateStore = null,
+        IDurableValueStateStore? durableValueStateStore = null,
+        IIncidentStateStore? incidentStateStore = null,
+        IOperationalStateStore? operationalStateStore = null,
+        ISchedulerStateStore? schedulerStateStore = null,
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;

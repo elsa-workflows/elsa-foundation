@@ -94,7 +94,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         InMemoryWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerPoisonStore poisonStore,
         IRuntimeDomainRetryPolicy retryPolicy) =>
-        new(
+        TestSchedulerDrainer.Create(
             queue,
             [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),

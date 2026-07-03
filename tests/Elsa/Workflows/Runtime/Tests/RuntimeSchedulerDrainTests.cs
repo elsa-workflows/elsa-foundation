@@ -12,11 +12,23 @@ public sealed class RuntimeSchedulerDrainTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void Constructor_RequiresTheWorkflowExecutionStateStore_SoTheTerminalGuardCannotBeSilentlyDisabled()
+    {
+        // RT-8 + W5: the terminal-status guard reads the workflow execution state store to stop sibling work once an
+        // execution is terminal. The single primary constructor makes that store required by construction, so no caller
+        // can pick a narrower overload that leaves the guard inert.
+        Assert.Throws<ArgumentNullException>(() => new WorkflowSchedulerDrainer(
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            [new NoopWorkflowSchedulerWorkHandler()],
+            workflowExecutionStateStore: null!));
+    }
+
+    [Fact]
     public async Task DrainAsync_DispatchesQueuedWorkInFifoOrder()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -39,7 +51,7 @@ public sealed class RuntimeSchedulerDrainTests
         // concurrent writer interleaves so the dequeue returns work-2. The drainer must fail fast rather than gate
         // work-2's dequeue on work-1's decision.
         var queue = new PeekDequeueMismatchWorkQueue(peeked: NewWorkItem(1), dequeued: NewWorkItem(2));
-        var drainer = new WorkflowSchedulerDrainer(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
@@ -54,7 +66,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -72,7 +84,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler(faultOnWorkItemId: "work-2");
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
         await queue.EnqueueAsync(NewWorkItem(2));
         await queue.EnqueueAsync(NewWorkItem(3));
@@ -100,7 +112,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var handler = new RecordingSchedulerWorkHandler();
         var pauseGate = new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeActivityExecutionStart));
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
         await queue.EnqueueAsync(NewStartActivityWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -129,7 +141,7 @@ public sealed class RuntimeSchedulerDrainTests
         var handler = new RecordingSchedulerWorkHandler();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         await workflowStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Completed));
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
@@ -166,7 +178,7 @@ public sealed class RuntimeSchedulerDrainTests
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         await workflowStateStore.SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         var handler = new TerminatingSchedulerWorkHandler(workflowStateStore, terminateOnWorkItemId: "work-1", _now);
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
@@ -197,7 +209,7 @@ public sealed class RuntimeSchedulerDrainTests
         var store = new InMemoryControlPlaneStateStore();
         var handler = new RecordingSchedulerWorkHandler();
         var pauseGate = new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(store), new FixedTimeProvider(_now));
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now), pauseGate);
         await store.SaveAsync(new ControlPlaneState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
@@ -237,7 +249,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var pauseGate = new RecordingWorkflowSchedulerPauseGate(BlockedDecision(RuntimePauseBoundary.BeforeGeneratorEmission));
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now),
@@ -323,7 +335,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var customHandler = new RecordingSchedulerWorkHandler(canHandle: false);
-        var drainer = new WorkflowSchedulerDrainer(queue, [customHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -339,7 +351,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DoesNotNoopInvokeActivityWorkWhenNoProviderMatches()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var drainer = new WorkflowSchedulerDrainer(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.InvokeActivity));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
@@ -354,7 +366,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DoesNotNoopGeneratedEventWorkWhenNoProviderMatches()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingGeneratedEventSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -372,7 +384,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_DoesNotNoopBookmarkResumeWorkWhenNoProviderMatches()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [new MissingBookmarkResumeSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -391,7 +403,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [new WorkflowCompleteActivitySchedulerWorkHandler(activityStateStore, queue, new FixedTimeProvider(_now)), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -414,7 +426,7 @@ public sealed class RuntimeSchedulerDrainTests
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
         await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -451,7 +463,7 @@ public sealed class RuntimeSchedulerDrainTests
     public async Task DrainAsync_FaultsMalformedCheckpointWorkThroughNamedHandler()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), new InMemoryRuntimeCheckpointCommitStore()), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -474,7 +486,7 @@ public sealed class RuntimeSchedulerDrainTests
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter), new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -593,7 +605,7 @@ public sealed class RuntimeSchedulerDrainTests
             queue,
             executableStore,
             new FixedTimeProvider(_now));
-        var drainer = new WorkflowSchedulerDrainer(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [handler, NewCheckpointHandler(activityStateStore, checkpointWriter), new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(
             1,
             commandKind: WorkflowExecutionCommandKind.CompleteActivity,
@@ -670,7 +682,7 @@ public sealed class RuntimeSchedulerDrainTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var customHandler = new RecordingSchedulerWorkHandler(canHandle: false);
         var fallbackHandler = new RecordingFallbackSchedulerWorkHandler();
-        var drainer = new WorkflowSchedulerDrainer(queue, [customHandler, fallbackHandler], new FixedTimeProvider(_now));
+        var drainer = TestSchedulerDrainer.Create(queue, [customHandler, fallbackHandler], new FixedTimeProvider(_now));
         await queue.EnqueueAsync(NewWorkItem(1));
 
         var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
