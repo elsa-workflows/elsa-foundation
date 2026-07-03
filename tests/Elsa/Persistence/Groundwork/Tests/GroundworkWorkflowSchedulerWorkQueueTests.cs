@@ -1,0 +1,153 @@
+using System.Text.Json;
+using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Xunit;
+
+namespace Elsa.Persistence.Groundwork.Tests;
+
+public sealed class GroundworkWorkflowSchedulerWorkQueueTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
+
+    // The SAME contract assertions run against two host-selected providers (real Groundwork SQLite
+    // and an in-memory document store). Identical behavior proves the bridge is provider-neutral.
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Enqueue_List_Dequeue_PreservesFifoOrderPerWorkflowExecution(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+        await queue.EnqueueAsync(NewWorkItem(3));
+        await queue.EnqueueAsync(NewWorkItem(9, workflowExecutionId: "wfexec-2"));
+
+        var listed = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Equal(new[] { "work-1", "work-2", "work-3" }, listed.Select(item => item.WorkItemId));
+
+        var limited = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1", limit: 2));
+        Assert.Equal(new[] { "work-1", "work-2" }, limited.Select(item => item.WorkItemId));
+
+        Assert.Equal("work-1", (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
+        Assert.Equal("work-2", (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
+        Assert.Equal("work-3", (await queue.DequeueAsync("wfexec-1"))!.WorkItemId);
+        Assert.Null(await queue.DequeueAsync("wfexec-1"));
+
+        // The other workflow execution's queue is untouched.
+        Assert.Equal("work-9", (await queue.DequeueAsync("wfexec-2"))!.WorkItemId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Enqueue_IsIdempotentPerWorkflowExecutionAndWorkItemId(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+
+        var first = NewWorkItem(1, commandId: "command-1");
+        var duplicate = NewWorkItem(1, commandId: "command-duplicate");
+
+        var enqueued = await queue.EnqueueAsync(first);
+        var deduplicated = await queue.EnqueueAsync(duplicate);
+
+        Assert.Equal("command-1", enqueued.CommandId);
+        Assert.Equal("command-1", deduplicated.CommandId);
+        var stored = Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Equal("command-1", stored.CommandId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task QueueSurvivesRestart_QueuedItemsRoundTripThroughNewBridgeInstance(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+
+        // First "process": enqueue and crash (bridge instance discarded, documents remain).
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        await queue.EnqueueAsync(NewWorkItem(1));
+        await queue.EnqueueAsync(NewWorkItem(2));
+
+        // Second "process": a fresh bridge over the same store sees the full backlog.
+        IWorkflowSchedulerWorkQueue restarted = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+        var recovered = await restarted.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+
+        Assert.Equal(new[] { "work-1", "work-2" }, recovered.Select(item => item.WorkItemId));
+        var head = recovered.First();
+        Assert.Equal("command-1", head.CommandId);
+        Assert.Equal(WorkflowExecutionCommandKind.RunSchedulerWork, head.CommandKind);
+        Assert.Equal("envelope-1", head.EnvelopeId);
+        Assert.Equal("wfexec-1:command-1", head.IdempotencyKey);
+        Assert.Equal(Now, head.EnqueuedAt);
+        Assert.Equal(1, head.Sequence);
+        Assert.Equal("work-1", head.Payload!.Value.GetProperty("workItemId").GetString());
+        Assert.Equal("test", head.CommandMetadata["source"]);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListPendingWorkflowExecutionIds_ReturnsDistinctOrderedBacklog(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "wfexec-b"));
+        await queue.EnqueueAsync(NewWorkItem(2, workflowExecutionId: "wfexec-b"));
+        await queue.EnqueueAsync(NewWorkItem(3, workflowExecutionId: "wfexec-a"));
+
+        Assert.Equal(new[] { "wfexec-a", "wfexec-b" }, await queue.ListPendingWorkflowExecutionIdsAsync(10));
+        Assert.Equal(new[] { "wfexec-a" }, await queue.ListPendingWorkflowExecutionIdsAsync(1));
+
+        await queue.DequeueAsync("wfexec-a");
+        Assert.Equal(new[] { "wfexec-b" }, await queue.ListPendingWorkflowExecutionIdsAsync(10));
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.ListPendingWorkflowExecutionIdsAsync(0).AsTask());
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Ids_WithSeparatorCharacters_DoNotCollide(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowSchedulerWorkQueue queue = new GroundworkWorkflowSchedulerWorkQueue(fixture.DocumentStore);
+
+        // "a:b" + "c" and "a" + "b:c" would collide without id escaping.
+        await queue.EnqueueAsync(NewWorkItem(1, workflowExecutionId: "a:b", workItemId: "c"));
+        await queue.EnqueueAsync(NewWorkItem(2, workflowExecutionId: "a", workItemId: "b:c"));
+
+        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a:b")));
+        Assert.Single(await queue.ListAsync(new RuntimeSchedulerWorkQuery("a")));
+    }
+
+    private static RuntimeSchedulerWorkItem NewWorkItem(
+        int index,
+        string workflowExecutionId = "wfexec-1",
+        string? commandId = null,
+        string? workItemId = null)
+    {
+        using var document = JsonDocument.Parse($$"""{"workItemId":"work-{{index}}"}""");
+        return new(
+            workItemId: workItemId ?? $"work-{index}",
+            workflowExecutionId: workflowExecutionId,
+            commandId: commandId ?? $"command-{index}",
+            commandKind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            envelopeId: $"envelope-{index}",
+            idempotencyKey: $"{workflowExecutionId}:command-{index}",
+            enqueuedAt: Now,
+            recordedAt: Now.AddMilliseconds(index),
+            sequence: index,
+            payload: document.RootElement.Clone(),
+            commandMetadata: new Dictionary<string, string> { ["source"] = "test" });
+    }
+
+    private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
+        GroundworkDocumentStoreFixture.Create(provider);
+}
