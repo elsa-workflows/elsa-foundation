@@ -14,16 +14,18 @@ This unit makes "add a new activity implementation kind" a closed, three-type mo
 
 ## Add a new kind — the three-type move (inside your feature)
 
-1. **Descriptor type** — a lightweight model. If sharable, put it in a zero-dep building-block lib (like `TypeInformation`, `WorkflowIdentity`); otherwise in your feature. `DescriptorType = its FullName`.
+1. **Descriptor type** — a lightweight model. If sharable, put it in a zero-dep building-block lib (like `ClrActivityDescriptor`, `WorkflowIdentity`); otherwise in your feature. `DescriptorType = its FullName`.
 2. **`IActivityConstructor<TYourDescriptor>`** — in your feature. Implement `Construct(descriptor, inputs, outputs)`; add the one-line bridge. Register it in your feature's `ConfigureServices` (it is auto-aggregated into the registry at startup via `OnActivityConstructorsInitializing`).
 3. **`IActivityReconciliationSource`** — in your feature (design-side). Produce `ActivityVersionReconciliationModel`s with `DescriptorType = "<FullName>"` and the descriptor object.
 
 That's it. No universal component changes — verified by the no-branch structural test.
 
 ## Worked: CLR kind (in `Elsa.Activities.Primitives`)
-- Descriptor: `Elsa.Primitives.Models.TypeInformation` (existing). `DescriptorType = "Elsa.Primitives.Models.TypeInformation"`.
-- Constructor: `ClrActivityConstructor : IActivityConstructor<TypeInformation>` → `LoadType()` + `ActivatorUtilities.CreateInstance` + `IActivityArgumentBinder.Bind(...)`.
-- Source: `Elsa.Activities.Design.Reconciliation.Clr` scanner emits `TypeInformation.FromType(type)`.
+> Note: the CLR descriptor is the alias-based `ClrActivityDescriptor` (spec 081), not the former
+> `TypeInformation` — resolution goes through the stable type alias, not `Assembly.Load(name, version)`.
+- Descriptor: `Elsa.Primitives.Models.ClrActivityDescriptor(string TypeAlias)`. `DescriptorType = "Elsa.Primitives.Models.ClrActivityDescriptor"`.
+- Constructor: `ClrActivityConstructor : IActivityConstructor<ClrActivityDescriptor>` → resolve `TypeAlias` to a `Type` via `IWellKnownTypeRegistry` + `ActivatorUtilities.CreateInstance` + `ActivityArgumentBinder`.
+- Source: `Elsa.Activities.Design.Reconciliation.Clr` scanner emits `new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type))`.
 
 ## Worked: Workflow kind (in `Elsa.Activities.Composition`)
 - Descriptor: `Elsa.Workflows.Primitives.Models.WorkflowIdentity(DefinitionId, VersionId, Version)`. `DescriptorType = "Elsa.Workflows.Primitives.Models.WorkflowIdentity"`.

@@ -2,7 +2,7 @@ namespace Elsa.Activities.Design.Core.Models;
 
 /// <summary>
 /// Execution shape of an activity — how the runtime drives it. Distinct from
-/// <c>ImplementationKind</c> (which CLR / Workflow / etc. backs the activity) and
+/// <c>DescriptorType</c> (which descriptor — CLR / Workflow / etc. — backs the activity) and
 /// from <c>SourceKind</c> (which provenance source produced the catalog row).
 /// </summary>
 public enum ActivityExecutionType

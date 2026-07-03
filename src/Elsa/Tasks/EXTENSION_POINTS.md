@@ -33,7 +33,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 **Known implementations (shipped — cross-domain IStartupTask consumers):**
 - `Elsa.Persistence.EFCore` — `RunMigrationsStartupTask` *(cross-domain — runs EF Core migrations)*
 - `Elsa.Serialization` — `JsonPayloadConvertersInitializingStartupTask` *(cross-domain — initialises JSON converters)*
-- `Elsa.Activities.Runtime` — `ActivityImplementationResolverRegistryStartupTask`, `ImplementationDescriptorRegistryStartupTask` *(cross-domain)*
+- `Elsa.Activities.Runtime` — `ActivityConstructorsStartupTask` *(populates the constructor registry)*, `RegisterActivityTypesStartupTask` *(seeds the well-known-type registry with activity aliases)*
 - `Elsa.Activities.Design.Reconciliation` — `ActivityVersionReconcilerStartupTask` *(cross-domain)*
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain)*
 
