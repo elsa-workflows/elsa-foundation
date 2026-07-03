@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Models;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,8 +14,6 @@ namespace Elsa.Activities.Parallel.Internal;
 /// </summary>
 internal sealed class ParallelNavigator
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
     private readonly IReadOnlyList<ParallelBranch> _branches;
     private readonly IReadOnlyDictionary<string, ParallelBranch> _branchesByNodeId;
 
@@ -59,7 +56,8 @@ internal sealed class ParallelNavigator
         if (executableNode.ChildSlots.Count == 0 && executableNode.Structure is null)
             return new ParallelNavigator([], threshold: null);
 
-        var structure = ReadStructure(executableNode);
+        var structure = ExecutableStructureReader.ReadStructure<ParallelExecutableStructure>(
+            executableNode, "Parallel", ParallelActivity.StructureKind, ParallelActivity.StructureSchemaVersion, Fail);
 
         var duplicateName = structure.Branches
             .GroupBy(branch => branch.Name, StringComparer.Ordinal)
@@ -100,59 +98,14 @@ internal sealed class ParallelNavigator
         string? structureNodeId,
         string slotName)
     {
-        var slotChild = ResolveSingleSlotChild(executableNode, slotName);
-
-        if (structureNodeId is null && slotChild is null)
-            return null;
-
-        if (structureNodeId is null)
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' slot '{slotName}' carries a branch activity but its structure declares no {branchName} branch.");
-
-        if (slotChild is null)
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure declares {branchName} branch '{structureNodeId}' but slot '{slotName}' carries no matching child.");
-
-        if (!StringComparer.Ordinal.Equals(slotChild.ExecutableNodeId, structureNodeId))
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure declares {branchName} branch '{structureNodeId}' but slot '{slotName}' carries child '{slotChild.ExecutableNodeId}'.");
-
-        return slotChild;
+        var slotChild = ExecutableStructureReader.ResolveSingleSlotChild(executableNode, slotName, "Parallel", "branch", Fail);
+        return ExecutableStructureReader.MatchSingleSlotChild(
+            executableNode, "Parallel", slotName, "branch", $"{branchName} branch", structureNodeId, slotChild, Fail);
     }
 
-    private static ExecutableNode? ResolveSingleSlotChild(ExecutableNode executableNode, string slotName)
-    {
-        var slot = executableNode.ChildSlots.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, slotName));
-        var children = slot?.Activities.ToArray() ?? [];
-
-        if (children.Length > 1)
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' slot '{slotName}' must contain at most one branch activity but contains {children.Length}.");
-
-        return children.Length == 0 ? null : children[0];
-    }
-
-    private static ParallelExecutableStructure ReadStructure(ExecutableNode executableNode)
-    {
-        if (executableNode.Structure is null)
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' requires structure '{ParallelActivity.StructureKind}'.");
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.Kind, ParallelActivity.StructureKind))
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' has unsupported structure kind '{executableNode.Structure.Kind}'.");
-
-        if (!StringComparer.Ordinal.Equals(executableNode.Structure.SchemaVersion, ParallelActivity.StructureSchemaVersion))
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' has unsupported structure schema version '{executableNode.Structure.SchemaVersion}'.");
-
-        try
-        {
-            return executableNode.Structure.Payload.Deserialize<ParallelExecutableStructure>(SerializerOptions)
-                   ?? throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure resolved to null.");
-        }
-        catch (ParallelExecutionException)
-        {
-            throw;
-        }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
-        {
-            throw new ParallelExecutionException($"Parallel executable node '{executableNode.ExecutableNodeId}' structure is not a valid Parallel structure payload.", exception);
-        }
-    }
+    private static ParallelExecutionException Fail(string message, Exception? inner) =>
+        inner is null ? new(message) : new(message, inner);
 
     private sealed record ParallelBranch(string Name, ExecutableNode? Node);
 }
+

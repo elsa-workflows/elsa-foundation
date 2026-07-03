@@ -12,6 +12,18 @@ namespace Elsa.Pipelines.Core.Extensions;
 public static class MiddlewareExtensions
 {
     /// <summary>
+    /// Appends <typeparamref name="TMiddleware"/> to the pipeline. The middleware is activated with
+    /// the composed <c>next</c> delegate prepended to its constructor, its <c>Invoke</c>/<c>InvokeAsync</c>
+    /// method bound to the canonical <see cref="PipelineDelegate{TContext}"/>. This is the one
+    /// registration path for command, request, and event middleware.
+    /// </summary>
+    public static IPipelineBuilder<TContext> UseMiddleware<TContext, TMiddleware>(this IPipelineBuilder<TContext> builder, params object[] args)
+        where TMiddleware : IMiddleware
+    {
+        return builder.Use(next => BuildMiddlewareDelegate<TMiddleware, PipelineDelegate<TContext>>(builder.ApplicationServices, next, args));
+    }
+
+    /// <summary>
     /// Gets the Invoke or InvokeAsync method from the middleware type.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the Invoke or InvokeAsync method cannot be found or the return type is not Task or ValueTask.</exception>

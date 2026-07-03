@@ -12,7 +12,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// collection value, which lets <see cref="ListAsync"/> be served through the same
 /// declared-index equality query every provider supports.
 /// </summary>
-public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IWorkflowExecutableStore
+public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind), IWorkflowExecutableStore
 {
     public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
     {
@@ -46,11 +47,7 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        var result = await store.DeleteAsync(
-            new DeleteDocumentRequest(
-                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
-                artifactId),
-            cancellationToken);
+        var result = await DeleteDocumentAsync(artifactId, cancellationToken);
 
         return result.Status == DocumentStoreWriteStatus.Deleted;
     }
@@ -59,12 +56,8 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
-            artifactId,
-            cancellationToken);
-
-        var executable = envelope is null ? null : Map(envelope);
+        var executable = await LoadDocumentAsync<ExecutableDocument, WorkflowExecutable>(
+            artifactId, document => document.Executable, cancellationToken);
         return executable?.DeletedAt is null || includeDeleted ? executable : null;
     }
 
@@ -73,14 +66,13 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
         CancellationToken cancellationToken = default,
         bool includeDeleted = false)
     {
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
-                ElsaRuntimeStorageManifest.WorkflowExecutableByCollection,
-                ElsaRuntimeStorageManifest.WorkflowExecutableCollection),
+        var executables = await QueryDocumentsAsync<ExecutableDocument, WorkflowExecutable>(
+            ElsaRuntimeStorageManifest.WorkflowExecutableByCollection,
+            ElsaRuntimeStorageManifest.WorkflowExecutableCollection,
+            document => document.Executable,
             cancellationToken);
 
-        return envelopes.Select(Map)
+        return executables
             .Where(executable => includeTransient || executable.Scope == WorkflowExecutableScope.Published)
             .Where(executable => includeDeleted || executable.DeletedAt is null)
             .ToArray();
@@ -89,19 +81,8 @@ public sealed class GroundworkWorkflowExecutableStore(IDocumentStore store, IGro
     private async ValueTask SaveCoreAsync(WorkflowExecutable executable, CancellationToken cancellationToken)
     {
         var document = new ExecutableDocument(ElsaRuntimeStorageManifest.WorkflowExecutableCollection, executable);
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind, document);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
-                executable.Identity.ArtifactId,
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(executable.Identity.ArtifactId, document, cancellationToken);
     }
-
-    private WorkflowExecutable Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<ExecutableDocument>(envelope).Executable;
 
     // Persistence envelope: stamps the constant collection partition used by ListAsync and carries the
     // provider-neutral executable payload.

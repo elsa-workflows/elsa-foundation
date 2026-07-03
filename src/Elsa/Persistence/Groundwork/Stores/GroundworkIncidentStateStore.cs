@@ -19,7 +19,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// not atomic under concurrent inserters of the same key. Promoting Groundwork to the default provider
 /// should track an atomic insert-only primitive (or unique-index conflict surfacing) in the provider.
 /// </remarks>
-public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IIncidentStateStore
+public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.IncidentStateDocumentKind), IIncidentStateStore
 {
     public async ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default)
     {
@@ -29,18 +30,11 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundwo
 
         var id = DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId);
 
-        var existing = await store.LoadAsync(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, id, cancellationToken);
+        var existing = await Store.LoadAsync(DocumentKind, id, cancellationToken);
         if (existing is not null)
             return false;
 
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, state);
-        var result = await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-                id,
-                schemaVersion,
-                content),
-            cancellationToken);
+        var result = await SaveDocumentAsync(id, state, cancellationToken);
 
         return result.Status == DocumentStoreWriteStatus.Saved;
     }
@@ -51,15 +45,7 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundwo
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
 
-        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, state);
-
-        await store.SaveAsync(
-            new SaveDocumentRequest(
-                ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-                DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId),
-                schemaVersion,
-                content),
-            cancellationToken);
+        await SaveDocumentAsync(DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId), state, cancellationToken);
 
         return state;
     }
@@ -69,26 +55,16 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundwo
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(incidentId);
 
-        var envelope = await store.LoadAsync(
-            ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-            DocumentId.Compose(workflowExecutionId, incidentId),
-            cancellationToken);
-
-        return envelope is null ? null : Map(envelope);
+        return await LoadDocumentAsync<IncidentState, IncidentState>(
+            DocumentId.Compose(workflowExecutionId, incidentId), state => state, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
-        var envelopes = await store.QueryAsync(
-            new DocumentStoreQuery(
-                ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
-                ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex,
-                workflowExecutionId),
-            cancellationToken);
-
-        return envelopes.Select(Map).ToArray();
+        return await QueryDocumentsAsync<IncidentState, IncidentState>(
+            ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, state => state, cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<IncidentState>> ListBlockingAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -96,7 +72,4 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundwo
         var states = await ListAsync(workflowExecutionId, cancellationToken);
         return states.Where(state => state.IsBlocking).ToArray();
     }
-
-    private IncidentState Map(DocumentEnvelope envelope) =>
-        serializer.Deserialize<IncidentState>(envelope);
 }

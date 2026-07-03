@@ -19,11 +19,11 @@ public class MediatorFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
-        // Requests + commands — synchronous, awaited, single-handler dispatch.
+        // Requests + commands — synchronous, awaited, single-handler dispatch over the shared pipeline.
         services
             .AddScoped<IRequestSender, RequestSender>()
             .AddScoped<ICommandSender, CommandSender>()
-            .AddSingleton<IRequestPipeline, RequestPipeline>()
-            .AddSingleton<ICommandPipeline, CommandPipeline>();
+            .AddSingleton<RequestPipeline>()
+            .AddSingleton<CommandPipeline>();
     }
 }

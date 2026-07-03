@@ -31,12 +31,12 @@ public sealed class RuntimeCheckpointStateChangeSet
     {
         activityExecutionInspections ??= [];
         postCommitOutbox ??= [];
-        ValidateBookmarks(bookmarks, nameof(bookmarks));
-        ValidateActivityExecutionInspections(activityExecutionInspections, nameof(activityExecutionInspections));
-        ValidateDurableValues(durableValues, nameof(durableValues));
-        ValidateIncidents(incidents, nameof(incidents));
-        ValidateOperational(operational, nameof(operational));
-        ValidatePostCommitOutbox(postCommitOutbox, nameof(postCommitOutbox));
+        ValidateStateIdMatches(bookmarks, state => state.BookmarkId, "Bookmark state change StateId must match BookmarkState.BookmarkId.", nameof(bookmarks));
+        ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
+        ValidateStateIdMatches(durableValues, state => state.DurableValueId, "Durable value state change StateId must match DurableValueState.DurableValueId.", nameof(durableValues));
+        ValidateStateIdMatches(incidents, state => state.IncidentId, "Incident state change StateId must match IncidentState.IncidentId.", nameof(incidents));
+        ValidateStateIdMatches(operational, state => state.OperationalStateId, "Operational state change StateId must match OperationalState.OperationalStateId.", nameof(operational));
+        ValidateStateIdMatches(postCommitOutbox, state => state.OutboxItemId, "Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", nameof(postCommitOutbox));
 
         WorkflowExecution = workflowExecution;
         Scheduler = scheduler;
@@ -80,52 +80,14 @@ public sealed class RuntimeCheckpointStateChangeSet
             ActivityExecutionInspections,
             postCommitOutbox);
 
-    private static void ValidateBookmarks(
-        IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
+    private static void ValidateStateIdMatches<TState>(
+        IReadOnlyCollection<RuntimeStateChange<TState>> changes,
+        Func<TState, string> stateIdSelector,
+        string message,
         string parameterName)
     {
-        if (bookmarks.Any(change => change.StateId != change.State.BookmarkId))
-            throw new ArgumentException("Bookmark state change StateId must match BookmarkState.BookmarkId.", parameterName);
-    }
-
-    private static void ValidatePostCommitOutbox(
-        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> postCommitOutbox,
-        string parameterName)
-    {
-        if (postCommitOutbox.Any(change => change.StateId != change.State.OutboxItemId))
-            throw new ArgumentException("Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", parameterName);
-    }
-
-    private static void ValidateActivityExecutionInspections(
-        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> activityExecutionInspections,
-        string parameterName)
-    {
-        if (activityExecutionInspections.Any(change => change.StateId != change.State.ActivityExecutionId))
-            throw new ArgumentException("Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", parameterName);
-    }
-
-    private static void ValidateIncidents(
-        IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
-        string parameterName)
-    {
-        if (incidents.Any(change => change.StateId != change.State.IncidentId))
-            throw new ArgumentException("Incident state change StateId must match IncidentState.IncidentId.", parameterName);
-    }
-
-    private static void ValidateDurableValues(
-        IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
-        string parameterName)
-    {
-        if (durableValues.Any(change => change.StateId != change.State.DurableValueId))
-            throw new ArgumentException("Durable value state change StateId must match DurableValueState.DurableValueId.", parameterName);
-    }
-
-    private static void ValidateOperational(
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational,
-        string parameterName)
-    {
-        if (operational.Any(change => change.StateId != change.State.OperationalStateId))
-            throw new ArgumentException("Operational state change StateId must match OperationalState.OperationalStateId.", parameterName);
+        if (changes.Any(change => change.StateId != stateIdSelector(change.State)))
+            throw new ArgumentException(message, parameterName);
     }
 }
 

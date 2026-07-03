@@ -1,22 +1,30 @@
-﻿using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
 
 namespace Elsa.Mediator.Commands;
 
-public sealed class CommandSender(IServiceProvider serviceProvider, ICommandPipeline commandPipeline) : ICommandSender
+/// <summary>
+/// Sends commands through the shared mediator pipeline. Commands resolve their handler through the
+/// closed <see cref="ICommandHandler{TCommand,TResult}"/> generic.
+/// </summary>
+public sealed class CommandSender(IServiceProvider serviceProvider, CommandPipeline commandPipeline) : ICommandSender
 {
-    public async Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken)
+    private const string Kind = "command";
+
+    /// <inheritdoc />
+    public async Task<T> Send<T>(ICommand<T> command, CancellationToken cancellationToken = default)
         where T : notnull
     {
-        var context = new CommandContext<T>(command, serviceProvider, cancellationToken);
+        var context = new MessageContext<T>(command, typeof(ICommandHandler<,>), Kind, serviceProvider, cancellationToken);
         await commandPipeline.Execute(context);
 
         return context.Result!;
     }
 
-    public async Task Send(ICommand command, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task Send(ICommand command, CancellationToken cancellationToken = default)
     {
-        var context = new CommandContext<Unit>(command, serviceProvider, cancellationToken);
+        var context = new MessageContext<Unit>(command, typeof(ICommandHandler<,>), Kind, serviceProvider, cancellationToken);
         await commandPipeline.Execute(context);
     }
 }

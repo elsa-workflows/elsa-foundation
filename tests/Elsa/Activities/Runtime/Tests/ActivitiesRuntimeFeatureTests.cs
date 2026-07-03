@@ -21,30 +21,16 @@ public sealed class ActivitiesRuntimeFeatureTests
 
         new ActivitiesRuntimeFeature().ConfigureServices(services);
 
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowInvokeActivitySchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowParentActivityCompletionSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowResumeBookmarkSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
-            descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IStartupTask) &&
-            descriptor.ImplementationType == typeof(RegisterActivityTypesStartupTask));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(ActivityFaultIncidentRecorder) &&
-            descriptor.ImplementationType == typeof(ActivityFaultIncidentRecorder));
+        // TS-1 (§2.23.1): single-implementation services are proven by resolvability, not implementation-type
+        // pinning. Named participants in multi-implementation collection contracts (scheduler work handlers via the
+        // resolved set below; the startup task) are preserved as composition contracts.
+        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask) && d.ImplementationType == typeof(RegisterActivityTypesStartupTask));
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<ActivityFactory>(provider.GetRequiredService<IActivityFactory>());
-        Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
-        Assert.IsType<ActivityFaultIncidentRecorder>(provider.GetRequiredService<ActivityFaultIncidentRecorder>());
+        provider.GetRequiredService<IActivityFactory>();
+        provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
+        provider.GetRequiredService<ActivityFaultIncidentRecorder>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowInvokeActivitySchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowParentActivityCompletionSchedulerWorkHandler);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerWorkHandler>(), handler => handler is WorkflowResumeBookmarkSchedulerWorkHandler);
@@ -59,26 +45,17 @@ public sealed class ActivitiesRuntimeFeatureTests
         new ActivitiesRuntimeFeature().ConfigureServices(services);
 
         // The registry is a singleton (one per host; populated at startup, read afterward).
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IActivityConstructorRegistry) &&
-            descriptor.ImplementationType == typeof(ActivityConstructorRegistry) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IActivityFactory) &&
-            descriptor.ImplementationType == typeof(ActivityFactory));
-        // The single aggregating handler is registered against the closed generic dispatch interface.
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IEventHandler<OnActivityConstructorsInitializing>) &&
-            descriptor.ImplementationType == typeof(RegisterActivityConstructors));
-        // The startup task that publishes the initialization event and flushes the registry.
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IStartupTask) &&
-            descriptor.ImplementationType == typeof(ActivityConstructorsStartupTask));
+        // TS-1 (§2.23.1): implementation-type/lifetime pinning of the single-implementation registry + factory is
+        // downgraded to resolvability; the genuine singleton contract is still proven behaviourally via Assert.Same.
+        // The named event-handler and startup-task participants in their multi-implementation collections are preserved
+        // as composition contracts.
+        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler<OnActivityConstructorsInitializing>) && d.ImplementationType == typeof(RegisterActivityConstructors));
+        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask) && d.ImplementationType == typeof(ActivityConstructorsStartupTask));
 
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<ActivityConstructorRegistry>(provider.GetRequiredService<IActivityConstructorRegistry>());
-        Assert.IsType<ActivityFactory>(provider.GetRequiredService<IActivityFactory>());
+        provider.GetRequiredService<IActivityConstructorRegistry>();
+        provider.GetRequiredService<IActivityFactory>();
         // Same instance twice → genuinely singleton.
         Assert.Same(
             provider.GetRequiredService<IActivityConstructorRegistry>(),

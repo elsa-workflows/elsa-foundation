@@ -20,236 +20,115 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutableStore) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowSchedulerWorkQueue));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutionStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowExecutionStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IActivityExecutionStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryActivityExecutionStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IActivityExecutionInspectionStore) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator) &&
-            descriptor.ImplementationType == typeof(RuntimeActivityExecutionInspectionAccumulator) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryBookmarkStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkStimulusLookup) &&
-            descriptor.ImplementationType == typeof(BookmarkStimulusLookup));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkResumeResolver) &&
-            descriptor.ImplementationType == typeof(BookmarkResumeResolver));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkResumeDispatcher) &&
-            descriptor.ImplementationType == typeof(BookmarkResumeDispatcher));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IBookmarkConsumptionCheckpointService) &&
-            descriptor.ImplementationType == typeof(BookmarkConsumptionCheckpointService));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDurableValueStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryDurableValueStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeActivityOutputRegister) &&
-            descriptor.ImplementationType == typeof(InMemoryRuntimeActivityOutputRegister));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IIncidentStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryIncidentStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IOperationalStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryOperationalStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IControlPlaneStateStore) &&
-            descriptor.ImplementationType == typeof(InMemoryControlPlaneStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimePauseDecisionProvider) &&
-            descriptor.ImplementationType == typeof(RuntimePauseDecisionProvider));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeRecoveryScanner) &&
-            descriptor.ImplementationType == typeof(InMemoryRuntimeRecoveryScanner));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipContextAccessor) &&
-            descriptor.ImplementationType == typeof(AsyncLocalRuntimeExecutionOwnershipContextAccessor));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipService) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy) &&
-            descriptor.ImplementationType == typeof(NoopRuntimeDomainRetryPolicy));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeVolatileWaitPolicy) &&
-            descriptor.ImplementationType == typeof(DefaultRuntimeVolatileWaitPolicy));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeGeneratorEmissionScheduler) &&
-            descriptor.ImplementationType == typeof(RuntimeGeneratorEmissionScheduler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerPauseGate) &&
-            descriptor.ImplementationType == typeof(WorkflowSchedulerPauseGate));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(ISchedulerStateStore) &&
-            descriptor.ImplementationType == typeof(InMemorySchedulerStateStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(InMemoryRuntimeCheckpointCommitStore) &&
-            descriptor.ImplementationType == typeof(InMemoryRuntimeCheckpointCommitStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimePostCommitOutboxProcessor) &&
-            descriptor.ImplementationType == typeof(RuntimePostCommitOutboxProcessor));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor) &&
-            descriptor.ImplementationType == typeof(WorkflowSchedulerCommandProcessor));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutionDrainCoordinator) &&
-            descriptor.ImplementationType == typeof(WorkflowExecutionDrainCoordinator));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(WorkflowExecutionDrainCoordinatorOptions) &&
-            descriptor.ImplementationType == typeof(WorkflowExecutionDrainCoordinatorOptions));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy) &&
-            descriptor.ImplementationType == typeof(ImmediateWorkflowSchedulerDrainPolicy));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy) &&
-            descriptor.ImplementationType == typeof(ImmediateRuntimeCheckpointPersistencePolicy));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore) &&
-            descriptor.ImplementationFactory is not null);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimePostCommitIntentDispatcher) &&
-            descriptor.ImplementationType == typeof(RuntimeSchedulerPostCommitIntentDispatcher));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(RuntimeCheckpointCommitter) &&
-            descriptor.ImplementationType == typeof(RuntimeCheckpointCommitter));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeInputBindingResolver) &&
-            descriptor.ImplementationType == typeof(RuntimeInputBindingResolver));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer) &&
-            descriptor.ImplementationType == typeof(RuntimeActivityInputMaterializer));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
-            descriptor.ImplementationType == typeof(NoopWorkflowSchedulerDrainObserver));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver) &&
-            descriptor.ImplementationType == typeof(BlockingIncidentWorkflowFaultObserver));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeFaultCapturePolicy) &&
-            descriptor.ImplementationType == typeof(DefaultRuntimeFaultCapturePolicy));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerPoisonStore) &&
-            descriptor.ImplementationType == typeof(InMemoryWorkflowSchedulerPoisonStore));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowStartSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowScheduleActivitySchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowStartActivitySchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowCompleteActivitySchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowCheckpointSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(WorkflowCancelSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(MissingActivityInvocationSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(MissingBookmarkResumeSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(MissingGeneratedEventSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
-            descriptor.ImplementationType == typeof(NoopWorkflowSchedulerWorkHandler));
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider) &&
-            descriptor.ImplementationType == typeof(InProcessWorkflowExecutionAgentProvider));
+        // TS-1 (constitution §2.23.1): assert registration presence + resolvability, not internal wiring.
+        // ImplementationType / ServiceLifetime / ImplementationFactory pinning was removed so that swapping an
+        // equivalent implementation no longer trips this test. Behavioural contracts are preserved: the
+        // negative-wiring assertions prove certain contracts are deliberately NOT registered, and the scheduler
+        // work-handler set + ordering below is a real composition contract.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkQueue));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionWriter));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityExecutionInspectionAccumulator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkStimulusLookup));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeResolver));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkResumeDispatcher));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IBookmarkConsumptionCheckpointService));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IDurableValueStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityOutputRegister));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IIncidentStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IOperationalStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IControlPlaneStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePauseDecisionProvider));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeRecoveryScanner));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipContextAccessor));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipService));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeVolatileWaitPolicy));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeGeneratorEmissionScheduler));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerPauseGate));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ISchedulerStateStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(InMemoryRuntimeCheckpointCommitStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitOutboxProcessor));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionCommandProcessor));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionDrainCoordinator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutionDrainCoordinatorOptions));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerDrainer));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerDrainPolicy));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimePostCommitIntentDispatcher));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(RuntimeCheckpointCommitter));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeInputBindingResolver));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeActivityInputMaterializer));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerDrainObserver));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeFaultCapturePolicy));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerPoisonStore));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider));
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionPool");
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IStorageDriver");
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IStorageDriverContext");
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRuntimeExecutionIdGenerator) &&
-            descriptor.ImplementationType == typeof(GuidRuntimeExecutionIdGenerator) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher) &&
-            descriptor.ImplementationType == typeof(WorkflowExecutionStartDispatcher) &&
-            descriptor.Lifetime == ServiceLifetime.Singleton);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeExecutionIdGenerator));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionStartDispatcher));
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor");
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
 
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
-        Assert.IsType<InProcessWorkflowExecutionAgentProvider>(provider.GetRequiredService<IWorkflowExecutionAgentProvider>());
-        Assert.IsType<WorkflowSchedulerCommandProcessor>(provider.GetRequiredService<IWorkflowExecutionCommandProcessor>());
-        Assert.IsType<WorkflowExecutionDrainCoordinator>(provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>());
-        Assert.IsType<WorkflowExecutionDrainCoordinatorOptions>(provider.GetRequiredService<WorkflowExecutionDrainCoordinatorOptions>());
-        Assert.IsType<InMemoryWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
-        Assert.IsType<InMemoryWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
-        Assert.IsType<InMemoryActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
-        Assert.IsType<InMemoryActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
-        Assert.IsType<InMemoryActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionWriter>());
-        Assert.IsType<RuntimeActivityExecutionInspectionAccumulator>(provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>());
-        Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<BookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
-        Assert.IsType<BookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
-        Assert.IsType<BookmarkResumeDispatcher>(provider.GetRequiredService<IBookmarkResumeDispatcher>());
-        Assert.IsType<BookmarkConsumptionCheckpointService>(provider.GetRequiredService<IBookmarkConsumptionCheckpointService>());
-        Assert.IsType<InMemoryDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
-        Assert.IsType<InMemoryRuntimeActivityOutputRegister>(provider.GetRequiredService<IRuntimeActivityOutputRegister>());
-        Assert.IsType<InMemoryIncidentStateStore>(provider.GetRequiredService<IIncidentStateStore>());
-        Assert.IsType<InMemoryOperationalStateStore>(provider.GetRequiredService<IOperationalStateStore>());
-        Assert.IsType<InMemoryControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
-        Assert.IsType<RuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
-        Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
-        Assert.IsType<AsyncLocalRuntimeExecutionOwnershipContextAccessor>(provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>());
-        Assert.IsType<RuntimeExecutionOwnershipService>(provider.GetRequiredService<IRuntimeExecutionOwnershipService>());
-        Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
-        Assert.IsType<DefaultRuntimeFaultCapturePolicy>(provider.GetRequiredService<IRuntimeFaultCapturePolicy>());
-        Assert.IsType<InMemoryWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
-        Assert.IsType<DefaultRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
-        Assert.IsType<RuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
-        Assert.IsType<WorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
-        Assert.IsType<InMemorySchedulerStateStore>(provider.GetRequiredService<ISchedulerStateStore>());
-        Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
-        Assert.IsType<RuntimePostCommitOutboxProcessor>(provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>());
-        Assert.IsType<WorkflowSchedulerDrainer>(provider.GetRequiredService<IWorkflowSchedulerDrainer>());
-        Assert.IsType<ImmediateWorkflowSchedulerDrainPolicy>(provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>());
-        Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
-        Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        Assert.IsType<RuntimeSchedulerPostCommitIntentDispatcher>(provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>());
-        Assert.IsType<RuntimeCheckpointCommitter>(provider.GetRequiredService<RuntimeCheckpointCommitter>());
-        Assert.IsType<DefaultRuntimePayloadCapturePolicy>(provider.GetRequiredService<IRuntimePayloadCapturePolicy>());
-        Assert.IsType<RuntimeInputBindingResolver>(provider.GetRequiredService<IRuntimeInputBindingResolver>());
-        Assert.IsType<RuntimeActivityInputMaterializer>(provider.GetRequiredService<IRuntimeActivityInputMaterializer>());
-        Assert.IsType<GuidRuntimeExecutionIdGenerator>(provider.GetRequiredService<IRuntimeExecutionIdGenerator>());
-        Assert.IsType<WorkflowExecutionStartDispatcher>(provider.GetRequiredService<IWorkflowExecutionStartDispatcher>());
+        // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
+        provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        provider.GetRequiredService<IWorkflowExecutionCommandProcessor>();
+        provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>();
+        provider.GetRequiredService<WorkflowExecutionDrainCoordinatorOptions>();
+        provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+        provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        provider.GetRequiredService<IActivityExecutionStateStore>();
+        provider.GetRequiredService<IActivityExecutionInspectionStore>();
+        provider.GetRequiredService<IActivityExecutionInspectionWriter>();
+        provider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>();
+        provider.GetRequiredService<IBookmarkStateStore>();
+        provider.GetRequiredService<IBookmarkStimulusLookup>();
+        provider.GetRequiredService<IBookmarkResumeResolver>();
+        provider.GetRequiredService<IBookmarkResumeDispatcher>();
+        provider.GetRequiredService<IBookmarkConsumptionCheckpointService>();
+        provider.GetRequiredService<IDurableValueStateStore>();
+        provider.GetRequiredService<IRuntimeActivityOutputRegister>();
+        provider.GetRequiredService<IIncidentStateStore>();
+        provider.GetRequiredService<IOperationalStateStore>();
+        provider.GetRequiredService<IControlPlaneStateStore>();
+        provider.GetRequiredService<IRuntimePauseDecisionProvider>();
+        provider.GetRequiredService<IRuntimeRecoveryScanner>();
+        provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>();
+        provider.GetRequiredService<IRuntimeExecutionOwnershipService>();
+        provider.GetRequiredService<IRuntimeDomainRetryPolicy>();
+        provider.GetRequiredService<IRuntimeFaultCapturePolicy>();
+        provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
+        provider.GetRequiredService<IRuntimeVolatileWaitPolicy>();
+        provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>();
+        provider.GetRequiredService<IWorkflowSchedulerPauseGate>();
+        provider.GetRequiredService<ISchedulerStateStore>();
+        provider.GetRequiredService<IRuntimePostCommitOutboxStore>();
+        provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        provider.GetRequiredService<IWorkflowSchedulerDrainer>();
+        provider.GetRequiredService<IWorkflowSchedulerDrainPolicy>();
+        provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>();
+        provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        provider.GetRequiredService<IRuntimePostCommitIntentDispatcher>();
+        provider.GetRequiredService<RuntimeCheckpointCommitter>();
+        provider.GetRequiredService<IRuntimePayloadCapturePolicy>();
+        provider.GetRequiredService<IRuntimeInputBindingResolver>();
+        provider.GetRequiredService<IRuntimeActivityInputMaterializer>();
+        provider.GetRequiredService<IRuntimeExecutionIdGenerator>();
+        provider.GetRequiredService<IWorkflowExecutionStartDispatcher>();
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is NoopWorkflowSchedulerDrainObserver);
         Assert.Contains(provider.GetServices<IWorkflowSchedulerDrainObserver>(), observer => observer is BlockingIncidentWorkflowFaultObserver);
         var schedulerWorkHandlers = provider.GetServices<IWorkflowSchedulerWorkHandler>().ToArray();

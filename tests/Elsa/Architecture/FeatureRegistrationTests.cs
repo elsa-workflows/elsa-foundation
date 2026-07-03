@@ -23,7 +23,8 @@ public sealed class FeatureRegistrationTests
         feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<SystemClock>(provider.GetRequiredService<ISystemClock>());
+        // TS-1 (§2.23.1): the feature makes ISystemClock resolvable; resolvability replaces the concrete-type pin.
+        provider.GetRequiredService<ISystemClock>();
     }
 
     [Fact]
@@ -35,7 +36,8 @@ public sealed class FeatureRegistrationTests
         feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<NewtonsoftJsonIslandTypeHandler>(provider.GetRequiredService<IJsonIslandTypeHandler>());
+        // TS-1 (§2.23.1): the feature makes IJsonIslandTypeHandler resolvable; resolvability replaces the concrete pin.
+        provider.GetRequiredService<IJsonIslandTypeHandler>();
     }
 
     [Fact]
@@ -46,9 +48,8 @@ public sealed class FeatureRegistrationTests
 
         feature.ConfigureServices(services);
 
+        // TS-1 (§2.23.1): assert the importer boundary is registered, not its implementation type or lifetime.
         Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IElsa3WorkflowDefinitionImporter) &&
-            descriptor.ImplementationType == typeof(Elsa3WorkflowDefinitionImporter) &&
-            descriptor.Lifetime == ServiceLifetime.Scoped);
+            descriptor.ServiceType == typeof(IElsa3WorkflowDefinitionImporter));
     }
 }
