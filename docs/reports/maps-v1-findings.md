@@ -9,7 +9,7 @@ This is a point-in-time report from direct repo facts. It is not a constitution 
 - Source projects: 105
 - Test projects: 35
 - Discovered CShells feature classes: 68
-- Specs: 96
+- Specs: 97
 - Direct package IDs with multiple versions: 0
 
 ## Package Version Clusters
