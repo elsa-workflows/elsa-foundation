@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 72
+- Discovered feature classes: 74
 
 ## Features
 
@@ -59,6 +59,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | NewtonsoftSerializationFeature | direct IShellFeature | Elsa.Serialization.Newtonsoft | IShellFeature | [NewtonsoftSerializationFeature.cs](../../src/Elsa/Serialization/Newtonsoft/NewtonsoftSerializationFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../src/Elsa/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |
 | OpenIddictIdentityFeature | direct IShellFeature | Elsa.Foundation.Identity.OpenIddict | IShellFeature | [OpenIddictIdentityFeature.cs](../../src/Elsa/Foundation/Identity/OpenIddict/OpenIddictIdentityFeature.cs) |
+| PostgreSqlGroundworkRuntimePersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql | IShellFeature | [PostgreSqlGroundworkRuntimePersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/PostgreSqlGroundworkRuntimePersistenceShellFeature.cs) |
+| PostgreSqlGroundworkUnifiedPersistenceShellFeature | direct IShellFeature | Elsa.Persistence.Groundwork.PostgreSql.Unified | IShellFeature | [PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs](../../src/Elsa/Persistence/Groundwork/PostgreSql/Unified/PostgreSqlGroundworkUnifiedPersistenceShellFeature.cs) |
 | PrimitivesFeature | direct IShellFeature | Elsa.Primitives.Hosting | IShellFeature | [PrimitivesFeature.cs](../../src/Elsa/Primitives/Hosting/PrimitivesFeature.cs) |
 | SecretsFeature | direct IShellFeature | Elsa.Secrets | IShellFeature | [SecretsFeature.cs](../../src/Elsa/Secrets/Features/SecretsFeature.cs) |
 | SecretsGroundworkPersistenceFeature | direct IShellFeature | Elsa.Secrets.Persistence.Groundwork | IShellFeature | [SecretsGroundworkPersistenceFeature.cs](../../src/Elsa/Secrets/Persistence/Groundwork/SecretsGroundworkPersistenceFeature.cs) |

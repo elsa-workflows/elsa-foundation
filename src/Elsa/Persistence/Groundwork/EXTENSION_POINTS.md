@@ -4,6 +4,33 @@ The Groundwork document-store bridge that persists Elsa runtime state (bookmarks
 
 This catalog covers the **schema-versioning** seams added so persisted runtime state can evolve without silently breaking suspended workflows. See [`../../../../docs/serialization.md`](../../../../docs/serialization.md) (**Schema evolution**) for the contract and the sanctioned-exception rationale.
 
+## Provider selection — host composition
+
+The runtime persistence seams are backed by a Groundwork document store only when a host composes a
+provider shell feature. The provider choice is the host's; runtime and domain code reference only the
+neutral ports. Each provider feature registers the concrete `IDocumentStore` and calls
+`AddGroundworkRuntimeStores()` (runtime-only) or the unified registration (all lanes).
+
+| Shell feature | Provider | Scope | Registration |
+|---|---|---|---|
+| `GroundworkRuntimePersistenceSqlite` | SQLite | Runtime only | `SqliteGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistenceSqlite` | SQLite | Runtime + workflows-design + activities-design | `AddGroundworkSqliteUnifiedPersistence` |
+| `GroundworkRuntimePersistencePostgreSql` | PostgreSQL | Runtime only | `PostgreSqlGroundworkRuntimePersistenceShellFeature` |
+| `GroundworkUnifiedPersistencePostgreSql` | PostgreSQL | Runtime + workflows-design + activities-design | `AddGroundworkPostgreSqlUnifiedPersistence` |
+
+The unified features share one provider-neutral union manifest (`GroundworkUnifiedManifest` in
+`Elsa.Persistence.Groundwork.Unified`), so the composition of the three lanes' document kinds is defined
+once and materialized per provider. SQLite stays the default composition; PostgreSQL is opt-in via
+`shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
+
+**Query-shape validation (PostgreSQL).** The PostgreSQL Groundwork provider serves the same query shapes
+Elsa already relies on for SQLite: `PostgreSqlDocumentStore` derives from the shared
+`RelationalDocumentStore` base, `PostgreSqlGroundworkCapabilities.Runtime()` advertises the full
+`PortableQueryOperation` set and `IndexCapabilities.All`, and the dialect implements `Contains` (`ILIKE …
+ESCAPE`) plus `LIMIT/OFFSET` pagination. The neutral querying layer
+([`Querying/`](Querying/GroundworkReadStore.cs)) and the store bridges therefore need no PostgreSQL-specific
+workarounds — no equality-only restriction applies to this provider's published surface.
+
 ## Override — replacement contracts
 
 Exactly one implementation is active per runtime host (registered with `TryAddSingleton` in `AddGroundworkRuntimeStores()`, so a host may replace either default).

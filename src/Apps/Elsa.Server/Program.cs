@@ -40,6 +40,7 @@ using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
+using Elsa.Persistence.Groundwork.PostgreSql.Unified;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -155,6 +156,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
 
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 

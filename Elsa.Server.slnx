@@ -141,6 +141,11 @@
   <Folder Name="/src/Elsa/Persistence/Groundwork/">
     <Project Path="src/Elsa/Persistence/Groundwork/Elsa.Persistence.Groundwork.csproj" />
     <Project Path="src/Elsa/Persistence/Groundwork/Querying/Elsa.Persistence.Groundwork.Querying.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/Unified/Elsa.Persistence.Groundwork.Unified.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Persistence/Groundwork/PostgreSql/">
+    <Project Path="src/Elsa/Persistence/Groundwork/PostgreSql/Elsa.Persistence.Groundwork.PostgreSql.csproj" />
+    <Project Path="src/Elsa/Persistence/Groundwork/PostgreSql/Unified/Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/Groundwork/Sqlite/">
     <Project Path="src/Elsa/Persistence/Groundwork/Sqlite/Elsa.Persistence.Groundwork.Sqlite.csproj" />
@@ -307,6 +312,12 @@
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/Querying/">
     <Project Path="tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/">
+    <Project Path="tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Persistence/Groundwork/UnifiedHost/">
     <Project Path="tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj" />
