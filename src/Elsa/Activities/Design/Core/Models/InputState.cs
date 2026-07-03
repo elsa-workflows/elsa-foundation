@@ -2,7 +2,7 @@ namespace Elsa.Activities.Design.Core.Models;
 
 /// <summary>
 /// Filled-in input on a design-time canvas. Joins back to an <see cref="InputDefinition"/> via
-/// <see cref="ArgumentState.ReferenceKey"/>.
+/// <see cref="ActivityArgumentState.ReferenceKey"/>.
 /// </summary>
-public sealed record InputState(string ReferenceKey, ArgumentValue Value)
-    : ArgumentState(ReferenceKey, Value);
+public sealed record InputState(string ReferenceKey, ActivityArgumentValue Value)
+    : ActivityArgumentState(ReferenceKey, Value);

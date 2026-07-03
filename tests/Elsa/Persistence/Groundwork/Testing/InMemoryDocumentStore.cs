@@ -6,14 +6,22 @@ using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
-namespace Elsa.Activities.Design.Persistence.Groundwork.Tests;
+namespace Elsa.Persistence.Groundwork.Testing;
 
-// Test double standing in for a Groundwork provider. It implements the same provider-neutral
-// IDocumentStore contract the real relational/document providers implement and resolves a query's
-// index name -> declared field path from the manifest, exactly like the real providers. This proves
-// GroundworkReadStore behaves correctly against the actual provider query surface (equality on a
-// declared index + offset paging), not a bespoke shim.
-internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore
+/// <summary>
+/// Shared in-memory <see cref="IDocumentStore"/> test double standing in for a Groundwork provider. It
+/// implements the same provider-neutral contract the real relational/document providers implement and
+/// resolves a query's index name to the declared field path from the manifest, exactly like the real
+/// providers. This lets the Groundwork-backed store suites prove their bridges behave identically
+/// regardless of which provider the host selects, rather than against a bespoke shim.
+/// </summary>
+/// <remarks>
+/// This is the canonical superset of the previously duplicated per-suite copies: it honours optimistic
+/// concurrency (<c>ExpectedVersion</c>), exposes <see cref="Snapshot"/> for the golden-fixture
+/// compatibility tests, and provides a working cross-document unit of work mirroring the relational
+/// provider's <see cref="TransactionBoundary.CrossUnitAtomic"/> boundary.
+/// </remarks>
+public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentStore
 {
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
@@ -45,6 +53,12 @@ internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumen
 
     public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_docs.GetValueOrDefault((documentKind, id)));
+
+    // Test-only: enumerate the stored envelopes of a kind. The golden-fixture compatibility test uses
+    // this to discover the composite document id the bridge assigned, so it can re-seed the same id under
+    // the legacy schema stamp without re-implementing each store's id-composition scheme.
+    public IReadOnlyCollection<DocumentEnvelope> Snapshot(string documentKind) =>
+        _docs.Values.Where(d => d.DocumentKind == documentKind).ToArray();
 
     public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default)
     {
@@ -96,6 +110,8 @@ internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumen
         return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
     }
 
+    // --- Closed-query (PortableDocumentQuery) surface: not exercised by these tests, which drive the
+    // provider through the declared-index DocumentStoreQuery path. ---
     public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
 
@@ -105,6 +121,8 @@ internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumen
     public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
 
+    // --- Document unit of work: an in-memory cross-document atomic batch mirroring the relational
+    // provider's CrossUnitAtomic boundary (stage Save/Delete, read-your-writes, all-or-nothing commit). ---
     public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
 
     public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
@@ -170,6 +188,7 @@ internal sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumen
 
         public ValueTask DisposeAsync()
         {
+            // Dispose-without-commit rolls back: simply drop the staged operations.
             _completed = true;
             return ValueTask.CompletedTask;
         }

@@ -5,4 +5,4 @@ namespace Elsa.Activities.Design.Core.Models;
 /// joins back to the matching <see cref="ArgumentDefinition.ReferenceKey"/>; <see cref="Value"/>
 /// carries the literal-or-expression value supplied by the canvas author.
 /// </summary>
-public record ArgumentState(string ReferenceKey, ArgumentValue Value);
+public record ActivityArgumentState(string ReferenceKey, ActivityArgumentValue Value);

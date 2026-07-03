@@ -1,15 +1,11 @@
 using System.Reflection;
 using CShells.Features;
-using Elsa.Persistence.EFCore.Contracts;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Sqlite;
-using Elsa.Persistence.EFCore.Sqlite.Constants;
-using Elsa.Persistence.EFCore.Sqlite.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite;
 
@@ -36,14 +32,11 @@ public class SqliteOpenTelemetryPersistenceShellFeature : EFCoreOpenTelemetryPer
     {
         base.OnAfterConfigured(services);
 
-        if (string.IsNullOrWhiteSpace(ConnectionString))
-            ConnectionString = SqliteConstants.DefaultConnectionString;
-
-        services.TryAddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
+        ConnectionString = SqliteShellFeatureDefaults.ApplyDefaults(services, ConnectionString);
     }
 
     protected override void ConfigureProvider(DbContextOptionsBuilder builder, Assembly migrationsAssembly, string connectionString, ElsaDbContextOptions? options)
     {
-        builder.UseElsaSqlite(migrationsAssembly, connectionString, options);
+        SqliteShellFeatureDefaults.ConfigureProvider(builder, migrationsAssembly, connectionString, options);
     }
 }

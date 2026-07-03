@@ -27,4 +27,9 @@
     <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <Using Include="Elsa.Persistence.Groundwork.Testing" />
+  </ItemGroup>
+
 </Project>
