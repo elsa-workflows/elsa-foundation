@@ -89,6 +89,12 @@ per workload. In-segment activity re-execution after a mid-segment crash is expe
   drives a `CreateBookmark` suspend under coalescing and asserts the bookmark lands in the **durable**
   bookmark store at the boundary (never buffered in-memory), so a durable timer/stimulus pump — e.g. W8's
   Delay pump, which reads the durable bookmark store — can never race an in-memory-only bookmark.
+- **Delay-boundary store isolation** —
+  `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`
+  proves that coalescing wraps only the seven core checkpoint stores, so W8's `IDurableTimerStore` and the
+  `IBookmarkStateStore` are **never** captured by the buffer even when both features are composed. W8's `Delay`
+  writes a durable timer *and* a bookmark at suspension; both therefore persist the instant they are written —
+  before quiescence ends — so the durable timer pump can never observe an in-memory-only timer or bookmark.
 
 ## Baselines (all green, unmodified except added tests)
 

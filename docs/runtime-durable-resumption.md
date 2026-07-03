@@ -197,7 +197,10 @@ gen-2's honest sweep converges to the crash-free control snapshot) and the queue
 `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
 That a bookmark-suspend flushes its bookmark **durably** at the boundary — so W8's durable Delay/timer pump (which
 reads the durable bookmark store) can never race an in-memory-only bookmark — is proven by
-`RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`.
+`RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`, and that
+coalescing never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (so a `Delay` suspension's timer
+*and* bookmark both persist directly, never through the buffer) by
+`RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`.
 
 ## Out of scope (owned elsewhere)
 
