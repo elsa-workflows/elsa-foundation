@@ -41,6 +41,26 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
     }
 
+    // W8's Delay is the first real suspending activity: it writes a durable timer (via IDurableTimerStore) and
+    // creates a bookmark, then W8's background timer pump resumes off the DURABLE timer + bookmark stores at due
+    // time. Coalescing decorates only the seven core checkpoint stores, so neither the durable-timer store nor the
+    // bookmark store is ever wrapped by the buffer — even with both features composed. A Delay suspension's timer
+    // and bookmark are therefore durable the instant they are written (before quiescence ends), so the pump can
+    // never race an in-memory-only bookmark/timer. Proven here against W8's landed IDurableTimerStore surface.
+    [Fact]
+    public void Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<InMemoryDurableTimerStore>(provider.GetRequiredService<IDurableTimerStore>());
+        Assert.IsType<InMemoryBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
+    }
+
     [Fact]
     public void WithoutOptIn_KeepsImmediatePolicyAndUndecoratedStores()
     {
