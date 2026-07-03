@@ -24,10 +24,40 @@ public sealed class RuntimePipelineWorkspace
     /// </summary>
     public CancellationToken CancellationToken { get; set; }
 
+    private readonly List<RuntimeCheckpointCommit> _pendingCheckpointCommits = [];
+
     /// <summary>
-    /// A checkpoint commit assembled by the handler in the <c>Invoke</c> slot for the <c>Checkpoint</c> slot to persist.
-    /// The handler stages the commit instead of committing inline; the Checkpoint middleware performs the actual
-    /// <c>CommitAsync</c> before <c>next</c>. Null when the dispatch produced no checkpoint commit.
+    /// The ordered checkpoint commits a handler assembled in the <c>Invoke</c> slot for the <c>Checkpoint</c> slot to
+    /// persist. The Checkpoint middleware drains this list <em>in stage order</em>, calling
+    /// <c>RuntimeCheckpointCommitter.CommitAsync</c> once per entry — one staged entry maps to exactly one committer
+    /// call, byte-identical to the handler's former inline sequence. Most handlers stage exactly one commit; handlers
+    /// that commit multiple times per dispatch (e.g. InvokeActivity) stage several. The Checkpoint slot MUST NOT fold or
+    /// batch these into a single commit: folding adjacent commits is the coalescing layer's job (W9), and batching at the
+    /// slot would change W9 boundary detection and W5 fencing granularity.
     /// </summary>
-    public RuntimeCheckpointCommit? PendingCheckpointCommit { get; set; }
+    public IReadOnlyList<RuntimeCheckpointCommit> PendingCheckpointCommits => _pendingCheckpointCommits;
+
+    /// <summary>Appends a checkpoint commit to the ordered staged list, preserving stage order for the Checkpoint slot.</summary>
+    public void StageCheckpointCommit(RuntimeCheckpointCommit commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        _pendingCheckpointCommits.Add(commit);
+    }
+
+    /// <summary>
+    /// Convenience for the single-commit handlers (Cancel, Checkpoint): getting returns the sole staged commit (or null);
+    /// setting clears the staged list and stages the given commit (or clears it when set to null). Handlers that stage
+    /// more than one commit per dispatch use <see cref="StageCheckpointCommit"/> and <see cref="PendingCheckpointCommits"/>
+    /// directly. Backed by the same ordered list the Checkpoint slot drains, so both paths persist identically.
+    /// </summary>
+    public RuntimeCheckpointCommit? PendingCheckpointCommit
+    {
+        get => _pendingCheckpointCommits.Count == 0 ? null : _pendingCheckpointCommits[^1];
+        set
+        {
+            _pendingCheckpointCommits.Clear();
+            if (value is not null)
+                _pendingCheckpointCommits.Add(value);
+        }
+    }
 }

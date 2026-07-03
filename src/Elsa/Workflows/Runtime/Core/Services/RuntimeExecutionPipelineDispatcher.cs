@@ -5,8 +5,9 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Services;
 
 /// <summary>
-/// Dispatches a drained scheduler work item through the runtime execution pipeline for its kind, with the selected
-/// work handler as the pipeline's inner terminal delegate (ADR 0029, Move 1 — "wrap, do not replace").
+/// Dispatches a drained scheduler work item through the runtime execution pipeline for its kind, staging the selected
+/// work handler in the pipeline's <c>Invoke</c> slot so it runs before the later slots that apply its results (ADR 0029,
+/// Move 2). The pipeline terminal is a guard that fails loudly if the handler was never run.
 /// </summary>
 public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipelineDispatcher
 {
@@ -36,11 +37,27 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         ArgumentNullException.ThrowIfNull(workItem);
         ArgumentNullException.ThrowIfNull(handler);
 
-        // Activity pipeline: the handler still runs as the pipeline terminal (not yet decomposed into the Invoke slot).
+        // Activity pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
+        // Checkpoint slot, mirroring the workflow path. Context-aware (migrated) handlers get the context explicitly and
+        // stage their results; other handlers run their plain path unchanged. The terminal is a guard: reaching it with
+        // the handler still staged means the Invoke slot was missing from the plan, so fail loudly.
         if (_selector.Select(workItem) == RuntimePipelineKind.Activity)
-            return _activityPipeline.InvokeAsync(
-                new ActivityRuntimePipelineContext(workItem),
-                _ => handler.HandleAsync(workItem, cancellationToken));
+        {
+            var activityContext = new ActivityRuntimePipelineContext(workItem);
+            activityContext.Workspace.CancellationToken = cancellationToken;
+            activityContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
+                ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
+                : handler.HandleAsync(workItem, cancellationToken);
+
+            return _activityPipeline.InvokeAsync(activityContext, static pipelineContext =>
+            {
+                if (pipelineContext.Workspace.InvokeHandler is not null)
+                    throw new InvalidOperationException(
+                        $"The activity runtime pipeline completed without running the staged handler for work item '{pipelineContext.WorkItem.WorkItemId}': the '{RuntimeActivityPipelineSlots.Invoke}' slot middleware is missing from the plan.");
+
+                return ValueTask.CompletedTask;
+            });
+        }
 
         // Workflow pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
         // Checkpoint slot. Context-aware (migrated) handlers get the context explicitly and stage their results; other
