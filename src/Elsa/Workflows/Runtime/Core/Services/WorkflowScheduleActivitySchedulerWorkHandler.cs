@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowScheduleActivitySchedulerWorkHandler);
 
@@ -47,7 +47,24 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         return workItem.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity;
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: run the handler and commit its checkpoint inline (when one is produced).</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    {
+        var commit = await ExecuteAsync(workItem, cancellationToken);
+        if (commit is not null)
+            await _checkpointCommitter!.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>Pipeline dispatch (Move 2): run the handler in the Invoke slot and stage its commit for the Checkpoint slot.</summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        var commit = await ExecuteAsync(workItem, cancellationToken);
+        if (commit is not null)
+            pipelineContext.Workspace.StageCheckpointCommit(commit);
+    }
+
+    private async ValueTask<RuntimeCheckpointCommit?> ExecuteAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -71,7 +88,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             if (existing.Status == ActivityExecutionStatus.Scheduled)
                 await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
 
-            return;
+            return null;
         }
 
         var state = NewActivityExecutionState(workItem, schedulePayload, executableNode);
@@ -79,11 +96,10 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         {
             await _activityExecutionStateStore.SaveAsync(state, cancellationToken);
             await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
-            return;
+            return null;
         }
 
-        var commit = await NewCommitAsync(workItem, schedulePayload, state, cancellationToken);
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        return await NewCommitAsync(workItem, schedulePayload, state, cancellationToken);
     }
 
     private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem)

@@ -11,45 +11,30 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowParentActivityCompletionSchedulerWorkHandler);
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly IWorkflowExecutionAmbientServicesAccessor _ambientServicesAccessor;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowParentActivityCompletionSchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory)
-        : this(inputMaterializer, serviceScopeFactory, TimeProvider.System)
-    {
-    }
-
-    public WorkflowParentActivityCompletionSchedulerWorkHandler(
-        IRuntimeActivityInputMaterializer inputMaterializer,
-        IServiceScopeFactory serviceScopeFactory,
-        TimeProvider timeProvider)
-        : this(inputMaterializer, serviceScopeFactory, NoopWorkflowExecutionAmbientServicesAccessor.Instance, timeProvider)
-    {
-    }
-
+    /// <summary>
+    /// Creates the handler. RT-8: collapsed to a single primary constructor (the former ambient-services-accessor
+    /// overload is gone — RT-7 replaced that AsyncLocal service locator with the explicit
+    /// <see cref="IRuntimePipelineContext"/> workspace carrier).
+    /// </summary>
     public WorkflowParentActivityCompletionSchedulerWorkHandler(
         IRuntimeActivityInputMaterializer inputMaterializer,
         IServiceScopeFactory serviceScopeFactory,
-        IWorkflowExecutionAmbientServicesAccessor ambientServicesAccessor,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(inputMaterializer);
         ArgumentNullException.ThrowIfNull(serviceScopeFactory);
-        ArgumentNullException.ThrowIfNull(ambientServicesAccessor);
-        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _inputMaterializer = inputMaterializer;
         _serviceScopeFactory = serviceScopeFactory;
-        _ambientServicesAccessor = ambientServicesAccessor;
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public string Name => HandlerName;
@@ -61,12 +46,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (workItem.CommandKind != WorkflowExecutionCommandKind.CompleteActivity)
             return false;
 
-        if (workItem.Payload is not { } payload)
+        if (workItem.Payload is null)
             return false;
 
         try
         {
-            var completionPayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
+            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            var completionPayload = RuntimeCompleteActivityPayloadMemo.Deserialize(workItem);
             return completionPayload?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
         }
         catch (Exception exception) when (
@@ -77,18 +63,40 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         }
     }
 
+    /// <summary>
+    /// Direct (no-pipeline) dispatch: runs against a fresh scope. RT-7: the former AsyncLocal ambient-services read is
+    /// gone; the pipeline overload carries the drain's services explicitly on the workspace.
+    /// </summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
+        await ExecuteAsync(workItem, ambientServices: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Pipeline dispatch (Move 2 / RT-7): run in the Invoke slot reading the drain's ambient services from the workspace
+    /// (staged explicitly by the dispatcher) instead of an AsyncLocal service locator.
+    /// </summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await ExecuteAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+    }
+
+    private async ValueTask ExecuteAsync(RuntimeSchedulerWorkItem workItem, IServiceProvider? ambientServices, CancellationToken cancellationToken)
+    {
         var payload = DeserializeCompletePayload(workItem);
         if (payload.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation)
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{workItem.WorkItemId}' is not parent completion evaluation work.");
 
-        if (_ambientServicesAccessor.Current is { } ambientServices)
+        if (ambientServices is { } provider)
         {
-            await HandleWithServicesAsync(workItem, payload, ambientServices, cancellationToken);
+            await HandleWithServicesAsync(workItem, payload, provider, cancellationToken);
             return;
         }
 
@@ -706,12 +714,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
     {
-        if (workItem.Payload is not { } payload)
+        if (workItem.Payload is null)
             throw new InvalidOperationException("CompleteActivity scheduler work item requires a complete activity payload.");
 
         try
         {
-            return payload.Deserialize<RuntimeCompleteActivityCommandPayload>()
+            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)
                    ?? throw new InvalidOperationException("CompleteActivity scheduler work item payload resolved to null.");
         }
         catch (Exception exception) when (

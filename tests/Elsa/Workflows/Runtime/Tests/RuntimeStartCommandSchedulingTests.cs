@@ -115,7 +115,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
         var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));
@@ -169,7 +169,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         await store.SaveAsync(executable);
         var startHandler = NewHandler(store, queue);
         var checkpointHandler = NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue);
-        var drainer = new WorkflowSchedulerDrainer(
+        var drainer = TestSchedulerDrainer.Create(
             queue,
             [startHandler, checkpointHandler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(_now));

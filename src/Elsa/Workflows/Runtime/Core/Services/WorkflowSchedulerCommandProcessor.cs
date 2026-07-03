@@ -13,26 +13,17 @@ public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionComman
     public WorkflowSchedulerCommandProcessor(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
-        IWorkflowExecutionDrainCoordinator drainCoordinator)
-        : this(schedulerWorkQueue, schedulerDrainPolicy, drainCoordinator, TimeProvider.System)
-    {
-    }
-
-    public WorkflowSchedulerCommandProcessor(
-        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
-        IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
         IWorkflowExecutionDrainCoordinator drainCoordinator,
-        TimeProvider timeProvider)
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(schedulerDrainPolicy);
         ArgumentNullException.ThrowIfNull(drainCoordinator);
-        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _schedulerWorkQueue = schedulerWorkQueue;
         _schedulerDrainPolicy = schedulerDrainPolicy;
         _drainCoordinator = drainCoordinator;
-        _timeProvider = timeProvider;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)

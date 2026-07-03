@@ -135,12 +135,11 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         InMemoryWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerWorkHandler handler,
         IRuntimeExecutionPipelineDispatcher dispatcher) =>
-        new(
+        TestSchedulerDrainer.Create(
             queue,
             [handler, new NoopWorkflowSchedulerWorkHandler()],
             new FixedTimeProvider(Now),
             pauseGate: null,
-            NoopWorkflowExecutionAmbientServicesAccessor.Instance,
             workflowExecutionStateStore: null,
             dispatcher);
 
