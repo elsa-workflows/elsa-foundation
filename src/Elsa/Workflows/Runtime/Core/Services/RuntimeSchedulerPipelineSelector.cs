@@ -43,19 +43,20 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
         // handler's CanHandle performs. A payload that reads as parent-completion but fails validation is claimed by the
         // workflow routing handler (whose CanHandle catches the same throw and returns true), so route it to workflow to
         // keep selection in agreement with the handler that actually runs.
-        return DeserializesAsParentCompletion(workItem.Payload)
+        return DeserializesAsParentCompletion(workItem)
             ? RuntimePipelineKind.Activity
             : RuntimePipelineKind.Workflow;
     }
 
-    private static bool DeserializesAsParentCompletion(JsonElement? payload)
+    private static bool DeserializesAsParentCompletion(RuntimeSchedulerWorkItem workItem)
     {
-        if (payload is not { } element)
+        if (workItem.Payload is null)
             return false;
 
         try
         {
-            return element.Deserialize<RuntimeCompleteActivityCommandPayload>()?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
+            // RT-11: reuse the single per-work-item parse instead of deserializing the payload again here.
+            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {

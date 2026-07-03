@@ -61,12 +61,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (workItem.CommandKind != WorkflowExecutionCommandKind.CompleteActivity)
             return false;
 
-        if (workItem.Payload is not { } payload)
+        if (workItem.Payload is null)
             return false;
 
         try
         {
-            var completionPayload = payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
+            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            var completionPayload = RuntimeCompleteActivityPayloadMemo.Deserialize(workItem);
             return completionPayload?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
         }
         catch (Exception exception) when (
@@ -684,12 +685,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
     private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
     {
-        if (workItem.Payload is not { } payload)
+        if (workItem.Payload is null)
             throw new InvalidOperationException("CompleteActivity scheduler work item requires a complete activity payload.");
 
         try
         {
-            return payload.Deserialize<RuntimeCompleteActivityCommandPayload>()
+            // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
+            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)
                    ?? throw new InvalidOperationException("CompleteActivity scheduler work item payload resolved to null.");
         }
         catch (Exception exception) when (
