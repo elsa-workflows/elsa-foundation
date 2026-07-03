@@ -18,13 +18,24 @@ public static class ElsaRuntimeStorageManifest
     // so the same strings are reused across units that expose the same logical access pattern.
     public const string ByWorkflowExecutionIndex = "by-workflow-execution";
     public const string ByCollectionIndex = "by-collection";
+    public const string ByStimulusIndex = "by-stimulus";
+    public const string ByArtifactIndex = "by-artifact";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
+    public const string StimulusHashField = "stimulusHash";
+    public const string ArtifactIdField = "artifactId";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
     /// <summary>Index used by <c>IBookmarkStateStore.ListAsync(workflowExecutionId)</c>.</summary>
     public const string BookmarkStateByWorkflowExecution = ByWorkflowExecutionIndex;
+
+    /// <summary>
+    /// Cross-execution index used by <c>IBookmarkStimulusIndex.ListByStimulusAsync</c> (W7, E3-5) so a
+    /// single stimulus can fan in to bookmarks waiting in any workflow execution. Keyed by stimulus hash
+    /// alone; the caller post-filters by stimulus type (the hash is already type-derived in practice).
+    /// </summary>
+    public const string BookmarkStateByStimulus = ByStimulusIndex;
 
     public const string WorkflowExecutableDocumentKind = "workflowExecutable";
 
@@ -63,6 +74,22 @@ public static class ElsaRuntimeStorageManifest
     // equality-only, so due-time filtering/ordering happens in memory — see GroundworkDurableTimerStore).
     public const string DurableTimerDocumentKind = "durableTimer";
 
+    // Durable trigger index over PUBLISHED artifacts (W7, E3-1). Each start-trigger activity in a
+    // published executable becomes one document, so an external stimulus with no execution id can be
+    // routed to start a new workflow instance. Indexed by stimulus hash (cross-artifact router lookup)
+    // and by artifact id (replace-on-republish).
+    public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
+
+    /// <summary>
+    /// Cross-artifact index used by <c>IWorkflowTriggerBindingStore.ListByStimulusAsync</c> so a single
+    /// stimulus can start instances of any workflow that triggers on it. Keyed by stimulus hash alone; the
+    /// caller post-filters by stimulus type (the hash is type-derived in practice).
+    /// </summary>
+    public const string WorkflowTriggerBindingByStimulus = ByStimulusIndex;
+
+    /// <summary>Index used by <c>IWorkflowTriggerBindingStore.ListByArtifactAsync</c> and the republish replace path.</summary>
+    public const string WorkflowTriggerBindingByArtifact = ByArtifactIndex;
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -71,8 +98,14 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 BookmarkStateDocumentKind,
                 "Bookmark state",
-                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
-                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByStimulusIndex, StimulusHashField)
+                ],
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-by-stimulus", ByStimulusIndex)
+                ]),
             Unit(
                 WorkflowExecutableDocumentKind,
                 "Workflow executable",
@@ -161,7 +194,18 @@ public static class ElsaRuntimeStorageManifest
                 DurableTimerDocumentKind,
                 "Durable timer",
                 [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowTriggerBindingDocumentKind,
+                "Workflow trigger binding",
+                [
+                    Keyword(ByStimulusIndex, StimulusHashField),
+                    Keyword(ByArtifactIndex, ArtifactIdField)
+                ],
+                [
+                    Query("list-by-stimulus", ByStimulusIndex),
+                    Query("list-by-artifact", ByArtifactIndex)
+                ])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

@@ -16,6 +16,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Expressions.Core.Models;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
@@ -140,7 +141,8 @@ public sealed class WorkflowExecutableCompiler(
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>
             {
-                ["authoredNodeId"] = activity.NodeId
+                ["authoredNodeId"] = activity.NodeId,
+                [TriggerNodeMetadata.ExecutionTypeKey] = activityVersion.ExecutionType.ToString()
             },
             childSlots: childSlots,
             structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));

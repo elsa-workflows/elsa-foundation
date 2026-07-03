@@ -104,6 +104,48 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** uses `IBookmarkStimulusLookup`, workflow execution state, the pinned executable artifact, and `IBookmarkResumeResolver` to enqueue a `ResumeBookmark` command through `IWorkflowExecutionAgentProvider`. The command payload carries `ResumeTargetId`, not C# callback method names. It does not consume bookmarks or invoke activity resume handlers.
 - **Default implementation:** `BookmarkResumeDispatcher`.
 
+### `IBookmarkStimulusIndex` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (narrow cross-execution read surface over bookmark state; segregated from `IBookmarkStateStore` so it can be widened/replaced independently).
+- **Signature:** `ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)`.
+- **Usage:** returns non-expired `BookmarkState` records matching a stimulus identity **across every workflow execution** (E3-5 fan-in), unlike `IBookmarkStimulusLookup` which is scoped to one `workflowExecutionId`. Implemented by the bookmark state store itself (in-memory and Groundwork), backed additively by the `bookmarkState` `by-stimulus` index. Note the Condition 7 gap (see [`docs/serialization.md`](../../../../../docs/serialization.md)): bookmarks written before the index existed are not backfilled until re-saved.
+- **Default implementation:** `InMemoryBookmarkStateStore` / `GroundworkBookmarkStateStore` *(each also implements this interface)*.
+
+### `IGlobalBookmarkStimulusLookup` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one cross-execution lookup surface finds every waiting bookmark for a stimulus).
+- **Signature:** `FindAsync(GlobalBookmarkStimulusLookupRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** builds the fan-in resume set for the stimulus router by querying `IBookmarkStimulusIndex`, filtering expired bookmarks against the evaluated time and (when supplied) a passive correlation scope carried in bookmark metadata. Correlation is a threaded metadata value only — not a correlation subsystem.
+- **Default implementation:** `GlobalBookmarkStimulusLookup`.
+
+### `IWorkflowTriggerBindingStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns the durable trigger-binding index for a runtime composition).
+- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(stimulusType, stimulusHash, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
+- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulus` is the cross-artifact fan-out the router uses to start every workflow waiting on a stimulus; `by-artifact` scoping supports republish replacement.
+- **Default implementation:** `InMemoryWorkflowTriggerBindingStore` *(single-node in-memory default; `GroundworkWorkflowTriggerBindingStore` replaces it for durable storage over the `workflowTriggerBinding` document kind)*.
+
+### `IWorkflowTriggerBindingExtractor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one extractor derives trigger bindings from a published executable).
+- **Signature:** `Extract(WorkflowExecutable executable)`.
+- **Usage:** walks the pinned executable's node tree, selects compiler-marked start-trigger nodes, and resolves each one's stimulus identity through the registered `IActivityTriggerStimulusProvider` set. A start-trigger node no provider can describe **throws**, failing the publish rather than persisting an unroutable trigger.
+- **Default implementation:** `WorkflowTriggerBindingExtractor`.
+
+### `IWorkflowTriggerIndexer` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one indexer writes the trigger index for a published artifact).
+- **Signature:** `IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)`.
+- **Usage:** invoked inside the publish flow; extracts bindings (an unroutable trigger throws before any write) then replaces the artifact's prior bindings with the current set (delete-by-artifact then write) so a republished version's triggers fully supersede the previous version's. Any failure propagates and **fails the publish** — no silently unindexed trigger.
+- **Default implementation:** `WorkflowTriggerIndexer`.
+
+### `IStimulusStartDeduplicator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (narrow best-effort dedup for the stimulus START path, Condition A).
+- **Signature:** `TryBeginStart(string idempotencyKey)`.
+- **Usage:** when the router is given an `idempotencyKey`, a duplicate at-least-once delivery under the same key does not double-start. The default is in-process and best-effort (not a durable cross-node ledger); when no key is supplied the start path is plainly at-least-once and **may double-start**. Hosts needing restart-durable start-once semantics replace this contract.
+- **Default implementation:** `InMemoryStimulusStartDeduplicator`.
+
+### `IStimulusRouter` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one routing spine turns an external stimulus into starts and/or resumes).
+- **Signature:** `RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** the E3-1/E3-5 spine. Snapshots the cross-execution resume set (via `IGlobalBookmarkStimulusLookup`) **before** starting new instances, starts matching published triggers (via `IWorkflowExecutionStartDispatcher`, deduped by `IStimulusStartDeduplicator` when an idempotency key is present), and resumes each waiting instance (via `IBookmarkResumeDispatcher`). All dispatch routes through the agent mailbox — the single-writer invariant is preserved. Correlation scope is a passive threaded metadata value.
+- **Default implementation:** `StimulusRouter`.
+
 ### `IRuntimeActivityOutputReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Query surface (read-only active-scope output lookup used by resolvers and resolution contexts).
 - **Signature:** `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`.
@@ -357,6 +399,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 **Known implementations (shipped):**
 - `Elsa.Workflows.Runtime.JavaScript` — `ActivityCompletionHandler` *(cross-domain — test implementation for JS-context activity completion)*
+
+### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (fan-in; one provider per start-trigger activity type, resolved as `IEnumerable<T>` by `IWorkflowTriggerBindingExtractor`).
+- **Signature:** `TriggerStimulusDescriptor? Describe(ExecutableNode node);`
+- **Usage:** at **publish time** the trigger extractor asks each registered provider to describe a node; a provider returns the node's stimulus identity `(stimulusType, stimulusHash, correlationScope?)` when it recognizes the activity type, or `null` ("not mine"). Providers read only the pinned published `ExecutableNode` (its literal input bindings), never a running workflow, so stimulus identity is fixed at publish time. A provider whose trigger carries a non-literal, unresolvable stimulus key **throws**, failing the publish.
+- **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, MyProvider>())`.
+
+**Known implementations (shipped):**
+- `Elsa.Activities.Primitives` — `EventTriggerStimulusProvider` *(cross-domain — describes the named-event `Event` start trigger; stimulus type `Event`, hash over the event name)*.
 
 ---
 

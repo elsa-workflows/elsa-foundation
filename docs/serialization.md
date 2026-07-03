@@ -69,10 +69,10 @@ boundary or the use needs options the payload serializer can't provide:
 
 Runtime state persisted by the Groundwork bridge (bookmarks, executables, execution/scheduler/
 operational/control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox,
-the durable scheduler work queue)
+the durable scheduler work queue, workflow trigger bindings)
 must be able to evolve without silently breaking already-suspended workflows. The contract:
 
-- **Per-kind integer versions, hosted in the envelope.** Each of the 13 runtime document kinds has a
+- **Per-kind integer versions, hosted in the envelope.** Each of the 14 runtime document kinds has a
   current integer version declared in
   [`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)
   (all `1` today). The version is stamped into the Groundwork **envelope** `SchemaVersion` field on
@@ -107,3 +107,48 @@ In the same change:
 2. Register an `IGroundworkRuntimeDocumentUpcaster` from the previous version to the new one.
 3. Add a golden fixture for the new version (`Fixtures/v<new>/<kind>.json`) and **keep** the historical
    fixtures so the compatibility test proves old documents still load.
+
+## Cross-execution stimulus routing (W7, E3-1 / E3-5)
+
+The trigger + stimulus-routing feature (`WorkflowsRuntimeTriggersFeature`) adds one new persisted document
+kind and two cross-cutting (across-execution / across-artifact) indexes. Both route through the same bridge
+serializer, versioning, and fixture gate as every other runtime kind.
+
+- **New document kind `workflowTriggerBinding` (version 1).** A durable index entry written at **publish
+  time** mapping an external stimulus identity `(stimulusType, stimulusHash)` to a start-trigger activity
+  inside a *pinned, published* executable — the piece Elsa 4 was missing that made "start a workflow from
+  an external event" impossible. It is indexed over the published artifact, never the mutable authored
+  definition. Golden fixture: `Fixtures/v1/workflowTriggerBinding.json`. Two Groundwork indexes back it:
+  `by-stimulus` (keyword over `stimulusHash`, the cross-artifact fan-out used by the router to start every
+  workflow waiting on a stimulus) and `by-artifact` (keyword over `artifactId`, used to replace an
+  artifact's bindings on republish). Writing an unroutable published trigger (a trigger node whose stimulus
+  cannot be derived) **fails the publish** rather than persisting a trigger that can never fire.
+- **New `by-stimulus` index on the existing `bookmarkState` kind.** Added additively so a single stimulus
+  can resume *waiting instances across executions* (E3-5 fan-in), not only within one `workflowExecutionId`.
+  No version bump or upcaster is needed: the state record shape is unchanged; only a new index was declared.
+
+### Condition 7 — added indexes are not retroactively backfilled
+
+**Verified behavior** (see `GroundworkAddedIndexVisibilityProbeTests`): the Groundwork SQLite provider
+populates an index's physicalized projection only when a document is **written**. A document written
+*before* a new index was declared is **not** retroactively backfilled into that index — not even across a
+manifest version bump — so only documents saved after the index exists are visible through it. Re-saving a
+document makes it visible.
+
+Consequence for the additive `bookmarkState` `by-stimulus` index: a bookmark that already existed in a
+database at the moment this feature is deployed is invisible to cross-execution stimulus routing until it
+is next re-saved. This gap is **bounded and accepted** because bookmarks are short-lived — they are created
+and consumed within a single workflow's wait window and are rewritten on the next checkpoint — so in
+practice a suspended instance becomes routable again on its next persistence. New databases are unaffected.
+The brand-new `workflowTriggerBinding` kind has no pre-existing documents, so it has no gap.
+
+### Stimulus START idempotency is at-least-once
+
+Stimulus delivery is an at-least-once world (a stimulus can be delivered more than once). The router's START
+path dedups **only when an `idempotencyKey` is supplied**: `IStimulusStartDeduplicator` records the key and a
+repeated delivery with the same key does not start a second instance. When **no** `idempotencyKey` is
+supplied the router makes **no** dedup guarantee — a duplicate delivery **may double-start**. Callers that
+require exactly-once start semantics must supply a stable `idempotencyKey`. The default deduplicator is an
+in-process, best-effort store (not a durable cross-node dedup ledger); its guarantee is scoped to the
+process that owns it. This is documented on `IStimulusRouter`/`IStimulusStartDeduplicator` and is intentional
+scope for this wave — a heavy durable dedup store was explicitly out of scope.
