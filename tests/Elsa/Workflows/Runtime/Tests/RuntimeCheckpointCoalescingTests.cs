@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -100,6 +101,41 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Empty(innerStore.ListCommits());
     }
 
+    [Fact]
+    public async Task Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately()
+    {
+        // A bookmark-suspend is a mandatory flush boundary: under coalescing the BookmarkCreated checkpoint must still
+        // land in the DURABLE bookmark store within the segment, so a durable timer/stimulus pump (which reads the
+        // durable bookmark store) can never race an in-memory-only bookmark. Delay-style suspensions rely on this.
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        using var provider = services.BuildServiceProvider();
+
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutableWithResumeTarget());
+        await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningActivityState());
+
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agent = await agentProvider.GetAgentAsync(NewSchedulerWorkActivationRequest("wfexec-1"));
+        await agent.EnqueueAsync(NewCreateBookmarkEnvelope());
+
+        // The bookmark is durable (flushed at the suspend boundary, not left buffered in-memory).
+        var bookmark = await provider.GetRequiredService<IBookmarkStateStore>().FindAsync("wfexec-1", "bookmark-1");
+        Assert.NotNull(bookmark);
+        Assert.Equal("delivery-status", bookmark!.StimulusType);
+        Assert.Equal("sha256:delivery-status:order-123", bookmark.StimulusHash);
+
+        // The activity durably transitioned to Suspended.
+        var state = await provider.GetRequiredService<IActivityExecutionStateStore>().FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Suspended, state!.Status);
+
+        // Exactly one durable commit landed and it is the BookmarkCreated boundary — coalescing did not defer it.
+        var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
+    }
+
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount)> DriveAsync(bool coalescing)
     {
         var services = new ServiceCollection();
@@ -168,6 +204,104 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             enqueuedAt: Now,
             sequence: 1,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private static WorkflowExecutionAgentActivationRequest NewSchedulerWorkActivationRequest(string workflowExecutionId) =>
+        new(
+            workflowExecutionId: workflowExecutionId,
+            reason: WorkflowExecutionAgentActivationReason.SchedulerWork,
+            requestedAt: Now,
+            requestedBy: "runtime-test",
+            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+
+    private static WorkflowExecutionCommandEnvelope NewCreateBookmarkEnvelope()
+    {
+        var payload = JsonSerializer.SerializeToElement(new RuntimeCreateBookmarkCommandPayload(
+            pinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            bookmarkId: "bookmark-1",
+            activityExecutionId: "actexec-1",
+            executableNodeId: "node-wait",
+            resumeTargetId: "resume-target:delivery",
+            stimulusType: "delivery-status",
+            stimulusHash: "sha256:delivery-status:order-123",
+            payload: JsonSerializer.SerializeToElement(new { orderId = "order-123" }),
+            expiresAt: Now.AddMinutes(30),
+            reason: RuntimeCreateBookmarkCommandPayload.ActivitySuspendedReason,
+            metadata: new Dictionary<string, string> { ["customer"] = "northwind" },
+            valueSnapshots: []));
+
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-create-bookmark",
+            WorkflowExecutionId: "wfexec-1",
+            Kind: WorkflowExecutionCommandKind.CreateBookmark,
+            EnqueuedAt: Now,
+            Payload: payload,
+            Metadata: new Dictionary<string, string> { ["source"] = "test" });
+
+        return new(
+            envelopeId: "envelope-create-bookmark",
+            workflowExecutionId: "wfexec-1",
+            command: command,
+            idempotencyKey: "wfexec-1:create-bookmark:bookmark-1",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now,
+            sequence: 1,
+            metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
+    }
+
+    private static ActivityExecutionState NewRunningActivityState() =>
+        new(
+            Execution: new ActivityExecution(
+                ActivityExecutionId: "actexec-1",
+                WorkflowExecutionId: "wfexec-1",
+                ExecutableNodeId: "node-wait",
+                AuthoredActivityId: "authored-node-wait",
+                ActivityType: "test/activity",
+                ActivityTypeVersion: "1.0.0"),
+            Status: ActivityExecutionStatus.Running,
+            SubStatus: null,
+            ScheduledAt: Now.AddMinutes(-3),
+            StartedAt: Now.AddMinutes(-2),
+            CompletedAt: null,
+            SchedulingActivityExecutionId: null,
+            ParentActivityExecutionId: null,
+            BranchId: null,
+            IterationId: null,
+            CallStackDepth: null,
+            BookmarkIds: [],
+            IncidentIds: [],
+            FaultCount: 0,
+            AggregateFaultCount: 0,
+            Metadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutable NewExecutableWithResumeTarget()
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var node = new ExecutableNode(
+            executableNodeId: "node-wait",
+            authoredActivityId: "authored-node-wait",
+            activityType: "test/activity",
+            activityTypeVersion: "1.0.0",
+            descriptorType: "test",
+            descriptorPayload: document.RootElement.Clone(),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+        return new(
+            identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            rootActivity: node,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                ["resume-target:delivery"] = new(
+                    ResumeTargetId: "resume-target:delivery",
+                    ExecutableNodeId: "node-wait",
+                    HandlerKey: "test-handler",
+                    Metadata: new Dictionary<string, string>())
+            },
+            createdAt: DateTimeOffset.UtcNow,
+            publishedAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
     }
 
     private static WorkflowExecutable NewExecutable()

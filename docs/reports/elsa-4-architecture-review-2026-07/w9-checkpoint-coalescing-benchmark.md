@@ -84,17 +84,26 @@ per workload. In-segment activity re-execution after a mid-segment crash is expe
 - **Policy + fold unit coverage** — `RuntimeCheckpointCoalescingPolicyTests` (boundary→Immediate,
   non-boundary→Deferred, `CoalescedFlush` marker→Immediate) and `RuntimeCheckpointFoldTests`
   (last-writer-wins collapse, Append never collapsed, outbox excluded from the folded state).
+- **Bookmark-suspend durability** —
+  `RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`
+  drives a `CreateBookmark` suspend under coalescing and asserts the bookmark lands in the **durable**
+  bookmark store at the boundary (never buffered in-memory), so a durable timer/stimulus pump — e.g. W8's
+  Delay pump, which reads the durable bookmark store — can never race an in-memory-only bookmark.
 
 ## Baselines (all green, unmodified except added tests)
+
+Measured after merging W8 (durable timer pump / Delay) into the branch.
 
 | Suite | Baseline | After W9 |
 |---|---|---|
 | Architecture guards | 37 | 37 |
-| Runtime | 578 | 604 (+26 coalescing/policy/fold) |
-| Groundwork | 128 | 129 (+1 two-generation convergence) |
+| Runtime | 588 | 615 (+27 coalescing/policy/fold/suspend) |
+| Groundwork | 142 | 143 (+1 two-generation convergence) |
 | Resumption | 12 | 12 |
 | Activities Runtime | 140 | 140 |
-| Publishing API | 46 | 46 |
+| Publishing API | 49 | 49 |
+| Scheduling runtime | 19 | 19 |
+| Activities Scheduling | 8 | 8 |
 
 Condition A (zero default-path change) is proven by every pre-existing baseline staying green **unmodified**:
 with the default Immediate policy the coalescing decorators and ambient working-set machinery are never

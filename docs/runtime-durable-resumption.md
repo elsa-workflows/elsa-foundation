@@ -195,6 +195,9 @@ and the absence of duplicate *terminal* effects are proven by
 (two generations over a shared store: gen-1 crashes mid-segment with the queue still holding the segment entry;
 gen-2's honest sweep converges to the crash-free control snapshot) and the queue-retention half by
 `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
+That a bookmark-suspend flushes its bookmark **durably** at the boundary — so W8's durable Delay/timer pump (which
+reads the durable bookmark store) can never race an in-memory-only bookmark — is proven by
+`RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`.
 
 ## Out of scope (owned elsewhere)
 
