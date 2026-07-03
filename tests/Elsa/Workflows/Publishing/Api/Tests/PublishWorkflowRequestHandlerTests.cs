@@ -251,7 +251,10 @@ public sealed class PublishWorkflowRequestHandlerTests
                 new FakeActivityVersionStore(activityVersions.ToList()),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
-            _store);
+            _store,
+            new WorkflowTriggerIndexer(
+                new WorkflowTriggerBindingExtractor([]),
+                new InMemoryWorkflowTriggerBindingStore()));
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")

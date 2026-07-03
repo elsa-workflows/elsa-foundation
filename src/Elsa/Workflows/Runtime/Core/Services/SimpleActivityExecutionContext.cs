@@ -19,9 +19,17 @@ public sealed class SimpleActivityExecutionContext(
     RuntimeSchedulerWorkItem? schedulerWorkItem = null,
     ExecutableNode? executableNode = null,
     ActivityExecutionState? activityExecutionState = null,
-    VariableScope? variableScope = null)
-    : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider
+    VariableScope? variableScope = null,
+    string? correlationId = null,
+    string? workflowName = null,
+    int workflowDefinitionVersion = 0,
+    IReadOnlyDictionary<string, object?>? workflowInputs = null,
+    IReadOnlyDictionary<string, object?>? workflowVariables = null,
+    IReadOnlyDictionary<string, object?>? activityOutputValues = null)
+    : IRuntimeActivityExecutionContext, IExpressionExecutionContext, IScopedVariableProvider, IExecutionExpressionState
 {
+    private static readonly IReadOnlyDictionary<string, object?> EmptyExpressionState = new Dictionary<string, object?>(StringComparer.Ordinal);
+
     private readonly IMemoryRegister _memory = new SimpleMemoryRegister();
     private readonly List<string> _outcomes = [];
     private readonly List<ActivityBookmarkRequest> _bookmarkRequests = [];
@@ -189,11 +197,28 @@ public sealed class SimpleActivityExecutionContext(
 
     public object? GetVariableValueOrDefault(string variableName) =>
         VariableScope is { } scope && scope.TryGetValueByName(variableName, out var value) ? value : null;
-    public string GetCorrelationId() => string.Empty;
-    public string GetWorkflowDefinitionId() => string.Empty;
-    public string GetWorkflowDefinitionVersionId() => string.Empty;
-    public int GetWorkflowDefinitionVersion() => 0;
-    public string GetWorkflowInstanceId() => string.Empty;
+    public string GetCorrelationId() => CorrelationId ?? string.Empty;
+    public string GetWorkflowDefinitionId() => WorkflowDefinitionId;
+    public string GetWorkflowDefinitionVersionId() => WorkflowDefinitionVersionId;
+    public int GetWorkflowDefinitionVersion() => WorkflowDefinitionVersion;
+    public string GetWorkflowInstanceId() => WorkflowInstanceId;
+
+    // IExecutionExpressionState — the live execution-time expression carrier (ADR 0030). Populated by the
+    // scheduler work handler from runtime state; read by the JavaScript pre/post-processors after casting the
+    // passed IExpressionExecutionContext. Identity is sourced from WorkflowExecutionState + the pinned
+    // executable; inputs/variables/outputs are the durable-value projections. No Design dependency (§E2.2/§E2.6).
+    public string WorkflowInstanceId => WorkflowExecutionId;
+    // Reflect a pending script assignment (setCorrelationId/setWorkflowInstanceName) so a read-after-write within
+    // the same evaluation observes the new value, even though the durable change is folded at the checkpoint
+    // via the control-leaf intent path (spec 064 scenario 3, carried forward by ADR 0030).
+    public string? CorrelationId => CorrelationIdAssignmentRequested ? RequestedCorrelationId : correlationId;
+    public string? WorkflowName => InstanceNameAssignmentRequested ? RequestedInstanceName : workflowName;
+    public string WorkflowDefinitionId => pinnedExecutable?.DefinitionId ?? string.Empty;
+    public string WorkflowDefinitionVersionId => pinnedExecutable?.DefinitionVersionId ?? string.Empty;
+    public int WorkflowDefinitionVersion { get; } = workflowDefinitionVersion;
+    public IReadOnlyDictionary<string, object?> WorkflowInputs { get; } = workflowInputs ?? EmptyExpressionState;
+    public IReadOnlyDictionary<string, object?> WorkflowVariables { get; } = workflowVariables ?? EmptyExpressionState;
+    public IReadOnlyDictionary<string, object?> ActivityOutputValues { get; } = activityOutputValues ?? EmptyExpressionState;
 
     public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => _memory.Declare(blockReference);
     public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => _memory.TryGetBlock(blockReference.Id, out block);

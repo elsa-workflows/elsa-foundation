@@ -101,13 +101,14 @@ public sealed class GroundworkRuntimeCheckpointCommitStorePostCommitContractTest
         IDocumentStore store = new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create());
         var writer = new GroundworkRuntimeCheckpointWriter(
             store,
-            new GroundworkWorkflowExecutionStateStore(store),
-            new GroundworkSchedulerStateStore(store),
-            new GroundworkActivityExecutionStateStore(store),
-            new GroundworkBookmarkStateStore(store),
-            new GroundworkDurableValueStateStore(store),
-            new GroundworkIncidentStateStore(store),
-            new GroundworkOperationalStateStore(store));
-        return (writer, new GroundworkRuntimePostCommitOutboxStore(store));
+            GroundworkTestSerialization.Serializer,
+            new GroundworkWorkflowExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkSchedulerStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkActivityExecutionStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
+            new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer));
+        return (writer, new GroundworkRuntimePostCommitOutboxStore(store, GroundworkTestSerialization.Serializer));
     }
 }

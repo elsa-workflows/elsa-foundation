@@ -11,6 +11,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)`.
 - **Usage:** separates checkpoint semantics from persistence timing. The checkpoint name says what changed; the policy decides immediate, deferred, or skipped flush.
 - **Default implementation:** `ImmediateRuntimeCheckpointPersistencePolicy` *(intra-domain default)*.
+- **Alternative implementation:** `CoalescingRuntimeCheckpointPersistencePolicy` *(opt-in, W9/E3-6/RT-10)* — burst-coalescing folding of intra-drain checkpoints into one flush at quiescence; enable with `services.AddCoalescingRuntimeCheckpointPersistence()` (see the Coalescing checkpoint persistence section below).
 
 ### `IRuntimeCheckpointWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one writer owns persistence of checkpoint envelopes for a runtime composition).
@@ -36,11 +37,30 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** provider implementations inspect operational state such as leases and heartbeats and return recovery candidates that requeue from the last checkpoint without invoking domain retry policy.
 - **Default implementation:** `InMemoryRuntimeRecoveryScanner` *(single-node in-memory default for operational recovery candidate discovery)*.
 
+### `IRuntimeResumptionService` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one service owns a single system-wide resumption sweep pass for a runtime composition).
+- **Signature:** `SweepAsync(RuntimeResumptionSweepRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** one sweep pass re-delivers stranded post-commit outbox items system-wide (`ProcessAsync(workflowExecutionId: null, intentKind: EnqueueSchedulerWork)`), unions durable scheduler-queue backlog (`IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`) with `IRuntimeRecoveryScanner` candidates, and re-drives each discovered execution by enqueueing a `RunSchedulerWork` envelope through the agent mailbox — preserving single-writer discipline. The request bounds each sweep (`MaxExecutionsPerSweep`) and skips executions the caller is backing off (`ExcludedWorkflowExecutionIds`). Re-drive failures surface on the result and do not abort the sweep; callers own logging and backoff. It is not registered by the runtime API feature — only the `WorkflowsRuntimeResumption` shell feature registers it and drives it from a recurring pump.
+- **Default implementation:** `RuntimeResumptionService` *(registered by the feature-gated `Elsa.Workflows.Runtime.Resumption` package)*.
+
 ### `IRuntimeDomainRetryPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides workflow/activity domain retry behavior for a runtime composition).
 - **Signature:** `Decide(RuntimeDomainRetryRequest request)`.
 - **Usage:** keeps workflow/activity retry decisions separate from operational recovery such as lost leases and interrupted execution agents.
 - **Default implementation:** `NoopRuntimeDomainRetryPolicy` *(explicit do-not-retry baseline; workflow/activity retry policy providers replace this)*.
+
+### `IRuntimeFaultCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one policy decides how an exception is turned into structured fault information for a runtime composition).
+- **Signature:** `Capture(Exception exception)` → `RuntimeFaultInfo`.
+- **Usage:** unifies runtime fault capture (RT-12) so the drainer's handler-crash path and the post-commit outbox delivery path both record the same structured `RuntimeFaultInfo` (exception type + message, stack trace behind an opt-in flag) instead of two divergent `exception.ToString()` / `exception.Message` policies. `RuntimeFaultInfo.ToSummaryString()` yields `"{ExceptionType}: {Message}"`.
+- **Default implementation:** `DefaultRuntimeFaultCapturePolicy` *(type full name + message; stack trace only when `RuntimeFaultCaptureOptions.CaptureStackTrace` is enabled)*.
+
+### `IWorkflowSchedulerPoisonStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns poison/retry records for crashed scheduler work items in a runtime composition).
+- **Signature:** `RecordAsync(RuntimeSchedulerPoisonRecord record, ...)`, `FindAsync(workflowExecutionId, workItemId, ...)`, `ListAsync(workflowExecutionId, ...)`.
+- **Usage:** when a scheduler work handler crashes, the drainer captures the fault, consults `IRuntimeDomainRetryPolicy`, and records a `RuntimeSchedulerPoisonRecord` here instead of dropping the dequeued item (RT-1 gap b). Disposition is `Poisoned` (terminal, no retry) or `RetryScheduled` (carries `NextRetryAt`). The default `NoopRuntimeDomainRetryPolicy` yields `Poisoned` — a safe, non-looping baseline.
+- **Default implementation:** `InMemoryWorkflowSchedulerPoisonStore` *(intra-domain default; a durable poison store is future provider work — see follow-ups below)*.
+- **Follow-ups (W1 → W2):** `RetryNow` re-enqueues immediately through the `IWorkflowSchedulerWorkQueue` public contract and also records `RetryScheduled`; `RetryAfter(delay)` records `RetryScheduled` with `NextRetryAt` but does **not** re-enqueue — re-driving delayed retries is left to the durable resumption pump (`RuntimeResumptionPumpTask`; see [`docs/runtime-durable-resumption.md`](../../../../../docs/runtime-durable-resumption.md)), which avoids ignoring the delay / hot-looping. A durable poison store and the delayed re-drive are explicit follow-ups, not W1 scope.
 
 ### `IRuntimeVolatileWaitPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides whether in-memory volatile waits are allowed in a runtime composition).
@@ -84,6 +104,48 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** uses `IBookmarkStimulusLookup`, workflow execution state, the pinned executable artifact, and `IBookmarkResumeResolver` to enqueue a `ResumeBookmark` command through `IWorkflowExecutionAgentProvider`. The command payload carries `ResumeTargetId`, not C# callback method names. It does not consume bookmarks or invoke activity resume handlers.
 - **Default implementation:** `BookmarkResumeDispatcher`.
 
+### `IBookmarkStimulusIndex` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (narrow cross-execution read surface over bookmark state; segregated from `IBookmarkStateStore` so it can be widened/replaced independently).
+- **Signature:** `ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default)`.
+- **Usage:** returns non-expired `BookmarkState` records matching a stimulus identity **across every workflow execution** (E3-5 fan-in), unlike `IBookmarkStimulusLookup` which is scoped to one `workflowExecutionId`. Implemented by the bookmark state store itself (in-memory and Groundwork), backed additively by the `bookmarkState` `by-stimulus` index. Note the Condition 7 gap (see [`docs/serialization.md`](../../../../../docs/serialization.md)): bookmarks written before the index existed are not backfilled until re-saved.
+- **Default implementation:** `InMemoryBookmarkStateStore` / `GroundworkBookmarkStateStore` *(each also implements this interface)*.
+
+### `IGlobalBookmarkStimulusLookup` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one cross-execution lookup surface finds every waiting bookmark for a stimulus).
+- **Signature:** `FindAsync(GlobalBookmarkStimulusLookupRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** builds the fan-in resume set for the stimulus router by querying `IBookmarkStimulusIndex`, filtering expired bookmarks against the evaluated time and (when supplied) a passive correlation scope carried in bookmark metadata. Correlation is a threaded metadata value only — not a correlation subsystem.
+- **Default implementation:** `GlobalBookmarkStimulusLookup`.
+
+### `IWorkflowTriggerBindingStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns the durable trigger-binding index for a runtime composition).
+- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(stimulusType, stimulusHash, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
+- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulus` is the cross-artifact fan-out the router uses to start every workflow waiting on a stimulus; `by-artifact` scoping supports republish replacement.
+- **Default implementation:** `InMemoryWorkflowTriggerBindingStore` *(single-node in-memory default; `GroundworkWorkflowTriggerBindingStore` replaces it for durable storage over the `workflowTriggerBinding` document kind)*.
+
+### `IWorkflowTriggerBindingExtractor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one extractor derives trigger bindings from a published executable).
+- **Signature:** `Extract(WorkflowExecutable executable)`.
+- **Usage:** walks the pinned executable's node tree, selects compiler-marked start-trigger nodes, and resolves each one's stimulus identity through the registered `IActivityTriggerStimulusProvider` set. A start-trigger node no provider can describe **throws**, failing the publish rather than persisting an unroutable trigger.
+- **Default implementation:** `WorkflowTriggerBindingExtractor`.
+
+### `IWorkflowTriggerIndexer` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one indexer writes the trigger index for a published artifact).
+- **Signature:** `IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)`.
+- **Usage:** invoked inside the publish flow; extracts bindings (an unroutable trigger throws before any write) then replaces the artifact's prior bindings with the current set (delete-by-artifact then write) so a republished version's triggers fully supersede the previous version's. Any failure propagates and **fails the publish** — no silently unindexed trigger.
+- **Default implementation:** `WorkflowTriggerIndexer`.
+
+### `IStimulusStartDeduplicator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (narrow best-effort dedup for the stimulus START path, Condition A).
+- **Signature:** `TryBeginStart(string idempotencyKey)`.
+- **Usage:** when the router is given an `idempotencyKey`, a duplicate at-least-once delivery under the same key does not double-start. The default is in-process and best-effort (not a durable cross-node ledger); when no key is supplied the start path is plainly at-least-once and **may double-start**. Hosts needing restart-durable start-once semantics replace this contract.
+- **Default implementation:** `InMemoryStimulusStartDeduplicator`.
+
+### `IStimulusRouter` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one routing spine turns an external stimulus into starts and/or resumes).
+- **Signature:** `RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)`.
+- **Usage:** the E3-1/E3-5 spine. Snapshots the cross-execution resume set (via `IGlobalBookmarkStimulusLookup`) **before** starting new instances, starts matching published triggers (via `IWorkflowExecutionStartDispatcher`, deduped by `IStimulusStartDeduplicator` when an idempotency key is present), and resumes each waiting instance (via `IBookmarkResumeDispatcher`). All dispatch routes through the agent mailbox — the single-writer invariant is preserved. Correlation scope is a passive threaded metadata value.
+- **Default implementation:** `StimulusRouter`.
+
 ### `IRuntimeActivityOutputReader` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Query surface (read-only active-scope output lookup used by resolvers and resolution contexts).
 - **Signature:** `TryGet(ActiveActivityOutputKey key, out ActiveActivityOutput output)`, `GetActivityOutputs(...)`.
@@ -119,6 +181,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `WorkflowVariables`, `WorkflowInputs`, `ActivityOutputValues` (name → value).
 - **Usage:** implemented by the materialization-time `IExpressionExecutionContext` so expression-language pre-processors can resolve variable/input/output references before the activity's real execution context exists. Populate the snapshots on the resolution context from the durable values captured for the execution: `RuntimeInputBindingStateProjection.ProjectWorkflowVariables` / `ProjectWorkflowInputs` / `ProjectActivityOutputValues` rebuild the `variables.*` / `input.*` / `output.*` snapshots. Workflow variables and inputs become durable values via `RuntimeWorkflowStateSeed`, seeded at the `WorkflowStarted` checkpoint and tagged with the `runtime.variableName` / `runtime.inputName` metadata keys. The start entry points (`ExecuteWorkflowRequestHandler`, `StartWorkflowTestRunRequestHandler`) populate the seed's `Variables` with authored workflow variable defaults projected off the compiled executable's root structure (`RuntimeVariableScopeFactory.ProjectDeclaredVariableDefaultsByName`); caller-supplied `Inputs` are a deferred API-surface change (#286).
 - **Default implementation:** private materialization context in `RuntimeActivityInputMaterializer`; consumed by `MaterializationAccessorsPreProcessor` *(Elsa.Workflows.Runtime.JavaScript)*.
+
+### `IExecutionExpressionState` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Bridge (carries live execution-time workflow state — identity, inputs, variables, prior outputs — to language pre/post-processors during activity execution). Execution-time counterpart to `IMaterializationExpressionState` (ADR 0030).
+- **Signature:** `WorkflowInstanceId`, `CorrelationId`, `WorkflowName`, `WorkflowDefinitionId`, `WorkflowDefinitionVersionId`, `WorkflowDefinitionVersion`, `WorkflowInputs`, `WorkflowVariables`, `ActivityOutputValues`.
+- **Usage:** implemented by the execution-time `IExpressionExecutionContext` (`SimpleActivityExecutionContext`) so expression-language pre/post-processors resolve execution-time identity functions, named pascalized accessors, execution-time output accessors, and JavaScript variable write-back **without a DI-registered live workflow execution context** (ADR 0030 D1; retires `IWorkflowExecutionContext`). Populated by `WorkflowInvokeActivitySchedulerWorkHandler`: identity from `WorkflowExecutionState` + the pinned `WorkflowExecutableIdentity`; `WorkflowVariables`/`WorkflowInputs`/`ActivityOutputValues` from the durable-value projections (`RuntimeInputBindingStateProjection`). Variable writes route through the visible `VariableScope` (`IScopedVariableProvider`) and fold into the checkpoint-commit durable-value write-back (`BuildWorkflowScopeWriteBackChanges`) — no second persistence route. A narrow marker, not a general transient-properties bag (ADR 0030 Q3); Design-free (§E2.2/§E2.6).
+- **Default implementation:** `SimpleActivityExecutionContext`; consumed by the re-pointed JavaScript pre/post-processors (`WorkflowFunctionsPreProcessor`, `WorkflowInputFunctionsPreProcessor`, `VariableFunctionsPreProcessor`, `ActivityOutputFunctionsPreProcessor`, `CopyVariablesToWorkflowContext`) in *Elsa.Workflows.Runtime.JavaScript*. The `JavaScriptWorkflowsRuntimeFeature` registration is covered by a resolve-and-evaluate guardrail test (ADR 0030 D4).
 
 ### `IRuntimePayloadCapturePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides which runtime observability payloads may be captured for a runtime composition).
@@ -156,11 +224,39 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** bridges the accepted command boundary to scheduler draining after scheduler work is recorded and the drain policy requests immediate advancement. The default coordinator drains scheduler work, processes deliverable `RuntimePostCommitIntentKinds.EnqueueSchedulerWork` outbox items for the same workflow execution, and repeats scheduler draining until scheduler-intent delivery quiesces, a pause/fault stops scheduler draining, or the bounded cycle guard is reached. Checkpoint commit remains the durability boundary: commits record post-commit work, and the coordinator only delivers it after the commit path succeeds. `WorkflowExecutionDrainCoordinatorOptions` names the cycle and outbox batch limits; cycle-cap exhaustion throws `WorkflowExecutionDrainCycleLimitExceededException`.
 - **Default implementation:** `WorkflowExecutionDrainCoordinator`.
 
+### `IRuntimeExecutionOwnershipService` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one service owns single-writer fencing — lease acquisition, heartbeat, release, and stale-writer rejection — for a runtime composition).
+- **Signature:** `AcquireAsync(string workflowExecutionId, ...)`, `HeartbeatAsync(RuntimeExecutionLease lease, ...)`, `ReleaseAsync(RuntimeExecutionLease lease, ...)`, `EnsureCurrentAsync(string workflowExecutionId, long fencingToken, ...)`.
+- **Usage:** enforces RT-2 single-writer ownership. `WorkflowExecutionDrainCoordinator` acquires a lease at the start of a drain, pushes it onto `IRuntimeExecutionOwnershipContextAccessor`, and releases it in a `finally` (so a crash leaves the lease persisted for the recovery scanner to detect — closing W2's post-dequeue/pre-commit window). `RuntimeCheckpointCommitter` calls `EnsureCurrentAsync` at the single checkpoint-commit funnel and throws `RuntimeStaleFencingTokenException` when the presented fencing token is not the current one (equality is the only pass; tokens are strictly monotonic and never reused across release). Ownership state is backed by `IOperationalStateStore`; the lease `ExpiresAt` reuses the recovery scanner's existing lease-timeout honoring rather than a parallel knob.
+- **Default implementation:** `RuntimeExecutionOwnershipService` *(operational-state-backed, monotonic fencing token preserved across release)*.
+
+### `IRuntimeExecutionOwnershipContextAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one accessor owns the ambient current-lease scope for a runtime composition).
+- **Signature:** `RuntimeExecutionLease? Current { get; }`, `Push(RuntimeExecutionLease lease) : IDisposable`.
+- **Usage:** an AsyncLocal push/pop scope (mirroring `AsyncLocalWorkflowExecutionAmbientServicesAccessor`) that carries the active drain's lease from `IWorkflowExecutionDrainCoordinator` down to `RuntimeCheckpointCommitter` without threading it through every command/handler signature. It is a runtime-internal ambient accessor, not the ADR-0029-discouraged pipeline-context ambient.
+- **Default implementation:** `AsyncLocalRuntimeExecutionOwnershipContextAccessor`.
+
 ### `IWorkflowSchedulerWorkQueue` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one queue owns recorded scheduler work for a runtime composition).
-- **Signature:** `EnqueueAsync(RuntimeSchedulerWorkItem workItem, ...)`, `ListAsync(RuntimeSchedulerWorkQuery query, ...)`, `DequeueAsync(string workflowExecutionId, ...)`.
-- **Usage:** stores scheduler work by `WorkflowExecutionId` after an execution agent accepts a command envelope. The queue preserves per-workflow insertion order and is idempotent by scheduler work item ID within each workflow execution. Draining and activity execution remain separate scheduler behavior.
-- **Default implementation:** `InMemoryWorkflowSchedulerWorkQueue` *(single-node in-memory default for the current runtime slice)*.
+- **Signature:** `EnqueueAsync(RuntimeSchedulerWorkItem workItem, ...)`, `ListAsync(RuntimeSchedulerWorkQuery query, ...)`, `DequeueAsync(string workflowExecutionId, ...)`, `ListPendingWorkflowExecutionIdsAsync(int limit, ...)`.
+- **Usage:** stores scheduler work by `WorkflowExecutionId` after an execution agent accepts a command envelope. The queue preserves per-workflow insertion order and is idempotent by scheduler work item ID within each workflow execution. `ListPendingWorkflowExecutionIdsAsync` returns the distinct execution ids with queued work, up to `limit`, so a resumption sweep can discover durable backlog after a restart when nothing else knows the interrupted execution ids. Draining and activity execution remain separate scheduler behavior.
+- **Default implementation:** `InMemoryWorkflowSchedulerWorkQueue` *(single-node in-memory default for the current runtime slice)*. `GroundworkWorkflowSchedulerWorkQueue` *(durable `IDocumentStore`-backed bridge; swapped in by `AddGroundworkRuntimeStores` so scheduler work survives a process crash — see [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md))*.
+
+### `IDurableTimerStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns durable timers for a runtime composition).
+- **Signature:** `SaveAsync(DurableTimer timer, ...)`, `FindAsync(string workflowExecutionId, string timerId, ...)`, `DeleteAsync(string workflowExecutionId, string timerId, ...)`, `ListDueAsync(DateTimeOffset now, int limit, ...)`.
+- **Usage:** persists `DurableTimer` records (a due-time-indexed document kind, `durableTimer`) keyed by `(WorkflowExecutionId, TimerId)`. `SaveAsync` is a deterministic upsert so a pre-commit crash re-executing the owning activity re-writes the same timer rather than duplicating it. `ListDueAsync` returns timers with `DueTime <= now`, ordered by `(DueTime, TimerId)`, capped at `limit`; the durable timer pump (`DurableTimerPumpTask`) drains this and fires each due timer through `IBookmarkResumeDispatcher`. The pump owns idempotency: it deletes a timer on `Dispatched`/`Duplicate` (the resume is durably enqueued into `IWorkflowSchedulerWorkQueue` before the dispatcher returns — see `WorkflowSchedulerCommandProcessor.ProcessAsync` — so deletion cannot lose the resume), and treats a past-grace `NotFound` as an already-consumed bookmark.
+- **Default implementation:** `InMemoryDurableTimerStore` *(single-node in-memory default; Delay works but is **not** restart-durable without a durable store)*. `GroundworkDurableTimerStore` *(durable `IDocumentStore`-backed bridge; swapped in by `AddGroundworkRuntimeStores`)*.
+- **Follow-ups (W8):**
+  - **Native due-time range index.** Groundwork is equality-index only this wave, so `ListDueAsync` loads the whole timer partition (equality query on a constant collection key) and filters/orders `DueTime` in memory. `MaxTimersPerTick` bounds the *dispatch* burst, not the *load*. A native range/due-time index in Groundwork is the scale follow-up.
+  - **Timer/Cron start triggers** (recurring schedules that *start* a workflow) are OUT this wave — they depend on W7's trigger/stimulus index. The `durableTimer` kind is shaped so a `start-trigger` timer variant can plug in later without a schema change.
+  - **Atomic timer registration (Option B).** Delay registers its timer activity-side, strictly before the bookmark (so "bookmark committed, timer missing" is structurally excluded). A fully atomic timer==bookmark lifecycle via a post-commit `RegisterDurableTimer` intent (`IRuntimePostCommitIntentDispatcher`) is the alternative if orphaned timers ever prove noisy.
+
+### `IDurableTimerScheduler` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one scheduler owns durable-timer registration for a runtime composition).
+- **Signature:** `ScheduleAsync(DurableTimer timer, ...)`.
+- **Usage:** thin activity-facing wrapper over `IDurableTimerStore.SaveAsync`. The `Delay` activity builds the `DurableTimer` (deriving `DueTime` from the injected `TimeProvider`) and calls this to write its timer before creating the matching bookmark.
+- **Default implementation:** `DurableTimerScheduler` *(registered by the `WorkflowsRuntimeScheduling` feature)*.
 
 ### `IActivityExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for concrete activity executions in a runtime composition).
@@ -241,6 +337,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `OnDrainedAsync(WorkflowExecutionCommandEnvelope envelope, RuntimeSchedulerDrainResult result, CancellationToken cancellationToken = default)`.
 - **Usage:** modules can project one command-triggered coordinated drain outcome into diagnostics or future checkpoint/outbox behavior without making history continuation state. Coordinated results aggregate scheduler work item results across scheduler drain passes, include post-commit outbox delivery counts/results, and expose a stop reason such as quiesced, paused, faulted, or outbox delivery failed.
 - **Default implementation:** `NoopWorkflowSchedulerDrainObserver`.
+- **Known implementations (shipped):** `BlockingIncidentWorkflowFaultObserver` *(RT-1a/RT-5 — after a drain turn, if the workflow has one or more blocking incidents and is still non-terminal, commits a `WorkflowFaulted` checkpoint that transitions the workflow to `Faulted`; registered additively via `TryAddEnumerable`)*.
 
 ### `IWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (handlers consume drained scheduler work items).
@@ -281,6 +378,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
 - **Usage:** declares the stable resume target ID that compile/publish can place into `WorkflowExecutable.ResumeTargets`. Durable bookmarks store the ID, not the C# method name.
 - **Not a runtime callback store** — handler method names and delegates are implementation details and are not persisted in `BookmarkState`.
+- **Compiler indexing (W8):** `WorkflowExecutableCompiler` now reflects `[ResumeTarget]` methods off each node's resolved activity type and indexes them into `WorkflowExecutable.ResumeTargets` (previously always empty). `Delay` is the first suspending activity to exercise this. The map is keyed by the attribute's resume-target ID, so duplicate IDs across nodes fail compilation loudly.
+- **Follow-up (W8) — node-scoped resume targets.** Because the key is the attribute ID (matching how the resume resolver and the create-bookmark handler already match), only **one instance** of a given resume-target activity is supported per workflow this wave (two `Delay`s in one workflow fail compilation). Node-scoped resume-target IDs (keyed by `ExecutableNodeId` + attribute ID) are the follow-up to lift this, and require a matching change in the resume resolver.
 
 ### `ISignalHandler` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contributor (receives a signal and acts — push pattern).
@@ -301,7 +400,39 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 **Known implementations (shipped):**
 - `Elsa.Workflows.Runtime.JavaScript` — `ActivityCompletionHandler` *(cross-domain — test implementation for JS-context activity completion)*
 
+### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (fan-in; one provider per start-trigger activity type, resolved as `IEnumerable<T>` by `IWorkflowTriggerBindingExtractor`).
+- **Signature:** `TriggerStimulusDescriptor? Describe(ExecutableNode node);`
+- **Usage:** at **publish time** the trigger extractor asks each registered provider to describe a node; a provider returns the node's stimulus identity `(stimulusType, stimulusHash, correlationScope?)` when it recognizes the activity type, or `null` ("not mine"). Providers read only the pinned published `ExecutableNode` (its literal input bindings), never a running workflow, so stimulus identity is fixed at publish time. A provider whose trigger carries a non-literal, unresolvable stimulus key **throws**, failing the publish.
+- **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, MyProvider>())`.
+
+**Known implementations (shipped):**
+- `Elsa.Activities.Primitives` — `EventTriggerStimulusProvider` *(cross-domain — describes the named-event `Event` start trigger; stimulus type `Event`, hash over the event name)*.
+
 ---
+
+## Coalescing checkpoint persistence *(opt-in — W9 / E3-6 / RT-10)*
+
+The burst-coalescing persistence policy is an **opt-in** durability/throughput trade, enabled with
+`services.AddCoalescingRuntimeCheckpointPersistence()` (in `Elsa.Workflows.Runtime.Api.Coalescing`). It is
+**not** registered by default: the default runtime keeps `ImmediateRuntimeCheckpointPersistencePolicy` and
+the contracts/decorators below are absent, so the default path is byte-identical. When enabled, it swaps the
+policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session decorators over the
+checkpoint commit store, scheduler queue, post-commit outbox, and state stores. See
+[`docs/runtime-durable-resumption.md`](../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
+and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
+
+### `IRuntimeCoalescingSessionAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one ambient accessor exposes the active coalescing session to the decorators).
+- **Signature:** `RuntimeCoalescingSession? Current { get; }`, `IDisposable Push(RuntimeCoalescingSession? session)`.
+- **Usage:** an `AsyncLocal` push/pop stack that makes the current drain segment's in-memory working set ambient to the coalescing store/queue/outbox decorators, mirroring the existing ambient ownership-scope resolution. Only registered by the opt-in extension.
+- **Default implementation:** `AsyncLocalRuntimeCoalescingSessionAccessor` *(opt-in only)*.
+
+### `IRuntimeCoalescingDrainScopeFactory` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
+- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`.
+- **Usage:** `WorkflowExecutionDrainCoordinator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.
+- **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
 
 ## Cross-references
 

@@ -4,6 +4,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 
 ## Current reports
 
+- [Elsa 4 architecture review 2026-07](elsa-4-architecture-review-2026-07.md) - consolidated full-codebase review with verified findings and improvement roadmap (W1-W21). Detail sub-reports and per-work-unit implementation briefs: [elsa-4-architecture-review-2026-07/](elsa-4-architecture-review-2026-07/README.md).
 - [Knowledge inventory](knowledge-inventory.md)
 - [Unfinished work](unfinished-work.md) - inventory of findings and loose concerns, not the active work queue.
 - [Architecture tour review](architecture-tour-review.md)

@@ -43,6 +43,12 @@ public sealed class FaultIncidentExecutionTests
         Assert.Equal(IncidentSeverity.Error, incident.Severity);
         Assert.Equal("Boom!", incident.Message);
         Assert.Equal("node-fault", incident.ExecutableNodeId);
+
+        // RT-1 acceptance: the blocking incident drives the workflow out of Running to a queryable Faulted status
+        // (the fault observer commits a WorkflowFaulted checkpoint post-drain).
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
+        Assert.NotNull(workflowState);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, workflowState!.Status);
     }
 
     [Fact]

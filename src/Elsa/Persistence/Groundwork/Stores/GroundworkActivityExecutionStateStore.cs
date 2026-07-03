@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -12,7 +11,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// document is wrapped in a thin envelope that stamps a top-level <c>workflowExecutionId</c> for the
 /// declared per-workflow index every provider supports.
 /// </summary>
-public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store) : IActivityExecutionStateStore
+public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IActivityExecutionStateStore
 {
     public async ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -21,13 +20,13 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store) 
         ArgumentException.ThrowIfNullOrWhiteSpace(state.Execution.ActivityExecutionId);
 
         var document = new ActivityExecutionStateDocument(state.Execution.WorkflowExecutionId, state);
-        var content = JsonSerializer.Serialize(document, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind, document);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
                 DocumentId.Compose(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -61,8 +60,8 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store) 
         return envelopes.Select(Map).ToArray();
     }
 
-    private static ActivityExecutionState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<ActivityExecutionStateDocument>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.State;
+    private ActivityExecutionState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<ActivityExecutionStateDocument>(envelope).State;
 
     private sealed record ActivityExecutionStateDocument(string WorkflowExecutionId, ActivityExecutionState State);
 }

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-workflow-execution-context`
 **Created**: 2026-06-11
-**Status**: Superseded (mechanism) by [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) — intent carried forward
+**Status**: Superseded (mechanism) by [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) — intent carried forward and implemented by [spec 083 (runtime execution-time expression carrier)](../083-runtime-execution-expression-carrier/spec.md)
 **Input**: Continue the runtime execution seam by replacing the runtime workflow execution context stub with a narrow runtime-owned implementation used by expression/JavaScript surfaces.
 
 > **Superseded note (2026-07-02).** This spec's *intent* is carried forward, but its *mechanism* is replaced. [ADR 0030](../../docs/adr/0030-runtime-expression-evaluation-uses-a-parameter-threaded-live-carrier.md) decided that runtime expression evaluation obtains workflow state from a **parameter-threaded carrier**, not from a mutable DI-registered `WorkflowExecutionContext` object. The three scenarios below (workflow identity without loading authored models; inputs/variables/outputs readable from a runtime-owned context; JS updates to correlation/name/variables visible on re-read) remain the target surface and map to ADR 0030's identity, read, and write-back behaviors. The implementation Speckit unit re-bases FR-001…FR-005 below onto the live carrier and MUST NOT reintroduce `IWorkflowExecutionContext` as a DI dependency. Do not implement this spec as written.

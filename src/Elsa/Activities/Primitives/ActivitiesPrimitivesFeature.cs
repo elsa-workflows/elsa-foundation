@@ -1,9 +1,12 @@
 using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Binding;
 using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Primitives;
 
@@ -27,5 +30,9 @@ public class ActivitiesPrimitivesFeature : IShellFeature
     {
         services.AddSingleton<ActivityArgumentBinder>();
         services.AddSingleton<IActivityConstructor, ClrActivityConstructor>();
+
+        // Contribute the Event start-trigger's stimulus provider (W7, E3-1) so the publish-time trigger extractor
+        // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, EventTriggerStimulusProvider>());
     }
 }

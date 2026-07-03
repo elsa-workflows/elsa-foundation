@@ -17,7 +17,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task ActivityExecutionState_RoundTrips_And_Lists_By_Workflow(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(fixture.DocumentStore);
+        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(ActivityState("wf-1", "ae-1"));
         await store.SaveAsync(ActivityState("wf-1", "ae-2"));
@@ -42,7 +42,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task WorkflowExecutionState_RoundTrips_Replaces_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(fixture.DocumentStore);
+        IWorkflowExecutionStateStore store = new GroundworkWorkflowExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
         await store.SaveAsync(WorkflowState("wf-2", WorkflowExecutionStatus.Pending));
@@ -65,7 +65,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task DurableValueState_RoundTrips_Lists_And_Deletes(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IDurableValueStateStore store = new GroundworkDurableValueStateStore(fixture.DocumentStore);
+        IDurableValueStateStore store = new GroundworkDurableValueStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(DurableValue("wf-1", "dv-1"));
         await store.SaveAsync(DurableValue("wf-1", "dv-2"));
@@ -88,7 +88,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task SchedulerState_RoundTrips_With_WorkItems_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        ISchedulerStateStore store = new GroundworkSchedulerStateStore(fixture.DocumentStore);
+        ISchedulerStateStore store = new GroundworkSchedulerStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Scheduler("wf-1", version: 3));
         await store.SaveAsync(Scheduler("wf-2", version: 1));
@@ -110,7 +110,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task OperationalState_RoundTrips_Lists_By_Workflow_And_All(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IOperationalStateStore store = new GroundworkOperationalStateStore(fixture.DocumentStore);
+        IOperationalStateStore store = new GroundworkOperationalStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Operational("wf-1", "op-1"));
         await store.SaveAsync(Operational("wf-1", "op-2"));
@@ -131,7 +131,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task ControlPlaneState_RoundTrips_Scoped_And_Global(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IControlPlaneStateStore store = new GroundworkControlPlaneStateStore(fixture.DocumentStore);
+        IControlPlaneStateStore store = new GroundworkControlPlaneStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(new ControlPlaneState("cp-1", "wf-1"));
         await store.SaveAsync(new ControlPlaneState("cp-2", "wf-1"));
@@ -156,7 +156,7 @@ public sealed class GroundworkRuntimeStateStoreTests
     public async Task IncidentState_TryAdd_Is_InsertOnly_And_ListBlocking_Filters(string provider)
     {
         await using var fixture = CreateStore(provider);
-        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore);
+        IIncidentStateStore store = new GroundworkIncidentStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         Assert.True(await store.TryAddAsync(Incident("wf-1", "inc-1", IncidentStatus.Open)));
         // Second insert of the same key must fail; the original must remain untouched.

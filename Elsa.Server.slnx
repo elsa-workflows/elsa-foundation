@@ -16,6 +16,7 @@
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <Project Path="src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Activities/Composition/">
@@ -208,6 +209,8 @@
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
@@ -235,6 +238,9 @@
   <Folder Name="/tests/Elsa/Activities/Sequence/">
     <Project Path="tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Activities/Scheduling/">
+    <Project Path="tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/" />
   <Folder Name="/tests/Elsa/Activities/Design/Tests/">
     <Project Path="tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
@@ -249,6 +255,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Agent/">
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Api/FastEndpoints/">
+    <Project Path="tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Architecture/">
     <Project Path="tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj" />
@@ -327,6 +336,12 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Resumption/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Scheduling/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa3/" />
   <Folder Name="/tests/Elsa3/Mapping/">

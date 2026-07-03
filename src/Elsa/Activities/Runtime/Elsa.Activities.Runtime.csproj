@@ -13,11 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Expose the internal RegisterActivityTypesStartupTask test seam (baseline assembly source) to unit tests (§2.23). -->
-    <InternalsVisibleTo Include="Elsa.Activities.Design.Tests" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />

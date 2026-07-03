@@ -10,9 +10,6 @@ public class ElsaEndpoint<TRequest, TResponse, TMapper> : Endpoint<TRequest, TRe
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        if (!EndpointSecurityOptions.SecurityIsEnabled)
-            AllowAnonymous();
-        else
-            Permissions([PermissionNames.All, .. permissions]);
+        Permissions([PermissionNames.All, .. permissions]);
     }
 }

@@ -44,14 +44,14 @@ public sealed class RuntimePostCommitOutboxProcessorTests
 
         var item = Assert.Single(result.Items);
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, item.RequestedDeliveryResultStatus);
-        Assert.Equal("Dispatch failed.", item.FailureMessage);
+        Assert.Equal("System.InvalidOperationException: Dispatch failed.", item.FailureMessage);
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(5), limit: 10)));
 
         var retryable = await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddSeconds(11), limit: 10));
         var retryableItem = Assert.Single(retryable);
         Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, retryableItem.Status);
         Assert.Equal(1, retryableItem.DeliveryAttemptCount);
-        Assert.Equal("Dispatch failed.", retryableItem.LastFailureMessage);
+        Assert.Equal("System.InvalidOperationException: Dispatch failed.", retryableItem.LastFailureMessage);
     }
 
     [Fact]

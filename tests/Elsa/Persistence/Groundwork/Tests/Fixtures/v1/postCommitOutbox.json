@@ -1,0 +1,35 @@
+{
+  "collection": "postCommitOutbox",
+  "item": {
+    "availableAt": "1970-01-01T00:00:00\u002B00:00",
+    "deliveredAt": null,
+    "deliveringOwnerId": null,
+    "deliveryAttemptCount": 0,
+    "deliveryStartedAt": null,
+    "intent": {
+      "activityExecutionId": null,
+      "dependsOnWaitRegistrationId": null,
+      "idempotencyKey": null,
+      "intentId": "intent-item-1",
+      "isWaitDependent": false,
+      "kind": "publish",
+      "metadata": {},
+      "payload": null,
+      "recordedAt": "1970-01-01T00:00:00\u002B00:00",
+      "waitFailurePolicy": null,
+      "workflowExecutionId": "wf-1"
+    },
+    "isTerminal": false,
+    "lastFailureMessage": null,
+    "metadata": {},
+    "outboxItemId": "item-1",
+    "recordedAt": "1970-01-01T00:00:00\u002B00:00",
+    "retryPolicy": {
+      "delay": null,
+      "maxAttempts": 0,
+      "metadata": {}
+    },
+    "status": 0
+  },
+  "workflowExecutionId": "wf-1"
+}

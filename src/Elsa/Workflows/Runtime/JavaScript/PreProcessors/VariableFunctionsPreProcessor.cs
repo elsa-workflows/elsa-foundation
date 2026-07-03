@@ -9,23 +9,35 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.JavaScript.PreProcessors;
 
-public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> options, IWorkflowExecutionContext workflowExecution)
+/// <summary>
+/// Registers the generic <c>getVariable</c>/<c>setVariable</c> functions plus named pascalized variable
+/// accessors (e.g. <c>getGreeting()</c>/<c>setGreeting()</c> for a variable named <c>greeting</c>) from the
+/// live execution-time expression carrier (<see cref="IExecutionExpressionState"/>). Re-pointed onto the carrier
+/// per ADR 0030: no DI-registered live workflow execution context. Reads and writes resolve through the visible
+/// container-scope chain (<see cref="IScopedVariableProvider"/>, ADR 0027) with nearest-scope shadowing, so
+/// mutations land in the workflow/container scope and fold into the checkpoint-commit durable-value write-back.
+/// No-op for any non-execution context (e.g. input materialization), so it is safe to register globally.
+/// </summary>
+public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> options)
     : IScriptPreProcessor
 {
     public ValueTask PreProcess(string script, IJavaScriptExecutionContext executionContext, IExpressionExecutionContext expressionContext, IExpressionEvaluatorOptions? evaluatorOptions, CancellationToken cancellationToken)
     {
+        if (expressionContext is not IExecutionExpressionState state)
+            return ValueTask.CompletedTask;
+
         // When the activity's expression context exposes a visible scope chain (workflow + ancestor
         // container scopes, ADR 0027), resolve name-based helpers through it so freehand scripts can
         // read/assign container-scoped variables with nearest-scope shadowing. Otherwise fall back to
-        // the workflow-scoped behaviour.
+        // the workflow-scope variable projection carried by the execution-time carrier.
         var scopedVariables = expressionContext as IScopedVariableProvider;
 
-        var namedVariables = scopedVariables is not null
-            ? scopedVariables.GetVisibleVariables()
-            : workflowExecution.GetVariables();
+        var variableNames = scopedVariables is not null
+            ? scopedVariables.GetVisibleVariables().Select(variable => variable.Name)
+            : state.WorkflowVariables.Keys;
 
-        foreach (var variable in namedVariables)
-            foreach (var function in BuildNamedVariableFunctions(executionContext, scopedVariables, variable))
+        foreach (var variableName in variableNames)
+            foreach (var function in BuildNamedVariableFunctions(executionContext, scopedVariables, state, variableName))
                 executionContext.RegisterFunction(function);
 
         executionContext.RegisterFunction(
@@ -38,32 +50,32 @@ public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> optio
         executionContext.RegisterFunction(
             new JavaScriptFunction<string>(
                 WorkflowFunctionNames.GetVariableFunctionName,
-                (name) => GetVariable(scopedVariables, name)
+                (name) => GetVariable(scopedVariables, state, name)
             )
         );
 
         return ValueTask.CompletedTask;
     }
 
-    private IEnumerable<IJavaScriptFunction> BuildNamedVariableFunctions(IJavaScriptExecutionContext context, IScopedVariableProvider? scopedVariables, IVariable variable)
+    private IEnumerable<IJavaScriptFunction> BuildNamedVariableFunctions(IJavaScriptExecutionContext context, IScopedVariableProvider? scopedVariables, IExecutionExpressionState state, string variableName)
     {
-        var pascalName = variable.Name.Pascalize();
+        var pascalName = variableName.Pascalize();
 
         yield return new JavaScriptFunction<object>(
             string.Format(WorkflowFunctionNames.SetNamedVariableFunctionFormat, pascalName),
-            (value) => SetVariable(context, scopedVariables, variable.Name, value));
+            (value) => SetVariable(context, scopedVariables, variableName, value));
 
         yield return new JavaScriptFunction(
             string.Format(WorkflowFunctionNames.GetNamedVariableFunctionFormat, pascalName),
-            () => GetVariable(scopedVariables, variable.Name));
+            () => GetVariable(scopedVariables, state, variableName));
     }
 
-    private object? GetVariable(IScopedVariableProvider? scopedVariables, string name)
+    private static object? GetVariable(IScopedVariableProvider? scopedVariables, IExecutionExpressionState state, string name)
     {
         if (scopedVariables is not null && scopedVariables.TryGetVariableValueByName(name, out var value))
             return value;
 
-        return workflowExecution.GetVariable(name);
+        return state.WorkflowVariables.GetValueOrDefault(name);
     }
 
     private void SetVariable(IJavaScriptExecutionContext context, IScopedVariableProvider? scopedVariables, string name, object? value)
@@ -87,11 +99,10 @@ public sealed class VariableFunctionsPreProcessor(IOptions<FeatureOptions> optio
             variablesContainer
         );
 
-        // Write back to the correct visible scope (nearest workflow/container scope declaring the
-        // name) when a scope chain is available; otherwise to the workflow context.
-        if (scopedVariables is not null && scopedVariables.TrySetVariableValueByName(name, value))
-            return;
-
-        workflowExecution.SetVariable(name, value);
+        // Write back to the correct visible scope (nearest workflow/container scope declaring the name) when a
+        // scope chain is available, so the mutation folds into the checkpoint-commit durable-value write-back.
+        // A name declared by no scope has no durable target under the artifact-only runtime model; it remains
+        // readable within this evaluation via the engine container above.
+        scopedVariables?.TrySetVariableValueByName(name, value);
     }
 }

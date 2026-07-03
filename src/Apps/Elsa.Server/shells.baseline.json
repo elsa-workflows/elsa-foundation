@@ -35,10 +35,13 @@
           "DiagnosticsConsoleLogStreaming": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeTriggers": {},
           "GroundworkRuntimePersistenceSqlite": {},
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityOidc": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
             "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",

@@ -19,6 +19,11 @@ public abstract class FastEndpointsFeatureBase : IFastEndpointsShellFeature
                     typeof(IFastEndpointsConfigurator),
                     typeof(SerializationFastEndpointConfigurator),
                     ServiceLifetime.Scoped
+                ),
+                new(
+                    typeof(IFastEndpointsConfigurator),
+                    typeof(ApiSecurityFastEndpointsConfigurator),
+                    ServiceLifetime.Scoped
                 )
             ]
         );

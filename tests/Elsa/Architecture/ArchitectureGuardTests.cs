@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -16,6 +17,18 @@ public sealed class ArchitectureGuardTests
     [
         ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
     ];
+
+    // Documented exceptions to the §2.23.3 no-InternalsVisibleTo rule. Each entry needs a reason
+    // recorded at the declaration site (csproj comment) and here. Additions require architect review.
+    private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
+    [
+        // Elsa.Server's ExtensionBuilder subsystem is a host-private surface of ~80 interlocking
+        // internal types; publicizing it to satisfy §2.23.3 would promote host-only contracts into
+        // public API. Tracked as the sole allowed exception (MD-3, Elsa 4 architecture review 2026-07).
+        ("Elsa.Server", "Elsa.Modularity.Tests")
+    ];
+
+    private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
 
     [Fact]
     public void Solution_has_no_global_layer_marker_folders()
@@ -206,6 +219,46 @@ public sealed class ArchitectureGuardTests
             .SelectMany(project => ProjectReferences(project)
                 .Where(isForbidden)
                 .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
+    {
+        var csprojViolations = ProjectFiles()
+            .SelectMany(project => XDocument.Load(project.FullPath)
+                .Descendants("InternalsVisibleTo")
+                .Select(x => x.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Where(target => !AllowedInternalsVisibleTo.Contains((project.Name, target)))
+                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"));
+
+        var attributeViolations = ProjectFiles()
+            .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories)
+                .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
+                               !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+                .Where(file => AssemblyInternalsVisibleToPattern.IsMatch(StripCommentsAndStringLiterals(File.ReadAllText(file))))
+                .Select(file => $"{project.Name} -> [assembly: InternalsVisibleTo] in {Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}"));
+
+        var violations = csprojViolations.Concat(attributeViolations).ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Projects_do_not_declare_duplicate_project_references()
+    {
+        var violations = ProjectFiles()
+            .SelectMany(project => XDocument.Load(project.FullPath)
+                .Descendants("ProjectReference")
+                .Select(x => x.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => include.Replace('\\', '/'))
+                .GroupBy(include => include, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => $"{project.Name}: duplicate ProjectReference {group.Key}"))
             .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));

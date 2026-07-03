@@ -76,6 +76,12 @@ not automatic constitution violations.
 |---|---|
 | HTTP (downloadable content handlers) | [`src/Elsa/Http/EXTENSION_POINTS.md`](src/Elsa/Http/EXTENSION_POINTS.md) |
 
+### API
+
+| Domain | Catalog |
+|---|---|
+| FastEndpoints (secure-by-construction endpoint bases, per-shell API security, endpoint configurators/filters) | [`src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md`](src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md) |
+
 ### Agent and Identity
 
 | Domain | Catalog |
@@ -96,6 +102,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
+| Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 
@@ -126,8 +133,9 @@ not automatic constitution violations.
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Workflows runtime (checkpoint policy/writer, post-commit dispatcher/outbox, recovery scanner, domain retry policy, bookmark resume resolver, value binding resolver/register/validator, payload capture policy, activity execution inspection store/accumulator, execution agent provider, start dispatcher, scheduler queue/drain, runtime middleware, signal handler, completion handler) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
+| Workflows runtime (checkpoint policy/writer, post-commit dispatcher/outbox, recovery scanner, single-writer ownership fencing, domain retry policy, bookmark resume resolver, value binding resolver/register/validator, payload capture policy, activity execution inspection store/accumulator, execution agent provider, start dispatcher, scheduler queue/drain, runtime middleware, signal handler, completion handler, trigger index + global stimulus routing, activity trigger stimulus providers) | [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
+| Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 
 ### Legacy
 
