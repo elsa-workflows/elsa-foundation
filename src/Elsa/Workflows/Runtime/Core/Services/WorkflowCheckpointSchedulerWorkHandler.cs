@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowCheckpointSchedulerWorkHandler);
 
@@ -49,6 +49,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return workItem.CommandKind == WorkflowExecutionCommandKind.Checkpoint;
     }
 
+    /// <summary>Direct (no-pipeline) dispatch: build the checkpoint commit and commit it inline.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -57,6 +58,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         var payload = DeserializeCheckpointPayload(workItem);
         var commit = await BuildCommitAsync(workItem, payload, cancellationToken);
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var payload = DeserializeCheckpointPayload(workItem);
+        pipelineContext.Workspace.PendingCheckpointCommit = await BuildCommitAsync(workItem, payload, cancellationToken);
     }
 
     private async ValueTask<RuntimeCheckpointCommit> BuildCommitAsync(

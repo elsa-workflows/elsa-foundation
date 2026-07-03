@@ -460,6 +460,42 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task CheckpointHandler_StagesCommitForTheCheckpointSlot_WhenDispatchedThroughThePipeline()
+    {
+        // RT-6 (Move 2): the migrated Checkpoint handler's context-aware overload stages its commit on the workspace
+        // for the Checkpoint slot instead of committing inline — mirroring the Cancel handler.
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
+        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));
+        var context = new WorkflowRuntimePipelineContext(workItem);
+
+        await handler.HandleAsync(workItem, context);
+
+        Assert.Empty(checkpointWriter.ListCommits());
+        var staged = context.Workspace.PendingCheckpointCommit;
+        Assert.NotNull(staged);
+        Assert.Equal("commit:work-1", staged.CommitId);
+        Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, staged.Checkpoint.Name);
+    }
+
+    [Fact]
+    public async Task CheckpointHandler_CommitsInline_OnDirectDispatch()
+    {
+        // Behaviour-preserving fallback: dispatched without a pipeline it commits inline, as before Move 2.
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        await activityStateStore.SaveAsync(NewActivityState("actexec-1", ActivityExecutionStatus.Completed));
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter);
+        var workItem = NewWorkItem(1, commandKind: WorkflowExecutionCommandKind.Checkpoint, payload: JsonSerializer.SerializeToElement(NewCheckpointPayload()));
+
+        await handler.HandleAsync(workItem);
+
+        Assert.Single(checkpointWriter.ListCommits());
+    }
+
+    [Fact]
     public async Task DrainAsync_FaultsMalformedCheckpointWorkThroughNamedHandler()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
