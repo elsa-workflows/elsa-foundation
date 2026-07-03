@@ -136,14 +136,16 @@ public sealed class PerShellApiSecurityIntegrationTests
                     {
                         // Both modes share an identical authentication stack (Identity + OIDC). The
                         // only differentiator is the ApiSecurity relax below, which is the whole point
-                        // of the per-shell isolation proof.
+                        // of the per-shell isolation proof. The OIDC feature is composed without a
+                        // ClientId, which is exactly the secured-server default: no interactive
+                        // OpenID Connect handler is registered, and the JWT bearer scheme challenges
+                        // unauthenticated calls with 401.
                         shell
                             .WithPath("app")
                             .WithFeature<FastEndpointsFeature>(f => f.EndpointRoutePrefix = string.Empty)
                             .WithFeature<TestFastEndpointsFeature>()
                             .WithFeature<FoundationIdentityAbstractionsFeature>()
-                            .WithFeature<OidcAuthenticationFeature>()
-                            .WithFeature<TestOidcConfigFeature>();
+                            .WithFeature<OidcAuthenticationFeature>();
 
                         if (mode == SecurityMode.InsecureAllowAnonymous)
                             shell.WithFeature<ApiSecurityFeature>(f => f.AllowAnonymous = true);

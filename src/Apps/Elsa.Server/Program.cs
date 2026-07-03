@@ -185,9 +185,18 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationWorkflowsAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
 
-            // Identity surface: provider-agnostic auth/IAM contracts, identity API endpoints, and
-            // authentication provider modules. Composed in the default shell so the API is secured;
-            // the per-shell ApiSecurity feature is the only way to opt a shell out (never enabled here).
+            // Identity surface. What actually secures the API in W4 is the authentication stack:
+            // FoundationIdentityAbstractions (provider-agnostic auth/IAM contracts) plus the OIDC
+            // authentication provider module, which registers the JWT bearer scheme as the default
+            // challenge scheme so an unauthenticated call is rejected with 401. These two features
+            // are enabled in the default shell (see shells.json); the per-shell ApiSecurity feature
+            // is the only way to opt a shell out, and it is never enabled here.
+            //
+            // The remaining identity assemblies (the identity API endpoints, ASP.NET Core Identity,
+            // and the OpenIddict token service) stay in the discovery universe so W18 can enable
+            // them, but they are intentionally NOT enabled in W4: local token issuance and user
+            // seeding are W18 scope, and enabling the token-issuance endpoints without a token
+            // service would fault the shell's endpoint registration.
             typeof(FoundationIdentityAbstractionsFeature).Assembly,
             typeof(FoundationIdentityApiFeature).Assembly,
             typeof(OidcAuthenticationFeature).Assembly,

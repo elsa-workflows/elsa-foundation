@@ -40,7 +40,6 @@
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},
           "FoundationIdentityAbstractions": {},
-          "FoundationIdentityApi": {},
           "FoundationIdentityOidc": {},
           "GitHubCopilotAgent": {
             "Enabled": true,
