@@ -29,7 +29,8 @@ public sealed class PackageManifestFeatureCatalogContributor(INuplaneAdminOperat
         }
     }
 
-    internal static PackageManifestReadResult ReadManifest(string installPath)
+    /// <summary>Reads the package manifest from an installed package layout. Exposed for tests (§2.23.3).</summary>
+    public static PackageManifestReadResult ReadManifest(string installPath)
     {
         // Nuplane owns the on-disk package layout (extracted dir vs .nupkg, root vs build/); we only choose
         // which relative manifest paths to try.

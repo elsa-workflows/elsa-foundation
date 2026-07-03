@@ -11,7 +11,7 @@ namespace Elsa.Modularity.Nuplane.Services;
 /// Used both by the package contributor (manifests inside installed Nuplane packages) and the bundled contributor
 /// (manifests emitted by feature projects the host references directly).
 /// </summary>
-internal static class PackageManifestCatalogMapper
+public static class PackageManifestCatalogMapper
 {
     /// <summary>Parses manifest bytes and computes a content hash. Returns a <see cref="PackageManifestReadResult"/>.</summary>
     public static PackageManifestReadResult ReadManifestBytes(byte[] bytes, string path)
@@ -215,7 +215,7 @@ internal static class PackageManifestCatalogMapper
             : null;
 }
 
-internal sealed record PackageManifestReadResult(string? Path, string? Hash, ElsaPackageManifest? Manifest, string? ReadError)
+public sealed record PackageManifestReadResult(string? Path, string? Hash, ElsaPackageManifest? Manifest, string? ReadError)
 {
     public static PackageManifestReadResult Found(string path, string hash, ElsaPackageManifest manifest) =>
         new(path, hash, manifest, null);

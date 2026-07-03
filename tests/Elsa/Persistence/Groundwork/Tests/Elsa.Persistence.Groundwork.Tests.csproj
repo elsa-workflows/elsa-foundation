@@ -21,4 +21,10 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Committed golden fixtures: the frozen v1 serialized shape of every runtime document kind.
+         Copied next to the test assembly so the drift/compatibility tests can load them at runtime. -->
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

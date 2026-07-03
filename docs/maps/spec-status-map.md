@@ -103,4 +103,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |
 | [081-typed-argument-model](../../specs/081-typed-argument-model/spec.md) | Typed Argument Model + Type Descriptor Registry (Backend) | Draft | - | 42 | 2 | retained, deferred, out of scope |
 | [082-runtime-pipeline-execution-spine](../../specs/082-runtime-pipeline-execution-spine/spec.md) | Runtime Pipeline Execution Spine (ADR 0029 Move 1) | Draft | - | 0 | 0 | out of scope |
+| [083-runtime-checkpoint-slot-decomposition](../../specs/083-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Draft — establishes the Move 2 decomposition pattern; **seeks architect approval of the pattern before the remaining handlers**. | - | 0 | 0 | retained, out of scope |
 | [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Draft | - | 25 | 0 | superseded |
