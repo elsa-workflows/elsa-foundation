@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -22,7 +21,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// in-memory lifecycle exactly, now durable.
 /// </para>
 /// </remarks>
-public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store) : IRuntimePostCommitOutboxStore
+public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IRuntimePostCommitOutboxStore
 {
     public async ValueTask SavePendingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
     {
@@ -122,27 +121,27 @@ public sealed class GroundworkRuntimePostCommitOutboxStore(IDocumentStore store)
             ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
             item.Intent.WorkflowExecutionId,
             item);
-        var content = JsonSerializer.Serialize(envelope, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind, envelope);
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind,
                 item.OutboxItemId,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
     }
 
-    private static RuntimePostCommitOutboxItem Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<OutboxEnvelope>(envelope.ContentJson, GroundworkRuntimeJson.Options)!.Item;
+    private RuntimePostCommitOutboxItem Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<OutboxEnvelope>(envelope).Item;
 
     // Two pending saves of the same item must be idempotent. Comparing the serialized intent under the shared
     // options is equivalent to the in-memory store's field-by-field comparison and avoids drifting from the
     // intent's shape over time.
-    private static bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
+    private bool IsSamePendingIntent(RuntimePostCommitOutboxItem existing, RuntimePostCommitOutboxItem item) =>
         existing.Status == RuntimePostCommitOutboxStatus.Pending
         && StringComparer.Ordinal.Equals(
-            JsonSerializer.Serialize(existing.Intent, GroundworkRuntimeJson.Options),
-            JsonSerializer.Serialize(item.Intent, GroundworkRuntimeJson.Options));
+            serializer.SerializeForComparison(existing.Intent),
+            serializer.SerializeForComparison(item.Intent));
 
     private static bool IsDeliverable(RuntimePostCommitOutboxItem item, RuntimePostCommitOutboxQuery query)
     {

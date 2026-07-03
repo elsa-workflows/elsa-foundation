@@ -150,6 +150,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (workItem is null)
                 break;
 
+            // Single-writer TOCTOU tripwire (RT-2): the pause decision above was computed for the peeked head; the
+            // dequeue must return that same head. A mismatch means another writer drained this execution concurrently
+            // between the peek and the dequeue — a violation of the single-writer ownership invariant (all dispatch
+            // MUST route through the agent mailbox). Fail fast rather than gate item B's dequeue on item A's decision.
+            if (!StringComparer.Ordinal.Equals(workItem.WorkItemId, nextWorkItem.WorkItemId))
+                throw new InvalidOperationException(
+                    $"Single-writer invariant violation: scheduler drain for workflow execution '{request.WorkflowExecutionId}' " +
+                    $"peeked work item '{nextWorkItem.WorkItemId}' but dequeued '{workItem.WorkItemId}'. A concurrent drainer " +
+                    "interleaved between the pause-gate peek and the dequeue; all dispatch must route through the agent mailbox.");
+
             var result = await DispatchAsync(workItem, cancellationToken);
             results.Add(result);
             remaining--;
@@ -240,7 +250,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     // A dispatched handler threw. The work item was already dequeued (:128), so without this it would be dropped:
     // no retry, no record, no incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the
     // default (Noop → DoNotRetry) parks it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the
-    // queue's public contract; RetryAfter records a NextRetryAt for a recovery pump (W2) to re-drive and does NOT
+    // queue's public contract; RetryAfter records a NextRetryAt for the durable resumption pump
+    // (RuntimeResumptionPumpTask; see docs/runtime-durable-resumption.md) to re-drive and does NOT
     // re-enqueue here, since immediate re-enqueue would ignore the delay and hot-loop. This lives entirely in the
     // crash path — it does not touch the peek/pause-gate/dequeue sequence.
     private async ValueTask HandleHandlerCrashAsync(

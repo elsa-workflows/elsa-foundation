@@ -79,6 +79,12 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             descriptor.ServiceType == typeof(IRuntimeRecoveryScanner) &&
             descriptor.ImplementationType == typeof(InMemoryRuntimeRecoveryScanner));
         Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipContextAccessor) &&
+            descriptor.ImplementationType == typeof(AsyncLocalRuntimeExecutionOwnershipContextAccessor));
+        Assert.Contains(services, descriptor =>
+            descriptor.ServiceType == typeof(IRuntimeExecutionOwnershipService) &&
+            descriptor.ImplementationFactory is not null);
+        Assert.Contains(services, descriptor =>
             descriptor.ServiceType == typeof(IRuntimeDomainRetryPolicy) &&
             descriptor.ImplementationType == typeof(NoopRuntimeDomainRetryPolicy));
         Assert.Contains(services, descriptor =>
@@ -222,6 +228,8 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<InMemoryControlPlaneStateStore>(provider.GetRequiredService<IControlPlaneStateStore>());
         Assert.IsType<RuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
         Assert.IsType<InMemoryRuntimeRecoveryScanner>(provider.GetRequiredService<IRuntimeRecoveryScanner>());
+        Assert.IsType<AsyncLocalRuntimeExecutionOwnershipContextAccessor>(provider.GetRequiredService<IRuntimeExecutionOwnershipContextAccessor>());
+        Assert.IsType<RuntimeExecutionOwnershipService>(provider.GetRequiredService<IRuntimeExecutionOwnershipService>());
         Assert.IsType<NoopRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
         Assert.IsType<DefaultRuntimeFaultCapturePolicy>(provider.GetRequiredService<IRuntimeFaultCapturePolicy>());
         Assert.IsType<InMemoryWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());

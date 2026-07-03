@@ -2,7 +2,6 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Documents.Store;
-using System.Text.Json;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -20,7 +19,7 @@ namespace Elsa.Persistence.Groundwork.Stores;
 /// not atomic under concurrent inserters of the same key. Promoting Groundwork to the default provider
 /// should track an atomic insert-only primitive (or unique-index conflict surfacing) in the provider.
 /// </remarks>
-public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncidentStateStore
+public sealed class GroundworkIncidentStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer) : IIncidentStateStore
 {
     public async ValueTask<bool> TryAddAsync(IncidentState state, CancellationToken cancellationToken = default)
     {
@@ -34,12 +33,12 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
         if (existing is not null)
             return false;
 
-        var content = JsonSerializer.Serialize(state, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, state);
         var result = await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
                 id,
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -52,13 +51,13 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.IncidentId);
 
-        var content = JsonSerializer.Serialize(state, GroundworkRuntimeJson.Options);
+        var (schemaVersion, content) = serializer.Serialize(ElsaRuntimeStorageManifest.IncidentStateDocumentKind, state);
 
         await store.SaveAsync(
             new SaveDocumentRequest(
                 ElsaRuntimeStorageManifest.IncidentStateDocumentKind,
                 DocumentId.Compose(state.WorkflowExecutionId, state.IncidentId),
-                ElsaRuntimeStorageManifest.SchemaVersion,
+                schemaVersion,
                 content),
             cancellationToken);
 
@@ -98,6 +97,6 @@ public sealed class GroundworkIncidentStateStore(IDocumentStore store) : IIncide
         return states.Where(state => state.IsBlocking).ToArray();
     }
 
-    private static IncidentState Map(DocumentEnvelope envelope) =>
-        JsonSerializer.Deserialize<IncidentState>(envelope.ContentJson, GroundworkRuntimeJson.Options)!;
+    private IncidentState Map(DocumentEnvelope envelope) =>
+        serializer.Deserialize<IncidentState>(envelope);
 }

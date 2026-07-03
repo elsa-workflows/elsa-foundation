@@ -7,9 +7,6 @@ public abstract class ElsaEndpointWithoutRequest<TResponse> : EndpointWithoutReq
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        if (!EndpointSecurityOptions.SecurityIsEnabled)
-            AllowAnonymous();
-        else
-            Permissions([PermissionNames.All, .. permissions]);
+        Permissions([PermissionNames.All, .. permissions]);
     }
 }

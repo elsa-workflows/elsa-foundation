@@ -4,19 +4,26 @@
 ###   dotnet run --project src/Apps/Elsa.Server/Elsa.Server.csproj
 ###
 ### The default CShell is mounted under /default.
+###
+### The server is secured by default: every Elsa API endpoint requires an authenticated caller.
+### Set the bearer token below (e.g. a JWT from your configured OIDC authority) before running
+### the requests; unauthenticated calls return 401.
 
 @host = https://localhost:7243/default
 @adminHost = https://localhost:7243
+@token = <paste-a-valid-jwt-here>
 
 ### Reload all CShells.
 # @name reloadAllShells
 POST {{adminHost}}/_admin/shells/reload-all
 Accept: application/json
+Authorization: Bearer {{token}}
 
 ### 01. Find the WriteLine activity definition.
 # @name searchWriteLineActivityDefinitions
 GET {{host}}/design/activities/definitions?searchTerm=WriteLine
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("writeLineActivityDefinitionId", response.body[0].id);
@@ -26,6 +33,7 @@ Accept: application/json
 # @name listWriteLineActivityVersions
 GET {{host}}/design/activities/definitions/{{writeLineActivityDefinitionId}}/versions
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("writeLineActivityVersionId", response.body[0].id);
@@ -36,6 +44,7 @@ Accept: application/json
 POST {{host}}/design/workflows/definitions/submit
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {
   "name": "Hello World",
@@ -77,6 +86,7 @@ Accept: application/json
 POST {{host}}/publishing/workflows/{{workflowVersionId}}/publish
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -91,6 +101,7 @@ Accept: application/json
 POST {{host}}/runtime/workflows/{{workflowExecutableArtifactId}}/execute
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -103,6 +114,7 @@ Accept: application/json
 POST {{host}}/runtime/workflows/{{workflowExecutableArtifactId}}/execute
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -110,6 +122,7 @@ Accept: application/json
 # @name searchSequenceActivityDefinitions
 GET {{host}}/design/activities/definitions?searchTerm=Sequence
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("sequenceActivityDefinitionId", response.body[0].id);
@@ -119,6 +132,7 @@ Accept: application/json
 # @name listSequenceActivityVersions
 GET {{host}}/design/activities/definitions/{{sequenceActivityDefinitionId}}/versions
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("sequenceActivityVersionId", response.body[0].id);
@@ -130,6 +144,7 @@ Accept: application/json
 POST {{host}}/design/workflows/definitions/submit
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {
   "name": "Sequence Write Lines",
@@ -201,6 +216,7 @@ Accept: application/json
 # @name searchSayHelloFromNuplaneActivityDefinitions
 GET {{host}}/design/activities/definitions?searchTerm=SayHelloFromNuplane
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("sayHelloFromNuplaneActivityDefinitionId", response.body[0].id);
@@ -210,6 +226,7 @@ Accept: application/json
 # @name listSayHelloFromNuplaneActivityVersions
 GET {{host}}/design/activities/definitions/{{sayHelloFromNuplaneActivityDefinitionId}}/versions
 Accept: application/json
+Authorization: Bearer {{token}}
 
 > {%
     client.global.set("sayHelloFromNuplaneActivityVersionId", response.body[0].id);
@@ -221,6 +238,7 @@ Accept: application/json
 POST {{host}}/design/workflows/definitions/submit
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {
   "name": "Say Hello From Nuplane",
@@ -261,6 +279,7 @@ Accept: application/json
 POST {{host}}/publishing/workflows/{{sayHelloWorkflowVersionId}}/publish
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -275,6 +294,7 @@ Accept: application/json
 POST {{host}}/runtime/workflows/{{sayHelloWorkflowExecutableArtifactId}}/execute
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -283,6 +303,7 @@ Accept: application/json
 POST {{host}}/publishing/workflows/{{sequenceWorkflowVersionId}}/publish
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}
 
@@ -298,5 +319,6 @@ Accept: application/json
 POST {{host}}/runtime/workflows/{{sequenceWorkflowExecutableArtifactId}}/execute
 Content-Type: application/json
 Accept: application/json
+Authorization: Bearer {{token}}
 
 {}

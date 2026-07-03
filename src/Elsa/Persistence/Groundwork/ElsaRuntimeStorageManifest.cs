@@ -54,6 +54,10 @@ public static class ElsaRuntimeStorageManifest
 
     public const string PostCommitOutboxDocumentKind = "postCommitOutbox";
 
+    // Durable scheduler work queue. Each queued work item is a document so the queue survives process
+    // restarts; the by-collection partition supports the system-wide pending-executions sweep.
+    public const string SchedulerWorkItemDocumentKind = "schedulerWorkItem";
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -129,6 +133,17 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 PostCommitOutboxDocumentKind,
                 "Post-commit outbox",
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByCollectionIndex, CollectionField)
+                ],
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-all", ByCollectionIndex)
+                ]),
+            Unit(
+                SchedulerWorkItemDocumentKind,
+                "Scheduler work queue item",
                 [
                     Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
                     Keyword(ByCollectionIndex, CollectionField)

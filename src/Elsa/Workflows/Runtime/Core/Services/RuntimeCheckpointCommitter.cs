@@ -8,16 +8,29 @@ public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
+    private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
+    private readonly IRuntimeExecutionOwnershipService? _ownershipService;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor: null, ownershipService: null)
+    {
+    }
+
+    public RuntimeCheckpointCommitter(
+        IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore,
+        IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
+        IRuntimeExecutionOwnershipService? ownershipService)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
 
         _persistencePolicy = persistencePolicy;
         _checkpointCommitStore = checkpointCommitStore;
+        _ownershipContextAccessor = ownershipContextAccessor;
+        _ownershipService = ownershipService;
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -25,6 +38,11 @@ public sealed class RuntimeCheckpointCommitter
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+
+        // Single-writer fencing (RT-2): if an ownership scope is active for this workflow execution, reject a commit
+        // whose fencing token is not the current owner's before any state is persisted. Unwired (both null) or no
+        // active scope leaves the commit path byte-for-byte unchanged.
+        await EnsureOwnershipAsync(commit, cancellationToken);
 
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
 
@@ -66,4 +84,15 @@ public sealed class RuntimeCheckpointCommitter
     private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
         checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
+
+    private async ValueTask EnsureOwnershipAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (_ownershipContextAccessor?.Current is not { } lease || _ownershipService is null)
+            return;
+
+        if (!StringComparer.Ordinal.Equals(lease.WorkflowExecutionId, commit.WorkflowExecutionId))
+            return;
+
+        await _ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, lease.FencingToken, cancellationToken);
+    }
 }
