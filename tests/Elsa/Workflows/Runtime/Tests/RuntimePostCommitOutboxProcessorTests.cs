@@ -141,7 +141,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var dispatcher = new RecordingDispatcher(failOnIntentId: "intent-1", failure: dispatchFailure);
         var processor = NewProcessor(store, dispatcher, _now);
 
-        var exception = await Assert.ThrowsAsync<RuntimePostCommitOutboxProcessingException>(async () =>
+        var exception = await Assert.ThrowsAsync<OutboxProcessingException>(async () =>
             await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10)));
 
         Assert.Equal("outbox-1", exception.OutboxItemId);

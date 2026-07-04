@@ -294,7 +294,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             AlwaysDeliveringPostCommitOutboxProcessor.Instance,
             options);
 
-        var exception = await Assert.ThrowsAsync<WorkflowExecutionDrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+        var exception = await Assert.ThrowsAsync<DrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
 
         Assert.Equal("wfexec-1", exception.WorkflowExecutionId);
         Assert.Equal(2, exception.MaxDrainCycles);

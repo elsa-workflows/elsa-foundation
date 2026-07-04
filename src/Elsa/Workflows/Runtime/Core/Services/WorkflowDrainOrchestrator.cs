@@ -168,7 +168,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             throw new InvalidOperationException("Workflow execution draining did not produce a scheduler drain result.");
 
         if (!completed)
-            throw new WorkflowExecutionDrainCycleLimitExceededException(request.WorkflowExecutionId, _options.MaxDrainCycles);
+            throw new DrainCycleLimitExceededException(request.WorkflowExecutionId, _options.MaxDrainCycles);
 
         return new RuntimeSchedulerDrainResult(
             workflowExecutionId: request.WorkflowExecutionId,
