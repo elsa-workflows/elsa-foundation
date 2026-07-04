@@ -5,7 +5,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 3.0.0 (draft)
+**Version:** 3.1.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -37,7 +37,7 @@ shared program-goals planner.
   - [§2.13 Packaging and Versioning — application-level](#213-packaging-and-versioning--application-level)
   - [§2.14 Integration vs. Consumption-Shape — separate modules](#214-integration-vs-consumption-shape--separate-modules)
   - [§2.15 Repository organisation — foundation repo + multi-repo preference](#215-repository-organisation--foundation-repo--multi-repo-preference)
-  - [§2.16 Refactor-cost test](#216-refactor-cost-test)
+  - [§2.16 Refactor-cost test](#216-refactor-cost-test) · [§2.16.1 Minimum-viable-project guidance](#2161-minimum-viable-project-guidance)
   - [§2.17 Duplication beats dependency](#217-duplication-beats-dependency)
   - [§2.18 Applying the Framework — Methodology for Refactoring a Modular Monolith](#218-applying-the-framework--methodology-for-refactoring-a-modular-monolith) · [§2.18.0 Shape](#2180-shape-of-the-methodology) · [§2.18.1 Step 1](#2181-step-1--identify-the-domains) · [§2.18.2 Step 2](#2182-step-2--extract-the-implementations) · [§2.18.3 Step 3](#2183-step-3--resolve-cross-domain-reuse) · [§2.18.4 Refactor-cost discipline](#2184-refactor-cost-discipline)
   - [§2.19 Feature identity — the feature `name`](#219-feature-identity--the-feature-name)
@@ -563,6 +563,23 @@ Before grouping features into a module, or moving a type between layers, ask: *"
 
 A corollary: when in doubt about a grouping, prefer the finer-grained split. Merging two packages later is easier than separating one that has consumers.
 
+#### §2.16.1 Minimum-viable-project guidance
+
+The finer-grained-split preference (§2.16) is deliberate and is **not** overridden by small project size. There is **no minimum line count** below which a project must be merged.
+
+**Guidance for *new* projects.** When creating a *new* implementation project (Layer 3) that would ship below roughly **100 physical lines of code**, briefly record why it earns a separate NuGet identity rather than folding into an existing sibling. The bar is *a reason*, not a size — a single sentence in the PR or the project's README suffices.
+
+**Exemption test.** A project below the guidance size is **automatically legitimate** — no justification required — when merging it away would either (a) violate another gate, or (b) collapse a real capability boundary. The following exception classes are the enumerated worked catalog of (a) and (b); a project fitting any of them is exempt:
+
+1. **Contracts-only `.Core` seam** — a `.Core` project consisting of interfaces, delegates, abstract types, and models only. It is the cross-`.Core` composition mechanism (§2.1); merging it into a consumer would break that mechanism.
+2. **Primitives / constants project** — a zero- or near-zero-dependency project of shared constants and primitive models.
+3. **Provider leaf** — a provider-specific implementation (`*.Sqlite`, `*.PostgreSql`, `*.FileSystem`, …) whose small size reflects that the provider genuinely needs little code. Provider isolation (§2.7 / the `.Core`-heavy-package rule) *mandates* the separate project.
+4. **Migration / compatibility boundary** — a one-way import or compatibility surface whose separateness is required by an explicit boundary rule.
+5. **Layer-2 helper / adapter library** — an opt-in default implementation that isolates a single focused external dependency, kept out of Layer 1 by §2.1.
+6. **Independently-composable feature unit or cross-domain contribution seam** — a project that exists as a separately-toggleable feature composition unit, or a project that bridges two domains by contributing one domain's types to another (and so cannot fold into either without creating a forbidden dependency).
+
+A project that fits **none** of these classes and is below the guidance size is a candidate for merging into its nearest sibling — but the merge is still discretionary under §2.16 (which favors keeping NuGet identity stable), not mandatory.
+
 ### §2.17 Duplication beats dependency
 
 The DRY principle is constrained by AI-era economics: *changing* code is cheap; *understanding* code across a wide blast radius is expensive. The constitution's preference order:
@@ -968,4 +985,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 3.0.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-06-04
+**Version:** 3.1.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04
