@@ -72,8 +72,10 @@ builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 
 // Gate the Studio management surface (module management, feature management, console-stream) behind an
 // authentication/authorization policy. The built-in scheme validates Studio:BackendModuleManagementApiKey; a host
-// can register its own authentication and reuse ModuleManagementAuth.PolicyName as the seam.
-builder.Services.AddModuleManagementAuth(configuration);
+// can register its own authentication and reuse ModuleManagementAuth.PolicyName as the seam. The console-stream
+// hub path is allowed to carry the key as an access_token query parameter (browsers cannot set headers on the
+// WebSocket/SSE handshake); every other endpoint takes the key by header only, keeping it out of access logs.
+builder.Services.AddModuleManagementAuth(configuration, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
 
 var app = builder.Build();
 

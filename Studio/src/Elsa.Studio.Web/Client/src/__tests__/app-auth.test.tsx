@@ -99,6 +99,61 @@ describe("studio auth mounting", () => {
     expect(anonymous.accessTokenFactory).toBeUndefined();
   });
 
+  it("prefers the management key over the manager JWT for the host hub credential", async () => {
+    // #215 finding 1: the host management gate validates the API key, not the user JWT, so a configured
+    // management key wins over the manager-based factory for the host context's SignalR credential.
+    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
+    manager.getAccessToken = vi.fn(async () => "access-token-1");
+
+    const context = createStudioEndpointContext(
+      "https://studio.example/",
+      manager,
+      { "X-Elsa-Module-Management-Key": "mgmt-secret" },
+      "mgmt-secret"
+    );
+
+    await expect(context.accessTokenFactory?.()).resolves.toBe("mgmt-secret");
+    // The host REST client keeps attaching the user JWT — accessTokenFactory only steers non-HTTP transports.
+    expect(manager.getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("synthesizes the management-key hub credential even without a user provider", async () => {
+    // Anonymous deployments that still gate the host with a management key must open the hub via the key,
+    // not degrade to long polling. Key present + no manager -> a key-returning factory.
+    const context = createStudioEndpointContext(
+      "https://studio.example/",
+      null,
+      { "X-Elsa-Module-Management-Key": "mgmt-secret" },
+      "mgmt-secret"
+    );
+
+    await expect(context.accessTokenFactory?.()).resolves.toBe("mgmt-secret");
+  });
+
+  it("falls back to the manager JWT factory when no management key is configured", async () => {
+    // Key absent -> unchanged behavior: the host hub credential is the manager-based factory.
+    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
+    manager.getAccessToken = vi.fn(async () => "access-token-1");
+
+    const context = createStudioEndpointContext("https://studio.example/", manager);
+    await expect(context.accessTokenFactory?.()).resolves.toBe("access-token-1");
+  });
+
+  it("gives the backend context no hub credential so the shell secret never leaks cross-origin", () => {
+    // #215 finding 2: the backend context (different origin) must never carry a management-key factory.
+    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
+    manager.getAccessToken = vi.fn(async () => "access-token-1");
+
+    // The backend call site passes headers but NO management key (App.tsx), so with an anonymous session
+    // there is no hub credential to leak. (Authenticated backend still exposes the user JWT, never the key.)
+    const anonymousBackend = createStudioEndpointContext(
+      "https://backend.example/",
+      null,
+      { "X-Elsa-Module-Management-Key": "mgmt-secret" }
+    );
+    expect(anonymousBackend.accessTokenFactory).toBeUndefined();
+  });
+
   it("wires the configured token endpoint into the backend manager", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();

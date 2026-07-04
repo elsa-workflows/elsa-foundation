@@ -57,24 +57,49 @@ export function StudioAuthBoundary({
  * user session exists. When `manager` is null it falls back to the plain SDK client, preserving the
  * anonymous path. `headers` (e.g. the #183 management-key header) is composed into every request either
  * way, so endpoint-auth keeps working alongside user auth.
+ *
+ * `managementKey` decides the hub credential (`accessTokenFactory`) and applies ONLY to the host
+ * management surface. Precedence: the management key wins over the user-JWT factory. The host's built-in
+ * gate validates the API key alone, so the JWT is never the right credential for it; deployments that
+ * rebind that policy to real identity do not hand a management key to the SPA, so key-absent falls through
+ * to the existing manager-based factory (unchanged behavior). This only steers non-HTTP transports
+ * (SignalR hubs) — host REST calls keep attaching the user JWT via the authenticated HTTP client, which
+ * reads the token from the manager independently of `accessTokenFactory`. The backend context must NOT
+ * receive a management key here: it would leak the shell secret cross-origin (#215 finding 2).
  */
 export function createStudioEndpointContext(
   baseUrl: string,
   manager: AuthProviderManager | null,
-  headers?: HeadersInit
+  headers?: HeadersInit,
+  managementKey?: string
 ): StudioEndpointContext {
+  const accessTokenFactory = createHubCredentialFactory(manager, managementKey);
+
   if (!manager) {
-    return createEndpointContext(baseUrl, { headers });
+    return { ...createEndpointContext(baseUrl, { headers }), accessTokenFactory };
   }
 
   return {
     baseUrl,
     headers,
     http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers }),
-    // Expose a SignalR access-token factory so transports that can't use the HTTP client (e.g. hub
-    // connections in modules) attach the same bearer token. Built from the tested SignalR auth transport.
-    accessTokenFactory: createSignalRAccessTokenFactory(manager)
+    accessTokenFactory
   };
+}
+
+/**
+ * Resolves the SignalR hub credential per the precedence documented on {@link createStudioEndpointContext}:
+ * management key first, then the manager-JWT factory, else none.
+ */
+function createHubCredentialFactory(
+  manager: AuthProviderManager | null,
+  managementKey?: string
+): (() => Promise<string>) | undefined {
+  if (managementKey) {
+    return () => Promise.resolve(managementKey);
+  }
+
+  return manager ? createSignalRAccessTokenFactory(manager) : undefined;
 }
 
 function StudioSigningIn() {

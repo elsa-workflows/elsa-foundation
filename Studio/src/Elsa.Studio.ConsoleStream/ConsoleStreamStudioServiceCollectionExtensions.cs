@@ -17,6 +17,13 @@ public static class ConsoleStreamStudioServiceCollectionExtensions
     private const int MaxRecentQuerySize = 2_000;
 
     /// <summary>
+    /// The request path the console-stream SignalR hub is mapped at. Exposed so the management auth gate can
+    /// scope its <c>access_token</c> query-parameter acceptance to this path (browsers cannot attach headers to
+    /// WebSocket/EventSource handshakes) without leaking the key into access logs on other management endpoints.
+    /// </summary>
+    public const string HubPath = $"{EndpointPrefix}/hub";
+
+    /// <summary>
     /// Minimum interval between live-stream batch releases. Bounds the long-polling feedback loop
     /// (one captured stdout line completing one pending poll 1:1) at ~10 poll round-trips per second
     /// even when a host logs per-request at Information — see <see cref="PacedConsoleLogProvider"/>.
@@ -53,7 +60,7 @@ public static class ConsoleStreamStudioServiceCollectionExtensions
         {
             aspNetCoreOptions.RecentPath = $"{EndpointPrefix}/recent";
             aspNetCoreOptions.SourcesPath = $"{EndpointPrefix}/sources";
-            aspNetCoreOptions.HubPath = $"{EndpointPrefix}/hub";
+            aspNetCoreOptions.HubPath = HubPath;
         });
 
         // Wrap the default in-memory provider so live streams release in time-gated batches. The

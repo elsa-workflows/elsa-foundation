@@ -186,6 +186,21 @@ describe("console stream module", () => {
     expect(options.headers).toEqual({ "x-elsa-module-management-key": "secret" });
   });
 
+  it("does not synthesize an accessTokenFactory from the management-key header", () => {
+    // Regression guard for #215 finding 2: the shell decides the hub credential. A management-key header
+    // with no shell-supplied factory (e.g. the cross-origin backend context) must NOT be reverse-engineered
+    // into an access_token, or the shell secret would leak to the backend/proxy as a query parameter.
+    const options = createConsoleConnectionOptions({
+      baseUrl: "https://server.example",
+      headers: { "X-Elsa-Module-Management-Key": "secret" },
+      http: { getJson: async () => ({}) }
+    });
+
+    expect(options.accessTokenFactory).toBeUndefined();
+    // The header still rides along so header-capable transports can present it.
+    expect(options.headers).toEqual({ "x-elsa-module-management-key": "secret" });
+  });
+
   it("omits accessTokenFactory on the anonymous context", () => {
     expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).accessTokenFactory)
       .toBeUndefined();

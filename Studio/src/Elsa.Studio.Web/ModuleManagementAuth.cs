@@ -23,10 +23,24 @@ internal static class ModuleManagementAuth
     /// <summary>The request header carrying the management API key. Matches the header the Studio SPA already attaches.</summary>
     public const string ApiKeyHeaderName = "X-Elsa-Module-Management-Key";
 
+    /// <summary>
+    /// The query-string parameter carrying the management API key. Browsers cannot attach custom headers to
+    /// WebSocket or EventSource requests, so the SignalR client sends its access token as <c>access_token</c>
+    /// (the standard SignalR convention) — without this fallback the console-stream hub's WebSocket handshake
+    /// is rejected and every connection degrades to long polling. Because a query-string credential lands in
+    /// proxy and access logs, it is accepted only on the paths listed in
+    /// <see cref="ModuleManagementApiKeyOptions.QueryTokenPathPrefixes"/> (the hub path), mirroring the standard
+    /// JwtBearer <c>OnMessageReceived</c> pattern; every other management endpoint takes the key by header only.
+    /// </summary>
+    public const string AccessTokenQueryParameterName = "access_token";
+
     private const string ApiKeyConfigurationKey = "Studio:BackendModuleManagementApiKey";
     private const string AllowAnonymousConfigurationKey = "Studio:AllowAnonymousManagementApi";
 
-    public static IServiceCollection AddModuleManagementAuth(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddModuleManagementAuth(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        params string[] queryTokenPathPrefixes)
     {
         var apiKey = configuration[ApiKeyConfigurationKey];
         var allowAnonymous = configuration.GetValue(AllowAnonymousConfigurationKey, defaultValue: false);
@@ -36,6 +50,7 @@ internal static class ModuleManagementAuth
             {
                 options.ApiKey = apiKey;
                 options.AllowAnonymous = allowAnonymous;
+                options.QueryTokenPathPrefixes = queryTokenPathPrefixes;
             });
 
         services.AddAuthorizationBuilder()
@@ -60,11 +75,20 @@ internal sealed class ModuleManagementApiKeyOptions : AuthenticationSchemeOption
     /// closed everywhere else.
     /// </summary>
     public bool AllowAnonymous { get; set; }
+
+    /// <summary>
+    /// Request-path prefixes on which the <c>access_token</c> query parameter is honoured (segment-aware,
+    /// ordinal-ignore-case). Empty by default so the query credential is rejected everywhere; the console-stream
+    /// hub path is added at registration. See <see cref="ModuleManagementAuth.AccessTokenQueryParameterName"/>.
+    /// </summary>
+    public string[] QueryTokenPathPrefixes { get; set; } = [];
 }
 
 /// <summary>
-/// Validates the management API key supplied via <see cref="ModuleManagementAuth.ApiKeyHeaderName"/>.
-/// Fails closed: a missing/empty configured key rejects every request unless the development opt-out is set.
+/// Validates the management API key supplied via <see cref="ModuleManagementAuth.ApiKeyHeaderName"/>, an
+/// <c>Authorization: Bearer</c> value, or (only on the configured hub paths) the <c>access_token</c> query
+/// parameter. Succeeds if any channel matches. Fails closed: a missing/empty configured key rejects every
+/// request unless the development opt-out is set.
 /// </summary>
 internal sealed class ModuleManagementApiKeyHandler(
     IOptionsMonitor<ModuleManagementApiKeyOptions> options,
@@ -83,14 +107,41 @@ internal sealed class ModuleManagementApiKeyHandler(
                 : AuthenticateResult.Fail("The Studio management API key is not configured."));
         }
 
-        if (!Request.Headers.TryGetValue(ModuleManagementAuth.ApiKeyHeaderName, out var providedKey))
-            return Task.FromResult(AuthenticateResult.NoResult());
+        // Evaluate every channel the key can ride in — a foreign gateway-injected bearer or an empty dedicated
+        // header must not shadow a valid key presented on another channel of the same request.
+        var dedicatedHeaderPresented = false;
 
-        if (!CryptographicEquals(providedKey.ToString(), configuredKey))
-            return Task.FromResult(AuthenticateResult.Fail("The supplied management API key is invalid."));
+        if (Request.Headers.TryGetValue(ModuleManagementAuth.ApiKeyHeaderName, out var headerKey))
+        {
+            dedicatedHeaderPresented = true;
+            if (CryptographicEquals(headerKey.ToString(), configuredKey))
+                return Task.FromResult(Success("module-management"));
+        }
 
-        return Task.FromResult(Success("module-management"));
+        foreach (var authorization in Request.Headers.Authorization)
+        {
+            const string bearerPrefix = "Bearer ";
+            if (authorization is not null && authorization.StartsWith(bearerPrefix, StringComparison.OrdinalIgnoreCase)
+                && CryptographicEquals(authorization[bearerPrefix.Length..], configuredKey))
+                return Task.FromResult(Success("module-management"));
+        }
+
+        // See AccessTokenQueryParameterName: query credential honoured only on the configured (hub) paths.
+        if (IsQueryTokenPathAllowed()
+            && Request.Query.TryGetValue(ModuleManagementAuth.AccessTokenQueryParameterName, out var queryKey)
+            && CryptographicEquals(queryKey.ToString(), configuredKey))
+            return Task.FromResult(Success("module-management"));
+
+        // The dedicated header is unambiguous intent for this gate, so a mismatch there fails the request.
+        // A foreign bearer (or nothing) yields NoResult: 401 under the built-in single scheme, but a host that
+        // rebinds the policy to a real identity scheme can still authenticate it.
+        return Task.FromResult(dedicatedHeaderPresented
+            ? AuthenticateResult.Fail("The supplied management API key is invalid.")
+            : AuthenticateResult.NoResult());
     }
+
+    private bool IsQueryTokenPathAllowed() =>
+        Options.QueryTokenPathPrefixes.Any(prefix => Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase));
 
     private AuthenticateResult Success(string name)
     {

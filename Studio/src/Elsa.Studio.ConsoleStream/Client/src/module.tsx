@@ -543,9 +543,9 @@ export function createConsoleFilter(sourceId: string | null) {
 export function createConsoleConnectionOptions(context: StudioEndpointContext): signalR.IHttpConnectionOptions {
   const headers = createSignalRHeaders(context.headers);
   const baseOptions: signalR.IHttpConnectionOptions = headers ? { headers } : {};
-  // When the shell runs authenticated it supplies an accessTokenFactory (built from the auth manager); the
-  // hub negotiate/connect requests then carry the same bearer token the HTTP client attaches. Anonymous
-  // deployments have no factory and keep the plain options.
+  // The shell decides the hub credential and hands it over as context.accessTokenFactory (a user JWT, the
+  // host management key, or none). The module is a dumb consumer: pass it straight through so WebSocket/SSE
+  // transports carry it as the access_token query parameter instead of degrading to long polling.
   return context.accessTokenFactory
     ? { ...baseOptions, accessTokenFactory: context.accessTokenFactory }
     : baseOptions;

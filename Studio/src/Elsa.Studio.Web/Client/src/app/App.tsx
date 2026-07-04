@@ -113,13 +113,16 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
   // Memoize so the boot effect isn't re-run every render by a fresh header object identity.
   const backendHeaders = useMemo(() => createBackendHeaders(runtimeConfig), [runtimeConfig.backendModuleManagementApiKey]);
+  // The management key steers the HOST hub credential (createStudioEndpointContext). Host-only: the backend
+  // context must never receive it (#215 finding 2 — it would leak the shell secret cross-origin).
+  const managementKey = runtimeConfig.backendModuleManagementApiKey?.trim() || undefined;
   // The shell endpoint context (host origin) routed through the authenticated HTTP client: the manifest
   // query fetches `/_elsa/studio/modules` through this, so the boot document carries the bearer token
   // (when a user provider is configured) and the #183 management-key header (always). Anonymous boot —
   // no provider — falls back to the plain SDK client via createStudioEndpointContext.
   const shellContext = useMemo(
-    () => createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders),
-    [authManager, shellBaseUrl, backendHeaders]
+    () => createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders, managementKey),
+    [authManager, shellBaseUrl, backendHeaders, managementKey]
   );
 
   useEffect(() => {
@@ -185,8 +188,9 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           hostVersion: manifest.hostVersion,
           sdkVersion: manifest.sdkVersion,
           // The Studio host serves the gated management surface (module management, feature management,
-          // console-stream), so the management-key header must ride the host context too, not only the backend.
-          ...createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders)
+          // console-stream), so the management-key header must ride the host context too, not only the
+          // backend — and the management key steers this host's hub credential (see createStudioEndpointContext).
+          ...createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders, managementKey)
         }, {
           backendBaseUrl,
           backendHeaders,
@@ -220,7 +224,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     return () => {
       disposed = true;
     };
-  }, [authManager, backendBaseUrl, backendHeaders, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendHeaders, managementKey, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
