@@ -34,3 +34,9 @@ Feature-development workflows remain here for now, but the documentation and ope
 ```powershell
 dotnet build Elsa.Server.slnx
 ```
+
+## Run with Docker
+
+To go from a fresh clone to a running full stack (PostgreSQL + Elsa.Server + Elsa Studio), follow the
+[Docker quickstart](docker/compose/README.md). For the full container/image reference (environment
+variables, mounts, persistence composition, troubleshooting), see [docs/docker.md](docs/docker.md).
