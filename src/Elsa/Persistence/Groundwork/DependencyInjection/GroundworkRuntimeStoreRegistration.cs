@@ -73,6 +73,12 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IWorkflowTriggerBindingStore>();
         services.AddSingleton<IWorkflowTriggerBindingStore, GroundworkWorkflowTriggerBindingStore>();
 
+        // Durable recurring-trigger schedule store (W16). Without this swap the Timer/Cron schedules written at
+        // publish time live only in the process-local in-memory store, so a restart forgets every recurring
+        // start trigger until the workflow is republished.
+        services.RemoveAll<IRecurringTriggerScheduleStore>();
+        services.AddSingleton<IRecurringTriggerScheduleStore, GroundworkRecurringTriggerScheduleStore>();
+
         return services;
     }
 }

@@ -1,0 +1,110 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+
+namespace Elsa.Workflows.Runtime.Core.Services;
+
+/// <summary>
+/// Process-local <see cref="IRecurringTriggerScheduleStore"/>. Schedules are held in memory only, so a
+/// Timer/Cron start trigger backed by this store is <b>not</b> restart-durable — a process restart forgets every
+/// schedule until the workflow is republished. Compose a durable persistence provider (the Groundwork bridge)
+/// to make recurring schedules survive restarts.
+/// </summary>
+public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerScheduleStore
+{
+    private readonly object _syncRoot = new();
+    private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
+
+    public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // Upsert: republish rewrites the schedule (including a re-anchored NextOccurrence), unlike the
+            // durable-timer store's existing-wins rule — a recurring schedule has no one-shot deadline to protect.
+            _schedules[schedule.ScheduleId] = schedule;
+            return new ValueTask<RecurringTriggerSchedule>(schedule);
+        }
+    }
+
+    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit), "Due-schedule listing limit must be greater than zero.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var due = _schedules.Values
+                .Where(schedule => schedule.NextOccurrence <= asOf)
+                .OrderBy(schedule => schedule.NextOccurrence)
+                .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
+                .Take(limit)
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>>(due);
+        }
+    }
+
+    public ValueTask<RecurringTriggerSchedule?> FindAsync(string scheduleId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            return new ValueTask<RecurringTriggerSchedule?>(
+                _schedules.TryGetValue(scheduleId, out var schedule) ? schedule : null);
+        }
+    }
+
+    public ValueTask<bool> TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            // Compare-and-swap: claim the occurrence only if no other worker (or an earlier sweep) already moved
+            // the cursor. This is the single-node realization of the W20 cluster-safe claim contract.
+            if (!_schedules.TryGetValue(scheduleId, out var schedule) || schedule.NextOccurrence != expectedNextOccurrence)
+                return new ValueTask<bool>(false);
+
+            _schedules[scheduleId] = schedule with { NextOccurrence = newNextOccurrence };
+            return new ValueTask<bool>(true);
+        }
+    }
+
+    public ValueTask DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var doomed = _schedules.Values
+                .Where(schedule => StringComparer.Ordinal.Equals(schedule.ArtifactId, artifactId))
+                .Select(schedule => schedule.ScheduleId)
+                .ToArray();
+
+            foreach (var scheduleId in doomed)
+                _schedules.Remove(scheduleId);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DeleteAsync(string scheduleId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scheduleId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            _schedules.Remove(scheduleId);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
