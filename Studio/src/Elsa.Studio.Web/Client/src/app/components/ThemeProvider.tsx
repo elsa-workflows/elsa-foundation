@@ -19,17 +19,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>("light");
   const [mounted, setMounted] = useState(false);
 
-  // Initialize from localStorage on mount
+  // Initialize from localStorage on mount, falling back to the OS `prefers-color-scheme` when the
+  // user has never chosen a mode. Once persisted, the stored preference always wins.
   useEffect(() => {
     const savedThemeId = localStorage.getItem("elsa-studio-theme");
-    const savedMode = (localStorage.getItem("elsa-studio-theme-mode") as ThemeMode) || "light";
-    
+    const savedMode = localStorage.getItem("elsa-studio-theme-mode") as ThemeMode | null;
+
     if (savedThemeId) {
       const theme = getTheme(savedThemeId);
       if (theme) setCurrentTheme(theme);
     }
-    
-    setMode(savedMode);
+
+    setMode(savedMode ?? getPreferredColorScheme());
     setMounted(true);
   }, []);
 
@@ -79,6 +80,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ThemeContext.Provider>
   );
+}
+
+function getPreferredColorScheme(): ThemeMode {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return "light";
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function useTheme(): ThemeContextType {
