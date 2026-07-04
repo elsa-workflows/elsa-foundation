@@ -82,16 +82,38 @@ app.UseAuthorization();
 
 app.MapGet("/studio-runtime.js", () =>
 {
-    var runtimeConfig = new
+    var runtimeConfig = new Dictionary<string, object?>
     {
-        backendBaseUrl = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
-        backendModuleManagementApiKey = configuration["Studio:BackendModuleManagementApiKey"] ?? string.Empty
+        ["backendBaseUrl"] = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
+        ["backendModuleManagementApiKey"] = configuration["Studio:BackendModuleManagementApiKey"] ?? string.Empty,
+        // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry)
+        // against the backend identity endpoints. Omitted endpoints fall back to the SDK defaults
+        // (`/_elsa/identity/token`); when Enabled is false the shell keeps booting anonymously.
+        ["auth"] = BuildAuthRuntimeConfig(configuration)
     };
 
     return Results.Content(
         $"window.__ELSA_STUDIO_RUNTIME__ = {JsonSerializer.Serialize(runtimeConfig)};",
         "application/javascript");
 });
+
+static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration)
+{
+    var auth = new Dictionary<string, object?>
+    {
+        ["enabled"] = configuration.GetValue("Studio:Auth:Enabled", defaultValue: false)
+    };
+
+    var tokenEndpoint = configuration["Studio:Auth:TokenEndpoint"];
+    if (!string.IsNullOrWhiteSpace(tokenEndpoint))
+        auth["tokenEndpoint"] = tokenEndpoint;
+
+    var refreshEndpoint = configuration["Studio:Auth:RefreshEndpoint"];
+    if (!string.IsNullOrWhiteSpace(refreshEndpoint))
+        auth["refreshEndpoint"] = refreshEndpoint;
+
+    return auth;
+}
 
 app.UseStaticFiles();
 

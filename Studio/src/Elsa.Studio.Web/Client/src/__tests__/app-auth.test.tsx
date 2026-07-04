@@ -86,6 +86,42 @@ describe("studio auth mounting", () => {
     // The management-key header still rides along on the anonymous path.
     expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
   });
+
+  it("exposes a SignalR access-token factory on the authenticated context and none on the anonymous one", async () => {
+    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
+    manager.getAccessToken = vi.fn(async () => "access-token-1");
+
+    const authenticated = createStudioEndpointContext("https://foundation.example/", manager);
+    expect(authenticated.accessTokenFactory).toBeTypeOf("function");
+    await expect(authenticated.accessTokenFactory?.()).resolves.toBe("access-token-1");
+
+    const anonymous = createStudioEndpointContext("https://foundation.example/", null);
+    expect(anonymous.accessTokenFactory).toBeUndefined();
+  });
+
+  it("wires the configured token endpoint into the backend manager", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/_elsa/identity/bootstrap")) {
+        return new Response(JSON.stringify({
+          ownershipMode: "foundation-owned",
+          providers: [{ id: "openiddict", kind: "openiddict", enabled: true, isDefault: true }]
+        }), { status: 200 });
+      }
+      if (url.endsWith("/custom/token")) {
+        return new Response(JSON.stringify({ accessToken: "custom-token" }), { status: 200 });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const manager = createStudioAuthManager(
+      { auth: { enabled: true, tokenEndpoint: "/custom/token" } },
+      "https://foundation.example/"
+    );
+
+    await expect(manager?.getAccessToken()).resolves.toBe("custom-token");
+  });
 });
 
 async function renderApp() {

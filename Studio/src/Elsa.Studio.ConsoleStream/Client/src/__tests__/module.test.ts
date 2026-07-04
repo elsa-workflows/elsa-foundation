@@ -171,6 +171,26 @@ describe("console stream module", () => {
       .toBeUndefined();
   });
 
+  it("attaches the shell's access-token factory to the hub connection when authenticated", async () => {
+    const accessTokenFactory = async () => "bearer-token-1";
+    const options = createConsoleConnectionOptions({
+      baseUrl: "https://server.example",
+      headers: { "X-Elsa-Module-Management-Key": "secret" },
+      http: { getJson: async () => ({}) },
+      accessTokenFactory
+    });
+
+    expect(options.accessTokenFactory).toBe(accessTokenFactory);
+    await expect(options.accessTokenFactory?.()).resolves.toBe("bearer-token-1");
+    // Headers still ride along so endpoint-auth composes with the bearer token.
+    expect(options.headers).toEqual({ "x-elsa-module-management-key": "secret" });
+  });
+
+  it("omits accessTokenFactory on the anonymous context", () => {
+    expect(createConsoleConnectionOptions({ baseUrl: "https://server.example", http: { getJson: async () => ({}) } }).accessTokenFactory)
+      .toBeUndefined();
+  });
+
   it("exports visible console entries as plain text", () => {
     const entries = [
       { ...entry(1), stream: "stdout" as const, text: "\x1b[32mready\x1b[0m", sourceLabel: "Elsa Studio · machine:123" },

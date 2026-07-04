@@ -7,6 +7,11 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly http: {
       getJson<T>(url: string, init?: RequestInit): Promise<T>;
     };
+    /**
+     * Present only on the authenticated context: returns the current bearer token (or "" when anonymous).
+     * Assigned to a SignalR connection's accessTokenFactory so the hub carries the same token as HTTP.
+     */
+    readonly accessTokenFactory?: () => Promise<string>;
   }
 
   export interface StudioNavigationContribution {

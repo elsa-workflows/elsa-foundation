@@ -5,6 +5,7 @@ import {
   createAuthenticatedHttpClient,
   createBackendAuthProviderManager,
   createEndpointContext,
+  createSignalRAccessTokenFactory,
   type AuthProviderManager,
   type StudioEndpointContext
 } from "../../sdk";
@@ -22,7 +23,11 @@ export function createStudioAuthManager(config: StudioRuntimeConfig, baseUrl: st
     return null;
   }
 
-  return createBackendAuthProviderManager({ baseUrl });
+  return createBackendAuthProviderManager({
+    baseUrl,
+    tokenEndpoint: config.auth?.tokenEndpoint,
+    refreshEndpoint: config.auth?.refreshEndpoint
+  });
 }
 
 /**
@@ -65,7 +70,10 @@ export function createStudioEndpointContext(
   return {
     baseUrl,
     headers,
-    http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers })
+    http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers }),
+    // Expose a SignalR access-token factory so transports that can't use the HTTP client (e.g. hub
+    // connections in modules) attach the same bearer token. Built from the tested SignalR auth transport.
+    accessTokenFactory: createSignalRAccessTokenFactory(manager)
   };
 }
 

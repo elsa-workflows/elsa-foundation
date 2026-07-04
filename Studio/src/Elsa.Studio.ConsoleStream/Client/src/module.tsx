@@ -542,7 +542,13 @@ export function createConsoleFilter(sourceId: string | null) {
 
 export function createConsoleConnectionOptions(context: StudioEndpointContext): signalR.IHttpConnectionOptions {
   const headers = createSignalRHeaders(context.headers);
-  return headers ? { headers } : {};
+  const baseOptions: signalR.IHttpConnectionOptions = headers ? { headers } : {};
+  // When the shell runs authenticated it supplies an accessTokenFactory (built from the auth manager); the
+  // hub negotiate/connect requests then carry the same bearer token the HTTP client attaches. Anonymous
+  // deployments have no factory and keep the plain options.
+  return context.accessTokenFactory
+    ? { ...baseOptions, accessTokenFactory: context.accessTokenFactory }
+    : baseOptions;
 }
 
 export function createConsoleExportContent(entries: ConsoleEntry[]) {

@@ -82,6 +82,13 @@ export interface StudioEndpointContext {
   baseUrl: string;
   headers?: HeadersInit;
   http: StudioHttpClient;
+  /**
+   * Optional access-token factory for non-HTTP transports (e.g. SignalR hub connections) that can't use
+   * {@link http}. Present only on the authenticated context, where the shell builds it from the auth manager
+   * via `createSignalRAccessTokenFactory`; modules assign it to a SignalR connection's `accessTokenFactory`
+   * so the hub carries the same bearer token the HTTP client attaches. Absent on the anonymous context.
+   */
+  accessTokenFactory?: () => Promise<string>;
 }
 
 export interface StudioRouteContribution {
