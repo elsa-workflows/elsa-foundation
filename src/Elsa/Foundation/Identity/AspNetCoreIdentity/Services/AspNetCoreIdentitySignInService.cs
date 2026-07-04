@@ -1,5 +1,6 @@
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -32,13 +33,18 @@ public sealed class AspNetCoreIdentitySignInService(
         if (!result.Succeeded)
             return SignInOutcome.Failure;
 
-        // Issue the cookie when running inside the HTTP pipeline. SignInManager writes the cookie through the
-        // ambient HttpContext; outside a request (e.g. unit tests) credential validation still succeeds and
-        // the session is projected without a cookie write.
-        if (httpContextAccessor.HttpContext is not null)
-            await signInManager.SignInAsync(user, isPersistent: false, AspNetCoreIdentityDefaults.CookieScheme);
-
+        // Build the principal through the Elsa claims-principal factory so tenant/role/permission claims are
+        // projected into the cookie (and the returned session).
         var principal = await principalFactory.CreateAsync(user);
+
+        // Issue the cookie when running inside the HTTP pipeline, on our own cookie scheme. Sign in through
+        // HttpContext (not SignInManager.SignInAsync, whose string overload parameter is the authentication
+        // *method*, not the scheme — it would target the default Identity.Application scheme, which this
+        // module does not register). Outside a request (e.g. unit tests) credential validation still succeeds
+        // and the session is projected without a cookie write.
+        if (httpContextAccessor.HttpContext is not null)
+            await httpContextAccessor.HttpContext.SignInAsync(AspNetCoreIdentityDefaults.CookieScheme, principal);
+
         var session = await sessionService.GetAsync(principal, cancellationToken);
         return SignInOutcome.Success(session);
     }
