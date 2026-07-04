@@ -41,7 +41,8 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
         });
 
         // ASP.NET Core Identity core over the EF stores + cookie scheme + Elsa claims-principal factory.
-        services.AddIdentityCoreServices().AddEntityFrameworkStores<ApplicationIdentityDbContext>();
+        // The cookie's SecurePolicy hardens to Always outside development/demo (see AddIdentityCoreServices).
+        services.AddIdentityCoreServices(isDevelopmentOrDemo).AddEntityFrameworkStores<ApplicationIdentityDbContext>();
 
         // Replace the in-memory Elsa IAM stores (registered by AddFoundationAspNetCoreIdentity) with the
         // EF-backed adapters over the same context, so the principal factory and managers read durable data.

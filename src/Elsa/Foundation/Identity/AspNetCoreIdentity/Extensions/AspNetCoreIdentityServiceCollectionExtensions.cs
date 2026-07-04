@@ -58,7 +58,12 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
     /// the first-party cookie scheme. Store registration is left to the caller via the returned
     /// <see cref="IdentityBuilder"/> (e.g. <c>.AddEntityFrameworkStores&lt;T&gt;()</c>).
     /// </summary>
-    public static IdentityBuilder AddIdentityCoreServices(this IServiceCollection services)
+    /// <param name="isDevelopmentOrDemo">
+    /// When <c>false</c> (production), the sign-in cookie is marked <see cref="CookieSecurePolicy.Always"/> so
+    /// it is only ever sent over HTTPS. Under development/demo it relaxes to
+    /// <see cref="CookieSecurePolicy.SameAsRequest"/> so a plain-HTTP local host can still establish a session.
+    /// </param>
+    public static IdentityBuilder AddIdentityCoreServices(this IServiceCollection services, bool isDevelopmentOrDemo = false)
     {
         var builder = services
             .AddIdentityCore<AspNetCoreIdentityUser>(options =>
@@ -80,6 +85,11 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
                 options.Cookie.Name = AspNetCoreIdentityDefaults.CookieScheme;
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
+                // Secure by default: the session cookie must not travel over plain HTTP in production. Only a
+                // development/demo host (which may run on http://localhost) relaxes to SameAsRequest.
+                options.Cookie.SecurePolicy = isDevelopmentOrDemo
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
                 options.SlidingExpiration = true;
             });
 
