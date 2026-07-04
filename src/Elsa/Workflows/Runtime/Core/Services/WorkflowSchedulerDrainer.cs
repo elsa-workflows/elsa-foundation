@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -15,6 +17,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
     private readonly IWorkflowSchedulerPoisonStore? _poisonStore;
     private readonly IRuntimeDomainRetryPolicy? _retryPolicy;
+    private readonly IWorkflowEngineTracer _tracer;
 
     /// <summary>
     /// Creates the drainer. RT-8: the seven telescoping constructors collapsed into this single primary constructor —
@@ -33,7 +36,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IRuntimeExecutionPipelineDispatcher? pipelineDispatcher = null,
         IRuntimeFaultCapturePolicy? faultCapturePolicy = null,
         IWorkflowSchedulerPoisonStore? poisonStore = null,
-        IRuntimeDomainRetryPolicy? retryPolicy = null)
+        IRuntimeDomainRetryPolicy? retryPolicy = null,
+        IWorkflowEngineTracer? tracer = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
         ArgumentNullException.ThrowIfNull(handlers);
@@ -50,11 +54,18 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();
         _poisonStore = poisonStore;
         _retryPolicy = retryPolicy;
+        _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
     }
 
     public async ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // MS-9: the drain-cycle span wraps the whole method. StartDrainCycle returns null when tracing is inactive, so
+        // no allocation and no ambient Activity is introduced; when active, Activity.Current is set for the scope and
+        // restored on dispose. This is trace context only — it is not service location and does not touch the fenced
+        // peek->pause->dequeue->dispatch sequence below (no new awaits are introduced inside the loop).
+        using var activity = _tracer.StartDrainCycle(request);
 
         var startedAt = _timeProvider.GetUtcNow();
         var results = new List<RuntimeSchedulerWorkItemResult>();
@@ -115,6 +126,14 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             ? RuntimeSchedulerDrainStopReason.WorkflowTerminated
             : (RuntimeSchedulerDrainStopReason?)null;
 
+        // MS-9: outcome tags set after the loop, from already-computed values (no pre-computation, no extra work).
+        if (activity is not null)
+        {
+            activity.SetTag(WorkflowEngineTelemetry.DrainItemsProcessedTag, results.Count);
+            if (stopReason is { } reason)
+                activity.SetTag(WorkflowEngineTelemetry.DrainStopReasonTag, reason.ToString());
+        }
+
         return new RuntimeSchedulerDrainResult(
             workflowExecutionId: request.WorkflowExecutionId,
             startedAt: startedAt,
@@ -136,9 +155,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         IWorkflowSchedulerWorkHandler? handler = null;
         var startedAt = _timeProvider.GetUtcNow();
 
+        // MS-9: the dispatch span nests under the drain-cycle span via Activity.Current. The activity-execution span
+        // (Invoke slot) and the checkpoint-commit span both nest under this one when the pipeline runs. Null when
+        // tracing is inactive.
+        using var activity = _tracer.StartDispatch(workItem);
+
         try
         {
             handler = FindHandler(workItem);
+            activity?.SetTag(WorkflowEngineTelemetry.HandlerNameTag, handler.Name);
 
             // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
             // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
@@ -149,6 +174,8 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 await _pipelineDispatcher.DispatchAsync(workItem, handler, ambientServices, cancellationToken);
             else
                 await handler.HandleAsync(workItem, cancellationToken);
+
+            activity?.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -169,6 +196,13 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // Persisted handler-name — this value is written into poison/drain records (RuntimeSchedulerPoisonRecord.HandlerName,
             // RuntimeSchedulerDrain.HandlerName). Do not rename WorkflowSchedulerDrainer without preserving this literal wire value.
             var handlerName = handler?.Name ?? nameof(WorkflowSchedulerDrainer);
+
+            if (activity is not null)
+            {
+                activity.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeFaulted);
+                activity.SetStatus(ActivityStatusCode.Error, faultInfo.ExceptionType);
+            }
+
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
