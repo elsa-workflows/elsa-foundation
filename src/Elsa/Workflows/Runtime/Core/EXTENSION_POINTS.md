@@ -206,8 +206,33 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `Capabilities`, `GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)`, `PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)`.
 - **Usage:** provider implementations enforce one active mailbox/agent per `WorkflowExecutionId`. Commands are delivered through `WorkflowExecutionCommandEnvelope`, which carries command identity, workflow execution ID, idempotency key, optional sequence, delivery mode, and metadata. Actor frameworks are provider choices; checkpoint state remains the source of truth.
 - **Default implementation:** `InProcessWorkflowExecutionActorProvider` *(single-node actor-like mailbox; no distributed placement or actor framework dependency)*.
+- **Alternative implementation:** `DistributedWorkflowExecutionActorProvider` *(opt-in leaf `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)* — clustered placement/routing over the in-process provider: claims per-execution placement, returns the local in-process actor when this node owns the execution, or a `ForwardingWorkflowExecutionActor` (durable-transport routing stub, `Deferred` result) when another node owns it. Placement is best-effort routing; W5 fencing at checkpoint commit is the authoritative double-execution guard. Enable with the `WorkflowsRuntimeDistributed` shell feature. See the Distributed placement and transport section below.
 
-### `IRuntimeExecutionIdGenerator` *(Core — `Elsa.Workflows.Runtime.Core`)*
+### Distributed placement and transport *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
+
+Leaf-owned contracts for clustered workflow-execution placement and cross-node command routing. Per §2.7 these live entirely in the provider leaf; `Elsa.Workflows.Runtime.Core` gains zero references to them. The leaf consumes the W5 single-writer fencing seam (`IRuntimeExecutionOwnershipService`) unchanged — placement decides *which* node drains (routing), fencing decides *whether* a write commits (safety).
+
+- ### `IExecutionPlacementStore` *(leaf)*
+  - **Kind:** Replacement (one store owns per-execution placement lease records for a distributed composition).
+  - **Signature:** `TryClaimAsync`, `FindAsync`, `ReleaseAsync`, `ListAsync` (compare-and-swap on placement token; claim doubles as renew).
+  - **Usage:** the CAS claim/renew primitive under placement ownership. Claiming an unowned or expired placement issues a strictly greater placement token; a claim against a live foreign lease fails without mutation.
+  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default; a durable Groundwork store is a named follow-up)*.
+- ### `IExecutionPlacementService` *(leaf)*
+  - **Kind:** Replacement (one service owns this node's placement acquisition/renewal/release policy).
+  - **Signature:** `NodeId`, `TryClaimAsync`, `FindOwnerAsync`, `ListOwnedAsync`, `ReleaseAsync`.
+  - **Usage:** wraps the store with this node's identity, lease duration, and `TimeProvider` so all lease timing is deterministic and options-driven.
+  - **Default implementation:** `ExecutionPlacementService`.
+- ### `IExecutionCommandTransport` *(leaf)*
+  - **Kind:** Replacement (one transport owns the durable cross-node command inbox for a distributed composition).
+  - **Signature:** `SendAsync`, `LeaseAsync`, `AckAsync`, `ListPendingExecutionIdsAsync`, `CountPendingAsync` (ack-based lease/visibility, at-least-once).
+  - **Usage:** commands for an execution owned by another node are durably enqueued, then leased/acked by the owning node's pump. A lease hides an item from other nodes until acked or expired; only the live lease holder may ack, so a superseded node's ack is refused and the item is re-driven on failover. Wire shape is frozen by the committed v1 golden fixture (§E6 kind `executionCommandTransport`).
+  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default; a durable Groundwork store is a named follow-up)*.
+
+### `ExecutionPlacementPumpTask` *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
+- **Kind:** Registered recurring task (`IRecurringTask`; one per node, DependsOn Tasks).
+- **Usage:** each bounded sweep renews the placements this node holds, then discovers executions with visible transport backlog, claims any it can own, leases their commands, dispatches each to the local actor, and acks on a delivered outcome. Deferred/Rejected dispatches stay leased so lease expiry re-drives them (the failover loop). All cadence/bounds come from `ExecutionPlacementPumpOptions` evaluated against `TimeProvider`; a failing sweep is logged, never rethrown, and widens the interval geometrically.
+
+
 - **Kind:** Replacement (one generator owns runtime command-dispatch IDs for a runtime composition).
 - **Signature:** `NewWorkflowExecutionId()`, `NewWorkflowExecutionCommandId()`, `NewWorkflowExecutionCommandEnvelopeId()`, `NewActivityExecutionId()`.
 - **Usage:** provides runtime-owned identifiers for workflow execution start dispatch and concrete activity executions without leaking API, persistence, or provider-specific identity generation into command construction.

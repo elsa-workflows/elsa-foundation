@@ -174,6 +174,26 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   execution semantics (own gate); remaining DS-9 non-activity evaluator paths; legacy internal
   `Elsa.Workflows.Runtime.JavaScript` RunJavaScript stub cleanup (provably wire-invisible — superseded,
   not renamed); email/messaging provider modules.
+- **W20 Distributed actor provider (E3-3)** — **in progress** (draft PR to main; branch point
+  `a5970003`). New opt-in leaf `Elsa.Workflows.Runtime.Distributed` adding a clustered
+  `DistributedWorkflowExecutionActorProvider` (sibling to `InProcessWorkflowExecutionActorProvider`;
+  W14 `WorkflowExecutionActor*` family symmetry) that layers per-execution **placement** over the
+  in-process provider. Two leaf-owned contracts (§2.7 — Runtime.Core gains zero references):
+  `IExecutionPlacementStore`/`IExecutionPlacementService` (CAS lease ownership, `TimeProvider`-driven
+  durations) and `IExecutionCommandTransport` (durable, ack-based/at-least-once cross-node command
+  inbox). A `ExecutionPlacementPumpTask` renews held placements, claims backlog, and drains it locally,
+  re-driving stranded commands on failover when a dead node's placement + transport leases expire. The
+  **placement-is-routing / fencing-is-safety** layering is the heart of the unit: placement only picks
+  which node drains, while the unchanged W5 single-writer fencing token checked at checkpoint commit is
+  the authoritative double-execution guard (a superseded node's late write is rejected with
+  `RuntimeStaleFencingTokenException`). The two-node kill-mid-drain acceptance test drives real W5
+  ownership over a shared liveness store and asserts BOTH inbox re-drive on failover AND fencing
+  rejection of the dead node's commit — command commits exactly once. This unit ships an **in-memory
+  harness only**; a durable Groundwork placement + transport store is a **named follow-up**, a
+  mechanical drop-in against the now-frozen contracts and the committed v1 golden fixture (document kind
+  `executionCommandTransport`, protected by a drift test). W16's `TryAdvanceAsync` recurring-pump
+  cluster-safety seam was **not** touched (out of required scope). New leaf seams catalogued in
+  [`EXTENSION_POINTS.md`](../../src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) and glossary.
 
 ### Follow-up findings recorded during Phase 0 execution
 
