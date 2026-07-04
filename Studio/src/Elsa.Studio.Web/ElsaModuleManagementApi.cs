@@ -211,14 +211,15 @@ internal static class ElsaModuleManagementApi
         if (string.IsNullOrWhiteSpace(feed.Name))
             return Results.BadRequest(new ModuleManagementErrorResponse("Feed name is required."));
 
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
-        var feeds = ReadFeedsArray(config);
-        if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
-            return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
+        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        {
+            var feeds = ReadFeedsArray(config);
+            if (feeds.Any(node => string.Equals((string?)node?["Name"], feed.Name, StringComparison.OrdinalIgnoreCase)))
+                return Results.Conflict(new ModuleManagementErrorResponse($"Feed '{feed.Name}' already exists."));
 
-        feeds.Add(ToJson(feed));
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate feed registration changes."));
+            feeds.Add(ToJson(feed));
+            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed added. Restart the host to activate feed registration changes."));
+        });
     }
 
     private static async Task<IResult> UpdateFeedAsync(
@@ -227,15 +228,16 @@ internal static class ElsaModuleManagementApi
         [FromServices] IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
-        var feeds = ReadFeedsArray(config);
-        var index = FindFeedIndex(feeds, name);
-        if (index < 0)
-            return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        {
+            var feeds = ReadFeedsArray(config);
+            var index = FindFeedIndex(feeds, name);
+            if (index < 0)
+                return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
 
-        feeds[index] = ToJson(feed with { Name = name });
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."));
+            feeds[index] = ToJson(feed with { Name = name });
+            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed updated. Restart the host to activate feed registration changes."));
+        });
     }
 
     private static async Task<IResult> DeleteFeedAsync(
@@ -243,15 +245,16 @@ internal static class ElsaModuleManagementApi
         [FromServices] IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
-        var feeds = ReadFeedsArray(config);
-        var index = FindFeedIndex(feeds, name);
-        if (index < 0)
-            return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
+        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        {
+            var feeds = ReadFeedsArray(config);
+            var index = FindFeedIndex(feeds, name);
+            if (index < 0)
+                return Results.NotFound(new ModuleManagementErrorResponse($"Feed '{name}' was not found."));
 
-        feeds.RemoveAt(index);
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
+            feeds.RemoveAt(index);
+            return Results.Ok(new ModuleManagementConfigurationWriteResponse(true, "Feed deleted. Restart the host to activate feed registration changes."));
+        });
     }
 
     private static async Task<IResult> UpdateRetentionPolicyAsync(
@@ -259,11 +262,38 @@ internal static class ElsaModuleManagementApi
         [FromServices] IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
-        var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
-        var nuplane = GetOrCreateObject(config.Document, "Nuplane");
-        nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
-        await WriteManagementConfigurationAsync(environment, config, cancellationToken);
-        return Results.Ok(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."));
+        return await MutateManagementConfigurationAsync(environment, cancellationToken, config =>
+        {
+            var nuplane = GetOrCreateObject(config.Document, "Nuplane");
+            nuplane["CleanupPolicy"] = JsonSerializer.SerializeToNode(policy, JsonOptions);
+            return Results.Ok(new ModuleManagementConfigurationWriteResponse(false, "Retention policy updated. It will be used by the next prune operation and after host restart by Nuplane cleanup."));
+        });
+    }
+
+    // Runs a read-modify-write cycle against nuplane-management.json under the process-wide config gate
+    // so concurrent feed/retention edits (and shell feature saves) can't interleave and clobber each
+    // other. The mutation returns the IResult to send back; the config is written atomically only when
+    // the result is a successful 2xx write response. Validation failures (Conflict/NotFound) short-
+    // circuit before any write.
+    private static async Task<IResult> MutateManagementConfigurationAsync(
+        IWebHostEnvironment environment,
+        CancellationToken cancellationToken,
+        Func<ManagementConfiguration, IResult> mutate)
+    {
+        await ConfigFileWriter.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
+            var result = mutate(config);
+            if (result is IStatusCodeHttpResult { StatusCode: >= 200 and < 300 })
+                await WriteManagementConfigurationAsync(environment, config, cancellationToken);
+
+            return result;
+        }
+        finally
+        {
+            ConfigFileWriter.WriteGate.Release();
+        }
     }
 
     private static IReadOnlyList<ModuleManagementPruneDecision> PrunePackageInstallDirectories(
@@ -374,11 +404,9 @@ internal static class ElsaModuleManagementApi
     private static async Task WriteManagementConfigurationAsync(IWebHostEnvironment environment, ManagementConfiguration config, CancellationToken cancellationToken)
     {
         var path = GetManagementFilePath(environment);
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        await File.WriteAllTextAsync(path, config.Document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
+        // Crash-safe: write to a temp sibling then atomically move over the destination, so a mid-write
+        // crash can't truncate nuplane-management.json.
+        await ConfigFileWriter.WriteAtomicAsync(path, config.Document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
     }
 
     private static string GetManagementFilePath(IWebHostEnvironment environment) =>
