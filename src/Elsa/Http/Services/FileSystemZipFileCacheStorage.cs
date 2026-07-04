@@ -44,6 +44,9 @@ public sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptio
             await fileStream.CopyToAsync(result, cancellationToken);
             await fileStream.FlushAsync(cancellationToken);
 
+            // Rewind so consumers (e.g. streaming the cached zip to an HTTP response) read
+            // the content instead of starting at the end of the stream.
+            result.Position = 0;
             return result;
         }
         finally
