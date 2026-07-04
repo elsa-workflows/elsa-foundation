@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
-  createModuleManagementHosts,
   deleteDropFolderPackage,
   formatFileSize,
   getErrorMessage,
   hostTabs,
-  normalizeModuleManagementRegistry,
   uploadPackage,
   type HostId,
   type HostModel,
@@ -16,9 +14,9 @@ import {
   type ModuleManagementModule,
   type ModuleManagementPackage,
   type ModuleManagementRegistryResponse,
-  type ModuleManagementStudioManifest,
-  type RegistryState
+  type ModuleManagementStudioManifest
 } from "./moduleManagementApi";
+import { useHostMutationRunner, useModuleManagementRegistries } from "./useModuleManagement";
 
 type InspectorTab = "overview" | "contributions" | "package" | "manifest" | "diagnostics";
 type ModuleOrigin = "built-in" | "nuplane";
@@ -53,108 +51,94 @@ const inspectorTabs = [
   { id: "diagnostics", label: "Diagnostics" }
 ];
 
+// Extra registry refetches after a write, polling async Nuplane reconciliation that completes after
+// the mutation resolves (was ModuleManagementPage.scheduleFollowUpRefreshes).
+const followUpRefreshDelaysMs = [500, 1500, 3000, 6000];
+
 export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
-  const hosts = useMemo<HostModel[]>(() => createModuleManagementHosts(api), [api]);
+  const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>("studio");
-  const [stateByHost, setStateByHost] = useState<Record<HostId, HostRegistryState>>(() => ({
-    studio: createInitialHostState(),
-    server: createInitialHostState()
+  // Per-host view state (selection, source view, inspector tab). Registry data itself now lives in the
+  // Query cache, not here.
+  const [viewByHost, setViewByHost] = useState<Record<HostId, HostViewState>>(() => ({
+    studio: createInitialViewState(),
+    server: createInitialViewState()
   }));
+  // Success/validation banners are transient UI, kept local; query/mutation errors surface via `error`.
+  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
+  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
-  const refreshTimerIds = useRef<number[]>([]);
   const [uploadDragActive, setUploadDragActive] = useState(false);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
-  const activeState = stateByHost[activeHost.id];
-  const rows = useMemo(() => buildRows(activeState.registry), [activeState.registry]);
+  const activeView = viewByHost[activeHost.id];
+  const activeQuery = byHost(activeHost.id);
+  const registry = activeQuery.data ?? null;
+  const mutation = useHostMutationRunner(activeHost, followUpRefreshDelaysMs);
+  // A write error (set locally) takes precedence over a stale read error; otherwise surface the
+  // registry query's failure.
+  const activeError = localErrorByHost[activeHost.id] ?? errorMessageFor(activeQuery.error);
+  const activeStatus = statusByHost[activeHost.id] ?? null;
+  const isLoading = activeQuery.isPending || activeQuery.isFetching;
+
+  const rows = useMemo(() => buildRows(registry), [registry]);
   const builtInRows = useMemo(() => rows.filter(row => row.origin === "built-in"), [rows]);
   const nuplaneRows = useMemo(() => rows.filter(row => row.origin === "nuplane"), [rows]);
   const packageSourceOptions = useMemo(() => getPackageSourceOptions(nuplaneRows), [nuplaneRows]);
+  // A package-source filter that no longer matches any row falls back to "all" so we never show an
+  // empty grid for a stale filter (was a dedicated effect over patchHostState).
+  const effectivePackageSourceFilter = activeView.packageSourceFilter !== AllPackageSources && !packageSourceOptions.includes(activeView.packageSourceFilter)
+    ? AllPackageSources
+    : activeView.packageSourceFilter;
   const filteredNuplaneRows = useMemo(
-    () => activeState.packageSourceFilter === AllPackageSources
+    () => effectivePackageSourceFilter === AllPackageSources
       ? nuplaneRows
-      : nuplaneRows.filter(row => row.packageSource === activeState.packageSourceFilter),
-    [activeState.packageSourceFilter, nuplaneRows]);
-  const visibleRows = activeState.sourceView === "nuplane" ? filteredNuplaneRows : builtInRows;
-  const selectedRow = visibleRows.find(row => row.key === activeState.selectedKey) ?? visibleRows[0] ?? null;
-  const summary = useMemo(() => getSummary(activeState.registry, rows), [activeState.registry, rows]);
-  const activeColumns = activeState.sourceView === "nuplane" ? nuplaneModuleColumns : builtInModuleColumns;
-  const gridColumns = activeState.sourceView === "nuplane"
+      : nuplaneRows.filter(row => row.packageSource === effectivePackageSourceFilter),
+    [effectivePackageSourceFilter, nuplaneRows]);
+  const visibleRows = activeView.sourceView === "nuplane" ? filteredNuplaneRows : builtInRows;
+  const selectedRow = visibleRows.find(row => row.key === activeView.selectedKey) ?? visibleRows[0] ?? null;
+  const summary = useMemo(() => getSummary(registry, rows), [registry, rows]);
+  const activeColumns = activeView.sourceView === "nuplane" ? nuplaneModuleColumns : builtInModuleColumns;
+  const gridColumns = activeView.sourceView === "nuplane"
     ? "minmax(250px, 1.45fr) 88px 104px minmax(140px, .9fr) 86px 82px 116px"
     : "minmax(250px, 1.45fr) 88px 104px minmax(120px, .8fr) 82px 116px";
 
-  useEffect(() => {
-    void refreshHost("studio");
-    void refreshHost("server");
-
-    return () => {
-      refreshTimerIds.current.forEach(window.clearTimeout);
-      refreshTimerIds.current = [];
-    };
-  }, []);
-
-  useEffect(() => {
-    if (activeState.packageSourceFilter !== AllPackageSources && !packageSourceOptions.includes(activeState.packageSourceFilter)) {
-      patchHostState(activeHost.id, { packageSourceFilter: AllPackageSources });
-    }
-  }, [activeHost.id, activeState.packageSourceFilter, packageSourceOptions]);
-
-  async function refreshHost(hostId: HostId, options?: { silent?: boolean }) {
-    const host = hosts.find(item => item.id === hostId);
-    if (!host) return;
-
-    if (!options?.silent) {
-      patchHostState(hostId, { state: "loading", error: null });
-    }
-
-    try {
-      const registry = await host.context.http.getJson<Partial<ModuleManagementRegistryResponse>>("/_elsa/module-management/registry");
-      patchHostState(hostId, { state: "ready", registry: normalizeModuleManagementRegistry(registry), status: null, error: null });
-    } catch (e) {
-      if (!options?.silent) {
-        patchHostState(hostId, { state: "failed", error: getErrorMessage(e) });
-      }
-    }
-  }
-
-  function patchHostState(hostId: HostId, patch: Partial<HostRegistryState>) {
-    setStateByHost(current => ({
+  function patchViewState(hostId: HostId, patch: Partial<HostViewState>) {
+    setViewByHost(current => ({
       ...current,
       [hostId]: { ...current[hostId], ...patch }
     }));
   }
 
-  function selectSourceView(sourceView: SourceView, packageSourceFilter = activeState.packageSourceFilter) {
-    patchHostState(activeHost.id, { sourceView, packageSourceFilter, selectedKey: "" });
+  function setStatus(hostId: HostId, status: string | null) {
+    setStatusByHost(current => ({ ...current, [hostId]: status }));
   }
 
-  async function runHostOperation<T>(operation: () => Promise<T>, success: string) {
+  function setLocalError(hostId: HostId, error: string | null) {
+    setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
+  }
+
+  function selectSourceView(sourceView: SourceView, packageSourceFilter = activeView.packageSourceFilter) {
+    patchViewState(activeHost.id, { sourceView, packageSourceFilter, selectedKey: "" });
+  }
+
+  async function runHostOperation(operation: () => Promise<unknown>, success: string) {
     const hostId = activeHost.id;
-    patchHostState(hostId, { operationBusy: true, error: null, status: null });
+    setLocalError(hostId, null);
+    setStatus(hostId, null);
     try {
-      await operation();
-      await refreshHost(hostId);
-      scheduleFollowUpRefreshes(hostId);
-      patchHostState(hostId, { status: success });
+      // mutateAsync invalidates + schedules follow-up refetches on success (see useHostMutationRunner).
+      await mutation.mutateAsync(operation);
+      setStatus(hostId, success);
     } catch (e) {
-      patchHostState(hostId, { error: getErrorMessage(e) });
-    } finally {
-      patchHostState(hostId, { operationBusy: false });
-    }
-  }
-
-  function scheduleFollowUpRefreshes(hostId: HostId) {
-    for (const delay of [500, 1500, 3000, 6000]) {
-      const timerId = window.setTimeout(() => {
-        void refreshHost(hostId, { silent: true });
-      }, delay);
-      refreshTimerIds.current.push(timerId);
+      setLocalError(hostId, getErrorMessage(e));
     }
   }
 
   function uploadSelectedFiles(files: FileList | File[]) {
     const packageFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith(".nupkg"));
     if (packageFiles.length === 0) {
-      patchHostState(activeHost.id, { error: "Select one or more .nupkg package files.", status: null });
+      setLocalError(activeHost.id, "Select one or more .nupkg package files.");
+      setStatus(activeHost.id, null);
       return;
     }
 
@@ -165,6 +149,8 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     }, `Uploaded ${packageFiles.length} package${packageFiles.length === 1 ? "" : "s"} to ${activeHost.label}. Reconcile completed; reload may be required.`);
   }
 
+  const isReady = activeQuery.isSuccess;
+
   return (
     <section className="modules-page">
       <div className="section-header modules-header">
@@ -174,9 +160,9 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => refreshHost(activeHost.id)} disabled={activeState.state === "loading"}>
+            <button type="button" className="studio-button" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
               <RefreshCcw size={15} />
-              {activeState.state === "loading" ? "Refreshing" : "Refresh"}
+              {isLoading ? "Refreshing" : "Refresh"}
             </button>
           </StudioToolbarGroup>
         </StudioToolbar>
@@ -184,8 +170,8 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
 
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
-      {activeState.error ? <StudioAlert tone="danger">{activeState.error}</StudioAlert> : null}
-      {activeState.status ? <StudioAlert tone="success">{activeState.status}</StudioAlert> : null}
+      {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
         <SummaryItem label="Rows" value={rows.length} />
@@ -195,7 +181,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
         <SummaryItem label="Attention" value={summary.attention} />
       </div>
 
-      {activeState.state === "ready" && rows.length === 0 && (activeState.registry?.dropFolderPackages.length ?? 0) === 0 ? (
+      {isReady && rows.length === 0 && (registry?.dropFolderPackages.length ?? 0) === 0 ? (
         <EmptyState icon={<Boxes size={22} />}>No modules or packages are reported for {activeHost.label}.</EmptyState>
       ) : (
         <div className="modules-workbench">
@@ -204,8 +190,8 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
             nuplaneCount={nuplaneRows.length}
             packageSourceOptions={packageSourceOptions}
             packageSourceCounts={getPackageSourceCounts(nuplaneRows)}
-            activeSourceView={activeState.sourceView}
-            activePackageSource={activeState.packageSourceFilter}
+            activeSourceView={activeView.sourceView}
+            activePackageSource={effectivePackageSourceFilter}
             onSelectBuiltIn={() => selectSourceView("built-in")}
             onSelectNuplane={() => selectSourceView("nuplane", AllPackageSources)}
             onSelectPackageSource={source => selectSourceView("nuplane", source)}
@@ -213,17 +199,17 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
           <div className="modules-grid-panel">
             <div className="modules-grid-heading">
               <div>
-                <h3>{activeState.sourceView === "nuplane" ? "Nuplane packages" : "Built-in modules"}</h3>
-                <p>{activeState.sourceView === "nuplane"
+                <h3>{activeView.sourceView === "nuplane" ? "Nuplane packages" : "Built-in modules"}</h3>
+                <p>{activeView.sourceView === "nuplane"
                   ? "Installed through Nuplane at runtime."
                   : "Referenced by the host deployment. Changes require rebuild or redeploy."}</p>
               </div>
             </div>
-            {activeState.sourceView === "nuplane" && activeState.registry ? (
+            {activeView.sourceView === "nuplane" && registry ? (
               <InlinePackageUploads
                 host={activeHost}
-                registry={activeState.registry}
-                busy={activeState.operationBusy}
+                registry={registry}
+                busy={mutation.isPending}
                 dragActive={uploadDragActive}
                 uploadInputRef={uploadInputRef}
                 onUploadFiles={uploadSelectedFiles}
@@ -232,24 +218,24 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
               />
             ) : null}
             {visibleRows.length === 0 ? (
-              <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeState.sourceView, nuplaneRows.length, activeState.packageSourceFilter)}</p>
+              <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeView.sourceView, nuplaneRows.length, effectivePackageSourceFilter)}</p>
             ) : (
               <StudioDataGrid
                 columns={activeColumns}
                 items={visibleRows}
                 getKey={row => row.key}
                 selectedKey={selectedRow?.key}
-                onSelect={row => patchHostState(activeHost.id, { selectedKey: row.key })}
+                onSelect={row => patchViewState(activeHost.id, { selectedKey: row.key })}
                 gridColumns={gridColumns}
               />
             )}
           </div>
           <ModuleInspector
             host={activeHost}
-            registry={activeState.registry}
+            registry={registry}
             selectedRow={selectedRow}
-            activeTab={activeState.inspectorTab}
-            onSelectTab={tab => patchHostState(activeHost.id, { inspectorTab: tab })}
+            activeTab={activeView.inspectorTab}
+            onSelectTab={tab => patchViewState(activeHost.id, { inspectorTab: tab })}
           />
         </div>
       )}
@@ -257,30 +243,25 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   );
 }
 
-interface HostRegistryState {
-  state: RegistryState;
-  registry: ModuleManagementRegistryResponse | null;
-  error: string | null;
-  status: string | null;
+interface HostViewState {
   selectedKey: string;
   inspectorTab: InspectorTab;
   sourceView: SourceView;
   packageSourceFilter: string;
-  operationBusy: boolean;
 }
 
-function createInitialHostState(): HostRegistryState {
+function createInitialViewState(): HostViewState {
   return {
-    state: "loading",
-    registry: null,
-    error: null,
-    status: null,
     selectedKey: "",
     inspectorTab: "overview",
     sourceView: "built-in",
-    packageSourceFilter: AllPackageSources,
-    operationBusy: false
+    packageSourceFilter: AllPackageSources
   };
+}
+
+function errorMessageFor(error: unknown): string | null {
+  if (error === undefined || error === null) return null;
+  return getErrorMessage(error);
 }
 
 function SummaryItem({ label, value }: { label: string; value: number }) {

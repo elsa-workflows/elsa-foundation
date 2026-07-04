@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Boxes, PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
 import { EmptyState, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
-  createModuleManagementHosts,
   defaultRetentionPolicy,
   deleteFeed,
   getErrorMessage,
@@ -17,17 +16,9 @@ import {
   type HostModel,
   type ModuleManagementFeed,
   type ModuleManagementRegistryResponse,
-  type ModuleManagementRetentionPolicy,
-  type RegistryState
+  type ModuleManagementRetentionPolicy
 } from "./moduleManagementApi";
-
-interface HostRegistryState {
-  state: RegistryState;
-  registry: ModuleManagementRegistryResponse | null;
-  error: string | null;
-  status: string | null;
-  operationBusy: boolean;
-}
+import { useHostMutationRunner, useModuleManagementRegistries } from "./useModuleManagement";
 
 interface FeedDraft {
   name: string;
@@ -38,50 +29,37 @@ interface FeedDraft {
 }
 
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
-  const hosts = useMemo<HostModel[]>(() => createModuleManagementHosts(api), [api]);
+  const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>("studio");
-  const [stateByHost, setStateByHost] = useState<Record<HostId, HostRegistryState>>(() => ({
-    studio: createInitialHostState(),
-    server: createInitialHostState()
-  }));
+  // Success/validation banners are transient UI; query/mutation failures surface via `activeError`.
+  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
+  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
-  const activeState = stateByHost[activeHost.id];
+  const activeQuery = byHost(activeHost.id);
+  const registry = activeQuery.data ?? null;
+  const mutation = useHostMutationRunner(activeHost);
+  const activeError = localErrorByHost[activeHost.id] ?? errorMessageFor(activeQuery.error);
+  const activeStatus = statusByHost[activeHost.id] ?? null;
+  const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
-  useEffect(() => {
-    void refreshHost("studio");
-    void refreshHost("server");
-  }, []);
-
-  async function refreshHost(hostId: HostId) {
-    const host = hosts.find(item => item.id === hostId);
-    if (!host) return;
-
-    patchHostState(hostId, { state: "loading", error: null });
-    try {
-      const registry = await host.context.http.getJson<ModuleManagementRegistryResponse>("/_elsa/module-management/registry");
-      patchHostState(hostId, { state: "ready", registry, status: null, error: null });
-    } catch (e) {
-      patchHostState(hostId, { state: "failed", error: getErrorMessage(e) });
-    }
+  function setStatus(hostId: HostId, status: string | null) {
+    setStatusByHost(current => ({ ...current, [hostId]: status }));
   }
 
-  function patchHostState(hostId: HostId, patch: Partial<HostRegistryState>) {
-    setStateByHost(current => ({
-      ...current,
-      [hostId]: { ...current[hostId], ...patch }
-    }));
+  function setLocalError(hostId: HostId, error: string | null) {
+    setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
   }
 
-  async function runHostOperation<T>(operation: () => Promise<T>, success: string) {
-    patchHostState(activeHost.id, { operationBusy: true, error: null, status: null });
+  async function runHostOperation(operation: () => Promise<unknown>, success: string) {
+    const hostId = activeHost.id;
+    setLocalError(hostId, null);
+    setStatus(hostId, null);
     try {
-      await operation();
-      patchHostState(activeHost.id, { status: success });
-      await refreshHost(activeHost.id);
+      // mutateAsync invalidates the host's registry on success so reads refetch (see useHostMutationRunner).
+      await mutation.mutateAsync(operation);
+      setStatus(hostId, success);
     } catch (e) {
-      patchHostState(activeHost.id, { error: getErrorMessage(e) });
-    } finally {
-      patchHostState(activeHost.id, { operationBusy: false });
+      setLocalError(hostId, getErrorMessage(e));
     }
   }
 
@@ -94,7 +72,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
         </div>
         <StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => refreshHost(activeHost.id)} disabled={activeState.state === "loading"}>
+            <button type="button" className="studio-icon-button" aria-label="Refresh package feeds" title="Refresh" onClick={() => void activeQuery.refetch()} disabled={isLoading}>
               <RefreshCcw size={15} />
             </button>
           </StudioToolbarGroup>
@@ -103,14 +81,14 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
 
       <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
-      {activeState.error ? <StudioAlert tone="danger">{activeState.error}</StudioAlert> : null}
-      {activeState.status ? <StudioAlert tone="success">{activeState.status}</StudioAlert> : null}
+      {activeError ? <StudioAlert tone="danger">{activeError}</StudioAlert> : null}
+      {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
 
-      {activeState.registry ? (
+      {registry ? (
         <PackageFeedsWorkbench
           host={activeHost}
-          registry={activeState.registry}
-          busy={activeState.operationBusy}
+          registry={registry}
+          busy={mutation.isPending}
           onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onDeleteFeed={feedName => runHostOperation(() => deleteFeed(activeHost.context, feedName), `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`)}
@@ -123,6 +101,11 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       )}
     </section>
   );
+}
+
+function errorMessageFor(error: unknown): string | null {
+  if (error === undefined || error === null) return null;
+  return getErrorMessage(error);
 }
 
 function PackageFeedsWorkbench({
@@ -446,14 +429,4 @@ function retentionPolicyEquals(left: ModuleManagementRetentionPolicy, right: Mod
     left.retainYoungerThanDays === right.retainYoungerThanDays &&
     left.mode === right.mode &&
     left.protectLastKnownGood === right.protectLastKnownGood;
-}
-
-function createInitialHostState(): HostRegistryState {
-  return {
-    state: "loading",
-    registry: null,
-    error: null,
-    status: null,
-    operationBusy: false
-  };
 }
