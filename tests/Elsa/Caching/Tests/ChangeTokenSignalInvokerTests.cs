@@ -60,8 +60,56 @@ public sealed class ChangeTokenSignalInvokerTests
     {
         var invoker = new ChangeTokenSignalInvoker();
 
-        // Should be a no-op; must not throw even though the key was never requested via GetToken.
+        // Must not throw even though the key was never requested via GetToken.
         await invoker.TriggerTokenAsync("does-not-exist");
+    }
+
+    /// <summary>
+    /// Regression test for the TOCTOU half of https://github.com/elsa-workflows/elsa-foundation/issues/396.
+    /// A reader that populated a cache entry from stale data can call <c>GetToken</c> just *after* the
+    /// invalidation for that key fired. Before the fix the invalidation was silently lost (TryRemove was a
+    /// no-op on the missing entry) and the reader received a fresh, never-cancelled token — caching stale
+    /// data indefinitely. Now a trigger with no registered token is remembered, and the next
+    /// <c>GetToken</c> hands out an already-signalled token so the racing population is evicted immediately;
+    /// the <c>GetToken</c> after that starts a clean generation.
+    /// </summary>
+    [Fact]
+    public async Task TriggerTokenAsync_Racing_Ahead_Of_GetToken_Is_Not_Lost()
+    {
+        var invoker = new ChangeTokenSignalInvoker();
+
+        // Deterministic replay of the filed interleaving: the invalidation lands before the reader
+        // registers its token for the freshly-populated (stale) cache entry.
+        await invoker.TriggerTokenAsync("my-key");
+
+        var racedToken = invoker.GetToken("my-key");
+        Assert.True(racedToken.HasChanged);
+
+        // The pending invalidation is consumed exactly once; the next population is clean.
+        var freshToken = invoker.GetToken("my-key");
+        Assert.NotSame(racedToken, freshToken);
+        Assert.False(freshToken.HasChanged);
+    }
+
+    /// <summary>
+    /// Guards the single-shot construction half of issue #396: concurrent <c>GetToken</c> callers for the
+    /// same key must all observe one token instance (the <c>Lazy</c> wrapper guarantees the losing racer
+    /// never constructs — and therefore never leaks — a <see cref="CancellationTokenSource"/>).
+    /// </summary>
+    [Fact]
+    public async Task GetToken_Concurrent_Callers_Observe_A_Single_Token_Instance()
+    {
+        var invoker = new ChangeTokenSignalInvoker();
+        const int callers = 8;
+        using var barrier = new Barrier(callers);
+
+        var tokens = await Task.WhenAll(Enumerable.Range(0, callers).Select(_ => Task.Run(() =>
+        {
+            barrier.SignalAndWait();
+            return invoker.GetToken("contended-key");
+        })));
+
+        Assert.All(tokens, token => Assert.Same(tokens[0], token));
     }
 
     /// <summary>
@@ -119,6 +167,11 @@ public sealed class ChangeTokenSignalInvokerTests
         Assert.True(found, $"Expected an entry for key '{key}' in the change token dictionary.");
 
         var changeTokenInfo = args[1]!;
+
+        // The dictionary value is wrapped in Lazy<T> (single-shot construction, issue #396); unwrap it.
+        if (changeTokenInfo.GetType().IsGenericType && changeTokenInfo.GetType().GetGenericTypeDefinition() == typeof(Lazy<>))
+            changeTokenInfo = changeTokenInfo.GetType().GetProperty("Value")!.GetValue(changeTokenInfo)!;
+
         var tokenSourceProperty = changeTokenInfo.GetType().GetProperty("TokenSource", BindingFlags.Public | BindingFlags.Instance)
             ?? throw new InvalidOperationException("Could not locate the 'TokenSource' property via reflection. The production implementation may have changed.");
 
