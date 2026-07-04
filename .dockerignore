@@ -52,8 +52,6 @@ src/Apps/Elsa.Server/.elsa/
 
 # --- Docker / compose assets ------------------------------------------------
 docker/
-# ...but the build-only NuGet config must reach the build context.
-!docker/nuget.docker.config
 **/Dockerfile
 **/.dockerignore
 **/docker-compose*.yml

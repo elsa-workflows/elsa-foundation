@@ -21,12 +21,11 @@ WORKDIR /src
 # Copy repo-root build configuration first so restore layers cache well.
 # Note: this repo has no root Directory.Build.props/targets.
 #
-# docker/nuget.docker.config is a self-contained, build-only NuGet config used
-# instead of the repo-root NuGet.config: it adds a catch-all mapping to nuget.org
-# for third-party packages the repo config expects a developer's user-level config
-# to supply. See that file's header for the full rationale.
+# NuGet.config is the repo-root config. Its packageSourceMapping maps every
+# package the solution uses to an explicit source, so restore is fully
+# self-contained here and needs no user-level NuGet config fallback.
 COPY Directory.Packages.props ./
-COPY docker/nuget.docker.config ./nuget.config
+COPY NuGet.config ./
 COPY Elsa.Server.slnx ./
 
 # Copy the source tree (tests, docs, local dev artifacts are excluded via .dockerignore).
@@ -38,7 +37,6 @@ COPY src/ ./src/
 # environment when a transitive preview dependency resolves to a newer available version,
 # without relaxing the repo's TreatWarningsAsErrors for real code warnings.
 RUN dotnet restore src/Apps/Elsa.Server/Elsa.Server.csproj \
-        --configfile nuget.config \
         -p:WarningsNotAsErrors=NU1603
 RUN dotnet publish src/Apps/Elsa.Server/Elsa.Server.csproj \
         -c Release \
