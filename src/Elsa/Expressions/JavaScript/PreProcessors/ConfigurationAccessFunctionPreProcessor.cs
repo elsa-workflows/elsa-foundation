@@ -22,7 +22,9 @@ public sealed class ConfigurationAccessFunctionPreProcessor(IOptions<Configurati
             FunctionNames.GetConfiguration,
             (name) =>
             {
-                if (featureOptions.Value.DisallowedSections?.Contains(name) == true)
+                if (featureOptions.Value.DisallowedSections?.Any(section =>
+                        string.Equals(name, section, StringComparison.OrdinalIgnoreCase) ||
+                        name.StartsWith(section + ":", StringComparison.OrdinalIgnoreCase)) == true)
                 {
                     throw new ArgumentException($"Configuration section '{name}' is restricted from access");
                 }

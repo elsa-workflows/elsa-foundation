@@ -1,0 +1,18 @@
+{
+  "emailKey": "tenant-1:alice@example.com",
+  "user": {
+    "directPermissions": [
+      "secrets:read"
+    ],
+    "displayName": "Alice Example",
+    "email": "alice@example.com",
+    "id": "user-1",
+    "ownership": "Foundation",
+    "roleIds": [
+      "role-1"
+    ],
+    "status": "Active",
+    "tenantId": "tenant-1",
+    "userName": "alice"
+  }
+}

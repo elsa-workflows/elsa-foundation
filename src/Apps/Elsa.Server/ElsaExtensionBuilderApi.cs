@@ -1,6 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using Elsa.Server.ExtensionBuilder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -9,8 +7,6 @@ namespace Elsa.Server;
 
 internal static class ElsaExtensionBuilderApi
 {
-    private const string ManagementApiKeyConfigurationKey = "Elsa:ModuleManagement:ApiKey";
-    private const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
     private const string CallerItemKey = "__ElsaExtensionBuilderCaller";
     private const string ElsaIdentityRoleClaimType = "elsa.identity.role";
 
@@ -498,16 +494,9 @@ internal static class ElsaExtensionBuilderApi
 
     internal static ValueTask<object?> RequireManagementApiKeyAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var configuration = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-        var configuredApiKey = configuration[ManagementApiKeyConfigurationKey];
-        if (string.IsNullOrWhiteSpace(configuredApiKey))
-            return new ValueTask<object?>(Results.NotFound());
-
-        if (!context.HttpContext.Request.Headers.TryGetValue(ManagementApiKeyHeaderName, out var providedApiKeys) ||
-            providedApiKeys.Count != 1 ||
-            string.IsNullOrWhiteSpace(providedApiKeys[0]) ||
-            !ApiKeysEqual(configuredApiKey, providedApiKeys[0]!))
-            return new ValueTask<object?>(Results.Unauthorized());
+        var failure = ManagementApiKeyAuthentication.Validate(context.HttpContext);
+        if (failure is not null)
+            return new ValueTask<object?>(failure);
 
         ApplyManagementApiKeyPrincipal(context.HttpContext);
         context.HttpContext.Items[CallerItemKey] = CreateCaller(context.HttpContext, hasManagementAccess: true);
@@ -572,11 +561,4 @@ internal static class ElsaExtensionBuilderApi
         user.Claims.Any(claim =>
             claim.Type == ElsaIdentityRoleClaimType &&
             string.Equals(claim.Value, role, StringComparison.OrdinalIgnoreCase));
-
-    private static bool ApiKeysEqual(string expected, string actual)
-    {
-        var expectedBytes = Encoding.UTF8.GetBytes(expected);
-        var actualBytes = Encoding.UTF8.GetBytes(actual);
-        return CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
-    }
 }

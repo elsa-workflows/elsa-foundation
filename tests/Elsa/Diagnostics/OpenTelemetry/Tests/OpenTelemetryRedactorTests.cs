@@ -51,4 +51,25 @@ public class OpenTelemetryRedactorTests
         Assert.DoesNotContain("abcDEF123", name);
         Assert.Contains("[Redacted]", name);
     }
+
+    [Fact]
+    public void Redact_SensitiveNameIsRedactedAcrossAllThreeSignals()
+    {
+        // Issue #376: the same sensitive value must be redacted on Spans, Traces AND Logs.
+        // Previously batch.Traces passed through unredacted because the `with` expression omitted Traces.
+        const string sensitive = "password=hunter2";
+        var redactor = new OpenTelemetryRedactor(OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions()));
+
+        var span = new TelemetrySpan("s1", "t1", sensitive, null, "resource", "op", "internal", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, SpanStatus.Ok, null, new Dictionary<string, string?>(), [], []);
+        var trace = new TelemetryTrace("t1", "s1", sensitive, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, TimeSpan.Zero, SpanStatus.Ok, [], [], 1);
+        var log = new OtlpLogRecord("l1", "resource", DateTimeOffset.UtcNow, "Information", null, sensitive, null, null, new Dictionary<string, string?>());
+        var batch = new OpenTelemetryBatch([], [trace], [span], [], [], [log]);
+
+        var result = redactor.Redact(batch);
+
+        Assert.DoesNotContain("hunter2", result.Spans.Single().Name);
+        Assert.DoesNotContain("hunter2", result.Traces.Single().Name);
+        Assert.DoesNotContain("hunter2", result.Logs.Single().Body);
+        Assert.Equal("[Redacted]", result.Traces.Single().Name);
+    }
 }

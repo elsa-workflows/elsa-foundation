@@ -72,6 +72,21 @@ Side units landed with Phase 2:
 
 Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
 
+- **W18 Identity & secrets hardening** — **in progress** (draft PR to main): the 5 Tier-0
+  security issues [#374](https://github.com/elsa-workflows/elsa-foundation/issues/374)
+  (AgentEndpointActor fail-closed), [#375](https://github.com/elsa-workflows/elsa-foundation/issues/375)
+  (getConfiguration case/hierarchy bypass), [#376](https://github.com/elsa-workflows/elsa-foundation/issues/376)
+  (OpenTelemetryRedactor never redacted Traces), [#377](https://github.com/elsa-workflows/elsa-foundation/issues/377)
+  (shared constant-time management API-key auth helper), and
+  [#406](https://github.com/elsa-workflows/elsa-foundation/issues/406)
+  (role→permission claim expansion), plus the W18 brief hardening: durable Groundwork
+  identity store (MS-1, own `elsa-identity` manifest + golden fixtures), secrets master-key
+  rotation via a validated key-ring (MS-4, `ISecretKeyRing`, [`docs/secrets-key-rotation.md`](../secrets-key-rotation.md)),
+  and audit visible-by-default with failed-operation records (MS-5/5b, `LoggingSecretAuditSink`;
+  fixes the pre-existing `SecretAuditTests` setup gap). Deliberately excluded: the
+  `ISecretManager` store-vs-resolver split (proposal-only in the PR body per the W14 deferral)
+  and the design-endpoints `AllowAnonymous` bypass (kept as the tracked finding below).
+
 ### Follow-up findings recorded during Phase 0 execution
 
 - **Ack-based dequeue for full window-C closure** (from W5): guaranteed item-level replay

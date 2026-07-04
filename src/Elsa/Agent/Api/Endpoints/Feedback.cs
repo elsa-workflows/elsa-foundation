@@ -32,6 +32,14 @@ internal sealed class Feedback(IAgentFeedbackService feedback, IAgentSessionServ
             return;
         }
 
+        var actorId = AgentEndpointActor.Resolve(User);
+        if (actorId is null)
+        {
+            var error = new AgentError("agent.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentFeedback>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(req.MessageId) && await sessions.FindMessageAsync(req.SessionId, req.MessageId, ct) is null)
         {
             var error = new AgentError("agent.message.not_found", $"Agent message '{req.MessageId}' was not found in session '{req.SessionId}'.", 404);
@@ -45,7 +53,7 @@ internal sealed class Feedback(IAgentFeedbackService feedback, IAgentSessionServ
             req.MessageId,
             req.Rating > 0 ? "positive" : "negative",
             req.Comment,
-            AgentEndpointActor.Resolve(User),
+            actorId,
             DateTimeOffset.UtcNow);
 
         await Send.OkAsync(AgentApiResponse<AgentFeedback>.Success(await feedback.AddAsync(item, ct)), ct);

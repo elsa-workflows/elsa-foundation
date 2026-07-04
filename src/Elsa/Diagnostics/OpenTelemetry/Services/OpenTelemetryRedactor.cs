@@ -19,6 +19,7 @@ public class OpenTelemetryRedactor(IOptions<OpenTelemetryDiagnosticsOptions> opt
         return batch with
         {
             Resources = batch.Resources.Select(RedactResource).ToList(),
+            Traces = batch.Traces.Select(RedactTrace).ToList(),
             Spans = batch.Spans.Select(RedactSpan).ToList(),
             Instruments = batch.Instruments.Select(x => x with { Attributes = RedactDictionary(x.Attributes) }).ToList(),
             MetricPoints = batch.MetricPoints.Select(x => x with { Attributes = RedactDictionary(x.Attributes) }).ToList(),
@@ -27,6 +28,8 @@ public class OpenTelemetryRedactor(IOptions<OpenTelemetryDiagnosticsOptions> opt
     }
 
     private TelemetryResource RedactResource(TelemetryResource resource) => resource with { Attributes = RedactDictionary(resource.Attributes) };
+
+    private TelemetryTrace RedactTrace(TelemetryTrace trace) => trace with { Name = RedactValue("trace.name", trace.Name) };
 
     private TelemetrySpan RedactSpan(TelemetrySpan span)
     {

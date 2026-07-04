@@ -1,0 +1,14 @@
+{
+  "role": {
+    "description": "Full access",
+    "id": "role-1",
+    "name": "Administrators",
+    "permissions": [
+      "secrets:read",
+      "secrets:write"
+    ],
+    "system": false,
+    "tenantId": "tenant-1"
+  },
+  "tenantKey": "tenant-1"
+}

@@ -12,7 +12,7 @@ public sealed class SecretStoreTests
     [Fact]
     public async Task Encrypted_Store_Protects_Stored_Value()
     {
-        var store = new EncryptedSecretStore(new DefaultSecretValueProtector(Microsoft.Extensions.Options.Options.Create(new SecretsOptions { EncryptionKey = "test-key" })));
+        var store = new EncryptedSecretStore(new DefaultSecretValueProtector(new DefaultSecretKeyRing(Microsoft.Extensions.Options.Options.Create(new SecretsOptions { EncryptionKey = "test-key" }))));
         var secret = Secret(SecretStoreNames.Encrypted);
         var version = secret.LatestActiveVersion!;
 

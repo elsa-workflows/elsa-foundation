@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Expressions\Core\Elsa.Expressions.Core.csproj" />
   </ItemGroup>

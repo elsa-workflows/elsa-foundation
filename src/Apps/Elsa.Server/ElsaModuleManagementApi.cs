@@ -1,12 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Nuplane;
@@ -20,8 +18,6 @@ namespace Elsa.Server;
 internal static class ElsaModuleManagementApi
 {
     private const string ManagementFileName = "appsettings.json";
-    private const string ManagementApiKeyConfigurationKey = "Elsa:ModuleManagement:ApiKey";
-    private const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
@@ -466,25 +462,11 @@ internal static class ElsaModuleManagementApi
 
     private static ValueTask<object?> RequireManagementApiKeyAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var configuration = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
-        var configuredApiKey = configuration[ManagementApiKeyConfigurationKey];
-        if (string.IsNullOrWhiteSpace(configuredApiKey))
-            return new ValueTask<object?>(Results.NotFound());
-
-        if (!context.HttpContext.Request.Headers.TryGetValue(ManagementApiKeyHeaderName, out var providedApiKeys) ||
-            providedApiKeys.Count != 1 ||
-            string.IsNullOrWhiteSpace(providedApiKeys[0]) ||
-            !ApiKeysEqual(configuredApiKey, providedApiKeys[0]!))
-            return new ValueTask<object?>(Results.Unauthorized());
+        var failure = ManagementApiKeyAuthentication.Validate(context.HttpContext);
+        if (failure is not null)
+            return new ValueTask<object?>(failure);
 
         return next(context);
-    }
-
-    private static bool ApiKeysEqual(string expected, string actual)
-    {
-        var expectedBytes = Encoding.UTF8.GetBytes(expected);
-        var actualBytes = Encoding.UTF8.GetBytes(actual);
-        return CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
     }
 
     private sealed record ManagementConfiguration(string Path, JsonObject Document);

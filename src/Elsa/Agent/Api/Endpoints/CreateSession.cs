@@ -22,6 +22,13 @@ internal sealed class CreateSession(
     {
         var actorId = AgentEndpointActor.Resolve(User);
         var tenantId = AgentEndpointActor.ResolveTenant(User);
+        if (actorId is null || tenantId is null)
+        {
+            var error = new AgentError("agent.actor.unresolved", "The current principal does not carry a resolvable actor or tenant identity.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentCreateSessionResponse>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
         var provider = providers.Active;
         if (provider is null)
         {

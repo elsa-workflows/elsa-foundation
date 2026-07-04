@@ -1,0 +1,14 @@
+{
+  "tenantKey": "tenant-1",
+  "tenantMembership": {
+    "directPermissions": [
+      "secrets:read"
+    ],
+    "roleIds": [
+      "role-1"
+    ],
+    "status": "Active",
+    "tenantId": "tenant-1",
+    "userId": "user-1"
+  }
+}

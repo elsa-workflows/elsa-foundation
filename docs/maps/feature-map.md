@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 74
+- Discovered feature classes: 75
 
 ## Features
 
@@ -45,6 +45,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | GitHubCopilotAgentFeature | direct IShellFeature | Elsa.Agent.GitHubCopilot | IShellFeature | [GitHubCopilotAgentFeature.cs](../../src/Elsa/Agent/GitHubCopilot/GitHubCopilotAgentFeature.cs) |
 | HttpFeature | direct IShellFeature | Elsa.Http | IShellFeature | [HttpFeature.cs](../../src/Elsa/Http/HttpFeature.cs) |
 | HttpJavaScriptFeature | direct IShellFeature | Elsa.Http.JavaScript | IShellFeature | [HttpJavaScriptFeature.cs](../../src/Elsa/Http/JavaScript/HttpJavaScriptFeature.cs) |
+| IdentityGroundworkPersistenceFeature | direct IShellFeature | Elsa.Foundation.Identity.Persistence.Groundwork | IShellFeature | [IdentityGroundworkPersistenceFeature.cs](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/IdentityGroundworkPersistenceFeature.cs) |
 | JavaScriptActivitiesFeature | direct IShellFeature | Elsa.Workflows.Runtime.JavaScript | IShellFeature | [JavaScriptActivitiesFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesFeature.cs) |
 | JavaScriptFeature | direct IShellFeature | Elsa.Expressions.JavaScript | IShellFeature | [JavaScriptFeature.cs](../../src/Elsa/Expressions/JavaScript/JavaScriptFeature.cs) |
 | JavaScriptLibrariesFeature | direct IShellFeature | Elsa.Expressions.JavaScript.Libraries | IShellFeature | [JavaScriptLibrariesFeature.cs](../../src/Elsa/Expressions/JavaScript/Libraries/JavaScriptLibrariesFeature.cs) |

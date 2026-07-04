@@ -24,7 +24,15 @@ internal sealed class DenyProposal(IAgentProposalService proposals, IAgentSessio
             return;
         }
 
-        var result = await proposals.DenyAsync(req.ProposalId, AgentEndpointActor.Resolve(User), req.Comment ?? req.Reason, ct);
+        var actorId = AgentEndpointActor.Resolve(User);
+        if (actorId is null)
+        {
+            var error = new AgentError("agent.actor.unresolved", "The current principal does not carry a resolvable actor identity.", 403);
+            await Send.ResponseAsync(AgentApiResponse<AgentActionProposal>.Failure(error), 403, cancellation: ct);
+            return;
+        }
+
+        var result = await proposals.DenyAsync(req.ProposalId, actorId, req.Comment ?? req.Reason, ct);
         if (!result.Succeeded)
         {
             await Send.ResponseAsync(AgentApiResponse<AgentActionProposal>.Failure(result.Error!), result.Error!.StatusCode, cancellation: ct);
