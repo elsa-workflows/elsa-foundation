@@ -5,7 +5,7 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 3.1.0 (draft)
+**Version:** 3.2.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v3.0.0**.
@@ -34,6 +34,7 @@ routes through the shared program-goals planner.
 - [§E3 Elsa-specific worked example references](#e3-elsa-specific-worked-example-references)
 - [§E4 Elsa configuration — \[DEFERRED\]](#e4-elsa-configuration--deferred)
 - [§E5 Elsa packaging snapshot](#e5-elsa-packaging-snapshot)
+- [§E6 Type-naming rules](#e6-type-naming-rules)
 - [Governance](#governance)
 
 ---
@@ -390,6 +391,32 @@ The Configuration & Settings classification (framework §2.12) is deferred to th
 
 ---
 
+## §E6 Type-naming rules
+
+**framework §2.2 — Elsa specialization.** Framework §2.2 fixes the *namespace/domain* naming convention (domain-only namespaces, no layer-marker buckets). This section specializes it into a **mechanical type-name style guide** for Elsa-owned types. It is a gate: plans, specs, and code that introduce or rename Elsa-owned types are checked against R1–R8 below. The rules and their supporting analysis originate in the Elsa 4 architecture review (`docs/reports/elsa-4-architecture-review-2026-07/review-naming.md`, findings NM-1..NM-14); this section is the ratified, enforceable extract.
+
+**Scope.** R1–R8 govern **Elsa-owned** type names. Names that mirror an external framework contract are explicitly exempt (see R3). Persisted/wire identifiers (JSON type discriminators, Groundwork document-kind strings, `nameof()`-derived handler names, checkpoint-name constants, serialized member keys) are **not** renamed to satisfy these rules — the literal wire value is preserved and the divergence is commented at the site. Behavior preservation outranks naming.
+
+- **R1 — Component budget.** A type name carries at most **4** CamelCase components; **5** is a hard cap. Beyond that, a component is almost always redundant with the namespace — drop it.
+- **R2 — Don't repeat the namespace in the type name.** Inside e.g. `Elsa.Workflows.Runtime.Core`, a type does not need both `Runtime` and `WorkflowExecution` prefixes. Leading `Workflow`/`Runtime`/`Activity` qualifiers are allowed only when they *disambiguate* from a sibling type without them.
+- **R3 — Banned vague words for Elsa-owned types:** `Manager`, `Helper`, `Util(s)`, `Info`, `Data`, `Object`, `Service` (when a more specific role fits), `Processor` (prefer a concrete verb). **Exception:** names that mirror an external framework contract (ASP.NET Core Identity `UserManager`, OpenIddict `IApplicationManager`, `IRoleManager`, `ILiquidTemplateManager`) keep the external name.
+- **R4 — One suffix, one meaning.** Codified role suffixes, pick exactly one per layer and never use two synonyms for adjacent steps:
+  - `…Source` = pull/returns; `…Contributor` = push/mutates context; `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
+  - `…Store` = persistence over one aggregate.
+  - `…Provider` = yields impls/descriptors; `…Factory` = constructs; `…Resolver` = maps key→value; `…Registry` = holds registrations.
+  - `…Executor`/`…Runner` = *does* the work (terminal); `…Router`/`…Dispatcher` = *selects a target and forwards*; `…Orchestrator`/`…Coordinator` = *sequences a multi-step operation*.
+  - Reserve `…Handler` for (a) mediator handlers and (b) sanctioned entity-lifecycle handlers. The scheduler `…WorkHandler` family is grandfathered.
+- **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Groundwork`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
+- **R6 — One concept, one head-noun.** If several types share a `…State` (or similar) head, the *head* must make the distinction obvious (`Hold`, `Liveness`, `Scheduler…`) rather than leaning on a vague adjective.
+- **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus provider prefixes `EFCore…`/`Groundwork…`/`Sqlite…`. Keep using them.
+- **R8 — Reserve `Agent` for the AI-assistant domain.** Workflow-execution "agents" use `Actor`/`Worker`/`Host` to avoid the cross-domain homonym.
+
+**Protected names (NM-14, do not "fix").** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope`, `Slot` are concrete, evocative domain nouns — they are exempt from any shortening pressure. The extension-point grammar (R4 first bullet), `.Core`/Feature layering, `…Store`, Command/Request/Result, and the R7 prefixes are strengths to protect, not simplify (NM-13).
+
+**First application.** The W14 naming pass (Elsa 4 review remediation; `docs/program-goals/elsa-4-review-remediation.md`) applied R1–R8 to the runtime cluster and vague-word offenders (rename families A–E). Subsequent type introductions/renames are expected to conform or record an explicit exception.
+
+---
+
 ## Governance
 
 ### Amendment process
@@ -425,4 +452,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.1.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-02 | **Derives from framework constitution:** v3.0.0
+**Version:** 3.2.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04 | **Derives from framework constitution:** v3.0.0

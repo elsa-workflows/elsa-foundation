@@ -105,7 +105,7 @@ item is already gone from the queue and nothing re-delivers a dequeued item. Thi
 consequence of the at-most-once dequeue described above.
 
 **What W5 changes.** W5 (single-writer ownership fencing, RT-2) makes the interrupted execution
-**detectable** instead of silently lost. `WorkflowExecutionDrainCoordinator` now acquires a
+**detectable** instead of silently lost. `WorkflowDrainOrchestrator` now acquires a
 `RuntimeExecutionLease` at the start of a drain (writing `ExecutionLease` + `Heartbeat` to operational
 state), pushes it onto the ambient ownership scope, and releases it only in a `finally`. A crash mid-drain
 therefore never runs the release, so the lease/heartbeat **persist**. Once the lease's timeout elapses,

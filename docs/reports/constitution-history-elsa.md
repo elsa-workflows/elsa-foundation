@@ -9,6 +9,49 @@ This file preserves raw Elsa constitution provenance. It is historical report ma
 Sync Impact Report — Elsa Workflow Engine Constitution
 ========================================================
 
+Version change: 3.1.0 (draft) → 3.2.0 (draft)
+Date: 2026-07-04
+Unit: W14 naming pass (Elsa 4 architecture review 2026-07, review-naming.md
+  findings NM-1..NM-14, rules R1–R8).
+  SemVer: MINOR — new section §E6 added; no existing rule removed or redefined
+  backward-incompatibly.
+
+§E6 (new) — Type-naming rules. Codifies the review's mechanical type-name
+  style guide (R1–R8) as an enforceable Elsa specialization of framework §2.2:
+  - R1 component budget (≤4, hard cap 5); R2 no namespace repetition in type
+    names; R3 banned vague words (Manager/Helper/Util/Info/Data/Object/
+    Service/Processor) with the external-contract exception; R4 codified role
+    suffixes (Source/Contributor/Pre-/PostProcessor/Validator/Store/Provider/
+    Factory/Resolver/Registry/Executor/Runner/Router/Dispatcher/Orchestrator/
+    Coordinator/Handler); R5 concrete nouns over infra metaphors unless
+    glossary-documented; R6 one concept one head-noun; R7 default-impl prefixes
+    are fixed and good; R8 reserve `Agent` for the AI domain.
+  - Protected-name list (NM-14) and protect-these strengths (NM-13) recorded.
+  - Wire/persisted-identifier carve-out made explicit: behavior preservation
+    outranks naming; literal wire values are preserved and commented, never
+    renamed to satisfy R1–R8.
+
+Applied by W14 rename families A–E (behavior-preserving type/file renames):
+  A drain/dispatch verbs (Coordinator→Orchestrator, CommandProcessor→Executor,
+  SchedulerCommandProcessor→CommandRouter, StartDispatcher); B …State facets
+  (OperationalState→ExecutionLivenessState, ControlPlaneState→WorkflowHoldState);
+  D vague words (AuthenticationProviderManager→Resolver, *VersionInfo→Summary,
+  AgentStepInfo→Descriptor, LogExceptionInfo→Details); E Agent→Actor; C
+  opportunistic exception shortenings. WorkflowSchedulerDrainer,
+  ParentCompletionSchedulerWorkHandler, and all persisted wire strings
+  deliberately preserved. ISecretManager rename deferred to W18 (target name
+  collision — see docs/program-goals/elsa-4-review-remediation.md).
+
+Ratification status unchanged: draft, pending Joey Barten, Sipke Schoorstra,
+Frans van Ek.
+-->
+~~~
+
+~~~markdown
+<!--
+Sync Impact Report — Elsa Workflow Engine Constitution
+========================================================
+
 Version change: 3.0.0 (draft) → 3.1.0 (draft)
 Date: 2026-07-02
 Unit: W6 repo hygiene (Elsa 4 architecture review 2026-07, findings MD-2 + MD-4).

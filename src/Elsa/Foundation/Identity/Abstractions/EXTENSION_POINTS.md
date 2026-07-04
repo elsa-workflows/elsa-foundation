@@ -6,7 +6,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 | Contract | Default impl | Override when |
 |---|---|---|
-| `IAuthenticationProviderManager` | `DefaultAuthenticationProviderManager` (`Elsa.Foundation.Identity.Abstractions`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
+| `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity.Abstractions`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
 | `IPermissionCatalog` | `DefaultIdentityPermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application supplies a broader permission catalog while preserving the namespaced identity keys. |
@@ -22,7 +22,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 - **Kind:** Contributor (registered provider module; one implementation per configured provider family/profile).
 - **Register:** `services.AddScoped<IAuthenticationProviderModule, MyProviderModule>()`.
-- **Consumed by:** `DefaultAuthenticationProviderManager`, which composes enabled provider descriptors for sign-in and capability discovery.
+- **Consumed by:** `DefaultAuthenticationProviderResolver`, which composes enabled provider descriptors for sign-in and capability discovery.
 - **Known implementations:** `OidcAuthenticationProviderModule` (`Elsa.Foundation.Identity.Oidc`) and `OpenIddictAuthenticationProviderModule` (`Elsa.Foundation.Identity.OpenIddict`) *(cross-domain provider modules)*.
 
 ### `IPermissionResourceHandler`
