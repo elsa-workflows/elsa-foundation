@@ -141,7 +141,9 @@ function AppContent() {
         const registry = createStudioRegistry({
           hostVersion: manifestResponse.hostVersion,
           sdkVersion: manifestResponse.sdkVersion,
-          ...createEndpointContext(shellBaseUrl)
+          // The Studio host serves the gated management surface (module management, feature management,
+          // console-stream), so the management-key header must ride the host context too, not only the backend.
+          ...createEndpointContext(shellBaseUrl, { headers: backendHeaders })
         }, backendBaseUrl, backendHeaders);
 
         for (const diagnostic of manifestResponse.diagnostics) {

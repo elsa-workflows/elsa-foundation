@@ -20,7 +20,8 @@ internal static class ElsaModuleManagementApi
 
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/module-management");
+        var group = endpoints.MapGroup("/_elsa/module-management")
+            .RequireAuthorization(ModuleManagementAuth.PolicyName);
 
         group.MapGet("/registry", GetRegistryAsync);
         group.MapPost("/packages/upload", UploadPackageAsync)

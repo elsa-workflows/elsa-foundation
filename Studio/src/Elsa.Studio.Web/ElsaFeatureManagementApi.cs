@@ -15,8 +15,11 @@ internal static class ElsaFeatureManagementApi
 {
     public static IEndpointRouteBuilder MapElsaFeatureManagementApi(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/modularity/features", GetFeaturesAsync);
-        endpoints.MapPost("/modularity/features/apply", ApplyFeaturesAsync);
+        var group = endpoints.MapGroup("/modularity/features")
+            .RequireAuthorization(ModuleManagementAuth.PolicyName);
+
+        group.MapGet("", GetFeaturesAsync);
+        group.MapPost("/apply", ApplyFeaturesAsync);
         return endpoints;
     }
 
