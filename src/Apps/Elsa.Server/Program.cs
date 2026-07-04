@@ -30,6 +30,7 @@ using Elsa.Expressions;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Locking.FileSystem;
@@ -209,6 +210,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationIdentityApiFeature).Assembly,
             typeof(OidcAuthenticationFeature).Assembly,
             typeof(AspNetCoreIdentityFeature).Assembly,
+
+            // The EF Core-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
+            // sign-in, login endpoints/page, dev seeding). Kept in the discovery universe so enablement
+            // (Workstream D) can turn it on via shells.json; it is intentionally NOT enabled here.
+            typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
+
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
 

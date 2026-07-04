@@ -116,6 +116,7 @@
     <Project Path="src/Elsa/Foundation/Identity/Abstractions/Elsa.Foundation.Identity.Abstractions.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
   </Folder>

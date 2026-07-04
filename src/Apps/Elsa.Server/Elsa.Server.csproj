@@ -61,6 +61,7 @@
 		<ProjectReference Include="..\..\Elsa\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\Elsa\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
