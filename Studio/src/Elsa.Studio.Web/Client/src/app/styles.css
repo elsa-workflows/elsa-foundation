@@ -245,6 +245,13 @@ textarea:focus {
   color: var(--muted-foreground);
 }
 
+.sidebar-search-empty {
+  margin: 4px 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .nav-section {
   display: grid;
   gap: 4px;
@@ -302,6 +309,11 @@ textarea:focus {
 .nav-section a:hover {
   background: var(--sidebar-active);
   color: var(--sidebar-foreground);
+}
+
+.nav-section a:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
 }
 
 .nav-section a:hover .nav-icon-tile {
@@ -2980,6 +2992,33 @@ textarea:focus {
   .studio-dialog-overlay[data-state="open"],
   .studio-dialog[data-state="open"] {
     animation: none;
+  }
+
+  /* Stop the refresh spinner from rotating, but keep the icon rendered so the "loading" affordance
+     (and its adjacent "Checking…" label) stays visible. */
+  .host-health-refresh .is-spinning {
+    animation: none;
+  }
+
+  /* Freeze the streaming caret solid rather than blinking. */
+  .weaver-caret {
+    animation: none;
+    visibility: visible;
+  }
+
+  /* Jump instantly instead of smooth-scrolling. */
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* Neutralize hover/state transitions so nothing eases in for motion-sensitive users. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
   }
 }
 
