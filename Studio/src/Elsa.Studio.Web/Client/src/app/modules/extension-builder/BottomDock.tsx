@@ -40,6 +40,10 @@ export function BottomDock({
   promotionResult,
   runtimeStatus,
   busy,
+  buildInProgress,
+  sourceBusy,
+  promoteBusy,
+  runtimeBusy,
   canBuild,
   canPromote,
   onBuildCommandChange,
@@ -79,7 +83,13 @@ export function BottomDock({
   artifact: BuildArtifact | null;
   promotionResult: PackagePromotionResult | null;
   runtimeStatus: ExtensionRuntimeStatus | null;
+  // `busy` scopes the build tab; the remaining flags scope their own dock panels so an operation in
+  // one panel does not disable another.
   busy: boolean;
+  buildInProgress: boolean;
+  sourceBusy: boolean;
+  promoteBusy: boolean;
+  runtimeBusy: boolean;
   canBuild: boolean;
   canPromote: boolean;
   onBuildCommandChange(value: RepositoryBuildCommand): void;
@@ -168,6 +178,7 @@ export function BottomDock({
               buildCommand={buildCommand}
               buildTargetPath={buildTargetPath}
               busy={busy}
+              buildInProgress={buildInProgress}
               canBuild={canBuild}
               capabilities={capabilities}
               onBuildCommandChange={onBuildCommandChange}
@@ -184,7 +195,7 @@ export function BottomDock({
               status={sourceControlStatus}
               diff={sourceControlDiff}
               commitMessage={commitMessage}
-              busy={busy}
+              busy={sourceBusy}
               onSelectDiff={onSelectSourceDiff}
               onStageFile={onStageFile}
               onUnstageFile={onUnstageFile}
@@ -202,7 +213,7 @@ export function BottomDock({
               activeBuild={activeBuild}
               artifact={artifact}
               promotionResult={promotionResult}
-              busy={busy}
+              busy={promoteBusy}
               canPromote={canPromote}
               isBuildCurrent={isBuildForCurrentRevision(activeBuild, project)}
               onPromote={onPromote}
@@ -213,7 +224,7 @@ export function BottomDock({
             <RuntimePanel
               capabilities={capabilities}
               runtimeStatus={runtimeStatus}
-              busy={busy}
+              busy={runtimeBusy}
               onRefreshRuntime={onRefreshRuntime}
               onRetryReconciliation={onRetryReconciliation}
               onRollback={onRollback}
