@@ -345,6 +345,9 @@
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Design/Api/">
+    <Project Path="tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Design/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj" />
