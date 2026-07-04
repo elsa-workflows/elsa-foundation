@@ -136,7 +136,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
 
 - **W21 Modularity ergonomics (MD-5, MD-6, MD-10)** — **done** ([#462](https://github.com/elsa-workflows/elsa-foundation/pull/462); branch
   point `1d5bb6bb`). Governance/analysis unit, no `src/` change beyond 5 registration tests.
-  MD-5 amendment ratification and ADR 0033 remain open decisions (see follow-ups).
+  MD-5 amendment and ADR 0033 were both **ratified 2026-07-04** at Phase 4 kickoff (see below).
   **MD-5:** fresh LoC audit (13 projects <100 physical LoC; smallest 32) — all 13 map to a named
   exception class, so **zero forced merges**; proposed a *soft* minimum-viable-project amendment
   (framework §2.16.1: guidance threshold + six exception classes, no hard gate) as a draft routed
@@ -200,6 +200,24 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   `executionCommandTransport`, protected by a drift test). W16's `TryAdvanceAsync` recurring-pump
   cluster-safety seam was **not** touched (out of required scope). New leaf seams catalogued in
   [`EXTENSION_POINTS.md`](../../src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md) and glossary.
+
+Phase 4 (W22–W32 + product track): **approved 2026-07-04** by Sipke per the
+[Phase 4 handoff](../reports/elsa-4-architecture-review-2026-07/phase-4-handoff.md) §3, with
+Wave-A-first ordering (outgoing control room's recommendation). Kickoff decisions:
+
+- **Ratified:** the MD-5 minimum-project-size amendment (applied as framework §2.16.1,
+  v3.0.0 → v3.1.0, Elsa cascade v3.2.0 → v3.3.0 — see the
+  [amendment index](../reports/constitution-amendment-index.md)) and
+  [ADR 0033](../adr/0033-runtime-core-splits-contracts-from-engine.md) (accepted; execution is W28).
+- **Wave A (parallel, in flight):** W22 runtime/flowchart, W23 serialization/expressions,
+  W24 HTTP/files, W25 persistence/EFCore, W26 API/design correctness units, scoped per handoff §3.
+- **Wave B (sequenced after Wave A):** W27 Groundwork durable placement + transport stores,
+  W28 ADR 0033 execution (solo — conflicts with anything touching Runtime.Core services),
+  W29 security/design follow-ups.
+- **Wave C (after correctness):** W30 god-class refactors, W31 DRY batch, W32 cleanup batch.
+- **Product track pulled forward by the user:** server-side execution output
+  ([#254](https://github.com/elsa-workflows/elsa-foundation/issues/254)) — scoping worker
+  launched alongside Wave A; Stage-1 plan goes to the user before implementation.
 
 ### Follow-up findings recorded during Phase 0 execution
 
@@ -289,9 +307,9 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   formalize the resolver boundary around `ISecretResolver`→`ISecretValueResolver`). Needs its own unit.
 - **Secrets golden-fixture gate** (from W18): the Secrets Groundwork persistence has no fixture
   drift gate of its own (pre-existing gap flagged during MS-1; Identity got one, Secrets did not).
-- **MD-5 amendment + ADR 0033 ratification** (from W21): the soft minimum-project-size amendment
-  awaits the constitution-readiness flow; ADR 0033 (Runtime.Core contracts-vs-engine split) awaits
-  the runtime-execution-seam owner. 18 feature-registration gaps remain filed in the MD-10 report.
+- **MD-5 amendment + ADR 0033 ratification** (from W21): **both ratified 2026-07-04** at Phase 4
+  kickoff — MD-5 applied as framework §2.16.1, ADR 0033 accepted with execution scheduled as W28.
+  18 feature-registration gaps remain filed in the MD-10 report (Wave C / W32).
 - **W16 activity-library follow-ups** (named in the
   [#465](https://github.com/elsa-workflows/elsa-foundation/pull/465) PR body): DS-8
   workflow-as-activity execution semantics; HTTP synchronous response correlation (async/202 shipped);
