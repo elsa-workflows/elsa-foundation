@@ -8,6 +8,8 @@ using Elsa.Secrets.Types;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Primitives;
 
 namespace Elsa.Secrets.Extensions;
@@ -32,7 +34,8 @@ public static class SecretsServiceCollectionExtensions
         services.TryAddSingleton<ISecretNameValidator, DefaultSecretNameValidator>();
         services.TryAddSingleton<ISecretValueProtector, DefaultSecretValueProtector>();
         services.TryAddSingleton<ISecretRepository, InMemorySecretRepository>();
-        services.TryAddSingleton<ISecretAuditSink, NullSecretAuditSink>();
+        services.TryAddSingleton<ISecretAuditSink>(sp =>
+            new LoggingSecretAuditSink((sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance).CreateLogger<LoggingSecretAuditSink>()));
         services.TryAddSingleton<SecretLifecyclePolicy>();
         services.TryAddSingleton<SecretModelMapper>();
         services.TryAddSingleton<ISecretManager, DefaultSecretManager>();

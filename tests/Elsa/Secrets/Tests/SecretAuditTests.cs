@@ -2,6 +2,8 @@ using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Events;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
+using Elsa.Secrets.Options;
+using Elsa.Secrets.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -18,6 +20,7 @@ public sealed class SecretAuditTests : IDisposable
     public SecretAuditTests()
     {
         var services = new ServiceCollection().AddSecrets();
+        services.Configure<SecretsOptions>(options => options.EncryptionKey = "audit-test-encryption-key");
         services.RemoveAll<ISecretAuditSink>();
         services.AddSingleton<ISecretAuditSink>(_auditSink);
         _provider = services.BuildServiceProvider();
@@ -36,6 +39,16 @@ public sealed class SecretAuditTests : IDisposable
         Assert.Contains(_auditSink.Records, x => x.Operation == "test" && x.Outcome == "succeeded");
         Assert.Contains(_auditSink.Records, x => x.Operation == "resolve" && x.Outcome == "succeeded");
         Assert.DoesNotContain(_auditSink.Records, x => (x.Reason ?? "").Contains("audit-secret-value", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Default_Audit_Sink_Is_The_Visible_Logging_Sink()
+    {
+        using var provider = new ServiceCollection().AddSecrets().BuildServiceProvider();
+
+        var sink = provider.GetRequiredService<ISecretAuditSink>();
+
+        Assert.IsType<LoggingSecretAuditSink>(sink);
     }
 
     public void Dispose() => _provider.Dispose();
