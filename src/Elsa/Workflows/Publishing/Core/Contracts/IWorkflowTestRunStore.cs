@@ -1,6 +1,6 @@
-using Elsa.Workflows.Publishing.Api.Models;
+using Elsa.Workflows.Publishing.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Contracts;
+namespace Elsa.Workflows.Publishing.Core.Contracts;
 
 public interface IWorkflowTestRunStore
 {
