@@ -63,6 +63,18 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  // Deleting a feed is destructive and irreversible from the UI, so confirm before firing.
+  async function confirmAndDeleteFeed(feedName: string) {
+    const confirmed = await api.dialogs.confirm({
+      title: "Delete feed",
+      message: `Delete feed "${feedName}" from ${activeHost.label}? This removes its package-source registration. A restart is required to apply the change.`,
+      confirmLabel: "Delete feed",
+      tone: "danger"
+    });
+    if (!confirmed) return;
+    await runHostOperation(() => deleteFeed(activeHost.context, feedName), `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`);
+  }
+
   return (
     <section className="modules-page package-feeds-page">
       <div className="section-header modules-header">
@@ -91,7 +103,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
           busy={mutation.isPending}
           onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
-          onDeleteFeed={feedName => runHostOperation(() => deleteFeed(activeHost.context, feedName), `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`)}
+          onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
           onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
           onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
           onPrune={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/prune", { dryRun: false }), `Pruned eligible package versions for ${activeHost.label}.`)}

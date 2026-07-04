@@ -121,6 +121,9 @@ function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): 
       baseUrl: "https://foundation.example/",
       http: stubHttp("https://foundation.example/", async () => studioRegistry())
     },
+    // The destructive feed-delete now goes through api.dialogs.confirm (#192 guard); auto-confirm so
+    // this Query-invalidation test still exercises the mutation path once the confirmation resolves.
+    dialogs: { confirm: async () => true },
     diagnostics: { add() {}, list: () => [] }
   } as ElsaStudioModuleApi;
 }

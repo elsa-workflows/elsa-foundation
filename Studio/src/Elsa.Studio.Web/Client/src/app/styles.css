@@ -160,9 +160,9 @@ textarea:focus {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
   min-height: 40px;
-  padding: 2px 8px;
+  padding: 2px var(--spacing-sm);
   margin: 0;
   border-radius: var(--radius-md);
 }
@@ -254,7 +254,7 @@ textarea:focus {
 
 .nav-section {
   display: grid;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .nav-heading {
@@ -443,14 +443,14 @@ textarea:focus {
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--card) 96%, transparent);
   backdrop-filter: blur(10px);
-  padding: 8px 26px;
+  padding: var(--spacing-sm) 26px;
   transition: all var(--transition-base);
 }
 
 .topbar > div:first-child {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
   min-width: 0;
 }
 
@@ -606,18 +606,18 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--spacing-md);
   min-height: 36px;
   min-width: 0;
   border-bottom: 1px solid var(--border);
   background: var(--card);
-  padding: 0 12px;
+  padding: 0 var(--spacing-md);
 }
 
 .bottom-panel-tab-list {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
   min-width: 0;
   overflow-x: auto;
 }
@@ -682,8 +682,8 @@ textarea:focus {
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 16px;
-  margin: 0 0 16px;
+  gap: var(--spacing-lg);
+  margin: 0 0 var(--spacing-lg);
 }
 
 .dashboard-view .section-header,
@@ -693,7 +693,7 @@ textarea:focus {
 
 .section-header > div:first-child {
   display: grid;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .section-header h2 {
@@ -967,14 +967,14 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--spacing-md);
   min-width: 0;
 }
 
 .studio-toolbar-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   min-width: 0;
 }
 
@@ -997,19 +997,19 @@ textarea:focus {
 .studio-status-chip[data-tone="success"] {
   border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
-  color: var(--studio-success);
+  color: var(--studio-success-fg);
 }
 
 .studio-status-chip[data-tone="warning"] {
   border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
-  color: var(--studio-warning);
+  color: var(--studio-warning-fg);
 }
 
 .studio-status-chip[data-tone="danger"] {
   border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
-  color: var(--studio-danger);
+  color: var(--studio-danger-fg);
 }
 
 .studio-status-chip[data-tone="accent"] {
@@ -1662,12 +1662,12 @@ textarea:focus {
 .studio-button.studio-button-primary {
   background: var(--studio-accent);
   border-color: var(--studio-accent);
-  color: #fff;
+  color: var(--studio-accent-text);
 }
 
 .studio-button.studio-button-primary:hover:not(:disabled) {
   filter: brightness(1.08);
-  color: #fff;
+  color: var(--studio-accent-text);
 }
 
 .extension-builder-advanced-toggle {
