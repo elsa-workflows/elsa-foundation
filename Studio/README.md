@@ -82,3 +82,19 @@ When `Studio:BackendBaseUrl` points at an Elsa Server backend, the console panel
 - `/_elsa/server/diagnostics/console-logs/recent`
 - `/_elsa/server/diagnostics/console-logs/sources`
 - `/_elsa/server/diagnostics/console-logs/hub`
+
+## Docker
+
+`Elsa.Studio.Web` can be built and run as a container image. Build from the repository root
+(the build context must be the repo root):
+
+```bash
+docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+docker run --rm -p 8080:8080 \
+  -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
+  elsa-studio-web:local
+```
+
+See [`docs/docker.md`](docs/docker.md) for the full runtime configuration surface
+(environment variables, `shells.json` mounting, the optional `packages/` feed volume, and
+a compose snippet).

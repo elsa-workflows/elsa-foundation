@@ -4,6 +4,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <PackageIcon>icon.png</PackageIcon>
+    <!-- Each project's Client/ folder holds frontend (Vite/pnpm) source. It is built
+         separately into wwwroot and is never a .NET compile/content input. Excluding it
+         from the default item globs keeps dev-only files (package.json, tsconfig.json,
+         etc.) out of publish output, which otherwise collide across projects with
+         NETSDK1152 during `dotnet publish`. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Client\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
