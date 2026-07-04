@@ -1,0 +1,32 @@
+{
+  "deliveryAttemptCount": 1,
+  "enqueuedAt": "1970-01-01T00:00:00\u002B00:00",
+  "envelope": {
+    "command": {
+      "commandId": "cmd-1",
+      "enqueuedAt": "1970-01-01T00:00:00\u002B00:00",
+      "kind": 1,
+      "metadata": {
+        "origin": "node-b"
+      },
+      "payload": {
+        "bookmarkId": "bm-1"
+      },
+      "workflowExecutionId": "wf-1"
+    },
+    "deliveryMode": 1,
+    "enqueuedAt": "1970-01-01T00:00:00\u002B00:00",
+    "envelopeId": "env-1",
+    "idempotencyKey": "idem-1",
+    "metadata": {
+      "origin": "node-b"
+    },
+    "sequence": 1,
+    "workflowExecutionId": "wf-1"
+  },
+  "leaseExpiresAt": "1970-01-01T00:00:30\u002B00:00",
+  "leasedByOwnerId": "node-a",
+  "sequence": 1,
+  "transportItemId": "transport:wf-1:1",
+  "workflowExecutionId": "wf-1"
+}

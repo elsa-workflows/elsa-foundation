@@ -17,6 +17,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Committed golden fixtures: the frozen v1 wire shape of the cross-node command transport item. -->
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
