@@ -16,7 +16,7 @@ export default defineConfig({
       fileName: () => "module.js"
     },
     rollupOptions: {
-      external: ["react", "@elsa-workflows/studio-sdk"],
+      external: ["react", "@elsa-workflows/studio-sdk", "@elsa-workflows/studio-ui"],
       output: {
         assetFileNames: "module[extname]"
       }

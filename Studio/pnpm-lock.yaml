@@ -80,7 +80,11 @@ importers:
 
   src/Elsa.Studio.FeatureManagement/Client: {}
 
-  src/Elsa.Studio.Samples.Dashboard/Client: {}
+  src/Elsa.Studio.Samples.Dashboard/Client:
+    dependencies:
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../Elsa.Studio.Web/StudioUi
 
   src/Elsa.Studio.Samples.WeatherForecast/Client: {}
 
