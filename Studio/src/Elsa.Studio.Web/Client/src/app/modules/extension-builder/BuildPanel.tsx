@@ -1,4 +1,4 @@
-import { PackageCheck, Play } from "lucide-react";
+import { Loader2, PackageCheck, Play } from "lucide-react";
 import { StatusChip } from "../../ui";
 import type { BuildArtifact, BuildDiagnostic, BuildResult, ExtensionBuilderCapabilities, RepositoryBuildCommand } from "../extensionBuilderApi";
 import { buildTone, diagnosticTone, formatArtifactSize, formatDate, formatDiagnosticLocation } from "./helpers";
@@ -11,6 +11,7 @@ export function BuildPanel({
   buildCommand,
   buildTargetPath,
   busy,
+  buildInProgress,
   canBuild,
   capabilities,
   onBuildCommandChange,
@@ -27,6 +28,9 @@ export function BuildPanel({
   buildCommand: RepositoryBuildCommand;
   buildTargetPath: string;
   busy: boolean;
+  // True while a build/pack is being submitted or is still running server-side; drives the active
+  // spinner state on the run/pack button.
+  buildInProgress: boolean;
   canBuild: boolean;
   capabilities: ExtensionBuilderCapabilities;
   onBuildCommandChange(value: RepositoryBuildCommand): void;
@@ -54,15 +58,15 @@ export function BuildPanel({
             <span>Target path</span>
             <input aria-label="Build target path" placeholder="Repository solution or project path" value={buildTargetPath} disabled={busy || !capabilities.canBuild} onChange={event => onBuildTargetPathChange(event.target.value)} />
           </label>
-          <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : undefined} onClick={() => onSubmitBuild()}>
-            <Play size={15} />
-            Run command
+          <button type="button" className="studio-button" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : buildInProgress ? `${buildCommand} in progress` : undefined} onClick={() => onSubmitBuild()}>
+            {buildInProgress ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <Play size={15} />}
+            {buildInProgress ? "Running…" : "Run command"}
           </button>
         </>
       ) : (
-        <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
-          <PackageCheck size={15} />
-          Pack NuGet package
+        <button type="button" className="studio-button studio-button-primary" disabled={busy || !canBuild} title={!capabilities.canBuild ? "Requires canBuild" : buildInProgress ? "Packing in progress" : "Build and pack a NuGet package"} onClick={() => onSubmitBuild("Pack")}>
+          {buildInProgress ? <Loader2 size={15} className="is-spinning" aria-hidden="true" /> : <PackageCheck size={15} />}
+          {buildInProgress ? "Packing…" : "Pack NuGet package"}
         </button>
       )}
       <h4>Build status</h4>

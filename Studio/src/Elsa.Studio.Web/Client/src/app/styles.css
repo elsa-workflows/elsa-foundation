@@ -2996,7 +2996,9 @@ textarea:focus {
 
   /* Stop the refresh spinner from rotating, but keep the icon rendered so the "loading" affordance
      (and its adjacent "Checking…" label) stays visible. */
-  .host-health-refresh .is-spinning {
+  .host-health-refresh .is-spinning,
+  .extension-builder-page .is-spinning,
+  .extension-builder-dock .is-spinning {
     animation: none;
   }
 
@@ -3246,6 +3248,13 @@ textarea:focus {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+}
+/* Active-progress spinner for busy buttons (Save/Build/Pack) in the command bar and dock; reuses
+   the shared host-health-spin keyframe so a running operation gives live feedback, not just a
+   disabled control. */
+.extension-builder-page .is-spinning,
+.extension-builder-dock .is-spinning {
+  animation: host-health-spin 0.8s linear infinite;
 }
 .extension-builder-back {
   display: inline-flex;
