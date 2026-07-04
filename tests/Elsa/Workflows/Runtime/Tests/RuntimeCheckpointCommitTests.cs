@@ -1109,6 +1109,24 @@ public sealed class RuntimeCheckpointCommitTests
         Assert.Contains("ExecutionLivenessState.OperationalStateId", exception.Message);
     }
 
+
+    [Fact]
+    public void RuntimeCheckpointStateChangeSet_RejectsMismatchedActivityExecutionStateIds()
+    {
+        // #399: ActivityExecutions was the only collection missing StateId consistency validation; a
+        // provider indexing by StateId would silently store the wrong activity-execution record.
+        var invalidActivityExecution = new RuntimeStateChange<ActivityExecutionState>(
+            StateId: "actexec-other",
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: _activityState,
+            Metadata: new Dictionary<string, string>());
+
+        var exception = Assert.Throws<ArgumentException>(() => NewStateChanges(activityStateChange: invalidActivityExecution));
+
+        Assert.Contains("StateId", exception.Message);
+        Assert.Contains("ActivityExecutionState.Execution.ActivityExecutionId", exception.Message);
+    }
+
     private RuntimeCheckpointCommit NewCommit(
         string checkpointName,
         IReadOnlyList<RuntimePostCommitIntent>? postCommitIntents = null) =>
