@@ -313,7 +313,9 @@
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
   </Folder>
-  <Folder Name="/tests/Elsa/Primitives/" />
+  <Folder Name="/tests/Elsa/Primitives/">
+    <Project Path="tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Primitives/Hosting/">
     <Project Path="tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj" />
   </Folder>
