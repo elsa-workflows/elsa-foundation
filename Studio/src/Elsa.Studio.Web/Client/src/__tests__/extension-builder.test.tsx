@@ -972,7 +972,99 @@ describe("extension builder page", () => {
 
     await unmount();
   });
+
+  it("shows active build progress in the command bar while a build is running", async () => {
+    // A submitted build that is still Running server-side must give live in-button feedback
+    // ("Building…"/"Packing…" + spinner), not merely a disabled control.
+    const runningResult = runningBuild();
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? runningResult : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-running")) return runningResult;
+      return defaultGetJson(url);
+    });
+
+    // Advanced mode: the headline action is "Build".
+    const advanced = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(advanced.container);
+    await waitForText(advanced.container, "Activities/HelloActivity.cs");
+    await clickButton(advanced.container, "Build");
+    await flushPromises();
+
+    const buildButton = buttonContaining(advanced.container, "Building…");
+    expect(buildButton).not.toBeNull();
+    expect(buildButton?.disabled).toBe(true);
+    expect(buildButton?.querySelector(".is-spinning")).not.toBeNull();
+    await advanced.unmount();
+
+    // Simple mode: the headline action is "Pack".
+    const simple = await renderExtensionBuilderPage(stubApi({ getJson, postJson }), { advanced: false });
+    await waitForText(simple.container, "Team Extensions");
+    await openSolution(simple.container);
+    await waitForText(simple.container, "Activities/HelloActivity.cs");
+    await clickButton(simple.container, "Pack");
+    await flushPromises();
+
+    const packButton = buttonContaining(simple.container, "Packing…");
+    expect(packButton).not.toBeNull();
+    expect(packButton?.querySelector(".is-spinning")).not.toBeNull();
+    await simple.unmount();
+  });
+
+  it("scopes busy state per operation so an in-flight source action does not disable the build action", async () => {
+    // Regression for the single global operationBusy flag that disabled every action at once. A
+    // slow source-control stage must not disable the unrelated Build/Pack headline action.
+    const staged = deferred<ReturnType<typeof sourceControlStatus>>();
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/source-control/stage")) return staged.promise;
+      if (url.endsWith("/builds")) return succeededBuild({ sourceRevisionId: null });
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/source-control/status")) return sourceControlStatus({ unstaged: ["src/Status.cs"] });
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    await clickTab(container, "Source control");
+    await waitForText(container, "src/Status.cs");
+
+    // Start a stage that never resolves; the source panel Stage button becomes busy…
+    await clickExactButton(container, "Stage");
+    await flushPromises();
+
+    // …but the command-bar Build action remains enabled (per-operation, not global, busy state).
+    const buildButton = buttonContaining(container, "Build");
+    expect(buildButton?.disabled).toBe(false);
+
+    // Let the stage settle so teardown does not leak a pending promise.
+    staged.resolve(sourceControlStatus({ staged: ["src/Status.cs"] }));
+    await flushPromises();
+
+    await unmount();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => { resolve = res; });
+  return { promise, resolve };
+}
+
+function runningBuild() {
+  return {
+    id: "build-running",
+    projectId: "proj-1",
+    sourceRevisionId: "rev-1",
+    status: "Running",
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    diagnostics: [],
+    artifact: null,
+    artifacts: []
+  };
+}
 
 function stubApi(options?: {
   getJson?: (url: string) => Promise<unknown>;

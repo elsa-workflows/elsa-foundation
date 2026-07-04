@@ -26,8 +26,17 @@ public sealed class StudioApiFeature : IWebShellFeature
     {
         services.AddElsaStudioApi(options =>
         {
-            options.HostVersion = Options.HostVersion;
-            options.SdkVersion = Options.SdkVersion;
+            // Only propagate versions the shell feature explicitly overrode. StudioApiOptions defaults
+            // both to the assembly version, so a value that still equals that default means the shell
+            // didn't set one — in that case leave whatever the Studio:Api configuration binding produced
+            // (which itself falls back to the assembly version) rather than clobbering it.
+            var assemblyVersion = StudioApiOptions.ResolveAssemblyVersion();
+
+            if (!string.Equals(Options.HostVersion, assemblyVersion, StringComparison.Ordinal))
+                options.HostVersion = Options.HostVersion;
+
+            if (!string.Equals(Options.SdkVersion, assemblyVersion, StringComparison.Ordinal))
+                options.SdkVersion = Options.SdkVersion;
 
             foreach (var moduleId in Options.DisabledModuleIds)
                 options.DisabledModuleIds.Add(moduleId);

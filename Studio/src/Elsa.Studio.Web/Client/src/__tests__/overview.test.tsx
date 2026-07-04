@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard, Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
 import type { ElsaStudioModuleApi, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
+import { withQueryClient } from "./queryTestUtils";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -406,7 +407,7 @@ async function renderComponent(component: React.ReactNode) {
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(component);
+    root.render(withQueryClient(component));
   });
 
   return {
@@ -427,7 +428,11 @@ function visibleText(container: HTMLElement) {
 }
 
 async function flushPromises() {
-  await new Promise(resolve => setTimeout(resolve, 0));
+  // TanStack Query settles across several microtask/render cycles (queryFn resolve → cache commit →
+  // re-render), so flush a handful of macrotasks to let the host-health query reach its terminal state.
+  for (let i = 0; i < 5; i++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
 }
 
 function stubBackendFetch(responder: () => Response | Promise<Response> = () => new Response("", { status: 200 })) {

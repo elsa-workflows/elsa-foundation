@@ -125,6 +125,12 @@ describe("AgentProposalReview", () => {
     expect(container.textContent).toContain("Waiting for administrator approval.");
     expect(buttons.every(button => button.disabled)).toBe(true);
 
+    // The risk chip is rendered and the article carries data-risk so the by-severity CSS
+    // (admin/critical -> strong danger tone) has a hook to key off.
+    const article = container.querySelector(".agent-proposal");
+    expect(article?.getAttribute("data-risk")).toBe("admin");
+    expect(container.querySelector(".agent-proposal-risk")?.textContent).toContain("admin");
+
     buttons.forEach(button => button.click());
 
     expect(onApprove).not.toHaveBeenCalled();

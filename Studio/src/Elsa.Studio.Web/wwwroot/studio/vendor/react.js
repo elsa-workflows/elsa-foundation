@@ -1,4 +1,5 @@
-import { R as e } from "./chunks/index.js";
+import e from "react";
+import { default as _ } from "react";
 const s = e.Children, n = e.Component, o = e.Fragment, c = e.Profiler, u = e.PureComponent, r = e.StrictMode, a = e.Suspense, i = e.cloneElement, l = e.createContext, f = e.createElement, m = e.createRef, d = e.forwardRef, E = e.isValidElement, p = e.lazy, C = e.memo, S = e.startTransition, R = e.use, x = e.useActionState, y = e.useCallback, I = e.useContext, V = e.useDebugValue, b = e.useDeferredValue, g = e.useEffect, v = e.useId, D = e.useImperativeHandle, M = e.useInsertionEffect, P = e.useLayoutEffect, T = e.useMemo, h = e.useOptimistic, k = e.useReducer, w = e.useRef, z = e.useState, A = e.useSyncExternalStore, F = e.useTransition, H = e.version;
 export {
   s as Children,
@@ -12,7 +13,7 @@ export {
   l as createContext,
   f as createElement,
   m as createRef,
-  e as default,
+  _ as default,
   d as forwardRef,
   E as isValidElement,
   p as lazy,

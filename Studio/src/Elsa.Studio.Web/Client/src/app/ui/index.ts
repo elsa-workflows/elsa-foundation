@@ -1,8 +1,5 @@
-export * from "./data-grid/DataGrid";
+// Host-agnostic primitives shared with module clients via `@elsa-workflows/studio-ui`.
+export * from "./shared";
+
+// Host-only surface (bound to the singleton dialog controller + Radix dialog).
 export * from "./dialog/DialogHost";
-export * from "./feedback/FeedbackStates";
-export * from "./feedback/StatusChip";
-export * from "./forms/Field";
-export * from "./inspector/Inspector";
-export * from "./layout/Tabs";
-export * from "./layout/Toolbar";

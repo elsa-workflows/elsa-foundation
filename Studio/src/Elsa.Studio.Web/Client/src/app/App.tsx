@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -28,13 +28,23 @@ import type {
   StudioPanelContribution
 } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
-import { createEndpointContext } from "../sdk";
+import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
+import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { QueryProvider } from "./providers/QueryProvider";
+import { useStudioManifest } from "./hooks/useStudioManifest";
+import {
+  checkingHostHealth,
+  getHealthErrorMessage,
+  labelForHostStatus,
+  useHostHealth,
+  type HostHealthStatus
+} from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
@@ -49,7 +59,6 @@ import "./weaver/weaver.css";
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = "workspace" | "settings";
 type NavIconTileStyle = React.CSSProperties & { "--nav-icon-color": string };
-type HostHealthStatus = "checking" | "ok" | "attention" | "unavailable";
 type DiagnosticsWidgetBoundaryProps = {
   children: React.ReactNode;
   title: string;
@@ -58,30 +67,29 @@ type DiagnosticsWidgetBoundaryState = {
   error: string | null;
 };
 
-interface HostHealthRegistry {
-  modules: Array<{ status?: string; diagnostics?: Array<{ status?: string }> }>;
-  diagnostics?: Array<{ status?: string }>;
-}
-
-interface HostHealthEntry {
-  status: HostHealthStatus;
-  attention: number;
-  detail: string;
-}
+// Single source of truth for the categorical nav-icon accent colours. Both the built-in
+// navigation entries and getDefaultNavIconColor() (which matches contributed modules by id
+// substring) resolve against this map so the palette is defined exactly once.
+// (The HostHealthRegistry/HostHealthEntry types that #192 added here alongside this map now live in
+// hooks/useHostHealth.ts after the #189 Query migration, so they are intentionally not re-added.)
+const navIconColors = {
+  dashboard: "#0ea5e9",
+  weather: "#14b8a6",
+  diagnostics: "#10b981",
+  modules: "#8b5cf6",
+  feeds: "#f59e0b",
+  extensionBuilder: "#ec4899"
+} as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: "#0ea5e9" },
-  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
-  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
-  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: "#10b981" }
+  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: navIconColors.dashboard },
+  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: navIconColors.extensionBuilder },
+  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: navIconColors.modules },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: navIconColors.diagnostics }
 ];
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
-// How often the host-health strip re-checks. When a host is unavailable we back off exponentially
-// from the healthy cadence up to the ceiling so a downed backend isn't hammered every few seconds.
-const healthyHealthPollMs = 15000;
-const maxHealthPollMs = 60000;
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
 const activeBottomPanelStorageKey = "elsa-studio-active-bottom-panel";
 const bottomPanelCollapsedStorageKey = "elsa-studio-bottom-panel-collapsed";
@@ -91,7 +99,7 @@ const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
 const minWorkspaceHeight = 280;
 
-function AppContent() {
+function AppContent({ authManager }: { authManager: AuthProviderManager | null }) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
@@ -103,18 +111,21 @@ function AppContent() {
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
-  const backendHeaders = createBackendHeaders(runtimeConfig);
+  // Memoize so the boot effect isn't re-run every render by a fresh header object identity.
+  const backendHeaders = useMemo(() => createBackendHeaders(runtimeConfig), [runtimeConfig.backendModuleManagementApiKey]);
+  // The shell endpoint context (host origin) routed through the authenticated HTTP client: the manifest
+  // query fetches `/_elsa/studio/modules` through this, so the boot document carries the bearer token
+  // (when a user provider is configured) and the #183 management-key header (always). Anonymous boot —
+  // no provider — falls back to the plain SDK client via createStudioEndpointContext.
+  const shellContext = useMemo(
+    () => createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders),
+    [authManager, shellBaseUrl, backendHeaders]
+  );
 
   useEffect(() => {
     const onPopState = () => setPath(normalizePath(window.location.pathname));
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  useEffect(() => {
-    const onModulesChanged = () => setModuleRegistryRevision(revision => revision + 1);
-    window.addEventListener(ModulesChangedEventName, onModulesChanged);
-    return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
   }, []);
 
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
@@ -126,31 +137,69 @@ function AppContent() {
     });
   }, [api]);
 
+  // The boot manifest is fetched through TanStack Query, using the authenticated shell HTTP client so
+  // the manifest request carries auth + management-key headers; the effect below turns manifest data
+  // into a loaded registry (module loading + contribution registration are side effects, not cacheable data).
+  const manifestQuery = useStudioManifest(shellContext.http);
+
+  // A modules-changed event re-fetches the manifest and bumps the revision so the loader effect re-runs
+  // even when the refetched manifest is structurally identical (a package may have been reconciled
+  // in place). Preserves the original "rebuild the registry on module changes" behavior.
   useEffect(() => {
+    const onModulesChanged = () => {
+      void manifestQuery.refetch();
+      setModuleRegistryRevision(revision => revision + 1);
+    };
+    window.addEventListener(ModulesChangedEventName, onModulesChanged);
+    return () => window.removeEventListener(ModulesChangedEventName, onModulesChanged);
+  }, [manifestQuery]);
+
+  useEffect(() => {
+    if (manifestQuery.isPending) {
+      setState("loading");
+      return;
+    }
+
+    if (manifestQuery.isError) {
+      setError(manifestQuery.error instanceof Error ? manifestQuery.error.message : String(manifestQuery.error));
+      setState("failed");
+      return;
+    }
+
+    const manifestResponse = manifestQuery.data;
+    if (!manifestResponse) return;
+
     let disposed = false;
 
-    async function boot() {
+    async function loadRegistry(manifest: StudioModulesResponse) {
       try {
         setState("loading");
-        const response = await fetch("/_elsa/studio/modules");
-        if (!response.ok) {
-          throw new Error(`Manifest request failed with ${response.status}.`);
-        }
-
-        const manifestResponse = (await response.json()) as StudioModulesResponse;
+        // Route both endpoint contexts through the authenticated HTTP client when a user provider is
+        // configured, so backend/host requests attach a bearer token and refresh-retry on 401. When no
+        // provider is configured this yields the plain SDK client (anonymous path). The #183
+        // management-key header is composed into every request either way, not dropped. The manifest
+        // document itself was already fetched (through the same authenticated shell context) by
+        // useStudioManifest; here we only turn it into a loaded registry.
+        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager, backendHeaders);
         const registry = createStudioRegistry({
-          hostVersion: manifestResponse.hostVersion,
-          sdkVersion: manifestResponse.sdkVersion,
-          ...createEndpointContext(shellBaseUrl)
-        }, backendBaseUrl, backendHeaders);
+          hostVersion: manifest.hostVersion,
+          sdkVersion: manifest.sdkVersion,
+          // The Studio host serves the gated management surface (module management, feature management,
+          // console-stream), so the management-key header must ride the host context too, not only the backend.
+          ...createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders)
+        }, {
+          backendBaseUrl,
+          backendHeaders,
+          backendHttp: backendContext.http
+        });
 
-        for (const diagnostic of manifestResponse.diagnostics) {
+        for (const diagnostic of manifest.diagnostics) {
           registry.diagnostics.add(diagnostic);
         }
 
-        await loadStudioModules(manifestResponse.modules, registry, {
-          hostVersion: manifestResponse.hostVersion,
-          sdkVersion: manifestResponse.sdkVersion
+        await loadStudioModules(manifest.modules, registry, {
+          hostVersion: manifest.hostVersion,
+          sdkVersion: manifest.sdkVersion
         });
         registerBuiltInAgentContributions(registry);
 
@@ -166,12 +215,12 @@ function AppContent() {
       }
     }
 
-    void boot();
+    void loadRegistry(manifestResponse);
 
     return () => {
       disposed = true;
     };
-  }, [backendBaseUrl, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendHeaders, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
@@ -260,7 +309,7 @@ function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit |
   return moduleManagementApiKey ? { "X-Elsa-Module-Management-Key": moduleManagementApiKey } : undefined;
 }
 
-function ShellFrame({
+export function ShellFrame({
   navigation,
   panels,
   path,
@@ -279,6 +328,7 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const [navQuery, setNavQuery] = useState("");
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
     if (!item.parentId) {
@@ -290,10 +340,18 @@ function ShellFrame({
     childrenByParentId.set(item.parentId, children);
   }
 
+  const query = navQuery.trim().toLowerCase();
+  const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
+  // A parent stays visible when it matches directly or when any of its children match, so a filtered
+  // child never becomes orphaned. Children are filtered independently in the render below.
+  const itemVisible = (item: StudioNavigationContribution) =>
+    !query || matchesQuery(item) || (childrenByParentId.get(item.id) ?? []).some(matchesQuery);
+
   const navigationSections = [
-    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
-    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
+    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace").filter(itemVisible) },
+    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings").filter(itemVisible) }
   ].filter(section => section.items.length > 0);
+  const hasNavResults = navigationSections.length > 0;
 
   return (
     <div className="studio-shell">
@@ -309,21 +367,43 @@ function ShellFrame({
         </a>
 
         <label className="sidebar-search">
-          <Search size={16} />
-          <input aria-label="Search modules" placeholder="Search modules" />
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Search modules"
+            placeholder="Search modules"
+            value={navQuery}
+            onChange={event => setNavQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Escape" && navQuery) {
+                event.preventDefault();
+                setNavQuery("");
+              }
+            }}
+          />
         </label>
+
+        {query && !hasNavResults ? (
+          <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>
+        ) : null}
 
         {navigationSections.map(section => (
           <nav key={section.id} className="nav-section" aria-label={section.label}>
             <span className="nav-heading">{section.label}</span>
             {section.items.map(item => {
-              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const childItems = (childrenByParentId.get(item.id) ?? [])
+                .filter(child => getNavigationSection(child) === section.id)
+                // When the parent matched the search directly, keep all of its children; otherwise only
+                // the children that match, so a filtered group doesn't reveal unrelated siblings.
+                .filter(child => !query || matchesQuery(item) || matchesQuery(child));
               const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              const itemActive = isNavigationItemActive(item, path);
               return (
                 <div className="nav-item-group" key={item.id}>
                   <a
-                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
                     href={item.path}
+                    aria-current={itemActive ? "page" : undefined}
                     onClick={event => {
                       event.preventDefault();
                       onNavigate(item.path);
@@ -334,19 +414,23 @@ function ShellFrame({
                   </a>
                   {childItems.length > 0 ? (
                     <div className="nav-children">
-                      {childItems.map(child => (
-                        <a
-                          key={child.id}
-                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
-                          href={child.path}
-                          onClick={event => {
-                            event.preventDefault();
-                            onNavigate(child.path);
-                          }}
-                        >
-                          {child.label}
-                        </a>
-                      ))}
+                      {childItems.map(child => {
+                        const childActive = isNavigationItemActive(child, path);
+                        return (
+                          <a
+                            key={child.id}
+                            className={childActive ? "active nav-child" : "nav-child"}
+                            href={child.path}
+                            aria-current={childActive ? "page" : undefined}
+                            onClick={event => {
+                              event.preventDefault();
+                              onNavigate(child.path);
+                            }}
+                          >
+                            {child.label}
+                          </a>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -407,6 +491,15 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
+  const tabsBaseId = useId();
+  const panelKeyDown = useTablistKeyboard(
+    panels.map(panel => panel.id),
+    activePanel.id,
+    id => {
+      setActivePanelId(id);
+      setCollapsed(false);
+    }
+  );
 
   useEffect(() => {
     if (!panels.some(panel => panel.id === activePanelId)) {
@@ -546,22 +639,30 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
         />
       ) : null}
       <div className="bottom-panel-tabs">
-        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels">
-          {panels.map(panel => (
-            <button
-              key={panel.id}
-              type="button"
-              role="tab"
-              aria-selected={panel.id === activePanel.id}
-              className={panel.id === activePanel.id ? "active" : ""}
-              onClick={() => {
-                setActivePanelId(panel.id);
-                setCollapsed(false);
-              }}
-            >
-              {panel.title}
-            </button>
-          ))}
+        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
+          {panels.map(panel => {
+            const isActive = panel.id === activePanel.id;
+            const ids = tabElementIds(tabsBaseId, panel.id);
+            return (
+              <button
+                key={panel.id}
+                id={ids.tabId}
+                data-tab-id={panel.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={ids.panelId}
+                tabIndex={isActive ? 0 : -1}
+                className={isActive ? "active" : ""}
+                onClick={() => {
+                  setActivePanelId(panel.id);
+                  setCollapsed(false);
+                }}
+              >
+                {panel.title}
+              </button>
+            );
+          })}
         </div>
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
           <button
@@ -584,7 +685,15 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           </button>
         </div>
       </div>
-      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title} aria-hidden={collapsed}>
+      <div
+        className="bottom-panel-content"
+        role="tabpanel"
+        id={tabElementIds(tabsBaseId, activePanel.id).panelId}
+        aria-labelledby={tabElementIds(tabsBaseId, activePanel.id).tabId}
+        // When collapsed the content is visually hidden; `inert` also removes it from the tab order and
+        // the accessibility tree so keyboard/AT users don't land on off-screen controls (React 19).
+        inert={collapsed}
+      >
         <ActivePanelComponent />
       </div>
     </section>
@@ -622,72 +731,15 @@ export function Dashboard({ api }: { api: ElsaStudioModuleApi }) {
 }
 
 function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
-  const [studio, setStudio] = useState<HostHealthEntry>(checkingHostHealth("Checking Studio host."));
-  const [server, setServer] = useState<HostHealthEntry>(checkingHostHealth("Checking Server host."));
-  const [backend, setBackend] = useState<HostHealthEntry>(checkingHostHealth("Checking backend API."));
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const refreshRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    let disposed = false;
-    let running = false;
-    let failures = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    async function run() {
-      if (disposed || running) return;
-      running = true;
-      setRefreshing(true);
-      try {
-        const [studioHealth, serverHealth, backendHealth] = await Promise.all([
-          readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
-          readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server"),
-          readBackendHealth(api.backend.baseUrl)
-        ]);
-
-        if (disposed) return;
-        setStudio(studioHealth);
-        setServer(serverHealth);
-        setBackend(backendHealth);
-        setLastChecked(new Date());
-
-        const degraded = [studioHealth, serverHealth, backendHealth].some(host => host.status === "unavailable");
-        failures = degraded ? failures + 1 : 0;
-        schedule();
-      } finally {
-        running = false;
-        if (!disposed) setRefreshing(false);
-      }
-    }
-
-    // Poll on an interval, backing off while a host is down, and pause polling while the tab is hidden
-    // (the visibility handler refetches on return so we never show stale status).
-    function schedule() {
-      if (timer) clearTimeout(timer);
-      if (disposed || document.hidden) return;
-      const delay = failures === 0 ? healthyHealthPollMs : Math.min(maxHealthPollMs, healthyHealthPollMs * 2 ** (failures - 1));
-      timer = setTimeout(() => void run(), delay);
-    }
-
-    refreshRef.current = () => void run();
-    const onModulesChanged = () => void run();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void run();
-    };
-    window.addEventListener(ModulesChangedEventName, onModulesChanged);
-    document.addEventListener("visibilitychange", onVisibility);
-
-    void run();
-
-    return () => {
-      disposed = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener(ModulesChangedEventName, onModulesChanged);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [api]);
+  // Host-health polling lives in useHostHealth: it preserves the exponential backoff, tab-hidden pause,
+  // refetch-on-return, and modules-changed re-check that the strip previously hand-rolled.
+  const { data, isFetching, dataUpdatedAt, refetch } = useHostHealth(api);
+  const studio = data?.studio ?? checkingHostHealth("Checking Studio host.");
+  const server = data?.server ?? checkingHostHealth("Checking Server host.");
+  const backend = data?.backend ?? checkingHostHealth("Checking backend API.");
+  const lastChecked = data && dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  const refreshing = isFetching;
 
   // Keep the "updated Ns ago" label ticking without re-running health checks.
   useEffect(() => {
@@ -713,7 +765,7 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
       </div>
       <div className="host-health-meta">
         <span className="host-health-updated">{formatCheckedAgo(lastChecked, now)}</span>
-        <button type="button" className="host-health-refresh" onClick={() => refreshRef.current()} disabled={refreshing}>
+        <button type="button" className="host-health-refresh" onClick={() => void refetch()} disabled={refreshing}>
           <RefreshCw size={13} className={refreshing ? "is-spinning" : undefined} aria-hidden="true" />
           {refreshing ? "Checking…" : "Refresh"}
         </button>
@@ -745,89 +797,6 @@ function HostHealthTile({
   );
 }
 
-async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, hostLabel: string): Promise<HostHealthEntry> {
-  try {
-    const registry = await registryRequest;
-    const attention = countRegistryAttention(registry);
-
-    return {
-      status: attention === 0 ? "ok" : "attention",
-      attention,
-      detail: attention === 0 ? `${hostLabel} is reachable.` : `${attention} item${attention === 1 ? "" : "s"} need review.`
-    };
-  } catch (e) {
-    return {
-      status: "unavailable",
-      attention: 0,
-      detail: `${hostLabel} module registry is unavailable: ${getHealthErrorMessage(e)}`
-    };
-  }
-}
-
-async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
-  // The backend Elsa Server exposes its liveness signal at the origin root (returns
-  // `{ "status": "Healthy", ... }` with CORS enabled) — it does not map a `/_elsa/health` route.
-  // Probe the root so the tile reflects the backend's real health check rather than a 404.
-  const healthUrl = new URL("/", baseUrl).toString();
-  // Prefer a readable (CORS) response so we can tell a healthy host apart from one returning 5xx.
-  // An opaque no-cors probe settles even for a crashing server, so it can't distinguish the two.
-  // Readable CORS request so we can inspect the real status: a rejected fetch means the
-  // host is unreachable, while any response (even an error status) means the API is up.
-  try {
-    const response = await fetch(healthUrl, { cache: "no-store" });
-    if (response.ok) {
-      // A 2xx can still carry a self-reported "Degraded"/"Unhealthy" status (ASP.NET Core health
-      // checks answer 200 for Degraded), so inspect the body before declaring the backend healthy.
-      const reported = await readReportedHealthStatus(response);
-      if (reported && !isHealthyStatus(reported)) {
-        return {
-          status: "attention",
-          attention: 1,
-          detail: `${healthUrl} reported "${reported}".`
-        };
-      }
-
-      return {
-        status: "ok",
-        attention: 0,
-        detail: healthUrl
-      };
-    }
-
-    return {
-      status: "attention",
-      attention: 1,
-      detail: `${healthUrl} responded with ${response.status}.`
-    };
-  } catch (readableError) {
-    // The host may not send CORS headers on its health endpoint; fall back to a reachability-only probe
-    // (which can still confirm the socket is up) before declaring the API unavailable.
-    try {
-      await fetch(healthUrl, { cache: "no-store", mode: "no-cors" });
-      return { status: "ok", attention: 0, detail: healthUrl };
-    } catch (e) {
-      return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
-    }
-  }
-}
-
-// Best-effort read of the backend's self-reported health status (e.g. `{ "status": "Healthy" }`).
-// Returns null for a non-JSON or bodyless response so the caller falls back to treating a 2xx as healthy.
-async function readReportedHealthStatus(response: Response): Promise<string | null> {
-  if (!(response.headers.get("content-type") ?? "").includes("json")) return null;
-  try {
-    const body = await response.json();
-    const status = (body as { status?: unknown })?.status;
-    return typeof status === "string" ? status : null;
-  } catch {
-    return null;
-  }
-}
-
-function isHealthyStatus(status: string): boolean {
-  return status.trim().toLowerCase() === "healthy";
-}
-
 function formatCheckedAgo(at: Date | null, now: number): string {
   if (!at) return "Checking…";
 
@@ -839,36 +808,6 @@ function formatCheckedAgo(at: Date | null, now: number): string {
   if (minutes < 60) return `Updated ${minutes}m ago`;
 
   return `Updated ${Math.floor(minutes / 60)}h ago`;
-}
-
-function checkingHostHealth(detail: string): HostHealthEntry {
-  return { status: "checking", attention: 0, detail };
-}
-
-function getHealthErrorMessage(error: unknown) {
-  return error instanceof Error && error.message.length > 0 ? error.message : "request failed";
-}
-
-function countRegistryAttention(registry: HostHealthRegistry) {
-  const attentionStatuses = new Set(["failed", "incompatible", "disabled"]);
-  const moduleStatuses = registry.modules.filter(module => module.status && attentionStatuses.has(module.status)).length;
-  const moduleDiagnostics = registry.modules.flatMap(module => module.diagnostics ?? []).filter(diagnostic => diagnostic.status && attentionStatuses.has(diagnostic.status)).length;
-  const hostDiagnostics = (registry.diagnostics ?? []).filter(diagnostic => diagnostic.status && attentionStatuses.has(diagnostic.status)).length;
-
-  return moduleStatuses + moduleDiagnostics + hostDiagnostics;
-}
-
-function labelForHostStatus(status: HostHealthStatus) {
-  if (status === "ok")
-    return "OK";
-
-  if (status === "attention")
-    return "Review";
-
-  if (status === "unavailable")
-    return "Unavailable";
-
-  return "Checking";
 }
 
 export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
@@ -1051,30 +990,12 @@ function NavIconTile({ item }: { item: StudioNavigationContribution }) {
 }
 
 function getDefaultNavIconColor(id: string) {
-  if (id.includes("dashboard") || id === "home") {
-    return "#0ea5e9";
-  }
-
-  if (id.includes("weather")) {
-    return "#14b8a6";
-  }
-
-  if (id.includes("diagnostics")) {
-    return "#10b981";
-  }
-
-  if (id.includes("modules")) {
-    return "#8b5cf6";
-  }
-
-  if (id.includes("feeds")) {
-    return "#f59e0b";
-  }
-
-  if (id.includes("extension-builder")) {
-    return "#ec4899";
-  }
-
+  if (id.includes("dashboard") || id === "home") return navIconColors.dashboard;
+  if (id.includes("weather")) return navIconColors.weather;
+  if (id.includes("diagnostics")) return navIconColors.diagnostics;
+  if (id.includes("modules")) return navIconColors.modules;
+  if (id.includes("feeds")) return navIconColors.feeds;
+  if (id.includes("extension-builder")) return navIconColors.extensionBuilder;
   return "var(--primary)";
 }
 
@@ -1178,12 +1099,21 @@ function navigateTo(path: string) {
 }
 
 export function App() {
+  // Create the auth manager once per shell instance: null means no provider is configured, so the shell
+  // boots anonymously (no login, no bearer token). When configured, the same manager instance backs both
+  // the session provider (via StudioAuthBoundary) and the authenticated HTTP client passed to AppContent.
+  const authManager = useMemo(() => createStudioAuthManager(getStudioRuntimeConfig(), window.location.origin), []);
+
+  // AuthProvider is mounted outermost so the login/redirect gate wraps the entire shell — including theming,
+  // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
   return (
-    <ThemeProvider>
-      <QueryProvider>
-        <AppContent />
-        <DialogHost />
-      </QueryProvider>
-    </ThemeProvider>
+    <StudioAuthBoundary manager={authManager}>
+      <ThemeProvider>
+        <QueryProvider>
+          <AppContent authManager={authManager} />
+          <DialogHost />
+        </QueryProvider>
+      </ThemeProvider>
+    </StudioAuthBoundary>
   );
 }

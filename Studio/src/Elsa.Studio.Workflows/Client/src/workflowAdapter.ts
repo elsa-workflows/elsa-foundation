@@ -111,7 +111,7 @@ export function resolveScope(root: ActivityNode | null | undefined, frames: Scop
   const owner = resolveScopeOwner(root, frames);
   if (!owner) return null;
 
-  let slot = getChildSlots(owner)[0];
+  const slot = getChildSlots(owner)[0];
   if (!slot) return null;
 
   return { owner, slot };
