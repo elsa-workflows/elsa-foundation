@@ -1227,7 +1227,7 @@ function formatSettingPreview(setting: StudioSettingDescriptor, value: unknown) 
   }
 
   if (normalizeType(setting.jsonType) === "boolean") {
-    return Boolean(value) ? "Enabled" : "Disabled";
+    return value ? "Enabled" : "Disabled";
   }
 
   if (value == null || value === "") {

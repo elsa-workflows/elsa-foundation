@@ -112,6 +112,7 @@ const consoleStreamServerTimeoutInMilliseconds = 120_000;
 const consoleStreamKeepAliveIntervalInMilliseconds = 15_000;
 const consoleStreamTimeoutMessage = "Server timeout elapsed without receiving a message from the server.";
 const autoScrollStorageKey = "elsa-studio-console-stream-autoscroll";
+// eslint-disable-next-line no-control-regex -- \x1b (ESC) is required to match ANSI SGR sequences.
 const ansiEscapePattern = /\x1b\[([0-9;]*)m/g;
 const ansiForegroundClasses: Record<number, string> = {
   30: "console-stream-ansi-fg-black",

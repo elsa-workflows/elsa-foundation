@@ -70,7 +70,7 @@ async function parseEventStream(
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let sseFrame: SseFrame = createSseFrame();
+  const sseFrame: SseFrame = createSseFrame();
 
   while (!signal.aborted) {
     const { value, done } = await reader.read();
