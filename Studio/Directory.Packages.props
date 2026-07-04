@@ -4,10 +4,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="CShells" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.AspNetCore" Version="0.0.29-preview.143" />
-    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.143" />
+    <PackageVersion Include="CShells" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.AspNetCore" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.144" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
