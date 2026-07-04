@@ -88,6 +88,12 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
+        var navigator = DoNavigator.From(runtimeContext.ExecutableNode);
+
+        // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
+        // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.
+        if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
+            throw new DoExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the Do body.");
 
         // A body Break outcome ends the loop early without re-checking the condition.
         if (context.OutcomeNames.Contains(BreakOutcome, StringComparer.Ordinal))
@@ -100,7 +106,6 @@ public sealed class Do : ActivityBase, IActivityChildCompletionHandler
         // this read reflects any state the body mutated this pass: the condition is re-evaluated after the
         // just-completed pass and the body repeats while it holds.
         var condition = context.ParentContext.Get(Condition);
-        var navigator = DoNavigator.From(runtimeContext.ExecutableNode);
 
         if (!condition || navigator.Body is not { } body)
         {

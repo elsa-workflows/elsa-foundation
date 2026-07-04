@@ -110,6 +110,18 @@ public sealed class DoActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompleted_Throws_WhenCompletedChildIsNotBody()
+    {
+        // #381: a stray child-completion callback must throw a diagnosable exception (mirroring
+        // For/ForEach/If/Switch/Parallel) instead of silently rescheduling the body or completing.
+        var context = NewContext(NewDoNode(body: NewNode("node-body")), condition: true);
+
+        await Assert.ThrowsAsync<DoExecutionException>(() => ((IActivityChildCompletionHandler)context.Activity)
+            .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
+            .AsTask());
+    }
+
+    [Fact]
     public async Task SuccessivePasses_UseDistinctIterationIds()
     {
         // The unconditional first pass and a subsequent body-completion pass must publish distinct ids.
