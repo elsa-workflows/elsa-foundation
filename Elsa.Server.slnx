@@ -116,6 +116,8 @@
     <Project Path="src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
     <Project Path="src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Foundation/Identity/Persistence/">
     <Project Path="src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Locking/">
@@ -293,6 +295,8 @@
   <Folder Name="/tests/Elsa/Foundation/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/">
     <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Modularity/">

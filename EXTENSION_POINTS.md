@@ -103,6 +103,7 @@ not automatic constitution violations.
 |---|---|
 | EF Core persistence (entity saving/loading, upsert, schema) | [`src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Groundwork runtime persistence (document serializer + schema-version upcasters) | [`src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Foundation Identity Groundwork persistence (durable users/roles/external-identities/memberships; wire-safe document kinds) | [`src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Foundation/Identity/Persistence/Groundwork/EXTENSION_POINTS.md) |
 
 ### Activities
 

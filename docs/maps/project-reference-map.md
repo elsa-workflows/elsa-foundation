@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 110
-- Test projects: 44
-- Direct project references: 563
+- Source projects: 111
+- Test projects: 45
+- Direct project references: 568
 
 ## Projects
 
@@ -69,6 +69,7 @@ Records direct project references only.
 | [Elsa.Foundation.Identity.AspNetCoreIdentity](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.Oidc](../../src/Elsa/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Foundation.Identity.OpenIddict](../../src/Elsa/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.Abstractions |
+| [Elsa.Foundation.Identity.Persistence.Groundwork](../../src/Elsa/Foundation/Identity/Persistence/Groundwork/Elsa.Foundation.Identity.Persistence.Groundwork.csproj) | source | Elsa.Foundation | net10.0 | default | Elsa.Foundation.Identity.Abstractions |
 | [Elsa.Http.Core](../../src/Elsa/Http/Core/Elsa.Http.Core.csproj) | source | Elsa.Http | net10.0 | default | - |
 | [Elsa.Http](../../src/Elsa/Http/Elsa.Http.csproj) | source | Elsa.Http | net10.0 | default | Elsa.Caching.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core |
 | [Elsa.Http.JavaScript](../../src/Elsa/Http/JavaScript/Elsa.Http.JavaScript.csproj) | source | Elsa.Http | net10.0 | default | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Http.Core |
@@ -144,8 +145,9 @@ Records direct project references only.
 | [Elsa.Diagnostics.StructuredLogs.Persistence.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs.Core<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore<br>Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | net10.0 | false | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
-| [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint |
+| [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint |
 | [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
+| [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | net10.0 | false | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | net10.0 | false | Elsa.Mediator |
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | net10.0 | false | Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Server |
@@ -181,7 +183,7 @@ Records direct project references only.
 | Elsa.Diagnostics | 9 | 5 |
 | Elsa.Events | 3 | 1 |
 | Elsa.Expressions | 10 | 2 |
-| Elsa.Foundation | 5 | 1 |
+| Elsa.Foundation | 6 | 2 |
 | Elsa.Http | 3 | 0 |
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
