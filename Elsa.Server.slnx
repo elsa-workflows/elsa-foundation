@@ -394,4 +394,7 @@
   <Folder Name="/tests/Elsa/Mediator/">
     <Project Path="tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Http/">
+    <Project Path="tests/Elsa/Http/Tests/Elsa.Http.Tests.csproj" />
+  </Folder>
 </Solution>
