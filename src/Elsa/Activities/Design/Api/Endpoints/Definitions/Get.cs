@@ -12,6 +12,6 @@ internal sealed class Get(IRequestSender requestSender, ILogger<Get> logger) : E
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("definitions/{id}"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

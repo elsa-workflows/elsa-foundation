@@ -16,6 +16,6 @@ internal sealed class Construct(IRequestSender requestSender, ILogger<Construct>
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("activities/{activityId}/construct"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }
