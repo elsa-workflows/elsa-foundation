@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Activities.Design.Persistence.Core.Services;
 
@@ -12,7 +13,7 @@ public sealed class ActivityDefinitionLookup(
     public async Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
     {
         return await definitionStore.FindByIdOrActivityTypeKeyAsync(idOrActivityTypeKey, idOrActivityTypeKey, cancellationToken)
-            ?? throw new ArgumentException($"Activity definition could not be found for activity-type-key/id '{idOrActivityTypeKey}'");
+            ?? throw new EntityNotFoundException($"Activity definition could not be found for activity-type-key/id '{idOrActivityTypeKey}'");
     }
 
     public async Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)

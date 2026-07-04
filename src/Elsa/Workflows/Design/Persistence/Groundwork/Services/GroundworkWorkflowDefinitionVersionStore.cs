@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -41,7 +42,7 @@ public sealed class GroundworkWorkflowDefinitionVersionStore : IWorkflowDefiniti
 
     public async Task<WorkflowDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default)
         => await FindByIdAsync(versionId, cancellationToken)
-           ?? throw new InvalidOperationException($"Entity '{typeof(WorkflowDefinitionVersion)}' with id '{versionId}' cannot be found");
+           ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionVersion), versionId);
 
     public Task<WorkflowDefinitionVersion?> FindByIdAsync(string versionId, CancellationToken cancellationToken = default)
         => _reads.FirstOrDefaultAsync(ById(versionId), cancellationToken);
