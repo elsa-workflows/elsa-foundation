@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
@@ -52,7 +53,14 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
         services.ReplaceStore<ITenantMembershipStore, EfCoreTenantMembershipStore>();
 
         if (isDevelopmentOrDemo)
-            services.AddHostedService<IdentitySeeder>();
+        {
+            // Register once and expose under both lifecycle hooks: IHostedService for plain hosts/tests, and
+            // the CShells IShellInitializer for the shell-composed Elsa.Server host (which does not run
+            // shell-scoped hosted services). The seed is idempotent under either.
+            services.AddSingleton<IdentitySeeder>();
+            services.AddHostedService(sp => sp.GetRequiredService<IdentitySeeder>());
+            services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<IdentitySeeder>());
+        }
 
         return services;
     }

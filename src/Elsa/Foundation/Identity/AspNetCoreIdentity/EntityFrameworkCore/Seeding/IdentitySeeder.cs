@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -13,16 +14,25 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seedin
 
 /// <summary>
 /// Development/demo seeding: ensures the identity schema exists, then seeds an administrator role (granted
-/// every catalog permission) and an admin user so a fresh checkout can log in. The seeded credentials are
-/// logged clearly to the console at startup. Runs only when the EF feature is registered with
+/// the all-access permission plus every catalog permission) and an admin user so a fresh checkout can log in.
+/// The seeded credentials are logged clearly at startup. Runs only when the EF feature is registered with
 /// <c>isDevelopmentOrDemo: true</c>.
 /// </summary>
+/// <remarks>
+/// Implemented as both an <see cref="IHostedService"/> (for plain hosts / tests, where hosted services run at
+/// host start) and a CShells <see cref="IShellInitializer"/> (so it also runs when composed inside a CShells
+/// shell — the <see cref="Elsa.Server"/> host — where shell-scoped hosted services are not executed). The
+/// seed is idempotent, so running under whichever hook fires is safe.
+/// </remarks>
 public sealed class IdentitySeeder(
     IServiceProvider services,
     IOptions<AspNetCoreIdentityOptions> identityOptions,
     IPermissionCatalog permissionCatalog,
-    ILogger<IdentitySeeder> logger) : IHostedService
+    ILogger<IdentitySeeder> logger) : IHostedService, IShellInitializer
 {
+    /// <summary>CShells shell-activation hook (see class remarks).</summary>
+    public Task InitializeAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
+
     public const string AdminUserName = "admin";
     public const string AdminPassword = "Password123!";
     public const string AdminEmail = "admin@elsa.local";

@@ -88,7 +88,14 @@ public static class OpenIddictIdentityServiceCollectionExtensions
         });
 
         if (snapshot.IsDevelopmentOrDemo)
-            services.AddHostedService<OpenIddictIdentityStoreInitializer>();
+        {
+            // Expose the store initializer under both lifecycle hooks: IHostedService for plain hosts/tests
+            // and the CShells IShellInitializer for the shell-composed Elsa.Server host (see the initializer's
+            // remarks). Ensure-created/migrate is idempotent under either.
+            services.AddSingleton<OpenIddictIdentityStoreInitializer>();
+            services.AddHostedService(sp => sp.GetRequiredService<OpenIddictIdentityStoreInitializer>());
+            services.AddSingleton<CShells.Lifecycle.IShellInitializer>(sp => sp.GetRequiredService<OpenIddictIdentityStoreInitializer>());
+        }
 
         return services;
     }

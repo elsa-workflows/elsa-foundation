@@ -37,6 +37,37 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
     }
 
     [Fact]
+    public void Dev_Seeder_Runs_Under_Both_Lifecycle_Hooks()
+    {
+        // The seeder must run in plain hosts (IHostedService) AND when composed inside a CShells shell
+        // (IShellInitializer) — the Elsa.Server host does not run shell-scoped hosted services. Registering
+        // it under only one hook is the exact regression that left the enabled shell unseeded.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new AspNetCoreIdentityEntityFrameworkCoreFeature { IsDevelopmentOrDemo = true }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(),
+            x => x is Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.IdentitySeeder);
+        Assert.Contains(provider.GetServices<CShells.Lifecycle.IShellInitializer>(),
+            x => x is Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.IdentitySeeder);
+    }
+
+    [Fact]
+    public void Non_Dev_Does_Not_Register_The_Seeder()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new AspNetCoreIdentityEntityFrameworkCoreFeature { IsDevelopmentOrDemo = false, ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.DoesNotContain(provider.GetServices<CShells.Lifecycle.IShellInitializer>(),
+            x => x is Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.IdentitySeeder);
+    }
+
+    [Fact]
     public async Task LocalProvider_Is_Surfaced_With_LoginPage_Challenge()
     {
         await using var scope = _fixture.CreateScope();
