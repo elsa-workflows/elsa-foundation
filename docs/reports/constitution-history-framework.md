@@ -9,6 +9,36 @@ This file preserves raw framework constitution provenance. It is historical repo
 Sync Impact Report — Modular Software Design Framework Constitution
 =====================================================================
 
+Version change: 3.0.0 (draft) → 3.1.0 (draft)
+Date: 2026-07-04
+Unit: W21 / MD-5 minimum-project-size amendment (Elsa 4 architecture review
+  2026-07, review-modularity.md MD-5 + Open Question 1). Ratified by Sipke
+  2026-07-04 from the W21 proposal report
+  (elsa-4-w21-md5-minimum-project-size-amendment.md).
+  SemVer: MINOR — new guidance subsection added; no existing rule removed or
+  redefined.
+
+§2.16.1 (new) — Minimum-viable-project guidance. Codifies that the
+  finer-grained-split preference (§2.16) is not overridden by small project
+  size: no minimum line count forces a merge. New Layer-3 projects below
+  ~100 physical LoC record a one-sentence justification; a six-class
+  exemption test (contracts-only .Core seam, primitives/constants, provider
+  leaf, migration/compatibility boundary, Layer-2 helper/adapter,
+  independently-composable feature unit or cross-domain contribution seam)
+  makes projects automatically legitimate where a merge would violate
+  another gate or collapse a capability boundary. Soft guidance + exemption
+  test, deliberately NOT a threshold gate — the audit showed a hard gate
+  would create more violations than it resolves. Framework text kept
+  example-free per the synthetic-examples policy; worked examples cascade
+  to the Elsa constitution (§E5 interpretive note).
+-->
+~~~
+
+~~~markdown
+<!--
+Sync Impact Report — Modular Software Design Framework Constitution
+=====================================================================
+
 Version change: 2.0.0 (draft, never ratified) → 3.0.0 (draft)
   SemVer: MAJOR.
   Rationale: Unit 1 (2026-06-02) collapsed the three in-process pub/sub

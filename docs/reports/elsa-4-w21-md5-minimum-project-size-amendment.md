@@ -1,9 +1,11 @@
-# W21 / MD-5 — Minimum-project-size amendment (PROPOSAL)
+# W21 / MD-5 — Minimum-project-size amendment (RATIFIED)
 
-Status: **proposal** — draft amendment text + rationale for review. **Not** applied to
-`constitution.md`; ratification is the architects' / user's call and routes through
-[Constitution Readiness](../program-goals/constitution-readiness.md). Produced by W21 of the Elsa 4
-remediation fleet.
+Status: **ratified 2026-07-04** by Sipke — applied as framework constitution **§2.16.1**
+(v3.0.0 → v3.1.0) with an Elsa-side §E5 interpretive note carrying the worked examples
+(Elsa constitution v3.2.0 → v3.3.0); provenance recorded in the
+[amendment index](constitution-amendment-index.md). Originally produced as a proposal by W21
+of the Elsa 4 remediation fleet, routed through
+[Constitution Readiness](../program-goals/constitution-readiness.md).
 
 **Branch point:** `1d5bb6bb` (W18 merge tip). **LoC method:** physical `.cs` line count (matches the
 2026-07 review — its 32 / 41 smallest values reproduce exactly at this SHA).

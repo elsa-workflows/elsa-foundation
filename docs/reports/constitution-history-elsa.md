@@ -9,6 +9,29 @@ This file preserves raw Elsa constitution provenance. It is historical report ma
 Sync Impact Report — Elsa Workflow Engine Constitution
 ========================================================
 
+Version change: 3.2.0 (draft) → 3.3.0 (draft)
+Date: 2026-07-04
+Unit: W21 / MD-5 minimum-project-size amendment cascade (framework
+  3.0.0 → 3.1.0, new §2.16.1). Ratified by Sipke 2026-07-04.
+  SemVer: MINOR — framework re-pin to v3.1.0 plus a new Elsa interpretive
+  note; no existing Elsa rule removed or redefined.
+
+§E5 (expanded) — Minimum project size interpretive note. Records that the
+  2026-07-04 audit found all 13 sub-100-LoC projects exempt under the
+  framework §2.16.1 six-class exemption test (0 forced merge candidates),
+  and carries the Elsa worked examples per exception class (Locking.Core,
+  Caching.Core, Workflows.Primitives, provider leaves, the §E2.7 import
+  boundary, Serialization.Newtonsoft, JavaScript.Libraries, Http.JavaScript).
+  New sub-100-LoC projects fitting none of the six classes need §2.16.1's
+  one-sentence justification.
+-->
+~~~
+
+~~~markdown
+<!--
+Sync Impact Report — Elsa Workflow Engine Constitution
+========================================================
+
 Version change: 3.1.0 (draft) → 3.2.0 (draft)
 Date: 2026-07-04
 Unit: W14 naming pass (Elsa 4 architecture review 2026-07, review-naming.md

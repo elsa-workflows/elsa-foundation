@@ -5,10 +5,10 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 3.2.0 (draft)
+**Version:** 3.3.0 (draft)
 **Status:** Draft for ratification by Joey Barten, Sipke Schoorstra, Frans van Ek.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v3.0.0**.
+**Derives from:** framework constitution **v3.1.0**.
 
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
@@ -387,6 +387,8 @@ The Configuration & Settings classification (framework §2.12) is deferred to th
 
 **Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
 
+**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Workflows.Primitives`, `Elsa.Expressions.JavaScript.Primitives`), provider leaves (`Elsa.Locking.FileSystem`, `Elsa.Persistence.EFCore.Sqlite`), the §E2.7 migration boundary (`Elsa3.Activities.Design.Import`), Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Expressions.JavaScript.Libraries`, `Elsa.Http.JavaScript`). New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
+
 **Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host (`Elsa.Server`) pins `.Core` libraries; Nuplane focuses on dynamically loading Layer-3 implementations, helper libraries, and optional features. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
 
 ---
@@ -452,4 +454,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 3.2.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04 | **Derives from framework constitution:** v3.0.0
+**Version:** 3.3.0 | **Ratified:** TODO(RATIFICATION_DATE) | **Last Amended:** 2026-07-04 | **Derives from framework constitution:** v3.1.0
