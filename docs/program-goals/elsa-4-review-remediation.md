@@ -150,6 +150,30 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   ([gap report](../reports/elsa-4-w21-md10-feature-registration-test-gap.md)).
   Snapshot caveat stated: counts are at `1d5bb6bb`; parallel W16/W17 will shift them.
 
+- **W16 Activity library (DS-16, partial DS-8/DS-9)** — **in progress** (draft PR
+  [#465](https://github.com/elsa-workflows/elsa-foundation/pull/465) to main; second-lander after
+  W17/W19/W21, merged clean). Closes DS-16 with four incremental packages, each activity shipping
+  activity + descriptor + registration + unit tests + sample workflow. **1a `Elsa.Activities.Http`
+  SendHttpRequest:** outbound call via `IHttpClientFactory` with sensible timeout/redirect defaults
+  and status→outcome error mapping. **1b HttpEndpoint + WriteHttpResponse + `HttpEndpointMiddleware`:**
+  start trigger through W7's `IActivityTriggerStimulusProvider` seam (webhook-style stimulus);
+  async/202 baseline — `WriteHttpResponse` records the intended response (status/headers/body) into
+  workflow state as an observable typed artifact (documented contract, no silent no-op). Sync
+  response correlation deferred (follow-up "HTTP synchronous response correlation" — keyed channel +
+  timeout + the multi-node problem W20 creates, designed together not bolted on). **2 Timer/Cron
+  start triggers (`Elsa.Activities.Scheduling` + `Elsa.Workflows.Runtime.Scheduling`):** dedicated
+  recurring-trigger schedule store (new §E6 doc kind `recurringTriggerSchedule` + golden fixture,
+  in-memory + Groundwork) + hosted pump through `IStimulusRouter`; missed-occurrence policy = fire at
+  most once and advance to next future occurrence, never replay backlog; W20 cluster-safety hook =
+  `TryAdvanceAsync` compare-and-swap on `NextOccurrence`. Cronos pinned in `Directory.Packages.props`.
+  **3 `Elsa.Activities.Scripting` RunJavaScript:** hardened on the existing Jint infra (W11's
+  `JintEngineFactory` already applies cancellation + timeout/statement/recursion constraints to the
+  activity path — partial DS-9). Two new Runtime.Core seams catalogued
+  ([`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md)): `IRecurringTriggerScheduleStore` +
+  `IRecurringTriggerScheduleProvider`. **Deferred (design-only in PR body):** DS-8 workflow-as-activity
+  execution semantics (own gate); remaining DS-9 non-activity evaluator paths; legacy internal
+  `Elsa.Workflows.Runtime.JavaScript` RunJavaScript stub cleanup (provably wire-invisible — superseded,
+  not renamed); email/messaging provider modules.
 - **W20 Distributed actor provider (E3-3)** — **in progress** (draft PR to main; branch point
   `a5970003`). New opt-in leaf `Elsa.Workflows.Runtime.Distributed` adding a clustered
   `DistributedWorkflowExecutionActorProvider` (sibling to `InProcessWorkflowExecutionActorProvider`;
