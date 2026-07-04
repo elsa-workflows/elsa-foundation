@@ -30,6 +30,19 @@ public class FileSystemZipFileCacheStorageTests : IDisposable
         Assert.Equal(content, ReadAllBytes(result));
     }
 
+    [Fact]
+    public async Task Write_ToExistingPath_TruncatesPreviousContent()
+    {
+        var longerContent = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        var shorterContent = new byte[] { 9, 9 };
+        await storage.Write("cached.tmp", new MemoryStream(longerContent));
+
+        await storage.Write("cached.tmp", new MemoryStream(shorterContent));
+
+        var result = await storage.Read("cached.tmp");
+        Assert.Equal(shorterContent, ReadAllBytes(result));
+    }
+
     private static byte[] ReadAllBytes(Stream stream)
     {
         // Deliberately no Seek: consumers such as ZipArchiveManager.LoadAsync hand this

@@ -61,7 +61,9 @@ public sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptio
         await zipFileLock.WaitAsync(cancellationToken);
         try
         {
-            using var writeStream = File.OpenWrite(fullFilePath);
+            // FileMode.Create truncates any existing file; File.OpenWrite would leave stale
+            // trailing bytes when a cache path is reused for a shorter payload.
+            using var writeStream = new FileStream(fullFilePath, FileMode.Create, FileAccess.Write);
             await stream.CopyToAsync(writeStream, cancellationToken);
         }
         finally
