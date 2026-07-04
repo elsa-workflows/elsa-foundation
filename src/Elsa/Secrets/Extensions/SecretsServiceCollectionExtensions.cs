@@ -32,6 +32,7 @@ public static class SecretsServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISecretNameValidator, DefaultSecretNameValidator>();
+        services.TryAddSingleton<ISecretKeyRing, DefaultSecretKeyRing>();
         services.TryAddSingleton<ISecretValueProtector, DefaultSecretValueProtector>();
         services.TryAddSingleton<ISecretRepository, InMemorySecretRepository>();
         services.TryAddSingleton<ISecretAuditSink>(sp =>
