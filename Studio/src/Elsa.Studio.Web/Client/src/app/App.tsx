@@ -28,8 +28,9 @@ import type {
   StudioPanelContribution
 } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
-import { createEndpointContext } from "../sdk";
+import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
+import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
@@ -92,7 +93,7 @@ const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
 const minWorkspaceHeight = 280;
 
-function AppContent() {
+function AppContent({ authManager }: { authManager: AuthProviderManager | null }) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
@@ -104,7 +105,8 @@ function AppContent() {
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
-  const backendHeaders = createBackendHeaders(runtimeConfig);
+  // Memoize so the boot effect isn't re-run every render by a fresh header object identity.
+  const backendHeaders = useMemo(() => createBackendHeaders(runtimeConfig), [runtimeConfig.backendModuleManagementApiKey]);
 
   useEffect(() => {
     const onPopState = () => setPath(normalizePath(window.location.pathname));
@@ -139,13 +141,22 @@ function AppContent() {
         }
 
         const manifestResponse = (await response.json()) as StudioModulesResponse;
+        // Route both endpoint contexts through the authenticated HTTP client when a user provider is
+        // configured, so backend/host requests attach a bearer token and refresh-retry on 401. When no
+        // provider is configured this yields the plain SDK client (anonymous path). The #183
+        // management-key header is composed into every request either way, not dropped.
+        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager, backendHeaders);
         const registry = createStudioRegistry({
           hostVersion: manifestResponse.hostVersion,
           sdkVersion: manifestResponse.sdkVersion,
           // The Studio host serves the gated management surface (module management, feature management,
           // console-stream), so the management-key header must ride the host context too, not only the backend.
-          ...createEndpointContext(shellBaseUrl, { headers: backendHeaders })
-        }, backendBaseUrl, backendHeaders);
+          ...createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders)
+        }, {
+          backendBaseUrl,
+          backendHeaders,
+          backendHttp: backendContext.http
+        });
 
         for (const diagnostic of manifestResponse.diagnostics) {
           registry.diagnostics.add(diagnostic);
@@ -174,7 +185,7 @@ function AppContent() {
     return () => {
       disposed = true;
     };
-  }, [backendBaseUrl, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendHeaders, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
@@ -1241,12 +1252,21 @@ function navigateTo(path: string) {
 }
 
 export function App() {
+  // Create the auth manager once per shell instance: null means no provider is configured, so the shell
+  // boots anonymously (no login, no bearer token). When configured, the same manager instance backs both
+  // the session provider (via StudioAuthBoundary) and the authenticated HTTP client passed to AppContent.
+  const authManager = useMemo(() => createStudioAuthManager(getStudioRuntimeConfig(), window.location.origin), []);
+
+  // AuthProvider is mounted outermost so the login/redirect gate wraps the entire shell — including theming,
+  // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
   return (
-    <ThemeProvider>
-      <QueryProvider>
-        <AppContent />
-        <DialogHost />
-      </QueryProvider>
-    </ThemeProvider>
+    <StudioAuthBoundary manager={authManager}>
+      <ThemeProvider>
+        <QueryProvider>
+          <AppContent authManager={authManager} />
+          <DialogHost />
+        </QueryProvider>
+      </ThemeProvider>
+    </StudioAuthBoundary>
   );
 }
