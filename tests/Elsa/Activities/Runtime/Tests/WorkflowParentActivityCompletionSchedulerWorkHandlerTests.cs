@@ -122,6 +122,38 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         Assert.Empty(await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
+    [Fact]
+    public async Task HandleAsync_PropagatesChildFaultToGrandparentWhenParentCompletionHandlerThrows()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewState("actexec-grandparent", "node-grandparent", ActivityExecutionStatus.Running));
+        await _activityStateStore.SaveAsync(NewState("actexec-parent", "node-parent", ActivityExecutionStatus.Running, parentActivityExecutionId: "actexec-grandparent"));
+        await _activityStateStore.SaveAsync(NewState("actexec-child", "node-child", ActivityExecutionStatus.Completed, parentActivityExecutionId: "actexec-parent"));
+        await using var provider = NewProvider(new RecordingActivityFactory(new ThrowingCompositeActivity(new InvalidOperationException("parent failed"))));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewParentCompletionWorkItem(parentActivityExecutionId: "actexec-grandparent"));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-parent");
+        Assert.NotNull(state);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ParentCompletionFaulted", state.SubStatus);
+
+        // The parent's own completion handler threw, so the fault must ride a child-fault parent-evaluation
+        // work item to the grandparent — otherwise the grandparent join waits forever (#379). It rides as a
+        // post-commit intent on the incident checkpoint, atomically with the recorded incident.
+        var propagated = AssertSchedulerPostCommitWork(WorkflowExecutionCommandKind.CompleteActivity);
+        Assert.True(propagated.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildFaulted, out var childFaulted));
+        Assert.Equal(bool.TrueString, childFaulted);
+        Assert.Equal("actexec-grandparent", propagated.CommandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId]);
+        Assert.Equal("actexec-parent", propagated.CommandMetadata[RuntimeMetadataKeys.CompletedChildActivityExecutionId]);
+
+        var propagatedPayload = propagated.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!;
+        Assert.Equal("actexec-grandparent", propagatedPayload.ActivityExecutionId);
+        Assert.Equal("actexec-parent", propagatedPayload.CompletedChildActivityExecutionId);
+        Assert.Equal(SchedulerCompletionKind.ParentCompletionEvaluation, propagatedPayload.CompletionKind);
+    }
+
     private WorkflowParentActivityCompletionSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
         new(
             new RuntimeActivityInputMaterializer(),
@@ -165,13 +197,13 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         return services.BuildServiceProvider();
     }
 
-    private RuntimeSchedulerWorkItem NewParentCompletionWorkItem()
+    private RuntimeSchedulerWorkItem NewParentCompletionWorkItem(string? parentActivityExecutionId = null)
     {
         var payload = new RuntimeCompleteActivityCommandPayload(
             NewIdentity(),
             "node-parent",
             "actexec-parent",
-            parentActivityExecutionId: null,
+            parentActivityExecutionId: parentActivityExecutionId,
             branchId: null,
             outcomeNames: [ActivityOutcomes.Done],
             reason: RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
