@@ -1,6 +1,9 @@
 using CShells.Features;
+using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
+using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -9,8 +12,9 @@ namespace Elsa.Activities.Http.Tests;
 /// <summary>
 /// Feature-registration coverage for <see cref="ActivitiesHttpFeature"/> (constitution §2.23.1). The HTTP
 /// activities are constructed by the runtime's CLR activity constructor, so the feature registers no per-type
-/// activity services; it does own the outbound transport, so the test pins the shell metadata and asserts the
-/// named <see cref="System.Net.Http.IHttpClientFactory"/> client is configured.
+/// activity services; it does own the outbound transport (the named client), contributes the
+/// <see cref="HttpEndpoint"/> start-trigger's stimulus provider on the W7 seam, and registers the inbound
+/// request middleware.
 /// </summary>
 public sealed class ActivitiesHttpFeatureTests
 {
@@ -37,6 +41,27 @@ public sealed class ActivitiesHttpFeatureTests
 
         // The activity disables the ambient client timeout and enforces its own via a linked token source.
         Assert.Equal(System.Threading.Timeout.InfiniteTimeSpan, client.Timeout);
+    }
+
+    [Fact]
+    public void ContributesHttpEndpointTriggerStimulusProvider_OnTheW7Seam()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesHttpFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        var providers = provider.GetServices<IActivityTriggerStimulusProvider>();
+
+        Assert.Contains(providers, p => p is HttpEndpointTriggerStimulusProvider);
+    }
+
+    [Fact]
+    public void RegistersTheInboundRequestMiddleware()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesHttpFeature().ConfigureServices(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(HttpEndpointMiddleware));
     }
 
     [Fact]
