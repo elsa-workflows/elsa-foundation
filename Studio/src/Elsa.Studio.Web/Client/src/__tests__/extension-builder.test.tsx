@@ -813,25 +813,23 @@ describe("extension builder page", () => {
     await unmount();
   });
 
-  it("renders distinct promotion rejection guidance", async () => {
-    for (const [category, expected] of [
-      ["Duplicate", "never silently overwritten"],
-      ["InvalidManifest", "manifest"],
-      ["DependencyPolicy", "dependency"],
-      ["MalformedPackage", "malformed"]
-    ] as const) {
-      const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(category) : {});
-      const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
-      await openSolution(container);
-      await waitForText(container, "Activities/HelloActivity.cs");
+  it.each([
+    ["Duplicate", "never silently overwritten"],
+    ["InvalidManifest", "manifest"],
+    ["DependencyPolicy", "dependency"],
+    ["MalformedPackage", "malformed"]
+  ] as const)("renders distinct promotion rejection guidance for %s", async (category, expected) => {
+    const postJson = vi.fn(async (url: string) => url.endsWith("/promote") ? rejectedPromotion(category) : {});
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
 
-      await clickTab(container, "Promote");
-      await clickButton(container, "Promote build");
-      await waitForText(container, expected);
+    await clickTab(container, "Promote");
+    await clickButton(container, "Promote build");
+    await waitForText(container, expected);
 
-      expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
-      await unmount();
-    }
+    expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
+    await unmount();
   });
 
   it("normalizes numeric enum values and backend file kind fallbacks", async () => {
