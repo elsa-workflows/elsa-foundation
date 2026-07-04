@@ -157,6 +157,66 @@ public sealed class IdentityProviderModuleTests
         Assert.False(revokedValidation.Succeeded);
     }
 
+    [Fact]
+    public async Task PrincipalFactoryExpandsRoleGrantedPermissions()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationAspNetCoreIdentity();
+        using var provider = services.BuildServiceProvider();
+
+        var roles = provider.GetRequiredService<IRoleStore>();
+        var users = provider.GetRequiredService<IUserStore>();
+        var externalIdentities = provider.GetRequiredService<IExternalIdentityStore>();
+
+        // A role that carries a permission, and a user in that role with NO direct permissions.
+        await roles.SaveAsync(new RoleRecord(
+            "role-editor",
+            "tenant-a",
+            "Editor",
+            null,
+            new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage },
+            System: false));
+
+        await users.SaveAsync(new UserRecord(
+            "user-42",
+            "tenant-a",
+            "editor@example.com",
+            "editor@example.com",
+            "Role Editor",
+            UserStatus.Active,
+            ResourceOwnership.External,
+            new HashSet<string> { "role-editor" },
+            new HashSet<string>()));
+
+        await externalIdentities.SaveAsync(new ExternalIdentityRecord(
+            "tenant-a",
+            "entra",
+            "editor-subject",
+            "user-42",
+            DateTimeOffset.UnixEpoch,
+            null,
+            ExternalIdentityLinkPolicy.Auto));
+
+        var principalFactory = provider.GetRequiredService<IPrincipalFactory>();
+        var externalPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Name, "Role Editor"),
+            new Claim(ClaimTypes.Email, "editor@example.com")
+        ], "entra"));
+
+        var principal = await principalFactory.CreateAsync(new PrincipalFactoryContext(
+            "tenant-a",
+            "entra",
+            "editor-subject",
+            externalPrincipal,
+            [],
+            []));
+
+        var permissions = principal.FindAll(IdentityClaimTypes.Permission).Select(c => c.Value).ToList();
+        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersManage, permissions);
+        Assert.Contains(principal.FindAll(IdentityClaimTypes.Role), c => c.Value == "role-editor");
+    }
+
     private static PrincipalFactoryContext CreateContext(string provider, string providerSubject, string email)
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity(

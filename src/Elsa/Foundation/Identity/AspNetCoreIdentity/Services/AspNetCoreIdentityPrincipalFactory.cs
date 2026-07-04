@@ -7,6 +7,7 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 
 public sealed class AspNetCoreIdentityPrincipalFactory(
     IUserStore users,
+    IRoleStore roles,
     IExternalIdentityStore externalIdentities,
     ITenantMembershipStore memberships,
     IUserManager userManager,
@@ -53,8 +54,13 @@ public sealed class AspNetCoreIdentityPrincipalFactory(
         if (!string.IsNullOrWhiteSpace(user.Email))
             AddIfMissing(identity, ClaimTypes.Email, user.Email);
 
+        var roleIds = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var role in user.RoleIds)
+        {
+            roleIds.Add(role);
             AddIfMissing(identity, IdentityClaimTypes.Role, role);
+        }
 
         foreach (var permission in user.DirectPermissions)
             AddIfMissing(identity, IdentityClaimTypes.Permission, permission);
@@ -63,9 +69,24 @@ public sealed class AspNetCoreIdentityPrincipalFactory(
         if (membership is not null && membership.Status == TenantMembershipStatus.Active)
         {
             foreach (var role in membership.RoleIds)
+            {
+                roleIds.Add(role);
                 AddIfMissing(identity, IdentityClaimTypes.Role, role);
+            }
 
             foreach (var permission in membership.DirectPermissions)
+                AddIfMissing(identity, IdentityClaimTypes.Permission, permission);
+        }
+
+        // Expand role-granted permissions so that permissions assigned to a role (RoleRecord.Permissions)
+        // are honoured by permission-based authorization, not just permissions assigned directly to the user.
+        foreach (var roleId in roleIds)
+        {
+            var role = await roles.FindAsync(context.TenantId, roleId, cancellationToken);
+            if (role is null)
+                continue;
+
+            foreach (var permission in role.Permissions)
                 AddIfMissing(identity, IdentityClaimTypes.Permission, permission);
         }
 
