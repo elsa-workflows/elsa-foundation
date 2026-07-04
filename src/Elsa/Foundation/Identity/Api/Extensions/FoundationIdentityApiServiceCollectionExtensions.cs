@@ -12,6 +12,7 @@ public static class FoundationIdentityApiServiceCollectionExtensions
     {
         services.AddFoundationIdentityAbstractions();
         services.TryAddScoped<IAuthSessionService, ClaimsAuthSessionService>();
+        services.AddOptions<FoundationIdentityApiOptions>();
 
         return services;
     }
