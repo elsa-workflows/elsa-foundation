@@ -1149,16 +1149,36 @@ export function createEndpointContext(baseUrl: string, options: { headers?: Head
   };
 }
 
-export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit): StudioHttpClient {
+/**
+ * Options for {@link createHttpClient}. `fetch` and `applyTimeout` are seams that decorating clients
+ * (e.g. the authenticated transport in `auth/transport/http.ts`) use to inject bearer-token/refresh
+ * behaviour and to opt out of the endpoint-timeout without re-implementing the six JSON verbs.
+ */
+export interface StudioHttpClientOptions {
+  defaultHeaders?: HeadersInit;
+  /** Fetch implementation used for every request. Defaults to the global `fetch`. */
+  fetch?: typeof fetch;
+  /**
+   * When false, requests are issued without the endpoint request-timeout AbortController. Decorating
+   * clients that already manage their own retry/abort semantics set this to skip the timeout wrapper.
+   */
+  applyTimeout?: boolean;
+}
+
+export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: HeadersInit | StudioHttpClientOptions): StudioHttpClient {
+  const options = normalizeHttpClientOptions(defaultHeadersOrOptions);
+  const { defaultHeaders } = options;
+  const send = <T>(url: string, init?: RequestInit) => requestJson<T>(baseUrl, url, init, options);
+
   return {
     requestJson<T>(url: string, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
+      return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
     async getJson<T>(url: string, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
+      return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
     async postJson<T>(url: string, body: unknown, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, {
+      return send<T>(url, withDefaultHeaders(defaultHeaders, {
         ...init,
         method: "POST",
         headers: withJsonContentTypeAndAccept(init?.headers),
@@ -1166,7 +1186,7 @@ export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit):
       }));
     },
     async putJson<T>(url: string, body: unknown, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, {
+      return send<T>(url, withDefaultHeaders(defaultHeaders, {
         ...init,
         method: "PUT",
         headers: withJsonContentTypeAndAccept(init?.headers),
@@ -1174,19 +1194,35 @@ export function createHttpClient(baseUrl: string, defaultHeaders?: HeadersInit):
       }));
     },
     async deleteJson<T>(url: string, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+      return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept({
         ...init,
         method: "DELETE"
       })));
     },
     async postForm<T>(url: string, body: FormData, init?: RequestInit) {
-      return requestJson<T>(baseUrl, url, withDefaultHeaders(defaultHeaders, withJsonAccept({
+      return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept({
         ...init,
         method: "POST",
         body
       })));
     }
   };
+}
+
+function normalizeHttpClientOptions(defaultHeadersOrOptions?: HeadersInit | StudioHttpClientOptions): StudioHttpClientOptions {
+  if (isHttpClientOptions(defaultHeadersOrOptions)) {
+    return defaultHeadersOrOptions;
+  }
+
+  return { defaultHeaders: defaultHeadersOrOptions };
+}
+
+function isHttpClientOptions(value: HeadersInit | StudioHttpClientOptions | undefined): value is StudioHttpClientOptions {
+  return typeof value === "object"
+    && value !== null
+    && !(value instanceof Headers)
+    && !Array.isArray(value)
+    && ("fetch" in value || "applyTimeout" in value || "defaultHeaders" in value);
 }
 
 export function withDefaultHeaders(defaultHeaders: HeadersInit | undefined, init: RequestInit = {}): RequestInit {
@@ -1205,14 +1241,22 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
   return headers;
 }
 
-async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) {
+async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit, options: StudioHttpClientOptions = {}): Promise<T> {
   const requestUrl = resolveStudioUrl(baseUrl, url);
+  const request = options.fetch ?? fetch;
+  const response = options.applyTimeout === false
+    ? await request(requestUrl, init)
+    : await fetchWithTimeout(request, requestUrl, init);
+
+  return parseJsonResponse<T>(requestUrl, response);
+}
+
+async function fetchWithTimeout(request: typeof fetch, requestUrl: string, init?: RequestInit): Promise<Response> {
   const timeout = new AbortController();
   const timeoutId = globalThis.setTimeout(() => timeout.abort(), requestTimeoutMs);
 
-  let response: Response;
   try {
-    response = await fetch(requestUrl, {
+    return await request(requestUrl, {
       ...init,
       signal: combineAbortSignals(init?.signal, timeout.signal)
     });
@@ -1225,7 +1269,9 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit) 
   } finally {
     globalThis.clearTimeout(timeoutId);
   }
+}
 
+async function parseJsonResponse<T>(requestUrl: string, response: Response): Promise<T> {
   if (!response.ok) {
     throw await createStudioHttpError(response);
   }
