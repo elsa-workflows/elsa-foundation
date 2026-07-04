@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -130,18 +129,5 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
             idempotencyKey: $"idem-{envelopeId}",
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: _now);
-    }
-
-    private sealed class RecordingCommandExecutor : IWorkflowExecutionCommandExecutor
-    {
-        private readonly ConcurrentQueue<string> _processed = new();
-
-        public IReadOnlyList<string> Processed => _processed.ToArray();
-
-        public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
-        {
-            _processed.Enqueue(envelope.EnvelopeId);
-            return new ValueTask<WorkflowExecutionCommandProcessResult>(WorkflowExecutionCommandProcessResult.NoDrain);
-        }
     }
 }
