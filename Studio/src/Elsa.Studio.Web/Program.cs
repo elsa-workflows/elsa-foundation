@@ -70,7 +70,15 @@ builder.Services.AddCShellsAspNetCore(shells =>
 // lifetime matches the connection's. Gated by the same feature-enablement check as the capture hook above.
 builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 
+// Gate the Studio management surface (module management, feature management, console-stream) behind an
+// authentication/authorization policy. The built-in scheme validates Studio:BackendModuleManagementApiKey; a host
+// can register its own authentication and reuse ModuleManagementAuth.PolicyName as the seam.
+builder.Services.AddModuleManagementAuth(configuration);
+
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/studio-runtime.js", () =>
 {
@@ -89,7 +97,7 @@ app.UseStaticFiles();
 
 app.MapElsaModuleManagementApi();
 app.MapElsaFeatureManagementApi();
-app.MapConsoleStreamStudioIfEnabled(configuration);
+app.MapConsoleStreamStudioIfEnabled(configuration, ModuleManagementAuth.PolicyName);
 app.MapShells();
 app.MapActiveShellStudioApi();
 app.MapNuplaneStaticWebAssets();

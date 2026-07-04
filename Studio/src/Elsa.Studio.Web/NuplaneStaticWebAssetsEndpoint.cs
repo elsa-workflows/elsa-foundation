@@ -51,7 +51,7 @@ internal static class NuplaneStaticWebAssetsEndpoint
             ? Results.File(physicalPath, GetContentType(physicalPath), enableRangeProcessing: true)
             : Results.Stream(file.CreateReadStream(), GetContentType(file.Name));
 
-    private static bool IsChildPath(string parentPath, string childPath)
+    internal static bool IsChildPath(string parentPath, string childPath)
     {
         var normalizedParent = Path.TrimEndingDirectorySeparator(parentPath) + Path.DirectorySeparatorChar;
         return childPath.StartsWith(normalizedParent, StringComparison.OrdinalIgnoreCase);
