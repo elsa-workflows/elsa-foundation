@@ -102,6 +102,16 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+
+  src/Elsa.Studio.Web/StudioUi:
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
 
   src/Elsa.Studio.Workflows/Client:
     dependencies:

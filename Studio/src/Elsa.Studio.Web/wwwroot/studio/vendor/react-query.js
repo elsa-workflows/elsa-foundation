@@ -1,4 +1,4 @@
-import { r as p } from "./chunks/index.js";
+import * as p from "react";
 import { j as bt } from "./chunks/jsx-runtime.js";
 var I = class {
   constructor() {
@@ -218,7 +218,7 @@ function Vt(t) {
 function V(t, e, s) {
   return typeof s.structuralSharing == "function" ? s.structuralSharing(t, e) : s.structuralSharing !== !1 ? z(t, e) : e;
 }
-function Pe(t) {
+function we(t) {
   return t;
 }
 function St(t, e, s = 0) {
@@ -329,7 +329,7 @@ function ee(t) {
 function se(t) {
   return !0;
 }
-function Ce(t, e = {}) {
+function Pe(t, e = {}) {
   const s = e.shouldDehydrateMutation ?? t.getDefaultOptions().dehydrate?.shouldDehydrateMutation ?? te, r = t.getMutationCache().getAll().flatMap(
     (o) => s(o) ? [Xt(o)] : []
   ), i = e.shouldDehydrateQuery ?? t.getDefaultOptions().dehydrate?.shouldDehydrateQuery ?? ee, n = e.shouldRedactErrors ?? t.getDefaultOptions().dehydrate?.shouldRedactErrors ?? se, a = e.serializeData ?? t.getDefaultOptions().dehydrate?.serializeData ?? Pt, h = t.getQueryCache().getAll().flatMap(
@@ -523,7 +523,7 @@ var B = class extends Error {
     super("CancelledError"), this.revert = t?.revert, this.silent = t?.silent;
   }
 };
-function Qe(t) {
+function Ce(t) {
   return t instanceof B;
 }
 function Qt(t) {
@@ -1966,7 +1966,7 @@ var me = class extends I {
       });
     });
   }
-}, Ee = class {
+}, Qe = class {
   #e;
   #t;
   #s;
@@ -2170,7 +2170,7 @@ var me = class extends I {
     this.#e.clear(), this.#t.clear();
   }
 };
-function Me({
+function Ee({
   streamFn: t,
   refetchMode: e = "reset",
   reducer: s = (i, n) => St(i, n),
@@ -2205,7 +2205,7 @@ function Me({
     return l && !o && i.client.setQueryData(i.queryKey, h), i.client.getQueryData(i.queryKey) ?? r;
   };
 }
-var Fe = /* @__PURE__ */ Symbol("dataTagSymbol"), De = /* @__PURE__ */ Symbol("dataTagErrorSymbol"), Te = /* @__PURE__ */ Symbol("unsetMarker"), It = p.createContext(
+var Me = /* @__PURE__ */ Symbol("dataTagSymbol"), Fe = /* @__PURE__ */ Symbol("dataTagErrorSymbol"), De = /* @__PURE__ */ Symbol("unsetMarker"), It = p.createContext(
   void 0
 ), M = (t) => {
   const e = p.useContext(It);
@@ -2214,12 +2214,12 @@ var Fe = /* @__PURE__ */ Symbol("dataTagSymbol"), De = /* @__PURE__ */ Symbol("d
   if (!e)
     throw new Error("No QueryClient set, use QueryClientProvider to set one");
   return e;
-}, Ie = ({
+}, Te = ({
   client: t,
   children: e
 }) => (p.useEffect(() => (t.mount(), () => {
   t.unmount();
-}), [t]), /* @__PURE__ */ bt.jsx(It.Provider, { value: t, children: e })), xt = p.createContext(!1), At = () => p.useContext(xt), xe = xt.Provider;
+}), [t]), /* @__PURE__ */ bt.jsx(It.Provider, { value: t, children: e })), xt = p.createContext(!1), At = () => p.useContext(xt), Ie = xt.Provider;
 function qt() {
   let t = !1;
   return {
@@ -2232,7 +2232,7 @@ function qt() {
     isReset: () => t
   };
 }
-var Ut = p.createContext(qt()), jt = () => p.useContext(Ut), Ae = ({
+var Ut = p.createContext(qt()), jt = () => p.useContext(Ut), xe = ({
   children: t
 }) => {
   const [e] = p.useState(() => qt());
@@ -2378,10 +2378,10 @@ function G(t, e, s) {
     u.updateResult();
   }), a.notifyOnChangeProps ? l : u.trackResult(l);
 }
-function qe(t, e) {
+function Ae(t, e) {
   return G(t, j, e);
 }
-function Ue(t, e) {
+function qe(t, e) {
   return G(
     {
       ...t,
@@ -2394,7 +2394,7 @@ function Ue(t, e) {
     e
   );
 }
-function je(t, e) {
+function Ue(t, e) {
   return G(
     {
       ...t,
@@ -2406,7 +2406,7 @@ function je(t, e) {
     e
   );
 }
-function ke(t, e) {
+function je(t, e) {
   return Oe(
     {
       ...t,
@@ -2421,21 +2421,21 @@ function ke(t, e) {
     e
   );
 }
-function Ke(t, e) {
+function ke(t, e) {
   const s = M(e);
   s.getQueryState(t.queryKey) || s.prefetchQuery(t);
 }
-function _e(t, e) {
+function Ke(t, e) {
   const s = M(e);
   s.getQueryState(t.queryKey) || s.prefetchInfiniteQuery(t);
+}
+function _e(t) {
+  return t;
 }
 function Le(t) {
   return t;
 }
-function Ne(t) {
-  return t;
-}
-var He = ({
+var Ne = ({
   children: t,
   options: e = {},
   state: s,
@@ -2462,7 +2462,7 @@ var He = ({
     a && ft(i, { queries: a }, n.current);
   }, [i, a]), t;
 };
-function Be(t, e) {
+function He(t, e) {
   const s = M(e), r = s.getQueryCache();
   return p.useSyncExternalStore(
     p.useCallback(
@@ -2473,7 +2473,7 @@ function Be(t, e) {
     () => s.isFetching(t)
   );
 }
-function ze(t, e) {
+function Be(t, e) {
   const s = M(e);
   return Se(
     { filters: { ...t, status: "pending" } },
@@ -2504,7 +2504,7 @@ function Se(t = {}, e) {
     () => i.current
   );
 }
-function Ge(t, e) {
+function ze(t, e) {
   const s = M(e), [r] = p.useState(
     () => new ye(
       s,
@@ -2531,10 +2531,10 @@ function Ge(t, e) {
     throw i.error;
   return { ...i, mutate: n, mutateAsync: i.mutate };
 }
-function We(t) {
+function Ge(t) {
   return t;
 }
-function $e(t, e) {
+function We(t, e) {
   return G(
     t,
     Dt,
@@ -2543,61 +2543,61 @@ function $e(t, e) {
 }
 export {
   B as CancelledError,
-  He as HydrationBoundary,
+  Ne as HydrationBoundary,
   Dt as InfiniteQueryObserver,
-  xe as IsRestoringProvider,
+  Ie as IsRestoringProvider,
   de as Mutation,
   pe as MutationCache,
   ye as MutationObserver,
   me as QueriesObserver,
   ce as Query,
   ge as QueryCache,
-  Ee as QueryClient,
+  Qe as QueryClient,
   It as QueryClientContext,
-  Ie as QueryClientProvider,
-  Ae as QueryErrorResetBoundary,
+  Te as QueryClientProvider,
+  xe as QueryErrorResetBoundary,
   j as QueryObserver,
-  De as dataTagErrorSymbol,
-  Fe as dataTagSymbol,
+  Fe as dataTagErrorSymbol,
+  Me as dataTagSymbol,
   re as defaultScheduler,
   te as defaultShouldDehydrateMutation,
   ee as defaultShouldDehydrateQuery,
-  Ce as dehydrate,
+  Pe as dehydrate,
   U as environmentManager,
-  Me as experimental_streamedQuery,
+  Ee as experimental_streamedQuery,
   et as focusManager,
   T as hashKey,
   ft as hydrate,
-  Ne as infiniteQueryOptions,
-  Qe as isCancelledError,
+  Le as infiniteQueryOptions,
+  Ce as isCancelledError,
   Gt as isServer,
-  Pe as keepPreviousData,
+  we as keepPreviousData,
   ht as matchMutation,
   ut as matchQuery,
-  We as mutationOptions,
+  Ge as mutationOptions,
   S as noop,
   b as notifyManager,
   H as onlineManager,
   A as partialMatchKey,
-  Le as queryOptions,
+  _e as queryOptions,
   z as replaceEqualDeep,
   it as shouldThrowError,
   rt as skipToken,
   D as timeoutManager,
-  Te as unsetMarker,
-  $e as useInfiniteQuery,
-  Be as useIsFetching,
-  ze as useIsMutating,
+  De as unsetMarker,
+  We as useInfiniteQuery,
+  He as useIsFetching,
+  Be as useIsMutating,
   At as useIsRestoring,
-  Ge as useMutation,
+  ze as useMutation,
   Se as useMutationState,
-  _e as usePrefetchInfiniteQuery,
-  Ke as usePrefetchQuery,
+  Ke as usePrefetchInfiniteQuery,
+  ke as usePrefetchQuery,
   Oe as useQueries,
-  qe as useQuery,
+  Ae as useQuery,
   M as useQueryClient,
   jt as useQueryErrorResetBoundary,
-  je as useSuspenseInfiniteQuery,
-  ke as useSuspenseQueries,
-  Ue as useSuspenseQuery
+  Ue as useSuspenseInfiniteQuery,
+  je as useSuspenseQueries,
+  qe as useSuspenseQuery
 };
