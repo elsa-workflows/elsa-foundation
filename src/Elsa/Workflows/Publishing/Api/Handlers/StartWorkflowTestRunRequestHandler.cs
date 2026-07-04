@@ -1,8 +1,9 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -118,7 +119,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 Status: WorkflowTestRunStatus.Rejected,
                 RequestedBy: RequestedBy,
                 RequestedAt: now,
-                ExpiresAt: null,
+                ExpiresAt: expiresAt,
                 Reason: exception.Message,
                 Metadata: new Dictionary<string, string>());
 
@@ -136,7 +137,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 Status: WorkflowTestRunStatus.Rejected,
                 RequestedBy: RequestedBy,
                 RequestedAt: now,
-                ExpiresAt: null,
+                ExpiresAt: expiresAt,
                 Reason: exception.Message,
                 Metadata: new Dictionary<string, string>());
 

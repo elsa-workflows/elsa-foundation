@@ -87,6 +87,28 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   `ISecretManager` store-vs-resolver split (proposal-only in the PR body per the W14 deferral)
   and the design-endpoints `AllowAnonymous` bypass (kept as the tracked finding below).
 
+- **W17 Publishing completion** — **in progress** (draft PR to main): DS-1 extracted a
+  contracts-only `Elsa.Workflows.Publishing.Core` from the `.Api` endpoint project (compiler
+  impl deliberately left in `.Api` — no third sub-100-LoC project), covered by the Architecture
+  layering guard. DS-2 verified the production publish path is already durable — the executable
+  persists through the runtime's Groundwork-backed `IWorkflowExecutableStore`, not the in-memory
+  transient staging store — so no Publishing-owned duplicate store/manifest was added (a conflicting
+  document kind would be a wire-level bug); proven by a restart-survival test (file-backed SQLite
+  reopen) and documented in [`docs/serialization.md`](../serialization.md). DS-5/DS-6 resolved
+  every checked-in empty endpoint stub: implemented `Get`/`Update`/`Delete` under
+  `Workflows/Design/Api/Endpoints/Definitions` (`Update` = the Draft-mutation gate forwarding to the
+  single coarse `IUpdateDraftCommand`), each secured by construction via `ConfigurePermissions()`
+  (W4, never anonymous) with handler + permission-guard tests in the new
+  `Elsa.Workflows.Design.Api.Tests` project; deleted the `Versions/Delete` stub plus all three
+  `Activities/Design/Api` stubs (published versions are immutable — no per-version delete). The W7
+  publish→trigger-index hook was verified already wired (`PublishWorkflowRequestHandler` indexes
+  within the publish flow; indexing failure fails the publish) — verified, not reworked. Folded
+  [#397](https://github.com/elsa-workflows/elsa-foundation/issues/397) (version-source resolution
+  moved inside the compile error path so the typed `WorkflowExecutableCompilationException`
+  propagates unwrapped) and [#398](https://github.com/elsa-workflows/elsa-foundation/issues/398)
+  (expiry/TTL bound on `InMemoryWorkflowTestRunStore`), both with tests. New Publishing `.Core`
+  seam catalogued in [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+
 - **W21 Modularity ergonomics (MD-5, MD-6, MD-10)** — **in progress** (draft PR to main; branch
   point `1d5bb6bb`). Governance/analysis unit, no `src/` change beyond 5 registration tests.
   **MD-5:** fresh LoC audit (13 projects <100 physical LoC; smallest 32) — all 13 map to a named

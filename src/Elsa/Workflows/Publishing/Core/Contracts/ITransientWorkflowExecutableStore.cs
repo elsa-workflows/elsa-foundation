@@ -1,6 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Contracts;
+namespace Elsa.Workflows.Publishing.Core.Contracts;
 
 public interface ITransientWorkflowExecutableStore
 {

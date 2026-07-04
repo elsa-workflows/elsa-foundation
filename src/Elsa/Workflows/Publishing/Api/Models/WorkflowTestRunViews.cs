@@ -1,3 +1,4 @@
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Models;

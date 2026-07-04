@@ -1,7 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Api;
-using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
