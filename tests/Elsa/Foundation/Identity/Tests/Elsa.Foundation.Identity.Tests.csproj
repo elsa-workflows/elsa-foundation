@@ -9,6 +9,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector" PrivateAssets="all" />
+		<PackageReference Include="Microsoft.AspNetCore.TestHost" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
 		<PackageReference Include="Microsoft.Extensions.Logging" />
