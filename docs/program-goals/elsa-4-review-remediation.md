@@ -70,9 +70,14 @@ Side units landed with Phase 2:
   and [#453](https://github.com/elsa-workflows/elsa-foundation/pull/453) (`ConstructedActivity`
   projections move).
 
-Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
+Phase 3 (W16–W21): **complete** — W18 solo first ([#461](https://github.com/elsa-workflows/elsa-foundation/pull/461)),
+then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows/elsa-foundation/pull/465),
+[#463](https://github.com/elsa-workflows/elsa-foundation/pull/463),
+[#464](https://github.com/elsa-workflows/elsa-foundation/pull/464),
+[#462](https://github.com/elsa-workflows/elsa-foundation/pull/462)), then W20 solo
+([#467](https://github.com/elsa-workflows/elsa-foundation/pull/467)). All roadmap units W1–W21 are merged.
 
-- **W18 Identity & secrets hardening** — **in progress** (draft PR to main): the 5 Tier-0
+- **W18 Identity & secrets hardening** — **done** ([#461](https://github.com/elsa-workflows/elsa-foundation/pull/461)): the 5 Tier-0
   security issues [#374](https://github.com/elsa-workflows/elsa-foundation/issues/374)
   (AgentEndpointActor fail-closed), [#375](https://github.com/elsa-workflows/elsa-foundation/issues/375)
   (getConfiguration case/hierarchy bypass), [#376](https://github.com/elsa-workflows/elsa-foundation/issues/376)
@@ -87,7 +92,7 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   `ISecretManager` store-vs-resolver split (proposal-only in the PR body per the W14 deferral)
   and the design-endpoints `AllowAnonymous` bypass (kept as the tracked finding below).
 
-- **W19 Self-observability (MS-9, MS-14)** — **in progress** (draft PR to main): engine
+- **W19 Self-observability (MS-9, MS-14)** — **done** ([#464](https://github.com/elsa-workflows/elsa-foundation/pull/464), closes #393): engine
   tracing + API error contract. MS-9 introduces the first `ActivitySource` in the repo — an
   `IWorkflowEngineTracer` replacement contract (`Elsa.Workflows.Runtime.Core.Diagnostics`)
   whose allocation-free no-op default (`NullWorkflowEngineTracer`) is swapped by the opt-in
@@ -107,7 +112,7 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   draws the ENGINE-telemetry vs. OpenTelemetry-ingestion distinction the review flagged. Cross-links
   the [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) bucket.
 
-- **W17 Publishing completion** — **in progress** (draft PR to main): DS-1 extracted a
+- **W17 Publishing completion** — **done** ([#463](https://github.com/elsa-workflows/elsa-foundation/pull/463), closes #397/#398): DS-1 extracted a
   contracts-only `Elsa.Workflows.Publishing.Core` from the `.Api` endpoint project (compiler
   impl deliberately left in `.Api` — no third sub-100-LoC project), covered by the Architecture
   layering guard. DS-2 verified the production publish path is already durable — the executable
@@ -129,8 +134,9 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   (expiry/TTL bound on `InMemoryWorkflowTestRunStore`), both with tests. New Publishing `.Core`
   seam catalogued in [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
 
-- **W21 Modularity ergonomics (MD-5, MD-6, MD-10)** — **in progress** (draft PR to main; branch
+- **W21 Modularity ergonomics (MD-5, MD-6, MD-10)** — **done** ([#462](https://github.com/elsa-workflows/elsa-foundation/pull/462); branch
   point `1d5bb6bb`). Governance/analysis unit, no `src/` change beyond 5 registration tests.
+  MD-5 amendment ratification and ADR 0033 remain open decisions (see follow-ups).
   **MD-5:** fresh LoC audit (13 projects <100 physical LoC; smallest 32) — all 13 map to a named
   exception class, so **zero forced merges**; proposed a *soft* minimum-viable-project amendment
   (framework §2.16.1: guidance threshold + six exception classes, no hard gate) as a draft routed
@@ -150,8 +156,8 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   ([gap report](../reports/elsa-4-w21-md10-feature-registration-test-gap.md)).
   Snapshot caveat stated: counts are at `1d5bb6bb`; parallel W16/W17 will shift them.
 
-- **W16 Activity library (DS-16, partial DS-8/DS-9)** — **in progress** (draft PR
-  [#465](https://github.com/elsa-workflows/elsa-foundation/pull/465) to main; second-lander after
+- **W16 Activity library (DS-16, partial DS-8/DS-9)** — **done** (PR
+  [#465](https://github.com/elsa-workflows/elsa-foundation/pull/465); second-lander after
   W17/W19/W21, merged clean). Closes DS-16 with four incremental packages, each activity shipping
   activity + descriptor + registration + unit tests + sample workflow. **1a `Elsa.Activities.Http`
   SendHttpRequest:** outbound call via `IHttpClientFactory` with sensible timeout/redirect defaults
@@ -174,7 +180,7 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   execution semantics (own gate); remaining DS-9 non-activity evaluator paths; legacy internal
   `Elsa.Workflows.Runtime.JavaScript` RunJavaScript stub cleanup (provably wire-invisible — superseded,
   not renamed); email/messaging provider modules.
-- **W20 Distributed actor provider (E3-3)** — **in progress** (draft PR to main; branch point
+- **W20 Distributed actor provider (E3-3)** — **done** ([#467](https://github.com/elsa-workflows/elsa-foundation/pull/467); branch point
   `a5970003`). New opt-in leaf `Elsa.Workflows.Runtime.Distributed` adding a clustered
   `DistributedWorkflowExecutionActorProvider` (sibling to `InProcessWorkflowExecutionActorProvider`;
   W14 `WorkflowExecutionActor*` family symmetry) that layers per-execution **placement** over the
@@ -275,6 +281,29 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   member `ControlPlaneCommand` still reads "control plane". Left unchanged — enum member names
   are serialized wire values (member/int), not renamed under the type-only naming pass. A
   future wire-versioned pass could align it; the term is glossary-documented in the meantime.
+
+### Follow-up findings recorded during Phase 3 execution
+
+- **`ISecretManager` store-vs-resolver split** (from W18): proposal-only in the
+  [#461](https://github.com/elsa-workflows/elsa-foundation/pull/461) PR body (keep the facade,
+  formalize the resolver boundary around `ISecretResolver`→`ISecretValueResolver`). Needs its own unit.
+- **Secrets golden-fixture gate** (from W18): the Secrets Groundwork persistence has no fixture
+  drift gate of its own (pre-existing gap flagged during MS-1; Identity got one, Secrets did not).
+- **MD-5 amendment + ADR 0033 ratification** (from W21): the soft minimum-project-size amendment
+  awaits the constitution-readiness flow; ADR 0033 (Runtime.Core contracts-vs-engine split) awaits
+  the runtime-execution-seam owner. 18 feature-registration gaps remain filed in the MD-10 report.
+- **W16 activity-library follow-ups** (named in the
+  [#465](https://github.com/elsa-workflows/elsa-foundation/pull/465) PR body): DS-8
+  workflow-as-activity execution semantics; HTTP synchronous response correlation (async/202 shipped);
+  full DS-9 hardening on non-activity evaluator paths; email/messaging provider modules; legacy
+  `Runtime.JavaScript` stub + `JavaScriptActivities` feature retirement (wire-invisible, evidence in
+  PR body); demo-shell composition of the new activity features.
+- **Repo-wide `EntityNotFoundException` sweep** (from W19): the #393 fix converted the bounded
+  Design/Activities-Design not-found sites; other domains still throw untyped exceptions for
+  not-found and fall to 500 instead of 404. Convert opportunistically or as a small sweep unit.
+- **Groundwork durable placement + transport stores** (from W20): mechanical drop-in against the
+  frozen leaf contracts and the committed `executionCommandTransport` v1 fixture; required before the
+  distributed provider is production-usable across processes.
 
 ## Linked Surfaces
 
