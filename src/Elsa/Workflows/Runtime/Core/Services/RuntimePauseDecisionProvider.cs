@@ -8,9 +8,9 @@ public sealed class RuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
     private const string PolicyMetadataKey = "runtime.pause.policy";
     private const string ScopeMetadataKey = "runtime.pause.holdScope";
 
-    private readonly IControlPlaneStateStore _controlPlaneStateStore;
+    private readonly IWorkflowHoldStateStore _controlPlaneStateStore;
 
-    public RuntimePauseDecisionProvider(IControlPlaneStateStore controlPlaneStateStore)
+    public RuntimePauseDecisionProvider(IWorkflowHoldStateStore controlPlaneStateStore)
     {
         ArgumentNullException.ThrowIfNull(controlPlaneStateStore);
 
@@ -57,22 +57,22 @@ public sealed class RuntimePauseDecisionProvider : IRuntimePauseDecisionProvider
             });
     }
 
-    private static bool Matches(ControlPlaneHold hold, RuntimePauseDecisionRequest request) =>
+    private static bool Matches(WorkflowHold hold, RuntimePauseDecisionRequest request) =>
         hold.Scope switch
         {
-            ControlPlaneHoldScope.WorkflowExecution =>
+            WorkflowHoldScope.WorkflowExecution =>
                 StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, request.WorkflowExecutionId),
-            ControlPlaneHoldScope.ActivityExecution =>
+            WorkflowHoldScope.ActivityExecution =>
                 StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, request.WorkflowExecutionId) &&
                 StringComparer.Ordinal.Equals(hold.ActivityExecutionId, request.ActivityExecutionId),
-            ControlPlaneHoldScope.Generator =>
+            WorkflowHoldScope.Generator =>
                 StringComparer.Ordinal.Equals(hold.WorkflowExecutionId, request.WorkflowExecutionId) &&
                 StringComparer.Ordinal.Equals(hold.GeneratorId, request.GeneratorId),
-            ControlPlaneHoldScope.Ingress =>
+            WorkflowHoldScope.Ingress =>
                 StringComparer.Ordinal.Equals(hold.IngressSourceId, request.IngressSourceId),
-            ControlPlaneHoldScope.WorkerDispatcher =>
+            WorkflowHoldScope.WorkerDispatcher =>
                 StringComparer.Ordinal.Equals(hold.WorkerId, request.WorkerId),
-            ControlPlaneHoldScope.HostDrain =>
+            WorkflowHoldScope.HostDrain =>
                 StringComparer.Ordinal.Equals(hold.HostId, request.HostId),
             _ => false
         };

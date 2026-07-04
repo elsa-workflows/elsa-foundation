@@ -3,13 +3,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Runtime-owned administrative control state. This is separate from workflow continuation state.
 /// </summary>
-public sealed class ControlPlaneState
+public sealed class WorkflowHoldState
 {
-    public ControlPlaneState(
+    public WorkflowHoldState(
         string controlPlaneStateId,
         string? workflowExecutionId = null,
-        IReadOnlyCollection<ControlPlaneHold>? activeHolds = null,
-        IReadOnlyCollection<ControlPlaneHold>? releasedHolds = null,
+        IReadOnlyCollection<WorkflowHold>? activeHolds = null,
+        IReadOnlyCollection<WorkflowHold>? releasedHolds = null,
         IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(controlPlaneStateId);
@@ -36,13 +36,15 @@ public sealed class ControlPlaneState
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
+    // Persisted JSON key: the `controlPlaneStateId` property name predates the W14 rename of this type
+    // (WorkflowHoldState was ControlPlaneState). The member name is intentionally left unchanged to keep the wire key stable.
     public string ControlPlaneStateId { get; }
     public string? WorkflowExecutionId { get; }
-    public IReadOnlyCollection<ControlPlaneHold> ActiveHolds { get; }
-    public IReadOnlyCollection<ControlPlaneHold> ReleasedHolds { get; }
+    public IReadOnlyCollection<WorkflowHold> ActiveHolds { get; }
+    public IReadOnlyCollection<WorkflowHold> ReleasedHolds { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 
-    private static IReadOnlyCollection<ControlPlaneHold> SnapshotHolds(IReadOnlyCollection<ControlPlaneHold>? holds, string parameterName)
+    private static IReadOnlyCollection<WorkflowHold> SnapshotHolds(IReadOnlyCollection<WorkflowHold>? holds, string parameterName)
     {
         var snapshot = (holds ?? []).ToArray();
 
@@ -60,7 +62,7 @@ public sealed class ControlPlaneState
         return snapshot;
     }
 
-    private static void ValidateUniqueHoldIds(IEnumerable<ControlPlaneHold> holds)
+    private static void ValidateUniqueHoldIds(IEnumerable<WorkflowHold> holds)
     {
         var duplicateHoldId = holds
             .GroupBy(hold => hold.HoldId, StringComparer.Ordinal)
@@ -71,31 +73,31 @@ public sealed class ControlPlaneState
             throw new ArgumentException($"Control-plane hold ID '{duplicateHoldId}' cannot appear in more than one hold collection.");
     }
 
-    private static void ValidateActiveHolds(IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
+    private static void ValidateActiveHolds(IReadOnlyCollection<WorkflowHold> holds, string parameterName)
     {
         if (holds.Any(hold => !hold.IsEffective))
             throw new ArgumentException("Active holds must have Requested or Active status.", parameterName);
     }
 
-    private static void ValidateReleasedHolds(IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
+    private static void ValidateReleasedHolds(IReadOnlyCollection<WorkflowHold> holds, string parameterName)
     {
-        if (holds.Any(hold => hold.Status != ControlPlaneHoldStatus.Released))
+        if (holds.Any(hold => hold.Status != WorkflowHoldStatus.Released))
             throw new ArgumentException("Released holds must have Released status.", parameterName);
     }
 
-    private static void ValidateWorkflowScopedHolds(string workflowExecutionId, IReadOnlyCollection<ControlPlaneHold> holds, string parameterName)
+    private static void ValidateWorkflowScopedHolds(string workflowExecutionId, IReadOnlyCollection<WorkflowHold> holds, string parameterName)
     {
         if (holds.Any(hold => hold.WorkflowExecutionId is null || !StringComparer.Ordinal.Equals(workflowExecutionId, hold.WorkflowExecutionId)))
             throw new ArgumentException("Control-plane workflow-scoped holds must belong to the same workflow execution.", parameterName);
     }
 }
 
-public sealed class ControlPlaneHold
+public sealed class WorkflowHold
 {
-    public ControlPlaneHold(
+    public WorkflowHold(
         string holdId,
-        ControlPlaneHoldScope scope,
-        ControlPlaneHoldStatus status,
+        WorkflowHoldScope scope,
+        WorkflowHoldStatus status,
         DateTimeOffset requestedAt,
         string requestedBy,
         string reason,
@@ -121,16 +123,16 @@ public sealed class ControlPlaneHold
         if (releasedBy is not null && string.IsNullOrWhiteSpace(releasedBy))
             throw new ArgumentException("Released-by cannot be blank when provided.", nameof(releasedBy));
 
-        if (status == ControlPlaneHoldStatus.Released && releasedAt is null)
+        if (status == WorkflowHoldStatus.Released && releasedAt is null)
             throw new ArgumentException("Released control-plane holds require a release time.", nameof(releasedAt));
 
-        if (status == ControlPlaneHoldStatus.Released && releasedBy is null)
+        if (status == WorkflowHoldStatus.Released && releasedBy is null)
             throw new ArgumentException("Released control-plane holds require a released-by value.", nameof(releasedBy));
 
-        if (status != ControlPlaneHoldStatus.Released && releasedAt is not null)
+        if (status != WorkflowHoldStatus.Released && releasedAt is not null)
             throw new ArgumentException("Only released control-plane holds can have a release time.", nameof(releasedAt));
 
-        if (status != ControlPlaneHoldStatus.Released && releasedBy is not null)
+        if (status != WorkflowHoldStatus.Released && releasedBy is not null)
             throw new ArgumentException("Only released control-plane holds can have a released-by value.", nameof(releasedBy));
 
         if (continuationPolicy == RuntimePauseContinuationPolicy.NotPaused)
@@ -164,8 +166,8 @@ public sealed class ControlPlaneHold
     }
 
     public string HoldId { get; }
-    public ControlPlaneHoldScope Scope { get; }
-    public ControlPlaneHoldStatus Status { get; }
+    public WorkflowHoldScope Scope { get; }
+    public WorkflowHoldStatus Status { get; }
     public DateTimeOffset RequestedAt { get; }
     public string RequestedBy { get; }
     public string Reason { get; }
@@ -180,9 +182,9 @@ public sealed class ControlPlaneHold
     public DateTimeOffset? ReleasedAt { get; }
     public string? ReleasedBy { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
-    public bool IsEffective => Status is ControlPlaneHoldStatus.Requested or ControlPlaneHoldStatus.Active;
+    public bool IsEffective => Status is WorkflowHoldStatus.Requested or WorkflowHoldStatus.Active;
 
-    public static ControlPlaneHold ForWorkflowExecution(
+    public static WorkflowHold ForWorkflowExecution(
         string holdId,
         string workflowExecutionId,
         DateTimeOffset requestedAt,
@@ -191,8 +193,8 @@ public sealed class ControlPlaneHold
         IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             holdId,
-            ControlPlaneHoldScope.WorkflowExecution,
-            ControlPlaneHoldStatus.Requested,
+            WorkflowHoldScope.WorkflowExecution,
+            WorkflowHoldStatus.Requested,
             requestedAt,
             requestedBy,
             reason,
@@ -200,7 +202,7 @@ public sealed class ControlPlaneHold
             continuationPolicy: RuntimePauseContinuationPolicy.StrictPause,
             metadata: metadata);
 
-    public static ControlPlaneHold ForHostDrain(
+    public static WorkflowHold ForHostDrain(
         string holdId,
         string hostId,
         DateTimeOffset requestedAt,
@@ -209,8 +211,8 @@ public sealed class ControlPlaneHold
         IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             holdId,
-            ControlPlaneHoldScope.HostDrain,
-            ControlPlaneHoldStatus.Requested,
+            WorkflowHoldScope.HostDrain,
+            WorkflowHoldStatus.Requested,
             requestedAt,
             requestedBy,
             reason,
@@ -225,7 +227,7 @@ public sealed class ControlPlaneHold
     }
 
     private static void ValidateScopeTargets(
-        ControlPlaneHoldScope scope,
+        WorkflowHoldScope scope,
         string? workflowExecutionId,
         string? activityExecutionId,
         string? generatorId,
@@ -236,7 +238,7 @@ public sealed class ControlPlaneHold
     {
         switch (scope)
         {
-            case ControlPlaneHoldScope.Ingress:
+            case WorkflowHoldScope.Ingress:
                 Require(ingressSourceId, nameof(ingressSourceId), "Ingress control-plane holds require an ingress source ID.");
                 Forbid(workflowExecutionId, nameof(workflowExecutionId), "Ingress control-plane holds are not workflow-execution scoped.");
                 Forbid(activityExecutionId, nameof(activityExecutionId), "Ingress control-plane holds are not activity-execution scoped.");
@@ -246,7 +248,7 @@ public sealed class ControlPlaneHold
                 if (ingressPolicy is null)
                     throw new ArgumentException("Ingress control-plane holds require an ingress pause policy.", nameof(ingressPolicy));
                 break;
-            case ControlPlaneHoldScope.WorkflowExecution:
+            case WorkflowHoldScope.WorkflowExecution:
                 Require(workflowExecutionId, nameof(workflowExecutionId), "Workflow execution control-plane holds require a workflow execution ID.");
                 Forbid(activityExecutionId, nameof(activityExecutionId), "Workflow execution control-plane holds are not activity-execution scoped.");
                 Forbid(generatorId, nameof(generatorId), "Workflow execution control-plane holds are not generator scoped.");
@@ -255,7 +257,7 @@ public sealed class ControlPlaneHold
                 Forbid(hostId, nameof(hostId), "Workflow execution control-plane holds are not host scoped.");
                 Forbid(ingressPolicy, nameof(ingressPolicy), "Ingress policy is only valid for ingress control-plane holds.");
                 break;
-            case ControlPlaneHoldScope.ActivityExecution:
+            case WorkflowHoldScope.ActivityExecution:
                 Require(workflowExecutionId, nameof(workflowExecutionId), "Activity execution control-plane holds require a workflow execution ID.");
                 Require(activityExecutionId, nameof(activityExecutionId), "Activity execution control-plane holds require an activity execution ID.");
                 Forbid(generatorId, nameof(generatorId), "Activity execution control-plane holds are not generator scoped.");
@@ -264,7 +266,7 @@ public sealed class ControlPlaneHold
                 Forbid(hostId, nameof(hostId), "Activity execution control-plane holds are not host scoped.");
                 Forbid(ingressPolicy, nameof(ingressPolicy), "Ingress policy is only valid for ingress control-plane holds.");
                 break;
-            case ControlPlaneHoldScope.Generator:
+            case WorkflowHoldScope.Generator:
                 Require(workflowExecutionId, nameof(workflowExecutionId), "Generator control-plane holds require a workflow execution ID.");
                 Require(generatorId, nameof(generatorId), "Generator control-plane holds require a generator ID.");
                 Forbid(activityExecutionId, nameof(activityExecutionId), "Generator control-plane holds use generator ID, not activity execution ID, as their generator target.");
@@ -273,7 +275,7 @@ public sealed class ControlPlaneHold
                 Forbid(hostId, nameof(hostId), "Generator control-plane holds are not host scoped.");
                 Forbid(ingressPolicy, nameof(ingressPolicy), "Ingress policy is only valid for ingress control-plane holds.");
                 break;
-            case ControlPlaneHoldScope.WorkerDispatcher:
+            case WorkflowHoldScope.WorkerDispatcher:
                 Require(workerId, nameof(workerId), "Worker/dispatcher control-plane holds require a worker ID.");
                 Forbid(workflowExecutionId, nameof(workflowExecutionId), "Worker/dispatcher control-plane holds are not workflow-execution scoped.");
                 Forbid(activityExecutionId, nameof(activityExecutionId), "Worker/dispatcher control-plane holds are not activity-execution scoped.");
@@ -282,7 +284,7 @@ public sealed class ControlPlaneHold
                 Forbid(hostId, nameof(hostId), "Worker/dispatcher control-plane holds are not host scoped.");
                 Forbid(ingressPolicy, nameof(ingressPolicy), "Ingress policy is only valid for ingress control-plane holds.");
                 break;
-            case ControlPlaneHoldScope.HostDrain:
+            case WorkflowHoldScope.HostDrain:
                 Require(hostId, nameof(hostId), "Host drain control-plane holds require a host ID.");
                 Forbid(workflowExecutionId, nameof(workflowExecutionId), "Host drain control-plane holds are not workflow-execution scoped.");
                 Forbid(activityExecutionId, nameof(activityExecutionId), "Host drain control-plane holds are not activity-execution scoped.");
@@ -408,7 +410,7 @@ public sealed class IngressPausePolicy
     private static bool RequiresResponseStatusCode(IngressPauseBehavior behavior) => behavior is IngressPauseBehavior.Reject;
 }
 
-public enum ControlPlaneHoldScope
+public enum WorkflowHoldScope
 {
     Ingress,
     WorkflowExecution,
@@ -418,7 +420,7 @@ public enum ControlPlaneHoldScope
     HostDrain
 }
 
-public enum ControlPlaneHoldStatus
+public enum WorkflowHoldStatus
 {
     Requested,
     Active,

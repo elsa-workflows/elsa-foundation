@@ -41,9 +41,9 @@ public sealed class ActivityDefinitionLookup(
         return await definitionStore.ListAsync(filter, cancellationToken);
     }
 
-    public async Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
     {
         var versions = await versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
-        return versions.Select(e => new ActivityDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
+        return versions.Select(e => new ActivityDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
     }
 }

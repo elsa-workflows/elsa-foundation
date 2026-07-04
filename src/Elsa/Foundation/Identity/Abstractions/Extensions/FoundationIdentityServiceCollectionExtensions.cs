@@ -18,7 +18,7 @@ public static class FoundationIdentityServiceCollectionExtensions
 
         services.AddAuthorizationCore();
 
-        services.TryAddScoped<IAuthenticationProviderManager, DefaultAuthenticationProviderManager>();
+        services.TryAddScoped<IAuthenticationProviderResolver, DefaultAuthenticationProviderResolver>();
         services.TryAddScoped<IOwnershipModeProvider, OptionsOwnershipModeProvider>();
         services.TryAddScoped<IEffectiveCapabilitiesResolver, DefaultEffectiveCapabilitiesResolver>();
         services.TryAddScoped<IPermissionEvaluator, ClaimsPermissionEvaluator>();

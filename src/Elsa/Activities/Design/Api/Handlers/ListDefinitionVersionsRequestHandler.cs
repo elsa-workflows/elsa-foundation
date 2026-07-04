@@ -6,11 +6,11 @@ using Elsa.Mediator.Core.Contracts;
 namespace Elsa.Activities.Design.Api.Handlers;
 
 public sealed class ListDefinitionVersionsRequestHandler(IActivityDefinitionVersionStore versionStore)
-    : IRequestHandler<ListDefinitionVersions, IEnumerable<ActivityDefinitionVersionInfo>>
+    : IRequestHandler<ListDefinitionVersions, IEnumerable<ActivityDefinitionVersionSummary>>
 {
-    public async Task<IEnumerable<ActivityDefinitionVersionInfo>> Handle(ListDefinitionVersions request, CancellationToken cancellationToken)
+    public async Task<IEnumerable<ActivityDefinitionVersionSummary>> Handle(ListDefinitionVersions request, CancellationToken cancellationToken)
     {
         var versions = await versionStore.ListByDefinitionAsync(request.DefinitionId, cancellationToken);
-        return versions.Select(e => new ActivityDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
+        return versions.Select(e => new ActivityDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
     }
 }

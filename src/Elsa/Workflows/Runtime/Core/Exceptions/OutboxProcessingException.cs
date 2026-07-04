@@ -1,8 +1,8 @@
 namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
-public sealed class RuntimePostCommitOutboxProcessingException : Exception
+public sealed class OutboxProcessingException : Exception
 {
-    public RuntimePostCommitOutboxProcessingException(
+    public OutboxProcessingException(
         string outboxItemId,
         string intentId,
         Exception dispatchException,

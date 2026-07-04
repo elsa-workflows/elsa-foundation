@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 
 namespace Elsa.Foundation.Identity.Api.Endpoints;
 
-internal sealed class Challenge(IAuthenticationProviderManager providers) : ElsaEndpoint<ProviderRouteRequest>
+internal sealed class Challenge(IAuthenticationProviderResolver providers) : ElsaEndpoint<ProviderRouteRequest>
 {
     public override void Configure()
     {

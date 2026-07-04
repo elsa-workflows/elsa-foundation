@@ -62,7 +62,7 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Null(dispatch.Failure);
 
         var activation = Assert.Single(harness.AgentProvider.Activations);
-        Assert.Equal(WorkflowExecutionAgentActivationReason.Recovery, activation.Reason);
+        Assert.Equal(WorkflowExecutionActorActivationReason.Recovery, activation.Reason);
         Assert.Equal("runtime-resumption", activation.RequestedBy);
 
         var envelope = Assert.Single(harness.AgentProvider.Agent.Envelopes);
@@ -196,7 +196,7 @@ public sealed class RuntimeResumptionServiceTests
         // (the item had already been dequeue-deleted, so the durable backlog is empty). W5's lease population is
         // exactly what makes this interrupted execution visible: the real recovery scanner reads the persisted
         // lease from operational state, the sweep discovers it, and re-drives it through the agent mailbox.
-        var operationalStore = new InMemoryOperationalStateStore();
+        var operationalStore = new InMemoryExecutionLivenessStateStore();
         var leaseDuration = TimeSpan.FromMinutes(1);
         var ownership = new RuntimeExecutionOwnershipService(
             operationalStore,
@@ -228,7 +228,7 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal(RuntimeResumptionDispatchOutcome.Accepted, dispatch.Outcome);
 
         var activation = Assert.Single(agentProvider.Activations);
-        Assert.Equal(WorkflowExecutionAgentActivationReason.Recovery, activation.Reason);
+        Assert.Equal(WorkflowExecutionActorActivationReason.Recovery, activation.Reason);
 
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
         Assert.Equal("wfexec-window-c", envelope.WorkflowExecutionId);
@@ -309,15 +309,15 @@ public sealed class RuntimeResumptionServiceTests
         }
     }
 
-    private sealed class FakeAgentProvider : IWorkflowExecutionAgentProvider
+    private sealed class FakeAgentProvider : IWorkflowExecutionActorProvider
     {
-        public List<WorkflowExecutionAgentActivationRequest> Activations { get; } = [];
+        public List<WorkflowExecutionActorActivationRequest> Activations { get; } = [];
         public FakeAgent Agent { get; } = new();
         public string? FailFor { get; set; }
 
-        public WorkflowExecutionAgentCapabilities Capabilities => WorkflowExecutionAgentCapabilities.InProcessMailbox;
+        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.InProcessMailbox;
 
-        public ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
         {
             if (string.Equals(request.WorkflowExecutionId, FailFor, StringComparison.Ordinal))
                 throw new InvalidOperationException("activation failed");
@@ -326,20 +326,20 @@ public sealed class RuntimeResumptionServiceTests
             return new(Agent);
         }
 
-        public ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default) => default;
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) => default;
     }
 
-    private sealed class FakeAgent : IWorkflowExecutionAgent
+    private sealed class FakeAgent : IWorkflowExecutionActor
     {
         public List<WorkflowExecutionCommandEnvelope> Envelopes { get; } = [];
         public WorkflowExecutionCommandDispatchStatus StatusToReturn { get; set; } = WorkflowExecutionCommandDispatchStatus.Accepted;
 
-        public WorkflowExecutionAgentDescriptor Descriptor { get; } = new(
+        public WorkflowExecutionActorDescriptor Descriptor { get; } = new(
             workflowExecutionId: "wfexec-agent",
             agentId: "agent-1",
             providerName: "test",
-            status: WorkflowExecutionAgentStatus.Active,
-            capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox,
+            status: WorkflowExecutionActorStatus.Active,
+            capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
             activatedAt: Now);
 
         public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)

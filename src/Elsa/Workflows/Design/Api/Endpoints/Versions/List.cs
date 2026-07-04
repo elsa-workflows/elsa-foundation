@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Versions;
 
-internal sealed class List(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitionVersions, IEnumerable<WorkflowDefinitionVersionInfo>>(requestSender, logger)
+internal sealed class List(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitionVersions, IEnumerable<WorkflowDefinitionVersionSummary>>(requestSender, logger)
 {
     public override void Configure()
     {

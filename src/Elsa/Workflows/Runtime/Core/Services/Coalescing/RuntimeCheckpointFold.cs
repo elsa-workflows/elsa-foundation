@@ -26,7 +26,7 @@ public static class RuntimeCheckpointFold
         var bookmarks = new MergeBuffer<BookmarkState>();
         var durableValues = new MergeBuffer<DurableValueState>();
         var incidents = new MergeBuffer<IncidentState>();
-        var operational = new MergeBuffer<OperationalState>();
+        var operational = new MergeBuffer<ExecutionLivenessState>();
 
         foreach (var changeSet in changeSets)
         {

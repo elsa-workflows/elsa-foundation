@@ -83,10 +83,10 @@ public sealed class RuntimeSchedulerWorkQueueTests
     public async Task WorkflowSchedulerCommandProcessor_RecordsEnvelopeAsSchedulerWork()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,
-            new WorkflowExecutionDrainCoordinator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []),
+            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []),
             new FixedTimeProvider(_now));
         var envelope = NewEnvelope(1);
 
@@ -108,11 +108,11 @@ public sealed class RuntimeSchedulerWorkQueueTests
     public async Task InProcessAgent_QueuesAcceptedCommandsThroughDefaultProcessor()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var processor = new WorkflowSchedulerCommandProcessor(
+        var processor = new WorkflowSchedulerCommandRouter(
             queue,
             DeferredSchedulerDrainPolicy.Instance,
-            new WorkflowExecutionDrainCoordinator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []));
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor);
+            new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []));
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1);
 
@@ -161,12 +161,12 @@ public sealed class RuntimeSchedulerWorkQueueTests
             payload: document.RootElement.Clone());
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(
         string workflowExecutionId,
-        WorkflowExecutionAgentCapabilities requiredCapabilities = WorkflowExecutionAgentCapabilities.InProcessMailbox) =>
+        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "runtime-test",
             requiredCapabilities: requiredCapabilities);

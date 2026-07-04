@@ -8,7 +8,7 @@ using Elsa.Foundation.Identity.Api.Models;
 namespace Elsa.Foundation.Identity.Api.Endpoints;
 
 internal sealed class Capabilities(
-    IAuthenticationProviderManager providers,
+    IAuthenticationProviderResolver providers,
     IOwnershipModeProvider ownershipModeProvider,
     IEffectiveCapabilitiesResolver capabilitiesResolver)
     : ElsaEndpointWithoutRequest<IdentityCapabilitiesResponse>

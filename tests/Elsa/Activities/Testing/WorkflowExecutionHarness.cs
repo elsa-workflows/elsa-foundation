@@ -81,7 +81,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         EnsureActivityTypesRegistered();
 
         await _provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        var agent = await _provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
         var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
@@ -160,13 +160,13 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutionAgentActivationRequest NewActivationRequest() =>
+    private static WorkflowExecutionActorActivationRequest NewActivationRequest() =>
         new(
             workflowExecutionId: WorkflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: Now,
             requestedBy: "activity-execution-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {

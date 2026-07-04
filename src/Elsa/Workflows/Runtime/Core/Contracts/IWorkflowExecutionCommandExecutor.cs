@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Processes commands after an execution agent accepts them into its single-writer mailbox.
 /// </summary>
-public interface IWorkflowExecutionCommandProcessor
+public interface IWorkflowExecutionCommandExecutor
 {
     ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
 

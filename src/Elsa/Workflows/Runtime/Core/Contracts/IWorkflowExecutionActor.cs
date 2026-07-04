@@ -10,9 +10,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// execution, so all dispatch MUST route through it. This is what makes at-most-one-drainer-per-execution hold for the
 /// drainer, scheduler queue, and checkpoint committer downstream.
 /// </remarks>
-public interface IWorkflowExecutionAgent
+public interface IWorkflowExecutionActor
 {
-    WorkflowExecutionAgentDescriptor Descriptor { get; }
+    WorkflowExecutionActorDescriptor Descriptor { get; }
 
     ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
 

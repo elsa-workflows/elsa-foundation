@@ -32,7 +32,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         await using var provider = services.BuildServiceProvider();
         var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var dispatchResult = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
@@ -81,7 +81,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         var executable = NewExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var requestProbe = requestScope.ServiceProvider.GetRequiredService<RequestScopedExecutionProbe>();
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var dispatchResult = await agent.EnqueueAsync(
@@ -109,7 +109,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         var executable = NewCompositeExecutable(_now);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         var startEnvelope = NewStartEnvelope(executable.Identity);
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var dispatchResult = await agent.EnqueueAsync(startEnvelope);
@@ -147,7 +147,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.InvokeActivity) >= 2);
         Assert.True(drainResult.Items.Count(item => item.CommandKind == WorkflowExecutionCommandKind.CompleteActivity) >= 3);
 
-        var rerunResult = await provider.GetRequiredService<IWorkflowExecutionDrainCoordinator>()
+        var rerunResult = await provider.GetRequiredService<IWorkflowDrainOrchestrator>()
             .DrainAsync(startEnvelope, new RuntimeSchedulerDrainRequest("wfexec-1"));
         var rerunStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var rerunQueuedItems = await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
@@ -161,13 +161,13 @@ public sealed class ComposedRuntimeActivityExecutionTests
         Assert.Equal(2, observer.ObservedResults.Count);
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {

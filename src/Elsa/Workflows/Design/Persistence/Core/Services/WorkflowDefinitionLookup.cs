@@ -36,9 +36,9 @@ public sealed class WorkflowDefinitionLookup(IWorkflowDefinitionVersionStore ver
         return result;
     }
 
-    public async Task<IEnumerable<WorkflowDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<WorkflowDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
     {
         var versions = await versionStore.ListByDefinitionAsync(definitionId, cancellationToken);
-        return versions.Select(e => new WorkflowDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt));
+        return versions.Select(e => new WorkflowDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt));
     }
 }

@@ -17,7 +17,7 @@ public interface IAuthenticationProviderModule
     ValueTask<AuthenticationProviderDescriptor> DescribeAsync(CancellationToken cancellationToken = default);
 }
 
-public interface IAuthenticationProviderManager
+public interface IAuthenticationProviderResolver
 {
     ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default);
 
@@ -93,7 +93,7 @@ public sealed record TokenValidationResult(bool Succeeded, ClaimsPrincipal? Prin
 
 public sealed record TokenRevocationRequest(string Token, string? Reason = null);
 
-public sealed class DefaultAuthenticationProviderManager(IEnumerable<IAuthenticationProviderModule> modules) : IAuthenticationProviderManager
+public sealed class DefaultAuthenticationProviderResolver(IEnumerable<IAuthenticationProviderModule> modules) : IAuthenticationProviderResolver
 {
     public async ValueTask<IReadOnlyList<AuthenticationProviderDescriptor>> ListAsync(CancellationToken cancellationToken = default)
     {

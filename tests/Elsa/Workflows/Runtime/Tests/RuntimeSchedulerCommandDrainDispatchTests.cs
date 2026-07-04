@@ -284,7 +284,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     public async Task ProcessAsync_ThrowsDomainExceptionWhenCycleCapIsExceeded()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
-        var options = new WorkflowExecutionDrainCoordinatorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
+        var options = new WorkflowDrainOrchestratorOptions(maxDrainCycles: 2, outboxDeliveryBatchSize: 1);
         var processor = NewProcessor(
             queue,
             new DequeuingSchedulerDrainer(queue, _now),
@@ -294,7 +294,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             AlwaysDeliveringPostCommitOutboxProcessor.Instance,
             options);
 
-        var exception = await Assert.ThrowsAsync<WorkflowExecutionDrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
+        var exception = await Assert.ThrowsAsync<DrainCycleLimitExceededException>(() => processor.ProcessAsync(NewEnvelope(1)).AsTask());
 
         Assert.Equal("wfexec-1", exception.WorkflowExecutionId);
         Assert.Equal(2, exception.MaxDrainCycles);
@@ -353,7 +353,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
@@ -371,7 +371,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         services.AddSingleton<IWorkflowSchedulerWorkHandler, AlwaysFaultingSchedulerWorkHandler>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
@@ -397,7 +397,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var activityStateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
         var executable = NewExecutable();
         await store.SaveAsync(executable);
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var outboxStore = provider.GetRequiredService<IRuntimePostCommitOutboxStore>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -431,13 +431,13 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Contains(drainResult.Items, item => item.HandlerName == MissingActivityInvocationSchedulerWorkHandler.HandlerName);
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private WorkflowExecutionCommandEnvelope NewEnvelope(int index, string workflowExecutionId = "wfexec-1")
     {
@@ -513,18 +513,18 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
             completedAt: _now,
             items: []);
 
-    private static WorkflowSchedulerCommandProcessor NewProcessor(
+    private static WorkflowSchedulerCommandRouter NewProcessor(
         IWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerDrainer drainer,
         IWorkflowSchedulerDrainPolicy drainPolicy,
         IEnumerable<IWorkflowSchedulerDrainObserver> observers,
         TimeProvider timeProvider,
         IRuntimePostCommitOutboxProcessor? outboxProcessor = null,
-        WorkflowExecutionDrainCoordinatorOptions? options = null) =>
+        WorkflowDrainOrchestratorOptions? options = null) =>
         new(
             queue,
             drainPolicy,
-            new WorkflowExecutionDrainCoordinator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
+            new WorkflowDrainOrchestrator(drainer, outboxProcessor ?? EmptyPostCommitOutboxProcessor.Instance, observers, options),
             timeProvider);
 
     private RuntimeSchedulerWorkItem FollowUpWorkItem() =>

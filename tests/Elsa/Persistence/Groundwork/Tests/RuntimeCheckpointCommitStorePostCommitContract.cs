@@ -108,7 +108,7 @@ public sealed class GroundworkRuntimeCheckpointCommitStorePostCommitContractTest
             new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
-            new GroundworkOperationalStateStore(store, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer));
         return (writer, new GroundworkRuntimePostCommitOutboxStore(store, GroundworkTestSerialization.Serializer));
     }
 }

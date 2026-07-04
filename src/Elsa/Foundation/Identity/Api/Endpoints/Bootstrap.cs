@@ -6,7 +6,7 @@ using Elsa.Foundation.Identity.Api.Models;
 
 namespace Elsa.Foundation.Identity.Api.Endpoints;
 
-internal sealed class Bootstrap(IAuthenticationProviderManager providers, IOwnershipModeProvider ownershipModeProvider)
+internal sealed class Bootstrap(IAuthenticationProviderResolver providers, IOwnershipModeProvider ownershipModeProvider)
     : ElsaEndpointWithoutRequest<IdentityBootstrapResponse>
 {
     public override void Configure()

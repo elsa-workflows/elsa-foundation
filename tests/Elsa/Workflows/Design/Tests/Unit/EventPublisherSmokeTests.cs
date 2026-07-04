@@ -232,7 +232,7 @@ public sealed class EventPublisherSmokeTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
             => Task.FromResult<IActivityDefinitionVersion>(null!);
 
-        public Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
+        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
     }
 }

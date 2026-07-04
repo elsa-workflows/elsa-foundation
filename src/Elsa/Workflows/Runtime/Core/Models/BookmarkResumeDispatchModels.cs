@@ -47,7 +47,7 @@ public sealed class BookmarkResumeDispatchResult
         BookmarkState? bookmark = null,
         BookmarkResumeResolution? resolution = null,
         WorkflowExecutionCommandDispatchResult? commandDispatch = null,
-        WorkflowExecutionAgentDescriptor? agent = null,
+        WorkflowExecutionActorDescriptor? agent = null,
         string? reason = null,
         BookmarkStimulusLookupResult? lookup = null)
     {
@@ -86,7 +86,7 @@ public sealed class BookmarkResumeDispatchResult
     public BookmarkState? Bookmark { get; }
     public BookmarkResumeResolution? Resolution { get; }
     public WorkflowExecutionCommandDispatchResult? CommandDispatch { get; }
-    public WorkflowExecutionAgentDescriptor? Agent { get; }
+    public WorkflowExecutionActorDescriptor? Agent { get; }
     public string? Reason { get; }
     public BookmarkStimulusLookupResult? Lookup { get; }
 }

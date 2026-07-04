@@ -13,6 +13,9 @@ namespace Elsa.Activities.Runtime.Services;
 
 public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
+    // W14 (NM naming pass): deliberately NOT renamed. HandlerName is a persisted handler identifier —
+    // nameof(...) is written verbatim into scheduler poison/drain records and matched on recovery, so renaming
+    // the type would change a wire value. Keep the type name to preserve the persisted HandlerName.
     public const string HandlerName = nameof(WorkflowParentActivityCompletionSchedulerWorkHandler);
 
     private readonly IRuntimeActivityInputMaterializer _inputMaterializer;

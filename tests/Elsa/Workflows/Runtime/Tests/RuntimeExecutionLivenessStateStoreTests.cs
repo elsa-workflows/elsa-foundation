@@ -4,17 +4,17 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeOperationalStateStoreTests
+public sealed class RuntimeExecutionLivenessStateStoreTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 13, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task InMemoryOperationalStateStore_SavesFindsAndListsByWorkflowExecution()
     {
-        var store = new InMemoryOperationalStateStore();
-        var first = NewOperationalState("operational-1", "wfexec-1", "worker-1");
-        var second = NewOperationalState("operational-2", "wfexec-1", "worker-2");
-        var otherWorkflow = NewOperationalState("operational-1", "wfexec-2", "worker-3");
+        var store = new InMemoryExecutionLivenessStateStore();
+        var first = NewExecutionLivenessState("operational-1", "wfexec-1", "worker-1");
+        var second = NewExecutionLivenessState("operational-2", "wfexec-1", "worker-2");
+        var otherWorkflow = NewExecutionLivenessState("operational-1", "wfexec-2", "worker-3");
 
         await store.SaveAsync(first);
         await store.SaveAsync(second);
@@ -27,7 +27,7 @@ public sealed class RuntimeOperationalStateStoreTests
         Assert.Null(await store.FindAsync("wfexec-1", "missing"));
     }
 
-    private OperationalState NewOperationalState(string operationalStateId, string workflowExecutionId, string ownerId) =>
+    private ExecutionLivenessState NewExecutionLivenessState(string operationalStateId, string workflowExecutionId, string ownerId) =>
         new(
             operationalStateId: operationalStateId,
             workflowExecutionId: workflowExecutionId,

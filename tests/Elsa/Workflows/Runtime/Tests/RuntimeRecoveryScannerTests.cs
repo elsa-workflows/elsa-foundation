@@ -11,9 +11,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_ReturnsLeaseCandidateWhenExpiresAtHasPassed()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState("operational-1", "wfexec-1", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-1", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
 
         var candidate = Assert.Single(await scanner.ScanAsync(NewRequest()));
 
@@ -27,9 +27,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_ReturnsLeaseCandidateWhenLeaseTimeoutIsExceeded()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
@@ -48,9 +48,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_ReturnsStaleHeartbeatWhenLeaseIsLive()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
@@ -66,9 +66,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_ReturnsDetectedInterruptedExecutionWithCheckpoint()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
@@ -92,9 +92,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_ReturnsOwnerFilteredDetectedInterruptedExecutionWhenOperationalOwnerIsUnknown()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
@@ -118,9 +118,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_FallsThroughToExpiredLeaseWhenInterruptedExecutionWasAlreadyHandled()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
@@ -144,11 +144,11 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_HonorsOwnerFilterAndLimitDeterministically()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState("operational-2", "wfexec-2", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
-        await store.SaveAsync(NewOperationalState("operational-1", "wfexec-1", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
-        await store.SaveAsync(NewOperationalState("operational-3", "wfexec-3", "worker-2", leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewExecutionLivenessState("operational-2", "wfexec-2", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-1", "worker-1", leaseExpiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(NewExecutionLivenessState("operational-3", "wfexec-3", "worker-2", leaseExpiresAt: _now.AddSeconds(-1)));
 
         var candidates = await scanner.ScanAsync(NewRequest(ownerId: "worker-1", limit: 1));
 
@@ -160,16 +160,16 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_AppliesOwnerFilterToTheRecoverySource()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-1",
             "wfexec-1",
             "worker-1",
             leaseOwnerId: "lease-owner",
             heartbeatOwnerId: "heartbeat-owner",
             leaseExpiresAt: _now.AddSeconds(-1)));
-        await store.SaveAsync(NewOperationalState(
+        await store.SaveAsync(NewExecutionLivenessState(
             "operational-2",
             "wfexec-2",
             "worker-2",
@@ -187,9 +187,9 @@ public sealed class RuntimeRecoveryScannerTests
     [Fact]
     public async Task ScanAsync_IgnoresLiveOperationalState()
     {
-        var store = new InMemoryOperationalStateStore();
+        var store = new InMemoryExecutionLivenessStateStore();
         var scanner = new InMemoryRuntimeRecoveryScanner(store);
-        await store.SaveAsync(NewOperationalState("operational-1", "wfexec-1", "worker-1"));
+        await store.SaveAsync(NewExecutionLivenessState("operational-1", "wfexec-1", "worker-1"));
 
         Assert.Empty(await scanner.ScanAsync(NewRequest()));
     }
@@ -202,7 +202,7 @@ public sealed class RuntimeRecoveryScannerTests
             limit: limit,
             ownerId: ownerId);
 
-    private OperationalState NewOperationalState(
+    private ExecutionLivenessState NewExecutionLivenessState(
         string operationalStateId,
         string workflowExecutionId,
         string ownerId,

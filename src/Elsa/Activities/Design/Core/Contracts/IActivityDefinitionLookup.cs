@@ -22,5 +22,5 @@ public interface IActivityDefinitionLookup
 
     Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default);
 
-    Task<IEnumerable<ActivityDefinitionVersionInfo>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
 }

@@ -136,7 +136,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutableWithResumeTarget());
         await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningActivityState());
 
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var agent = await agentProvider.GetAgentAsync(NewSchedulerWorkActivationRequest("wfexec-1"));
         await agent.EnqueueAsync(NewCreateBookmarkEnvelope());
 
@@ -181,7 +181,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     private static async ValueTask EnqueueStartAsync(ServiceProvider provider)
     {
         var executable = NewExecutable();
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
     }
@@ -196,13 +196,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             .ToList();
     }
 
-    private static WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private static WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: Now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {
@@ -226,13 +226,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static WorkflowExecutionAgentActivationRequest NewSchedulerWorkActivationRequest(string workflowExecutionId) =>
+    private static WorkflowExecutionActorActivationRequest NewSchedulerWorkActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.SchedulerWork,
+            reason: WorkflowExecutionActorActivationReason.SchedulerWork,
             requestedAt: Now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private static WorkflowExecutionCommandEnvelope NewCreateBookmarkEnvelope()
     {

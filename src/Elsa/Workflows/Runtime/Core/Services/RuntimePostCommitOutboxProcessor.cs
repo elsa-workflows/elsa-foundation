@@ -88,7 +88,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 cancellationToken);
 
             if (recordingException is not null)
-                throw new RuntimePostCommitOutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
+                throw new OutboxProcessingException(item.OutboxItemId, item.Intent.IntentId, exception, recordingException);
 
             return new RuntimePostCommitOutboxProcessedItem(
                 item.OutboxItemId,

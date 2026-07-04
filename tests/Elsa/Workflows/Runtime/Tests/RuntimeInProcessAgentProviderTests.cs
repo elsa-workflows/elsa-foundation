@@ -13,33 +13,33 @@ public sealed class RuntimeInProcessAgentProviderTests
     [Fact]
     public async Task GetAgentAsync_ReturnsOneActiveAgentPerWorkflowExecutionId()
     {
-        var provider = new InProcessWorkflowExecutionAgentProvider();
+        var provider = new InProcessWorkflowExecutionActorProvider();
         var first = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
-        var second = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionAgentActivationReason.SchedulerWork));
+        var second = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionActorActivationReason.SchedulerWork));
         var other = await provider.GetAgentAsync(NewActivationRequest("wfexec-2"));
 
         Assert.Same(first, second);
         Assert.NotSame(first, other);
         Assert.Equal("wfexec-1", first.Descriptor.WorkflowExecutionId);
-        Assert.Equal(InProcessWorkflowExecutionAgentProvider.ProviderName, first.Descriptor.ProviderName);
-        Assert.True(first.Descriptor.Capabilities.HasFlag(WorkflowExecutionAgentCapabilities.InProcessMailbox));
+        Assert.Equal(InProcessWorkflowExecutionActorProvider.ProviderName, first.Descriptor.ProviderName);
+        Assert.True(first.Descriptor.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.InProcessMailbox));
     }
 
     [Fact]
     public async Task GetAgentAsync_RejectsUnsupportedCapabilities()
     {
-        var provider = new InProcessWorkflowExecutionAgentProvider();
+        var provider = new InProcessWorkflowExecutionActorProvider();
 
         await Assert.ThrowsAsync<NotSupportedException>(async () => await provider.GetAgentAsync(NewActivationRequest(
             workflowExecutionId: "wfexec-1",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.DistributedPlacement)));
+            requiredCapabilities: WorkflowExecutionActorCapabilities.DistributedPlacement)));
     }
 
     [Fact]
     public async Task EnqueueAsync_SerializesAcceptedCommandProcessing()
     {
         var processor = new RecordingCommandProcessor();
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor);
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var tasks = Enumerable.Range(1, 8)
@@ -57,7 +57,7 @@ public sealed class RuntimeInProcessAgentProviderTests
     public async Task EnqueueAsync_DeduplicatesProcessedIdempotencyKeys()
     {
         var processor = new RecordingCommandProcessor();
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor);
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1, idempotencyKey: "wfexec-1:duplicate");
 
@@ -74,7 +74,7 @@ public sealed class RuntimeInProcessAgentProviderTests
     public async Task EnqueueAsync_EvictsOldProcessedIdempotencyKeysAfterConfiguredLimit()
     {
         var processor = new RecordingCommandProcessor();
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor, maxProcessedIdempotencyKeysPerAgent: 2);
+        var provider = new InProcessWorkflowExecutionActorProvider(processor, maxProcessedIdempotencyKeysPerAgent: 2);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         await agent.EnqueueAsync(NewEnvelope(1, idempotencyKey: "key-1"));
@@ -89,42 +89,42 @@ public sealed class RuntimeInProcessAgentProviderTests
     [Fact]
     public async Task PassivateAsync_RemovesActiveAgentAndDefersOldAgentWork()
     {
-        var provider = new InProcessWorkflowExecutionAgentProvider();
+        var provider = new InProcessWorkflowExecutionActorProvider();
         var oldAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
-        await provider.PassivateAsync(new WorkflowExecutionAgentPassivationRequest(
+        await provider.PassivateAsync(new WorkflowExecutionActorPassivationRequest(
             workflowExecutionId: "wfexec-1",
-            boundary: WorkflowExecutionAgentPassivationBoundary.AfterCheckpointCommit,
+            boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
             requestedAt: _now,
             reason: "Host drain"));
 
         var oldResult = await oldAgent.EnqueueAsync(NewEnvelope(1));
-        var newAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionAgentActivationReason.Recovery));
+        var newAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionActorActivationReason.Recovery));
 
-        Assert.Equal(WorkflowExecutionAgentStatus.Passivated, oldAgent.Descriptor.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, oldAgent.Descriptor.Status);
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, oldResult.Status);
         Assert.NotSame(oldAgent, newAgent);
-        Assert.Equal(WorkflowExecutionAgentStatus.Active, newAgent.Descriptor.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, newAgent.Descriptor.Status);
     }
 
     [Fact]
     public async Task PassivateAsync_DoesNotCreateReplacementWhileOldMailboxIsStillProcessing()
     {
         var processor = new BlockingCommandProcessor();
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor);
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var oldAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var enqueueTask = oldAgent.EnqueueAsync(NewEnvelope(1)).AsTask();
         await processor.WaitUntilStartedAsync();
 
-        var passivationTask = provider.PassivateAsync(new WorkflowExecutionAgentPassivationRequest(
+        var passivationTask = provider.PassivateAsync(new WorkflowExecutionActorPassivationRequest(
             workflowExecutionId: "wfexec-1",
-            boundary: WorkflowExecutionAgentPassivationBoundary.AfterCheckpointCommit,
+            boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
             requestedAt: _now,
             reason: "Host drain")).AsTask();
-        await WaitUntilStatusAsync(oldAgent, WorkflowExecutionAgentStatus.Passivating);
+        await WaitUntilStatusAsync(oldAgent, WorkflowExecutionActorStatus.Passivating);
 
-        var unrelatedAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-2", WorkflowExecutionAgentActivationReason.Recovery));
-        var activationTask = provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionAgentActivationReason.Recovery)).AsTask();
+        var unrelatedAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-2", WorkflowExecutionActorActivationReason.Recovery));
+        var activationTask = provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionActorActivationReason.Recovery)).AsTask();
 
         Assert.Equal("wfexec-2", unrelatedAgent.Descriptor.WorkflowExecutionId);
         Assert.False(activationTask.IsCompleted);
@@ -135,15 +135,15 @@ public sealed class RuntimeInProcessAgentProviderTests
         var newAgent = await activationTask;
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, enqueueResult.Status);
-        Assert.Equal(WorkflowExecutionAgentStatus.Passivated, oldAgent.Descriptor.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Passivated, oldAgent.Descriptor.Status);
         Assert.NotSame(oldAgent, newAgent);
-        Assert.Equal(WorkflowExecutionAgentStatus.Active, newAgent.Descriptor.Status);
+        Assert.Equal(WorkflowExecutionActorStatus.Active, newAgent.Descriptor.Status);
     }
 
     [Fact]
     public async Task EnqueueAsync_RejectsEnvelopeForDifferentWorkflowExecution()
     {
-        var provider = new InProcessWorkflowExecutionAgentProvider();
+        var provider = new InProcessWorkflowExecutionActorProvider();
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewEnvelope(1, workflowExecutionId: "wfexec-2"));
@@ -155,16 +155,16 @@ public sealed class RuntimeInProcessAgentProviderTests
     [Fact]
     public void Provider_DoesNotIntroduceActorFrameworkDependencies()
     {
-        var runtimeCoreAssembly = typeof(InProcessWorkflowExecutionAgentProvider).Assembly;
+        var runtimeCoreAssembly = typeof(InProcessWorkflowExecutionActorProvider).Assembly;
         var referencedAssemblies = runtimeCoreAssembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
 
         Assert.DoesNotContain(referencedAssemblies, IsActorFrameworkReference);
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(
         string workflowExecutionId,
-        WorkflowExecutionAgentActivationReason reason = WorkflowExecutionAgentActivationReason.Start,
-        WorkflowExecutionAgentCapabilities requiredCapabilities = WorkflowExecutionAgentCapabilities.InProcessMailbox) =>
+        WorkflowExecutionActorActivationReason reason = WorkflowExecutionActorActivationReason.Start,
+        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox) =>
         new(
             workflowExecutionId: workflowExecutionId,
             reason: reason,
@@ -202,7 +202,7 @@ public sealed class RuntimeInProcessAgentProviderTests
             || name.Contains("Dapr", StringComparison.OrdinalIgnoreCase)
             || name.Contains("Proto.Actor", StringComparison.OrdinalIgnoreCase));
 
-    private static async Task WaitUntilStatusAsync(IWorkflowExecutionAgent agent, WorkflowExecutionAgentStatus expectedStatus)
+    private static async Task WaitUntilStatusAsync(IWorkflowExecutionActor agent, WorkflowExecutionActorStatus expectedStatus)
     {
         for (var attempt = 0; attempt < 100; attempt++)
         {
@@ -215,7 +215,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.Equal(expectedStatus, agent.Descriptor.Status);
     }
 
-    private sealed class RecordingCommandProcessor : IWorkflowExecutionCommandProcessor
+    private sealed class RecordingCommandProcessor : IWorkflowExecutionCommandExecutor
     {
         private readonly object _syncRoot = new();
         private int _currentConcurrency;
@@ -248,7 +248,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         }
     }
 
-    private sealed class BlockingCommandProcessor : IWorkflowExecutionCommandProcessor
+    private sealed class BlockingCommandProcessor : IWorkflowExecutionCommandExecutor
     {
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);

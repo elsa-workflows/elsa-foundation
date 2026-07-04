@@ -1,8 +1,8 @@
 namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
-public sealed class WorkflowExecutionDrainCycleLimitExceededException : InvalidOperationException
+public sealed class DrainCycleLimitExceededException : InvalidOperationException
 {
-    public WorkflowExecutionDrainCycleLimitExceededException(string workflowExecutionId, int maxDrainCycles)
+    public DrainCycleLimitExceededException(string workflowExecutionId, int maxDrainCycles)
         : base($"Workflow execution drain exceeded the maximum cycle count of {maxDrainCycles} for workflow execution '{workflowExecutionId}'.")
     {
         WorkflowExecutionId = workflowExecutionId;

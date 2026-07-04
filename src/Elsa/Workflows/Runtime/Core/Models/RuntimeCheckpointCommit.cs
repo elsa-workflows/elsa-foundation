@@ -25,7 +25,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         IReadOnlyCollection<RuntimeStateChange<BookmarkState>> bookmarks,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValues,
         IReadOnlyCollection<RuntimeStateChange<IncidentState>> incidents,
-        IReadOnlyCollection<RuntimeStateChange<OperationalState>> operational,
+        IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> operational,
         IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>>? activityExecutionInspections = null,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>>? postCommitOutbox = null)
     {
@@ -35,7 +35,7 @@ public sealed class RuntimeCheckpointStateChangeSet
         ValidateStateIdMatches(activityExecutionInspections, state => state.ActivityExecutionId, "Activity execution inspection state change StateId must match ActivityExecutionInspectionProjection.ActivityExecutionId.", nameof(activityExecutionInspections));
         ValidateStateIdMatches(durableValues, state => state.DurableValueId, "Durable value state change StateId must match DurableValueState.DurableValueId.", nameof(durableValues));
         ValidateStateIdMatches(incidents, state => state.IncidentId, "Incident state change StateId must match IncidentState.IncidentId.", nameof(incidents));
-        ValidateStateIdMatches(operational, state => state.OperationalStateId, "Operational state change StateId must match OperationalState.OperationalStateId.", nameof(operational));
+        ValidateStateIdMatches(operational, state => state.OperationalStateId, "Operational state change StateId must match ExecutionLivenessState.OperationalStateId.", nameof(operational));
         ValidateStateIdMatches(postCommitOutbox, state => state.OutboxItemId, "Post-commit outbox state change StateId must match RuntimePostCommitOutboxItem.OutboxItemId.", nameof(postCommitOutbox));
 
         WorkflowExecution = workflowExecution;
@@ -56,7 +56,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<RuntimeStateChange<BookmarkState>> Bookmarks { get; }
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValues { get; }
     public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents { get; }
-    public IReadOnlyCollection<RuntimeStateChange<OperationalState>> Operational { get; }
+    public IReadOnlyCollection<RuntimeStateChange<ExecutionLivenessState>> Operational { get; }
 
     /// <summary>
     /// Pending post-commit outbox items, applied atomically with the rest of the change set. Built by the

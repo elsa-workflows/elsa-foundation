@@ -58,8 +58,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
         services.TryAddSingleton<IRuntimeActivityOutputRegister, InMemoryRuntimeActivityOutputRegister>();
         services.TryAddSingleton<IIncidentStateStore, InMemoryIncidentStateStore>();
-        services.TryAddSingleton<IOperationalStateStore, InMemoryOperationalStateStore>();
-        services.TryAddSingleton<IControlPlaneStateStore, InMemoryControlPlaneStateStore>();
+        services.TryAddSingleton<IExecutionLivenessStateStore, InMemoryExecutionLivenessStateStore>();
+        services.TryAddSingleton<IWorkflowHoldStateStore, InMemoryWorkflowHoldStateStore>();
         services.TryAddSingleton<IRuntimePauseDecisionProvider, RuntimePauseDecisionProvider>();
         services.TryAddSingleton<IRuntimeRecoveryScanner, InMemoryRuntimeRecoveryScanner>();
         services.TryAddSingleton<IRuntimeDomainRetryPolicy, NoopRuntimeDomainRetryPolicy>();
@@ -73,7 +73,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
-                serviceProvider.GetRequiredService<IOperationalStateStore>(),
+                serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointCommitStore>();
@@ -81,9 +81,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IRuntimePostCommitOutboxProcessor, RuntimePostCommitOutboxProcessor>();
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
-        services.TryAddSingleton<WorkflowExecutionDrainCoordinatorOptions>();
-        services.TryAddSingleton<IWorkflowExecutionDrainCoordinator, WorkflowExecutionDrainCoordinator>();
-        services.TryAddSingleton<IWorkflowExecutionCommandProcessor, WorkflowSchedulerCommandProcessor>();
+        services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
+        services.TryAddSingleton<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
+        services.TryAddSingleton<IWorkflowExecutionCommandExecutor, WorkflowSchedulerCommandRouter>();
 
         // Runtime execution pipeline spine (ADR 0029). The built-in placeholder middleware are registered so the
         // executor can resolve them by type from the built plan; the pass-through slots keep dispatch behavior-preserving
@@ -150,9 +150,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingBookmarkResumeSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, MissingGeneratedEventSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, NoopWorkflowSchedulerWorkHandler>());
-        services.TryAddSingleton<IWorkflowExecutionAgentProvider, InProcessWorkflowExecutionAgentProvider>();
+        services.TryAddSingleton<IWorkflowExecutionActorProvider, InProcessWorkflowExecutionActorProvider>();
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
-        services.TryAddSingleton<IWorkflowExecutionStartDispatcher, WorkflowExecutionStartDispatcher>();
+        services.TryAddSingleton<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
 
         return services;
     }

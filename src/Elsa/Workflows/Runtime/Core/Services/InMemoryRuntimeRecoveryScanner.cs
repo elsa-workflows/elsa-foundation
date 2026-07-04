@@ -6,9 +6,9 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
 {
     private const string SourceMetadataKey = "runtime.recovery.source";
-    private readonly IOperationalStateStore _operationalStateStore;
+    private readonly IExecutionLivenessStateStore _operationalStateStore;
 
-    public InMemoryRuntimeRecoveryScanner(IOperationalStateStore operationalStateStore)
+    public InMemoryRuntimeRecoveryScanner(IExecutionLivenessStateStore operationalStateStore)
     {
         ArgumentNullException.ThrowIfNull(operationalStateStore);
         _operationalStateStore = operationalStateStore;
@@ -33,7 +33,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
             .ToArray();
     }
 
-    private static RuntimeRecoveryCandidate? TryCreateCandidate(OperationalState state, RuntimeRecoveryScanRequest request)
+    private static RuntimeRecoveryCandidate? TryCreateCandidate(ExecutionLivenessState state, RuntimeRecoveryScanRequest request)
     {
         if (state.InterruptedExecution is { Status: RuntimeInterruptionStatus.Detected } interruptedExecution && DetectedInterruptionOwnerMatches(state, request.OwnerId))
             return CreateCandidate(state, request, interruptedExecution.Reason, interruptedExecution.LastCheckpointId, "InterruptedExecution");
@@ -48,7 +48,7 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
     }
 
     private static RuntimeRecoveryCandidate CreateCandidate(
-        OperationalState state,
+        ExecutionLivenessState state,
         RuntimeRecoveryScanRequest request,
         RuntimeInterruptionReason reason,
         string? lastCheckpointId,
@@ -69,13 +69,13 @@ public sealed class InMemoryRuntimeRecoveryScanner : IRuntimeRecoveryScanner
             });
     }
 
-    private static bool DetectedInterruptionOwnerMatches(OperationalState state, string? ownerId) =>
+    private static bool DetectedInterruptionOwnerMatches(ExecutionLivenessState state, string? ownerId) =>
         ownerId is null
         || HasNoOperationalOwner(state)
         || StringComparer.Ordinal.Equals(state.ExecutionLease?.OwnerId, ownerId)
         || StringComparer.Ordinal.Equals(state.Heartbeat?.OwnerId, ownerId);
 
-    private static bool HasNoOperationalOwner(OperationalState state) =>
+    private static bool HasNoOperationalOwner(ExecutionLivenessState state) =>
         state.ExecutionLease is null && state.Heartbeat is null;
 
     private static bool OwnerMatches(string sourceOwnerId, string? requestedOwnerId) =>

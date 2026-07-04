@@ -97,14 +97,14 @@ public sealed class WorkflowExecutionCommandDispatchOptions
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
-public sealed class WorkflowExecutionAgentActivationRequest
+public sealed class WorkflowExecutionActorActivationRequest
 {
-    public WorkflowExecutionAgentActivationRequest(
+    public WorkflowExecutionActorActivationRequest(
         string workflowExecutionId,
-        WorkflowExecutionAgentActivationReason reason,
+        WorkflowExecutionActorActivationReason reason,
         DateTimeOffset requestedAt,
         string requestedBy,
-        WorkflowExecutionAgentCapabilities requiredCapabilities,
+        WorkflowExecutionActorCapabilities requiredCapabilities,
         IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -119,21 +119,21 @@ public sealed class WorkflowExecutionAgentActivationRequest
     }
 
     public string WorkflowExecutionId { get; }
-    public WorkflowExecutionAgentActivationReason Reason { get; }
+    public WorkflowExecutionActorActivationReason Reason { get; }
     public DateTimeOffset RequestedAt { get; }
     public string RequestedBy { get; }
-    public WorkflowExecutionAgentCapabilities RequiredCapabilities { get; }
+    public WorkflowExecutionActorCapabilities RequiredCapabilities { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
-public sealed class WorkflowExecutionAgentDescriptor
+public sealed class WorkflowExecutionActorDescriptor
 {
-    public WorkflowExecutionAgentDescriptor(
+    public WorkflowExecutionActorDescriptor(
         string workflowExecutionId,
         string agentId,
         string providerName,
-        WorkflowExecutionAgentStatus status,
-        WorkflowExecutionAgentCapabilities capabilities,
+        WorkflowExecutionActorStatus status,
+        WorkflowExecutionActorCapabilities capabilities,
         DateTimeOffset activatedAt,
         string? lastCheckpointId = null,
         IReadOnlyDictionary<string, string>? metadata = null)
@@ -158,18 +158,18 @@ public sealed class WorkflowExecutionAgentDescriptor
     public string WorkflowExecutionId { get; }
     public string AgentId { get; }
     public string ProviderName { get; }
-    public WorkflowExecutionAgentStatus Status { get; }
-    public WorkflowExecutionAgentCapabilities Capabilities { get; }
+    public WorkflowExecutionActorStatus Status { get; }
+    public WorkflowExecutionActorCapabilities Capabilities { get; }
     public DateTimeOffset ActivatedAt { get; }
     public string? LastCheckpointId { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
-public sealed class WorkflowExecutionAgentPassivationRequest
+public sealed class WorkflowExecutionActorPassivationRequest
 {
-    public WorkflowExecutionAgentPassivationRequest(
+    public WorkflowExecutionActorPassivationRequest(
         string workflowExecutionId,
-        WorkflowExecutionAgentPassivationBoundary boundary,
+        WorkflowExecutionActorPassivationBoundary boundary,
         DateTimeOffset requestedAt,
         string reason,
         IReadOnlyDictionary<string, string>? metadata = null)
@@ -185,14 +185,14 @@ public sealed class WorkflowExecutionAgentPassivationRequest
     }
 
     public string WorkflowExecutionId { get; }
-    public WorkflowExecutionAgentPassivationBoundary Boundary { get; }
+    public WorkflowExecutionActorPassivationBoundary Boundary { get; }
     public DateTimeOffset RequestedAt { get; }
     public string Reason { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 }
 
 [Flags]
-public enum WorkflowExecutionAgentCapabilities
+public enum WorkflowExecutionActorCapabilities
 {
     None = 0,
     InProcessMailbox = 1 << 0,
@@ -225,7 +225,7 @@ public enum WorkflowExecutionCommandDispatchStatus
     Deferred
 }
 
-public enum WorkflowExecutionAgentActivationReason
+public enum WorkflowExecutionActorActivationReason
 {
     Start,
     ResumeBookmark,
@@ -236,7 +236,7 @@ public enum WorkflowExecutionAgentActivationReason
     GeneratedEvent
 }
 
-public enum WorkflowExecutionAgentStatus
+public enum WorkflowExecutionActorStatus
 {
     Active,
     Passivating,
@@ -244,7 +244,7 @@ public enum WorkflowExecutionAgentStatus
     Unavailable
 }
 
-public enum WorkflowExecutionAgentPassivationBoundary
+public enum WorkflowExecutionActorPassivationBoundary
 {
     AfterCheckpointCommit,
     EnteringDurableSuspension,

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Activities.Design.Api.Endpoints.Definitions;
 
-internal sealed class ListVersions(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitionVersions, IEnumerable<ActivityDefinitionVersionInfo>>(requestSender, logger)
+internal sealed class ListVersions(IRequestSender requestSender, ILogger<List> logger) : ElsaRequestHandlerEndpoint<ListDefinitionVersions, IEnumerable<ActivityDefinitionVersionSummary>>(requestSender, logger)
 {
     public override void Configure()
     {

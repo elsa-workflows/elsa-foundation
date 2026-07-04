@@ -44,8 +44,8 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         AssertBridge<IWorkflowExecutionStateStore, GroundworkWorkflowExecutionStateStore>(services);
         AssertBridge<IDurableValueStateStore, GroundworkDurableValueStateStore>(services);
         AssertBridge<ISchedulerStateStore, GroundworkSchedulerStateStore>(services);
-        AssertBridge<IOperationalStateStore, GroundworkOperationalStateStore>(services);
-        AssertBridge<IControlPlaneStateStore, GroundworkControlPlaneStateStore>(services);
+        AssertBridge<IExecutionLivenessStateStore, GroundworkExecutionLivenessStateStore>(services);
+        AssertBridge<IWorkflowHoldStateStore, GroundworkWorkflowHoldStateStore>(services);
         AssertBridge<IIncidentStateStore, GroundworkIncidentStateStore>(services);
         AssertBridge<IRuntimeCheckpointCommitStore, GroundworkRuntimeCheckpointWriter>(services);
         AssertBridge<IWorkflowSchedulerWorkQueue, GroundworkWorkflowSchedulerWorkQueue>(services);

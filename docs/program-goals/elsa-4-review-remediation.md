@@ -91,6 +91,25 @@ Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
   in-memory default; without an idempotency key the start path is at-least-once (a duplicate
   stimulus delivery may double-start). A durable dedup ledger is the hardening follow-up.
 
+### Follow-up findings recorded during Phase 2 execution (W14 naming pass)
+
+- **`ISecretManager` rename deferred to W18** (identity/secrets): the review's Family D
+  target name `ISecretStore` is already taken by a semantically-distinct existing type — the
+  per-provider backing store (`EncryptedSecretStore`, `ConfigurationSecretStore`, aggregated
+  by `ISecretStoreRegistry`). `ISecretManager` is a higher-level CRUD/lifecycle facade
+  (Create/Find/List/Update/Rotate/Revoke/Delete/Test/ResolvePayload) over those stores, so it
+  cannot take the `…Store` name without collision. **W18 follow-up: ISecretManager naming +
+  store-vs-resolver split decided together in W18; interim rename deliberately skipped
+  (`ISecretStore` name occupied by per-provider backing stores).** A fresh interim name
+  (`ISecretService`/`ISecretCatalog`/`ISecretDirectory`) was rejected to avoid the
+  double-rename churn W18's split would immediately re-litigate. Renamed in W14: only the
+  clean Family D targets.
+- **`ControlPlaneCommand` activation-reason enum member** (cosmetic): after Family B renamed
+  `ControlPlaneState`→`WorkflowHoldState`, the `WorkflowExecutionActorActivationReason`
+  member `ControlPlaneCommand` still reads "control plane". Left unchanged — enum member names
+  are serialized wire values (member/int), not renamed under the type-only naming pass. A
+  future wire-versioned pass could align it; the term is glossary-documented in the meantime.
+
 ## Linked Surfaces
 
 - [Consolidated review report](../reports/elsa-4-architecture-review-2026-07.md)

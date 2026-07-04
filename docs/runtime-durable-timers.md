@@ -56,7 +56,7 @@ suspend
 
 The pump deletes a timer as soon as the dispatcher returns `Dispatched`. That is only safe because the
 resume is **durably enqueued before the dispatcher returns**:
-`WorkflowSchedulerCommandProcessor.ProcessAsync` calls `_schedulerWorkQueue.EnqueueAsync(workItem)`
+`WorkflowSchedulerCommandRouter.ProcessAsync` calls `_schedulerWorkQueue.EnqueueAsync(workItem)`
 (durable when Groundwork-backed) **before** the drain and before the agent returns `Accepted`. So if the
 process crashes after the timer delete but before the resume commits, W2's resumption sweep
 (`IRuntimeResumptionService.SweepAsync`) discovers the durable backlog

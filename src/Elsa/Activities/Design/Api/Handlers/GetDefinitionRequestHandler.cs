@@ -17,7 +17,7 @@ public sealed class GetDefinitionRequestHandler(IActivityDefinitionVersionStore 
 
         var definition = await definitionTask;
         var versionRows = await versionsTask;
-        var versions = versionRows.Select(e => new ActivityDefinitionVersionInfo(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
+        var versions = versionRows.Select(e => new ActivityDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt, e.ExecutionType)).ToArray();
 
         return new ActivityDefinitionDetailsView(definition.ToView(), versions);
     }

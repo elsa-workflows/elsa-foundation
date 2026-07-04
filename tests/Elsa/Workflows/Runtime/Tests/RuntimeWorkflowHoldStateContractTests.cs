@@ -3,21 +3,21 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class RuntimeControlPlaneContractTests
+public sealed class RuntimeWorkflowHoldStateContractTests
 {
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void ControlPlaneState_HoldsAdministrativePauseOutsideWorkflowContinuationState()
+    public void WorkflowHoldState_HoldsAdministrativePauseOutsideWorkflowContinuationState()
     {
-        var pause = ControlPlaneHold.ForWorkflowExecution(
+        var pause = WorkflowHold.ForWorkflowExecution(
             holdId: "pause-1",
             workflowExecutionId: "wfexec-1",
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance");
 
-        var state = new ControlPlaneState(
+        var state = new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [pause],
@@ -29,21 +29,21 @@ public sealed class RuntimeControlPlaneContractTests
         Assert.Equal("RuntimeControlPlane", state.Metadata["Owner"]);
         Assert.DoesNotContain(
             typeof(WorkflowExecutionState).GetProperties(),
-            property => property.PropertyType.ToString().Contains(nameof(ControlPlaneState), StringComparison.Ordinal));
+            property => property.PropertyType.ToString().Contains(nameof(WorkflowHoldState), StringComparison.Ordinal));
     }
 
     [Fact]
     public void WorkflowExecutionPause_DefaultsToStrictPause()
     {
-        var pause = ControlPlaneHold.ForWorkflowExecution(
+        var pause = WorkflowHold.ForWorkflowExecution(
             holdId: "pause-1",
             workflowExecutionId: "wfexec-1",
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance");
 
-        Assert.Equal(ControlPlaneHoldScope.WorkflowExecution, pause.Scope);
-        Assert.Equal(ControlPlaneHoldStatus.Requested, pause.Status);
+        Assert.Equal(WorkflowHoldScope.WorkflowExecution, pause.Scope);
+        Assert.Equal(WorkflowHoldStatus.Requested, pause.Status);
         Assert.Equal(RuntimePauseContinuationPolicy.StrictPause, pause.ContinuationPolicy);
         Assert.True(pause.IsEffective);
     }
@@ -51,31 +51,31 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void HostDrainPause_DefaultsToDrainInFlight()
     {
-        var drain = ControlPlaneHold.ForHostDrain(
+        var drain = WorkflowHold.ForHostDrain(
             holdId: "drain-1",
             hostId: "host-1",
             requestedAt: _now,
             requestedBy: "operator",
             reason: "shutdown");
 
-        Assert.Equal(ControlPlaneHoldScope.HostDrain, drain.Scope);
+        Assert.Equal(WorkflowHoldScope.HostDrain, drain.Scope);
         Assert.Equal("host-1", drain.HostId);
         Assert.Equal(RuntimePauseContinuationPolicy.DrainInFlight, drain.ContinuationPolicy);
     }
 
     [Theory]
-    [InlineData(ControlPlaneHoldScope.WorkflowExecution)]
-    [InlineData(ControlPlaneHoldScope.ActivityExecution)]
-    [InlineData(ControlPlaneHoldScope.Generator)]
-    [InlineData(ControlPlaneHoldScope.Ingress)]
-    [InlineData(ControlPlaneHoldScope.WorkerDispatcher)]
-    [InlineData(ControlPlaneHoldScope.HostDrain)]
-    public void ControlPlaneHold_ValidatesRequiredTargetForScope(ControlPlaneHoldScope scope)
+    [InlineData(WorkflowHoldScope.WorkflowExecution)]
+    [InlineData(WorkflowHoldScope.ActivityExecution)]
+    [InlineData(WorkflowHoldScope.Generator)]
+    [InlineData(WorkflowHoldScope.Ingress)]
+    [InlineData(WorkflowHoldScope.WorkerDispatcher)]
+    [InlineData(WorkflowHoldScope.HostDrain)]
+    public void ControlPlaneHold_ValidatesRequiredTargetForScope(WorkflowHoldScope scope)
     {
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneHold(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHold(
             holdId: "hold-1",
             scope: scope,
-            status: ControlPlaneHoldStatus.Requested,
+            status: WorkflowHoldStatus.Requested,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance"));
@@ -86,10 +86,10 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneHold_RejectsAmbiguousScopeTargets()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneHold(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHold(
             holdId: "pause-1",
-            scope: ControlPlaneHoldScope.WorkflowExecution,
-            status: ControlPlaneHoldStatus.Requested,
+            scope: WorkflowHoldScope.WorkflowExecution,
+            status: WorkflowHoldStatus.Requested,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",
@@ -102,10 +102,10 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneHold_RejectsNotPausedContinuationPolicy()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneHold(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHold(
             holdId: "pause-1",
-            scope: ControlPlaneHoldScope.WorkflowExecution,
-            status: ControlPlaneHoldStatus.Requested,
+            scope: WorkflowHoldScope.WorkflowExecution,
+            status: WorkflowHoldStatus.Requested,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",
@@ -119,10 +119,10 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsDuplicateHoldIds()
     {
-        var hold1 = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
-        var hold2 = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
+        var hold1 = WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
+        var hold2 = WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [hold1, hold2]));
@@ -133,11 +133,11 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsSameHoldIdAcrossActiveAndReleasedCollections()
     {
-        var activeHold = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
-        var releasedHold = new ControlPlaneHold(
+        var activeHold = WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
+        var releasedHold = new WorkflowHold(
             holdId: "pause-1",
-            scope: ControlPlaneHoldScope.WorkflowExecution,
-            status: ControlPlaneHoldStatus.Released,
+            scope: WorkflowHoldScope.WorkflowExecution,
+            status: WorkflowHoldStatus.Released,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",
@@ -145,7 +145,7 @@ public sealed class RuntimeControlPlaneContractTests
             releasedAt: _now.AddMinutes(1),
             releasedBy: "operator");
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [activeHold],
@@ -158,10 +158,10 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsReleasedHoldInActiveCollection()
     {
-        var releasedHold = new ControlPlaneHold(
+        var releasedHold = new WorkflowHold(
             holdId: "pause-1",
-            scope: ControlPlaneHoldScope.WorkflowExecution,
-            status: ControlPlaneHoldStatus.Released,
+            scope: WorkflowHoldScope.WorkflowExecution,
+            status: WorkflowHoldStatus.Released,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",
@@ -169,7 +169,7 @@ public sealed class RuntimeControlPlaneContractTests
             releasedAt: _now.AddMinutes(1),
             releasedBy: "operator");
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [releasedHold]));
@@ -181,9 +181,9 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsEffectiveHoldInReleasedCollection()
     {
-        var activeHold = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
+        var activeHold = WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-1", _now, "operator", "maintenance");
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             releasedHolds: [activeHold]));
@@ -195,9 +195,9 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsHoldFromAnotherWorkflowWhenWorkflowScoped()
     {
-        var pause = ControlPlaneHold.ForWorkflowExecution("pause-1", "wfexec-2", _now, "operator", "maintenance");
+        var pause = WorkflowHold.ForWorkflowExecution("pause-1", "wfexec-2", _now, "operator", "maintenance");
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [pause]));
@@ -208,17 +208,17 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void ControlPlaneState_RejectsGlobalHoldWhenWorkflowScoped()
     {
-        var ingress = new ControlPlaneHold(
+        var ingress = new WorkflowHold(
             holdId: "ingress-pause-1",
-            scope: ControlPlaneHoldScope.Ingress,
-            status: ControlPlaneHoldStatus.Requested,
+            scope: WorkflowHoldScope.Ingress,
+            status: WorkflowHoldStatus.Requested,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",
             ingressSourceId: "http-endpoint-1",
             ingressPolicy: IngressPausePolicy.DefaultFor(RuntimeIngressSourceKind.HttpEndpoint));
 
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneState(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHoldState(
             controlPlaneStateId: "control-1",
             workflowExecutionId: "wfexec-1",
             activeHolds: [ingress]));
@@ -325,10 +325,10 @@ public sealed class RuntimeControlPlaneContractTests
     [Fact]
     public void IngressPauseHold_RequiresIngressPolicy()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new ControlPlaneHold(
+        var exception = Assert.Throws<ArgumentException>(() => new WorkflowHold(
             holdId: "ingress-pause-1",
-            scope: ControlPlaneHoldScope.Ingress,
-            status: ControlPlaneHoldStatus.Requested,
+            scope: WorkflowHoldScope.Ingress,
+            status: WorkflowHoldStatus.Requested,
             requestedAt: _now,
             requestedBy: "operator",
             reason: "maintenance",

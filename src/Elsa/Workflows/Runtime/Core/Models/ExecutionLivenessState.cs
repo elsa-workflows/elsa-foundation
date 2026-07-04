@@ -3,9 +3,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <summary>
 /// Runtime-owned operational coordination state. This is not workflow/domain retry state.
 /// </summary>
-public sealed class OperationalState
+public sealed class ExecutionLivenessState
 {
-    public OperationalState(
+    public ExecutionLivenessState(
         string operationalStateId,
         string workflowExecutionId,
         RuntimeExecutionLease? executionLease,
@@ -35,6 +35,8 @@ public sealed class OperationalState
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
+    // Persisted JSON key: the `operationalStateId` property name predates the W14 rename of this type
+    // (ExecutionLivenessState was OperationalState). The member name is intentionally left unchanged to keep the wire key stable.
     public string OperationalStateId { get; }
     public string WorkflowExecutionId { get; }
     public RuntimeExecutionLease? ExecutionLease { get; }

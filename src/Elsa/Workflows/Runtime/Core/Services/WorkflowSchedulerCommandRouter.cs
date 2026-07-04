@@ -3,17 +3,17 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class WorkflowSchedulerCommandProcessor : IWorkflowExecutionCommandProcessor
+public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandExecutor
 {
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
     private readonly IWorkflowSchedulerDrainPolicy _schedulerDrainPolicy;
-    private readonly IWorkflowExecutionDrainCoordinator _drainCoordinator;
+    private readonly IWorkflowDrainOrchestrator _drainCoordinator;
     private readonly TimeProvider _timeProvider;
 
-    public WorkflowSchedulerCommandProcessor(
+    public WorkflowSchedulerCommandRouter(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
         IWorkflowSchedulerDrainPolicy schedulerDrainPolicy,
-        IWorkflowExecutionDrainCoordinator drainCoordinator,
+        IWorkflowDrainOrchestrator drainCoordinator,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);

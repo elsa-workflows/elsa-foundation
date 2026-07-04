@@ -13,7 +13,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowExecutableCompiler compiler,
     ITransientWorkflowExecutableStore transientExecutableStore,
     IWorkflowTestRunStore testRunStore,
-    IWorkflowExecutionStartDispatcher startDispatcher,
+    IWorkflowStartDispatcher startDispatcher,
     TimeProvider timeProvider)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
@@ -29,7 +29,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         IWorkflowExecutableCompiler compiler,
         ITransientWorkflowExecutableStore transientExecutableStore,
         IWorkflowTestRunStore testRunStore,
-        IWorkflowExecutionStartDispatcher startDispatcher)
+        IWorkflowStartDispatcher startDispatcher)
         : this(compiler, transientExecutableStore, testRunStore, startDispatcher, TimeProvider.System)
     {
     }

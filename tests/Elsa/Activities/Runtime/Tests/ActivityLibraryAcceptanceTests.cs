@@ -94,7 +94,7 @@ public sealed class ActivityLibraryAcceptanceTests
     public async Task IfForEachSetVariable_ComposeAndRunToCompletion_ThroughTheServerRequestHandlerPath()
     {
         // Server / end-to-end variant: the same composed If + ForEach + SetVariable workflow is started through the
-        // real ExecuteWorkflowRequestHandler → IWorkflowExecutionStartDispatcher → scheduler-drain path (the same
+        // real ExecuteWorkflowRequestHandler → IWorkflowStartDispatcher → scheduler-drain path (the same
         // path SeededVariableEndToEndExecutionTests exercises), not the harness's direct agent enqueue. A true
         // HTTP-server run is not feasible in this unit-test project, so this uses the request-handler path — the
         // server-side entrypoint — and asserts the run reaches Completed with the loop's effect observable in the
@@ -105,7 +105,7 @@ public sealed class ActivityLibraryAcceptanceTests
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
 
         var handler = new Elsa.Workflows.Runtime.Api.Handlers.ExecuteWorkflowRequestHandler(
-            provider.GetRequiredService<IWorkflowExecutionStartDispatcher>(),
+            provider.GetRequiredService<IWorkflowStartDispatcher>(),
             provider.GetRequiredService<IWorkflowExecutableStore>());
 
         var view = await handler.Handle(new Elsa.Workflows.Runtime.Api.Requests.ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);

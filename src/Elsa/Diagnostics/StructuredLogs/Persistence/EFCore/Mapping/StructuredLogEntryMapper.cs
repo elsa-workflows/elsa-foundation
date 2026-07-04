@@ -64,14 +64,14 @@ internal static class StructuredLogEntryMapper
         }
     }
 
-    private static LogExceptionInfo? DeserializeException(string? json)
+    private static LogExceptionDetails? DeserializeException(string? json)
     {
         if (string.IsNullOrEmpty(json))
             return null;
 
         try
         {
-            return JsonSerializer.Deserialize<LogExceptionInfo>(json, SerializerOptions);
+            return JsonSerializer.Deserialize<LogExceptionDetails>(json, SerializerOptions);
         }
         catch (JsonException)
         {
