@@ -34,6 +34,23 @@ public sealed class LoginPageTests
         Assert.DoesNotContain("Invalid username or password", LoginPage.Render("/", showError: false));
     }
 
+    [Fact]
+    public void Render_Embeds_The_Antiforgery_Token_As_A_Hidden_Field()
+    {
+        var html = LoginPage.Render("/studio", showError: false, antiforgeryToken: "csrf-token-value");
+
+        Assert.Contains($"name=\"{Elsa.Foundation.Identity.AspNetCoreIdentity.AspNetCoreIdentityDefaults.AntiforgeryFieldName}\"", html);
+        Assert.Contains("value=\"csrf-token-value\"", html);
+    }
+
+    [Fact]
+    public void Render_Omits_The_Antiforgery_Field_When_No_Token_Is_Supplied()
+    {
+        var html = LoginPage.Render("/studio", showError: false);
+
+        Assert.DoesNotContain($"name=\"{Elsa.Foundation.Identity.AspNetCoreIdentity.AspNetCoreIdentityDefaults.AntiforgeryFieldName}\"", html);
+    }
+
     [Theory]
     [InlineData("/studio", true)]
     [InlineData("/", true)]

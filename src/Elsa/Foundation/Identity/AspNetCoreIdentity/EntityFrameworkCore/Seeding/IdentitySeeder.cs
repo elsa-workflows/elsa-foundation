@@ -28,6 +28,13 @@ public sealed class IdentitySeeder(
     public const string AdminEmail = "admin@elsa.local";
     public const string AdminRoleName = "administrator";
 
+    /// <summary>
+    /// The all-access permission ("*") that Elsa endpoints secured with <c>ConfigurePermissions()</c> require.
+    /// Mirrors <c>Elsa.Api.FastEndpoints.Constants.PermissionNames.All</c>; kept as a literal here so the
+    /// seeder does not take a dependency on the API layer.
+    /// </summary>
+    public const string AllAccessPermission = "*";
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
@@ -64,6 +71,13 @@ public sealed class IdentitySeeder(
             return existing.Id;
 
         var permissions = permissionCatalog.List().Select(x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Grant the administrator the all-access permission ("*") in addition to every catalogued permission.
+        // Elsa endpoints secured with ConfigurePermissions() require this wildcard (Api.FastEndpoints
+        // PermissionNames.All), and it is not a catalog entry — so without it the seeded admin, though holding
+        // every named identity permission, could not reach the workflow/design/runtime API surface.
+        permissions.Add(AllAccessPermission);
+
         var role = new RoleRecord(Guid.NewGuid().ToString("n"), tenantId, AdminRoleName, "Administrator", permissions, System: true);
         await roleStore.SaveAsync(role, cancellationToken);
         return role.Id;

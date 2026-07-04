@@ -80,6 +80,30 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Form_Login_Without_A_Csrf_Token_Is_Rejected_And_Issues_No_Session()
+    {
+        var client = _fixture.Client;
+
+        // The HTML-form flow is identified by a (local) returnUrl. Posting valid credentials but no
+        // antiforgery token must NOT establish a session — it redirects back to the login page with an error.
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["username"] = IdentitySeeder.AdminUserName,
+            ["password"] = IdentitySeeder.AdminPassword,
+            ["returnUrl"] = "/studio"
+        });
+
+        var response = await client.PostAsync(LoginRoute, content);
+
+        // Redirected back to the login page with an error (not straight to the returnUrl), and crucially no
+        // identity cookie was issued — the CSRF failure blocked sign-in before credentials were checked.
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains(LoginRoute, response.Headers.Location?.ToString() ?? string.Empty, StringComparison.Ordinal);
+        var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values) ? values : [];
+        Assert.DoesNotContain(setCookie, x => x.StartsWith("Elsa.Identity.Cookie", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Logout_Then_Token_Returns_401()
     {
         var client = _fixture.Client;
