@@ -1,3 +1,21 @@
+/*
+ * Studio design tokens.
+ *
+ * Two token layers exist by design, and the split is intentional:
+ *
+ *   1. Primitive/chrome tokens — `--radius*`, `--spacing*`, `--shadow*`, and the raw
+ *      theme palette (`--background`, `--primary`, `--warning`, …). These live in
+ *      `styles.css` and are (re)written per theme+mode by ThemeProvider. They are the
+ *      low-level scale; app chrome (sidebar/topbar layout) consumes them directly.
+ *   2. Semantic `--studio-*` tokens — the component-facing vocabulary. Everything a
+ *      Studio component styles against should reference these so a future re-theme only
+ *      needs to remap this one aliasing layer. Each `--studio-*` value below is an alias
+ *      onto a layer-1 primitive (e.g. `--studio-radius: var(--radius)`), so the two
+ *      systems converge here rather than diverging into parallel scales.
+ *
+ * Rule of thumb: chrome/layout may use layer-1 primitives directly; reusable components
+ * use `--studio-*`. New tone/foreground pairs are added here, not scattered in styles.css.
+ */
 :root {
   --studio-font-ui: var(--font-sans);
   --studio-font-mono: var(--font-mono);
@@ -21,6 +39,20 @@
   --studio-danger: var(--danger);
   --studio-danger-text: var(--danger-foreground);
 
+  /*
+   * Tinted-chip FOREGROUND tokens (WCAG-AA).
+   *
+   * `--studio-{tone}` is a saturated *fill* colour: correct as a solid background or
+   * border, but it fails AA as small text on a light 10-13% same-hue tint (measured:
+   * warning 2.30:1, success 1.92:1, danger 3.99:1 — all < 4.5:1). Chip/badge text must
+   * therefore use these darker (light theme) / lighter (dark theme) `-fg` variants, which
+   * reach >= 5:1 on the tint. The tone palette is theme-independent, so these are defined
+   * here in CSS (not per-preset) and only the lightness is flipped for dark mode below.
+   */
+  --studio-success-fg: oklch(0.48 0.14 150);
+  --studio-warning-fg: oklch(0.52 0.15 60);
+  --studio-danger-fg: oklch(0.505 0.22 27);
+
   --studio-radius-sm: var(--radius-sm);
   --studio-radius: var(--radius);
   --studio-radius-md: var(--radius-md);
@@ -37,4 +69,15 @@
   --text: var(--studio-text);
   --muted: var(--studio-text-muted);
   --accent: var(--studio-accent);
+}
+
+/*
+ * Dark theme: the tinted chip sits on a dark surface, so its text must be *lighter* than
+ * the tone (not darker). These reach >= 7:1 on the dark tint. Keyed off the same
+ * `data-theme-mode` attribute ThemeProvider sets on <html>.
+ */
+html[data-theme-mode="dark"] {
+  --studio-success-fg: oklch(0.85 0.12 150);
+  --studio-warning-fg: oklch(0.86 0.12 60);
+  --studio-danger-fg: oklch(0.78 0.15 27);
 }

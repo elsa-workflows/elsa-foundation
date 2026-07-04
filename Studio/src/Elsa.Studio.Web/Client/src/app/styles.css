@@ -997,19 +997,19 @@ textarea:focus {
 .studio-status-chip[data-tone="success"] {
   border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
-  color: var(--studio-success);
+  color: var(--studio-success-fg);
 }
 
 .studio-status-chip[data-tone="warning"] {
   border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
-  color: var(--studio-warning);
+  color: var(--studio-warning-fg);
 }
 
 .studio-status-chip[data-tone="danger"] {
   border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
   background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
-  color: var(--studio-danger);
+  color: var(--studio-danger-fg);
 }
 
 .studio-status-chip[data-tone="accent"] {

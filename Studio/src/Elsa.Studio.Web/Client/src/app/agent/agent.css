@@ -200,6 +200,45 @@
   font-size: 0.75rem;
 }
 
+/*
+ * Weaver risk chip — tone by severity.
+ *
+ * `data-risk` is set on the parent `.agent-proposal` article; the actual values are the
+ * StudioAgentRisk levels (`review-required` | `destructive` | `admin`). We also accept the
+ * generic low/medium/high/critical aliases in case a provider emits those. Text uses the
+ * WCAG-AA `--studio-*-fg` foreground tokens (same fix as the status chip: the saturated
+ * tone colour fails AA as small text on its own tint).
+ */
+.agent-proposal[data-risk="review-required"] .agent-proposal-risk,
+.agent-proposal[data-risk="medium"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+}
+
+.agent-proposal[data-risk="destructive"] .agent-proposal-risk,
+.agent-proposal[data-risk="high"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+/* Admin/critical: strongest emphasis — solid danger fill with its AA foreground. */
+.agent-proposal[data-risk="admin"] .agent-proposal-risk,
+.agent-proposal[data-risk="critical"] .agent-proposal-risk {
+  border-color: var(--studio-danger);
+  background: color-mix(in srgb, var(--studio-danger) 18%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+  font-weight: 700;
+}
+
+/* Low risk stays neutral-informational using the success tone. */
+.agent-proposal[data-risk="low"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  color: var(--studio-success-fg);
+}
+
 .agent-context-chip em {
   color: var(--studio-warning);
   font-style: normal;
@@ -352,7 +391,7 @@
 }
 
 .agent-proposal-error {
-  color: #dc2626;
+  color: var(--studio-danger-fg);
 }
 
 .agent-proposal-disabled {
