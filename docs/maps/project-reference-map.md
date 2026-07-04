@@ -6,9 +6,9 @@ Records direct project references only.
 
 ## Summary
 
-- Source projects: 113
-- Test projects: 47
-- Direct project references: 580
+- Source projects: 115
+- Test projects: 49
+- Direct project references: 608
 
 ## Projects
 
@@ -29,10 +29,12 @@ Records direct project references only.
 | [Elsa.Activities.Design.Reconciliation](../../src/Elsa/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Core |
 | [Elsa.Activities.Design.Reconciliation.Json](../../src/Elsa/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Serialization.Core |
 | [Elsa.Activities.Flowchart](../../src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Http](../../src/Elsa/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Primitives](../../src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Core](../../src/Elsa/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../src/Elsa/Activities/Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Scheduling](../../src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Scripting](../../src/Elsa/Activities/Scripting/Elsa.Activities.Scripting.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Sequence](../../src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj) | source | Elsa.Activities | net10.0 | default | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Anthropic](../../src/Elsa/Agent/Anthropic/Elsa.Agent.Anthropic.csproj) | source | Elsa.Agent | net10.0 | default | Elsa.Agent.Core |
 | [Elsa.Agent.Api](../../src/Elsa/Agent/Api/Elsa.Agent.Api.csproj) | source | Elsa.Agent | net10.0 | default | Elsa.Agent.Core<br>Elsa.Api.FastEndpoints |
@@ -133,8 +135,10 @@ Records direct project references only.
 | [Elsa.Activities.Design.Tests.ClrFixture](../../tests/Elsa/Activities/Design/Tests/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Tests](../../tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Persistence.EFCore<br>Elsa.Activities.Design.Persistence.EFCore.Sqlite<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Persistence.EFCore<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore |
 | [Elsa.Activities.Flowchart.Tests](../../tests/Elsa/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Testing<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Http.Tests](../../tests/Elsa/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Testing<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Activities.Runtime.Tests](../../tests/Elsa/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.ControlFlow<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Tasks<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.JavaScript |
 | [Elsa.Activities.Scheduling.Tests](../../tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Testing<br>Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Scheduling |
+| [Elsa.Activities.Scripting.Tests](../../tests/Elsa/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scripting<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript |
 | [Elsa.Activities.Sequence.Tests](../../tests/Elsa/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Expressions<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Testing](../../tests/Elsa/Activities/Testing/Elsa.Activities.Testing.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Agent.Tests](../../tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj) | test | Elsa.Agent | net10.0 | false | Elsa.Agent.Anthropic<br>Elsa.Agent.Api<br>Elsa.Agent.Core<br>Elsa.Agent.GitHubCopilot<br>Elsa.Agent.Workflows |
@@ -179,7 +183,7 @@ Records direct project references only.
 
 | Domain | Source projects | Test projects |
 |---|---:|---:|
-| Elsa.Activities | 19 | 10 |
+| Elsa.Activities | 21 | 12 |
 | Elsa.Agent | 5 | 1 |
 | Elsa.Api | 1 | 1 |
 | Elsa.Architecture | 0 | 1 |

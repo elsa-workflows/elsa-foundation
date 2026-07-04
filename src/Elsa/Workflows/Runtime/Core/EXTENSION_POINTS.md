@@ -256,7 +256,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Default implementation:** `InMemoryDurableTimerStore` *(single-node in-memory default; Delay works but is **not** restart-durable without a durable store)*. `GroundworkDurableTimerStore` *(durable `IDocumentStore`-backed bridge; swapped in by `AddGroundworkRuntimeStores`)*.
 - **Follow-ups (W8):**
   - **Native due-time range index.** Groundwork is equality-index only this wave, so `ListDueAsync` loads the whole timer partition (equality query on a constant collection key) and filters/orders `DueTime` in memory. `MaxTimersPerTick` bounds the *dispatch* burst, not the *load*. A native range/due-time index in Groundwork is the scale follow-up.
-  - **Timer/Cron start triggers** (recurring schedules that *start* a workflow) are OUT this wave — they depend on W7's trigger/stimulus index. The `durableTimer` kind is shaped so a `start-trigger` timer variant can plug in later without a schema change.
+  - **Timer/Cron start triggers** (recurring schedules that *start* a workflow) ship via a **dedicated recurring-trigger schedule store + pump** (see `IRecurringTriggerScheduleStore` / `IRecurringTriggerScheduleProvider` below and the `WorkflowsRuntimeRecurringTriggers` feature), **not** the `durableTimer` store. Rationale: the durable-timer pump resumes an *existing* execution (it has a `WorkflowExecutionId`); a start trigger has none, so it needs the trigger/stimulus router (W7) to *start* a workflow. The `durableTimer` kind therefore remains resume-only.
   - **Atomic timer registration (Option B).** Delay registers its timer activity-side, strictly before the bookmark (so "bookmark committed, timer missing" is structurally excluded). A fully atomic timer==bookmark lifecycle via a post-commit `RegisterDurableTimer` intent (`IRuntimePostCommitIntentDispatcher`) is the alternative if orphaned timers ever prove noisy.
 
 ### `IDurableTimerScheduler` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -264,6 +264,21 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `ScheduleAsync(DurableTimer timer, ...)`.
 - **Usage:** thin activity-facing wrapper over `IDurableTimerStore.SaveAsync`. The `Delay` activity builds the `DurableTimer` (deriving `DueTime` from the injected `TimeProvider`) and calls this to write its timer before creating the matching bookmark.
 - **Default implementation:** `DurableTimerScheduler` *(registered by the `WorkflowsRuntimeScheduling` feature)*.
+
+### `IRecurringTriggerScheduleStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one store owns recurring-start schedules for a runtime composition).
+- **Signature:** `SaveAsync(RecurringTriggerSchedule schedule, ...)`, `ListDueAsync(DateTimeOffset asOf, int limit, ...)`, `FindAsync(string scheduleId, ...)`, `TryAdvanceAsync(string scheduleId, DateTimeOffset expectedNextOccurrence, DateTimeOffset newNextOccurrence, ...)`, `DeleteByArtifactAsync(string artifactId, ...)`, `DeleteAsync(string scheduleId, ...)`.
+- **Usage:** persists `RecurringTriggerSchedule` records (a next-occurrence-indexed document kind, `recurringTriggerSchedule`) for Timer/Cron **start** triggers — the recurring-start counterpart to `IDurableTimerStore` (which is resume-only). `SaveAsync` is an idempotent upsert keyed by `ScheduleId`; republishing an artifact replaces its schedules via `DeleteByArtifactAsync` + re-save, mirroring the trigger index. The recurring-trigger pump (`RecurringTriggerPumpTask`, `WorkflowsRuntimeRecurringTriggers` feature) drains `ListDueAsync` and, for each due schedule, **claims the occurrence with `TryAdvanceAsync` (compare-and-swap on `NextOccurrence`) before firing** the trigger stimulus through `IStimulusRouter`. **Missed-occurrence policy:** on pump wake after downtime a schedule fires **at most once** and advances straight to the next future occurrence — the backlog is never replayed. **Cluster-safety hook (W20):** `TryAdvanceAsync` is the compare-and-swap a future clustered store keeps so at most one node fires an occurrence, without changing the pump.
+- **Default implementation:** `InMemoryRecurringTriggerScheduleStore` *(single-node in-memory default; start triggers work but are **not** restart-durable without a durable store)*. `GroundworkRecurringTriggerScheduleStore` *(durable `IDocumentStore`-backed bridge; swapped in by `AddGroundworkRuntimeStores`)*.
+
+### `IRecurringTriggerScheduleProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contributor (fan-in; one provider per recurring-trigger activity type, resolved as `IEnumerable<T>` by the schedule indexer).
+- **Signature:** `RecurringScheduleDescriptor? Describe(ExecutableNode node);`
+- **Usage:** the recurring-schedule sibling of `IActivityTriggerStimulusProvider`. At **publish time** the schedule indexer asks each provider to describe a node; a provider returns the node's recurrence spec (interval / cron expression → next occurrence) when it recognizes the activity type, or `null` ("not mine"). A recurring-trigger activity contributes **both** seams: one trigger binding (so the router can route the pump's stimulus) and one schedule (so the pump knows when to fire). Providers read only the pinned published `ExecutableNode`; a non-literal recurrence spec **throws**, failing the publish rather than persisting an unfireable schedule.
+- **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTriggerScheduleProvider, MyProvider>())`.
+
+**Known implementations (shipped):**
+- `Elsa.Activities.Scheduling` — `TimerRecurringScheduleProvider` / `CronRecurringScheduleProvider` *(cross-domain — describe the `Timer` (fixed interval) and `Cron` (cron expression, via Cronos) recurring start schedules)*.
 
 ### `IActivityExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for concrete activity executions in a runtime composition).
@@ -426,6 +441,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 **Known implementations (shipped):**
 - `Elsa.Activities.Primitives` — `EventTriggerStimulusProvider` *(cross-domain — describes the named-event `Event` start trigger; stimulus type `Event`, hash over the event name)*.
+- `Elsa.Activities.Http` — `HttpEndpointTriggerStimulusProvider` *(cross-domain — describes the `HttpEndpoint` start trigger; stimulus type `HttpEndpoint`, hash over the normalized request path so an inbound request routes to the matching published endpoint)*.
+- `Elsa.Activities.Scheduling` — `TimerTriggerStimulusProvider` / `CronTriggerStimulusProvider` *(cross-domain — describe the `Timer` and `Cron` recurring start triggers; stimulus types `Timer` / `Cron`, hash over the interval / cron expression. These pair with the recurring-trigger schedule store + pump below: the stimulus identity is what the pump fires through `IStimulusRouter`, and the same providers also implement `IRecurringTriggerScheduleProvider` to register the schedule at publish time)*.
 
 ---
 
