@@ -93,6 +93,20 @@ public static class ElsaRuntimeStorageManifest
     /// <summary>Index used by <c>IWorkflowTriggerBindingStore.ListByArtifactAsync</c> and the republish replace path.</summary>
     public const string WorkflowTriggerBindingByArtifact = ByArtifactIndex;
 
+    // Durable recurring-trigger schedule store (W16). Each Timer/Cron start trigger in a published artifact
+    // becomes one schedule document with no execution id, so the recurring-trigger pump can start a NEW
+    // instance on each occurrence across process restarts. The by-collection partition serves the due-schedule
+    // sweep through an equality index (Groundwork is equality-only, so next-occurrence filtering/ordering
+    // happens in memory — see GroundworkRecurringTriggerScheduleStore); the by-artifact index serves
+    // replace-on-republish.
+    public const string RecurringTriggerScheduleDocumentKind = "recurringTriggerSchedule";
+
+    /// <summary>Index used by the recurring-trigger pump's due-schedule sweep (constant partition).</summary>
+    public const string RecurringTriggerScheduleByCollection = ByCollectionIndex;
+
+    /// <summary>Index used by the recurring-schedule replace-on-republish delete path.</summary>
+    public const string RecurringTriggerScheduleByArtifact = ByArtifactIndex;
+
     public static StorageManifest Create() => new(
         new StorageManifestIdentity("elsa-workflows-runtime"),
         new StorageManifestOwner("elsa.workflows.runtime"),
@@ -207,6 +221,17 @@ public static class ElsaRuntimeStorageManifest
                 ],
                 [
                     Query("list-by-stimulus", ByStimulusIndex),
+                    Query("list-by-artifact", ByArtifactIndex)
+                ]),
+            Unit(
+                RecurringTriggerScheduleDocumentKind,
+                "Recurring trigger schedule",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByArtifactIndex, ArtifactIdField)
+                ],
+                [
+                    Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex)
                 ])
         ],
