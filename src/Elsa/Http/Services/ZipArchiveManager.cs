@@ -92,7 +92,9 @@ public sealed class ZipArchiveManager(ISystemClock clock, IZipFileCacheStoragePr
             var downloadable = await downloadableFunc();
             var entryName = !string.IsNullOrWhiteSpace(downloadable.Filename) ? downloadable.Filename : $"file-{currentFileIndex}.bin";
             var entry = zipArchive.CreateEntry(entryName);
-            var fileStream = downloadable.Stream;
+            // Take ownership of the downloadable's stream: dispose it once its content has been
+            // copied into the zip entry, releasing the underlying connection/file handle.
+            await using var fileStream = downloadable.Stream;
             await using var entryStream = entry.Open();
             await fileStream.CopyToAsync(entryStream, cancellationToken);
             await entryStream.FlushAsync(cancellationToken);
