@@ -3,6 +3,7 @@ using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Tests;
 
@@ -143,6 +144,39 @@ public sealed class AgentProposalTests
     }
 
     [Fact]
+    public async Task Proposal_execution_exception_surfaces_message_and_is_logged()
+    {
+        var audit = new InMemoryAgentAuditStore();
+        var logger = new RecordingLogger();
+        var proposals = new InMemoryAgentProposalService(new ThrowingExecutor(), audit, logger);
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
+
+        var result = await proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("agent.proposal.execution_exception", result.Error?.Code);
+        Assert.Contains("Simulated executor failure.", result.Error?.Message);
+        var logged = Assert.Single(logger.Entries, e => e.Exception is not null);
+        Assert.IsType<InvalidOperationException>(logged.Exception);
+        Assert.Equal(LogLevel.Error, logged.Level);
+    }
+
+    [Fact]
+    public async Task Proposal_execution_propagates_cancellation_and_still_marks_failed()
+    {
+        var audit = new InMemoryAgentAuditStore();
+        var proposals = new InMemoryAgentProposalService(new CancellingExecutor(), audit);
+        var proposal = await proposals.AddAsync(CreateProposal(requiresApproval: false));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => proposals.ExecuteAsync(proposal.Id, "reviewer", "rev-1"));
+
+        var stored = await proposals.FindAsync(proposal.Id);
+        var events = await audit.ListAsync("session-1");
+        Assert.Equal(AgentActionProposalStatus.Failed, stored?.Status);
+        Assert.Contains(events, x => x.Kind == AgentAuditEventKind.ProposalFailed && x.ActorId == "reviewer");
+    }
+
+    [Fact]
     public async Task Feedback_emits_audit_event_with_message_linkage()
     {
         using var provider = BuildAgentProvider();
@@ -217,5 +251,23 @@ public sealed class AgentProposalTests
     {
         public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("Simulated executor failure.");
+    }
+
+    private sealed class CancellingExecutor : IAgentActionProposalExecutor
+    {
+        public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+            => throw new OperationCanceledException("Simulated cancellation.");
+    }
+
+    private sealed class RecordingLogger : ILogger<InMemoryAgentProposalService>
+    {
+        public List<(LogLevel Level, Exception? Exception, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, exception, formatter(state, exception)));
     }
 }
