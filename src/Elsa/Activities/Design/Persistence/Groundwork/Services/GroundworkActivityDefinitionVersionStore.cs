@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Groundwork.Documents.Store;
 
@@ -36,7 +37,7 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
 
     public async Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default)
         => await _reads.FirstOrDefaultAsync(ById(versionId), cancellationToken)
-           ?? throw new InvalidOperationException($"Entity '{typeof(ActivityDefinitionVersion)}' with id '{versionId}' cannot be found");
+           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinitionVersion), versionId);
 
     public async Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
     {

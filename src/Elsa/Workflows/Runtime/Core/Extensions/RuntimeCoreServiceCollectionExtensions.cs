@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Builders;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
@@ -41,6 +42,12 @@ public static class RuntimeCoreServiceCollectionExtensions
 
         // Scheduler work handlers take TimeProvider via constructor injection; register it so GetServices<IWorkflowSchedulerWorkHandler>() can activate them.
         services.TryAddSingleton(TimeProvider.System);
+
+        // MS-9 self-instrumentation: the engine hot path (drain/dispatch/activity-execute/checkpoint-commit) resolves an
+        // IWorkflowEngineTracer. The default is a no-op that returns null spans at zero cost, so the fenced drain/commit
+        // path is byte-for-byte unchanged unless WorkflowsRuntimeTracingFeature replaces it with the ActivitySource-backed
+        // tracer (which itself stays free until a listener attaches).
+        services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
@@ -129,7 +136,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>(),
                 serviceProvider.GetRequiredService<IRuntimeFaultCapturePolicy>(),
                 serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
-                serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>()));
+                serviceProvider.GetRequiredService<IRuntimeDomainRetryPolicy>(),
+                serviceProvider.GetRequiredService<IWorkflowEngineTracer>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
         services.TryAddSingleton<IRuntimePostCommitIntentDispatcher, RuntimeSchedulerPostCommitIntentDispatcher>();

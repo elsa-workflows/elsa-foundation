@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Middleware;
@@ -9,8 +10,10 @@ namespace Elsa.Workflows.Runtime.Core.Middleware;
 /// `PostCommit`) that apply them (ADR 0029, Move 2). Mirrors <see cref="RuntimeWorkflowInvokeMiddleware"/>. When no
 /// handler is staged this slot is a no-op.
 /// </summary>
-public sealed class RuntimeActivityInvokeMiddleware : IActivityRuntimeMiddleware
+public sealed class RuntimeActivityInvokeMiddleware(IWorkflowEngineTracer? tracer = null) : IActivityRuntimeMiddleware
 {
+    private readonly IWorkflowEngineTracer _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
+
     public async ValueTask InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -20,6 +23,11 @@ public sealed class RuntimeActivityInvokeMiddleware : IActivityRuntimeMiddleware
         {
             // Clear before running so the pipeline terminal can detect a missing Invoke slot (an unconsumed handler).
             context.Workspace.InvokeHandler = null;
+
+            // MS-9: the activity-execution span wraps only the handler invocation and nests under the dispatch span via
+            // Activity.Current. The InvokeHandler clear above stays before the span starts so terminal-detection is
+            // unchanged; null when tracing is inactive.
+            using var activity = _tracer.StartActivityExecution(context.WorkItem);
             await invokeHandler(context);
         }
 

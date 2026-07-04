@@ -1,5 +1,6 @@
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.EFCore.Services;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -17,7 +18,7 @@ public sealed class EFCoreWorkflowDefinitionStore(IDbContextFactory<WorkflowsDes
 {
     public async Task<WorkflowDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
         => await FindByIdAsync(id, cancellationToken)
-           ?? throw new InvalidOperationException($"Entity '{typeof(WorkflowDefinition)}' with id '{id}' cannot be found");
+           ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinition), id);
 
     public Task<WorkflowDefinition?> FindByIdAsync(string id, CancellationToken cancellationToken = default)
         => FirstOrDefaultAsync(Query<WorkflowDefinition>.Where(x => x.Id, QueryOp.Equal, id), cancellationToken: cancellationToken);

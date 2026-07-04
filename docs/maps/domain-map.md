@@ -6,8 +6,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 112
-- Test projects: 46
+- Source projects: 113
+- Test projects: 47
 - Domains: 23
 - Direct cross-domain references: 341
 
@@ -36,7 +36,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Server | 1 | 0 | host |
 | Elsa.Tasks | 3 | 0 | contract<br>feature/implementation<br>helper |
-| Elsa.Workflows | 20 | 7 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Workflows | 21 | 8 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa3 | 3 | 1 | feature/implementation<br>test |
 
 ## Projects
@@ -152,6 +152,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.JavaScript](../../src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj) | source | Elsa.Workflows | Runtime.JavaScript | feature/implementation | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Resumption](../../src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | source | Elsa.Workflows | Runtime.Resumption | feature/implementation | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Scheduling](../../src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | source | Elsa.Workflows | Runtime.Scheduling | feature/implementation | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Tracing](../../src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj) | source | Elsa.Workflows | Runtime.Tracing | feature/implementation | Elsa.Workflows.Runtime.Core |
 | [Elsa3.Activities.Design.Import](../../src/Elsa3/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models |
 | [Elsa3.Mapping](../../src/Elsa3/Mapping/Elsa3.Mapping.csproj) | source | Elsa3 | - | feature/implementation | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models |
 | [Elsa3.Models](../../src/Elsa3/Models/Elsa3.Models.csproj) | source | Elsa3 | - | feature/implementation | - |
@@ -200,6 +201,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Runtime.Resumption.Tests](../../tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj) | test | Elsa.Workflows | Runtime.Resumption.Tests | test | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Runtime.Scheduling.Tests](../../tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj) | test | Elsa.Workflows | Runtime.Scheduling.Tests | test | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Scheduling |
 | [Elsa.Workflows.Runtime.Tests](../../tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj) | test | Elsa.Workflows | Runtime.Tests | test | Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Runtime.Tracing.Tests](../../tests/Elsa/Workflows/Runtime/Tracing/Tests/Elsa.Workflows.Runtime.Tracing.Tests.csproj) | test | Elsa.Workflows | Runtime.Tracing.Tests | test | Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Tracing |
 | [Elsa3.Mapping.Tests](../../tests/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | test | Elsa.Serialization.SystemText<br>Elsa3.Mapping |
 
 ## Direct Cross-Domain References

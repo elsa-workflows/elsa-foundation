@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
@@ -10,6 +12,7 @@ public sealed class RuntimeCheckpointCommitter
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
     private readonly IRuntimeExecutionOwnershipContextAccessor? _ownershipContextAccessor;
     private readonly IRuntimeExecutionOwnershipService? _ownershipService;
+    private readonly IWorkflowEngineTracer _tracer;
 
     public RuntimeCheckpointCommitter(
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
@@ -22,7 +25,8 @@ public sealed class RuntimeCheckpointCommitter
         IRuntimeCheckpointPersistencePolicy persistencePolicy,
         IRuntimeCheckpointCommitStore checkpointCommitStore,
         IRuntimeExecutionOwnershipContextAccessor? ownershipContextAccessor,
-        IRuntimeExecutionOwnershipService? ownershipService)
+        IRuntimeExecutionOwnershipService? ownershipService,
+        IWorkflowEngineTracer? tracer = null)
     {
         ArgumentNullException.ThrowIfNull(persistencePolicy);
         ArgumentNullException.ThrowIfNull(checkpointCommitStore);
@@ -31,6 +35,7 @@ public sealed class RuntimeCheckpointCommitter
         _checkpointCommitStore = checkpointCommitStore;
         _ownershipContextAccessor = ownershipContextAccessor;
         _ownershipService = ownershipService;
+        _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
     }
 
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
@@ -39,12 +44,25 @@ public sealed class RuntimeCheckpointCommitter
     {
         ArgumentNullException.ThrowIfNull(commit);
 
+        // MS-9: the checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
+        // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
+        // context, not service location). No new awaits are inserted between the fenced awaits below — attribute writes
+        // are synchronous and happen after their source values are already computed.
+        using var activity = _tracer.StartCheckpointCommit(commit);
+
         // Single-writer fencing (RT-2): if an ownership scope is active for this workflow execution, reject a commit
         // whose fencing token is not the current owner's before any state is persisted. Unwired (both null) or no
         // active scope leaves the commit path byte-for-byte unchanged.
         await EnsureOwnershipAsync(commit, cancellationToken);
 
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
+
+        if (activity is not null)
+        {
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceModeTag, decision.Mode.ToString());
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit.Checkpoint));
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag, commit.PostCommitIntents.Count);
+        }
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
         {

@@ -25,6 +25,8 @@ The endpoint base classes always apply `Permissions(...)` through `ConfigurePerm
 | `ElsaEndpointWithMapper<TRequest, TResponse, TMapper>` | Mapper-based |
 | `ElsaRequestHandlerEndpoint<TRequest, TResponse>` / `ElsaCommandHandlerEndpoint<TRequest>` | Mediator request/command bridge |
 
+The Mediator-bridge base classes (`ElsaRequestHandlerEndpoint`, both `ElsaCommandHandlerEndpoint` variants) also own the **not-found error contract** (MS-14, issue #393): they catch `EntityNotFoundException` (`Elsa.Primitives.Exceptions`) and map it to `404`, `ArgumentException` to `400`, rethrow `OperationCanceledException`, and fall back to `500` for anything else. A store/lookup that throws `EntityNotFoundException` therefore surfaces as `404` for every endpoint built on these bases — new endpoints inherit the mapping automatically. Combined with the global ProblemDetails configurator below, the wire shape is RFC 7807.
+
 ## Implementable contributor interfaces
 
 ### `IFastEndpointsConfigurator` (CShells contract)
@@ -32,7 +34,7 @@ The endpoint base classes always apply `Permissions(...)` through `ConfigurePerm
 - **Kind:** Contributor (fan-in; every registered configurator is applied when the shell maps its FastEndpoints).
 - **Register:** `services.AddScoped<IFastEndpointsConfigurator, MyConfigurator>()` (usually via `FastEndpointsFeatureBase` or `TryAddEnumerable`).
 - **Consumed by:** the CShells `FastEndpoints` feature during `MapEndpoints`, which applies every `IFastEndpointsConfigurator` resolved from the shell provider against the process-static FastEndpoints `Config`.
-- **Known implementations (intra-domain):** `ApiSecurityFastEndpointsConfigurator` (assigns `Config.Endpoints.Configurator` on every map — a relax action that logs one prominent warning naming the shell when `AllowAnonymous = true`, or `null` when secured, so a relaxed configurator cannot leak across shells through the static `Config`); `SerializationFastEndpointConfigurator` (request/response serialization); `EndpointFilterFastEndpointConfigurator` (applies `IFastEndpointFilter` exclusions).
+- **Known implementations (intra-domain):** `ProblemDetailsFastEndpointConfigurator` (registered first; calls `config.Errors.UseProblemDetails()` so every Elsa endpoint returns RFC 7807 ProblemDetails — MS-14); `ApiSecurityFastEndpointsConfigurator` (assigns `Config.Endpoints.Configurator` on every map — a relax action that logs one prominent warning naming the shell when `AllowAnonymous = true`, or `null` when secured, so a relaxed configurator cannot leak across shells through the static `Config`); `SerializationFastEndpointConfigurator` (request/response serialization); `EndpointFilterFastEndpointConfigurator` (applies `IFastEndpointFilter` exclusions).
 
 ### `IFastEndpointFilter`
 

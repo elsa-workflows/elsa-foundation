@@ -220,6 +220,7 @@
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
@@ -364,6 +365,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Scheduling/">
     <Project Path="tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Tracing/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Tracing/Tests/Elsa.Workflows.Runtime.Tracing.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa3/" />
   <Folder Name="/tests/Elsa3/Mapping/">
