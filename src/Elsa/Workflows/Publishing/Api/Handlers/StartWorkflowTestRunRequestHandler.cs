@@ -119,7 +119,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 Status: WorkflowTestRunStatus.Rejected,
                 RequestedBy: RequestedBy,
                 RequestedAt: now,
-                ExpiresAt: null,
+                ExpiresAt: expiresAt,
                 Reason: exception.Message,
                 Metadata: new Dictionary<string, string>());
 
@@ -137,7 +137,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 Status: WorkflowTestRunStatus.Rejected,
                 RequestedBy: RequestedBy,
                 RequestedAt: now,
-                ExpiresAt: null,
+                ExpiresAt: expiresAt,
                 Reason: exception.Message,
                 Metadata: new Dictionary<string, string>());
 

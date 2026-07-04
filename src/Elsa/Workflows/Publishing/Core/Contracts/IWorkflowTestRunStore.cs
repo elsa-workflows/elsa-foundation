@@ -7,4 +7,6 @@ public interface IWorkflowTestRunStore
     ValueTask SaveAsync(WorkflowTestRun testRun, CancellationToken cancellationToken = default);
 
     ValueTask<WorkflowTestRun?> FindAsync(string testRunId, CancellationToken cancellationToken = default);
+
+    ValueTask<int> CleanupExpiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
 }
