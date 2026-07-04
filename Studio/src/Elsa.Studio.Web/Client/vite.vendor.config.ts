@@ -19,6 +19,7 @@ export default defineConfig({
         "vendor/react-dom-client": resolve(__dirname, "src/vendor/react-dom-client.ts"),
         "vendor/react-query": resolve(__dirname, "src/vendor/react-query.ts"),
         "vendor/studio-ui": resolve(__dirname, "src/vendor/studio-ui.ts"),
+        "vendor/lucide-react": resolve(__dirname, "src/vendor/lucide-react.ts"),
         "sdk/index": resolve(__dirname, "src/sdk/index.ts")
       },
       formats: ["es"]
