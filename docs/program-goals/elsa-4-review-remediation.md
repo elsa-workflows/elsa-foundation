@@ -47,7 +47,30 @@ Phase 1 (feature parity) — **COMPLETE 2026-07-03**; all three units merged to 
 2. W9 Checkpoint coalescing persistence policy (E3-6, RT-10) — **done** ([#435](https://github.com/elsa-workflows/elsa-foundation/pull/435) + hardening test [#437](https://github.com/elsa-workflows/elsa-foundation/pull/437); opt-in `AddCoalescingRuntimeCheckpointPersistence` with ambient-session decorators, default Immediate path byte-identical, single atomic flush at quiescence/boundary gated by W5 fencing, two-generation crash-convergence proof, benchmark: 3→1 durable commits per burst = Elsa 3 parity; coalescing doctrine + governing invariant in `docs/runtime-durable-resumption.md`).
 3. W7 Trigger subsystem + global stimulus routing (E3-1 Critical, E3-5) — **done** ([#434](https://github.com/elsa-workflows/elsa-foundation/pull/434); publish-time trigger index over published artifacts (`workflowTriggerBinding` kind, indexing failure fails the publish), `IStimulusRouter` start + cross-execution fan-in resume through the existing single-writer dispatchers, narrow `IBookmarkStimulusIndex` with additive by-stimulus index, real `Event` start-trigger activity via the `IActivityTriggerStimulusProvider` seam, `WorkflowsRuntimeTriggersFeature`, secured `POST runtime/workflows/stimuli` endpoint). Closes the largest Elsa 3 parity gap: a stimulus with no execution id can start and fan-in resume workflows.
 
-Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
+Phase 2 (structure & DX) — **COMPLETE 2026-07-04**; all six units merged to main:
+
+1. W15 Test hardening (TS-1, TS-9, IN-4) — **done** ([#441](https://github.com/elsa-workflows/elsa-foundation/pull/441); `TaskExecutor` non-blocking lock acquisition with skip+log, decorator/ordering/identity assertions preserved through downgrades, 12 cancellation contract tests).
+2. W10 Mediator consolidation (AR-2, AR-5) — **done** ([#442](https://github.com/elsa-workflows/elsa-foundation/pull/442); unified `PipelineBuilder<TContext>`/`PipelineDelegate<TContext>`, closed-generic handler dispatch via `HandlerInvokerMiddleware` + `CompiledHandlerInvoker`, `TryAddEnumerable` registrations; Events builder migrated).
+3. W11 Hot-path fixes (IN-2, IN-5, IN-10) — **done** ([#443](https://github.com/elsa-workflows/elsa-foundation/pull/443); background publisher on host lifetime with wired `StopAsync`, Jint engine-options caching, Events dispatch caching).
+4. W13 DRY sweep (PS-7/8/9, DS-3/4/7, MS-7, TS-3) — **done** ([#449](https://github.com/elsa-workflows/elsa-foundation/pull/449); 8 duplication families collapsed one-per-commit, net −1369 LoC: generic `ValidateStateIdMatches<TState>`, shared `ExecutableStructureReader`, `GroundworkDocumentStore` base proven by golden fixtures, `SqliteShellFeatureDefaults`, `AgentProposalAuthorization`, canonical in-memory document-store fake in `Elsa.Persistence.Groundwork.Testing`, dead `ExpressionDescriptor` deleted, `ActivityArgumentValue`/`ActivityArgumentState` renames).
+5. W12 Runtime structure (RT-4/6/7/8/11) — **done** ([#450](https://github.com/elsa-workflows/elsa-foundation/pull/450); `AddWorkflowRuntimeCore` host-agnostic composition root, ADR-0029 Move 2 finished across all handlers with ordered commit-list Checkpoint slot, both ambient service locators deleted, required-dependency single constructors, `ConditionalWeakTable` payload memo; continuation spec `specs/084`).
+6. W14 Naming pass (NM findings, R1–R8) — **done** ([#457](https://github.com/elsa-workflows/elsa-foundation/pull/457); rename families A/B/D/E/C type-only with all persisted wire identifiers preserved verbatim, constitution §E6 type-naming rules v3.2.0, glossary entries for renamed terms + codenames, `ISecretManager` deferred to W18 — see follow-ups).
+
+Side units landed with Phase 2:
+
+- **Groundwork added-index backfill** — gap fixed upstream (Groundwork PR #21, published as
+  `0.0.1-preview.16`) and adopted via [#455](https://github.com/elsa-workflows/elsa-foundation/pull/455)
+  (all four `Groundwork.*` pins bumped; probe flipped to `GroundworkAddedIndexBackfillRegressionTests`).
+- **Audit-issue reconciliation** — the 50 automated-audit issues #374–#423 dispositioned against
+  merged remediation ([#456](https://github.com/elsa-workflows/elsa-foundation/pull/456);
+  report + disposition table on [#424](https://github.com/elsa-workflows/elsa-foundation/issues/424):
+  5 fixed/closed, 5 partially fixed, 40 still open incl. all 5 Tier-0 security issues → Phase 3 W18).
+- **Hotfix [#454](https://github.com/elsa-workflows/elsa-foundation/pull/454)** — repaired a
+  crossed-merge build break between [#440](https://github.com/elsa-workflows/elsa-foundation/pull/440)
+  and [#453](https://github.com/elsa-workflows/elsa-foundation/pull/453) (`ConstructedActivity`
+  projections move).
+
+Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
 
 ### Follow-up findings recorded during Phase 0 execution
 
@@ -90,6 +113,26 @@ Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
 - **Start-path idempotency is process-local** (from W7): `IStimulusStartDeduplicator` is an
   in-memory default; without an idempotency key the start path is at-least-once (a duplicate
   stimulus delivery may double-start). A durable dedup ledger is the hardening follow-up.
+
+### Follow-up findings recorded during Phase 2 execution
+
+- **#379 parent-completion fault propagation (hang risk)** — surfaced by the reconciliation
+  pass: `WorkflowParentActivityCompletionSchedulerWorkHandler` commits an incident on a
+  handler-thrown child fault but never invokes `ChildFaultParentEvaluation` (both sibling
+  handlers do), so a 3+ level fork/join can hang permanently. **In flight as a standalone
+  hotfix unit** (launched post-W14; see issue #379).
+- **Pre-existing `Elsa.Secrets.Tests` failure** — `SecretAuditTests` (EncryptionKey
+  configuration) fails on clean main, independently confirmed during W13 QA; predates the
+  wave. Candidate quick fix; fold into W18 identity/secrets if not fixed sooner.
+- **Map-manifest staleness signal** — `docs/maps/manifest.json` reported
+  `relevant_inputs_dirty: true` on clean checkouts during W11 (pre-existing). The generator's
+  dirtiness detection needs a sweep so freshness signals stay trustworthy.
+- **`TaskExecutorSingleNodeTests` future home** (from W15): lives in the Runtime test project
+  but exercises `Elsa.Tasks`; a dedicated `Elsa.Tasks.Tests` project is the natural home when
+  the tasks domain grows its own suite.
+- **W13 primitives left two one-liner fixes unwired** (tracked as issues): #381 (`Do`/`While`
+  never consult the shared navigator's `IsBody`) and #399 (`RuntimeCheckpointCommit` misses
+  `ValidateStateIdMatches` for `activityExecutions`). Both labeled `ready-for-agent`.
 
 ### Follow-up findings recorded during Phase 2 execution (W14 naming pass)
 
