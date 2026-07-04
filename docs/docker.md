@@ -71,14 +71,14 @@ The image:
 
 ### NuGet restore in a clean container
 
-The build uses a self-contained `docker/nuget.docker.config` (via `dotnet restore --configfile`)
-instead of the repo-root `NuGet.config`. The repo-root config relies on a developer's *user-level*
-`~/.nuget/NuGet/NuGet.Config` to supply a catch-all mapping to nuget.org for third-party packages
-(FastEndpoints, JetBrains.Annotations, Polly, NuGet.\*, …). A clean container has no such fallback,
-so the Docker config reproduces the developer's effective merged configuration: the same five public
-feeds plus a catch-all on nuget.org. Feed-specific mappings (CShells, Nuplane, Groundwork,
-Elsa.Platform) still win via NuGet's longest-prefix rule. All feeds are public (no auth). The
-repo-root `NuGet.config` is unchanged.
+The build restores against the repo-root `NuGet.config` directly (no
+`--configfile` override). Its `packageSourceMapping` maps every package the
+solution uses — including third-party transitives such as FastEndpoints,
+JetBrains.Annotations, Polly, `NuGet.*`, and `SQLitePCLRaw.*` — to an explicit
+source, so restore is fully self-contained and needs no user-level
+`~/.nuget/NuGet/NuGet.Config` fallback. Preview packages (CShells, Nuplane,
+Groundwork, Elsa.Platform) map narrowly to their feedz.io feeds; everything else
+maps to nuget.org. All feeds are public (no auth).
 
 ---
 
