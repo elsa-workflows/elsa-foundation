@@ -84,8 +84,8 @@ internal static class ElsaModuleManagementApi
             return Results.BadRequest(new ModuleManagementErrorResponse("Choose a non-empty .nupkg file."));
 
         var fileName = Path.GetFileName(file.FileName);
-        if (!StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(fileName), ".nupkg"))
-            return Results.BadRequest(new ModuleManagementErrorResponse("Only .nupkg files can be uploaded."));
+        if (ValidateUploadFileName(fileName) is { } fileNameError)
+            return Results.BadRequest(new ModuleManagementErrorResponse(fileNameError));
 
         var config = await ReadManagementConfigurationAsync(environment, cancellationToken);
         var dropFolder = ResolveDropFolder(environment, config);
@@ -95,6 +95,14 @@ internal static class ElsaModuleManagementApi
         var tempPath = Path.Combine(dropFolder, $".{Guid.NewGuid():N}.upload");
         await using (var output = File.Create(tempPath))
             await file.CopyToAsync(output, cancellationToken);
+
+        // A .nupkg is a ZIP archive; reconciliation loads it into the process (RCE-shaped), so refuse content that
+        // is not a readable package before it can reach the drop folder and be picked up by the reconciler.
+        if (ValidateNupkgArchive(tempPath) is { } archiveError)
+        {
+            File.Delete(tempPath);
+            return Results.BadRequest(new ModuleManagementErrorResponse(archiveError));
+        }
 
         File.Move(tempPath, destination, overwrite: true);
         QueueReconciliation(
@@ -449,7 +457,7 @@ internal static class ElsaModuleManagementApi
             node[to] = value;
     }
 
-    private static string EnsureChildPath(string root, string fileName)
+    internal static string EnsureChildPath(string root, string fileName)
     {
         var rootPath = Path.GetFullPath(root);
         var path = Path.GetFullPath(Path.Combine(rootPath, fileName));
@@ -457,6 +465,32 @@ internal static class ElsaModuleManagementApi
             throw new InvalidOperationException("The resolved path is outside the package drop folder.");
 
         return path;
+    }
+
+    /// <summary>Rejects an upload file name that is empty, contains path components, or is not a <c>.nupkg</c>.</summary>
+    internal static string? ValidateUploadFileName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || !StringComparer.Ordinal.Equals(Path.GetFileName(fileName), fileName))
+            return "A .nupkg file name is required.";
+
+        return StringComparer.OrdinalIgnoreCase.Equals(Path.GetExtension(fileName), ".nupkg")
+            ? null
+            : "Only .nupkg files can be uploaded.";
+    }
+
+    /// <summary>Rejects an uploaded package whose bytes are not a readable ZIP archive (the NuGet package container).</summary>
+    internal static string? ValidateNupkgArchive(string path)
+    {
+        try
+        {
+            using var archive = System.IO.Compression.ZipFile.OpenRead(path);
+            _ = archive.Entries.Count;
+            return null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException)
+        {
+            return "The uploaded file is not a valid .nupkg package.";
+        }
     }
 
     private sealed record ManagementConfiguration(string Path, JsonObject Document);
