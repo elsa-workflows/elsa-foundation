@@ -6,10 +6,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 
 ## Summary
 
-- Source projects: 111
-- Test projects: 45
+- Source projects: 112
+- Test projects: 46
 - Domains: 23
-- Direct cross-domain references: 340
+- Direct cross-domain references: 341
 
 ## Domains
 
@@ -36,7 +36,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Server | 1 | 0 | host |
 | Elsa.Tasks | 3 | 0 | contract<br>feature/implementation<br>helper |
-| Elsa.Workflows | 19 | 6 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Workflows | 20 | 7 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa3 | 3 | 1 | feature/implementation<br>test |
 
 ## Projects
@@ -144,7 +144,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workflows.Design.Validations.Core](../../src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj) | source | Elsa.Workflows | Design.Validations.Core | contract | Elsa.Events.Core<br>Elsa.Workflows.Design.Core |
 | [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | Elsa.Workflows | Design.Validations | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Primitives](../../src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj) | source | Elsa.Workflows | Primitives | feature/implementation | - |
-| [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | source | Elsa.Workflows | Publishing.Api | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | source | Elsa.Workflows | Publishing.Api | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workflows.Publishing.Core](../../src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj) | source | Elsa.Workflows | Publishing.Core | contract | Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Api](../../src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | source | Elsa.Workflows | Runtime.Api | feature/implementation | Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Workflows.Runtime.Core](../../src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | source | Elsa.Workflows | Runtime.Core | contract | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core |
 | [Elsa.Workflows.Runtime.Http](../../src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj) | source | Elsa.Workflows | Runtime.Http | feature/implementation | Elsa.Http.Core<br>Elsa.Primitives |
@@ -175,7 +176,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | test | Elsa.Diagnostics | StructuredLogs.Tests | test | Elsa.Diagnostics.StructuredLogs<br>Elsa.Diagnostics.StructuredLogs.Core |
 | [Elsa.Events.Tests](../../tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | Tests | test | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core |
 | [Elsa.Expressions.JavaScript.Jint.Tests](../../tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | JavaScript.Jint.Tests | test | Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint |
-| [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | Tests | test | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
+| [Elsa.Expressions.Tests](../../tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | Tests | test | Elsa.Activities.Design.Core<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript.Libraries<br>Elsa.Expressions.Liquid<br>Elsa.Primitives<br>Elsa.Serialization.SystemText |
 | [Elsa.Foundation.Identity.Persistence.Groundwork.Tests](../../tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj) | test | Elsa.Foundation | Identity.Persistence.Groundwork.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Foundation.Identity.Tests](../../tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj) | test | Elsa.Foundation | Identity.Tests | test | Elsa.Foundation.Identity.Abstractions<br>Elsa.Foundation.Identity.Api<br>Elsa.Foundation.Identity.AspNetCoreIdentity<br>Elsa.Foundation.Identity.Oidc<br>Elsa.Foundation.Identity.OpenIddict |
 | [Elsa.Mediator.Tests](../../tests/Elsa/Mediator/Tests/Elsa.Mediator.Tests.csproj) | test | Elsa.Mediator | Tests | test | Elsa.Mediator |
@@ -192,6 +193,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | Tests | test | Elsa.Expressions<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | Tests | test | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
+| [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | Design.Api.Tests | test | Elsa.Mediator.Core<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | Design.Persistence.Groundwork.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | Design.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Publishing.Api.Tests](../../tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj) | test | Elsa.Workflows | Publishing.Api.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Mediator.Core<br>Elsa.Persistence.Core<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime.Core |
@@ -467,6 +469,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks | [Elsa.Primitives](../../src/Elsa/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | Elsa.Workflows | [Elsa.Api.FastEndpoints](../../src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj) | Elsa.Api |
 | [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | Elsa.Workflows | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
+| [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | Elsa.Workflows | [Elsa.Mediator.Core](../../src/Elsa/Mediator/Core/Elsa.Mediator.Core.csproj) | Elsa.Mediator |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | Elsa.Workflows | [Elsa.Activities.Design.Core](../../src/Elsa/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | Elsa.Workflows | [Elsa.Events.Core](../../src/Elsa/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | Elsa.Workflows | [Elsa.Expressions.Core](../../src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj) | Elsa.Expressions |
