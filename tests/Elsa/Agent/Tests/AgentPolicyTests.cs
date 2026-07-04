@@ -134,6 +134,27 @@ public sealed class AgentPolicyTests
         Assert.False(AgentEndpointActor.CanAccess("user-1", "tenant-2", principal));
     }
 
+    [Fact]
+    public void Agent_endpoint_actor_fails_closed_for_claimless_principals()
+    {
+        // Issue #374: two distinct principals that both lack the identity/tenant claims must not
+        // collide into a shared "anonymous"/"default" identity that grants cross-actor access.
+        var claimlessA = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", "a")], "test"));
+        var claimlessB = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", "b")], "test"));
+
+        Assert.Null(AgentEndpointActor.Resolve(claimlessA));
+        Assert.Null(AgentEndpointActor.ResolveTenant(claimlessA));
+
+        // A session created by one claim-less principal is not accessible to another (nor to itself).
+        Assert.False(AgentEndpointActor.CanAccess("anonymous", "default", claimlessA));
+        Assert.False(AgentEndpointActor.CanAccess("anonymous", "default", claimlessB));
+
+        // A principal with an actor but no tenant claim still fails closed.
+        var actorOnly = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "user-1")], "test"));
+        Assert.Null(AgentEndpointActor.ResolveTenant(actorOnly));
+        Assert.False(AgentEndpointActor.CanAccess("user-1", "tenant-1", actorOnly));
+    }
+
     private static AgentContextAttachment CreateAttachment(string source, string contentType, AgentContextSensitivity sensitivity, object? content = null)
         => new(
             "ctx-1",
