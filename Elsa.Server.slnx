@@ -15,6 +15,7 @@
   <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <Project Path="src/Elsa/Activities/Http/Elsa.Activities.Http.csproj" />
     <Project Path="src/Elsa/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <Project Path="src/Elsa/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <Project Path="src/Elsa/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
@@ -248,6 +249,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Scheduling/">
     <Project Path="tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Activities/Http/">
+    <Project Path="tests/Elsa/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Design/" />
   <Folder Name="/tests/Elsa/Activities/Design/Tests/">
