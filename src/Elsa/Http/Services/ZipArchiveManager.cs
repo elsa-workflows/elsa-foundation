@@ -11,7 +11,7 @@ namespace Elsa.Http.Services;
 /// <summary>
 /// Initializes a new instance of the <see cref="ZipManager"/> class.
 /// </summary>
-internal sealed class ZipArchiveManager(ISystemClock clock, IZipFileCacheStorageProviders fileCacheStorageFactory, IOptions<HttpZipFileCacheOptions> fileCacheOptions, ILogger<ZipArchiveManager> logger)
+public sealed class ZipArchiveManager(ISystemClock clock, IZipFileCacheStorageProviders fileCacheStorageFactory, IOptions<HttpZipFileCacheOptions> fileCacheOptions, ILogger<ZipArchiveManager> logger)
     : IZipArchiveManager
 {
     public async Task<ZipFileArchive> CreateAsync(

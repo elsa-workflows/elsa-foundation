@@ -5,7 +5,10 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Http.Services;
 
-internal sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorage
+/// <summary>
+/// Stores cached zip files and their metadata on the local file system.
+/// </summary>
+public sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorage
 {
     private const string metaDataFileSuffix = "_metadata.json";
     private readonly SemaphoreSlim metaDataLock = new(1, 1);

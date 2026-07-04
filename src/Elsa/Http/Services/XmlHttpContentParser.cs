@@ -7,7 +7,7 @@ namespace Elsa.Http.Services;
 /// <summary>
 /// Reads application/xml and text/xml content type streams.
 /// </summary>
-internal sealed class XmlHttpContentParser : IHttpContentParser
+public sealed class XmlHttpContentParser : IHttpContentParser
 {
     /// <inheritdoc />
     public int Priority => 0;
