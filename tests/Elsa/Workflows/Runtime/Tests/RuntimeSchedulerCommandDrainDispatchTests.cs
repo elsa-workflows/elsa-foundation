@@ -353,7 +353,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
@@ -371,7 +371,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         services.AddSingleton<IWorkflowSchedulerWorkHandler, AlwaysFaultingSchedulerWorkHandler>();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
@@ -397,7 +397,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var activityStateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
         var executable = NewExecutable();
         await store.SaveAsync(executable);
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
         var outboxStore = provider.GetRequiredService<IRuntimePostCommitOutboxStore>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
@@ -431,13 +431,13 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         Assert.Contains(drainResult.Items, item => item.HandlerName == MissingActivityInvocationSchedulerWorkHandler.HandlerName);
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private WorkflowExecutionCommandEnvelope NewEnvelope(int index, string workflowExecutionId = "wfexec-1")
     {

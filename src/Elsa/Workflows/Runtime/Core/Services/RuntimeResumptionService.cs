@@ -22,7 +22,7 @@ public sealed class RuntimeResumptionService(
     IRuntimePostCommitOutboxProcessor outboxProcessor,
     IWorkflowSchedulerWorkQueue workQueue,
     IRuntimeRecoveryScanner recoveryScanner,
-    IWorkflowExecutionAgentProvider agentProvider,
+    IWorkflowExecutionActorProvider agentProvider,
     IRuntimeExecutionIdGenerator idGenerator,
     TimeProvider timeProvider) : IRuntimeResumptionService
 {
@@ -85,9 +85,9 @@ public sealed class RuntimeResumptionService(
         {
             var now = timeProvider.GetUtcNow();
             var agent = await agentProvider.GetAgentAsync(
-                new WorkflowExecutionAgentActivationRequest(
+                new WorkflowExecutionActorActivationRequest(
                     workflowExecutionId: workflowExecutionId,
-                    reason: WorkflowExecutionAgentActivationReason.Recovery,
+                    reason: WorkflowExecutionActorActivationReason.Recovery,
                     requestedAt: now,
                     requestedBy: DispatchSource,
                     requiredCapabilities: agentProvider.Capabilities),

@@ -148,7 +148,7 @@ public sealed class GroundworkDurableResumptionCrashTests
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();
         var executable = NewExecutable();
         await store.SaveAsync(executable);
-        var agentProvider = provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
     }
@@ -169,17 +169,17 @@ public sealed class GroundworkDurableResumptionCrashTests
             provider.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
             provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
             provider.GetRequiredService<IRuntimeRecoveryScanner>(),
-            provider.GetRequiredService<IWorkflowExecutionAgentProvider>(),
+            provider.GetRequiredService<IWorkflowExecutionActorProvider>(),
             provider.GetRequiredService<IRuntimeExecutionIdGenerator>(),
             provider.GetRequiredService<TimeProvider>());
 
-    private static WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private static WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: Now,
             requestedBy: "runtime-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {

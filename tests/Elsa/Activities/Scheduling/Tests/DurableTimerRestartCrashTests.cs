@@ -185,7 +185,7 @@ public sealed class DurableTimerRestartCrashTests
             harness.Services.GetRequiredService<IRuntimePostCommitOutboxProcessor>(),
             harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>(),
             harness.Services.GetRequiredService<IRuntimeRecoveryScanner>(),
-            harness.Services.GetRequiredService<IWorkflowExecutionAgentProvider>(),
+            harness.Services.GetRequiredService<IWorkflowExecutionActorProvider>(),
             harness.Services.GetRequiredService<IRuntimeExecutionIdGenerator>(),
             harness.Services.GetRequiredService<TimeProvider>());
 

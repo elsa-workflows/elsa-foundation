@@ -112,7 +112,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
             queue,
             DeferredSchedulerDrainPolicy.Instance,
             new WorkflowDrainOrchestrator(ThrowingSchedulerDrainer.Instance, EmptyPostCommitOutboxProcessor.Instance, []));
-        var provider = new InProcessWorkflowExecutionAgentProvider(processor);
+        var provider = new InProcessWorkflowExecutionActorProvider(processor);
         var agent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
         var envelope = NewEnvelope(1);
 
@@ -161,12 +161,12 @@ public sealed class RuntimeSchedulerWorkQueueTests
             payload: document.RootElement.Clone());
     }
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(
         string workflowExecutionId,
-        WorkflowExecutionAgentCapabilities requiredCapabilities = WorkflowExecutionAgentCapabilities.InProcessMailbox) =>
+        WorkflowExecutionActorCapabilities requiredCapabilities = WorkflowExecutionActorCapabilities.InProcessMailbox) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "runtime-test",
             requiredCapabilities: requiredCapabilities);

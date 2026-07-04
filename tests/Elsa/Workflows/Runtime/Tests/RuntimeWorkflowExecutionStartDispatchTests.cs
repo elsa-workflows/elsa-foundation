@@ -12,7 +12,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     private readonly DateTimeOffset _now = new(2026, 6, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task DispatchAsync_SendsStartCommandThroughWorkflowExecutionAgent()
+    public async Task DispatchAsync_SendsStartCommandThroughWorkflowExecutionActor()
     {
         var store = new InMemoryWorkflowExecutableStore();
         var executable = NewExecutable();
@@ -26,7 +26,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
         Assert.Equal("wfexec-1", result.WorkflowExecutionId);
         Assert.Equal("wfexec-1", activation.WorkflowExecutionId);
-        Assert.Equal(WorkflowExecutionAgentActivationReason.Start, activation.Reason);
+        Assert.Equal(WorkflowExecutionActorActivationReason.Start, activation.Reason);
         Assert.Equal("runtime-test", activation.RequestedBy);
         Assert.Equal("wfexec-1", envelope.WorkflowExecutionId);
         Assert.Equal("command-1", envelope.Command.CommandId);
@@ -184,28 +184,28 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
-    private sealed class RecordingAgentProvider : IWorkflowExecutionAgentProvider
+    private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider
     {
         public RecordingAgent Agent { get; } = new("wfexec-unassigned");
-        public List<WorkflowExecutionAgentActivationRequest> ActivationRequests { get; } = [];
-        public WorkflowExecutionAgentCapabilities Capabilities => WorkflowExecutionAgentCapabilities.None;
+        public List<WorkflowExecutionActorActivationRequest> ActivationRequests { get; } = [];
+        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.None;
 
-        public ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
         {
             ActivationRequests.Add(request);
             Agent.AssignWorkflowExecutionId(request.WorkflowExecutionId);
-            return ValueTask.FromResult<IWorkflowExecutionAgent>(Agent);
+            return ValueTask.FromResult<IWorkflowExecutionActor>(Agent);
         }
 
-        public ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
     }
 
-    private sealed class RecordingAgent(string workflowExecutionId) : IWorkflowExecutionAgent
+    private sealed class RecordingAgent(string workflowExecutionId) : IWorkflowExecutionActor
     {
         private string _workflowExecutionId = workflowExecutionId;
 
-        public WorkflowExecutionAgentDescriptor Descriptor { get; private set; } = NewDescriptor(workflowExecutionId);
+        public WorkflowExecutionActorDescriptor Descriptor { get; private set; } = NewDescriptor(workflowExecutionId);
         public List<WorkflowExecutionCommandEnvelope> Envelopes { get; } = [];
 
         public void AssignWorkflowExecutionId(string workflowExecutionId)
@@ -224,13 +224,13 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
                 recordedAt: DateTimeOffset.UtcNow));
         }
 
-        private static WorkflowExecutionAgentDescriptor NewDescriptor(string workflowExecutionId) =>
+        private static WorkflowExecutionActorDescriptor NewDescriptor(string workflowExecutionId) =>
             new(
                 workflowExecutionId: workflowExecutionId,
                 agentId: $"recording:{workflowExecutionId}",
                 providerName: "Recording",
-                status: WorkflowExecutionAgentStatus.Active,
-                capabilities: WorkflowExecutionAgentCapabilities.None,
+                status: WorkflowExecutionActorStatus.Active,
+                capabilities: WorkflowExecutionActorCapabilities.None,
                 activatedAt: DateTimeOffset.UtcNow);
     }
 

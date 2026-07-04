@@ -81,25 +81,25 @@ public sealed class ExecuteWorkflowRequestHandlerTests
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
-    private sealed class RecordingAgentProvider : IWorkflowExecutionAgentProvider
+    private sealed class RecordingAgentProvider : IWorkflowExecutionActorProvider
     {
-        public WorkflowExecutionAgentCapabilities Capabilities => WorkflowExecutionAgentCapabilities.None;
+        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.None;
 
-        public ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IWorkflowExecutionAgent>(new RecordingAgent(request.WorkflowExecutionId));
+        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IWorkflowExecutionActor>(new RecordingAgent(request.WorkflowExecutionId));
 
-        public ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
     }
 
-    private sealed class RecordingAgent(string workflowExecutionId) : IWorkflowExecutionAgent
+    private sealed class RecordingAgent(string workflowExecutionId) : IWorkflowExecutionActor
     {
-        public WorkflowExecutionAgentDescriptor Descriptor { get; } = new(
+        public WorkflowExecutionActorDescriptor Descriptor { get; } = new(
             workflowExecutionId: workflowExecutionId,
             agentId: $"recording:{workflowExecutionId}",
             providerName: "Recording",
-            status: WorkflowExecutionAgentStatus.Active,
-            capabilities: WorkflowExecutionAgentCapabilities.None,
+            status: WorkflowExecutionActorStatus.Active,
+            capabilities: WorkflowExecutionActorCapabilities.None,
             activatedAt: DateTimeOffset.UtcNow);
 
         public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>

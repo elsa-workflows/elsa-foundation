@@ -63,47 +63,47 @@ public sealed class RuntimeAgentProviderContractTests
     [Fact]
     public void AgentProviderContract_UsesActivationRequestAndProviderCapabilities()
     {
-        Assert.True(typeof(IWorkflowExecutionAgent).IsInterface);
-        Assert.True(typeof(IWorkflowExecutionAgentProvider).IsInterface);
+        Assert.True(typeof(IWorkflowExecutionActor).IsInterface);
+        Assert.True(typeof(IWorkflowExecutionActorProvider).IsInterface);
 
-        var providerMethod = typeof(IWorkflowExecutionAgentProvider).GetMethod(nameof(IWorkflowExecutionAgentProvider.GetAgentAsync))!;
+        var providerMethod = typeof(IWorkflowExecutionActorProvider).GetMethod(nameof(IWorkflowExecutionActorProvider.GetAgentAsync))!;
         var parameters = providerMethod.GetParameters();
-        var passivateMethod = typeof(IWorkflowExecutionAgentProvider).GetMethod(nameof(IWorkflowExecutionAgentProvider.PassivateAsync))!;
+        var passivateMethod = typeof(IWorkflowExecutionActorProvider).GetMethod(nameof(IWorkflowExecutionActorProvider.PassivateAsync))!;
         var passivateParameters = passivateMethod.GetParameters();
 
-        Assert.Equal(typeof(WorkflowExecutionAgentActivationRequest), parameters[0].ParameterType);
-        Assert.Equal(typeof(WorkflowExecutionAgentPassivationRequest), passivateParameters[0].ParameterType);
-        Assert.Equal(typeof(WorkflowExecutionAgentCapabilities), typeof(IWorkflowExecutionAgentProvider).GetProperty(nameof(IWorkflowExecutionAgentProvider.Capabilities))!.PropertyType);
+        Assert.Equal(typeof(WorkflowExecutionActorActivationRequest), parameters[0].ParameterType);
+        Assert.Equal(typeof(WorkflowExecutionActorPassivationRequest), passivateParameters[0].ParameterType);
+        Assert.Equal(typeof(WorkflowExecutionActorCapabilities), typeof(IWorkflowExecutionActorProvider).GetProperty(nameof(IWorkflowExecutionActorProvider.Capabilities))!.PropertyType);
     }
 
     [Fact]
     public void RuntimeCore_DoesNotExposeLegacyWorkflowExecutionPool()
     {
-        var runtimeCoreAssembly = typeof(IWorkflowExecutionAgentProvider).Assembly;
+        var runtimeCoreAssembly = typeof(IWorkflowExecutionActorProvider).Assembly;
 
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionPool"));
-        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionAgentProvider"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionActorProvider"));
     }
 
     [Fact]
     public void RuntimeCore_DoesNotExposeDirectWorkflowExecutor()
     {
-        var runtimeCoreAssembly = typeof(IWorkflowExecutionAgentProvider).Assembly;
+        var runtimeCoreAssembly = typeof(IWorkflowExecutionActorProvider).Assembly;
 
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor"));
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Services.SequentialWorkflowExecutor"));
         Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowStartDispatcher"));
-        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionAgentProvider"));
+        Assert.NotNull(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionActorProvider"));
     }
 
     [Fact]
     public void AgentContract_EnqueuesCommandEnvelopesAndReturnsDispatchResult()
     {
-        var defaultMethod = typeof(IWorkflowExecutionAgent).GetMethod(
-            nameof(IWorkflowExecutionAgent.EnqueueAsync),
+        var defaultMethod = typeof(IWorkflowExecutionActor).GetMethod(
+            nameof(IWorkflowExecutionActor.EnqueueAsync),
             [typeof(WorkflowExecutionCommandEnvelope), typeof(CancellationToken)])!;
-        var optionsMethod = typeof(IWorkflowExecutionAgent).GetMethod(
-            nameof(IWorkflowExecutionAgent.EnqueueAsync),
+        var optionsMethod = typeof(IWorkflowExecutionActor).GetMethod(
+            nameof(IWorkflowExecutionActor.EnqueueAsync),
             [typeof(WorkflowExecutionCommandEnvelope), typeof(WorkflowExecutionCommandDispatchOptions), typeof(CancellationToken)])!;
         var parameters = defaultMethod.GetParameters();
         var optionsParameters = optionsMethod.GetParameters();
@@ -113,7 +113,7 @@ public sealed class RuntimeAgentProviderContractTests
         Assert.Equal(typeof(WorkflowExecutionCommandEnvelope), parameters[0].ParameterType);
         Assert.Equal(typeof(WorkflowExecutionCommandEnvelope), optionsParameters[0].ParameterType);
         Assert.Equal(typeof(WorkflowExecutionCommandDispatchOptions), optionsParameters[1].ParameterType);
-        Assert.Equal(typeof(WorkflowExecutionAgentDescriptor), typeof(IWorkflowExecutionAgent).GetProperty(nameof(IWorkflowExecutionAgent.Descriptor))!.PropertyType);
+        Assert.Equal(typeof(WorkflowExecutionActorDescriptor), typeof(IWorkflowExecutionActor).GetProperty(nameof(IWorkflowExecutionActor.Descriptor))!.PropertyType);
     }
 
     [Fact]
@@ -142,51 +142,51 @@ public sealed class RuntimeAgentProviderContractTests
     [Fact]
     public void AgentDescriptor_IsFrameworkNeutralAndKeepsCheckpointStateAuthoritative()
     {
-        var descriptor = new WorkflowExecutionAgentDescriptor(
+        var descriptor = new WorkflowExecutionActorDescriptor(
             workflowExecutionId: "wfexec-1",
             agentId: "agent-1",
             providerName: "InProcessMailboxProvider",
-            status: WorkflowExecutionAgentStatus.Active,
-            capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox | WorkflowExecutionAgentCapabilities.Passivation,
+            status: WorkflowExecutionActorStatus.Active,
+            capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox | WorkflowExecutionActorCapabilities.Passivation,
             activatedAt: _now,
             lastCheckpointId: "checkpoint-1");
 
         Assert.Equal("wfexec-1", descriptor.WorkflowExecutionId);
         Assert.Equal("checkpoint-1", descriptor.LastCheckpointId);
-        Assert.True(descriptor.Capabilities.HasFlag(WorkflowExecutionAgentCapabilities.InProcessMailbox));
+        Assert.True(descriptor.Capabilities.HasFlag(WorkflowExecutionActorCapabilities.InProcessMailbox));
         Assert.DoesNotContain(
-            typeof(WorkflowExecutionAgentDescriptor).GetProperties().Select(property => property.PropertyType.ToString()),
+            typeof(WorkflowExecutionActorDescriptor).GetProperties().Select(property => property.PropertyType.ToString()),
             IsActorFrameworkReference);
     }
 
     [Fact]
     public void ActivationRequest_IsKeyedByWorkflowExecutionIdAndReason()
     {
-        var request = new WorkflowExecutionAgentActivationRequest(
+        var request = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: "wfexec-1",
-            reason: WorkflowExecutionAgentActivationReason.ResumeBookmark,
+            reason: WorkflowExecutionActorActivationReason.ResumeBookmark,
             requestedAt: _now,
             requestedBy: "dispatcher-1",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox | WorkflowExecutionAgentCapabilities.LeaseFencing);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox | WorkflowExecutionActorCapabilities.LeaseFencing);
 
         Assert.Equal("wfexec-1", request.WorkflowExecutionId);
-        Assert.Equal(WorkflowExecutionAgentActivationReason.ResumeBookmark, request.Reason);
-        Assert.True(request.RequiredCapabilities.HasFlag(WorkflowExecutionAgentCapabilities.LeaseFencing));
+        Assert.Equal(WorkflowExecutionActorActivationReason.ResumeBookmark, request.Reason);
+        Assert.True(request.RequiredCapabilities.HasFlag(WorkflowExecutionActorCapabilities.LeaseFencing));
     }
 
     [Fact]
     public void PassivationRequest_NamesSafeBoundary()
     {
-        var request = new WorkflowExecutionAgentPassivationRequest(
+        var request = new WorkflowExecutionActorPassivationRequest(
             workflowExecutionId: "wfexec-1",
-            boundary: WorkflowExecutionAgentPassivationBoundary.AfterCheckpointCommit,
+            boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
             requestedAt: _now,
             reason: "Host drain");
 
         Assert.Equal("wfexec-1", request.WorkflowExecutionId);
-        Assert.Equal(WorkflowExecutionAgentPassivationBoundary.AfterCheckpointCommit, request.Boundary);
+        Assert.Equal(WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit, request.Boundary);
         Assert.DoesNotContain(
-            Enum.GetNames<WorkflowExecutionAgentPassivationBoundary>(),
+            Enum.GetNames<WorkflowExecutionActorPassivationBoundary>(),
             name => name.Contains("Mid", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -243,7 +243,7 @@ public sealed class RuntimeAgentProviderContractTests
     [Fact]
     public void AgentContracts_DoNotIntroduceActorFrameworkDependencies()
     {
-        var runtimeCoreAssembly = typeof(IWorkflowExecutionAgentProvider).Assembly;
+        var runtimeCoreAssembly = typeof(IWorkflowExecutionActorProvider).Assembly;
         var referencedAssemblies = runtimeCoreAssembly.GetReferencedAssemblies().Select(assembly => assembly.Name).ToArray();
 
         Assert.DoesNotContain(referencedAssemblies, IsActorFrameworkReference);

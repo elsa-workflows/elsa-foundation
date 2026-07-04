@@ -67,7 +67,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var published = await Handler(workflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var dispatcher = new WorkflowStartDispatcher(
             _store,
-            new InProcessWorkflowExecutionAgentProvider(),
+            new InProcessWorkflowExecutionActorProvider(),
             new GuidRuntimeExecutionIdGenerator());
 
         var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(published.ArtifactId, "test"));

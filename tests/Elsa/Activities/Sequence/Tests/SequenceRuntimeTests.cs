@@ -100,7 +100,7 @@ public sealed class SequenceRuntimeTests
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
     {
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
@@ -150,13 +150,13 @@ public sealed class SequenceRuntimeTests
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "sequence-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {

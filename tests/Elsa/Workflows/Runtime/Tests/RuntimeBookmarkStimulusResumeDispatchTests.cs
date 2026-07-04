@@ -51,7 +51,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         var store = new InMemoryBookmarkStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-1"));
         await workflowStateStore.SaveAsync(NewWorkflowExecution());
@@ -74,7 +74,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.Equal("bookmark-1", result.Bookmark!.BookmarkId);
         Assert.Equal("resume-target:delivery", result.Resolution!.ResumeTarget.ResumeTargetId);
         var activation = Assert.Single(agentProvider.Activations);
-        Assert.Equal(WorkflowExecutionAgentActivationReason.ResumeBookmark, activation.Reason);
+        Assert.Equal(WorkflowExecutionActorActivationReason.ResumeBookmark, activation.Reason);
         Assert.Equal("adapter", activation.RequestedBy);
         var envelope = Assert.Single(agentProvider.Agent.Envelopes);
         Assert.Equal("envelope-1", envelope.EnvelopeId);
@@ -103,7 +103,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         var store = new InMemoryBookmarkStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-1"));
         await workflowStateStore.SaveAsync(NewWorkflowExecution());
@@ -124,7 +124,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     public async Task DispatchAsync_DoesNotEnqueueWhenWorkflowStateIsMissing()
     {
         var store = new InMemoryBookmarkStateStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, new InMemoryWorkflowExecutionStateStore(), new InMemoryWorkflowExecutableStore(), agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-1"));
 
@@ -140,7 +140,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     {
         var store = new InMemoryBookmarkStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, workflowStateStore, new InMemoryWorkflowExecutableStore(), agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-1"));
         await workflowStateStore.SaveAsync(NewWorkflowExecution());
@@ -158,7 +158,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         var store = new InMemoryBookmarkStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-1"));
         await workflowStateStore.SaveAsync(NewWorkflowExecution());
@@ -178,7 +178,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         var store = new InMemoryBookmarkStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
         var executableStore = new InMemoryWorkflowExecutableStore();
-        var agentProvider = new RecordingWorkflowExecutionAgentProvider();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
         var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
         await store.SaveAsync(NewBookmark("bookmark-a"));
         await store.SaveAsync(NewBookmark("bookmark-b"));
@@ -196,7 +196,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         IBookmarkStateStore bookmarkStateStore,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowExecutableStore executableStore,
-        IWorkflowExecutionAgentProvider agentProvider) =>
+        IWorkflowExecutionActorProvider agentProvider) =>
         new(
             new BookmarkStimulusLookup(bookmarkStateStore),
             workflowExecutionStateStore,
@@ -283,13 +283,13 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         return document.RootElement.Clone();
     }
 
-    private sealed class RecordingWorkflowExecutionAgentProvider : IWorkflowExecutionAgentProvider
+    private sealed class RecordingWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider
     {
-        public RecordingWorkflowExecutionAgent Agent { get; } = new();
-        public List<WorkflowExecutionAgentActivationRequest> Activations { get; } = [];
-        public WorkflowExecutionAgentCapabilities Capabilities => WorkflowExecutionAgentCapabilities.InProcessMailbox;
+        public RecordingWorkflowExecutionActor Agent { get; } = new();
+        public List<WorkflowExecutionActorActivationRequest> Activations { get; } = [];
+        public WorkflowExecutionActorCapabilities Capabilities => WorkflowExecutionActorCapabilities.InProcessMailbox;
 
-        public ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(request);
             cancellationToken.ThrowIfCancellationRequested();
@@ -298,20 +298,20 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
             return new(Agent);
         }
 
-        public ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
     }
 
-    private sealed class RecordingWorkflowExecutionAgent : IWorkflowExecutionAgent
+    private sealed class RecordingWorkflowExecutionActor : IWorkflowExecutionActor
     {
         public List<WorkflowExecutionCommandEnvelope> Envelopes { get; } = [];
 
-        public WorkflowExecutionAgentDescriptor Descriptor { get; } = new(
+        public WorkflowExecutionActorDescriptor Descriptor { get; } = new(
             workflowExecutionId: "wfexec-1",
             agentId: "agent-1",
             providerName: "recording",
-            status: WorkflowExecutionAgentStatus.Active,
-            capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox,
+            status: WorkflowExecutionActorStatus.Active,
+            capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
             activatedAt: DateTimeOffset.UnixEpoch);
 
         public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)

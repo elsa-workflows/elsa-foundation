@@ -4,28 +4,30 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecutionAgentProvider
+public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider
 {
-    public const string ProviderName = nameof(InProcessWorkflowExecutionAgentProvider);
+    // In-process diagnostic/routing label only; not persisted across runs (the actor subsystem is in-memory and
+    // descriptors are transient), so the nameof value tracks the type name without wire-compatibility risk.
+    public const string ProviderName = nameof(InProcessWorkflowExecutionActorProvider);
     public const int DefaultMaxProcessedIdempotencyKeysPerAgent = 4096;
 
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _lifecycleLocks = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, InProcessWorkflowExecutionAgent> _agents = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, InProcessWorkflowExecutionActor> _agents = new(StringComparer.Ordinal);
     private readonly IWorkflowExecutionCommandExecutor _commandProcessor;
     private readonly int _maxProcessedIdempotencyKeysPerAgent;
     private long _activationCounter;
 
-    public InProcessWorkflowExecutionAgentProvider()
+    public InProcessWorkflowExecutionActorProvider()
         : this(NoopWorkflowExecutionCommandExecutor.Instance)
     {
     }
 
-    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandExecutor commandProcessor)
+    public InProcessWorkflowExecutionActorProvider(IWorkflowExecutionCommandExecutor commandProcessor)
         : this(commandProcessor, DefaultMaxProcessedIdempotencyKeysPerAgent)
     {
     }
 
-    public InProcessWorkflowExecutionAgentProvider(IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeysPerAgent)
+    public InProcessWorkflowExecutionActorProvider(IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeysPerAgent)
     {
         ArgumentNullException.ThrowIfNull(commandProcessor);
 
@@ -36,16 +38,16 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         _maxProcessedIdempotencyKeysPerAgent = maxProcessedIdempotencyKeysPerAgent;
     }
 
-    public WorkflowExecutionAgentCapabilities Capabilities =>
-        WorkflowExecutionAgentCapabilities.InProcessMailbox |
-        WorkflowExecutionAgentCapabilities.Passivation;
+    public WorkflowExecutionActorCapabilities Capabilities =>
+        WorkflowExecutionActorCapabilities.InProcessMailbox |
+        WorkflowExecutionActorCapabilities.Passivation;
 
-    public async ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         var unsupportedCapabilities = request.RequiredCapabilities & ~Capabilities;
-        if (unsupportedCapabilities != WorkflowExecutionAgentCapabilities.None)
+        if (unsupportedCapabilities != WorkflowExecutionActorCapabilities.None)
             throw new NotSupportedException($"The in-process workflow execution agent provider does not support required capabilities: {unsupportedCapabilities}.");
 
         var lifecycleLock = GetLifecycleLock(request.WorkflowExecutionId);
@@ -56,7 +58,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
             var agent = _agents.GetOrAdd(request.WorkflowExecutionId, workflowExecutionId =>
             {
                 var activationId = Interlocked.Increment(ref _activationCounter);
-                return new InProcessWorkflowExecutionAgent(workflowExecutionId, activationId, _commandProcessor, _maxProcessedIdempotencyKeysPerAgent);
+                return new InProcessWorkflowExecutionActor(workflowExecutionId, activationId, _commandProcessor, _maxProcessedIdempotencyKeysPerAgent);
             });
 
             return agent;
@@ -67,7 +69,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         }
     }
 
-    public async ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -91,7 +93,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
     private SemaphoreSlim GetLifecycleLock(string workflowExecutionId) =>
         _lifecycleLocks.GetOrAdd(workflowExecutionId, _ => new SemaphoreSlim(1, 1));
 
-    private sealed class InProcessWorkflowExecutionAgent : IWorkflowExecutionAgent
+    private sealed class InProcessWorkflowExecutionActor : IWorkflowExecutionActor
     {
         private readonly SemaphoreSlim _mailbox = new(1, 1);
         private readonly HashSet<string> _processedIdempotencyKeys = new(StringComparer.Ordinal);
@@ -102,9 +104,9 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
         private readonly DateTimeOffset _activatedAt;
         private readonly object _statusLock = new();
         private readonly int _maxProcessedIdempotencyKeys;
-        private WorkflowExecutionAgentStatus _status = WorkflowExecutionAgentStatus.Active;
+        private WorkflowExecutionActorStatus _status = WorkflowExecutionActorStatus.Active;
 
-        public InProcessWorkflowExecutionAgent(string workflowExecutionId, long activationId, IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeys)
+        public InProcessWorkflowExecutionActor(string workflowExecutionId, long activationId, IWorkflowExecutionCommandExecutor commandProcessor, int maxProcessedIdempotencyKeys)
         {
             _workflowExecutionId = workflowExecutionId;
             _agentId = $"inprocess:{workflowExecutionId}:{activationId}";
@@ -113,15 +115,15 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
             _maxProcessedIdempotencyKeys = maxProcessedIdempotencyKeys;
         }
 
-        public WorkflowExecutionAgentDescriptor Descriptor => new(
+        public WorkflowExecutionActorDescriptor Descriptor => new(
             workflowExecutionId: _workflowExecutionId,
             agentId: _agentId,
             providerName: ProviderName,
             status: Status,
-            capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox | WorkflowExecutionAgentCapabilities.Passivation,
+            capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox | WorkflowExecutionActorCapabilities.Passivation,
             activatedAt: _activatedAt);
 
-        private WorkflowExecutionAgentStatus Status
+        private WorkflowExecutionActorStatus Status
         {
             get
             {
@@ -149,7 +151,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
                 if (!string.Equals(envelope.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Rejected, "Envelope workflow execution ID does not match this agent.");
 
-                if (Status != WorkflowExecutionAgentStatus.Active)
+                if (Status != WorkflowExecutionActorStatus.Active)
                     return DispatchResult(envelope, WorkflowExecutionCommandDispatchStatus.Deferred, "In-process workflow execution agent is passivated.");
 
                 if (_processedIdempotencyKeys.Contains(envelope.IdempotencyKey))
@@ -181,12 +183,12 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
             }
         }
 
-        public async ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken)
+        public async ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken)
         {
             if (!string.Equals(request.WorkflowExecutionId, _workflowExecutionId, StringComparison.Ordinal))
                 return;
 
-            SetStatus(WorkflowExecutionAgentStatus.Passivating);
+            SetStatus(WorkflowExecutionActorStatus.Passivating);
 
             try
             {
@@ -194,13 +196,13 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
             }
             catch
             {
-                SetStatus(WorkflowExecutionAgentStatus.Active);
+                SetStatus(WorkflowExecutionActorStatus.Active);
                 throw;
             }
 
             try
             {
-                SetStatus(WorkflowExecutionAgentStatus.Passivated);
+                SetStatus(WorkflowExecutionActorStatus.Passivated);
             }
             finally
             {
@@ -208,7 +210,7 @@ public sealed class InProcessWorkflowExecutionAgentProvider : IWorkflowExecution
             }
         }
 
-        private void SetStatus(WorkflowExecutionAgentStatus status)
+        private void SetStatus(WorkflowExecutionActorStatus status)
         {
             lock (_statusLock)
                 _status = status;

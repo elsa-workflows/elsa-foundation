@@ -11,7 +11,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
     private readonly IWorkflowExecutableStore _workflowExecutableStore;
     private readonly IBookmarkResumeResolver _bookmarkResumeResolver;
-    private readonly IWorkflowExecutionAgentProvider _agentProvider;
+    private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
 
@@ -20,7 +20,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowExecutableStore workflowExecutableStore,
         IBookmarkResumeResolver bookmarkResumeResolver,
-        IWorkflowExecutionAgentProvider agentProvider,
+        IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
         : this(bookmarkStimulusLookup, workflowExecutionStateStore, workflowExecutableStore, bookmarkResumeResolver, agentProvider, idGenerator, TimeProvider.System)
     {
@@ -31,7 +31,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         IWorkflowExecutionStateStore workflowExecutionStateStore,
         IWorkflowExecutableStore workflowExecutableStore,
         IBookmarkResumeResolver bookmarkResumeResolver,
-        IWorkflowExecutionAgentProvider agentProvider,
+        IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
     {
@@ -130,12 +130,12 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
             metadata: metadata);
-        var activationRequest = new WorkflowExecutionAgentActivationRequest(
+        var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: request.WorkflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.ResumeBookmark,
+            reason: WorkflowExecutionActorActivationReason.ResumeBookmark,
             requestedAt: now,
             requestedBy: request.RequestedBy,
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.None,
+            requiredCapabilities: WorkflowExecutionActorCapabilities.None,
             metadata: metadata);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);

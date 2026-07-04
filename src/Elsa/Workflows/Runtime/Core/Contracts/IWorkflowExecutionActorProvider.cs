@@ -12,11 +12,11 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// committer additionally fences checkpoint commits with an execution lease so a superseded writer that bypassed the
 /// mailbox cannot persist state.
 /// </remarks>
-public interface IWorkflowExecutionAgentProvider
+public interface IWorkflowExecutionActorProvider
 {
-    WorkflowExecutionAgentCapabilities Capabilities { get; }
+    WorkflowExecutionActorCapabilities Capabilities { get; }
 
-    ValueTask<IWorkflowExecutionAgent> GetAgentAsync(WorkflowExecutionAgentActivationRequest request, CancellationToken cancellationToken = default);
+    ValueTask<IWorkflowExecutionActor> GetAgentAsync(WorkflowExecutionActorActivationRequest request, CancellationToken cancellationToken = default);
 
-    ValueTask PassivateAsync(WorkflowExecutionAgentPassivationRequest request, CancellationToken cancellationToken = default);
+    ValueTask PassivateAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken = default);
 }

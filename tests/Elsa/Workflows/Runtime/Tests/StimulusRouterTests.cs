@@ -207,12 +207,12 @@ public sealed class StimulusRouterTests
                     workflowExecutionId: executionId,
                     status: WorkflowExecutionCommandDispatchStatus.Accepted,
                     recordedAt: DateTimeOffset.UnixEpoch),
-                new WorkflowExecutionAgentDescriptor(
+                new WorkflowExecutionActorDescriptor(
                     workflowExecutionId: executionId,
                     agentId: $"agent-{executionId}",
                     providerName: "recording",
-                    status: WorkflowExecutionAgentStatus.Active,
-                    capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox,
+                    status: WorkflowExecutionActorStatus.Active,
+                    capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
                     activatedAt: DateTimeOffset.UnixEpoch));
     }
 
@@ -246,12 +246,12 @@ public sealed class StimulusRouterTests
                     workflowExecutionId: request.WorkflowExecutionId,
                     status: WorkflowExecutionCommandDispatchStatus.Accepted,
                     recordedAt: DateTimeOffset.UnixEpoch),
-                agent: new WorkflowExecutionAgentDescriptor(
+                agent: new WorkflowExecutionActorDescriptor(
                     workflowExecutionId: request.WorkflowExecutionId,
                     agentId: $"agent-{request.WorkflowExecutionId}",
                     providerName: "recording",
-                    status: WorkflowExecutionAgentStatus.Active,
-                    capabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox,
+                    status: WorkflowExecutionActorStatus.Active,
+                    capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
                     activatedAt: DateTimeOffset.UnixEpoch));
             return new ValueTask<BookmarkResumeDispatchResult>(result);
         }

@@ -112,7 +112,7 @@ public sealed class FlowchartRuntimeTests
     private async Task ExecuteAsync(ServiceProvider provider, WorkflowExecutable executable)
     {
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
-        var agent = await provider.GetRequiredService<IWorkflowExecutionAgentProvider>()
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest("wfexec-1"));
 
         var result = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
@@ -170,13 +170,13 @@ public sealed class FlowchartRuntimeTests
     private static FlowchartConnection NewConnection(string sourceNodeId, string targetNodeId, string? sourcePort = null) =>
         new(new FlowchartEndpoint(sourceNodeId, sourcePort), new FlowchartEndpoint(targetNodeId));
 
-    private WorkflowExecutionAgentActivationRequest NewActivationRequest(string workflowExecutionId) =>
+    private WorkflowExecutionActorActivationRequest NewActivationRequest(string workflowExecutionId) =>
         new(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: _now,
             requestedBy: "flowchart-test",
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.InProcessMailbox);
+            requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
     private WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
     {

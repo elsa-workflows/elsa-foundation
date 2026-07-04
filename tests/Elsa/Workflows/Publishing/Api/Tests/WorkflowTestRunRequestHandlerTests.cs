@@ -239,7 +239,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private WorkflowStartDispatcher Dispatcher() =>
         new(
             _executableStore,
-            new InProcessWorkflowExecutionAgentProvider(),
+            new InProcessWorkflowExecutionActorProvider(),
             new GuidRuntimeExecutionIdGenerator());
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>

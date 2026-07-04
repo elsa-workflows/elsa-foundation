@@ -8,13 +8,13 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     private readonly IWorkflowExecutableStore _executableStore;
-    private readonly IWorkflowExecutionAgentProvider _agentProvider;
+    private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
-        IWorkflowExecutionAgentProvider agentProvider,
+        IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
         : this(executableStore, agentProvider, idGenerator, TimeProvider.System)
     {
@@ -22,7 +22,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
-        IWorkflowExecutionAgentProvider agentProvider,
+        IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
     {
@@ -105,12 +105,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             enqueuedAt: now,
             metadata: metadata);
 
-        var activationRequest = new WorkflowExecutionAgentActivationRequest(
+        var activationRequest = new WorkflowExecutionActorActivationRequest(
             workflowExecutionId: workflowExecutionId,
-            reason: WorkflowExecutionAgentActivationReason.Start,
+            reason: WorkflowExecutionActorActivationReason.Start,
             requestedAt: now,
             requestedBy: request.RequestedBy,
-            requiredCapabilities: WorkflowExecutionAgentCapabilities.None,
+            requiredCapabilities: WorkflowExecutionActorCapabilities.None,
             metadata: metadata);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);

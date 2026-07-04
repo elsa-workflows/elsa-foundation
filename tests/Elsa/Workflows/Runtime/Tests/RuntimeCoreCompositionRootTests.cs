@@ -28,7 +28,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.NotNull(provider.GetService<IRuntimeExecutionPipelineDispatcher>());
         Assert.NotNull(provider.GetService<IRuntimeWorkflowExecutionPipeline>());
         Assert.NotNull(provider.GetService<IRuntimeActivityExecutionPipeline>());
-        Assert.NotNull(provider.GetService<IWorkflowExecutionAgentProvider>());
+        Assert.NotNull(provider.GetService<IWorkflowExecutionActorProvider>());
         Assert.NotNull(provider.GetService<IWorkflowStartDispatcher>());
         Assert.NotEmpty(provider.GetServices<IWorkflowSchedulerWorkHandler>());
     }

@@ -103,7 +103,7 @@ public sealed class WorkflowExecutionStartDispatchResult
         string workflowExecutionId,
         WorkflowExecutableIdentity pinnedExecutable,
         WorkflowExecutionCommandDispatchResult commandDispatch,
-        WorkflowExecutionAgentDescriptor agent)
+        WorkflowExecutionActorDescriptor agent)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
@@ -125,5 +125,5 @@ public sealed class WorkflowExecutionStartDispatchResult
     public string WorkflowExecutionId { get; }
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public WorkflowExecutionCommandDispatchResult CommandDispatch { get; }
-    public WorkflowExecutionAgentDescriptor Agent { get; }
+    public WorkflowExecutionActorDescriptor Agent { get; }
 }

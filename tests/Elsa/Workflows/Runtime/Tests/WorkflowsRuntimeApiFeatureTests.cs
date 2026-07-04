@@ -69,7 +69,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRuntimeFaultCapturePolicy));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerPoisonStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionAgentProvider));
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionActorProvider));
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionPool");
         Assert.DoesNotContain(services, descriptor =>
@@ -85,7 +85,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
-        provider.GetRequiredService<IWorkflowExecutionAgentProvider>();
+        provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         provider.GetRequiredService<IWorkflowExecutionCommandExecutor>();
         provider.GetRequiredService<IWorkflowDrainOrchestrator>();
         provider.GetRequiredService<WorkflowDrainOrchestratorOptions>();
