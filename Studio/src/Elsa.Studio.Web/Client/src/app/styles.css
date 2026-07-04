@@ -1662,12 +1662,12 @@ textarea:focus {
 .studio-button.studio-button-primary {
   background: var(--studio-accent);
   border-color: var(--studio-accent);
-  color: #fff;
+  color: var(--studio-accent-text);
 }
 
 .studio-button.studio-button-primary:hover:not(:disabled) {
   filter: brightness(1.08);
-  color: #fff;
+  color: var(--studio-accent-text);
 }
 
 .extension-builder-advanced-toggle {

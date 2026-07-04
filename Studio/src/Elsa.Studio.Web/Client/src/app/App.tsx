@@ -70,12 +70,24 @@ interface HostHealthEntry {
   detail: string;
 }
 
+// Single source of truth for the categorical nav-icon accent colours. Both the built-in
+// navigation entries and getDefaultNavIconColor() (which matches contributed modules by id
+// substring) resolve against this map so the palette is defined exactly once.
+const navIconColors = {
+  dashboard: "#0ea5e9",
+  weather: "#14b8a6",
+  diagnostics: "#10b981",
+  modules: "#8b5cf6",
+  feeds: "#f59e0b",
+  extensionBuilder: "#ec4899"
+} as const;
+
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: "#0ea5e9" },
-  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: "#ec4899" },
-  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: "#8b5cf6" },
-  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: "#f59e0b" },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: "#10b981" }
+  { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0, iconColor: navIconColors.dashboard },
+  { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 40, iconColor: navIconColors.extensionBuilder },
+  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: navIconColors.modules },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: navIconColors.diagnostics }
 ];
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
@@ -1114,30 +1126,12 @@ function NavIconTile({ item }: { item: StudioNavigationContribution }) {
 }
 
 function getDefaultNavIconColor(id: string) {
-  if (id.includes("dashboard") || id === "home") {
-    return "#0ea5e9";
-  }
-
-  if (id.includes("weather")) {
-    return "#14b8a6";
-  }
-
-  if (id.includes("diagnostics")) {
-    return "#10b981";
-  }
-
-  if (id.includes("modules")) {
-    return "#8b5cf6";
-  }
-
-  if (id.includes("feeds")) {
-    return "#f59e0b";
-  }
-
-  if (id.includes("extension-builder")) {
-    return "#ec4899";
-  }
-
+  if (id.includes("dashboard") || id === "home") return navIconColors.dashboard;
+  if (id.includes("weather")) return navIconColors.weather;
+  if (id.includes("diagnostics")) return navIconColors.diagnostics;
+  if (id.includes("modules")) return navIconColors.modules;
+  if (id.includes("feeds")) return navIconColors.feeds;
+  if (id.includes("extension-builder")) return navIconColors.extensionBuilder;
   return "var(--primary)";
 }
 

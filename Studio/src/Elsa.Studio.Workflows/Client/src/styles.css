@@ -17,6 +17,17 @@
   --wf-danger-soft: color-mix(in srgb, var(--danger, #dc2626) 12%, var(--card, #ffffff));
   --wf-success: var(--success, #047857);
   --wf-success-soft: color-mix(in srgb, var(--success, #047857) 12%, var(--card, #ffffff));
+  /* Warning tone. --wf-warning is the saturated fill (borders/badges); --wf-warning-text is
+     the AA-readable dark-amber *text* colour for warning tints (the fill fails AA as text).
+     Replaces raw #f59e0b / #d97706 / #b45309 hexes scattered through this sheet. */
+  --wf-warning: var(--warning, #d97706);
+  --wf-warning-soft: color-mix(in srgb, var(--warning, #d97706) 12%, var(--card, #ffffff));
+  --wf-warning-text: var(--studio-warning-fg, #b45309);
+
+  /* Toggle-switch thumb. A near-white constant (not a raw #fff) that stays lighter than both
+     the off track (--wf-muted-text) and the on track (--wf-accent) in light AND dark mode,
+     where the former literal #fff had no theme-aware token backing it. */
+  --wf-switch-knob: oklch(0.99 0 0);
 
   /* Radii — reuse the host scale, fall back to standalone values when bundled alone. */
   --wf-radius-sm: var(--radius-sm, 4px);
@@ -163,7 +174,7 @@
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--wf-switch-knob);
   transition: transform 120ms ease;
 }
 
@@ -724,7 +735,7 @@
 }
 
 .wf-instance-incident[data-severity="warning"] {
-  border-color: color-mix(in srgb, #f59e0b 45%, var(--wf-border));
+  border-color: color-mix(in srgb, var(--wf-warning) 45%, var(--wf-border));
 }
 
 .wf-instance-incident[data-severity="error"],
@@ -921,9 +932,9 @@
 }
 
 .wf-status-badge[data-status="suspended"] {
-  border-color: color-mix(in srgb, #f59e0b 35%, var(--wf-border));
-  background: color-mix(in srgb, #f59e0b 14%, var(--wf-panel));
-  color: #b45309;
+  border-color: color-mix(in srgb, var(--wf-warning) 35%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  color: var(--wf-warning-text);
 }
 
 .wf-grid-row:hover {
@@ -1397,9 +1408,9 @@
 }
 
 .wf-editor-actions .wf-test-run-status[data-state="rejected"] .wf-test-run-trigger {
-  border-color: color-mix(in srgb, #d97706 40%, var(--wf-border));
-  background: color-mix(in srgb, #d97706 12%, var(--wf-panel));
-  color: #b45309;
+  border-color: color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-warning) 12%, var(--wf-panel));
+  color: var(--wf-warning-text);
 }
 
 .wf-editor-body {
@@ -2451,7 +2462,7 @@
   flex: 0 0 auto;
   border-top: 1px solid var(--wf-border);
   border-bottom: 0;
-  color: var(--warning, #92400e);
+  color: var(--wf-warning-text);
   font-size: 12px;
   padding: 0 12px;
 }
@@ -2510,8 +2521,8 @@
 }
 
 .wf-runtime-card[data-state="rejected"] {
-  border-color: color-mix(in srgb, #d97706 34%, var(--wf-border));
-  background: color-mix(in srgb, #d97706 9%, var(--wf-panel));
+  border-color: color-mix(in srgb, var(--wf-warning) 34%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-warning) 9%, var(--wf-panel));
 }
 
 .wf-runtime-card header {
@@ -3636,14 +3647,14 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--warning, #d97706);
+  background: var(--wf-warning);
   color: var(--warning-foreground, #ffffff);
   box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
   z-index: 2;
 }
 
 .wf-node-unavailable {
-  border-color: var(--warning, #d97706);
+  border-color: var(--wf-warning);
 }
 
 .wf-availability-notice {
@@ -3652,10 +3663,10 @@
   gap: 8px;
   margin: 8px 0;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--warning, #d97706) 50%, transparent);
-  background: color-mix(in srgb, var(--warning, #d97706) 14%, var(--wf-panel));
+  border: 1px solid color-mix(in srgb, var(--wf-warning) 50%, transparent);
+  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
   border-radius: var(--wf-radius);
-  color: var(--warning, #b45309);
+  color: var(--wf-warning-text);
   font-size: 12px;
 }
 
@@ -3670,7 +3681,7 @@
   display: block;
   margin-top: 3px;
   font-size: 11px;
-  color: var(--warning, #b45309);
+  color: var(--wf-warning-text);
 }
 
 .wf-variable-picker {
@@ -3728,7 +3739,7 @@
 }
 
 .wf-validation-item.repairable .wf-validation-message {
-  color: var(--warning, #b45309);
+  color: var(--wf-warning-text);
 }
 
 .wf-validation-message {
@@ -3752,5 +3763,5 @@
 }
 
 .wf-validation-repair:hover {
-  background: color-mix(in srgb, var(--warning, #d97706) 14%, var(--wf-panel));
+  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
 }
