@@ -27,6 +27,7 @@ public sealed class XmlHttpContentParser : IHttpContentParser
             return xml;
 
         var serializer = new XmlSerializer(returnType);
-        return serializer.Deserialize(reader)!;
+        using var stringReader = new StringReader(xml);
+        return serializer.Deserialize(stringReader)!;
     }
 }
