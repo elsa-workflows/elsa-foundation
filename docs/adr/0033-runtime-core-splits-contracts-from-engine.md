@@ -1,6 +1,6 @@
 # Runtime.Core Splits Contracts From The Engine
 
-Status: proposed
+Status: accepted (2026-07-04; execution scheduled as W28, solo after the Phase 4 Wave-A correctness units)
 
 `Elsa.Workflows.Runtime.Core` will be split along the framework §2.1 charter line into a retained
 contracts-and-models `.Core` and a new sibling **implementation** package that owns the runtime engine.
