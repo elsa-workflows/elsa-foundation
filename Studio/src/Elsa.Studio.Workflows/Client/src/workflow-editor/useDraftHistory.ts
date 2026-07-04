@@ -1,22 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
-import type { ScopeFrame } from "../workflowAdapter";
 import { canRedo, canUndo, createHistory, pushSnapshot, redo as redoHistory, undo as undoHistory, type HistoryState } from "../workflowHistory";
 import { historyCaptureDelayMs } from "./constants";
 import { cloneWorkflowDraftForUndo, getDraftSignature } from "./editorHelpers";
 
 interface DraftHistoryParams {
   draft: WorkflowDraft | null;
-  setDraft: React.Dispatch<React.SetStateAction<WorkflowDraft | null>>;
-  setSelectedNodeId: React.Dispatch<React.SetStateAction<string | null>>;
-  setFrames: React.Dispatch<React.SetStateAction<ScopeFrame[]>>;
+  // Restores a whole-draft snapshot into the editor document (resets scope + selection). The document
+  // reducer owns the cascade; the hook only decides *which* snapshot to restore.
+  restoreDraft(snapshot: WorkflowDraft): void;
 }
 
 // User-facing undo/redo. Snapshots are whole drafts; nodes/edges rebuild from them. Signature-driven
 // capture records every committed mutation (palette add, drag, property edit, auto-layout, code apply,
 // Weaver batch) without touching each handler. Lifted out of WorkflowEditor along with the associated
 // refs and the debounced capture effect.
-export function useDraftHistory({ draft, setDraft, setSelectedNodeId, setFrames }: DraftHistoryParams) {
+export function useDraftHistory({ draft, restoreDraft }: DraftHistoryParams) {
   const historyRef = useRef<HistoryState<WorkflowDraft>>(createHistory());
   const lastCapturedDraftRef = useRef<WorkflowDraft | null>(null);
   const lastCapturedSignatureRef = useRef("");
@@ -71,11 +70,9 @@ export function useDraftHistory({ draft, setDraft, setSelectedNodeId, setFrames 
     restoringRef.current = true;
     lastCapturedDraftRef.current = cloneWorkflowDraftForUndo(snapshot);
     lastCapturedSignatureRef.current = getDraftSignature(snapshot);
-    setDraft(snapshot);
-    setSelectedNodeId(null);
-    setFrames([]);
+    restoreDraft(snapshot);
     setHistoryVersion(version => version + 1);
-  }, [setDraft, setFrames, setSelectedNodeId]);
+  }, [restoreDraft]);
 
   const undo = useCallback(() => {
     if (!draft) return;
