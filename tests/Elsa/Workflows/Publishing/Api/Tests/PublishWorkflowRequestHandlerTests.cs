@@ -18,6 +18,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -159,7 +160,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var workflowVersion = WorkflowVersion(rootActivity: null);
         var handler = Handler(workflowVersion);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
         Assert.Contains("root activity", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -186,7 +187,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("", "JavaScript"), null, null, null, null)));
         var handler = Handler(workflowVersion);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
         Assert.Contains("no expression text", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -197,11 +198,26 @@ public sealed class PublishWorkflowRequestHandlerTests
         var workflowVersion = WorkflowVersion(new ActivityNode("missing", "missing-activity", [Text("one")], []));
         var handler = Handler(workflowVersion);
 
-        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
         Assert.Contains("missing-activity", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Activity definition version", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Workflow definition version", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task PropagatesTypedCompilationExceptionForUnknownVersionId()
+    {
+        // #397: publishing a VersionId the store cannot resolve used to bubble a raw ArgumentException from
+        // version-source resolution (which ran before the compiler's guarded region) and the handler then
+        // rewrapped every compilation failure into a bare ArgumentException, erasing the type. The handler now
+        // lets the typed WorkflowExecutableCompilationException propagate untouched.
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var handler = Handler(workflowVersion);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => handler.Handle(new PublishWorkflow("missing-version"), CancellationToken.None));
+
+        Assert.Contains("missing-version", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

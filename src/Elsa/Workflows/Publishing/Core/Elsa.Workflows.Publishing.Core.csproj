@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!--
+    Contracts-only seam for the compile-and-publish domain (DS-1). It carries the compiler contract,
+    the compile request/source/exception model, and the artifact/test-run store contracts so a CLI,
+    a batch republish job, or a test can compile a workflow without referencing the FastEndpoints
+    .Api shell. It depends DOWN only on the two .Core seams whose model types the contracts expose.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+</Project>

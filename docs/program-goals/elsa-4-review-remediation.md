@@ -107,6 +107,48 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   draws the ENGINE-telemetry vs. OpenTelemetry-ingestion distinction the review flagged. Cross-links
   the [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) bucket.
 
+- **W17 Publishing completion** — **in progress** (draft PR to main): DS-1 extracted a
+  contracts-only `Elsa.Workflows.Publishing.Core` from the `.Api` endpoint project (compiler
+  impl deliberately left in `.Api` — no third sub-100-LoC project), covered by the Architecture
+  layering guard. DS-2 verified the production publish path is already durable — the executable
+  persists through the runtime's Groundwork-backed `IWorkflowExecutableStore`, not the in-memory
+  transient staging store — so no Publishing-owned duplicate store/manifest was added (a conflicting
+  document kind would be a wire-level bug); proven by a restart-survival test (file-backed SQLite
+  reopen) and documented in [`docs/serialization.md`](../serialization.md). DS-5/DS-6 resolved
+  every checked-in empty endpoint stub: implemented `Get`/`Update`/`Delete` under
+  `Workflows/Design/Api/Endpoints/Definitions` (`Update` = the Draft-mutation gate forwarding to the
+  single coarse `IUpdateDraftCommand`), each secured by construction via `ConfigurePermissions()`
+  (W4, never anonymous) with handler + permission-guard tests in the new
+  `Elsa.Workflows.Design.Api.Tests` project; deleted the `Versions/Delete` stub plus all three
+  `Activities/Design/Api` stubs (published versions are immutable — no per-version delete). The W7
+  publish→trigger-index hook was verified already wired (`PublishWorkflowRequestHandler` indexes
+  within the publish flow; indexing failure fails the publish) — verified, not reworked. Folded
+  [#397](https://github.com/elsa-workflows/elsa-foundation/issues/397) (version-source resolution
+  moved inside the compile error path so the typed `WorkflowExecutableCompilationException`
+  propagates unwrapped) and [#398](https://github.com/elsa-workflows/elsa-foundation/issues/398)
+  (expiry/TTL bound on `InMemoryWorkflowTestRunStore`), both with tests. New Publishing `.Core`
+  seam catalogued in [`EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+
+- **W21 Modularity ergonomics (MD-5, MD-6, MD-10)** — **in progress** (draft PR to main; branch
+  point `1d5bb6bb`). Governance/analysis unit, no `src/` change beyond 5 registration tests.
+  **MD-5:** fresh LoC audit (13 projects <100 physical LoC; smallest 32) — all 13 map to a named
+  exception class, so **zero forced merges**; proposed a *soft* minimum-viable-project amendment
+  (framework §2.16.1: guidance threshold + six exception classes, no hard gate) as a draft routed
+  through Constitution Readiness, not applied to `constitution.md`
+  ([report](../reports/elsa-4-w21-md5-minimum-project-size-amendment.md)).
+  **MD-6:** `Elsa.Workflows.Runtime.Core` charter audit — grown to 19,029 LoC, of which
+  `Services/` (10,092 LoC / 94 files) is engine logic breaching the §2.1 `.Core` charter (a
+  *semantic* breach the mechanical dependency-envelope guards miss); disposition = contracts-vs-engine
+  split aligned with ADR-0029 / `specs/084`, recorded as **proposed**
+  [ADR 0033](../adr/0033-runtime-core-splits-contracts-from-engine.md) +
+  [audit report](../reports/elsa-4-w21-md6-runtime-core-charter-audit.md) (ratification owned by the
+  runtime-execution-seam architect; no split executed).
+  **MD-10:** §2.23.1 feature-registration audit re-enumerated at branch point — 70 concrete features,
+  47→**52 covered** after stamping 5 pattern-matched registration tests (Mediator, MemoryCache,
+  Secrets, Liquid, JavaScriptLibraries; tests/ only), 18 remaining gaps filed with per-feature
+  file:line evidence grouped by scaffolding need
+  ([gap report](../reports/elsa-4-w21-md10-feature-registration-test-gap.md)).
+  Snapshot caveat stated: counts are at `1d5bb6bb`; parallel W16/W17 will shift them.
 
 ### Follow-up findings recorded during Phase 0 execution
 

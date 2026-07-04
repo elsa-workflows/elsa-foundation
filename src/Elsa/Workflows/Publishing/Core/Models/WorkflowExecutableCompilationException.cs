@@ -1,4 +1,4 @@
-namespace Elsa.Workflows.Publishing.Api.Models;
+namespace Elsa.Workflows.Publishing.Core.Models;
 
 public sealed class WorkflowExecutableCompilationException(
     string? definitionId,
