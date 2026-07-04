@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
 import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
+import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
   afterEach(() => {
@@ -713,7 +714,7 @@ async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(<ModuleManagementPage api={api} />);
+    root.render(withQueryClient(<ModuleManagementPage api={api} />));
   });
   await flushPromises();
 
@@ -732,7 +733,7 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
   const root = createRoot(container);
 
   flushSync(() => {
-    root.render(<PackageFeedsPage api={api} />);
+    root.render(withQueryClient(<PackageFeedsPage api={api} />));
   });
   await flushPromises();
 
@@ -746,5 +747,9 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
 }
 
 async function flushPromises() {
-  await new Promise(resolve => setTimeout(resolve, 0));
+  // TanStack Query settles across several microtask/render cycles (queryFn resolve → cache commit →
+  // re-render), so flush a handful of macrotasks to let the registry queries reach their terminal state.
+  for (let i = 0; i < 5; i++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
 }
