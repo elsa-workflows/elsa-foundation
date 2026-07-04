@@ -1,5 +1,6 @@
+import { useId } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { StatusChip } from "../../ui";
+import { StatusChip, tabElementIds, useTablistKeyboard } from "../../ui";
 import type {
   BuildArtifact,
   BuildDiagnostic,
@@ -107,29 +108,43 @@ export function BottomDock({
   const effectiveTab: InspectorTab = tabs.some(tab => tab.id === activeTab) ? activeTab : "build";
   const changeCount = (sourceControlStatus?.changedFiles ?? []).length;
   const diagnosticCount = (activeBuild?.diagnostics ?? []).length;
+  const tabsBaseId = useId();
 
   function selectTab(tab: InspectorTab) {
     onSelectTab(tab);
     if (!open) onToggleOpen();
   }
 
+  const onTabsKeyDown = useTablistKeyboard(tabs.map(tab => tab.id), effectiveTab, id => selectTab(id as InspectorTab));
+
   return (
     <section className={open ? "extension-builder-dock open" : "extension-builder-dock"} aria-label="Build and runtime dock">
-      <div className="extension-builder-dock-tabs" role="tablist">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={open && tab.id === effectiveTab}
-            className={open && tab.id === effectiveTab ? "active" : ""}
-            onClick={() => selectTab(tab.id)}
-          >
-            {tab.label}
-            {tab.id === "source" && changeCount > 0 ? <span className="extension-builder-dock-badge warn">{changeCount}</span> : null}
-            {tab.id === "build" && diagnosticCount > 0 ? <span className="extension-builder-dock-badge">{diagnosticCount}</span> : null}
-          </button>
-        ))}
+      <div className="extension-builder-dock-tabs" role="tablist" aria-label="Dock panels" onKeyDown={onTabsKeyDown}>
+        {tabs.map(tab => {
+          const isActive = open && tab.id === effectiveTab;
+          const ids = tabElementIds(tabsBaseId, tab.id);
+          // Roving tabindex tracks the effective tab even while the dock is collapsed, so keyboard
+          // users can always reach and arrow through the tablist to reopen it.
+          const isRovingAnchor = tab.id === effectiveTab;
+          return (
+            <button
+              key={tab.id}
+              id={ids.tabId}
+              data-tab-id={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={ids.panelId}
+              tabIndex={isRovingAnchor ? 0 : -1}
+              className={isActive ? "active" : ""}
+              onClick={() => selectTab(tab.id)}
+            >
+              {tab.label}
+              {tab.id === "source" && changeCount > 0 ? <span className="extension-builder-dock-badge warn">{changeCount}</span> : null}
+              {tab.id === "build" && diagnosticCount > 0 ? <span className="extension-builder-dock-badge">{diagnosticCount}</span> : null}
+            </button>
+          );
+        })}
         <span className="extension-builder-dock-spacer" />
         {activeBuild ? <StatusChip tone={buildTone(activeBuild.status)}>{activeBuild.status}</StatusChip> : null}
         <button type="button" className="studio-icon-button" aria-label={open ? "Collapse dock" : "Expand dock"} title={open ? "Collapse" : "Expand"} onClick={onToggleOpen}>
@@ -138,7 +153,12 @@ export function BottomDock({
       </div>
 
       {open ? (
-        <div className="extension-builder-dock-body">
+        <div
+          className="extension-builder-dock-body"
+          role="tabpanel"
+          id={tabElementIds(tabsBaseId, effectiveTab).panelId}
+          aria-labelledby={tabElementIds(tabsBaseId, effectiveTab).tabId}
+        >
           {effectiveTab === "build" ? (
             <BuildPanel
               advanced={advanced}

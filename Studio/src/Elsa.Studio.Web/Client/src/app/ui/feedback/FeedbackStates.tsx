@@ -9,7 +9,10 @@ export function StudioAlert({
   tone?: StudioFeedbackTone;
   children: React.ReactNode;
 }) {
-  return <div className="studio-alert" data-tone={tone}>{children}</div>;
+  // Urgent tones (errors/warnings) use role="alert" (assertive) so screen readers announce them
+  // immediately; informational tones use role="status" (polite) to avoid interrupting the user.
+  const role = tone === "danger" || tone === "warning" ? "alert" : "status";
+  return <div className="studio-alert" role={role} data-tone={tone}>{children}</div>;
 }
 
 export function EmptyState({

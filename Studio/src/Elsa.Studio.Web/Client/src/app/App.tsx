@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -35,6 +35,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { QueryProvider } from "./providers/QueryProvider";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
@@ -262,7 +263,7 @@ function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit |
   return moduleManagementApiKey ? { "X-Elsa-Module-Management-Key": moduleManagementApiKey } : undefined;
 }
 
-function ShellFrame({
+export function ShellFrame({
   navigation,
   panels,
   path,
@@ -281,6 +282,7 @@ function ShellFrame({
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
+  const [navQuery, setNavQuery] = useState("");
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
     if (!item.parentId) {
@@ -292,10 +294,18 @@ function ShellFrame({
     childrenByParentId.set(item.parentId, children);
   }
 
+  const query = navQuery.trim().toLowerCase();
+  const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
+  // A parent stays visible when it matches directly or when any of its children match, so a filtered
+  // child never becomes orphaned. Children are filtered independently in the render below.
+  const itemVisible = (item: StudioNavigationContribution) =>
+    !query || matchesQuery(item) || (childrenByParentId.get(item.id) ?? []).some(matchesQuery);
+
   const navigationSections = [
-    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace") },
-    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings") }
+    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace").filter(itemVisible) },
+    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings").filter(itemVisible) }
   ].filter(section => section.items.length > 0);
+  const hasNavResults = navigationSections.length > 0;
 
   return (
     <div className="studio-shell">
@@ -311,21 +321,43 @@ function ShellFrame({
         </a>
 
         <label className="sidebar-search">
-          <Search size={16} />
-          <input aria-label="Search modules" placeholder="Search modules" />
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Search modules"
+            placeholder="Search modules"
+            value={navQuery}
+            onChange={event => setNavQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Escape" && navQuery) {
+                event.preventDefault();
+                setNavQuery("");
+              }
+            }}
+          />
         </label>
+
+        {query && !hasNavResults ? (
+          <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>
+        ) : null}
 
         {navigationSections.map(section => (
           <nav key={section.id} className="nav-section" aria-label={section.label}>
             <span className="nav-heading">{section.label}</span>
             {section.items.map(item => {
-              const childItems = (childrenByParentId.get(item.id) ?? []).filter(child => getNavigationSection(child) === section.id);
+              const childItems = (childrenByParentId.get(item.id) ?? [])
+                .filter(child => getNavigationSection(child) === section.id)
+                // When the parent matched the search directly, keep all of its children; otherwise only
+                // the children that match, so a filtered group doesn't reveal unrelated siblings.
+                .filter(child => !query || matchesQuery(item) || matchesQuery(child));
               const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+              const itemActive = isNavigationItemActive(item, path);
               return (
                 <div className="nav-item-group" key={item.id}>
                   <a
-                    className={[isNavigationItemActive(item, path) ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+                    className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
                     href={item.path}
+                    aria-current={itemActive ? "page" : undefined}
                     onClick={event => {
                       event.preventDefault();
                       onNavigate(item.path);
@@ -336,19 +368,23 @@ function ShellFrame({
                   </a>
                   {childItems.length > 0 ? (
                     <div className="nav-children">
-                      {childItems.map(child => (
-                        <a
-                          key={child.id}
-                          className={isNavigationItemActive(child, path) ? "active nav-child" : "nav-child"}
-                          href={child.path}
-                          onClick={event => {
-                            event.preventDefault();
-                            onNavigate(child.path);
-                          }}
-                        >
-                          {child.label}
-                        </a>
-                      ))}
+                      {childItems.map(child => {
+                        const childActive = isNavigationItemActive(child, path);
+                        return (
+                          <a
+                            key={child.id}
+                            className={childActive ? "active nav-child" : "nav-child"}
+                            href={child.path}
+                            aria-current={childActive ? "page" : undefined}
+                            onClick={event => {
+                              event.preventDefault();
+                              onNavigate(child.path);
+                            }}
+                          >
+                            {child.label}
+                          </a>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
@@ -409,6 +445,15 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   const ActivePanelComponent = activePanel.component;
+  const tabsBaseId = useId();
+  const panelKeyDown = useTablistKeyboard(
+    panels.map(panel => panel.id),
+    activePanel.id,
+    id => {
+      setActivePanelId(id);
+      setCollapsed(false);
+    }
+  );
 
   useEffect(() => {
     if (!panels.some(panel => panel.id === activePanelId)) {
@@ -548,22 +593,30 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
         />
       ) : null}
       <div className="bottom-panel-tabs">
-        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels">
-          {panels.map(panel => (
-            <button
-              key={panel.id}
-              type="button"
-              role="tab"
-              aria-selected={panel.id === activePanel.id}
-              className={panel.id === activePanel.id ? "active" : ""}
-              onClick={() => {
-                setActivePanelId(panel.id);
-                setCollapsed(false);
-              }}
-            >
-              {panel.title}
-            </button>
-          ))}
+        <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
+          {panels.map(panel => {
+            const isActive = panel.id === activePanel.id;
+            const ids = tabElementIds(tabsBaseId, panel.id);
+            return (
+              <button
+                key={panel.id}
+                id={ids.tabId}
+                data-tab-id={panel.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={ids.panelId}
+                tabIndex={isActive ? 0 : -1}
+                className={isActive ? "active" : ""}
+                onClick={() => {
+                  setActivePanelId(panel.id);
+                  setCollapsed(false);
+                }}
+              >
+                {panel.title}
+              </button>
+            );
+          })}
         </div>
         <div className="bottom-panel-actions" aria-label="Bottom panel controls">
           <button
@@ -586,7 +639,15 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
           </button>
         </div>
       </div>
-      <div className="bottom-panel-content" role="tabpanel" aria-label={activePanel.title} aria-hidden={collapsed}>
+      <div
+        className="bottom-panel-content"
+        role="tabpanel"
+        id={tabElementIds(tabsBaseId, activePanel.id).panelId}
+        aria-labelledby={tabElementIds(tabsBaseId, activePanel.id).tabId}
+        // When collapsed the content is visually hidden; `inert` also removes it from the tab order and
+        // the accessibility tree so keyboard/AT users don't land on off-screen controls (React 19).
+        inert={collapsed}
+      >
         <ActivePanelComponent />
       </div>
     </section>

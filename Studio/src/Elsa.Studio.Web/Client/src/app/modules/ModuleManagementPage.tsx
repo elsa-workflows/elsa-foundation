@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, StatusChip, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { EmptyState, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   createModuleManagementHosts,
   deleteDropFolderPackage,
@@ -182,10 +182,10 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
         </StudioToolbar>
       </div>
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
-      {activeState.error ? <div className="studio-alert" data-tone="danger">{activeState.error}</div> : null}
-      {activeState.status ? <div className="studio-alert" data-tone="success">{activeState.status}</div> : null}
+      {activeState.error ? <StudioAlert tone="danger">{activeState.error}</StudioAlert> : null}
+      {activeState.status ? <StudioAlert tone="success">{activeState.status}</StudioAlert> : null}
 
       <div className="modules-summary-strip">
         <SummaryItem label="Rows" value={rows.length} />
@@ -508,7 +508,7 @@ function ModuleInspector({
         <StatusChip tone={statusTone(selectedRow?.status ?? "available")}>{selectedRow?.status ?? "available"}</StatusChip>
       </div>
 
-      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} />
+      <StudioTabs tabs={inspectorTabs} activeTab={activeTab} onSelect={tab => onSelectTab(tab as InspectorTab)} ariaLabel="Inspector" />
 
       {activeTab === "overview" ? <OverviewTab host={host} registry={registry} selectedRow={selectedRow} /> : null}
       {activeTab === "contributions" ? <ContributionsTab selectedRow={selectedRow} /> : null}
