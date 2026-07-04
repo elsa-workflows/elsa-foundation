@@ -147,12 +147,11 @@ by the host — see the note in `Elsa.Server.csproj`).
 ## Elsa Studio
 
 The Studio image is **not** built from this repository. Build it from the sibling repo
-`elsa-foundation-studio` (branch `sfmskywalker-studio-docker-image`), whose Dockerfile also uses its
-repo root as build context:
+`elsa-foundation-studio` (main), whose Dockerfile also uses its repo root as build context:
 
 ```bash
 cd ../elsa-foundation-studio
-git checkout sfmskywalker-studio-docker-image
+git checkout main
 docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
 

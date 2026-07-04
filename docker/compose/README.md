@@ -77,17 +77,11 @@ continue to step 3.
 The Studio image is **not** built from this repository. Build it once from the sibling repo
 `elsa-foundation-studio`, whose Dockerfile also uses **its own repo root** as the build context.
 
-Until the Studio Docker support is merged, check out its branch first
-(`sfmskywalker-studio-docker-image`, PR [#182](https://github.com/elsa-workflows/elsa-foundation-studio/pull/182) in that repo):
-
 ```bash
 cd ../elsa-foundation-studio                 # sibling checkout, next to this repo
-git checkout sfmskywalker-studio-docker-image
+git checkout main
 docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
-
-> Once that PR is merged, drop the `git checkout` line and just build from the sibling repo's default
-> branch. The image tag must be `elsa-studio-web:local` — that is what the compose file expects.
 
 Back in this directory, bring up the whole stack with the `studio` profile:
 

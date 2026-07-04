@@ -71,11 +71,11 @@ services:
   # Elsa Studio (management UI).
   #
   # The image is NOT built from this repository. Build it once from the sibling
-  # repo elsa-foundation-studio (branch: sfmskywalker-studio-docker-image), whose
+  # repo elsa-foundation-studio (main), whose
   # Dockerfile also uses its repo root as build context:
   #
   #   cd ../elsa-foundation-studio          # sibling checkout
-  #   git checkout sfmskywalker-studio-docker-image
+  #   git checkout main
   #   docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
   #
   # Then start it with the 'studio' profile:
