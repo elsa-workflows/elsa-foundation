@@ -24,7 +24,7 @@ public class RunMigrationsStartupTask<TDbContext>(IDbContextFactory<TDbContext> 
         if (!shouldRunMigrations)
             return;
 
-        var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         await dbContext.Database.MigrateAsync(cancellationToken);
     }
 }
