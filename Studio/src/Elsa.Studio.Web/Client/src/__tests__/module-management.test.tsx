@@ -279,9 +279,10 @@ describe("module management page", () => {
     await unmount();
   });
 
-  it("deletes staged uploads through the existing drop-folder API", async () => {
+  it("deletes staged uploads through the existing drop-folder API after confirmation", async () => {
     const fetchMock = mockFetch();
-    const { container, unmount } = await renderModuleManagementPage(stubApi());
+    const confirm = vi.fn(async () => true);
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
     await clickSourceButton(container, "Nuplane");
 
     const deleteButton = stagedUploads(container)?.querySelector<HTMLButtonElement>("[title*='Delete Elsa.Studio.FeatureManagement.1.0.1.nupkg']");
@@ -293,12 +294,35 @@ describe("module management page", () => {
     await flushPromises();
     await flushPromises();
 
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]![0]).toMatchObject({ tone: "danger" });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://studio.example/_elsa/module-management/packages/drop-folder/Elsa.Studio.FeatureManagement.1.0.1.nupkg",
       expect.objectContaining({ method: "DELETE" })
     );
     expect(container.textContent).toContain("Nuplane reconciliation is running.");
     expect(container.textContent).not.toContain("Reconcile or restart may be required.");
+
+    await unmount();
+  });
+
+  it("does not delete a staged upload when the confirmation is cancelled", async () => {
+    const fetchMock = mockFetch();
+    const confirm = vi.fn(async () => false);
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ confirm }));
+    await clickSourceButton(container, "Nuplane");
+
+    const deleteButton = stagedUploads(container)?.querySelector<HTMLButtonElement>("[title*='Delete Elsa.Studio.FeatureManagement.1.0.1.nupkg']");
+    expect(deleteButton).toBeTruthy();
+
+    flushSync(() => {
+      deleteButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     await unmount();
   });
@@ -432,6 +456,50 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
+    const fetchMock = mockFetch();
+    const confirm = vi.fn(async () => true);
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
+
+    const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
+    expect(deleteFeedButton).toBeTruthy();
+
+    flushSync(() => {
+      deleteFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0]![0]).toMatchObject({ tone: "danger" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://studio.example/_elsa/module-management/feeds/studio-local-packages",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
+  it("does not delete a package feed when the confirmation is cancelled", async () => {
+    const fetchMock = mockFetch();
+    const confirm = vi.fn(async () => false);
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ confirm }));
+
+    const deleteFeedButton = container.querySelector<HTMLButtonElement>("[aria-label='Delete studio-local-packages']");
+    expect(deleteFeedButton).toBeTruthy();
+
+    flushSync(() => {
+      deleteFeedButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
   it("loads Server registry from the backend context when the Server tab is selected", async () => {
     const backendGetJson = vi.fn(async () => serverRegistry());
     const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
@@ -510,6 +578,7 @@ describe("module management page", () => {
 function stubApi(options?: {
   hostGetJson?: (url: string) => Promise<unknown>;
   backendGetJson?: (url: string) => Promise<unknown>;
+  confirm?: (options: { message: string }) => Promise<boolean>;
 }): ElsaStudioModuleApi {
   return {
     host: {
@@ -525,6 +594,13 @@ function stubApi(options?: {
     diagnostics: {
       add() {},
       list: () => []
+    },
+    // Default to auto-confirming so tests unrelated to the destructive-confirm flow are
+    // unaffected; the confirm-specific tests pass an explicit resolver.
+    dialogs: {
+      confirm: options?.confirm ?? (async () => true),
+      prompt: async () => null,
+      alert: async () => undefined
     }
   } as ElsaStudioModuleApi;
 }

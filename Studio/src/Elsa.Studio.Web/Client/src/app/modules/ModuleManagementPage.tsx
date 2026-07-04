@@ -142,6 +142,18 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     }
   }
 
+  // Deleting a staged drop-folder package permanently removes the uploaded .nupkg, so confirm first.
+  async function confirmAndDeleteDropFolderPackage(fileName: string) {
+    const confirmed = await api.dialogs.confirm({
+      title: "Delete staged package",
+      message: `Delete "${fileName}" from the ${activeHost.label} drop folder? This permanently removes the uploaded package file.`,
+      confirmLabel: "Delete package",
+      tone: "danger"
+    });
+    if (!confirmed) return;
+    await runHostOperation(() => deleteDropFolderPackage(activeHost.context, fileName), `Deleted ${fileName} from ${activeHost.label}. Nuplane reconciliation is running.`);
+  }
+
   function scheduleFollowUpRefreshes(hostId: HostId) {
     for (const delay of [500, 1500, 3000, 6000]) {
       const timerId = window.setTimeout(() => {
@@ -228,7 +240,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
                 uploadInputRef={uploadInputRef}
                 onUploadFiles={uploadSelectedFiles}
                 onDragActiveChange={setUploadDragActive}
-                onDeleteDropFolderPackage={fileName => runHostOperation(() => deleteDropFolderPackage(activeHost.context, fileName), `Deleted ${fileName} from ${activeHost.label}. Nuplane reconciliation is running.`)}
+                onDeleteDropFolderPackage={fileName => confirmAndDeleteDropFolderPackage(fileName)}
               />
             ) : null}
             {visibleRows.length === 0 ? (
