@@ -116,6 +116,43 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.DoesNotContain("\"nodes\"", json);
     }
 
+    [Fact]
+    public async Task Published_Executable_Survives_Restart()
+    {
+        // DS-2 (durability): the production publish path persists compiled executables through
+        // GroundworkWorkflowExecutableStore. A published artifact must survive a host restart — proven by
+        // writing through one bridge instance over a file-backed SQLite database, disposing it, then reopening
+        // the SAME database file with a FRESH bridge and reading the artifact (and its node tree) back.
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-executable-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+                await store.SaveAsync(Executable("artifact-1"));
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+                var found = await store.FindAsync("artifact-1");
+                Assert.NotNull(found);
+                Assert.Equal("artifact-1", found!.Identity.ArtifactId);
+                Assert.Equal("definition-1", found.Identity.DefinitionId);
+                Assert.Equal("root", found.RootActivity.ExecutableNodeId);
+                Assert.Equal("child", Assert.Single(Assert.Single(found.RootActivity.ChildSlots).Activities).ExecutableNodeId);
+                Assert.Equal("artifact-1", Assert.Single(await store.ListAsync()).Identity.ArtifactId);
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
+    }
+
     private static WorkflowExecutable Executable(
         string artifactId,
         string artifactVersion = "1",

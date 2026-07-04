@@ -159,3 +159,20 @@ require exactly-once start semantics must supply a stable `idempotencyKey`. The 
 in-process, best-effort store (not a durable cross-node dedup ledger); its guarantee is scoped to the
 process that owns it. This is documented on `IStimulusRouter`/`IStimulusStartDeduplicator` and is intentional
 scope for this wave — a heavy durable dedup store was explicitly out of scope.
+
+### Published executables are durable (DS-2, W17)
+
+A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Groundwork
+bridge as every other runtime kind — the **`workflowExecutable`** document kind (version 1 in
+[`ElsaRuntimeDocumentVersions`](../src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs)),
+written by
+[`GroundworkWorkflowExecutableStore`](../src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutableStore.cs)
+over the `IWorkflowExecutableStore` seam, with golden fixture `Fixtures/v1/workflowExecutable.json`. The
+`InMemory` executable store registered by `WorkflowsPublishingApiFeature` is a `TryAdd` default that the
+Groundwork runtime-persistence feature overrides; when durable persistence is composed, publishing is durable
+by construction. The `PublishWorkflowRequestHandler` saves the compiled artifact and then builds its trigger
+index in the same publish flow, so a published artifact **and** its start-triggers survive a host restart.
+`GroundworkWorkflowExecutableStoreTests.Published_Executable_Survives_Restart` proves this against a
+file-backed SQLite database reopened with a fresh bridge instance. There is intentionally **no**
+Publishing-owned executable store or manifest — a second store writing the same kind under different options
+would be a wire-level format divergence, exactly the hazard the per-kind versioning above exists to prevent.
