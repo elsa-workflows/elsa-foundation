@@ -55,6 +55,13 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** unifies runtime fault capture (RT-12) so the drainer's handler-crash path and the post-commit outbox delivery path both record the same structured `RuntimeFaultInfo` (exception type + message, stack trace behind an opt-in flag) instead of two divergent `exception.ToString()` / `exception.Message` policies. `RuntimeFaultInfo.ToSummaryString()` yields `"{ExceptionType}: {Message}"`.
 - **Default implementation:** `DefaultRuntimeFaultCapturePolicy` *(type full name + message; stack trace only when `RuntimeFaultCaptureOptions.CaptureStackTrace` is enabled)*.
 
+### `IWorkflowEngineTracer` *(Core — `Elsa.Workflows.Runtime.Core.Diagnostics`)*
+- **Kind:** Replacement (one tracer owns engine-phase span emission for a runtime composition).
+- **Signature:** `StartDrainCycle(RuntimeSchedulerDrainRequest)`, `StartDispatch(RuntimeSchedulerWorkItem)`, `StartActivityExecution(RuntimeSchedulerWorkItem)`, `StartCheckpointCommit(RuntimeCheckpointCommit)` — each returns `Activity?`.
+- **Usage:** engine self-instrumentation (MS-9). The four hot-path phases (drain → dispatch → activity.execute / checkpoint.commit) start spans on the `Elsa.Workflows.Runtime` `ActivitySource`; nesting is via `Activity.Current`, tags are set through `activity?.SetTag(...)` after values exist. Instrumentation is behaviour-preserving: no new awaits inside the fenced drain/commit sequences, no W12 slot reordering, and the no-op path allocates nothing. Span/tag names are the stable contract in `WorkflowEngineTelemetry`. This is **engine telemetry** (emits spans), not the `Elsa.Diagnostics.OpenTelemetry` ingestion domain (receives OTLP) — see [`docs/reference/engine-telemetry.md`](../../../../docs/reference/engine-telemetry.md).
+- **Default implementation:** `NullWorkflowEngineTracer` *(allocation-free no-op; registered by the runtime composition root)*.
+- **Alternative implementation:** `ActivitySourceWorkflowEngineTracer` *(opt-in — composed by the `WorkflowsRuntimeTracing` shell feature in `Elsa.Workflows.Runtime.Tracing`, which `services.Replace(...)`s the no-op; still costs nothing until an `ActivityListener`/OpenTelemetry `AddSource` attaches)*.
+
 ### `IWorkflowSchedulerPoisonStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns poison/retry records for crashed scheduler work items in a runtime composition).
 - **Signature:** `RecordAsync(RuntimeSchedulerPoisonRecord record, ...)`, `FindAsync(workflowExecutionId, workItemId, ...)`, `ListAsync(workflowExecutionId, ...)`.
