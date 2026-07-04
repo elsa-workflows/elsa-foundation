@@ -1,5 +1,6 @@
 import React from "react";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { StatusChip } from "@elsa-workflows/studio-ui";
 import "./styles.css";
 
 export function register(api: ElsaStudioModuleApi) {
@@ -29,7 +30,9 @@ export function ModuleHealthWidget() {
   return (
     <div className="admin-card dashboard-sample-card">
       <h2>Dashboard module</h2>
-      <p className="metric">Loaded</p>
+      <p className="metric">
+        <StatusChip tone="success">Loaded</StatusChip>
+      </p>
       <p>Runtime widget registration completed through the Studio SDK.</p>
     </div>
   );

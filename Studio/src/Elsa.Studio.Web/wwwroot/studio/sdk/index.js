@@ -1,18 +1,18 @@
-import { j as w } from "../vendor/chunks/jsx-runtime.js";
-import { r as h } from "../vendor/chunks/index.js";
+import { j as p } from "../vendor/chunks/jsx-runtime.js";
+import { createContext as ie, useContext as se, useState as O, useRef as D, useCallback as b, useLayoutEffect as ae, useMemo as G, useEffect as ce } from "react";
 const j = {
   status: "anonymous",
   roles: [],
   permissions: []
-}, K = {
+}, V = {
   status: "unknown",
   roles: [],
   permissions: []
 };
-function re(e) {
-  return new ne(e);
+function de(e) {
+  return new ue(e);
 }
-class ne {
+class ue {
   constructor(t) {
     this.options = t;
     for (const r of t.adapters ?? []) {
@@ -25,7 +25,7 @@ class ne {
   adapters = /* @__PURE__ */ new Map();
   activeAdapter = null;
   pendingLoginProviderId = null;
-  session = K;
+  session = V;
   getSession() {
     return this.session;
   }
@@ -77,7 +77,7 @@ class ne {
     const r = this.adapters.get(t);
     if (r)
       return r;
-    const o = (await this.options.bootstrap()).providers.find((s) => s.enabled && s.id === t);
+    const o = (await this.options.bootstrap()).providers.find((i) => i.enabled && i.id === t);
     if (!o)
       throw new x(`No auth provider adapter is registered for '${t}'.`);
     return this.resolveProviderAdapter(o);
@@ -105,27 +105,27 @@ class x extends Error {
     super(t), this.name = "AuthConfigurationError";
   }
 }
-function _(e) {
+function Q(e) {
   const t = e.fetch ?? fetch, r = e.sessionEndpoint ?? "/_elsa/identity/session", n = e.logoutEndpoint ?? `/_elsa/identity/logout/${encodeURIComponent(e.id)}`;
   return {
     id: e.id,
     kind: e.kind,
     initialize: () => E(t, r, e),
     login: (o) => {
-      const s = e.challenge;
-      if (!s || s.type === "none")
-        throw new b(`Provider '${e.id}' does not expose a redirect challenge.`);
-      const c = "method" in s ? s.method.toUpperCase() : "GET";
+      const i = e.challenge;
+      if (!i || i.type === "none")
+        throw new k(`Provider '${e.id}' does not expose a redirect challenge.`);
+      const c = "method" in i ? i.method.toUpperCase() : "GET";
       if (c !== "GET")
-        throw new b(`Provider '${e.id}' exposes an unsupported ${c} challenge.`);
-      const i = new URL(ie(s), D(e)), a = o?.returnUrl ?? e.location?.href ?? window.location.href;
-      return i.searchParams.set("returnUrl", ae(a, o?.providerId ?? e.id, e)), (e.location ?? window.location).assign(i.toString()), Promise.resolve();
+        throw new k(`Provider '${e.id}' exposes an unsupported ${c} challenge.`);
+      const s = new URL(he(i), U(e)), a = o?.returnUrl ?? e.location?.href ?? window.location.href;
+      return s.searchParams.set("returnUrl", pe(a, o?.providerId ?? e.id, e)), (e.location ?? window.location).assign(s.toString()), Promise.resolve();
     },
     handleCallback: () => E(t, r, e),
     logout: async () => {
       const o = await t($(n, e), { method: "POST", credentials: "include" });
       if (!o.ok)
-        throw new b(`Sign-out failed with ${o.status}.`);
+        throw new k(`Sign-out failed with ${o.status}.`);
     },
     getAccessToken: async () => {
       if (!e.tokenEndpoint)
@@ -134,15 +134,15 @@ function _(e) {
       if (o.status === 401)
         return null;
       if (!o.ok)
-        throw new b(`Access-token request failed with ${o.status}.`);
-      const s = await o.json();
-      return typeof s.accessToken == "string" ? s.accessToken : null;
+        throw new k(`Access-token request failed with ${o.status}.`);
+      const i = await o.json();
+      return typeof i.accessToken == "string" ? i.accessToken : null;
     },
     refresh: async () => {
-      const o = await e.getRefreshToken?.(), s = e.refreshEndpoint;
-      if (!s || !o)
+      const o = await e.getRefreshToken?.(), i = e.refreshEndpoint;
+      if (!i || !o)
         return E(t, r, e);
-      const c = await t($(s, e), {
+      const c = await t($(i, e), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -154,9 +154,9 @@ function _(e) {
       if (c.status === 401)
         return j;
       if (!c.ok)
-        throw new b(`Session refresh failed with ${c.status}.`);
-      const i = await c.json();
-      return i.status ? G(i) : E(t, r, e);
+        throw new k(`Session refresh failed with ${c.status}.`);
+      const s = await c.json();
+      return s.status ? X(s) : E(t, r, e);
     }
   };
 }
@@ -165,64 +165,64 @@ async function E(e, t, r) {
   if (n.status === 401)
     return j;
   if (!n.ok)
-    throw new b(`Session request failed with ${n.status}.`);
-  return oe(n);
+    throw new k(`Session request failed with ${n.status}.`);
+  return le(n);
 }
-async function oe(e) {
+async function le(e) {
   const t = await e.json();
-  return G(t);
+  return X(t);
 }
-function G(e) {
-  const t = se(e.status) ? e.status : "anonymous";
+function X(e) {
+  const t = fe(e.status) ? e.status : "anonymous";
   return {
     ...e,
     status: t,
-    roles: F(e.roles),
-    permissions: F(e.permissions)
+    roles: N(e.roles),
+    permissions: N(e.permissions)
   };
 }
-function F(e) {
+function N(e) {
   return Array.isArray(e) ? e.filter((t) => typeof t == "string") : [];
 }
-function se(e) {
+function fe(e) {
   return e === "unknown" || e === "anonymous" || e === "authenticated";
 }
-function ie(e) {
+function he(e) {
   return "loginPath" in e ? e.loginPath : e.url;
 }
 function $(e, t) {
-  return new URL(e, D(t)).toString();
+  return new URL(e, U(t)).toString();
 }
-function D(e) {
+function U(e) {
   return e?.baseUrl ?? e?.location?.origin ?? window.location.origin;
 }
-function ae(e, t, r) {
-  const n = new URL(e, ce(r));
-  return n.searchParams.set("authProviderId", t), de(e) ? `${n.pathname}${n.search}${n.hash}` : n.toString();
+function pe(e, t, r) {
+  const n = new URL(e, we(r));
+  return n.searchParams.set("authProviderId", t), ge(e) ? `${n.pathname}${n.search}${n.hash}` : n.toString();
 }
-function ce(e) {
-  return e?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? e?.location?.origin ?? D(e);
+function we(e) {
+  return e?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? e?.location?.origin ?? U(e);
 }
-function de(e) {
+function ge(e) {
   try {
     return new URL(e), !1;
   } catch {
     return !0;
   }
 }
-class b extends Error {
+class k extends Error {
   constructor(t) {
     super(t), this.name = "AuthAdapterError";
   }
 }
-function Je(e = {}) {
+function We(e = {}) {
   const t = e.baseUrl ?? window.location.origin, r = e.fetch ?? fetch;
-  return re({
-    bootstrap: () => O(r, t, "/_elsa/identity/bootstrap"),
-    capabilities: () => O(r, t, "/_elsa/identity/capabilities"),
+  return de({
+    bootstrap: () => W(r, t, "/_elsa/identity/bootstrap"),
+    capabilities: () => W(r, t, "/_elsa/identity/capabilities"),
     isCallback: e.isCallback,
     getCallbackProviderId: e.getCallbackProviderId,
-    adapterFactory: (n) => _({
+    adapterFactory: (n) => Q({
       id: n.id,
       kind: n.kind,
       baseUrl: t,
@@ -231,7 +231,7 @@ function Je(e = {}) {
     })
   });
 }
-async function O(e, t, r) {
+async function W(e, t, r) {
   const n = await e(new URL(r, t).toString(), {
     credentials: "include",
     cache: "no-store",
@@ -241,73 +241,73 @@ async function O(e, t, r) {
     throw new Error(`Auth discovery request failed with ${n.status}.`);
   return await n.json();
 }
-const V = h.createContext(null);
-function U() {
-  const e = h.useContext(V);
+const Y = ie(null);
+function q() {
+  const e = se(Y);
   if (!e)
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return e;
 }
-function De({ manager: e, children: t }) {
-  const [r, n] = h.useState(() => e.getSession() ?? K), [o, s] = h.useState(null), c = h.useRef(!1), i = h.useRef(0), a = h.useCallback((f) => c.current && i.current === f, []), l = h.useCallback(async (f) => {
+function ze({ manager: e, children: t }) {
+  const [r, n] = O(() => e.getSession() ?? V), [o, i] = O(null), c = D(!1), s = D(0), a = b((f) => c.current && s.current === f, []), l = b(async (f) => {
     if (a(f)) {
-      s(null);
+      i(null);
       try {
-        const p = await e.getCapabilities();
-        a(f) && s(p);
-      } catch (p) {
-        a(f) && (console.error("Auth capabilities request failed.", p), s(null));
+        const h = await e.getCapabilities();
+        a(f) && i(h);
+      } catch (h) {
+        a(f) && (console.error("Auth capabilities request failed.", h), i(null));
       }
     }
   }, [e, a]);
-  h.useLayoutEffect(() => {
+  ae(() => {
     c.current = !0;
-    const f = ++i.current;
-    async function p() {
+    const f = ++s.current;
+    async function h() {
       try {
-        const y = await e.initialize();
+        const g = await e.initialize();
         if (!a(f))
           return;
-        if (n(y), y.status !== "authenticated") {
-          s(null);
+        if (n(g), g.status !== "authenticated") {
+          i(null);
           return;
         }
         await l(f);
-      } catch (y) {
-        a(f) && (console.error("Auth initialization failed.", y), n(j), s(null));
+      } catch (g) {
+        a(f) && (console.error("Auth initialization failed.", g), n(j), i(null));
       }
     }
-    return p(), () => {
-      c.current = !1, i.current += 1;
+    return h(), () => {
+      c.current = !1, s.current += 1;
     };
   }, [l, e, a]);
-  const g = h.useCallback(async (f) => {
-    const p = ++i.current;
-    if (await e.login(f), !a(p))
+  const w = b(async (f) => {
+    const h = ++s.current;
+    if (await e.login(f), !a(h))
       return;
-    const y = e.getSession();
-    n(y), y.status === "authenticated" ? await l(p) : s(null);
-  }, [l, e, a]), C = h.useCallback(async () => {
-    const f = ++i.current;
-    await e.logout(), a(f) && (n(e.getSession()), s(null));
-  }, [e, a]), q = h.useCallback(async () => {
-    const f = ++i.current, p = await e.refresh();
-    return a(f) && (n(p), p.status === "authenticated" ? await l(f) : s(null)), p;
-  }, [l, e, a]), te = h.useMemo(() => ({
+    const g = e.getSession();
+    n(g), g.status === "authenticated" ? await l(h) : i(null);
+  }, [l, e, a]), C = b(async () => {
+    const f = ++s.current;
+    await e.logout(), a(f) && (n(e.getSession()), i(null));
+  }, [e, a]), F = b(async () => {
+    const f = ++s.current, h = await e.refresh();
+    return a(f) && (n(h), h.status === "authenticated" ? await l(f) : i(null)), h;
+  }, [l, e, a]), oe = G(() => ({
     session: r,
     capabilities: o,
-    login: g,
+    login: w,
     logout: C,
-    refresh: q
-  }), [o, g, C, q, r]);
-  return /* @__PURE__ */ w.jsx(V.Provider, { value: te, children: t });
+    refresh: F
+  }), [o, w, C, F, r]);
+  return /* @__PURE__ */ p.jsx(Y.Provider, { value: oe, children: t });
 }
-function ue() {
-  return U().session;
+function ye() {
+  return q().session;
 }
-function le() {
-  const { permissions: e } = ue();
-  return h.useMemo(() => {
+function ve() {
+  const { permissions: e } = ye();
+  return G(() => {
     const t = new Set(e);
     return {
       has: (r) => t.has(r),
@@ -316,71 +316,71 @@ function le() {
     };
   }, [e]);
 }
-function Ue() {
-  return U().capabilities;
+function He() {
+  return q().capabilities;
 }
-function qe({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
-  const o = le(), s = typeof e == "string" ? [e] : e ?? [];
-  return s.length === 0 || (t ? o.hasAll(s) : o.hasAny(s)) ? /* @__PURE__ */ w.jsx(w.Fragment, { children: n }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: r });
+function Me({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
+  const o = ve(), i = typeof e == "string" ? [e] : e ?? [];
+  return i.length === 0 || (t ? o.hasAll(i) : o.hasAny(i)) ? /* @__PURE__ */ p.jsx(p.Fragment, { children: n }) : /* @__PURE__ */ p.jsx(p.Fragment, { children: r });
 }
-function Fe({ children: e, fallback: t = null, loginOptions: r }) {
-  const { session: n, login: o } = U(), s = h.useRef(null);
-  return h.useEffect(() => {
+function Be({ children: e, fallback: t = null, loginOptions: r }) {
+  const { session: n, login: o } = q(), i = D(null);
+  return ce(() => {
     if (n.status === "anonymous") {
-      const c = fe(r), i = s.current;
-      if (i?.key === c && i.login === o)
+      const c = Ae(r), s = i.current;
+      if (s?.key === c && s.login === o)
         return;
       const a = { key: c, login: o };
-      s.current = a, o(r).catch((l) => {
-        s.current === a && (s.current = null), console.error("Auth login failed.", l);
+      i.current = a, o(r).catch((l) => {
+        i.current === a && (i.current = null), console.error("Auth login failed.", l);
       });
     } else
-      s.current = null;
-  }, [o, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ w.jsx(w.Fragment, { children: t }) : /* @__PURE__ */ w.jsx(w.Fragment, { children: e });
+      i.current = null;
+  }, [o, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ p.jsx(p.Fragment, { children: t }) : /* @__PURE__ */ p.jsx(p.Fragment, { children: e });
 }
-function fe(e) {
+function Ae(e) {
   return `${e?.providerId ?? ""}
 ${e?.returnUrl ?? ""}`;
 }
-function Oe(e) {
-  return _({
+function Ke(e) {
+  return Q({
     ...e,
     kind: "external-oidc"
   });
 }
-function Ne(e, t, r = {}) {
+function _e(e, t, r = {}) {
   return {
     requestJson(n, o) {
-      return A(e, n, t, r, T(o));
+      return v(e, n, t, r, T(o));
     },
     getJson(n, o) {
-      return A(e, n, t, r, T(o));
+      return v(e, n, t, r, T(o));
     },
-    postJson(n, o, s) {
-      return A(e, n, t, r, {
-        ...s,
+    postJson(n, o, i) {
+      return v(e, n, t, r, {
+        ...i,
         method: "POST",
-        headers: N(s?.headers),
+        headers: z(i?.headers),
         body: JSON.stringify(o)
       });
     },
-    putJson(n, o, s) {
-      return A(e, n, t, r, {
-        ...s,
+    putJson(n, o, i) {
+      return v(e, n, t, r, {
+        ...i,
         method: "PUT",
-        headers: N(s?.headers),
+        headers: z(i?.headers),
         body: JSON.stringify(o)
       });
     },
     deleteJson(n, o) {
-      return A(e, n, t, r, T({
+      return v(e, n, t, r, T({
         ...o,
         method: "DELETE"
       }));
     },
-    postForm(n, o, s) {
-      return A(e, n, t, r, T({
-        ...s,
+    postForm(n, o, i) {
+      return v(e, n, t, r, T({
+        ...i,
         method: "POST",
         body: o
       }));
@@ -388,10 +388,10 @@ function Ne(e, t, r = {}) {
   };
 }
 const J = /* @__PURE__ */ new Map();
-async function A(e, t, r, n, o) {
-  const s = n.fetch ?? fetch, c = new URL(t, e).toString(), i = await s(c, await Q(r, W(n, o))), a = i.status === 401 && n.refreshOnUnauthorized !== !1 ? await he(s, c, r, W(n, o)) : i;
+async function v(e, t, r, n, o) {
+  const i = n.fetch ?? fetch, c = new URL(t, e).toString(), s = await i(c, await Z(r, H(n, o))), a = s.status === 401 && n.refreshOnUnauthorized !== !1 ? await ke(i, c, r, H(n, o)) : s;
   if (!a.ok)
-    throw await X(a);
+    throw await ee(a);
   const l = await a.text();
   if (!l.trim())
     return {};
@@ -401,17 +401,17 @@ async function A(e, t, r, n, o) {
     throw new P(a.status, `Expected JSON from ${c}.`);
   }
 }
-async function he(e, t, r, n) {
-  return await pe(t, r) ? e(t, await Q(r, n)) : new Response("Authentication required.", { status: 401 });
+async function ke(e, t, r, n) {
+  return await be(t, r) ? e(t, await Z(r, n)) : new Response("Authentication required.", { status: 401 });
 }
-async function pe(e, t) {
+async function be(e, t) {
   const r = new URL(e).origin, n = J.get(r);
   if (n)
     return n;
-  const o = t.refresh().then((s) => s.status === "authenticated").finally(() => J.delete(r));
+  const o = t.refresh().then((i) => i.status === "authenticated").finally(() => J.delete(r));
   return J.set(r, o), o;
 }
-async function Q(e, t) {
+async function Z(e, t) {
   const r = new Headers(t?.headers), n = await e.getAccessToken();
   return n && r.set("Authorization", `Bearer ${n}`), {
     ...t,
@@ -427,24 +427,24 @@ function T(e) {
     headers: t
   };
 }
-function N(e) {
+function z(e) {
   const t = new Headers(e);
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
-function W(e, t) {
-  return v(e.defaultHeaders ?? e.headers, t);
+function H(e, t) {
+  return y(e.defaultHeaders ?? e.headers, t);
 }
-function we(e, t = {}) {
+function me(e, t = {}) {
   return async () => await e.getAccessToken() ?? await t.fallbackAccessTokenFactory?.() ?? t.anonymousToken ?? "";
 }
-function We(e, t) {
-  const r = ge(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
+function Ge(e, t) {
+  const r = Se(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
   return {
     ...e,
-    accessTokenFactory: we(t, { fallbackAccessTokenFactory: r })
+    accessTokenFactory: me(t, { fallbackAccessTokenFactory: r })
   };
 }
-function ge(e) {
+function Se(e) {
   return typeof e == "function";
 }
 const M = 1e4, u = {
@@ -504,13 +504,13 @@ const M = 1e4, u = {
   diagnostics: { id: u.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: d() },
   diagnosticsWidgets: { id: u.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: d() }
 };
-function Me(e) {
+function Ve(e) {
   return e;
 }
 function d(e = "studio-host") {
   return { kind: "host", id: e };
 }
-function ze(e) {
+function Qe(e) {
   return { kind: "module", id: e, moduleId: e };
 }
 function S(e = {}) {
@@ -526,14 +526,14 @@ function S(e = {}) {
       t.push(n);
     },
     list(n) {
-      return z(t, r, e, n).map((o) => o.contribution);
+      return B(t, r, e, n).map((o) => o.contribution);
     },
     compose(n) {
-      return z(t, r, e, n);
+      return B(t, r, e, n);
     }
   };
 }
-function He() {
+function Xe() {
   const e = /* @__PURE__ */ new Set(), t = /* @__PURE__ */ new Set();
   return {
     contextProviders: S({ slot: m.aiContextProviders }),
@@ -557,83 +557,83 @@ function He() {
     }
   };
 }
-function Be() {
+function Ye() {
   const e = [], t = /* @__PURE__ */ new Set();
   let r = 1;
   const n = () => e[0] ?? null, o = () => {
-    const i = n();
+    const s = n();
     for (const a of t)
-      a(i);
+      a(s);
   };
-  function s(i) {
-    e.push({ ...i, id: r++ }), e.length === 1 && o();
+  function i(s) {
+    e.push({ ...s, id: r++ }), e.length === 1 && o();
   }
   return {
     api: {
-      confirm(i) {
+      confirm(s) {
         return new Promise((a) => {
-          s({ ...i, kind: "confirm", settle: (l) => a(l === !0) });
+          i({ ...s, kind: "confirm", settle: (l) => a(l === !0) });
         });
       },
-      prompt(i) {
+      prompt(s) {
         return new Promise((a) => {
-          s({ ...i, kind: "prompt", settle: (l) => a(typeof l == "string" ? l : null) });
+          i({ ...s, kind: "prompt", settle: (l) => a(typeof l == "string" ? l : null) });
         });
       },
-      alert(i) {
+      alert(s) {
         return new Promise((a) => {
-          s({ ...i, kind: "alert", settle: () => a() });
+          i({ ...s, kind: "alert", settle: () => a() });
         });
       }
     },
-    subscribe(i) {
-      return t.add(i), i(n()), () => {
-        t.delete(i);
+    subscribe(s) {
+      return t.add(s), s(n()), () => {
+        t.delete(s);
       };
     },
     getCurrent: n,
-    respond(i, a) {
-      const l = e.findIndex((C) => C.id === i);
+    respond(s, a) {
+      const l = e.findIndex((C) => C.id === s);
       if (l === -1)
         return;
-      const [g] = e.splice(l, 1);
-      g.settle(a), l === 0 && o();
+      const [w] = e.splice(l, 1);
+      w.settle(a), l === 0 && o();
     },
     cancelAll() {
       if (e.length === 0)
         return;
-      const i = e.splice(0);
-      for (const a of i)
+      const s = e.splice(0);
+      for (const a of s)
         a.settle(a.kind === "prompt" ? null : !1);
       o();
     }
   };
 }
-function z(e, t, r, n = {}) {
-  return e.map((o, s) => ({
+function B(e, t, r, n = {}) {
+  return e.map((o, i) => ({
     contribution: o,
     slot: t,
-    availability: ye(o, t, r, n),
-    order: r.getOrder?.(o) ?? ke(o),
-    stableKey: r.getStableKey?.(o) ?? be(o, s),
-    index: s
-  })).filter((o) => Ae(o.availability, n)).sort((o, s) => o.order - s.order || o.stableKey.localeCompare(s.stableKey) || o.index - s.index).map(({ index: o, ...s }) => s);
+    availability: Pe(o, t, r, n),
+    order: r.getOrder?.(o) ?? Ee(o),
+    stableKey: r.getStableKey?.(o) ?? Te(o, i),
+    index: i
+  })).filter((o) => xe(o.availability, n)).sort((o, i) => o.order - i.order || o.stableKey.localeCompare(i.stableKey) || o.index - i.index).map(({ index: o, ...i }) => i);
 }
-function ye(e, t, r, n) {
-  const o = { contribution: e, slot: t, context: n.context }, s = R(r.slotOwner?.(o), "slot-owner");
-  if (s.state !== "available")
-    return s;
-  const c = H(e, "moduleId");
+function Pe(e, t, r, n) {
+  const o = { contribution: e, slot: t, context: n.context }, i = R(r.slotOwner?.(o), "slot-owner");
+  if (i.state !== "available")
+    return i;
+  const c = K(e, "moduleId");
   if (c && n.disabledModuleIds?.includes(c))
     return { state: "hidden", reason: `Module ${c} is disabled.`, source: "module" };
-  const i = H(e, "featureId");
-  if (i && n.disabledFeatureIds?.includes(i))
-    return { state: "hidden", reason: `Feature ${i} is disabled.`, source: "feature" };
-  const a = R(ve(e, n.context), "runtime"), l = R(r.hostPolicy?.(o), "host-policy");
+  const s = K(e, "featureId");
+  if (s && n.disabledFeatureIds?.includes(s))
+    return { state: "hidden", reason: `Feature ${s} is disabled.`, source: "feature" };
+  const a = R(Ce(e, n.context), "runtime"), l = R(r.hostPolicy?.(o), "host-policy");
   if (l.state !== "available")
     return l;
-  const g = R(n.hostPolicy?.(o), "host-policy");
-  return g.state !== "available" ? g : a;
+  const w = R(n.hostPolicy?.(o), "host-policy");
+  return w.state !== "available" ? w : a;
 }
 function R(e, t) {
   if (e === !1)
@@ -648,19 +648,19 @@ function R(e, t) {
   }
   return { state: "available" };
 }
-function ve(e, t) {
+function Ce(e, t) {
   if (!L(e) || !("availability" in e))
     return !0;
   const r = e.availability;
   return typeof r == "function" ? r(t) : r;
 }
-function Ae(e, t) {
+function xe(e, t) {
   return e.state === "available" ? !0 : e.state === "hidden" ? t.includeHidden === !0 : t.includeUnavailable === !0;
 }
-function ke(e) {
-  return me(e, "order") ?? 500;
+function Ee(e) {
+  return Re(e, "order") ?? 500;
 }
-function be(e, t) {
+function Te(e, t) {
   if (!L(e))
     return `_${t.toString().padStart(4, "0")}`;
   for (const r of ["id", "name", "label", "title", "path"]) {
@@ -670,13 +670,13 @@ function be(e, t) {
   }
   return `_${t.toString().padStart(4, "0")}`;
 }
-function H(e, t) {
+function K(e, t) {
   if (!L(e))
     return;
   const r = e[t];
   return typeof r == "string" ? r : void 0;
 }
-function me(e, t) {
+function Re(e, t) {
   if (!L(e))
     return;
   const r = e[t];
@@ -685,45 +685,45 @@ function me(e, t) {
 function L(e) {
   return typeof e == "object" && e !== null;
 }
-function Ke(e, t = {}) {
+function Ze(e, t = {}) {
   return {
     baseUrl: e,
     headers: t.headers,
-    http: Se(e, t.headers)
+    http: Ie(e, t.headers)
   };
 }
-function Se(e, t) {
+function Ie(e, t) {
   return {
     requestJson(r, n) {
-      return k(e, r, v(t, I(n)));
+      return A(e, r, y(t, I(n)));
     },
     async getJson(r, n) {
-      return k(e, r, v(t, I(n)));
+      return A(e, r, y(t, I(n)));
     },
     async postJson(r, n, o) {
-      return k(e, r, v(t, {
+      return A(e, r, y(t, {
         ...o,
         method: "POST",
-        headers: B(o?.headers),
+        headers: _(o?.headers),
         body: JSON.stringify(n)
       }));
     },
     async putJson(r, n, o) {
-      return k(e, r, v(t, {
+      return A(e, r, y(t, {
         ...o,
         method: "PUT",
-        headers: B(o?.headers),
+        headers: _(o?.headers),
         body: JSON.stringify(n)
       }));
     },
     async deleteJson(r, n) {
-      return k(e, r, v(t, I({
+      return A(e, r, y(t, I({
         ...n,
         method: "DELETE"
       })));
     },
     async postForm(r, n, o) {
-      return k(e, r, v(t, I({
+      return A(e, r, y(t, I({
         ...o,
         method: "POST",
         body: n
@@ -731,44 +731,44 @@ function Se(e, t) {
     }
   };
 }
-function v(e, t = {}) {
+function y(e, t = {}) {
   return e ? {
     ...t,
-    headers: Pe(e, t.headers)
+    headers: $e(e, t.headers)
   } : t;
 }
-function Pe(e, t) {
+function $e(e, t) {
   const r = new Headers(e);
   return new Headers(t).forEach((n, o) => r.set(o, n)), r;
 }
-async function k(e, t, r) {
-  const n = Ie(e, t), o = new AbortController(), s = globalThis.setTimeout(() => o.abort(), M);
+async function A(e, t, r) {
+  const n = qe(e, t), o = new AbortController(), i = globalThis.setTimeout(() => o.abort(), M);
   let c;
   try {
     c = await fetch(n, {
       ...r,
-      signal: Ce(r?.signal, o.signal)
+      signal: je(r?.signal, o.signal)
     });
   } catch (a) {
     throw o.signal.aborted && !r?.signal?.aborted ? new Error(`Request to ${n} timed out after ${M / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : a;
   } finally {
-    globalThis.clearTimeout(s);
+    globalThis.clearTimeout(i);
   }
   if (!c.ok)
-    throw await X(c);
-  const i = await c.text();
-  if (!i.trim())
+    throw await ee(c);
+  const s = await c.text();
+  if (!s.trim())
     return {};
   try {
-    return JSON.parse(i);
+    return JSON.parse(s);
   } catch {
     throw new P(
       c.status,
-      `Expected JSON from ${n}, but received ${$e(c, i)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+      `Expected JSON from ${n}, but received ${Fe(c, s)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
-function Ce(e, t) {
+function je(e, t) {
   if (!e)
     return t;
   if (typeof AbortSignal.any == "function")
@@ -776,20 +776,20 @@ function Ce(e, t) {
   const r = new AbortController(), n = () => r.abort();
   return e.aborted || t.aborted ? r.abort() : (e.addEventListener("abort", n, { once: !0 }), t.addEventListener("abort", n, { once: !0 })), r.signal;
 }
-async function xe(e) {
-  return (await Y(e)).message;
+async function Le(e) {
+  return (await te(e)).message;
 }
-async function X(e) {
-  const t = await Y(e);
+async function ee(e) {
+  const t = await te(e);
   return new P(e.status, t.message, t.validationErrors, t.payload);
 }
-async function Y(e) {
+async function te(e) {
   const t = e.headers.get("content-type") ?? "";
-  if (Ee(t))
+  if (Je(t))
     try {
-      const n = await e.json(), o = Z(n);
+      const n = await e.json(), o = re(n);
       return {
-        message: Te(n) ?? Re(o) ?? `Request failed with ${e.status}.`,
+        message: De(n) ?? Ue(o) ?? `Request failed with ${e.status}.`,
         validationErrors: o,
         payload: n
       };
@@ -798,33 +798,33 @@ async function Y(e) {
     }
   return { message: (await e.text()).trim() || `Request failed with ${e.status}.`, validationErrors: null, payload: null };
 }
-function Ee(e) {
+function Je(e) {
   return e.toLowerCase().includes("json");
 }
-async function _e(e) {
+async function et(e) {
   if (e instanceof P)
     return e.message;
-  if (ee(e))
+  if (ne(e))
     try {
-      return await xe(e.response.clone());
+      return await Le(e.response.clone());
     } catch {
       return e.response.statusText || "Request failed.";
     }
   return e instanceof Error ? e.message : "Unknown error.";
 }
-async function Ge(e) {
+async function tt(e) {
   if (e instanceof P)
     return e.validationErrors;
-  if (!ee(e))
+  if (!ne(e))
     return null;
   try {
     const t = await e.response.clone().json();
-    return Z(t);
+    return re(t);
   } catch {
     return null;
   }
 }
-function Te(e) {
+function De(e) {
   if (typeof e.detail == "string" && e.detail.length > 0) return e.detail;
   if (typeof e.title == "string" && e.title.length > 0) return e.title;
   if (typeof e.reason == "string" && e.reason.length > 0) return e.reason;
@@ -835,24 +835,24 @@ function Te(e) {
   }
   return null;
 }
-function Z(e) {
+function re(e) {
   const t = e.errors;
   if (!t || typeof t != "object" || Array.isArray(t))
     return null;
   const r = {};
   for (const [n, o] of Object.entries(t)) {
-    const s = Array.isArray(o) ? o.map(String) : [String(o)];
-    s.length > 0 && (r[n] = s);
+    const i = Array.isArray(o) ? o.map(String) : [String(o)];
+    i.length > 0 && (r[n] = i);
   }
   return Object.keys(r).length > 0 ? r : null;
 }
-function Re(e) {
+function Ue(e) {
   return e ? Object.values(e).flat().join(" ") : null;
 }
-function ee(e) {
+function ne(e) {
   return typeof e == "object" && e !== null && "response" in e && e.response instanceof Response;
 }
-function Ie(e, t) {
+function qe(e, t) {
   return new URL(t, e).toString();
 }
 function I(e) {
@@ -863,11 +863,11 @@ function I(e) {
     headers: t
   };
 }
-function B(e) {
+function _(e) {
   const t = new Headers(e);
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
-function $e(e, t) {
+function Fe(e, t) {
   const r = e.headers.get("content-type") ?? "an unknown content type", n = t.trim(), o = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
   return `${r}${o}`;
 }
@@ -880,36 +880,36 @@ class P extends Error {
   payload;
 }
 export {
-  b as AuthAdapterError,
+  k as AuthAdapterError,
   x as AuthConfigurationError,
-  qe as AuthGuard,
-  De as AuthProvider,
-  Fe as RequireAuth,
+  Me as AuthGuard,
+  ze as AuthProvider,
+  Be as RequireAuth,
   P as StudioHttpError,
-  He as createAiContributionApi,
-  re as createAuthProviderManager,
-  Ne as createAuthenticatedHttpClient,
-  Je as createBackendAuthProviderManager,
+  Xe as createAiContributionApi,
+  de as createAuthProviderManager,
+  _e as createAuthenticatedHttpClient,
+  We as createBackendAuthProviderManager,
   S as createContributionRegistry,
-  Be as createDialogController,
-  Ke as createEndpointContext,
-  Se as createHttpClient,
-  Oe as createOidcAuthAdapter,
-  _ as createRedirectAuthAdapter,
-  we as createSignalRAccessTokenFactory,
-  X as createStudioHttpError,
-  Me as defineStudioSlot,
-  _e as describeApiError,
+  Ye as createDialogController,
+  Ze as createEndpointContext,
+  Ie as createHttpClient,
+  Ke as createOidcAuthAdapter,
+  Q as createRedirectAuthAdapter,
+  me as createSignalRAccessTokenFactory,
+  ee as createStudioHttpError,
+  Ve as defineStudioSlot,
+  et as describeApiError,
   d as hostSlotOwner,
-  ze as moduleSlotOwner,
-  xe as readStudioHttpErrorMessage,
+  Qe as moduleSlotOwner,
+  Le as readStudioHttpErrorMessage,
   u as studioSlotIds,
   m as studioSlots,
-  Ge as tryExtractValidationErrors,
-  Ue as useAuthCapabilities,
-  U as useAuthContext,
-  ue as useAuthSession,
-  le as usePermissions,
-  We as withAuthenticatedSignalROptions,
-  v as withDefaultHeaders
+  tt as tryExtractValidationErrors,
+  He as useAuthCapabilities,
+  q as useAuthContext,
+  ye as useAuthSession,
+  ve as usePermissions,
+  Ge as withAuthenticatedSignalROptions,
+  y as withDefaultHeaders
 };

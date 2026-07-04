@@ -1,24 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import React from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Moon, Sun, Palette, Check } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 import "./ThemeSwitcher.css";
 
 export function ThemeSwitcher() {
   const { currentTheme, mode, setTheme, setMode, availableThemes } = useTheme();
-  const [isThemeOpen, setIsThemeOpen] = useState(false);
-  const themeDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (themeDropdownRef.current && !themeDropdownRef.current.contains(event.target as Node)) {
-        setIsThemeOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const toggleMode = () => {
     setMode(mode === "light" ? "dark" : "light");
@@ -36,44 +23,44 @@ export function ThemeSwitcher() {
         {mode === "light" ? <Moon size={18} /> : <Sun size={18} />}
       </button>
 
-      {/* Theme Selector Dropdown */}
-      <div className="theme-selector-wrapper" ref={themeDropdownRef}>
-        <button
-          className="theme-selector-button"
-          onClick={() => setIsThemeOpen(!isThemeOpen)}
-          aria-label="Select theme"
-          aria-expanded={isThemeOpen}
-          title={`Theme: ${currentTheme.name}`}
-        >
-          <Palette size={18} />
-          <span className="theme-selector-swatch" aria-hidden="true">
-            <span
-              className="theme-selector-swatch-dot"
-              style={{ backgroundColor: currentTheme.light.primary }}
-            />
-            <span
-              className="theme-selector-swatch-dot"
-              style={{ backgroundColor: currentTheme.dark.primary }}
-            />
-          </span>
-        </button>
+      {/* Theme Selector Dropdown (Radix: keyboard nav, Esc, focus trap/restore, ARIA menu) */}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className="theme-selector-button"
+            aria-label="Select theme"
+            title={`Theme: ${currentTheme.name}`}
+          >
+            <Palette size={18} />
+            <span className="theme-selector-swatch" aria-hidden="true">
+              <span
+                className="theme-selector-swatch-dot"
+                style={{ backgroundColor: currentTheme.light.primary }}
+              />
+              <span
+                className="theme-selector-swatch-dot"
+                style={{ backgroundColor: currentTheme.dark.primary }}
+              />
+            </span>
+          </button>
+        </DropdownMenu.Trigger>
 
-        {isThemeOpen && (
-          <div className="theme-dropdown">
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="theme-dropdown"
+            align="end"
+            sideOffset={8}
+          >
             <div className="theme-dropdown-header">
               <span className="theme-dropdown-title">Choose a theme</span>
             </div>
             <div className="theme-list">
               {availableThemes.map((theme) => (
-                <button
+                <DropdownMenu.Item
                   key={theme.id}
                   className={`theme-item ${currentTheme.id === theme.id ? "active" : ""}`}
                   aria-label={theme.name}
-                  aria-pressed={currentTheme.id === theme.id}
-                  onClick={() => {
-                    setTheme(theme.id);
-                    setIsThemeOpen(false);
-                  }}
+                  onSelect={() => setTheme(theme.id)}
                   title={theme.description}
                 >
                   <span className="theme-item-preview" aria-hidden="true">
@@ -90,12 +77,12 @@ export function ThemeSwitcher() {
                   {currentTheme.id === theme.id && (
                     <Check size={16} className="theme-item-checkmark" aria-hidden="true" />
                   )}
-                </button>
+                </DropdownMenu.Item>
               ))}
             </div>
-          </div>
-        )}
-      </div>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

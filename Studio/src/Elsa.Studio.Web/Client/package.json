@@ -12,7 +12,11 @@
   "dependencies": {
     "@elsa-workflows/studio-code-editor": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.6",
+    "@radix-ui/react-dropdown-menu": "2.1.15",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17"
   }
 }

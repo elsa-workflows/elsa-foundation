@@ -11,7 +11,7 @@ export default defineConfig({
     outDir: "../wwwroot/studio",
     emptyOutDir: true,
     rollupOptions: {
-      external: ["react", "react-dom", "react-dom/client", "@elsa-workflows/studio-sdk", "@tanstack/react-query"],
+      external: ["react", "react-dom", "react-dom/client", "@elsa-workflows/studio-sdk", "@tanstack/react-query", "lucide-react"],
       output: {
         entryFileNames: "assets/[name].js",
         chunkFileNames: "assets/[name].js",

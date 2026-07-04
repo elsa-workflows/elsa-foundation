@@ -84,11 +84,8 @@
   border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
+/* Positioning is handled by Radix (portaled Content with align="end"/sideOffset). */
 .theme-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
   width: min(320px, calc(100vw - 32px));
   background: var(--card);
   border: 1px solid var(--border);
@@ -161,11 +158,19 @@
   content: none;
 }
 
-.theme-item:hover {
+.theme-item:hover,
+.theme-item[data-highlighted] {
   background: var(--muted);
   border-color: var(--border);
   transform: none;
   box-shadow: none;
+}
+
+/* Radix menu items are focused via roving tabindex; suppress the native outline
+   since keyboard focus is conveyed by [data-highlighted]. */
+.theme-item:focus,
+.theme-item:focus-visible {
+  outline: none;
 }
 
 .theme-item.active {
@@ -194,7 +199,8 @@
   box-shadow: none;
 }
 
-.theme-item:hover .theme-color-dot {
+.theme-item:hover .theme-color-dot,
+.theme-item[data-highlighted] .theme-color-dot {
   border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
 }
 

@@ -1,15 +1,16 @@
-var i = { exports: {} }, s = {};
-var l;
-function p() {
-  if (l) return s;
-  l = 1;
-  var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), c = /* @__PURE__ */ Symbol.for("react.fragment");
+import { StatusChip as p } from "@elsa-workflows/studio-ui";
+var a = { exports: {} }, s = {};
+var u;
+function m() {
+  if (u) return s;
+  u = 1;
+  var t = /* @__PURE__ */ Symbol.for("react.transitional.element"), l = /* @__PURE__ */ Symbol.for("react.fragment");
   function o(h, r, d) {
     var n = null;
     if (d !== void 0 && (n = "" + d), r.key !== void 0 && (n = "" + r.key), "key" in r) {
       d = {};
-      for (var a in r)
-        a !== "key" && (d[a] = r[a]);
+      for (var i in r)
+        i !== "key" && (d[i] = r[i]);
     } else d = r;
     return r = d.ref, {
       $$typeof: t,
@@ -19,19 +20,19 @@ function p() {
       props: d
     };
   }
-  return s.Fragment = c, s.jsx = o, s.jsxs = o, s;
+  return s.Fragment = l, s.jsx = o, s.jsxs = o, s;
 }
-var u;
-function m() {
-  return u || (u = 1, i.exports = p()), i.exports;
+var c;
+function x() {
+  return c || (c = 1, a.exports = m()), a.exports;
 }
-var e = m();
-function v(t) {
+var e = x();
+function f(t) {
   t.dashboardWidgets.add({
     id: "dashboard-sample-health",
     title: "Module health",
     order: 100,
-    component: x
+    component: j
   }), t.dashboardWidgets.add({
     id: "dashboard-sample-route",
     title: "Route ownership",
@@ -41,13 +42,13 @@ function v(t) {
     id: "dashboard-sample-backend",
     title: "Backend endpoints",
     order: 120,
-    component: j
+    component: v
   });
 }
-function x() {
+function j() {
   return /* @__PURE__ */ e.jsxs("div", { className: "admin-card dashboard-sample-card", children: [
     /* @__PURE__ */ e.jsx("h2", { children: "Dashboard module" }),
-    /* @__PURE__ */ e.jsx("p", { className: "metric", children: "Loaded" }),
+    /* @__PURE__ */ e.jsx("p", { className: "metric", children: /* @__PURE__ */ e.jsx(p, { tone: "success", children: "Loaded" }) }),
     /* @__PURE__ */ e.jsx("p", { children: "Runtime widget registration completed through the Studio SDK." })
   ] });
 }
@@ -58,7 +59,7 @@ function R() {
     /* @__PURE__ */ e.jsx("p", { children: "Dashboard navigation and routing are provided by Studio." })
   ] });
 }
-function j() {
+function v() {
   return /* @__PURE__ */ e.jsxs("div", { className: "admin-card dashboard-sample-card", children: [
     /* @__PURE__ */ e.jsx("h2", { children: "Backend endpoints" }),
     /* @__PURE__ */ e.jsx("p", { className: "metric", children: "0" }),
@@ -66,8 +67,8 @@ function j() {
   ] });
 }
 export {
-  j as BackendEndpointsWidget,
-  x as ModuleHealthWidget,
+  v as BackendEndpointsWidget,
+  j as ModuleHealthWidget,
   R as RouteOwnershipWidget,
-  v as register
+  f as register
 };

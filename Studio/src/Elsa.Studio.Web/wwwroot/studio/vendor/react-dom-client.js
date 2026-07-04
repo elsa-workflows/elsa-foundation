@@ -1,5 +1,5 @@
-import { r as Yh } from "./chunks/index2.js";
-import { r as Qh } from "./chunks/index3.js";
+import Yh from "react";
+import { r as Qh } from "./chunks/index.js";
 var li = { exports: {} }, ie = {}, ai = { exports: {} }, ti = {};
 var ny;
 function Xh() {
@@ -229,7 +229,7 @@ var cy;
 function Ch() {
   if (cy) return ie;
   cy = 1;
-  var o = Gh(), _a = Yh(), Xl = Qh();
+  var o = Gh(), _a = Yh, Xl = Qh();
   function b(l) {
     var a = "https://react.dev/errors/" + l;
     if (1 < arguments.length) {

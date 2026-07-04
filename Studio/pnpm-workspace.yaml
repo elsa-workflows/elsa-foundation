@@ -1,5 +1,6 @@
 packages:
   - "src/Elsa.Studio.Web/Client"
+  - "src/Elsa.Studio.Web/StudioUi"
   - "src/Elsa.Studio.ConsoleStream/Client"
   - "src/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
   - "src/Elsa.Studio.Diagnostics.StructuredLogs/Client"
@@ -13,4 +14,7 @@ packages:
   - "src/Elsa.Studio.Samples.Dashboard/Client"
   - "src/Elsa.Studio.Samples.WeatherForecast/Client"
 allowBuilds:
-  esbuild: true
+  esbuild: set this to true or false
+onlyBuiltDependencies:
+  - esbuild
+verifyDepsBeforeRun: false
