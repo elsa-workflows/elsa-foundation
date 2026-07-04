@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Boxes, PackagePlus, Pencil, RefreshCcw, Scissors, Trash2, X } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
-import { EmptyState, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import { EmptyState, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   addFeed,
   createModuleManagementHosts,
@@ -101,10 +101,10 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
         </StudioToolbar>
       </div>
 
-      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} />
+      <StudioTabs tabs={hostTabs} activeTab={activeHostId} onSelect={tabId => setActiveHostId(tabId as HostId)} ariaLabel="Hosts" />
 
-      {activeState.error ? <div className="studio-alert" data-tone="danger">{activeState.error}</div> : null}
-      {activeState.status ? <div className="studio-alert" data-tone="success">{activeState.status}</div> : null}
+      {activeState.error ? <StudioAlert tone="danger">{activeState.error}</StudioAlert> : null}
+      {activeState.status ? <StudioAlert tone="success">{activeState.status}</StudioAlert> : null}
 
       {activeState.registry ? (
         <PackageFeedsWorkbench
