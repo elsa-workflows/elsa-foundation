@@ -14,3 +14,6 @@ packages:
   - "src/Elsa.Studio.Samples.WeatherForecast/Client"
 allowBuilds:
   esbuild: set this to true or false
+onlyBuiltDependencies:
+  - esbuild
+verifyDepsBeforeRun: false
