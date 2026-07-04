@@ -276,7 +276,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
 
             var latestFaultedParentState = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
                                            ?? parentState;
-            await activityFaultIncidentRecorder.CommitAsync(NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, "ParentCompletionFaulted", valueSnapshots), cancellationToken);
+            var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, "ParentCompletionFaulted", valueSnapshots);
+
+            // Unlike a leaf activity, the faulting node here is the parent composite whose own
+            // OnChildCompleted/OnChildFaulted threw. Mirror the sibling invoke/resume handlers and ride a
+            // child-fault parent-evaluation work item along on the incident checkpoint so the grandparent join
+            // resolves deterministically instead of waiting forever for a completion that never arrives (#379).
+            // TryBuildAsync returns null when the faulted parent has no parent, leaving a plain blocking incident.
+            var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ParentCompletionFaulted");
+            var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
+                activityExecutionStateStore, _timeProvider, workItem, payload.PinnedExecutable, latestFaultedParentState, incidentId, cancellationToken);
+
+            await activityFaultIncidentRecorder.CommitAsync(
+                parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
+                cancellationToken);
             return;
         }
 
