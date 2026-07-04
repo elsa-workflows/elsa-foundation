@@ -9,7 +9,8 @@ public interface IActivityDefinitionLookup
     /// <summary>
     /// Picker query. Returns rows whose reconciliation-state sibling does NOT mark them
     /// removed (catalog presence ⋂ NOT <c>RemovedAt</c>). All filter params are AND-composed;
-    /// nulls/empty leave that dimension unfiltered. Per spec FR-007, SC-009 — no live-
+    /// nulls/empty leave that dimension unfiltered. <paramref name="tenantAgnostic"/> set to
+    /// <c>true</c> ignores the ambient tenant scope. Per spec FR-007, SC-009 — no live-
     /// provider enumeration; the catalog store is the single source of truth.
     /// </summary>
     Task<IEnumerable<IActivityDefinition>> ListDefinitions(
@@ -18,6 +19,7 @@ public interface IActivityDefinitionLookup
         string? searchTerm = null,
         string? displayName = null,
         string? description = null,
+        bool? tenantAgnostic = null,
         CancellationToken cancellationToken = default);
 
     Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default);

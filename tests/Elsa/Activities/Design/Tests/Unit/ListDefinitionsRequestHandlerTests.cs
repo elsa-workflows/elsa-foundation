@@ -65,11 +65,31 @@ public sealed class ListDefinitionsRequestHandlerTests
         Assert.Equal(WriteLineTypeKey, definition.ActivityTypeKey);
     }
 
+    /// <summary>
+    /// Covers issue #392: the request's <c>TenantAgnostic</c> flag was accepted but never forwarded to the
+    /// lookup, silently tenant-scoping results for callers that asked for cross-tenant visibility.
+    /// </summary>
+    [Fact]
+    public async Task Handle_ForwardsTenantAgnosticToLookup()
+    {
+        var lookup = new StubActivityDefinitionLookup([Activity("write-line", WriteLineTypeKey)]);
+        var handler = new ListDefinitionsRequestHandler(
+            lookup,
+            new DefaultActivityAvailabilityEvaluator(new ActivityAvailabilityOptions()),
+            new InMemoryActivityAvailabilitySettingsStore());
+
+        await handler.Handle(new ListDefinitions(null, null, null, null, null, TenantAgnostic: true), CancellationToken.None);
+
+        Assert.True(lookup.LastTenantAgnostic);
+    }
+
     private static ActivityDefinitionModel Activity(string id, string activityTypeKey) =>
         new(id, activityTypeKey, "Test", activityTypeKey, null);
 
     private sealed class StubActivityDefinitionLookup(IReadOnlyCollection<IActivityDefinition> activities) : IActivityDefinitionLookup
     {
+        public bool? LastTenantAgnostic { get; private set; }
+
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("This test only supports ListDefinitions.");
 
@@ -79,8 +99,12 @@ public sealed class ListDefinitionsRequestHandlerTests
             string? searchTerm = null,
             string? displayName = null,
             string? description = null,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IEnumerable<IActivityDefinition>>(activities);
+            bool? tenantAgnostic = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastTenantAgnostic = tenantAgnostic;
+            return Task.FromResult<IEnumerable<IActivityDefinition>>(activities);
+        }
 
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("This test only supports ListDefinitions.");
