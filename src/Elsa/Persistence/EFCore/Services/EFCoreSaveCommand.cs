@@ -10,10 +10,6 @@ public sealed class EFCoreSaveCommand<TDbContext, TEntity>(IDbContextFactory<TDb
     where TDbContext : DbContext
     where TEntity : Entity
 {
-    // ReSharper disable once StaticMemberInGenericType
-    // Justification: This is a static member that is used to ensure that only one thread can access the database for TEntity at a time.
-    private static readonly SemaphoreSlim Semaphore = new(1, 1);
-
     /// <summary>
     /// Creates a new instance of the database context.
     /// </summary>
@@ -26,13 +22,12 @@ public sealed class EFCoreSaveCommand<TDbContext, TEntity>(IDbContextFactory<TDb
     /// Saves the entity.
     /// </summary>
     /// <param name="entity">The entity to save.</param>
-    /// <param name="keySelector">The key selector to get the primary key property.</param>
-    /// <param name="onSaving">The callback to invoke before saving the entity.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     public async Task SaveAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        await Semaphore.WaitAsync(cancellationToken); // Asynchronous wait
-
+        // No process-wide lock here (issue #394): each save runs on its own DbContext, and concurrency
+        // control is the database's job (keys/unique constraints/optimistic tokens), not an in-process
+        // semaphore that serialized every save of TEntity across the entire host.
         try
         {
             await using var dbContext = await CreateDbContextAsync(cancellationToken);
@@ -53,10 +48,6 @@ public sealed class EFCoreSaveCommand<TDbContext, TEntity>(IDbContextFactory<TDb
             }
 
             throw;
-        }
-        finally
-        {
-            Semaphore.Release();
         }
     }
 }
