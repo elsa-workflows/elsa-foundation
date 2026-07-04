@@ -19,27 +19,23 @@ public sealed class PublishWorkflowRequestHandler(
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
-        WorkflowExecutable executable;
-        try
-        {
-            executable = await compiler.CompileAsync(
-                new WorkflowExecutableCompileRequest(
-                    request.VersionId,
-                    WorkflowExecutableScope.Published,
-                    now,
-                    now,
-                    ExpiresAt: null,
-                    PublishedArtifactPrefix,
-                    new Dictionary<string, string>
-                    {
-                        ["slice"] = "workflow-execution-vertical-slice"
-                    }),
-                cancellationToken);
-        }
-        catch (WorkflowExecutableCompilationException exception)
-        {
-            throw new ArgumentException(exception.Message, exception);
-        }
+
+        // Compilation failures surface as WorkflowExecutableCompilationException (itself an ArgumentException),
+        // carrying the DefinitionId/VersionId context. Let the typed exception propagate rather than rewrapping
+        // it into a bare ArgumentException that discards that context (#397).
+        var executable = await compiler.CompileAsync(
+            new WorkflowExecutableCompileRequest(
+                request.VersionId,
+                WorkflowExecutableScope.Published,
+                now,
+                now,
+                ExpiresAt: null,
+                PublishedArtifactPrefix,
+                new Dictionary<string, string>
+                {
+                    ["slice"] = "workflow-execution-vertical-slice"
+                }),
+            cancellationToken);
 
         await executableStore.SaveAsync(executable, cancellationToken);
 

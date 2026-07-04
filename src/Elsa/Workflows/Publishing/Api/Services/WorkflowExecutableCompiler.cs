@@ -43,9 +43,10 @@ public sealed class WorkflowExecutableCompiler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var source = request.Source ?? await GetVersionSourceAsync(request.VersionId, cancellationToken);
+        WorkflowExecutableCompileSource? source = null;
         try
         {
+            source = request.Source ?? await GetVersionSourceAsync(request.VersionId, cancellationToken);
             var state = source.State;
             ArgumentNullException.ThrowIfNull(state);
 
@@ -83,7 +84,7 @@ public sealed class WorkflowExecutableCompiler(
         }
         catch (ArgumentException exception) when (exception is not WorkflowExecutableCompilationException)
         {
-            throw new WorkflowExecutableCompilationException(source.DefinitionId, source.DefinitionVersionId, exception.Message, exception);
+            throw new WorkflowExecutableCompilationException(source?.DefinitionId, source?.DefinitionVersionId, exception.Message, exception);
         }
     }
 
