@@ -1111,6 +1111,67 @@ public sealed class RuntimeCheckpointCommitTests
 
 
     [Fact]
+    public async Task InMemoryCheckpointCommitStore_SurfacesDuplicateOutboxIntentAsValidationError_NotDurabilityFailure()
+    {
+        // #386: two outbox items with the same OutboxItemId but different intents are a data-conflict
+        // validation failure. It must surface as the store's InvalidOperationException — not be re-wrapped
+        // as RuntimeCheckpointInconsistentDurabilityException, which describes partial persistence and
+        // sends operators down the wrong diagnostic path.
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            StateChanges = NewStateChanges().WithPostCommitOutbox(
+            [
+                NewOutboxChange("outbox-1", "intent-1"),
+                NewOutboxChange("outbox-1", "intent-2")
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
+
+        Assert.Contains("already exists with a different intent or status", exception.Message);
+        Assert.Empty(writer.ListCommits());
+    }
+
+    [Fact]
+    public async Task InMemoryCheckpointCommitStore_SurfacesNonPendingOutboxItemAsValidationError_NotDurabilityFailure()
+    {
+        // #386: a non-pending outbox item in the applied change set is likewise a validation failure,
+        // not an inconsistent-durability condition.
+        var writer = new InMemoryRuntimeCheckpointCommitStore();
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.PostCommitIntentRecorded) with
+        {
+            StateChanges = NewStateChanges().WithPostCommitOutbox(
+            [
+                NewOutboxChange("outbox-1", "intent-1", RuntimePostCommitOutboxStatus.Delivered)
+            ])
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => writer.CommitAsync(commit, decision).AsTask());
+
+        Assert.Contains("pending", exception.Message);
+        Assert.Empty(writer.ListCommits());
+    }
+
+    private RuntimeStateChange<RuntimePostCommitOutboxItem> NewOutboxChange(
+        string outboxItemId,
+        string intentId,
+        RuntimePostCommitOutboxStatus status = RuntimePostCommitOutboxStatus.Pending) =>
+        new(
+            StateId: outboxItemId,
+            Operation: RuntimeStateChangeOperation.Upsert,
+            State: new RuntimePostCommitOutboxItem(
+                outboxItemId: outboxItemId,
+                intent: NewIntent(intentId),
+                status: status,
+                recordedAt: _now,
+                availableAt: _now,
+                deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? _now : null),
+            Metadata: new Dictionary<string, string>());
+
+    [Fact]
     public void RuntimeCheckpointStateChangeSet_RejectsMismatchedActivityExecutionStateIds()
     {
         // #399: ActivityExecutions was the only collection missing StateId consistency validation; a
