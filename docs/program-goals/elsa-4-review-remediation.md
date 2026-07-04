@@ -87,6 +87,27 @@ Phase 3 (W16–W21): queued; see the roadmap's dependency graph.
   `ISecretManager` store-vs-resolver split (proposal-only in the PR body per the W14 deferral)
   and the design-endpoints `AllowAnonymous` bypass (kept as the tracked finding below).
 
+- **W19 Self-observability (MS-9, MS-14)** — **in progress** (draft PR to main): engine
+  tracing + API error contract. MS-9 introduces the first `ActivitySource` in the repo — an
+  `IWorkflowEngineTracer` replacement contract (`Elsa.Workflows.Runtime.Core.Diagnostics`)
+  whose allocation-free no-op default (`NullWorkflowEngineTracer`) is swapped by the opt-in
+  `WorkflowsRuntimeTracing` shell feature (`Elsa.Workflows.Runtime.Tracing`) for the real
+  `ActivitySourceWorkflowEngineTracer`. Four behaviour-preserving span sites on source
+  `Elsa.Workflows.Runtime` (drain → dispatch → activity.execute / checkpoint.commit): no new
+  awaits in the fenced drain/commit sequences, no W12 slot reordering, tags set only via
+  `activity?.SetTag` after values exist, stable names in `WorkflowEngineTelemetry`; an
+  `ActivityListener` span-tree acceptance test asserts the parent-child structure. MS-14 adds a
+  global ProblemDetails error contract (`ProblemDetailsFastEndpointConfigurator` →
+  `config.Errors.UseProblemDetails()`) for every Elsa endpoint (W16's new endpoints inherit it),
+  and folds issue [#393](https://github.com/elsa-workflows/elsa-foundation/issues/393): the
+  FastEndpoints handler base classes map a new `EntityNotFoundException` (`Elsa.Primitives`,
+  the lowest project already referenced by both the endpoint bases and the Design stores — no
+  new dependency edge) to `404`, with the bounded Design/Activities-Design not-found lookup
+  throw sites converted. Docs: [`docs/reference/engine-telemetry.md`](../reference/engine-telemetry.md)
+  draws the ENGINE-telemetry vs. OpenTelemetry-ingestion distinction the review flagged. Cross-links
+  the [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) bucket.
+
+
 ### Follow-up findings recorded during Phase 0 execution
 
 - **Ack-based dequeue for full window-C closure** (from W5): guaranteed item-level replay
