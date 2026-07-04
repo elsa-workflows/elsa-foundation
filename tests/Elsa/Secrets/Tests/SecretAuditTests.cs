@@ -51,6 +51,21 @@ public sealed class SecretAuditTests : IDisposable
         Assert.IsType<LoggingSecretAuditSink>(sink);
     }
 
+    [Fact]
+    public async Task Failed_Operation_Emits_Failed_Audit_Record_Without_Secret_Material()
+    {
+        await _manager.CreateAsync(new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" });
+        _auditSink.Records.Clear();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _manager.CreateAsync(new CreateSecretRequest { Name = "dup.secret", Value = "audit-secret-value" }));
+
+        var failure = Assert.Single(_auditSink.Records.Where(x => x.Operation == "create" && x.Outcome == "failed"));
+        Assert.Equal("dup.secret", failure.SecretName);
+        Assert.DoesNotContain("audit-secret-value", failure.Reason ?? "", StringComparison.Ordinal);
+        Assert.DoesNotContain("audit-secret-value", failure.SecretName, StringComparison.Ordinal);
+    }
+
     public void Dispose() => _provider.Dispose();
 
     private sealed class RecordingSecretAuditSink : ISecretAuditSink
