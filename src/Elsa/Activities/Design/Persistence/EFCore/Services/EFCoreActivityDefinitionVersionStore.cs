@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EFCore.DbContext;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.EFCore.Services;
+using Elsa.Primitives.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Activities.Design.Persistence.EFCore.Services;
@@ -18,7 +19,7 @@ public sealed class EFCoreActivityDefinitionVersionStore(IDbContextFactory<Activ
 {
     public async Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default)
         => await FirstOrDefaultAsync(ById(versionId), cancellationToken: cancellationToken)
-           ?? throw new InvalidOperationException($"Entity '{typeof(ActivityDefinitionVersion)}' with id '{versionId}' cannot be found");
+           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinitionVersion), versionId);
 
     public async Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
         => await FirstOrDefaultAsync(ById(versionId), include: q => q.Include(x => x.Definition), cancellationToken: cancellationToken)

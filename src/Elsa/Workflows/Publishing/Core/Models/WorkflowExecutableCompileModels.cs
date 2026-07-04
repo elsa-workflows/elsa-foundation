@@ -1,7 +1,7 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
-namespace Elsa.Workflows.Publishing.Api.Models;
+namespace Elsa.Workflows.Publishing.Core.Models;
 
 public sealed record WorkflowExecutableCompileRequest(
     string VersionId,

@@ -10,10 +10,11 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -207,6 +208,62 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Null(await restartedTransientStore.FindAsync(view.ArtifactId!));
         Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
     }
+
+    [Fact]
+    public async Task TestRunStoreDropsExpiredRunOnRead()
+    {
+        // #398: a test run past its ExpiresAt must never be observed, even before the periodic sweep runs.
+        var store = new InMemoryWorkflowTestRunStore();
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveAsync(TestRun("testrun-expired", expiresAt: now.AddMinutes(-1)));
+
+        Assert.Null(await store.FindAsync("testrun-expired"));
+    }
+
+    [Fact]
+    public async Task TestRunStoreKeepsUnexpiredAndNeverExpiringRuns()
+    {
+        var store = new InMemoryWorkflowTestRunStore();
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveAsync(TestRun("testrun-live", expiresAt: now.AddMinutes(30)));
+        await store.SaveAsync(TestRun("testrun-eternal", expiresAt: null));
+
+        Assert.NotNull(await store.FindAsync("testrun-live"));
+        Assert.NotNull(await store.FindAsync("testrun-eternal"));
+    }
+
+    [Fact]
+    public async Task CleanupExpiredTestRunsRemovesOnlyExpiredRuns()
+    {
+        // #398: the store used to grow without bound; CleanupExpiredAsync now evicts every run whose retention
+        // window has elapsed while leaving live and never-expiring runs in place.
+        var store = new InMemoryWorkflowTestRunStore();
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveAsync(TestRun("testrun-old", expiresAt: now.AddMinutes(-5)));
+        await store.SaveAsync(TestRun("testrun-live", expiresAt: now.AddMinutes(30)));
+        await store.SaveAsync(TestRun("testrun-eternal", expiresAt: null));
+
+        var deleted = await store.CleanupExpiredAsync(now);
+
+        Assert.Equal(1, deleted);
+        Assert.Null(await store.FindAsync("testrun-old"));
+        Assert.NotNull(await store.FindAsync("testrun-live"));
+        Assert.NotNull(await store.FindAsync("testrun-eternal"));
+    }
+
+    private static WorkflowTestRun TestRun(string testRunId, DateTimeOffset? expiresAt) =>
+        new(
+            TestRunId: testRunId,
+            DefinitionId: "definition-1",
+            DefinitionVersionId: "version-1",
+            ArtifactId: null,
+            WorkflowExecutionId: null,
+            Status: WorkflowTestRunStatus.Rejected,
+            RequestedBy: "test",
+            RequestedAt: expiresAt?.AddMinutes(-30) ?? DateTimeOffset.UtcNow,
+            ExpiresAt: expiresAt,
+            Reason: null,
+            Metadata: new Dictionary<string, string>());
 
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,

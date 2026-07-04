@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Groundwork.Services;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Exceptions;
 using Groundwork.Documents.Store;
 using Xunit;
 
@@ -55,7 +56,7 @@ public class GroundworkActivityDefinitionStoreTests
     public async Task Get_throws_when_absent()
     {
         var store = await SeededAsync(Definition("a1", "Acme.Send"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.GetAsync("missing"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetAsync("missing"));
     }
 
     [Fact]

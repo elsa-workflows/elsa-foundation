@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Exceptions;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Activities.Design.Persistence.Groundwork.Services;
@@ -30,7 +31,7 @@ public sealed class GroundworkActivityDefinitionStore : IActivityDefinitionStore
 
     public async Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default)
         => await _reads.FirstOrDefaultAsync(Query<ActivityDefinition>.Where(x => x.Id, QueryOp.Equal, id), cancellationToken)
-           ?? throw new InvalidOperationException($"Entity '{typeof(ActivityDefinition)}' with id '{id}' cannot be found");
+           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinition), id);
 
     public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
         => _reads.FirstOrDefaultAsync(filter.ToQuery(), cancellationToken);

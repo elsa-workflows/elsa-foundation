@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Api.FastEndpoints.Abstractions;
@@ -13,6 +14,10 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand, TResponse>(ICommandSe
         {
             var result = await commandSender.Send(req, ct);
             await Send.OkAsync(result, ct);
+        }
+        catch (EntityNotFoundException e)
+        {
+            ThrowError(e.Message, 404);
         }
         catch (ArgumentException e)
         {
@@ -40,6 +45,10 @@ public abstract class ElsaCommandHandlerEndpoint<TCommand>(ICommandSender comman
         {
             await commandSender.Send(req, ct);
             await Send.OkAsync(cancellation: ct);
+        }
+        catch (EntityNotFoundException e)
+        {
+            ThrowError(e.Message, 404);
         }
         catch (ArgumentException e)
         {

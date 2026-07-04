@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -68,7 +69,7 @@ public class GroundworkWorkflowDefinitionStoreTests
     public async Task GetAsync_throws_when_absent()
     {
         var store = await SeededStoreAsync(Sample());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.GetAsync("missing"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetAsync("missing"));
     }
 
     [Fact]

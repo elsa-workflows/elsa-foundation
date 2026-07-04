@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
 
 </Project>

@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 75
+- Feature classes: 76
 - Concrete features missing explicit ShellFeature ID: 0
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 71
+- Feature-bearing source projects: 72
 - IConfiguration feature-registration shape observed from: `src/Apps/Elsa.Server/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -101,6 +101,7 @@ No duplicate explicit feature IDs were discovered.
 | JavaScriptWorkflowsRuntime | JavaScriptWorkflowsRuntimeFeature | False | Elsa.Workflows.Runtime.JavaScript | - | - | [JavaScriptWorkflowsRuntimeFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptWorkflowsRuntimeFeature.cs) |
 | WorkflowsRuntimeResumption | WorkflowsRuntimeResumptionFeature | False | Elsa.Workflows.Runtime.Resumption | BacklogBatchSize: int<br>HeartbeatTimeoutMinutes: double<br>LeaseTimeoutMinutes: double<br>MaxBackoffIntervalMinutes: double<br>MaxExecutionsPerSweep: int<br>OutboxBatchSize: int<br>RecoveryScanBatchSize: int<br>SweepIntervalSeconds: double | code default | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |
 | WorkflowsRuntimeScheduling | WorkflowsRuntimeSchedulingFeature | False | Elsa.Workflows.Runtime.Scheduling | MaxBackoffIntervalMinutes: double<br>MaxTimersPerTick: int<br>NotFoundGraceSeconds: double<br>SweepIntervalSeconds: double | code default | [WorkflowsRuntimeSchedulingFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
+| WorkflowsRuntimeTracing | WorkflowsRuntimeTracingFeature | False | Elsa.Workflows.Runtime.Tracing | - | - | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
 | Elsa3ImportJsonActivities | Elsa3ImportActivitiesFeature | False | Elsa3.Activities.Design.Import | WorkflowCollectionSourceTypes: IEnumerable<string> | type-name selection signal<br>validation/requiredness guard in code | [Elsa3ImportActivitiesFeature.cs](../../src/Elsa3/Activities/Design/Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3Mapping | Elsa3MappingFeature | False | Elsa3.Mapping | - | - | [Elsa3MappingFeature.cs](../../src/Elsa3/Mapping/Elsa3MappingFeature.cs) |
 
@@ -169,7 +170,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | JavaScriptWorkflowsDesign | Elsa.Workflows.Design.JavaScript | - | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsDesignPersistenceEFCoreSqlite | Elsa.Workflows.Design.Persistence.EFCore.Sqlite | Elsa.Workflows.Design.Persistence.EFCore (EFCoreWorkflowsPersistenceFeatureBase) | Elsa.Persistence.EFCore.Sqlite | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.EntityFrameworkCore.Design 10.0.8 |
 | WorkflowDesignValidations | Elsa.Workflows.Design.Validations | - | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Options 10.0.8 |
-| WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
+| WorkflowsPublishingApi | Elsa.Workflows.Publishing.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeApi | Elsa.Workflows.Runtime.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeTriggers | Elsa.Workflows.Runtime.Api | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Mediator.Core<br>Elsa.Workflows.Runtime.Core | Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeHttp | Elsa.Workflows.Runtime.Http | - | Elsa.Http.Core<br>Elsa.Primitives | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.AspNetCore.Authorization 10.0.8<br>Microsoft.AspNetCore.Http.Abstractions 2.3.10 |
@@ -178,6 +179,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | JavaScriptWorkflowsRuntime | Elsa.Workflows.Runtime.JavaScript | Elsa.Api.FastEndpoints (ApiSecurity) | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Primitives<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 | WorkflowsRuntimeResumption | Elsa.Workflows.Runtime.Resumption | - | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
 | WorkflowsRuntimeScheduling | Elsa.Workflows.Runtime.Scheduling | - | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8<br>Microsoft.Extensions.Logging.Abstractions 10.0.8<br>Microsoft.Extensions.Options 10.0.8 |
+| WorkflowsRuntimeTracing | Elsa.Workflows.Runtime.Tracing | - | Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.8 |
 | Elsa3ImportJsonActivities | Elsa3.Activities.Design.Import | - | Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Events.Core<br>Elsa.Serialization.Core<br>Elsa3.Models | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58<br>Microsoft.Extensions.Logging.Abstractions 10.0.8 |
 | Elsa3Mapping | Elsa3.Mapping | - | Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa3.Models | CShells.Abstractions 0.0.29-preview.144<br>Elsa.Platform.PackageManifest.Generator 0.0.1-preview.58 |
 

@@ -13,8 +13,8 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -142,6 +142,29 @@ public sealed class WorkflowExecutableCompilerTests
             PublishedAt: now,
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-")).AsTask());
+    }
+
+    [Fact]
+    public async Task CompilingUnknownVersionIdThrowsTypedCompilationException()
+    {
+        // #397: version-source resolution used to run before the try block, so a store lookup failure for an
+        // unknown VersionId escaped as a raw ArgumentException that the publish path could not distinguish from
+        // a real compilation error. Resolution now runs inside the guarded region, so the failure surfaces as a
+        // typed WorkflowExecutableCompilationException (DefinitionId/VersionId unknown because resolution failed).
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello"))));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "missing-version",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-")).AsTask());
+
+        Assert.Null(exception.DefinitionId);
+        Assert.Null(exception.DefinitionVersionId);
+        Assert.Contains("missing-version", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

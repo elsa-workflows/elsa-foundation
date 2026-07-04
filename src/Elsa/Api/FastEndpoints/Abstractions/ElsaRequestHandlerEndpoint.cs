@@ -1,4 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Api.FastEndpoints.Abstractions;
@@ -13,6 +14,10 @@ public abstract class ElsaRequestHandlerEndpoint<TRequest, TResponse>(IRequestSe
         {
             var result = await requestSender.Send(req, ct);
             await Send.OkAsync(result, ct);
+        }
+        catch (EntityNotFoundException e)
+        {
+            ThrowError(e.Message, 404);
         }
         catch (ArgumentException e)
         {

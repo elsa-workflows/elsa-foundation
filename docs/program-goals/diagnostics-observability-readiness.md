@@ -27,6 +27,7 @@ The bucket keeps the observability port coherent across two repos and two sub-do
 - A literal port of elsa-studio Blazor/MudBlazor pages, Dashboard widgets, or `RemoteFeature` gating.
 - Eagerly extracting a shared real-time live-feed package before a second consumer proves the seam.
 - gRPC OTLP ingestion (source ships it disabled/stubbed); revisit only on demand.
+- **Engine telemetry (the workflow engine's own `ActivitySource` self-instrumentation)** — this bucket owns telemetry *ingestion* (receiving OTLP pushed by other processes), not the engine *emitting* its own spans. The engine's self-instrumentation is the `IWorkflowEngineTracer` / `WorkflowsRuntimeTracing` surface delivered by W19 (MS-9) in the [Elsa 4 Review Remediation](elsa-4-review-remediation.md) bucket; the two are independent and neither depends on the other. See [`docs/reference/engine-telemetry.md`](../reference/engine-telemetry.md).
 
 ## Active Objectives
 
