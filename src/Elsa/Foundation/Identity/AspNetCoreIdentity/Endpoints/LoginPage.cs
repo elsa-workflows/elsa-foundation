@@ -1,5 +1,6 @@
 using System.Net;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
@@ -8,9 +9,10 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 /// <c>GET /_elsa/identity/login</c> — the out-of-the-box, backend-served login page. This is a locked
 /// product decision: the Studio SPA never renders login UI; instead this minimal, self-contained (no CDN
 /// assets) dark-themed page posts to the login endpoint and redirects to a validated local
-/// <c>returnUrl</c>. Non-local return URLs are dropped to prevent open redirects.
+/// <c>returnUrl</c>. Non-local return URLs are dropped to prevent open redirects. The page embeds an
+/// antiforgery token (and sets the paired cookie) that the login POST validates for the HTML-form flow.
 /// </summary>
-public sealed class LoginPage : ElsaEndpointWithoutRequest
+public sealed class LoginPage(IAntiforgery antiforgery) : ElsaEndpointWithoutRequest
 {
     public override void Configure()
     {
@@ -23,18 +25,25 @@ public sealed class LoginPage : ElsaEndpointWithoutRequest
         var returnUrl = LocalUrl.Sanitize(Query<string>("returnUrl", isRequired: false));
         var error = Query<string>("error", isRequired: false);
 
+        // Issues the antiforgery cookie on this response and returns the request token to embed in the form.
+        var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+
         HttpContext.Response.ContentType = "text/html; charset=utf-8";
-        await HttpContext.Response.WriteAsync(Render(returnUrl, error is not null), ct);
+        await HttpContext.Response.WriteAsync(Render(returnUrl, error is not null, tokens.RequestToken), ct);
     }
 
     /// <summary>
     /// Renders the self-contained dark-themed login page. <paramref name="returnUrl"/> is expected to be
-    /// pre-sanitized (see <see cref="LocalUrl.Sanitize"/>) and is HTML-encoded before embedding. Exposed for
-    /// unit testing the markup and the return-URL handling.
+    /// pre-sanitized (see <see cref="LocalUrl.Sanitize"/>) and is HTML-encoded before embedding.
+    /// <paramref name="antiforgeryToken"/> is embedded as a hidden field so the POST can validate CSRF.
+    /// Exposed for unit testing the markup and the return-URL handling.
     /// </summary>
-    public static string Render(string returnUrl, bool showError)
+    public static string Render(string returnUrl, bool showError, string? antiforgeryToken = null)
     {
         var encodedReturnUrl = WebUtility.HtmlEncode(returnUrl);
+        var antiforgeryField = string.IsNullOrEmpty(antiforgeryToken)
+            ? string.Empty
+            : $"""<input type="hidden" name="{AspNetCoreIdentityDefaults.AntiforgeryFieldName}" value="{WebUtility.HtmlEncode(antiforgeryToken)}" />""";
         var errorBanner = showError
             ? """<p class="error" role="alert">Invalid username or password.</p>"""
             : string.Empty;
@@ -90,6 +99,7 @@ public sealed class LoginPage : ElsaEndpointWithoutRequest
             <h1 class="brand">Elsa</h1>
             <p class="subtitle">Sign in to continue</p>
             {{errorBanner}}
+            {{antiforgeryField}}
             <input type="hidden" name="returnUrl" value="{{encodedReturnUrl}}" />
             <label for="username">Username</label>
             <input id="username" name="username" autocomplete="username" autofocus required />

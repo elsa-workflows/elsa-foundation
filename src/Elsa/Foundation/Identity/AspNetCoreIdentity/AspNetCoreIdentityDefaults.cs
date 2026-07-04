@@ -18,4 +18,7 @@ public static class AspNetCoreIdentityDefaults
 
     /// <summary>Base route for the first-party sign-in surface, under the shared identity prefix.</summary>
     public const string LoginRoute = "_elsa/identity/login";
+
+    /// <summary>The form field name carrying the antiforgery token on the HTML login POST.</summary>
+    public const string AntiforgeryFieldName = "__csrf";
 }

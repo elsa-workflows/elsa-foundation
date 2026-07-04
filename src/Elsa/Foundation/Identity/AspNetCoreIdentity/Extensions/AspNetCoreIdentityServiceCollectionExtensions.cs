@@ -36,6 +36,10 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
         services.AddOptions<AspNetCoreIdentityOptions>();
         services.AddHttpContextAccessor();
 
+        // CSRF protection for the HTML login form: the GET page embeds an antiforgery token which the POST
+        // validates for form posts (JSON API callers are unaffected — they never carry the field/cookie).
+        services.AddAntiforgery(options => options.FormFieldName = AspNetCoreIdentityDefaults.AntiforgeryFieldName);
+
         services.TryAddSingleton<IUserStore, InMemoryIdentityStore>();
         services.TryAddSingleton<IRoleStore>(sp => (InMemoryIdentityStore)sp.GetRequiredService<IUserStore>());
         services.TryAddSingleton<IExternalIdentityStore>(sp => (InMemoryIdentityStore)sp.GetRequiredService<IUserStore>());
