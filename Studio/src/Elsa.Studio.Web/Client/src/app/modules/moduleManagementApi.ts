@@ -131,6 +131,7 @@ export const hostTabs = [
 
 export const moduleManagementKeys = {
   all: ["module-management"] as const,
+  host: (hostId: HostId) => [...moduleManagementKeys.all, hostId] as const,
   registry: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "registry"] as const,
   packages: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "packages"] as const,
   feeds: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "feeds"] as const
