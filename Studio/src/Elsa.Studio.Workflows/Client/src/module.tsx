@@ -1777,8 +1777,8 @@ function parseWorkflowMetadataSuggestion(text: string): WorkflowMetadataSuggesti
       // Not valid JSON — try the next candidate.
     }
   }
-  const nameLine = text.match(/name\s*[:\-]\s*(.+)/i)?.[1];
-  const descLine = text.match(/description\s*[:\-]\s*(.+)/i)?.[1];
+  const nameLine = text.match(/name\s*[:-]\s*(.+)/i)?.[1];
+  const descLine = text.match(/description\s*[:-]\s*(.+)/i)?.[1];
   return pickSuggestion(nameLine, descLine);
 }
 
