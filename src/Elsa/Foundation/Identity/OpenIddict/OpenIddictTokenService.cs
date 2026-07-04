@@ -1,76 +1,133 @@
-using System.Collections.Concurrent;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
+using OpenIddict.Validation;
+using TokenValidationResult = Elsa.Foundation.Identity.Abstractions.Authentication.TokenValidationResult;
 
 namespace Elsa.Foundation.Identity.OpenIddict;
 
-public sealed class OpenIddictTokenService(IOptions<OpenIddictIdentityOptions> options) : ITokenService
+/// <summary>
+/// <see cref="ITokenService"/> over the real OpenIddict pipeline:
+/// <list type="bullet">
+/// <item><b>Issue</b> mints a signed JWT access token (readable <c>at+jwt</c>, HS256 with the server's
+/// signing credentials, carrying sub/tenant/provider/permission claims) plus an opaque, single-use refresh
+/// token. Both are backed by OpenIddict token-store entries so they can be revoked and rotated.</item>
+/// <item><b>Validate</b> runs OpenIddict's full local validation pipeline (signature, issuer, lifetime, and
+/// token-entry status — so revocation takes effect immediately).</item>
+/// <item><b>Refresh</b> redeems the stored refresh entry (single use; reuse after redemption or revocation
+/// fails) and issues a fresh access/refresh pair.</item>
+/// <item><b>Revoke</b> revokes the matching token entry, for access JWTs (via their embedded entry id) and
+/// opaque refresh tokens alike.</item>
+/// </list>
+/// Tokens are minted directly with the server's <see cref="OpenIddictServerOptions.JsonWebTokenHandler"/> and
+/// credentials rather than through the HTTP <c>/connect/token</c> pipeline, because issuance here is a
+/// first-party cookie→bearer exchange invoked from an endpoint (Workstream C), not an OAuth grant.
+/// </summary>
+public sealed class OpenIddictTokenService(
+    IOpenIddictTokenManager tokenManager,
+    OpenIddictValidationService validationService,
+    IOptionsMonitor<OpenIddictServerOptions> serverOptions,
+    IOptions<OpenIddictIdentityOptions> options) : ITokenService
 {
-    private readonly ConcurrentDictionary<string, StoredToken> _accessTokens = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, StoredToken> _refreshTokens = new(StringComparer.Ordinal);
-
-    public ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
-        var accessToken = CreateToken();
-        var refreshToken = CreateToken();
-        var principal = CreatePrincipal(request);
         var accessExpiresAt = now.Add(options.Value.AccessTokenLifetime);
-        var refreshExpiresAt = now.Add(options.Value.RefreshTokenLifetime);
 
-        _accessTokens[accessToken] = new(principal, accessExpiresAt, Revoked: false);
-        _refreshTokens[refreshToken] = new(principal, refreshExpiresAt, Revoked: false);
+        var entryId = await CreateTokenEntryAsync(
+            request.SubjectId, OpenIddictConstants.TokenTypeHints.AccessToken, now, accessExpiresAt,
+            referenceId: null, payload: null, cancellationToken);
 
-        return ValueTask.FromResult(new TokenIssueResult(accessToken, accessExpiresAt, refreshToken));
+        var accessToken = CreateAccessTokenJwt(request, entryId, now, accessExpiresAt);
+        var refreshToken = await CreateRefreshTokenAsync(request, now, cancellationToken);
+
+        return new TokenIssueResult(accessToken, accessExpiresAt, refreshToken);
     }
 
-    public ValueTask<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken = default)
     {
-        if (!_refreshTokens.TryGetValue(request.RefreshToken, out var storedToken) || storedToken.Revoked || storedToken.ExpiresAt <= DateTimeOffset.UtcNow)
-            throw new InvalidOperationException("Refresh token is invalid or expired.");
+        var entry = await tokenManager.FindByReferenceIdAsync(request.RefreshToken, cancellationToken) ?? throw InvalidRefreshToken();
 
-        var accessToken = CreateToken();
-        var refreshToken = CreateToken();
-        var accessExpiresAt = DateTimeOffset.UtcNow.Add(options.Value.AccessTokenLifetime);
-        var refreshExpiresAt = DateTimeOffset.UtcNow.Add(options.Value.RefreshTokenLifetime);
+        if (!await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken))
+            throw InvalidRefreshToken();
 
-        _refreshTokens[request.RefreshToken] = storedToken with { Revoked = true };
-        _accessTokens[accessToken] = new(storedToken.Principal, accessExpiresAt, Revoked: false);
-        _refreshTokens[refreshToken] = new(storedToken.Principal, refreshExpiresAt, Revoked: false);
+        var expiresAt = await tokenManager.GetExpirationDateAsync(entry, cancellationToken);
+        if (expiresAt is null || expiresAt <= DateTimeOffset.UtcNow)
+            throw InvalidRefreshToken();
 
-        return ValueTask.FromResult(new TokenRefreshResult(accessToken, accessExpiresAt, refreshToken));
+        // Rotation: a refresh token is single-use. Redeeming marks the entry, so replaying it fails above.
+        if (!await tokenManager.TryRedeemAsync(entry, cancellationToken))
+            throw InvalidRefreshToken();
+
+        var subject = await tokenManager.GetSubjectAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
+        var payloadJson = await tokenManager.GetPayloadAsync(entry, cancellationToken) ?? throw InvalidRefreshToken();
+        var payload = JsonSerializer.Deserialize<RefreshTokenPayload>(payloadJson) ?? throw InvalidRefreshToken();
+
+        var issued = await IssueAsync(new TokenIssueRequest(subject, payload.TenantId, payload.Scopes), cancellationToken);
+        return new TokenRefreshResult(issued.AccessToken, issued.ExpiresAt, issued.RefreshToken);
     }
 
-    public ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default)
     {
-        if (!_accessTokens.TryGetValue(request.Token, out var storedToken))
-            return ValueTask.FromResult(new TokenValidationResult(false, Failure: "Token was not issued by this provider."));
-
-        if (storedToken.Revoked)
-            return ValueTask.FromResult(new TokenValidationResult(false, Failure: "Token has been revoked."));
-
-        if (storedToken.ExpiresAt <= DateTimeOffset.UtcNow)
-            return ValueTask.FromResult(new TokenValidationResult(false, Failure: "Token has expired."));
-
-        return ValueTask.FromResult(new TokenValidationResult(true, storedToken.Principal));
+        try
+        {
+            var principal = await validationService.ValidateAccessTokenAsync(request.Token, cancellationToken);
+            return new TokenValidationResult(true, principal);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return new TokenValidationResult(false, Failure: exception.Message);
+        }
     }
 
-    public ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default)
     {
-        if (_accessTokens.TryGetValue(request.Token, out var accessToken))
-            _accessTokens[request.Token] = accessToken with { Revoked = true };
+        // Opaque refresh tokens are stored by reference id; access JWTs carry their entry id as a claim.
+        var entry = await tokenManager.FindByReferenceIdAsync(request.Token, cancellationToken);
 
-        if (_refreshTokens.TryGetValue(request.Token, out var refreshToken))
-            _refreshTokens[request.Token] = refreshToken with { Revoked = true };
+        if (entry is null && TryGetTokenEntryId(request.Token, out var entryId))
+            entry = await tokenManager.FindByIdAsync(entryId, cancellationToken);
 
-        return ValueTask.CompletedTask;
+        if (entry is not null)
+            await tokenManager.TryRevokeAsync(entry, cancellationToken);
     }
 
-    private ClaimsPrincipal CreatePrincipal(TokenIssueRequest request)
+    private string CreateAccessTokenJwt(TokenIssueRequest request, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)
+    {
+        // Resolving the server options also runs OpenIddict's configuration validation (credentials present).
+        var server = serverOptions.CurrentValue;
+
+        var identity = CreateClaimsIdentity(request);
+        identity.AddClaim(new Claim(OpenIddictConstants.Claims.Private.TokenId, entryId));
+        identity.AddClaim(new Claim(OpenIddictConstants.Claims.JwtId, Guid.NewGuid().ToString("n")));
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Subject = identity,
+            Issuer = server.Issuer!.AbsoluteUri,
+            IssuedAt = now.UtcDateTime,
+            // Keep NotBefore < Expires even when a non-positive lifetime is configured (e.g. expiry tests).
+            NotBefore = expiresAt > now ? now.UtcDateTime : expiresAt.AddMinutes(-5).UtcDateTime,
+            Expires = expiresAt.UtcDateTime,
+            SigningCredentials = server.SigningCredentials[0],
+            TokenType = "at+jwt"
+        };
+
+        return server.JsonWebTokenHandler.CreateToken(descriptor);
+    }
+
+    private ClaimsIdentity CreateClaimsIdentity(TokenIssueRequest request)
     {
         var identity = new ClaimsIdentity(options.Value.ProviderId);
         identity.AddClaim(new Claim(OpenIddictConstants.Claims.Subject, request.SubjectId));
@@ -81,10 +138,61 @@ public sealed class OpenIddictTokenService(IOptions<OpenIddictIdentityOptions> o
         foreach (var scope in request.Scopes.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase))
             identity.AddClaim(new Claim(IdentityClaimTypes.Permission, scope));
 
-        return new ClaimsPrincipal(identity);
+        return identity;
     }
 
-    private static string CreateToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+    private async ValueTask<string> CreateRefreshTokenAsync(TokenIssueRequest request, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var referenceId = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
+        var payload = JsonSerializer.Serialize(new RefreshTokenPayload(request.TenantId, request.Scopes.ToArray()));
 
-    private sealed record StoredToken(ClaimsPrincipal Principal, DateTimeOffset ExpiresAt, bool Revoked);
+        await CreateTokenEntryAsync(
+            request.SubjectId, OpenIddictConstants.TokenTypeHints.RefreshToken, now, now.Add(options.Value.RefreshTokenLifetime),
+            referenceId, payload, cancellationToken);
+
+        return referenceId;
+    }
+
+    private async ValueTask<string> CreateTokenEntryAsync(
+        string subject, string type, DateTimeOffset now, DateTimeOffset expiresAt, string? referenceId, string? payload,
+        CancellationToken cancellationToken)
+    {
+        var entry = await tokenManager.CreateAsync(new OpenIddictTokenDescriptor
+        {
+            Subject = subject,
+            Type = type,
+            CreationDate = now,
+            ExpirationDate = expiresAt,
+            Status = OpenIddictConstants.Statuses.Valid,
+            ReferenceId = referenceId,
+            Payload = payload
+        }, cancellationToken);
+
+        return await tokenManager.GetIdAsync(entry, cancellationToken)
+            ?? throw new InvalidOperationException("The created token entry has no identifier.");
+    }
+
+    private static bool TryGetTokenEntryId(string token, out string entryId)
+    {
+        try
+        {
+            var jwt = new JsonWebToken(token);
+            if (jwt.TryGetPayloadValue<string>(OpenIddictConstants.Claims.Private.TokenId, out var id) && !string.IsNullOrEmpty(id))
+            {
+                entryId = id;
+                return true;
+            }
+        }
+        catch
+        {
+            // Not a JWT — fall through.
+        }
+
+        entryId = string.Empty;
+        return false;
+    }
+
+    private static InvalidOperationException InvalidRefreshToken() => new("Refresh token is invalid or expired.");
+
+    private sealed record RefreshTokenPayload(string TenantId, string[] Scopes);
 }

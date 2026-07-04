@@ -37,6 +37,7 @@
     <PackageVersion Include="Microsoft.AspNetCore.Routing" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.Routing.Abstractions" Version="2.3.10" />
     <PackageVersion Include="Microsoft.AspNetCore.StaticFiles" Version="2.3.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
@@ -66,6 +67,7 @@
     <PackageVersion Include="Open.Linq.AsyncExtensions" Version="1.2.0" />
     <PackageVersion Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageVersion Include="OpenIddict.Abstractions" Version="7.5.0" />
+    <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageVersion Include="System.CommandLine" Version="2.0.8" />
     <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.8" />
