@@ -98,10 +98,12 @@ Phases 2–3 (remaining W-units): queued; see the roadmap's dependency graph.
   per-provider backing store (`EncryptedSecretStore`, `ConfigurationSecretStore`, aggregated
   by `ISecretStoreRegistry`). `ISecretManager` is a higher-level CRUD/lifecycle facade
   (Create/Find/List/Update/Rotate/Revoke/Delete/Test/ResolvePayload) over those stores, so it
-  cannot take the `…Store` name without collision. W18 owns the store-vs-resolver split that
-  will EXTRACT a resolver FROM the facade; the name should be settled there (candidates:
-  `ISecretService`/`ISecretCatalog`/`ISecretDirectory`, or split into
-  `…Registry`+`…Resolver`). Renamed in W14: only the clean Family D targets.
+  cannot take the `…Store` name without collision. **W18 follow-up: ISecretManager naming +
+  store-vs-resolver split decided together in W18; interim rename deliberately skipped
+  (`ISecretStore` name occupied by per-provider backing stores).** A fresh interim name
+  (`ISecretService`/`ISecretCatalog`/`ISecretDirectory`) was rejected to avoid the
+  double-rename churn W18's split would immediately re-litigate. Renamed in W14: only the
+  clean Family D targets.
 - **`ControlPlaneCommand` activation-reason enum member** (cosmetic): after Family B renamed
   `ControlPlaneState`→`WorkflowHoldState`, the `WorkflowExecutionActorActivationReason`
   member `ControlPlaneCommand` still reads "control plane". Left unchanged — enum member names
