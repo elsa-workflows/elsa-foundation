@@ -40,7 +40,7 @@ public static class RuntimeMetadataKeys
     /// Operational-state metadata key carrying the highest execution-ownership fencing token ever issued for a
     /// workflow execution (RT-2). Preserved across a lease release so a subsequent acquisition always issues a
     /// strictly greater token and a token is never reused. See
-    /// <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeExecutionOwnershipService"/>.
+    /// <c>RuntimeExecutionOwnershipService</c> (engine package).
     /// </summary>
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
 
@@ -67,7 +67,7 @@ public static class RuntimeMetadataKeys
     /// Metadata key on a durable value carrying a workflow variable value. Its presence marks the durable
     /// value as a persisted workflow variable (rather than an activity output capture) and its value is the
     /// variable name, mirroring how <see cref="OutputName"/> tags activity-output durable values. Read by
-    /// <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeInputBindingStateProjection.ProjectWorkflowVariables"/>
+    /// <c>RuntimeInputBindingStateProjection.ProjectWorkflowVariables</c> (engine package)
     /// to rebuild the <c>variables.*</c> snapshot for input materialization.
     /// </summary>
     public const string VariableName = "runtime.variableName";
@@ -75,13 +75,13 @@ public static class RuntimeMetadataKeys
     /// <summary>
     /// Metadata key on a durable value carrying a workflow input value. Its presence marks the durable value
     /// as a persisted workflow input and its value is the input name, mirroring <see cref="OutputName"/>. Read
-    /// by <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeInputBindingStateProjection.ProjectWorkflowInputs"/>
+    /// by <c>RuntimeInputBindingStateProjection.ProjectWorkflowInputs</c> (engine package)
     /// to rebuild the <c>input.*</c> snapshot for input materialization.
     /// </summary>
     public const string InputName = "runtime.inputName";
     /// <summary>
     /// Metadata key marking a durable value's payload as sensitive (<c>"true"</c>). Read by the workflow-output
-    /// read projection (#254 Seam R1): <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeWorkflowOutputStateProjection"/>
+    /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked
     /// output surfaces on the read edge as an explicit redacted marker even under a payload-capturing policy.
     /// Nothing writes this key yet — <c>SetWorkflowOutput</c> carries no sensitivity channel — it is the reserved
