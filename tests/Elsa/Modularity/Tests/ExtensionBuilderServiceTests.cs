@@ -203,6 +203,48 @@ public sealed class ExtensionBuilderServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CloneRepositoryFailsFastWithoutCredentialPromptForUnreachableRemote()
+    {
+        // Guards the GIT_TERMINAL_PROMPT=0 behavior: a clone of an unreachable HTTPS remote must
+        // return a clean failure instead of blocking on an interactive credential prompt. This is
+        // the one non-cosmetic behavior of the retired Stack-B git invocation, and it must survive
+        // the standardization onto the canonical git process invocation.
+        var service = CreateService();
+
+        var clone = service.CloneRepositoryAsync(_caller, new("https://elsa.invalid/private-repository.git", "Unreachable Repository"));
+        var completed = await Task.WhenAny(clone, Task.Delay(TimeSpan.FromSeconds(30)));
+
+        Assert.Same(clone, completed); // Must complete (fail) rather than hang on a prompt.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => clone);
+        Assert.Empty(await service.ListRepositoriesAsync(_caller));
+        var workspacesPath = Path.Combine(_directory, "state", "workspaces");
+        Assert.True(!Directory.Exists(workspacesPath) || !Directory.EnumerateDirectories(workspacesPath).Any());
+    }
+
+    [Fact]
+    public async Task PersistedStateUsesFrozenTopLevelKeysAndSurvivesRestart()
+    {
+        // Pins the frozen state.json wire contract: the seven top-level object keys and their
+        // round-trip through a storage restart. Guards the persistence extraction (WithStateAsync /
+        // ReadStateAsync / LoadStateAsync / SaveStateAsync) against any accidental identifier drift.
+        var service = CreateService(buildRunner: new FakeBuildRunner(BuildStatus.Failed));
+        var workspace = await service.CreateWorkspaceAsync(_caller, new("Frozen Keys"));
+        var project = await service.CreateProjectAsync(_caller, workspace.Id, new("generic-dotnet", "Elsa.Test.Frozen", "1.0.0", "net10.0", null, null));
+        await service.SubmitBuildAsync(_caller, project.Id);
+
+        var statePath = Path.Combine(_directory, "state", "state.json");
+        Assert.True(File.Exists(statePath));
+        var root = Json(await File.ReadAllTextAsync(statePath));
+        var keys = root.EnumerateObject().Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var frozenKey in new[] { "workspaces", "projects", "builds", "promotions", "activeVersions", "workingCopies", "repositoryPaths" })
+            Assert.Contains(frozenKey, keys);
+
+        var restarted = CreateService();
+        Assert.NotNull(await restarted.GetWorkspaceAsync(_caller, workspace.Id));
+        Assert.NotNull(await restarted.GetProjectAsync(_caller, project.Id));
+    }
+
+    [Fact]
     public async Task CreateWorkspaceInitializesManagedRepositoryWithStarterCommit()
     {
         var service = CreateService();
