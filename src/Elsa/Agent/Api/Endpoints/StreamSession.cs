@@ -26,16 +26,10 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
         response.Headers.Connection = "keep-alive";
         response.Headers["X-Accel-Buffering"] = "no";
 
-        var session = await sessions.FindAsync(req.SessionId, ct);
-        if (session is null)
+        var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
+        if (error is not null)
         {
-            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404), DateTimeOffset.UtcNow), ct);
-            return;
-        }
-
-        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
-        {
-            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, new("agent.session.forbidden", "The agent session is not available to the current principal.", 403), DateTimeOffset.UtcNow), ct);
+            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow), ct);
             return;
         }
 

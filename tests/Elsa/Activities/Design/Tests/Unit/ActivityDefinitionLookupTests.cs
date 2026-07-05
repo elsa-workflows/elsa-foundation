@@ -1,5 +1,7 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Services;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Persistence.EFCore.Services;
 using Elsa.Activities.Design.Tests.Integration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,5 +39,46 @@ public sealed class ActivityDefinitionLookupTests
 
         var result = Assert.Single(results);
         Assert.Equal("write-line", result.Id);
+    }
+
+    /// <summary>
+    /// Covers issue #392: <c>tenantAgnostic</c> must reach <see cref="ActivityDefinitionFilter.TenantAgnostic"/>,
+    /// which is what makes the store ignore the tenant scope.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(null)]
+    public async Task ListDefinitions_ForwardsTenantAgnosticToTheFilter(bool? tenantAgnostic)
+    {
+        var definitionStore = new RecordingActivityDefinitionStore();
+        var lookup = new ActivityDefinitionLookup(new ThrowingActivityDefinitionVersionStore(), definitionStore);
+
+        await lookup.ListDefinitions(tenantAgnostic: tenantAgnostic);
+
+        Assert.NotNull(definitionStore.LastFilter);
+        Assert.Equal(tenantAgnostic, definitionStore.LastFilter!.TenantAgnostic);
+    }
+
+    private sealed class RecordingActivityDefinitionStore : IActivityDefinitionStore
+    {
+        public ActivityDefinitionFilter? LastFilter { get; private set; }
+
+        public Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This test only supports ListAsync.");
+
+        public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This test only supports ListAsync.");
+
+        public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default)
+        {
+            LastFilter = filter;
+            return Task.FromResult<IReadOnlyList<ActivityDefinition>>([]);
+        }
+
+        public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This test only supports ListAsync.");
+
+        public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("This test only supports ListAsync.");
     }
 }

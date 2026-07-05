@@ -27,6 +27,7 @@ public sealed class ListDefinitionsRequestHandler(
             searchTerm: request.SearchTerm,
             displayName: request.DisplayName,
             description: request.Description,
+            tenantAgnostic: request.TenantAgnostic,
             cancellationToken: cancellationToken);
 
         var settings = await settingsStore.LoadAsync(ActivityAvailabilitySettings.HostDefaultScope, cancellationToken);

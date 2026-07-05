@@ -107,7 +107,7 @@ public sealed class Elsa3ActivityToStateTests
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(
             string? id = null, string? category = null, string? searchTerm = null,
             string? displayName = null, string? description = null,
-            CancellationToken cancellationToken = default) =>
+            bool? tenantAgnostic = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IEnumerable<IActivityDefinition>>([_definition]);
 
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>

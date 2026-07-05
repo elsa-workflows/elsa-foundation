@@ -17,18 +17,10 @@ internal sealed class Feedback(IAgentFeedbackService feedback, IAgentSessionServ
 
     public override async Task HandleAsync(AgentFeedbackApiRequest req, CancellationToken ct)
     {
-        var session = await sessions.FindAsync(req.SessionId, ct);
-        if (session is null)
+        var (_, authError) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
+        if (authError is not null)
         {
-            var error = new AgentError("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404);
-            await Send.ResponseAsync(AgentApiResponse<AgentFeedback>.Failure(error), 404, cancellation: ct);
-            return;
-        }
-
-        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
-        {
-            var error = new AgentError("agent.session.forbidden", "The agent session is not available to the current principal.", 403);
-            await Send.ResponseAsync(AgentApiResponse<AgentFeedback>.Failure(error), 403, cancellation: ct);
+            await Send.ResponseAsync(AgentApiResponse<AgentFeedback>.Failure(authError), authError.StatusCode, cancellation: ct);
             return;
         }
 

@@ -28,6 +28,7 @@ public sealed class ActivityDefinitionLookup(
         string? searchTerm = null,
         string? displayName = null,
         string? description = null,
+        bool? tenantAgnostic = null,
         CancellationToken cancellationToken = default)
     {
         var filter = new ActivityDefinitionFilter
@@ -36,7 +37,8 @@ public sealed class ActivityDefinitionLookup(
             Category = category,
             SearchTerm = searchTerm,
             DisplayName = displayName,
-            Description = description
+            Description = description,
+            TenantAgnostic = tenantAgnostic
         };
 
         return await definitionStore.ListAsync(filter, cancellationToken);

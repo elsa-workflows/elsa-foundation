@@ -89,12 +89,16 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     }
 
     /// <inheritdoc />
-    public long GetHighWaterMark()
+    public async Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
     {
         try
         {
-            using var db = _dbContextFactory.CreateDbContext();
-            return db.StructuredLogEntries.Max(x => (long?)x.Sequence) ?? 0;
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+            return await db.StructuredLogEntries.MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -104,7 +108,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<StructuredLogEntry> GetRecent(StructuredLogFilter filter)
+    public async Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
@@ -117,14 +121,18 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
 
         try
         {
-            using var db = _dbContextFactory.CreateDbContext();
-            var rows = ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var rows = await ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
                 .OrderByDescending(x => x.Id)
                 .Take(max)
-                .ToList();
+                .ToListAsync(cancellationToken);
 
             rows.Reverse(); // Contract: newest last.
             return rows.Select(StructuredLogEntryMapper.ToModel).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
@@ -133,20 +141,24 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<StructuredLogEntry> GetAfter(long afterSequence, StructuredLogFilter filter)
+    public async Task<IReadOnlyList<StructuredLogEntry>> GetAfterAsync(long afterSequence, StructuredLogFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
         try
         {
-            using var db = _dbContextFactory.CreateDbContext();
-            var rows = ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
+            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var rows = await ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
                 .Where(x => x.Sequence > afterSequence)
                 .OrderBy(x => x.Id)
                 .Take(_maxRecentQuerySize)
-                .ToList();
+                .ToListAsync(cancellationToken);
 
             return rows.Select(StructuredLogEntryMapper.ToModel).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

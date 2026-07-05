@@ -43,14 +43,14 @@ public sealed class InMemoryStructuredLogStore : IStructuredLogStore
     }
 
     /// <inheritdoc />
-    public long GetHighWaterMark()
+    public Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
     {
         lock (_gate)
-            return _highWaterMark;
+            return Task.FromResult(_highWaterMark);
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<StructuredLogEntry> GetRecent(StructuredLogFilter filter)
+    public Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
@@ -59,20 +59,20 @@ public sealed class InMemoryStructuredLogStore : IStructuredLogStore
             : _maxRecentQuerySize;
 
         if (max == 0)
-            return [];
+            return Task.FromResult<IReadOnlyList<StructuredLogEntry>>([]);
 
         var matched = SnapshotMatching(filter, afterSequence: null);
-        if (matched.Count <= max)
-            return matched;
+        if (matched.Count > max)
+            matched = matched.GetRange(matched.Count - max, max);
 
-        return matched.GetRange(matched.Count - max, max);
+        return Task.FromResult<IReadOnlyList<StructuredLogEntry>>(matched);
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<StructuredLogEntry> GetAfter(long afterSequence, StructuredLogFilter filter)
+    public Task<IReadOnlyList<StructuredLogEntry>> GetAfterAsync(long afterSequence, StructuredLogFilter filter, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
-        return SnapshotMatching(filter, afterSequence);
+        return Task.FromResult<IReadOnlyList<StructuredLogEntry>>(SnapshotMatching(filter, afterSequence));
     }
 
     private List<StructuredLogEntry> SnapshotMatching(StructuredLogFilter filter, long? afterSequence)

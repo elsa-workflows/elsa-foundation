@@ -271,6 +271,7 @@ public sealed class Elsa3MigrationBoundaryTests
             string? searchTerm = null,
             string? displayName = null,
             string? description = null,
+            bool? tenantAgnostic = null,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Enumerable.Empty<IActivityDefinition>());
 

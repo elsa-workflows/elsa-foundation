@@ -5,7 +5,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.Struc
 The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
 
 - **`IStructuredLogSink`** assigns the monotonic `Sequence`, stamps the entry once, then dispatches to the store **and** the live publisher (keeping history and the tail consistent).
-- **`IStructuredLogStore`** is pure history (`Append`/`GetRecent`/`GetAfter`). Swap this to make logs durable.
+- **`IStructuredLogStore`** is pure history (`Append`/`GetRecentAsync`/`GetAfterAsync`). Swap this to make logs durable.
 - **`IStructuredLogLiveFeed` / `IStructuredLogLivePublisher`** is the in-process fan-out to SSE subscribers. It stays in-process for every storage backend.
 
 ---
@@ -15,7 +15,7 @@ The capture/serve pipeline is decomposed into three single-responsibility roles 
 All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature registers `InMemoryStructuredLogStore` (history), `InMemoryStructuredLogLiveFeed` (live fan-out, also the publisher), a `StructuredLogSink` (sequencing/dispatch), and a `LocalStructuredLogSourceProvider`. The store is registered with `TryAddSingleton` so a persistence feature can override it; the others use `AddSingleton`.
 
 ### `IStructuredLogStore` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
-- **Signature:** `void Append(StructuredLogEntry entry)`, `IReadOnlyList<StructuredLogEntry> GetRecent(StructuredLogFilter filter)`, `IReadOnlyList<StructuredLogEntry> GetAfter(long afterSequence, StructuredLogFilter filter)`, `long GetHighWaterMark()`.
+- **Signature:** `void Append(StructuredLogEntry entry)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken ct = default)`, `Task<IReadOnlyList<StructuredLogEntry>> GetAfterAsync(long afterSequence, StructuredLogFilter filter, CancellationToken ct = default)`, `Task<long> GetHighWaterMarkAsync(CancellationToken ct = default)`. Queries are async so persistent backends never block a request thread on storage I/O; `Append` stays synchronous because it sits on the logging hot path.
 - **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer (capacity from `StructuredLogsOptions.BufferCapacity`). Stores entries verbatim; the externally-assigned `Sequence` is the cursor.
 - **Override:** register your own `IStructuredLogStore` to persist entries and serve `recent`/Last-Event-ID resume from durable storage. Pure *replace-one-keep-rest* override. Shipped override: **`EfCoreStructuredLogStore`** (see _Persistence_ below). Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IStructuredLogStore>` wins regardless of feature order.
 
@@ -31,7 +31,7 @@ All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature regist
 
 ### `IStructuredLogSink` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
 - **Signature:** `void Emit(StructuredLogEntry entry)`.
-- **Default impl:** `StructuredLogSink` — assigns the monotonic `Sequence` (seeded from `store.GetHighWaterMark()` on startup), stamps the entry, then calls `store.Append(stamped)` + `publisher.Publish(stamped)`. This is the seam the capture `ILoggerProvider` writes to.
+- **Default impl:** `StructuredLogSink` — assigns the monotonic `Sequence` (seeded from `store.GetHighWaterMarkAsync()` lazily on the first emit, guaranteed to complete before the first sequence is assigned), stamps the entry, then calls `store.Append(stamped)` + `publisher.Publish(stamped)`. This is the seam the capture `ILoggerProvider` writes to.
 - **Override:** replace to tee captured entries elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
 
 ### `IStructuredLogSourceProvider` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*

@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Elsa.Agent.Core.Services.AgentIds;
 
 namespace Elsa.Agent.Core.Services;
@@ -280,8 +282,10 @@ public sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAg
 
 public sealed class InMemoryAgentProposalService(
     IAgentActionProposalExecutor executor,
-    IAgentAuditSink auditSink) : IAgentProposalService
+    IAgentAuditSink auditSink,
+    ILogger<InMemoryAgentProposalService>? logger = null) : IAgentProposalService
 {
+    private readonly ILogger _logger = logger ?? NullLogger<InMemoryAgentProposalService>.Instance;
     private readonly ConcurrentDictionary<string, AgentActionProposal> _proposals = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, object> _proposalLocks = new(StringComparer.OrdinalIgnoreCase);
 
@@ -398,26 +402,22 @@ public sealed class InMemoryAgentProposalService(
         {
             result = await executor.ExecuteAsync(reserved, cancellationToken);
         }
-        catch (Exception)
+        catch (OperationCanceledException)
         {
-            result = AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.execution_exception", $"Proposal '{proposalId}' execution failed.", 500);
+            // Preserve the state transition (the reservation must not stay 'Executed'), then let
+            // cancellation propagate instead of misreporting it as a generic execution failure.
+            await MarkFailedAsync("agent.proposal.cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Proposal '{ProposalId}' execution threw an unhandled exception.", proposalId);
+            result = AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.execution_exception", $"Proposal '{proposalId}' execution failed: {ex.Message}", 500);
         }
 
         if (!result.Succeeded)
         {
-            var failedAt = DateTimeOffset.UtcNow;
-            lock (GetProposalLock(proposalId))
-                _proposals[proposalId] = reserved with { Status = AgentActionProposalStatus.Failed, UpdatedAt = failedAt };
-
-            await auditSink.EmitAsync(new(
-                NewId(),
-                AgentAuditEventKind.ProposalFailed,
-                proposal.SessionId,
-                actorId,
-                "Agent proposal execution failed.",
-                failedAt,
-                new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["code"] = result.Error?.Code ?? string.Empty }), CancellationToken.None);
-
+            await MarkFailedAsync(result.Error?.Code ?? string.Empty);
             return result;
         }
 
@@ -431,6 +431,22 @@ public sealed class InMemoryAgentProposalService(
             new Dictionary<string, string> { ["proposalId"] = proposal.Id }), cancellationToken);
 
         return result;
+
+        async Task MarkFailedAsync(string code)
+        {
+            var failedAt = DateTimeOffset.UtcNow;
+            lock (GetProposalLock(proposalId))
+                _proposals[proposalId] = reserved with { Status = AgentActionProposalStatus.Failed, UpdatedAt = failedAt };
+
+            await auditSink.EmitAsync(new(
+                NewId(),
+                AgentAuditEventKind.ProposalFailed,
+                proposal.SessionId,
+                actorId,
+                "Agent proposal execution failed.",
+                failedAt,
+                new Dictionary<string, string> { ["proposalId"] = proposal.Id, ["code"] = code }), CancellationToken.None);
+        }
     }
 
     private static bool RevisionMatches(AgentActionProposal proposal, string? expectedRevision)

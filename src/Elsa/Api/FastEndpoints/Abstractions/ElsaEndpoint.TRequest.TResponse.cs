@@ -1,5 +1,4 @@
-﻿using Elsa.Api.FastEndpoints.Constants;
-using FastEndpoints;
+﻿using FastEndpoints;
 
 namespace Elsa.Api.FastEndpoints.Abstractions;
 
@@ -7,7 +6,7 @@ public class ElsaEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse> w
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions([PermissionNames.All, .. permissions]);
+        Permissions(ElsaEndpointPermissions.Compose(permissions));
     }
 
     protected void ThrowError(Exception exception, int statusCode = 500) => ThrowError(exception.Message, statusCode);

@@ -37,25 +37,25 @@ public sealed class EfCoreStructuredLogStoreTests
     }
 
     [Fact]
-    public void GetHighWaterMarkReturnsMaxSequence()
+    public async Task GetHighWaterMarkReturnsMaxSequence()
     {
         using var host = StructuredLogsTestHost.Create();
         Seed(host, (5, LogLevel.Information, "c", "s"), (7, LogLevel.Information, "c", "s"), (3, LogLevel.Information, "c", "s"));
 
-        Assert.Equal(7L, NewStore(host).GetHighWaterMark());
+        Assert.Equal(7L, await NewStore(host).GetHighWaterMarkAsync());
     }
 
     [Fact]
-    public void GetHighWaterMarkReturnsZeroWhenTableMissing()
+    public async Task GetHighWaterMarkReturnsZeroWhenTableMissing()
     {
         using var host = StructuredLogsTestHost.Create(createSchema: false);
 
         // Must not throw even though the table does not exist yet (pre-migration window).
-        Assert.Equal(0L, NewStore(host).GetHighWaterMark());
+        Assert.Equal(0L, await NewStore(host).GetHighWaterMarkAsync());
     }
 
     [Fact]
-    public void GetRecentIsNewestLastAndClampedToRequestedCount()
+    public async Task GetRecentIsNewestLastAndClampedToRequestedCount()
     {
         using var host = StructuredLogsTestHost.Create();
         Seed(host,
@@ -65,25 +65,25 @@ public sealed class EfCoreStructuredLogStoreTests
             (4, LogLevel.Information, "c", "s"),
             (5, LogLevel.Information, "c", "s"));
 
-        var recent = NewStore(host).GetRecent(new StructuredLogFilter { MaxCount = 2 });
+        var recent = await NewStore(host).GetRecentAsync(new StructuredLogFilter { MaxCount = 2 });
 
         Assert.Equal(new[] { 4L, 5L }, recent.Select(e => e.Sequence));
     }
 
     [Fact]
-    public void GetRecentAppliesLevelFilter()
+    public async Task GetRecentAppliesLevelFilter()
     {
         using var host = StructuredLogsTestHost.Create();
         Seed(host, (1, LogLevel.Information, "c", "s"), (2, LogLevel.Error, "c", "s"));
 
-        var recent = NewStore(host).GetRecent(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
+        var recent = await NewStore(host).GetRecentAsync(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
 
         Assert.Single(recent);
         Assert.Equal(LogLevel.Error, recent[0].Level);
     }
 
     [Fact]
-    public void GetAfterReturnsGreaterSequencesOldestFirst()
+    public async Task GetAfterReturnsGreaterSequencesOldestFirst()
     {
         using var host = StructuredLogsTestHost.Create();
         Seed(host,
@@ -92,7 +92,7 @@ public sealed class EfCoreStructuredLogStoreTests
             (3, LogLevel.Information, "c", "s"),
             (4, LogLevel.Information, "c", "s"));
 
-        var after = NewStore(host).GetAfter(2, StructuredLogFilter.None);
+        var after = await NewStore(host).GetAfterAsync(2, StructuredLogFilter.None);
 
         Assert.Equal(new[] { 3L, 4L }, after.Select(e => e.Sequence));
     }
@@ -114,9 +114,9 @@ public sealed class EfCoreStructuredLogStoreTests
 
         store.Append(entry);
 
-        var persisted = await WaitForAsync(() =>
+        var persisted = await WaitForAsync(async () =>
         {
-            var recent = store.GetRecent(StructuredLogFilter.None);
+            var recent = await store.GetRecentAsync(StructuredLogFilter.None);
             return recent.Count == 1 ? recent[0] : null;
         });
 
@@ -156,7 +156,7 @@ public sealed class EfCoreStructuredLogStoreTests
 
         Assert.True(pruned);
 
-        var newest = store.GetRecent(new StructuredLogFilter { MaxCount = 1 });
+        var newest = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 1 });
         Assert.Equal(40L, Assert.Single(newest).Sequence);
 
         store.Dispose();
@@ -191,17 +191,17 @@ public sealed class EfCoreStructuredLogStoreTests
         return probe();
     }
 
-    private static async Task<T?> WaitForAsync<T>(Func<T?> probe, int timeoutMs = 5000) where T : class
+    private static async Task<T?> WaitForAsync<T>(Func<Task<T?>> probe, int timeoutMs = 5000) where T : class
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
         while (DateTime.UtcNow < deadline)
         {
-            var result = probe();
+            var result = await probe();
             if (result is not null)
                 return result;
             await Task.Delay(25);
         }
 
-        return probe();
+        return await probe();
     }
 }

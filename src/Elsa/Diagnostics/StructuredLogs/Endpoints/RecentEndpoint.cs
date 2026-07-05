@@ -38,7 +38,7 @@ internal sealed class RecentEndpoint(
             return;
         }
 
-        var entries = store.GetRecent(filter);
+        var entries = await store.GetRecentAsync(filter, ct);
         await Send.StringAsync(serializer.SerializeMany(entries), 200, "application/json", ct);
     }
 }

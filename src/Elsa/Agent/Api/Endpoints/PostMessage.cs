@@ -21,22 +21,14 @@ internal sealed class PostMessage(
 
     public override async Task HandleAsync(AgentMessageRequest req, CancellationToken ct)
     {
-        var session = await sessions.FindAsync(req.SessionId, ct);
-        if (session is null)
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
+        if (error is not null)
         {
-            var error = new AgentError("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404);
-            await Send.ResponseAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), 404, cancellation: ct);
+            await Send.ResponseAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), error.StatusCode, cancellation: ct);
             return;
         }
 
-        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
-        {
-            var error = new AgentError("agent.session.forbidden", "The agent session is not available to the current principal.", 403);
-            await Send.ResponseAsync(AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), 403, cancellation: ct);
-            return;
-        }
-
-        var availability = await policyEvaluator.EvaluateAvailabilityAsync(session.Policy, ct);
+        var availability = await policyEvaluator.EvaluateAvailabilityAsync(session!.Policy, ct);
         if (!availability.Allowed)
         {
             await SendDeniedAsync(req.SessionId, availability, ct);

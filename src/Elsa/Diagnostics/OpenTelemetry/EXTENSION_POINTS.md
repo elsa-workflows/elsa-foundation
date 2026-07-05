@@ -67,7 +67,7 @@ All contracts live in `Elsa.Diagnostics.OpenTelemetry.Core`. The feature registe
 
 ## Notes
 
-- Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from `store.GetAfter(sequence)`). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
+- Live stream items (`OpenTelemetryStreamItem`) carry **no monotonic sequence/id**, so the SSE stream offers **no `Last-Event-ID` resume** (unlike Structured Logs, which resumes from `store.GetAfterAsync(sequence)`). SSE frames use typed `event:` names (`resource`/`trace`/`metric`/`log`/`dropped`) with no `id:`.
 - This domain was ported from elsa-core with two deliberate deviations — **SSE over SignalR** and the **OTLP collector as FastEndpoints** (not `EndpointRouteBuilderExtensions`/`IWebShellFeature`). See [`README.md`](README.md#deviations-from-the-elsa-core-source).
 
 ---
