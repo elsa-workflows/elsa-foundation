@@ -112,6 +112,18 @@ public sealed class WhileActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompleted_Throws_WhenCompletedChildIsNotBody()
+    {
+        // #381: a stray child-completion callback must throw a diagnosable exception (mirroring
+        // For/ForEach/If/Switch/Parallel) instead of silently rescheduling the body or completing.
+        var context = NewContext(NewWhileNode(body: NewNode("node-body")), condition: true);
+
+        await Assert.ThrowsAsync<WhileExecutionException>(() => ((IActivityChildCompletionHandler)context.Activity)
+            .OnChildCompletedAsync(new ActivityChildCompletedContext(context, "actexec-x", "node-x", [ActivityOutcomes.Done]))
+            .AsTask());
+    }
+
+    [Fact]
     public async Task OnChildCompleted_Throws_WhenRuntimeContextIsMissing()
     {
         var context = new NonRuntimeActivityExecutionContext(_serviceProvider, new WhileActivity());

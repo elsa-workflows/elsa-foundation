@@ -8,7 +8,9 @@ public sealed class ZipFileArchive(string fileName, string contentType, Stream s
 
     public void Dispose()
     {
-        onCleanup?.Invoke();
+        // Dispose the stream before running cleanup: cleanup typically deletes the backing
+        // temp file, which fails on Windows while the stream still holds an open handle.
         Stream.Dispose();
+        onCleanup?.Invoke();
     }
 }

@@ -5,7 +5,10 @@ using Microsoft.Extensions.Options;
 
 namespace Elsa.Http.Services;
 
-internal sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorage
+/// <summary>
+/// Stores cached zip files and their metadata on the local file system.
+/// </summary>
+public sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOptions> options, IPayloadSerializer payloadSerializer) : IZipFileCacheStorage
 {
     private const string metaDataFileSuffix = "_metadata.json";
     private readonly SemaphoreSlim metaDataLock = new(1, 1);
@@ -41,6 +44,9 @@ internal sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOpt
             await fileStream.CopyToAsync(result, cancellationToken);
             await fileStream.FlushAsync(cancellationToken);
 
+            // Rewind so consumers (e.g. streaming the cached zip to an HTTP response) read
+            // the content instead of starting at the end of the stream.
+            result.Position = 0;
             return result;
         }
         finally
@@ -55,7 +61,9 @@ internal sealed class FileSystemZipFileCacheStorage(IOptions<HttpZipFileCacheOpt
         await zipFileLock.WaitAsync(cancellationToken);
         try
         {
-            using var writeStream = File.OpenWrite(fullFilePath);
+            // FileMode.Create truncates any existing file; File.OpenWrite would leave stale
+            // trailing bytes when a cache path is reused for a shorter payload.
+            using var writeStream = new FileStream(fullFilePath, FileMode.Create, FileAccess.Write);
             await stream.CopyToAsync(writeStream, cancellationToken);
         }
         finally

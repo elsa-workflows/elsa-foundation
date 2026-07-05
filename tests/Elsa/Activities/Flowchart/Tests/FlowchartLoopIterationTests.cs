@@ -73,7 +73,10 @@ public sealed class FlowchartLoopIterationTests
         await fixture.ExecuteAsync(executable);
 
         var state = await fixture.GetFlowchartStateAsync();
-        Assert.Contains(state.ExecutionPaths, path => path.IterationKey is not null && path.CurrentNodeId == "node-a");
+        // #382: completed iteration paths are pruned from the persisted blob; the iteration identity
+        // evidence lives in the never-pruned loop-iteration scope and its key. No Waiting path may
+        // remain — a stale first-iteration arrival must not have satisfied the later iteration's join.
+        Assert.Contains(state.Scopes, scope => scope.Kind == ExecutionScopeKind.LoopIteration && scope.LoopIterationKey is not null && scope.OwnerNodeId == "node-a");
         Assert.DoesNotContain(state.ExecutionPaths, path => path.Status == ExecutionPathStatus.Waiting);
     }
 
