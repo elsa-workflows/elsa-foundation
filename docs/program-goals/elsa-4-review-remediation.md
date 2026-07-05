@@ -239,7 +239,8 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     prune-on-save + diagnostics cap behind a Stage-1.5 design gate — §E6 golden fixture pins
     the **ordinal** enum encodings + `elsa.flowchart.executionState` key; Canceled/Faulted
     paths deliberately retained for race-loser late-completion absorption.
-- **Wave B (in flight, sequenced):**
+- **Wave B — COMPLETE 2026-07-05** (W27 → W28 → W29, sequenced, all merged with control-room
+  QA — detached-worktree suite reproduction + revert/mutation bite-proofs — before each merge):
   - **W27 Groundwork durable placement + transport stores — done 2026-07-05**
     ([#484](https://github.com/elsa-workflows/elsa-foundation/pull/484), merge `c8f9b393`).
     Durable stores for the frozen leaf contracts in a NEW bridge project
@@ -279,7 +280,24 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     `RuntimeCoreEngineShapeGuardTests` semantic guard (suffix-keyed, red-proven, with a
     predicate-liveness fact); Architecture suite 47 → 49. All nine affected suites at
     identical before/after counts.
-  - W29 security/design follow-ups (now incl. #414 item 7 unredacted provider `LogDebug`).
+  - **W29 security/design follow-ups — done 2026-07-05**
+    ([#491](https://github.com/elsa-workflows/elsa-foundation/pull/491), merge `4938c062`).
+    Item 1 (design-endpoints `AllowAnonymous` removal) found **already delivered** by the
+    earlier D-sweep + the `ApiSecurity.AllowAnonymous` kill-switch (default off,
+    Development-only, warning-logged) — residual shipped: endpoint-security regression pins
+    for all 18 design endpoint files + an inventory guard against unpinned new endpoints.
+    `ISecretManager` store-vs-resolver split executed per the PR #461 proposal
+    (`ISecretResolver` → `ISecretValueResolver`, `ResolvePayloadAsync` off the facade, duplicate
+    lifecycle-policy evaluation eliminated; swap-registration test proves resolver replaceable
+    without touching the manager). Secrets golden-fixture gate: kind `secret` pinned at
+    `tests/Elsa/Secrets/Tests/Fixtures/v1/secret.json` (two-version fixture covering both
+    payload wire variants, fake ciphertext only; drift + legacy-load tests per the Identity
+    pattern; the computed `LatestActiveVersion` wire quirk deliberately pinned). #414 item 7
+    fixed at ALL FOUR raw exception-log sites (Anthropic + 3 GitHubCopilot) — redacted
+    rendering via `Normalize(ex.ToString())`, failing-first with capturing-logger proofs;
+    cross-provider redaction-helper dedup deliberately left to W31. Granular design
+    permissions (`Design:Read`/`Write`) explicitly NOT introduced — would change the deployed
+    permission contract and needs Studio coordination; own gated unit if ever wanted.
 - **Wave C (after structural):** W30 god-class refactors, W31 DRY batch (remaining #412/#413/
   #414 items 3/4/6, #415 live slices — item 3 stale per W25, #416 slices 2–6 — slice 3 needs its
   own gate for the EXTENSION_POINTS Priority-ordering contract, #417 remainder incl. the
