@@ -20,4 +20,11 @@
     <ProjectReference Include="..\..\..\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The nested persistence bridge is its own project; keep SDK globs scoped to this project. -->
+    <Compile Remove="Persistence/**/*" />
+    <EmbeddedResource Remove="Persistence/**/*" />
+    <None Remove="Persistence/**/*" />
+  </ItemGroup>
+
 </Project>

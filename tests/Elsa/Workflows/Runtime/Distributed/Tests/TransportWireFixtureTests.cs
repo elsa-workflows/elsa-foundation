@@ -17,32 +17,35 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// </remarks>
 public sealed class TransportWireFixtureTests
 {
-    // Set ELSA_DISTRIBUTED_FIXTURE_REGEN=1 to (re)write the committed fixture after an intentional, versioned change.
-    private static readonly bool Regenerate = Environment.GetEnvironmentVariable("ELSA_DISTRIBUTED_FIXTURE_REGEN") == "1";
-
     [Fact]
     public void Serialized_Shape_Matches_The_Committed_Golden_Fixture()
     {
         var item = TransportWireFixture.CanonicalItem();
         var actualJson = JsonSerializer.Serialize(item, TransportWireFixture.SerializerOptions);
 
-        if (Regenerate)
+        if (GoldenFixtureTestSupport.Regenerate)
         {
-            WriteFixtureToSource(Canonicalize(JsonNode.Parse(actualJson)));
+            GoldenFixtureTestSupport.WriteFixtureToSource(
+                SourceDirectory(), TransportWireFixture.Kind, GoldenFixtureTestSupport.Canonicalize(JsonNode.Parse(actualJson)));
             return;
         }
 
-        var expectedJson = ReadCommittedFixture();
-        AssertJsonSemanticallyEqual(expectedJson, actualJson);
+        var expectedJson = GoldenFixtureTestSupport.ReadCommittedFixture(TransportWireFixture.Kind);
+        GoldenFixtureTestSupport.AssertJsonSemanticallyEqual(
+            expectedJson,
+            actualJson,
+            "The serialized shape of the execution command transport item no longer matches its committed golden " +
+            "fixture (Fixtures/v1/executionCommandTransport.json). This is the frozen v1 wire format shared with the " +
+            "durable transport follow-up.");
     }
 
     [Fact]
     public void Committed_Fixture_Round_Trips_Into_An_Equivalent_Item()
     {
-        if (Regenerate)
+        if (GoldenFixtureTestSupport.Regenerate)
             return;
 
-        var fixtureJson = ReadCommittedFixture();
+        var fixtureJson = GoldenFixtureTestSupport.ReadCommittedFixture(TransportWireFixture.Kind);
         var deserialized = JsonSerializer.Deserialize<ExecutionCommandTransportItem>(fixtureJson, TransportWireFixture.SerializerOptions);
 
         Assert.NotNull(deserialized);
@@ -57,59 +60,6 @@ public sealed class TransportWireFixtureTests
         Assert.Equal(expected.Envelope.IdempotencyKey, deserialized.Envelope.IdempotencyKey);
         Assert.Equal(expected.Envelope.Command.Kind, deserialized.Envelope.Command.Kind);
         Assert.Equal(expected.Envelope.Command.CommandId, deserialized.Envelope.Command.CommandId);
-    }
-
-    private static void AssertJsonSemanticallyEqual(string expectedJson, string actualJson)
-    {
-        var expected = JsonNode.Parse(expectedJson);
-        var actual = JsonNode.Parse(actualJson);
-
-        if (JsonNode.DeepEquals(expected, actual))
-            return;
-
-        Assert.Fail(
-            "The serialized shape of the execution command transport item no longer matches its committed golden " +
-            "fixture (Fixtures/v1/executionCommandTransport.json). This is the frozen v1 wire format shared with the " +
-            "durable transport follow-up.\n\n" +
-            "To evolve it you must bump the schema version, add an upcaster, add a new versioned fixture, and keep the " +
-            "old one. Run with ELSA_DISTRIBUTED_FIXTURE_REGEN=1 only after a deliberate, versioned change.\n\n" +
-            $"Expected (committed):\n{Canonicalize(expected)}\n\nActual (serialized today):\n{Canonicalize(actual)}");
-    }
-
-    private static string Canonicalize(JsonNode? node) =>
-        SortRecursively(node)?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? "null";
-
-    private static JsonNode? SortRecursively(JsonNode? node)
-    {
-        switch (node)
-        {
-            case JsonObject obj:
-                var result = new JsonObject();
-                foreach (var property in obj.OrderBy(p => p.Key, StringComparer.Ordinal))
-                    result[property.Key] = SortRecursively(property.Value?.DeepClone());
-                return result;
-            case JsonArray array:
-                var newArray = new JsonArray();
-                foreach (var element in array)
-                    newArray.Add(SortRecursively(element?.DeepClone()));
-                return newArray;
-            default:
-                return node?.DeepClone();
-        }
-    }
-
-    private static string ReadCommittedFixture()
-    {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1", TransportWireFixture.Kind + ".json");
-        Assert.True(File.Exists(path), $"Missing committed golden fixture at '{path}'. Run with ELSA_DISTRIBUTED_FIXTURE_REGEN=1 to generate it.");
-        return File.ReadAllText(path);
-    }
-
-    private static void WriteFixtureToSource(string canonicalJson)
-    {
-        var directory = Path.Combine(SourceDirectory(), "Fixtures", "v1");
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, TransportWireFixture.Kind + ".json"), canonicalJson);
     }
 
     private static string SourceDirectory([CallerFilePath] string? callerFilePath = null) => Path.GetDirectoryName(callerFilePath)!;

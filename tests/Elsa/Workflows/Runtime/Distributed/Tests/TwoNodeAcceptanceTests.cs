@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Xunit;
 
@@ -14,7 +15,12 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 /// recovers on the survivor WITHOUT double-execution. Determinism comes entirely from advancing the shared fake clock
 /// and driving pumps by hand; there are no sleeps.
 /// </summary>
-public sealed class TwoNodeAcceptanceTests
+/// <remarks>
+/// The suite is abstract over the shared placement store and command transport so the SAME scenarios prove both the
+/// in-memory harness stores (W20) and the durable Groundwork-backed stores (W27) — see the concrete fixtures in
+/// <c>InMemoryTwoNodeAcceptanceTests</c> and <c>GroundworkTwoNodeAcceptanceTests</c>.
+/// </remarks>
+public abstract class TwoNodeAcceptanceTests
 {
     private const string ExecutionId = "wf-acceptance-1";
     private const string NodeA = "node-a";
@@ -99,10 +105,12 @@ public sealed class TwoNodeAcceptanceTests
         Assert.Single(cluster.ExecutorB.Committed);
     }
 
+    /// <summary>Creates the cluster-shared placement store + transport pair the two nodes run over.</summary>
+    protected abstract (IExecutionPlacementStore PlacementStore, IExecutionCommandTransport Transport) CreateClusterState();
+
     private Cluster NewCluster()
     {
-        var placementStore = new InMemoryExecutionPlacementStore();
-        var transport = new InMemoryExecutionCommandTransport();
+        var (placementStore, transport) = CreateClusterState();
         var livenessStore = new InMemoryExecutionLivenessStateStore();
         var clock = new MutableTimeProvider(_now);
 
@@ -119,11 +127,18 @@ public sealed class TwoNodeAcceptanceTests
     }
 
     private sealed record Cluster(
-        InMemoryExecutionCommandTransport Transport,
+        IExecutionCommandTransport Transport,
         MutableTimeProvider Clock,
         IRuntimeExecutionOwnershipService OwnershipA,
         FencingCommandExecutor ExecutorA,
         FencingCommandExecutor ExecutorB,
         NodeHarness NodeA,
         NodeHarness NodeB);
+}
+
+/// <summary>The W20 acceptance suite over the in-memory harness stores (the original single-process cluster state).</summary>
+public sealed class InMemoryTwoNodeAcceptanceTests : TwoNodeAcceptanceTests
+{
+    protected override (IExecutionPlacementStore PlacementStore, IExecutionCommandTransport Transport) CreateClusterState() =>
+        (new InMemoryExecutionPlacementStore(), new InMemoryExecutionCommandTransport());
 }
