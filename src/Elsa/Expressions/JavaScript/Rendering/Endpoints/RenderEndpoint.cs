@@ -7,7 +7,7 @@ internal sealed class RenderEndpoint(IJavaScriptDeclarationsDocumentRenderer ren
 {
     public override void Configure()
     {
-        AllowAnonymous();
+        ConfigurePermissions();
         Get("javascript/documents/render");
     }
 

@@ -68,7 +68,13 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
     {
         foreach (var (propertyName, value) in properties)
         {
-            if (value.ValueKind != JsonValueKind.Null || !TryGetArgument(propertyName, value, out var argument))
+            var parsed = TryGetArgument(propertyName, value, out var argument);
+
+            // Skip only properties that carry a value but do not parse as an argument. Null-valued
+            // properties fall through and are recorded as ArgumentState.Null below. (The original
+            // guard used `||`, which — by De Morgan's law — skipped every property and made this
+            // whole loop body dead code, silently dropping all imported inputs/outputs. See #378.)
+            if (value.ValueKind != JsonValueKind.Null && !parsed)
             {
                 continue;
             }

@@ -30,6 +30,7 @@ using Elsa.Expressions;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Locking.FileSystem;
@@ -193,22 +194,31 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FoundationWorkflowsAgentFeature).Assembly,
             typeof(GitHubCopilotAgentFeature).Assembly,
 
-            // Identity surface. What actually secures the API in W4 is the authentication stack:
-            // FoundationIdentityAbstractions (provider-agnostic auth/IAM contracts) plus the OIDC
-            // authentication provider module, which registers the JWT bearer scheme as the default
-            // challenge scheme so an unauthenticated call is rejected with 401. These two features
-            // are enabled in the default shell (see shells.json); the per-shell ApiSecurity feature
-            // is the only way to opt a shell out, and it is never enabled here.
+            // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
+            // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
+            // registers the external JWT bearer scheme, and — now that Workstream D is landed — the
+            // first-party token stack: the identity API endpoints (login/session/token exchange), the
+            // ASP.NET Core Identity substrate (cookie sign-in, EF stores, dev seeding), and the OpenIddict
+            // token service (JWT issuance + local bearer validation). Together their composite scheme
+            // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
+            // rejected with 401. All of these are enabled in the default shell (see shells.json) with
+            // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
+            // The per-shell ApiSecurity feature is the only way to opt a shell out of endpoint security,
+            // and it is never enabled here (and is neutralized in Production regardless — see below).
             //
-            // The remaining identity assemblies (the identity API endpoints, ASP.NET Core Identity,
-            // and the OpenIddict token service) stay in the discovery universe so W18 can enable
-            // them, but they are intentionally NOT enabled in W4: local token issuance and user
-            // seeding are W18 scope, and enabling the token-issuance endpoints without a token
-            // service would fault the shell's endpoint registration.
+            // W18 note (resolved): the earlier guard kept the token-issuance endpoints out of the default
+            // shell because enabling them without an ITokenService would fault endpoint registration. The
+            // OpenIddict module now supplies that service, so the fault condition no longer exists and the
+            // features are enabled.
             typeof(FoundationIdentityAbstractionsFeature).Assembly,
             typeof(FoundationIdentityApiFeature).Assembly,
             typeof(OidcAuthenticationFeature).Assembly,
             typeof(AspNetCoreIdentityFeature).Assembly,
+
+            // The EF Core-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
+            // sign-in, login endpoints/page, dev seeding), enabled in the default shell via shells.json.
+            typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
+
             typeof(OpenIddictIdentityFeature).Assembly,
             typeof(ApiSecurityFeature).Assembly,
 

@@ -12,6 +12,6 @@ internal sealed class ListDiagnostics(IRequestSender requestSender, ILogger<List
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("availability/diagnostics"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

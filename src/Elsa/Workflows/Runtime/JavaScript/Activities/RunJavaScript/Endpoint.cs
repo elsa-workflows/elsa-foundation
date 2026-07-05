@@ -11,7 +11,7 @@ internal sealed class Endpoint(IServiceProvider serviceProvider, ILogger<Endpoin
     public override void Configure()
     {
         Post("javascript/execute");
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 
     public override async Task HandleAsync(RequestModel req, CancellationToken ct)
