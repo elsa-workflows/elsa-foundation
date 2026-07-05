@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Foundation.Identity.Abstractions.Extensions;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
@@ -54,6 +55,10 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
 
         if (isDevelopmentOrDemo)
         {
+            // Safety guard: hard-fail startup if this dangerous flag is set outside the Development environment
+            // (the in-memory DB + seeded well-known admin must never boot in production).
+            services.AddIdentityDevelopmentOrDemoGuard("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore");
+
             // Register once and expose under both lifecycle hooks: IHostedService for plain hosts/tests, and
             // the CShells IShellInitializer for the shell-composed Elsa.Server host (which does not run
             // shell-scoped hosted services). The seed is idempotent under either.

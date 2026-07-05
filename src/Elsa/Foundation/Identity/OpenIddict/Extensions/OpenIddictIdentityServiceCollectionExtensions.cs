@@ -89,6 +89,10 @@ public static class OpenIddictIdentityServiceCollectionExtensions
 
         if (snapshot.IsDevelopmentOrDemo)
         {
+            // Safety guard: hard-fail startup if this dangerous flag is set outside the Development environment
+            // (ephemeral per-process signing keys must never back tokens in production).
+            services.AddIdentityDevelopmentOrDemoGuard("FoundationIdentityOpenIddict");
+
             // Expose the store initializer under both lifecycle hooks: IHostedService for plain hosts/tests
             // and the CShells IShellInitializer for the shell-composed Elsa.Server host (see the initializer's
             // remarks). Ensure-created/migrate is idempotent under either.

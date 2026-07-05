@@ -38,6 +38,10 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
         var databaseSuffix = Guid.NewGuid().ToString("n");
 
         var host = new HostBuilder()
+            // The identity dev/demo features register a DevelopmentOrDemoGuard that hard-fails startup outside
+            // the Development environment (HostBuilder defaults to Production). This composition legitimately
+            // runs in dev/demo mode, so declare the Development environment.
+            .UseEnvironment(Environments.Development)
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();

@@ -73,7 +73,8 @@ public sealed class OpenIddictBearerAuthenticationTests
         var issued = await IssueAsync(host);
         Assert.Equal(HttpStatusCode.OK, (await CallProtectedAsync(host, issued.AccessToken)).StatusCode);
 
-        await host.Services.GetRequiredService<ITokenService>().RevokeAsync(new TokenRevocationRequest(issued.AccessToken));
+        await using (var scope = host.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ITokenService>().RevokeAsync(new TokenRevocationRequest(issued.AccessToken));
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await CallProtectedAsync(host, issued.AccessToken)).StatusCode);
     }
@@ -83,6 +84,9 @@ public sealed class OpenIddictBearerAuthenticationTests
         var databaseName = $"openiddict-http-{Guid.NewGuid():n}";
 
         var host = await new HostBuilder()
+            // The dev/demo OpenIddict feature registers a DevelopmentOrDemoGuard that hard-fails startup
+            // outside Development (HostBuilder defaults to Production); this host runs legitimately in dev/demo.
+            .UseEnvironment(Environments.Development)
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();
@@ -118,9 +122,13 @@ public sealed class OpenIddictBearerAuthenticationTests
         return host;
     }
 
-    private static ValueTask<TokenIssueResult> IssueAsync(IHost host) =>
-        host.Services.GetRequiredService<ITokenService>()
+    private static async ValueTask<TokenIssueResult> IssueAsync(IHost host)
+    {
+        // Resolve the (scoped) token service from a scope — the Development environment enables scope validation.
+        await using var scope = host.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ITokenService>()
             .IssueAsync(new TokenIssueRequest("user-1", "tenant-a", ["identity.users.read"]));
+    }
 
     private static async Task<HttpResponseMessage> CallProtectedAsync(IHost host, string? accessToken)
     {
