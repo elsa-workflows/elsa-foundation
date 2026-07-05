@@ -55,12 +55,15 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         Assert.Empty(await Provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
-    public async Task<FlowchartExecutionState> GetFlowchartStateAsync()
+    public async Task<FlowchartExecutionState> GetFlowchartStateAsync() =>
+        JsonSerializer.Deserialize<FlowchartExecutionState>(await GetRawFlowchartStateAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
+
+    public async Task<string> GetRawFlowchartStateAsync()
     {
         var states = await Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         var flowchartState = states.Single(state => state.Execution.ExecutableNodeId == "node-flowchart");
-        return JsonSerializer.Deserialize<FlowchartExecutionState>(flowchartState.Metadata[FlowchartExecutionEngine.StateMetadataKey], new JsonSerializerOptions(JsonSerializerDefaults.Web))
-               ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
+        return flowchartState.Metadata[FlowchartExecutionEngine.StateMetadataKey];
     }
 
     public WorkflowExecutable NewExecutable(
