@@ -21,6 +21,7 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 public sealed class DefinitionEndpointSecurityTests
 {
     private const string EndpointsNamespace = "Elsa.Workflows.Design.Api.Endpoints.Definitions";
+    private const string VersionsNamespace = "Elsa.Workflows.Design.Api.Endpoints.Versions";
 
     [Fact]
     public void Get_endpoint_requires_a_permission_and_is_not_anonymous() =>
@@ -33,6 +34,23 @@ public sealed class DefinitionEndpointSecurityTests
     [Fact]
     public void Delete_endpoint_requires_a_permission_and_is_not_anonymous() =>
         AssertPermissionGuarded($"{EndpointsNamespace}.Delete", new StubCommandSender());
+
+    // D5 sweep (QA finding): endpoints that carried an interim AllowAnonymous() are now permission-guarded.
+    // These are the direct regression guards proving the sweep replaced AllowAnonymous() with
+    // ConfigurePermissions() and that no swept endpoint can silently regress to anonymous.
+    [Theory]
+    [InlineData("List", false)]
+    [InlineData("Add", true)]
+    [InlineData("Submit", true)]
+    public void Swept_definition_endpoints_require_a_permission_and_are_not_anonymous(string name, bool isCommand) =>
+        AssertPermissionGuarded($"{EndpointsNamespace}.{name}", isCommand ? new StubCommandSender() : new StubRequestSender());
+
+    [Theory]
+    [InlineData("List", false)]
+    [InlineData("Get", false)]
+    [InlineData("Add", true)]
+    public void Swept_version_endpoints_require_a_permission_and_are_not_anonymous(string name, bool isCommand) =>
+        AssertPermissionGuarded($"{VersionsNamespace}.{name}", isCommand ? new StubCommandSender() : new StubRequestSender());
 
     private static void AssertPermissionGuarded(string endpointTypeName, object sender)
     {
