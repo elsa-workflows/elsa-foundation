@@ -145,12 +145,14 @@ public sealed class EfCoreStructuredLogStoreTests
             store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
 
         // Eventually the table is pruned down to roughly the retention cap and the newest row survives.
+        // Generous deadline: prunes racing the probe can hit transient SQLite contention and go through
+        // retry cycles (1s delay each) before succeeding, especially on a loaded machine.
         var pruned = await WaitForConditionAsync(() =>
         {
             using var db = host.CreateDbContext();
             var count = db.StructuredLogEntries.Count();
             return count is > 0 and <= 9; // cap (5) + at most one prune-interval (4) of slack
-        });
+        }, timeoutMs: 30_000);
 
         Assert.True(pruned);
 
