@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using static Elsa.Activities.Flowchart.Internal.FlowchartScheduler;
 using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
 
 namespace Elsa.Activities.Flowchart.Internal;
@@ -772,49 +773,4 @@ public sealed class FlowchartExecutionEngine(
         StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.ParallelJoin) ||
         StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.InclusiveJoin);
 
-    private static FlowchartExecutionState ScheduleNode(
-        IRuntimeActivityExecutionContext context,
-        FlowchartExecutionState state,
-        string nodeId,
-        string executionPathId,
-        string executionScopeId,
-        string? iterationKey,
-        string schedulingActivityExecutionId,
-        string schedulingCause)
-    {
-        context.ScheduleChildActivity(
-            nodeId,
-            schedulingActivityExecutionId,
-            new Dictionary<string, string>
-            {
-                [ParentActivityExecutionIdMetadataKey] = context.ActivityExecutionState.Execution.ActivityExecutionId,
-                [ExecutionPathIdMetadataKey] = executionPathId,
-                [ExecutionScopeIdMetadataKey] = executionScopeId,
-                [SchedulingCauseMetadataKey] = schedulingCause,
-                [TargetNodeIdMetadataKey] = nodeId
-            },
-            ActivitySchedulingProvenance.From(
-                context.WorkflowExecutionId,
-                context.ActivityExecutionState.Execution.ActivityExecutionId,
-                schedulingActivityExecutionId,
-                branchId: context.ActivityExecutionState.BranchId,
-                iterationId: iterationKey,
-                executionPathId: executionPathId,
-                executionScopeId: executionScopeId,
-                schedulingCause: schedulingCause,
-                metadata: new Dictionary<string, string>
-                {
-                    [TargetNodeIdMetadataKey] = nodeId
-                }));
-
-        var activeChild = new FlowchartActiveChild(nodeId, executionPathId, executionScopeId, schedulingCause);
-        return state with
-        {
-            ActiveChildren = state.ActiveChildren
-                .Where(child => !StringComparer.Ordinal.Equals(child.ExecutionPathId, executionPathId))
-                .Append(activeChild)
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
-    }
 }
