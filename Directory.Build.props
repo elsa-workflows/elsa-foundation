@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    Shared NuGet package metadata for the publishable Elsa.* libraries.
+    This file is metadata-only on purpose: it must not change build behavior
+    (no Version here — CI injects /p:Version), so that adding it does not alter
+    how any project compiles. Non-packable projects (the Elsa.Server host and the
+    test projects) simply ignore these properties.
+  -->
+  <PropertyGroup>
+    <Authors>Elsa Workflows</Authors>
+    <Company>Elsa Workflows</Company>
+    <Product>Elsa</Product>
+    <Copyright>Copyright © Elsa Workflows</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/elsa-workflows/elsa-foundation</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/elsa-workflows/elsa-foundation.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>elsa;workflow;workflows;orchestration;automation</PackageTags>
+  </PropertyGroup>
+
+</Project>
