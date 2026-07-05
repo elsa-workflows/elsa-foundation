@@ -1,7 +1,5 @@
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -70,16 +68,14 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly ILogger<ExtensionBuilderStorage> _logger;
-    private readonly string _dotNetExecutable;
     private readonly GitClient _git;
     private readonly RepositoryInspector _inspector;
+    private readonly BuildOrchestrator _builds;
     private readonly string[] _serverLocalRepositoryRoots;
     private readonly string _statePath;
 
     public ExtensionBuilderStorage(IWebHostEnvironment environment, IOptions<ExtensionBuilderOptions> options, ILogger<ExtensionBuilderStorage> logger)
     {
-        _logger = logger;
         var extensionBuilderOptions = options.Value;
         var configuredPath = extensionBuilderOptions.StoragePath;
         var contentRootPath = environment.ContentRootPath;
@@ -91,10 +87,11 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         RootPath = Path.GetFullPath(Path.IsPathRooted(configuredPath)
             ? configuredPath
             : Path.Combine(environment.ContentRootPath, configuredPath));
-        _dotNetExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.DotNetExecutable) ? "dotnet" : extensionBuilderOptions.DotNetExecutable;
+        var dotNetExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.DotNetExecutable) ? "dotnet" : extensionBuilderOptions.DotNetExecutable;
         var gitExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.GitExecutable) ? "git" : extensionBuilderOptions.GitExecutable;
         _git = new GitClient(gitExecutable, logger);
         _inspector = new RepositoryInspector(_git);
+        _builds = new BuildOrchestrator(dotNetExecutable);
         _statePath = Path.Combine(RootPath, "state.json");
     }
 
@@ -587,12 +584,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             return null;
 
         var commandName = request.Command ?? RepositoryBuildCommand.Build;
-        var command = commandName.ToString().ToLowerInvariant();
-        var diagnostics = new List<BuildDiagnostic>();
         var targetPath = ResolveRepositoryBuildTarget(repositoryPath, request.TargetPath);
         if (targetPath is null)
         {
-            diagnostics.Add(new(BuildDiagnosticSeverity.Error, "No solution or project file was found for the repository build.", null, null, null, null));
+            var diagnostics = new List<BuildDiagnostic> { new(BuildDiagnosticSeverity.Error, "No solution or project file was found for the repository build.", null, null, null, null) };
             await File.WriteAllLinesAsync(logPath, diagnostics.Select(diagnostic => diagnostic.Message), cancellationToken);
             var failed = running with { Status = BuildStatus.Failed, Diagnostics = diagnostics, CompletedAt = DateTimeOffset.UtcNow };
             await SaveBuildAsync(failed, CancellationToken.None);
@@ -600,48 +595,9 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
 
         var artifactsPath = commandName is RepositoryBuildCommand.Pack ? GetBuildArtifactsPath(buildId) : null;
-        var arguments = artifactsPath is null
-            ? [command, targetPath]
-            : new[] { command, targetPath, "--output", artifactsPath };
-        ProcessResult process;
-        try
-        {
-            process = await RunProcessAsync(_dotNetExecutable, repositoryPath, cancellationToken, arguments);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} was canceled.", null, null, null, null));
-            await File.WriteAllLinesAsync(logPath, diagnostics.Select(diagnostic => diagnostic.Message), CancellationToken.None);
-            var canceled = running with { Status = BuildStatus.Failed, Diagnostics = diagnostics, CompletedAt = DateTimeOffset.UtcNow };
-            await SaveBuildAsync(canceled, CancellationToken.None);
-            return canceled;
-        }
-
-        var log = new[] { process.Output, process.Error }
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .SelectMany(text => text.Split(Environment.NewLine))
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .ToArray();
-        await File.WriteAllLinesAsync(logPath, log, cancellationToken);
-        diagnostics.AddRange(ExtensionBuilderBuildRunner.ParseDiagnostics(log));
-        IReadOnlyList<BuildArtifact> artifacts = artifactsPath is null
-            ? []
-            : ReadRepositoryPackArtifacts(buildId, artifactsPath, project, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty);
-        if (process.ExitCode != 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error))
-            diagnostics.Add(new(BuildDiagnosticSeverity.Error, $"{commandName} failed.", null, null, null, null));
-        if (commandName is RepositoryBuildCommand.Pack && process.ExitCode == 0 && artifacts.Count == 0)
-            diagnostics.Add(new(BuildDiagnosticSeverity.Error, "Pack completed without producing package artifacts.", null, null, null, null));
-
-        var completed = running with
-        {
-            Status = process.ExitCode == 0 && diagnostics.All(diagnostic => diagnostic.Severity is not BuildDiagnosticSeverity.Error)
-                ? BuildStatus.Succeeded
-                : BuildStatus.Failed,
-            Diagnostics = diagnostics,
-            Artifact = artifacts.FirstOrDefault(),
-            Artifacts = artifacts,
-            CompletedAt = DateTimeOffset.UtcNow
-        };
+        var completed = await _builds.RunAsync(
+            repositoryPath, running, commandName, targetPath, artifactsPath, logPath,
+            project, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty, cancellationToken);
         await SaveBuildAsync(completed, CancellationToken.None);
         return completed;
     }
@@ -1076,33 +1032,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             .FirstOrDefault();
     }
 
-    private static IReadOnlyList<BuildArtifact> ReadRepositoryPackArtifacts(string buildId, string artifactsPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch, bool sourceIsDirty) =>
-        Directory.EnumerateFiles(artifactsPath, "*.nupkg", SearchOption.TopDirectoryOnly)
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .Select(path => ReadRepositoryPackArtifact(buildId, path, project, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty))
-            .ToArray();
-
-    private static BuildArtifact ReadRepositoryPackArtifact(string buildId, string artifactPath, ExtensionProject project, string workspaceId, string sourceRevisionId, string? sourceBranch, bool sourceIsDirty)
-    {
-        var (packageId, version) = TryReadPackageIdentity(artifactPath) ?? (project.PackageId, project.PackageVersion);
-        var file = new FileInfo(artifactPath);
-        return new($"artifact_{Guid.NewGuid():N}", buildId, packageId, version, file.Name, file.FullName, file.Length, DateTimeOffset.UtcNow, workspaceId, sourceRevisionId, sourceBranch, sourceIsDirty);
-    }
-
-    private static (string PackageId, string Version)? TryReadPackageIdentity(string artifactPath)
-    {
-        try
-        {
-            return ExtensionBuilderBuildRunner.TryReadNuspecIdentity(artifactPath);
-        }
-        catch (InvalidDataException)
-        {
-        }
-
-        var match = Regex.Match(Path.GetFileNameWithoutExtension(artifactPath), @"^(?<id>.+)\.(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$");
-        return match.Success ? (match.Groups["id"].Value, match.Groups["version"].Value) : null;
-    }
-
     private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
     {
         var repositoryState = _inspector.GetRepositoryState(repositoryPath);
@@ -1345,47 +1274,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         branchName.Equals("main", StringComparison.OrdinalIgnoreCase) ||
         branchName.Equals("master", StringComparison.OrdinalIgnoreCase);
 
-    private static async Task<ProcessResult> RunProcessAsync(string fileName, string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
-    {
-        try
-        {
-            using var process = StartProcess(fileName, workingDirectory, arguments);
-            try
-            {
-                var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-                var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-                await process.WaitForExitAsync(cancellationToken);
-                return new(process.ExitCode, await outputTask, await errorTask);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                if (!process.HasExited)
-                    process.Kill(entireProcessTree: true);
-
-                throw;
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new InvalidOperationException($"Could not start '{fileName}'.", ex);
-        }
-    }
-
-    private static Process StartProcess(string fileName, string workingDirectory, params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo(fileName)
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            UseShellExecute = false
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-
-        return Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
-    }
-
     private static string StarterReadme(string displayName) =>
         $$"""
         # {{displayName}}
@@ -1586,8 +1474,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         bool IsProtectedBranch,
         DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt);
-
-    private sealed record ProcessResult(int ExitCode, string Output, string Error);
 
     private sealed class ExtensionBuilderState
     {
