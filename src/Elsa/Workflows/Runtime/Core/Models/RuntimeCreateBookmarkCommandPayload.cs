@@ -86,5 +86,5 @@ public sealed class RuntimeCreateBookmarkCommandPayload
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges { get; }
 }
 
-internal sealed class RuntimeCreateBookmarkCommandPayloadValidationException(string message, string? paramName)
+public sealed class RuntimeCreateBookmarkCommandPayloadValidationException(string message, string? paramName)
     : ArgumentException(message, paramName);
