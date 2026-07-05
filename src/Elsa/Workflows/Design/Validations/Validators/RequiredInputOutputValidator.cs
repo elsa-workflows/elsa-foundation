@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -13,7 +12,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
 /// Baseline validator (Unit C FR-033). For every activity in the Draft (root + nested), looks
-/// up the catalog version via <see cref="IActivityDefinitionLookup"/> and reads
+/// up the catalog version via <see cref="CatalogVersionResolver"/> and reads
 /// <c>IsRequired</c> from each <see cref="InputDefinition"/> / <see cref="OutputDefinition"/>
 /// (per FR-036). Emits a <see cref="ValidationError"/> per required input or output where the
 /// corresponding <see cref="ArgumentState"/> on the activity is absent or carries an empty
@@ -34,7 +33,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </para>
 /// </remarks>
 public sealed class RequiredInputOutputValidator(
-    IActivityDefinitionLookup catalog,
+    CatalogVersionResolver catalogResolver,
     IOptions<WorkflowDesignValidatorOptions> options,
     ActivityTreeWalker activityTreeWalker
 ) : IDraftValidator
@@ -44,22 +43,14 @@ public sealed class RequiredInputOutputValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
-        // Memoize catalog lookups per pass: ActivityDefinitionLookup is a passthrough to the version
-        // store, so repeated ActivityVersionIds across the tree would otherwise each round-trip. The
-        // lookup is fail-closed — GetVersion throws EntityNotFoundException on a missing id (both store
-        // impls throw), so a resolved entry is always non-null. A missing version is therefore not
-        // silently skipped: it propagates and the gate faults (surfacing as Validation/Faulted on the
-        // shielded read path). Treating a missing version as a first-class validation error instead is
-        // tracked as a pending spec decision (missing-version-as-validation-error).
-        var versionCache = new Dictionary<string, IActivityDefinitionVersion>(StringComparer.Ordinal);
-
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
-            if (!versionCache.TryGetValue(node.ActivityVersionId, out var version))
-            {
-                version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
-                versionCache[node.ActivityVersionId] = version;
-            }
+            // CatalogVersionResolver memoizes per pass and translates the store's throwing Get
+            // contract to nullable. An unresolvable node is UnknownActivityVersionValidator's
+            // report (FR-033 2026-07-05 amendment) — skip it here rather than fault the gate.
+            var version = await catalogResolver.Find(node.ActivityVersionId, cancellationToken);
+            if (version is null)
+                continue;
 
             var providedInputKeys = node.Inputs
                 .Where(IsBound)

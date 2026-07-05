@@ -14,8 +14,9 @@ public static class ValidationPaths
 }
 
 /// <summary>
-/// Reserved <see cref="ValidationError.Type"/> categories (R3). Only the shield-synthesized fault
-/// category is pinned as a constant this round; baseline validator categories stay inline.
+/// Reserved <see cref="ValidationError.Type"/> categories (R3). Pins the categories with a
+/// cross-cutting consumer — the shield synthesizes <see cref="Faulted"/>, and UI/tooling group on
+/// <see cref="UnknownActivityVersion"/>; the remaining baseline validator categories stay inline.
 /// </summary>
 public static class ValidationCategories
 {
@@ -24,4 +25,11 @@ public static class ValidationCategories
     /// (<see cref="DraftValidationGate.TryDeriveValidationErrorsAsync"/>) when a validator throws.
     /// </summary>
     public const string Faulted = "Validation/Faulted";
+
+    /// <summary>
+    /// R3 reserved category (FR-033 2026-07-05 amendment) — emitted by
+    /// <c>UnknownActivityVersionValidator</c> when an activity node's <c>ActivityVersionId</c> does
+    /// not resolve in the catalog.
+    /// </summary>
+    public const string UnknownActivityVersion = "Graph/UnknownActivityVersion";
 }

@@ -1,8 +1,11 @@
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Handlers;
+using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -62,6 +65,35 @@ public sealed class PromotionGateTests
         var version = await ctx.WorkflowDefinitionVersions.FirstOrDefaultAsync(x => x.Id == versionId);
         Assert.NotNull(version);
         Assert.Equal("1.0.0", version.Version);
+    }
+
+    [Fact]
+    public async Task Draft_referencing_unknown_activity_version_cannot_be_promoted()
+    {
+        // FR-033 2026-07-05 amendment consequence pin: a node whose ActivityVersionId is not in
+        // the catalog is a baseline validation error, so the FR-024 gate blocks promotion with a
+        // node-addressed error instead of the store's opaque EntityNotFoundException fault. Wires
+        // the REAL ExecuteValidations aggregator + UnknownActivityVersionValidator against an
+        // empty (throwing, per store contract) catalog; the error's shape is pinned by
+        // UnknownActivityVersionValidatorTests — this test pins only the gate consequence.
+        using var host = WorkflowsDesignTestHost.Create();
+
+        var validator = new UnknownActivityVersionValidator(
+            ValidatorTestHelpers.CatalogResolver(new StubActivityCatalog()),
+            ValidatorTestHelpers.Options(),
+            ValidatorTestHelpers.Walker());
+        var executeValidations = new ExecuteValidations([validator]);
+        host.EventPublisher.Subscribe<OnDraftValidating>(e => executeValidations.Handle(e, CancellationToken.None));
+
+        var draftId = await CreateDraft(host);
+        await UpdateDraftTestKit.Update(host, draftId, UpdateDraftTestKit.State(
+            activities: [UpdateDraftTestKit.Node("n1", "av-unregistered")]));
+
+        using var scope = host.Services.CreateScope();
+        var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
+        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(draftId));
+
+        Assert.Equal(1, ex.ErrorCount);
     }
 
     private static async Task<string> CreateDraft(WorkflowsDesignTestHost host)

@@ -16,17 +16,13 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
 /// Pins that the <see cref="RequiredInputOutputValidator"/> derives errors against the CURRENT
-/// catalog state on every pass (errors are derived, never cached against the draft), that it looks
-/// each distinct <c>ActivityVersionId</c> up exactly once per pass (per-pass memoization), and that
-/// a missing catalog version is FAIL-CLOSED: production <c>ActivityDefinitionLookup.GetVersion</c>
-/// passes through the version store, and both store impls throw <see cref="EntityNotFoundException"/>
-/// on a missing id (they never return null). So removing a node's version does not silently drop the
-/// error — it faults the gate: the unshielded write gate propagates the exception, and the shielded
-/// read gate folds it into the reserved <c>Validation/Faulted</c> synthetic.
-/// <para>
-/// Whether a missing catalog version should instead surface as a first-class validation error is a
-/// separate, pending spec decision (missing-version-as-validation-error), not pinned here.
-/// </para>
+/// catalog state on every pass (errors are derived, never cached against the draft) and that it
+/// looks each distinct <c>ActivityVersionId</c> up exactly once per pass (memoized by
+/// <c>CatalogVersionResolver</c>). Per the FR-033 2026-07-05 amendment a missing catalog version is
+/// NO LONGER fail-closed here: <c>CatalogVersionResolver</c> folds the store's
+/// <see cref="EntityNotFoundException"/> to null and this validator skips the unresolvable node, so
+/// removing a node's version neither faults the gate nor drops a spurious required-arg error — the
+/// unresolvable-version report is owned by <see cref="UnknownActivityVersionValidator"/>.
 /// </summary>
 public sealed class RequiredInputOutputValidatorDerivationTests
 {
@@ -47,7 +43,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         // reliance on null-returns (the version stays present throughout).
         var catalog = new MutableLookup();
         catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
-        var validator = new RequiredInputOutputValidator(catalog, Options(), Walker());
+        var validator = new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker());
 
         var missing = State(activities: [Node("n1", "av-1")]);
         var before = await Validate(validator, missing);
@@ -59,43 +55,46 @@ public sealed class RequiredInputOutputValidatorDerivationTests
     }
 
     [Fact]
-    public async Task Removing_the_version_faults_the_unshielded_write_gate()
+    public async Task Removing_the_version_is_skipped_not_faulted_on_the_write_gate()
     {
-        // Removing the version makes GetVersion throw EntityNotFoundException. Through the unshielded
-        // write gate (DeriveValidationErrorsAsync) that exception propagates — the caller's write fails.
+        // FR-033 amendment: removing the version makes GetVersion throw, but CatalogVersionResolver
+        // folds that to null and this validator skips the node. The unshielded write gate therefore
+        // completes without faulting — the unresolvable-version report belongs to
+        // UnknownActivityVersionValidator (not wired into this single-validator publisher).
         var catalog = new MutableLookup();
         catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
-
         var state = State(activities: [Node("n1", "av-1")]);
-        var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(catalog, Options(), Walker()));
 
-        // Sanity: with the version present, deriving succeeds and yields the required-input error.
-        var before = await publisher.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
+        // Sanity: with the version present, deriving yields the required-input error.
+        var present = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
+        var before = await present.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
         Assert.Single(before, e => e.Path == "n1/inputs/body");
 
         catalog.Remove("av-1");
 
-        await Assert.ThrowsAsync<EntityNotFoundException>(
-            () => publisher.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None));
+        // A fresh pass gets a fresh resolver (production scopes one per pass), so the removal is seen:
+        // the node is skipped and the gate completes empty rather than faulting.
+        var afterRemoval = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
+        var after = await afterRemoval.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
+        Assert.Empty(after);
     }
 
     [Fact]
-    public async Task Removing_the_version_surfaces_as_Validation_Faulted_on_the_shielded_read_gate()
+    public async Task Removing_the_version_does_not_synthesize_Validation_Faulted_on_the_read_gate()
     {
-        // Same missing-version fault, seen through the shielded read gate (TryDeriveValidationErrorsAsync):
-        // the throw is folded into the reserved Validation/Faulted synthetic so the Draft stays readable.
+        // The shielded read gate no longer sees a fault from this validator (it skips), so there is
+        // no reserved Validation/Faulted synthetic — the Draft reads clean of this validator.
         var catalog = new MutableLookup();
         catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
         catalog.Remove("av-1");
 
         var state = State(activities: [Node("n1", "av-1")]);
-        var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(catalog, Options(), Walker()));
+        var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
 
         var errors = await publisher.TryDeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
 
-        var faulted = Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
-        Assert.Equal(ValidationPaths.Workflow, faulted.Path);
-        Assert.Contains(nameof(EntityNotFoundException), faulted.Message);
+        Assert.DoesNotContain(errors, e => e.Type == ValidationCategories.Faulted);
+        Assert.Empty(errors);
     }
 
     [Fact]
@@ -110,7 +109,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
             Node("n2", "av-1"),
             Node("n3", "av-1"),
         ]);
-        var validator = new RequiredInputOutputValidator(catalog, Options(), Walker());
+        var validator = new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker());
 
         await Validate(validator, state);
 

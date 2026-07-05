@@ -165,7 +165,7 @@ No Version-side counterpart — FR-024 promotion gate prevents Versions with non
 ```csharp
 public sealed record ValidationError(
     string Path,        // R2 format: "{NodeId}/inputs/{InputReferenceKey}", "$workflow", etc.
-    string Type,        // R3 format: "Graph/OrphanActivity", "Expressions/UnresolvedVariable", etc.
+    string Type,        // R3 format: "RootActivity/Missing", "Graph/UnknownActivityVersion", etc.
     string Message      // human-readable
 );
 ```
@@ -368,19 +368,19 @@ Idempotent — second Discard on same DraftId is a no-op.
 After every mutation pipeline (4.1), the validation entity's `Errors` list is reset to the validators' current pass output:
 
 ```
-prior Errors = [ ValidationError("$workflow", "Graph/StartActivity", "No start activity") ]
+prior Errors = [ ValidationError("$workflow", "RootActivity/Missing", "Workflow has no root activity.") ]
 
-mutation: add activity + mark as start
+mutation: set a root activity
     ↓
 validators run
     ↓
 new Errors = [ ]   (the offending condition is gone)
 
-mutation: delete the start activity again
+mutation: clear the root activity again
     ↓
 validators run
     ↓
-new Errors = [ ValidationError("$workflow", "Graph/StartActivity", "No start activity") ]
+new Errors = [ ValidationError("$workflow", "RootActivity/Missing", "Workflow has no root activity.") ]
 ```
 
 Errors are simple data — never tracked as immutable individuals with `IsSolved` flags.

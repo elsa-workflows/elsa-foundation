@@ -51,12 +51,12 @@ The `$workflow` sentinel disambiguates workflow-level paths from any conceivable
 {Category}/{Subcategory}  — two-level category
 ```
 
-Reserved baseline categories (Unit C ships these):
-- `Graph/OrphanActivity`
-- `Graph/StartActivity`
+Reserved baseline categories (as shipped; reconciled with the FR-033 amendment, 2026-07-05):
+- `RootActivity/Missing` *(originally reserved as `Graph/StartActivity`; reshaped by spec 070's root-activity contract. `Graph/OrphanActivity` shipped in Unit C Phase 8 and was later removed by spec 070 — its workflow-level connection substrate no longer exists.)*
 - `Variables/Uniqueness`
 - `InputOutput/MissingRequired`
 - `Expressions/UnresolvedVariable`
+- `Graph/UnknownActivityVersion` *(FR-033 amendment — unresolvable `ActivityVersionId` on an activity node)*
 
 External validators (activity features, future Validations.* sub-modules) extend by prefixing with their domain — e.g. `Http/AuthPolicyUnknown`, `Http/InvalidUrl`, `JavaScript/SyntaxError`. No central registry; validators MUST choose categories that are clearly scoped to their domain.
 
