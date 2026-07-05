@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 117
 - Test projects: 51
-- Direct project references: 618
+- Direct project references: 619
 
 ## Projects
 
@@ -106,7 +106,7 @@ Records direct project references only.
 | [Elsa.Tasks.Core](../../src/Elsa/Tasks/Core/Elsa.Tasks.Core.csproj) | source | Elsa.Tasks | net10.0 | default | - |
 | [Elsa.Tasks](../../src/Elsa/Tasks/Elsa.Tasks.csproj) | source | Elsa.Tasks | net10.0 | default | Elsa.Locking.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core |
 | [Elsa.Tasks.Schedules](../../src/Elsa/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | source | Elsa.Tasks | net10.0 | default | Elsa.Primitives<br>Elsa.Tasks.Core |
-| [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Workflows.Design.Persistence.Core |
+| [Elsa.Workflows.Design.Api](../../src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Api.FastEndpoints<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.Core](../../src/Elsa/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Workflows.Design.JavaScript](../../src/Elsa/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Primitives |
 | [Elsa.Workflows.Design.Persistence.Core](../../src/Elsa/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Persistence.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core |

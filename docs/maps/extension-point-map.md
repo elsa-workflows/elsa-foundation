@@ -16,7 +16,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 | Catalog | Owner project | Domain | Sections | Extension-point headings | Kind lines | Known implementation blocks | Root indexed |
 |---|---|---|---|---|---|---:|---|
-| [EXTENSION_POINTS.md](../../EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Secrets<br>Persistence<br>Activities<br>Workflows<br>Legacy<br>Diagnostics | 0 | root |  |
+| [EXTENSION_POINTS.md](../../EXTENSION_POINTS.md) | acttest | Other | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Secrets<br>Persistence<br>Activities<br>Workflows<br>Legacy<br>Diagnostics | 0 | root |  |
 | [src/Elsa/Activities/ControlFlow/Do/EXTENSION_POINTS.md](../../src/Elsa/Activities/ControlFlow/Do/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions | 0 | yes |  |  |
 | [src/Elsa/Activities/ControlFlow/For/EXTENSION_POINTS.md](../../src/Elsa/Activities/ControlFlow/For/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions<br>Runtime extensions consumed | 0 | yes |  |  |
 | [src/Elsa/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md](../../src/Elsa/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions<br>Runtime seam dependencies | 0 | yes |  |  |
