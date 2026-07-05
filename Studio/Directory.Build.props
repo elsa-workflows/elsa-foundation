@@ -4,6 +4,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <PackageIcon>icon.png</PackageIcon>
+    <!-- Shared NuGet package metadata for the publishable Elsa.Studio.* module libraries.
+         No Version here — CI injects /p:Version. -->
+    <Authors>Elsa Workflows</Authors>
+    <Company>Elsa Workflows</Company>
+    <Product>Elsa Studio</Product>
+    <Copyright>Copyright © Elsa Workflows</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/elsa-workflows/elsa-foundation-studio</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/elsa-workflows/elsa-foundation-studio.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>elsa;studio;workflow;workflows;designer;ui</PackageTags>
     <!-- Each project's Client/ folder holds frontend (Vite/pnpm) source. It is built
          separately into wwwroot and is never a .NET compile/content input. Excluding it
          from the default item globs keeps dev-only files (package.json, tsconfig.json,

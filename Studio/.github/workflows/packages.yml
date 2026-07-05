@@ -1,0 +1,137 @@
+name: Packages
+
+# Packs the Elsa 4 Studio module libraries (Elsa.Studio.*) and publishes them:
+#   - every push to main / a feature branch, and every GitHub Release, pushes a
+#     preview build (4.0.0-preview.<run_number>) to the elsa-4 feedz.io feed
+#   - a *published* GitHub Release additionally pushes the tagged version to nuget.org
+#
+# Frontend (React/Vite) client assets are pre-built and committed under each module's
+# wwwroot, so no Node/pnpm build step is needed to pack — packing uses the same committed
+# assets the Docker image ships. npm publishing is intentionally not wired here: the
+# workspace packages are internal build sources (all private, exporting raw .ts via
+# workspace:* references), not standalone npm deliverables.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+      - 'feat/*'
+      - 'fix/*'
+      - 'bug/*'
+      - 'enh/*'
+      - 'perf/*'
+      - 'patch/*'
+      - 'rc/*'
+      - 'release/*'
+      - 'develop/*'
+  release:
+    types: [prereleased, published]
+
+env:
+  base_version: '4.0.0'
+  feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
+  nuget_feed_source: 'https://api.nuget.org/v3/index.json'
+
+jobs:
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Extract branch name
+        run: |
+          BRANCH_NAME=${{ github.ref }} # e.g., refs/heads/main
+          BRANCH_NAME=${BRANCH_NAME#refs/heads/} # remove the refs/heads/ prefix
+          # Use the last path segment of the branch name as the version prefix (e.g. feat/issue-123 -> issue-123).
+          PACKAGE_PREFIX=$(echo $BRANCH_NAME | rev | cut -d/ -f1 | rev | tr '_' '-')
+          # main and long-lived branches publish as 'preview'.
+          if [[ "${BRANCH_NAME}" == "main" || "${BRANCH_NAME}" =~ ^develop/ || "${BRANCH_NAME}" =~ ^release/ || "${BRANCH_NAME}" =~ ^rc/ ]]; then
+              PACKAGE_PREFIX="preview"
+          fi
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "PACKAGE_PREFIX=${PACKAGE_PREFIX}" >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify commit exists in branch
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
+            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
+            git branch --remote --contains | grep -E 'origin/(main|release/)'
+          else
+            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
+            git branch --remote --contains | grep origin/${BRANCH_NAME}
+          fi
+
+      - name: Set VERSION variable
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
+            TAG_NAME=${{ github.ref }} # e.g., refs/tags/4.0.0
+            TAG_NAME=${TAG_NAME#refs/tags/} # remove the refs/tags/ prefix
+            TAG_NAME=${TAG_NAME#v} # tolerate a leading v (v4.0.0 -> 4.0.0) so the NuGet version is valid
+            echo "VERSION=${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{env.base_version}}-${PACKAGE_PREFIX}.${{github.run_number}}" >> $GITHUB_ENV
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore Elsa.Studio.slnx -p:WarningsNotAsErrors=NU1603
+
+      - name: Build
+        run: dotnet build Elsa.Studio.slnx -c Release --no-restore /p:Version=${VERSION} -p:WarningsNotAsErrors=NU1603
+
+      - name: Test
+        run: dotnet test Elsa.Studio.slnx -c Release --no-build /p:Version=${VERSION}
+
+      - name: Pack
+        run: dotnet pack Elsa.Studio.slnx -c Release --no-build /p:Version=${VERSION} -p:WarningsNotAsErrors=NU1603 -p:PackageOutputPath=$(pwd)/packages/nuget
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: elsa-foundation-studio-nuget-packages
+          path: packages/nuget/*.nupkg
+
+  publish_preview_feedz:
+    name: Publish to feedz.io
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event_name == 'release' || github.event_name == 'push' }}
+    steps:
+      - name: Download Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-studio-nuget-packages
+
+      - name: Publish to feedz.io
+        run: dotnet nuget push *.nupkg -k ${{ secrets.FEEDZ_API_KEY }} -s ${{ env.feedz_feed_source }} --skip-duplicate
+
+  publish_nuget:
+    name: Publish release to nuget.org
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.action == 'published' }}
+    steps:
+      - name: Download Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-studio-nuget-packages
+
+      - name: Publish to nuget.org
+        run: dotnet nuget push *.nupkg -k ${{ secrets.NUGET_API_KEY }} -s ${{ env.nuget_feed_source }} --skip-duplicate
