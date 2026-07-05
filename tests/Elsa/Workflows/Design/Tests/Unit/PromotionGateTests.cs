@@ -31,8 +31,8 @@ public sealed class PromotionGateTests
         {
             if (evt is OnDraftValidating validating)
             {
-                validating.Errors.Add(new ValidationError("$workflow", "Graph/StartActivity", "No start"));
-                validating.Errors.Add(new ValidationError("n1", "Graph/OrphanActivity", "Orphan node"));
+                validating.Errors.Add(new ValidationError("$workflow", "RootActivity/Missing", "No root activity"));
+                validating.Errors.Add(new ValidationError("n1", "Graph/UnknownActivityVersion", "Unknown activity version"));
             }
         };
 
