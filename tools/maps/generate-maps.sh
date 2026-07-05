@@ -75,6 +75,22 @@ run_git() {
   fi
 }
 
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw filesystem walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+list_repo_files() {
+  local listing
+  if ! listing="$(run_git -C "$repo_root" ls-files --cached --others --exclude-standard -- "$@")"; then
+    echo "git ls-files failed; map generation requires a git checkout" >&2
+    return 1
+  fi
+  while IFS= read -r rel_file; do
+    [ -n "$rel_file" ] || continue
+    [ -f "$repo_root/$rel_file" ] || continue
+    printf '%s/%s\n' "$repo_root" "$rel_file"
+  done <<< "$listing"
+}
+
 git_head_value() {
   local value head ref ref_file head_file
   if value="$(run_git -C "$repo_root" rev-parse --verify HEAD 2>/dev/null)"; then
@@ -205,13 +221,14 @@ owner_project() {
   local file="$1"
   local dir
   dir="$(dirname "$file")"
-  while [ "$dir" != "/" ]; do
+  while :; do
     local match
     match="$(find "$dir" -maxdepth 1 -name '*.csproj' -type f | sort | head -n 1)"
     if [ -n "$match" ]; then
       basename "$match" .csproj
       return 0
     fi
+    [ "$dir" = "$repo_root" ] && break
     dir="$(dirname "$dir")"
   done
   return 1
@@ -221,7 +238,7 @@ join_br() {
   awk 'BEGIN{first=1} { if (!first) printf "<br>"; printf "%s", $0; first=0 }'
 }
 
-find "$repo_root/src" "$repo_root/tests" -name '*.csproj' -type f 2>/dev/null | sort > "$tmp_dir/projects.txt"
+list_repo_files 'src/*.csproj' 'tests/*.csproj' | sort > "$tmp_dir/projects.txt"
 
 {
   echo "# Project Reference Map"
@@ -306,7 +323,7 @@ done < "$tmp_dir/projects.txt"
 } > "$docs_maps/package-map.md"
 
 : > "$tmp_dir/features.tsv"
-find "$repo_root/src" -name '*.cs' -type f 2>/dev/null | sort | while IFS= read -r cs_file; do
+list_repo_files 'src/*.cs' | sort | while IFS= read -r cs_file; do
   { grep -E '^[[:space:]]*public[[:space:]].*class[[:space:]][A-Za-z0-9_]+[[:space:]]*:[^{]*(IShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase)' "$cs_file" 2>/dev/null || true; } \
     | while IFS= read -r line; do
       class="$(printf '%s\n' "$line" | sed -nE 's/.*class[[:space:]]+([A-Za-z0-9_]+).*/\1/p')"
@@ -383,11 +400,9 @@ sort -u "$tmp_dir/testrefs.txt" -o "$tmp_dir/testrefs.txt"
   echo "|---|---|"
   grep '/tests/' "$tmp_dir/projects.txt" | while IFS= read -r project_file; do
     name="$(basename "$project_file" .csproj)"
-    project_dir="$(dirname "$project_file")"
+    project_rel_dir="$(dirname "$(repo_path "$project_file")")"
     files="$(
-      find "$project_dir" -type f -name '*.cs' \
-        ! -path '*/bin/*' \
-        ! -path '*/obj/*' \
+      list_repo_files "$project_rel_dir/*.cs" \
         | sort \
         | while IFS= read -r source_file; do
             rel="$(repo_path "$source_file")"
@@ -426,11 +441,15 @@ find "$repo_root/specs" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | whi
     status_line="$(grep -m1 '^\*\*Status\*\*:' "$spec_file" || true)"
     [ -n "$status_line" ] && status="${status_line#**Status**: }"
     lower="$(tr '[:upper:]' '[:lower:]' < "$spec_file")"
+    # Substring check instead of `printf | grep -q`: grep -q exiting early
+    # SIGPIPEs printf on >64KB specs, and pipefail then drops the keyword.
     for keyword in "superseded" "retained" "deferred" "out of scope" "construct-only"; do
-      if printf '%s\n' "$lower" | grep -q "$keyword"; then
-        [ -n "$notes" ] && notes="$notes, "
-        notes="$notes$keyword"
-      fi
+      case "$lower" in
+        *"$keyword"*)
+          [ -n "$notes" ] && notes="$notes, "
+          notes="$notes$keyword"
+          ;;
+      esac
     done
   fi
   [ -z "$notes" ] && notes="-"
@@ -544,9 +563,7 @@ done
 } > "$docs_reports/maps-v1-findings.md"
 
 {
-  find "$repo_root/src" -type f \( -name '*.csproj' -o -name '*.cs' \) 2>/dev/null
-  find "$repo_root/tests" -type f -name '*.csproj' 2>/dev/null
-  find "$repo_root/specs" -type f -name '*.md' 2>/dev/null
+  list_repo_files 'src/*.csproj' 'src/*.cs' 'tests/*.csproj' 'specs/*.md'
   printf '%s\n' "$repo_root/Directory.Packages.props"
   printf '%s\n' "$repo_root/tools/maps/generate-maps.ps1"
   printf '%s\n' "$repo_root/tools/maps/generate-maps.sh"
