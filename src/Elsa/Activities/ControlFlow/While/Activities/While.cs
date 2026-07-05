@@ -59,10 +59,11 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
+        var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
         var condition = context.Get(Condition);
 
         // First condition evaluation: false on entry means the body never runs.
-        ContinueOrComplete(runtimeContext, condition, completedChildActivityExecutionId: null);
+        ContinueOrComplete(runtimeContext, navigator, condition, completedChildActivityExecutionId: null);
     }
 
     public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)
@@ -70,6 +71,12 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
+        var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
+
+        // #381: validate the completed child is actually this loop's body (mirroring For/ForEach/If/
+        // Switch/Parallel) so a stray callback fails diagnosably instead of silently rescheduling.
+        if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
+            throw new WhileExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the While body.");
 
         // Early exit (#299): a body that completes with a Break outcome ends the loop now, before the
         // condition is re-evaluated. Recognized by outcome name so While takes no dependency on the
@@ -85,17 +92,16 @@ public sealed class While : ActivityBase, IActivityChildCompletionHandler
         // the next pass.
         var condition = context.ParentContext.Get(Condition);
 
-        ContinueOrComplete(runtimeContext, condition, context.CompletedChildActivityExecutionId);
+        ContinueOrComplete(runtimeContext, navigator, condition, context.CompletedChildActivityExecutionId);
         return ValueTask.CompletedTask;
     }
 
     private static void ContinueOrComplete(
         IRuntimeActivityExecutionContext runtimeContext,
+        WhileNavigator navigator,
         bool condition,
         string? completedChildActivityExecutionId)
     {
-        var navigator = WhileNavigator.From(runtimeContext.ExecutableNode);
-
         if (!condition || navigator.Body is not { } body)
         {
             runtimeContext.CompleteCompositeActivity([ActivityOutcomes.Done]);
