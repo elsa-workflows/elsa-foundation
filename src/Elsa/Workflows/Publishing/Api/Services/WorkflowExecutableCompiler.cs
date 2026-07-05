@@ -1,29 +1,26 @@
-using System.Reflection;
-using System.Text.Json;
-using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Serialization.Core;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Core.Contracts;
-using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
+/// <summary>
+/// Orchestrates workflow-executable compilation (W30b, #418): resolves the compile source, drives a single
+/// authored-tree walk, and assembles the durable <see cref="WorkflowExecutable"/> artifact. Per-phase work is
+/// delegated to focused collaborators — <see cref="ActivityTreeProjector"/> (walk + validate),
+/// <see cref="ExecutableNodeCompiler"/> (node/resume-target compilation), and
+/// <see cref="WorkflowExecutableHasher"/> (content-addressable identity).
+/// </summary>
 public sealed class WorkflowExecutableCompiler(
     IWorkflowDefinitionVersionStore workflowVersions,
     IActivityDefinitionVersionStore activityVersions,
-    IActivityStructureService activityStructureService,
-    IWellKnownTypeRegistry wellKnownTypeRegistry,
-    RuntimeInputBindingCompiler inputBindingCompiler,
     WorkflowExecutableHasher hasher,
-    ActivityTreeProjector activityTreeProjector)
+    ActivityTreeProjector activityTreeProjector,
+    ExecutableNodeCompiler executableNodeCompiler)
     : IWorkflowExecutableCompiler
 {
     public async ValueTask<WorkflowExecutable> CompileAsync(
@@ -51,7 +48,7 @@ public sealed class WorkflowExecutableCompiler(
             foreach (var activityVersionId in projection.Nodes.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
-            var compiledRoot = CompileNode(rootActivity, projection, activityRows);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows);
             var artifactHash = hasher.ComputeHash(source, compiledRoot);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -66,7 +63,7 @@ public sealed class WorkflowExecutableCompiler(
                     ArtifactHash: artifactHash,
                     Source: source.SourceReference),
                 rootActivity: compiledRoot,
-                resumeTargets: BuildResumeTargets(compiledRoot),
+                resumeTargets: executableNodeCompiler.BuildResumeTargets(compiledRoot),
                 createdAt: request.CreatedAt,
                 publishedAt: request.PublishedAt,
                 compatibilityMetadata: metadata,
@@ -91,125 +88,4 @@ public sealed class WorkflowExecutableCompiler(
             State: version.State,
             SourceReference: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version));
     }
-
-    private ExecutableNode CompileNode(
-        ActivityNode activity,
-        ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
-    {
-        var activityVersion = activityRows[activity.ActivityVersionId];
-
-        var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows);
-
-        foreach (var inputState in activity.Inputs)
-        {
-            if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
-                throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
-
-            inputBindings[inputDefinition.Name] = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
-        }
-
-        var activityType = activityVersion.Definition?.ActivityTypeKey
-            ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
-
-        return new ExecutableNode(
-            executableNodeId: activity.NodeId,
-            authoredActivityId: activity.NodeId,
-            activityType: activityType,
-            activityTypeVersion: activityVersion.Version,
-            descriptorType: activityVersion.DescriptorType,
-            descriptorPayload: activityVersion.DescriptorPayload,
-            inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = activityVersion.ExecutionType.ToString()
-            },
-            childSlots: childSlots,
-            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
-    }
-
-    private IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(ExecutableNode root)
-    {
-        // Index [ResumeTarget] handlers declared by each node's activity CLR type into the executable's
-        // resume-target map. Suspending activities (e.g. Delay) create a durable bookmark against a resume
-        // target id; the CreateBookmark handler validates that id against this map, and the resume handler
-        // reflects the matching method back at resume time. Activities without resume targets (all existing
-        // activities) contribute nothing, so the map stays empty for them.
-        var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
-
-        foreach (var node in FlattenExecutableNodes(root))
-        {
-            if (!wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var activityType) || activityType is null || activityType == typeof(object))
-                continue;
-
-            foreach (var method in activityType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-            {
-                var attribute = method.GetCustomAttribute<ResumeTargetAttribute>();
-                if (attribute is null)
-                    continue;
-
-                ValidateResumeTargetSignature(activityType, method);
-
-                var resumeTargetId = attribute.ResumeTargetId;
-                if (resumeTargets.TryGetValue(resumeTargetId, out var existing))
-                    throw new ArgumentException(
-                        $"Resume target '{resumeTargetId}' is declared by executable nodes '{existing.ExecutableNodeId}' and '{node.ExecutableNodeId}'. A resume target id must be unique within a workflow executable; multiple instances of the same resume-target activity in one workflow are not yet supported.");
-
-                resumeTargets[resumeTargetId] = new WorkflowExecutableResumeTarget(
-                    ResumeTargetId: resumeTargetId,
-                    ExecutableNodeId: node.ExecutableNodeId,
-                    HandlerKey: method.Name,
-                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
-            }
-        }
-
-        return resumeTargets;
-    }
-
-    private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
-    {
-        var parameters = method.GetParameters();
-        var hasSupportedParameter =
-            parameters.Length == 0 ||
-            parameters.Length == 1 && (parameters[0].ParameterType == typeof(IActivityExecutionContext) || parameters[0].ParameterType == typeof(JsonElement));
-        var hasSupportedReturn =
-            method.ReturnType == typeof(void) ||
-            method.ReturnType == typeof(Task) ||
-            method.ReturnType == typeof(ValueTask);
-
-        if (!hasSupportedParameter || !hasSupportedReturn)
-            throw new ArgumentException(
-                $"Resume target method '{activityType.FullName}.{method.Name}' has an unsupported signature. A resume target must take no parameters or a single {nameof(IActivityExecutionContext)}/{nameof(JsonElement)} parameter and return void, Task, or ValueTask.");
-    }
-
-    private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)
-    {
-        yield return root;
-
-        foreach (var slot in root.ChildSlots)
-            foreach (var child in slot.Activities)
-                foreach (var descendant in FlattenExecutableNodes(child))
-                    yield return descendant;
-    }
-
-    private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
-        IEnumerable<ActivityChildProjection> childSlots,
-        ActivityTreeProjection projection,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
-    {
-        return childSlots
-            .Select(slot => new ExecutableChildSlot(
-                slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows)).ToArray()))
-            .ToArray();
-    }
-
-    private static ExecutableActivityStructure? CompileStructure(ActivityNodeStructure? structure) =>
-        structure is null
-            ? null
-            : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
 }
