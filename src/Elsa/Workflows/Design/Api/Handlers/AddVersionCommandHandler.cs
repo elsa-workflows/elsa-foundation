@@ -9,6 +9,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Handlers;
@@ -32,7 +33,7 @@ public sealed class AddVersionCommandHandler(
         await using var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken);
 
         var lastVersion = await versionStore.FindLatestVersionAsync(command.DefinitionId, cancellationToken);
-        var nextVersion = NextVersion(lastVersion?.Version);
+        var nextVersion = WorkflowVersionNumbering.NextMajor(lastVersion?.Version);
 
         // Defense-in-depth existence check (mirrors WorkflowsVersionReconciler): on the Groundwork
         // backend there is no unique (DefinitionId, Version) constraint, so a concurrent publish that
@@ -47,10 +48,4 @@ public sealed class AddVersionCommandHandler(
         var addedVersion = await versionStore.GetWithDefinitionAsync(version.Id, cancellationToken);
         return addedVersion.ToDetailsView();
     }
-
-    // Each published workflow version is a new major (1.0.0 → 2.0.0 → …).
-    private static string NextVersion(string? lastVersion) =>
-        lastVersion is not null && SemVer.TryParse(lastVersion, out var semVer)
-            ? $"{semVer.Major + 1}.0.0"
-            : "1.0.0";
 }
