@@ -50,16 +50,28 @@ internal sealed class StreamEndpoint(
         response.Headers["X-Accel-Buffering"] = "no";
         await response.Body.FlushAsync(ct);
 
+        // Subscribe BEFORE querying history: the live feed registers subscribers eagerly, so entries
+        // emitted while the history query is in flight are buffered by the subscription instead of being
+        // lost in the gap between snapshot and subscription (issue #411). Entries the replay already
+        // delivered are skipped by sequence when the buffered live stream is drained.
+        var live = feed.Subscribe(filter, ct);
+
+        var lastReplayedSequence = long.MinValue;
         if (long.TryParse(request.Headers["Last-Event-ID"], out var afterSequence))
         {
+            lastReplayedSequence = afterSequence;
             foreach (var entry in await store.GetAfterAsync(afterSequence, filter, ct))
+            {
                 await response.WriteAsync(formatter.FormatEntry(entry), ct);
+                lastReplayedSequence = Math.Max(lastReplayedSequence, entry.Sequence);
+            }
+
             await response.Body.FlushAsync(ct);
         }
 
         try
         {
-            await StreamLiveAsync(response, filter, ct);
+            await streamWriter.StreamAsync(response, SkipReplayed(live, lastReplayedSequence), ct);
         }
         catch (OperationCanceledException)
         {
@@ -67,8 +79,16 @@ internal sealed class StreamEndpoint(
         }
     }
 
-    private async Task StreamLiveAsync(HttpResponse response, StructuredLogFilter filter, CancellationToken ct)
+    private static async IAsyncEnumerable<StructuredLogStreamItem> SkipReplayed(
+        IAsyncEnumerable<StructuredLogStreamItem> live,
+        long lastReplayedSequence)
     {
-        await streamWriter.StreamAsync(response, feed.Subscribe(filter, ct), ct);
+        await foreach (var item in live)
+        {
+            if (item.Entry is { } entry && entry.Sequence <= lastReplayedSequence)
+                continue;
+
+            yield return item;
+        }
     }
 }
