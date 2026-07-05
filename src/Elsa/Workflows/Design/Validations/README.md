@@ -4,8 +4,10 @@ Baseline universal validators for the workflow-design sub-domain. Implements the
 `IDraftValidator` contributor interface (from `Elsa.Workflows.Design.Validations.Core`)
 and **returns** `ValidationError` entries. The single `ExecuteValidations` handler
 (also registered here) aggregates every validator's returned errors onto the
-`OnDraftValidating` event's `Errors` collection; the mutation pipeline persists them to the
-`WorkflowDefinitionDraftValidation` sibling per Unit C FR-023 / FR-027.
+`OnDraftValidating` event's `Errors` collection; the publishing command reads them back and
+surfaces them on `OnDraftValidated` (create/update) or uses them as the promotion gate (FR-024).
+Errors are derived state — recomputed on every mutation and re-derived on demand — and are not
+persisted.
 
 Per framework §2.22 — this README documents what the feature registers.
 
@@ -26,19 +28,26 @@ Per framework §2.22 — this README documents what the feature registers.
 
 ## Contributor interfaces registered
 
-All four implement `IDraftValidator` and are registered via DI
+All five implement `IDraftValidator` and are registered via DI
 (`services.AddScoped<IDraftValidator, X>()`). Each **returns** its `ValidationError` set from
 `Validate(...)`; the single `ExecuteValidations : IEventHandler<OnDraftValidating>` handler
 (registered here) resolves `IEnumerable<IDraftValidator>`, runs each, and adds every returned
-error to `event.Errors`. The pipeline reads `event.Errors` after dispatch and upserts into the
-validation sibling in the same transaction as the Draft's state.
+error to `event.Errors`. The publishing command reads `event.Errors` back after dispatch and
+surfaces them on `OnDraftValidated` / uses them as the promotion gate; the errors are not
+persisted.
 
 | Validator | Scope | `(Path, Type)` emitted |
 |---|---|---|
+| `UnknownActivityVersionValidator` | Root + nested (recurses) | `{NodeId}` · `Graph/UnknownActivityVersion` |
 | `StartActivityValidator` | Root-level | `$workflow` · `RootActivity/Missing` |
 | `VariableUniquenessValidator` | Workflow-scope | `$workflow/variables/{Name}` · `Variables/Uniqueness` |
 | `RequiredInputOutputValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `InputOutput/MissingRequired` |
 | `VariableExpressionResolverValidator` | Root + nested (recurses) | `{NodeId}/inputs|outputs/{ReferenceKey}` · `Expressions/UnresolvedVariable` |
+
+Catalog-consulting validators resolve `ActivityVersionId`s through the scoped, memoizing
+`CatalogVersionResolver` (Internal), which translates the version store's throwing Get contract
+into a nullable result — see the Faulting note in `EXTENSION_POINTS.md` before writing a new
+catalog-consulting validator.
 
 ## Tasks registered
 

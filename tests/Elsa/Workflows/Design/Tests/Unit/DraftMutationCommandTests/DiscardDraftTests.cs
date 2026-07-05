@@ -10,16 +10,17 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
 /// <summary>
-/// SC-018 + Unit C FR-029. <see cref="IDiscardDraftCommand"/> atomically deletes a Draft and
-/// its sibling rows (layout + validation) via the EF cascade. Versions are never touched.
-/// The command is idempotent — a second Discard on the same id is a no-op.
+/// SC-018 + Unit C FR-029. <see cref="IDiscardDraftCommand"/> atomically deletes a Draft and its
+/// layout sibling via the EF cascade (validation is no longer persisted, so there is no validation
+/// row to delete). Versions are never touched. The command is idempotent — a second Discard on the
+/// same id is a no-op.
 /// </summary>
 public sealed class DiscardDraftTests
 {
     private const string WorkflowDefinitionId = "wf-1";
 
     [Fact]
-    public async Task Discard_deletes_Draft_Layout_and_Validation_atomically()
+    public async Task Discard_deletes_Draft_and_Layout_atomically()
     {
         using var host = WorkflowsDesignTestHost.Create();
         var draftId = await CreateDraft(host);
@@ -29,7 +30,6 @@ public sealed class DiscardDraftTests
         using var ctx = host.CreateContext();
         Assert.Null(await ctx.WorkflowDefinitionDrafts.FirstOrDefaultAsync(d => d.Id == draftId));
         Assert.Null(await ctx.WorkflowDefinitionDraftLayouts.FirstOrDefaultAsync(l => l.WorkflowDefinitionDraftId == draftId));
-        Assert.Null(await ctx.WorkflowDefinitionDraftValidations.FirstOrDefaultAsync(v => v.WorkflowDefinitionDraftId == draftId));
     }
 
     [Fact]

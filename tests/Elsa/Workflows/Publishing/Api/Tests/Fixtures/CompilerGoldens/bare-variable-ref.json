@@ -1,0 +1,65 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "expiresAt": null,
+  "identity": {
+    "artifactHash": "sha256:e864eef17cf7fe2202fa76cc6d6a134d4fc50a162c063e2a79acb083459d7114",
+    "artifactId": "artifact-e864eef17cf7",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1",
+    "source": {
+      "sourceId": "version-1",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceVersion": "1.0.0"
+    }
+  },
+  "publishedAt": "2026-06-24T12:00:00\u002B00:00",
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Test.WriteLine",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "write-var",
+    "childSlots": [],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "write-var",
+    "inputBindings": [
+      {
+        "expression": {
+          "expression": "{\u0022referenceKey\u0022:\u0022var-counter\u0022,\u0022declaringScopeId\u0022:null}",
+          "language": "Variable",
+          "resultTypeId": "System.String, System.Private.CoreLib"
+        },
+        "inputName": "Text",
+        "key": "Text",
+        "literalValue": null,
+        "metadata": [
+          {
+            "Key": "referenceKey",
+            "Value": "Text"
+          },
+          {
+            "Key": "typeName",
+            "Value": "System.String, System.Private.CoreLib"
+          }
+        ],
+        "source": "Expression"
+      }
+    ],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "write-var"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": null
+  },
+  "scope": "Published"
+}

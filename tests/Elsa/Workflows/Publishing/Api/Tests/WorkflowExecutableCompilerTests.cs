@@ -261,7 +261,7 @@ public sealed class WorkflowExecutableCompilerTests
     public async Task CompilesDraftSnapshotWithoutReadingDurableWorkflowVersion()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
-        var compiler = new WorkflowExecutableCompiler(
+        var compiler = TestCompiler.Create(
             new ThrowingVersionStore(),
             new FakeActivityVersionStore([_writeLineActivity]),
             _activityStructureService,
@@ -379,7 +379,7 @@ public sealed class WorkflowExecutableCompilerTests
         registry.RegisterType(typeof(ResumeProbeActivity), typeof(ResumeProbeActivity).FullName!);
         registry.RegisterType(typeof(SequenceActivity), typeof(SequenceActivity).FullName!);
 
-        return new WorkflowExecutableCompiler(
+        return TestCompiler.Create(
             new FakeVersionStore(workflowVersion),
             new FakeActivityVersionStore([.. activities]),
             _activityStructureService,
@@ -399,7 +399,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion) =>
-        new(
+        TestCompiler.Create(
             new FakeVersionStore(workflowVersion),
             new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
             _activityStructureService,

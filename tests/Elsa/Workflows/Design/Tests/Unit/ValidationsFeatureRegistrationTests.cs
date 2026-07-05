@@ -23,12 +23,13 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 public sealed class ValidationsFeatureRegistrationTests
 {
     [Fact]
-    public void Feature_registers_all_four_baseline_validators()
+    public void Feature_registers_all_five_baseline_validators()
     {
         using var provider = BuildProvider(_ => { });
 
         var validatorTypes = provider.GetServices<IDraftValidator>().Select(v => v.GetType()).ToList();
 
+        Assert.Contains(typeof(UnknownActivityVersionValidator), validatorTypes);
         Assert.Contains(typeof(StartActivityValidator), validatorTypes);
         Assert.Contains(typeof(VariableUniquenessValidator), validatorTypes);
         Assert.Contains(typeof(RequiredInputOutputValidator), validatorTypes);
@@ -84,24 +85,9 @@ public sealed class ValidationsFeatureRegistrationTests
 
         var services = new ServiceCollection();
         services.AddOptions();
-        services.AddSingleton<IActivityDefinitionLookup, StubActivityDefinitionLookup>();
+        services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
         feature.ConfigureServices(services);
 
         return services.BuildServiceProvider();
-    }
-
-    private sealed class StubActivityDefinitionLookup : IActivityDefinitionLookup
-    {
-        public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-
-        public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null, string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-
-        public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-
-        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
     }
 }

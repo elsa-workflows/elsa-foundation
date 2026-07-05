@@ -1,10 +1,11 @@
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
-using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Validations.Handlers;
+using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -12,13 +13,17 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-014 + Unit C FR-024. The promotion gate refuses to promote a Draft whose
-/// <c>WorkflowDefinitionDraftValidation</c> sibling carries any errors.
+/// SC-014 + Unit C FR-024. Validation errors are derived state (no persisted sibling): the
+/// promotion gate re-runs the validators in-lock via <c>OnDraftValidating</c> and refuses to
+/// promote a Draft whose current state produces any errors, throwing
+/// <c>DraftHasValidationErrorsException</c> with the error count. Validator contributions are
+/// simulated with the <c>CapturingEventPublisher.OnPublish</c> hook — the project-wide pattern for
+/// driving <c>OnDraftValidating</c> without spinning up the full event pipeline.
 /// </summary>
 public sealed class PromotionGateTests
 {
     [Fact]
-    public async Task Promotion_throws_when_validation_sibling_has_errors()
+    public async Task Promotion_throws_when_the_draft_state_produces_validation_errors()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
@@ -42,11 +47,11 @@ public sealed class PromotionGateTests
     }
 
     [Fact]
-    public async Task Promotion_succeeds_when_validation_sibling_is_empty()
+    public async Task Promotion_succeeds_when_the_draft_state_produces_no_errors()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
-        // No OnSend hook - validators contribute nothing; sibling persists with empty Errors.
+        // No OnPublish hook — validators contribute nothing, so the re-run gate finds no errors.
         var draftId = await CreateDraft(host);
 
         using var scope = host.Services.CreateScope();
@@ -60,6 +65,35 @@ public sealed class PromotionGateTests
         var version = await ctx.WorkflowDefinitionVersions.FirstOrDefaultAsync(x => x.Id == versionId);
         Assert.NotNull(version);
         Assert.Equal("1.0.0", version.Version);
+    }
+
+    [Fact]
+    public async Task Draft_referencing_unknown_activity_version_cannot_be_promoted()
+    {
+        // FR-033 2026-07-05 amendment consequence pin: a node whose ActivityVersionId is not in
+        // the catalog is a baseline validation error, so the FR-024 gate blocks promotion with a
+        // node-addressed error instead of the store's opaque EntityNotFoundException fault. Wires
+        // the REAL ExecuteValidations aggregator + UnknownActivityVersionValidator against an
+        // empty (throwing, per store contract) catalog; the error's shape is pinned by
+        // UnknownActivityVersionValidatorTests — this test pins only the gate consequence.
+        using var host = WorkflowsDesignTestHost.Create();
+
+        var validator = new UnknownActivityVersionValidator(
+            ValidatorTestHelpers.CatalogResolver(new StubActivityCatalog()),
+            ValidatorTestHelpers.Options(),
+            ValidatorTestHelpers.Walker());
+        var executeValidations = new ExecuteValidations([validator]);
+        host.EventPublisher.Subscribe<OnDraftValidating>(e => executeValidations.Handle(e, CancellationToken.None));
+
+        var draftId = await CreateDraft(host);
+        await UpdateDraftTestKit.Update(host, draftId, UpdateDraftTestKit.State(
+            activities: [UpdateDraftTestKit.Node("n1", "av-unregistered")]));
+
+        using var scope = host.Services.CreateScope();
+        var gate = scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>();
+        var ex = await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => gate.Execute(draftId));
+
+        Assert.Equal(1, ex.ErrorCount);
     }
 
     private static async Task<string> CreateDraft(WorkflowsDesignTestHost host)

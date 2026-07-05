@@ -1,5 +1,7 @@
 # Quickstart — Unit C Workflow Design Substrate
 
+> **Supersession note (2026-07-05):** recipes below that rebuild `WorkflowDefinitionDraftValidation.Errors` are superseded — the entity is deleted; validation errors are derived state recomputed in-lock on each mutation (and re-derived by the promotion gate), never persisted (spec.md FR-021/FR-023). Per-diff mutation-event publication is likewise retired (declarations stand). The validators-as-`OnDraftValidating`-subscribers and wholesale-rebuild *semantics* survive in-memory. Reinstatable when a consumer exists.
+
 Developer onboarding for the Unit C deliverables. Five recipes covering the most common consumer scenarios.
 
 ---
@@ -92,17 +94,17 @@ Developer onboarding for the Unit C deliverables. Five recipes covering the most
 **Concept.** Validators are subscribers to `OnDraftValidating`, which fires after every Draft mutation. Each validator walks the post-mutation Draft and contributes `ValidationError` entries. The set of errors on the validation sibling (`WorkflowDefinitionDraftValidation.Errors`) is **rebuilt wholesale** after every mutation — there is no "this error was solved" tracking. If the underlying condition is still failing, the next pass re-emits the error; if it stopped failing, the error disappears.
 
 ```
-prior mutation:  add activity X (no start marked)
+prior mutation:  clear the root activity
                  → validators run
-                 → Errors: [ ValidationError("$workflow", "Graph/StartActivity", "No start activity") ]
+                 → Errors: [ ValidationError("$workflow", "RootActivity/Missing", "Workflow has no root activity.") ]
 
-next mutation:   mark X as start
+next mutation:   set activity X as the root
                  → validators run
-                 → Errors: [ ]   (the start-activity condition is satisfied)
+                 → Errors: [ ]   (the root-activity condition is satisfied)
 
-next mutation:   add activity Y (orphan, no connections)
+next mutation:   add activity Y whose ActivityVersionId is not in the catalog
                  → validators run
-                 → Errors: [ ValidationError($"{Y.NodeId}", "Graph/OrphanActivity", "Activity has no connections") ]
+                 → Errors: [ ValidationError($"{Y.NodeId}", "Graph/UnknownActivityVersion", "…does not exist in the activity catalog.") ]
 ```
 
 **Grouping key for the UI:** `(Path, Type)`. Multiple errors with the same key are grouped under one UI item.
@@ -118,7 +120,7 @@ next mutation:   add activity Y (orphan, no connections)
 **Why not in a separate `Elsa.Workflows.Design.Validations.Http`?** Joey settled this in clarify session 2 Q3: activity-specific validators read activity-specific property shapes, so they share intimate knowledge of the activity definition. Co-locating them with the activity-feature module keeps that knowledge in one place. If a single activity's validator surface grows substantially (10+ validators, complex shared state), refactor-cost test (§2.16) supports extracting a sub-module then.
 
 **The split is:**
-- `Elsa.Workflows.Design.Validations` — baseline UNIVERSAL validators (5 of them per FR-033) — applicable regardless of activity type. Graph integrity, variable uniqueness, required input/output, variable-expression resolver.
+- `Elsa.Workflows.Design.Validations` — baseline UNIVERSAL validators (5 of them per FR-033 as amended 2026-07-05) — applicable regardless of activity type. Missing root activity, variable uniqueness, required input/output, variable-expression resolver, unknown activity version.
 - `Elsa.<Model>.Activities.Design` — activity-specific validators co-located with the activity definitions (e.g. HttpEndpoint auth-policy lookup, URL string-input validation).
 
 Both subscribe to `OnDraftValidating` from `Elsa.Workflows.Design.Validations.Core`.

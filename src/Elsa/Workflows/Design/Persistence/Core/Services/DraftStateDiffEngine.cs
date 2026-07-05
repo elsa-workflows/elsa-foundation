@@ -11,6 +11,11 @@ using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Services;
 
+/// <summary>
+/// Default <see cref="IDraftStateDiffEngine"/>. Currently NOT invoked by any mutation command and NOT
+/// registered in DI: per-diff mutation-event publication is retired until the FR-017/FR-018 event-sourcing
+/// consumer exists. Kept as the tested contract to re-wire at that point.
+/// </summary>
 public sealed class DraftStateDiffEngine(IActivityStructureService activityStructureService) : IDraftStateDiffEngine
 {
     public IReadOnlyList<IEvent> Evaluate(

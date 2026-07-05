@@ -2,16 +2,17 @@ using System.Text.Json;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Validations.Core.Models;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 
+// Validation errors are deliberately absent: they are derived state, recomputed by the
+// validation gate on every mutation and by the promotion gate on demand. Documents written
+// before this change may still carry an "Errors" property; the serializer ignores it.
 internal sealed record GroundworkWorkflowDefinitionDraftDocument(
     string Collection,
     WorkflowDefinitionDraft Entity,
-    IReadOnlyCollection<DesignMetadataRecord> Layout,
-    IReadOnlyCollection<ValidationError> Errors);
+    IReadOnlyCollection<DesignMetadataRecord> Layout);
 
 internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
     IDocumentStore store,
@@ -43,8 +44,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
 
     public SaveDocumentRequest ToSaveRequest(
         WorkflowDefinitionDraft draft,
-        IReadOnlyCollection<DesignMetadataRecord> layout,
-        IReadOnlyCollection<ValidationError> errors) =>
+        IReadOnlyCollection<DesignMetadataRecord> layout) =>
         JsonDocumentStoreExtensions.ToSaveDocumentRequest(
             WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind,
             draft.Id,
@@ -52,8 +52,7 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
             new GroundworkWorkflowDefinitionDraftDocument(
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
                 draft,
-                layout,
-                errors),
+                layout),
             jsonOptions);
 
     public DeleteDocumentRequest ToDeleteRequest(string draftId) =>
@@ -67,15 +66,14 @@ internal sealed class GroundworkWorkflowDefinitionDraftDocumentStore(
         if (document?.Entity is not null)
             return document with
             {
-                Layout = document.Layout ?? [],
-                Errors = document.Errors ?? []
+                Layout = document.Layout ?? []
             };
 
         var legacyDocument = JsonSerializer.Deserialize<GroundworkDocument<WorkflowDefinitionDraft>>(envelope.ContentJson, jsonOptions);
         if (legacyDocument?.Entity is null)
             throw new InvalidOperationException($"Document '{envelope.Id}' of kind '{WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind}' could not be deserialized as {nameof(WorkflowDefinitionDraft)}.");
 
-        return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, [], []);
+        return new GroundworkWorkflowDefinitionDraftDocument(legacyDocument.Collection, legacyDocument.Entity, []);
     }
 
     private static GroundworkWorkflowDefinitionDraftDocument? CurrentDraft(IReadOnlyCollection<GroundworkWorkflowDefinitionDraftDocument> drafts) =>

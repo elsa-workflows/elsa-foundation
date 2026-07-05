@@ -1,14 +1,14 @@
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
-/// Atomically deletes a <c>WorkflowDefinitionDraft</c> and cascades its sibling rows
-/// (<c>WorkflowDefinitionDraftLayout</c>, <c>WorkflowDefinitionDraftValidation</c>). Per Unit C
-/// FR-029.
+/// Atomically deletes a <c>WorkflowDefinitionDraft</c> and cascades its layout sibling
+/// (<c>WorkflowDefinitionDraftLayout</c>). Per Unit C FR-029. Validation errors are derived state
+/// (not persisted), so there is no validation sibling to cascade.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Atomicity.</b> The Draft + both siblings are removed in a single transaction via the
-/// EF cascade rules configured on the relationships (research item R5). No
+/// <b>Atomicity.</b> The Draft + its layout sibling are removed in a single transaction via the
+/// EF cascade rules configured on the relationship (research item R5). No
 /// <c>WorkflowDefinitionVersion</c> is touched — versions are never deleted by domain contract.
 /// </para>
 /// <para>

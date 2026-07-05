@@ -74,9 +74,6 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IWorkflowDefinitionLookup>();
         services.AddScoped<IWorkflowDefinitionLookup, WorkflowDefinitionLookup>();
 
-        services.RemoveAll<IDraftStateDiffEngine>();
-        services.AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>();
-
         services.TryAddScoped<IIdentityGenerator, ShortIdentityGenerator>();
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
