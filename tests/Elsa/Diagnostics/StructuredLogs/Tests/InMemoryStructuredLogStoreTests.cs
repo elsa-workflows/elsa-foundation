@@ -11,26 +11,26 @@ public sealed class InMemoryStructuredLogStoreTests
         TestEntries.Create(sequence: sequence, level: level, message: message);
 
     [Fact]
-    public void AppendRetainsEntriesAndTracksHighWaterMark()
+    public async Task AppendRetainsEntriesAndTracksHighWaterMark()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
 
         store.Append(Seq(1, "a"));
         store.Append(Seq(2, "b"));
 
-        var recent = store.GetRecent(StructuredLogFilter.None);
+        var recent = await store.GetRecentAsync(StructuredLogFilter.None);
         Assert.Equal(new[] { 1L, 2L }, recent.Select(e => e.Sequence));
-        Assert.Equal(2L, store.GetHighWaterMark());
+        Assert.Equal(2L, await store.GetHighWaterMarkAsync());
     }
 
     [Fact]
-    public void HighWaterMarkIsZeroWhenEmpty()
+    public async Task HighWaterMarkIsZeroWhenEmpty()
     {
-        Assert.Equal(0L, new InMemoryStructuredLogStore(TestOptions.Create()).GetHighWaterMark());
+        Assert.Equal(0L, await new InMemoryStructuredLogStore(TestOptions.Create()).GetHighWaterMarkAsync());
     }
 
     [Fact]
-    public void EvictsOldestBeyondCapacity()
+    public async Task EvictsOldestBeyondCapacity()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create(o => o.BufferCapacity = 2));
 
@@ -38,62 +38,62 @@ public sealed class InMemoryStructuredLogStoreTests
         store.Append(Seq(2, "b"));
         store.Append(Seq(3, "c"));
 
-        var recent = store.GetRecent(StructuredLogFilter.None);
+        var recent = await store.GetRecentAsync(StructuredLogFilter.None);
         Assert.Equal(new[] { "b", "c" }, recent.Select(e => e.Message));
     }
 
     [Fact]
-    public void GetRecentIsNewestAlignedAndClampedToTake()
+    public async Task GetRecentIsNewestAlignedAndClampedToTake()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         for (var i = 0; i < 5; i++)
             store.Append(Seq(i + 1, i.ToString()));
 
-        var recent = store.GetRecent(new StructuredLogFilter { MaxCount = 2 });
+        var recent = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 2 });
 
         Assert.Equal(new[] { "3", "4" }, recent.Select(e => e.Message));
     }
 
     [Fact]
-    public void GetRecentClampsTakeToMaxRecentQuerySize()
+    public async Task GetRecentClampsTakeToMaxRecentQuerySize()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create(o => o.MaxRecentQuerySize = 2));
         for (var i = 0; i < 5; i++)
             store.Append(Seq(i + 1, i.ToString()));
 
-        Assert.Equal(2, store.GetRecent(new StructuredLogFilter { MaxCount = 100 }).Count);
+        Assert.Equal(2, (await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 100 })).Count);
     }
 
     [Fact]
-    public void GetRecentAppliesFilter()
+    public async Task GetRecentAppliesFilter()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         store.Append(Seq(1, level: LogLevel.Information));
         store.Append(Seq(2, level: LogLevel.Error));
 
-        var recent = store.GetRecent(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
+        var recent = await store.GetRecentAsync(new StructuredLogFilter { MinimumLevel = LogLevel.Warning });
 
         Assert.Single(recent);
         Assert.Equal(LogLevel.Error, recent[0].Level);
     }
 
     [Fact]
-    public void GetRecentWithZeroTakeReturnsEmpty()
+    public async Task GetRecentWithZeroTakeReturnsEmpty()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         store.Append(Seq(1));
 
-        Assert.Empty(store.GetRecent(new StructuredLogFilter { MaxCount = 0 }));
+        Assert.Empty(await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 0 }));
     }
 
     [Fact]
-    public void GetAfterReturnsOnlyLaterSequencesOldestFirst()
+    public async Task GetAfterReturnsOnlyLaterSequencesOldestFirst()
     {
         var store = new InMemoryStructuredLogStore(TestOptions.Create());
         for (var i = 0; i < 4; i++)
             store.Append(Seq(i + 1, i.ToString()));
 
-        var after = store.GetAfter(2, StructuredLogFilter.None);
+        var after = await store.GetAfterAsync(2, StructuredLogFilter.None);
 
         Assert.Equal(new[] { 3L, 4L }, after.Select(e => e.Sequence));
     }

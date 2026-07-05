@@ -52,7 +52,7 @@ internal sealed class StreamEndpoint(
 
         if (long.TryParse(request.Headers["Last-Event-ID"], out var afterSequence))
         {
-            foreach (var entry in store.GetAfter(afterSequence, filter))
+            foreach (var entry in await store.GetAfterAsync(afterSequence, filter, ct))
                 await response.WriteAsync(formatter.FormatEntry(entry), ct);
             await response.Body.FlushAsync(ct);
         }
