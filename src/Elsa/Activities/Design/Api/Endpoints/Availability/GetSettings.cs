@@ -12,6 +12,6 @@ internal sealed class GetSettings(IRequestSender requestSender, ILogger<GetSetti
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("availability/settings"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

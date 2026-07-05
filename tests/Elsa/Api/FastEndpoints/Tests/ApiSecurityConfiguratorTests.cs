@@ -3,6 +3,8 @@ using Elsa.Api.FastEndpoints.Configurators;
 using Elsa.Api.FastEndpoints.Options;
 using Elsa.Api.FastEndpoints.Tests.Support;
 using FastEndpoints;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -54,6 +56,38 @@ public sealed class ApiSecurityConfiguratorTests
     }
 
     [Fact]
+    public void AllowAnonymous_is_neutralized_outside_development_and_logs_why()
+    {
+        var config = new Config();
+        config.Endpoints.Configurator = _ => { };
+
+        // The same insecure options that relax in Development must be ignored in Production.
+        var (configurator, logs) = CreateConfigurator(allowAnonymous: true, shellName: "prod-shell", environment: Environments.Production);
+        configurator.Configure(config);
+
+        // The relaxer must be cleared: the shell stays secure.
+        Assert.Null(ReadConfigurator(config));
+
+        // And the operator must be told the kill-switch was ignored.
+        var warnings = logs.Logs.Where(log => log.Level == LogLevel.Warning).ToList();
+        Assert.Single(warnings);
+        Assert.Contains("IGNORED", warnings[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("prod-shell", warnings[0].Message);
+    }
+
+    [Fact]
+    public void AllowAnonymous_is_honored_in_development()
+    {
+        var config = new Config();
+        config.Endpoints.Configurator = null;
+
+        var (configurator, _) = CreateConfigurator(allowAnonymous: true, shellName: "dev-shell", environment: Environments.Development);
+        configurator.Configure(config);
+
+        Assert.NotNull(ReadConfigurator(config));
+    }
+
+    [Fact]
     public void A_secure_shell_clears_an_insecure_shells_leaked_relaxer()
     {
         var config = new Config();
@@ -71,7 +105,8 @@ public sealed class ApiSecurityConfiguratorTests
         Assert.Null(ReadConfigurator(config));
     }
 
-    private static (ApiSecurityFastEndpointsConfigurator Configurator, RecordingLoggerProvider Logs) CreateConfigurator(bool allowAnonymous, string shellName)
+    private static (ApiSecurityFastEndpointsConfigurator Configurator, RecordingLoggerProvider Logs) CreateConfigurator(
+        bool allowAnonymous, string shellName, string? environment = null)
     {
         var logs = new RecordingLoggerProvider();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
@@ -83,7 +118,17 @@ public sealed class ApiSecurityConfiguratorTests
             ShellName = shellName
         });
 
-        return (new ApiSecurityFastEndpointsConfigurator(options, logger), logs);
+        var hostEnvironment = new FakeHostEnvironment { EnvironmentName = environment ?? Environments.Development };
+
+        return (new ApiSecurityFastEndpointsConfigurator(options, hostEnvironment, logger), logs);
+    }
+
+    private sealed class FakeHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private static Action<EndpointDefinition>? ReadConfigurator(Config config)
