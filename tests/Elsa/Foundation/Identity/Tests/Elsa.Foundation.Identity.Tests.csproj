@@ -9,6 +9,10 @@
 
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector" PrivateAssets="all" />
+		<!-- Required to self-host a real CShells host and drive the shell-activation (IShellInitializer) path
+		     that the DevelopmentOrDemoGuard runs under in the composed Elsa.Server host. -->
+		<PackageReference Include="CShells" />
+		<PackageReference Include="CShells.AspNetCore" />
 		<PackageReference Include="Microsoft.AspNetCore.TestHost" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />

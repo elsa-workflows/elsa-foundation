@@ -10,6 +10,7 @@
     <PackageVersion Include="Cronos" Version="0.13.0" />
     <PackageVersion Include="CShells" Version="0.0.29-preview.144" />
     <PackageVersion Include="CShells.Abstractions" Version="0.0.29-preview.144" />
+    <PackageVersion Include="CShells.AspNetCore" Version="0.0.29-preview.144" />
     <PackageVersion Include="CShells.AspNetCore.Abstractions" Version="0.0.29-preview.144" />
     <PackageVersion Include="CShells.FastEndpoints" Version="0.0.29-preview.144" />
     <PackageVersion Include="CShells.FastEndpoints.Abstractions" Version="0.0.29-preview.144" />
