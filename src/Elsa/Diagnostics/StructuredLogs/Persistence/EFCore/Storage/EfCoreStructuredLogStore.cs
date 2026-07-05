@@ -233,29 +233,44 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
         if (_insertedSincePrune < _pruneInterval)
             return;
 
-        _insertedSincePrune = 0;
-
-        try
+        for (var attempt = 0; ; attempt++)
         {
-            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            var maxId = await db.StructuredLogEntries.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
-            var threshold = maxId - _maxRetainedEntries;
-            if (threshold <= 0)
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+                var maxId = await db.StructuredLogEntries.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
+                var threshold = maxId - _maxRetainedEntries;
+
+                if (threshold > 0)
+                {
+                    // Durable ordering is by Id, so deleting everything at or below the threshold keeps
+                    // the newest _maxRetainedEntries rows. Runs off the capture hot path inside the
+                    // drain loop.
+                    await db.StructuredLogEntries
+                        .Where(x => x.Id <= threshold)
+                        .ExecuteDeleteAsync(cancellationToken);
+                }
+
+                // Reset only on success (issue #403, parity with EfCoreOpenTelemetryStore): a reset
+                // before the attempt let a single transient failure abandon retention permanently.
+                _insertedSincePrune = 0;
                 return;
-
-            // Durable ordering is by Id, so deleting everything at or below the threshold keeps the
-            // newest _maxRetainedEntries rows. Runs off the capture hot path inside the drain loop.
-            await db.StructuredLogEntries
-                .Where(x => x.Id <= threshold)
-                .ExecuteDeleteAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            // Best-effort retention: a failed prune must not break the drain loop.
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch when (attempt < MaxBatchRetries)
+            {
+                // Transient (e.g. SQLite busy/lock contention). Retry.
+                await Task.Delay(RetryDelay, cancellationToken);
+            }
+            catch
+            {
+                // Best-effort retention: a failed prune must not break the drain loop. Keep the
+                // counter armed so the next persisted batch retries pruning.
+                return;
+            }
         }
     }
 
