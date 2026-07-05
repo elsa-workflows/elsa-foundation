@@ -28,14 +28,18 @@ public static class ConsoleStreamEndpointRouteBuilderExtensions
     /// <summary>
     /// Maps the console-log-streaming endpoints (SignalR hub + HTTP routes) only when the ConsoleStream
     /// feature is enabled in shell configuration. Call this on the application root endpoint builder so the
-    /// hub is hosted on the root container rather than a recyclable shell scope. Pass an authorization policy
-    /// to gate the endpoints behind the Studio management surface.
+    /// hub is hosted on the root container rather than a recyclable shell scope. The authorization policy is
+    /// required: this is the production wiring entry point, so it must never map the management-surface hub
+    /// ungated by omission. A host that deliberately wants an ungated hub calls <see cref="MapConsoleStreamStudio"/>
+    /// directly.
     /// </summary>
     public static IEndpointRouteBuilder MapConsoleStreamStudioIfEnabled(
         this IEndpointRouteBuilder endpoints,
         IConfiguration configuration,
-        string? authorizationPolicy = null)
+        string authorizationPolicy)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authorizationPolicy);
+
         if (ConsoleStreamHookInstaller.IsFeatureEnabled(configuration))
             endpoints.MapConsoleStreamStudio(authorizationPolicy);
 

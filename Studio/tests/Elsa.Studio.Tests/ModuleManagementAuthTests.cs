@@ -173,7 +173,34 @@ public sealed class ModuleManagementAuthTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private async Task<HttpClient> StartGatedHostAsync(string? apiKey, bool allowAnonymous = false)
+    [Fact]
+    public async Task RejectsWellKnownDevelopmentDefaultKeyOutsideDevelopment()
+    {
+        // Defense in depth (#209): the public repo-constant dev key must be treated as unconfigured outside
+        // Development, so a deployment that forgets to override it fails closed instead of accepting it.
+        var client = await StartGatedHostAsync(apiKey: ModuleManagementAuth.DevelopmentDefaultApiKey);
+        client.DefaultRequestHeaders.Add(ModuleManagementAuth.ApiKeyHeaderName, ModuleManagementAuth.DevelopmentDefaultApiKey);
+
+        var response = await client.PostAsync("/gated", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AcceptsWellKnownDevelopmentDefaultKeyInDevelopment()
+    {
+        // In the Development environment the well-known key is honoured so a developer can opt into the gated path.
+        var client = await StartGatedHostAsync(
+            apiKey: ModuleManagementAuth.DevelopmentDefaultApiKey,
+            environment: Environments.Development);
+        client.DefaultRequestHeaders.Add(ModuleManagementAuth.ApiKeyHeaderName, ModuleManagementAuth.DevelopmentDefaultApiKey);
+
+        var response = await client.PostAsync("/gated", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private async Task<HttpClient> StartGatedHostAsync(string? apiKey, bool allowAnonymous = false, string? environment = null)
     {
         var settings = new Dictionary<string, string?>
         {
@@ -181,10 +208,10 @@ public sealed class ModuleManagementAuthTests : IAsyncDisposable
             ["Studio:AllowAnonymousManagementApi"] = allowAnonymous ? "true" : "false"
         };
 
-        var builder = WebApplication.CreateSlimBuilder();
+        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = environment ?? Environments.Production });
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
-        builder.Services.AddModuleManagementAuth(builder.Configuration, HubPath);
+        builder.Services.AddModuleManagementAuth(builder.Configuration, builder.Environment, HubPath);
 
         var app = builder.Build();
         app.UseAuthentication();

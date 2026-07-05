@@ -1,7 +1,10 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Studio.Web;
@@ -37,12 +40,23 @@ internal static class ModuleManagementAuth
     private const string ApiKeyConfigurationKey = "Studio:BackendModuleManagementApiKey";
     private const string AllowAnonymousConfigurationKey = "Studio:AllowAnonymousManagementApi";
 
+    /// <summary>
+    /// The well-known development management key. It ships nowhere in the base configuration (a fresh checkout boots
+    /// anonymously under <c>appsettings.Development.json</c>); it exists only so a developer can opt into the gated
+    /// path locally. Outside the Development environment a configured key equal to this constant is treated as
+    /// <em>unconfigured</em> so a deployment that forgets to override it fails closed instead of accepting a value
+    /// that is public in the source tree.
+    /// </summary>
+    public const string DevelopmentDefaultApiKey = "local-dev-module-management-key";
+
     public static IServiceCollection AddModuleManagementAuth(
         this IServiceCollection services,
         IConfiguration configuration,
+        IHostEnvironment environment,
         params string[] queryTokenPathPrefixes)
     {
-        var apiKey = configuration[ApiKeyConfigurationKey];
+        var isDevelopment = environment.IsDevelopment();
+        var apiKey = ResolveApiKey(configuration[ApiKeyConfigurationKey], isDevelopment, services);
         var allowAnonymous = configuration.GetValue(AllowAnonymousConfigurationKey, defaultValue: false);
 
         services.AddAuthentication(SchemeName)
@@ -61,6 +75,27 @@ internal static class ModuleManagementAuth
             });
 
         return services;
+    }
+
+    /// <summary>
+    /// Defense in depth: outside Development a configured key equal to the public <see cref="DevelopmentDefaultApiKey"/>
+    /// constant is rejected (treated as unconfigured) so the gate fails closed rather than trusting a repo constant.
+    /// A clear warning is logged so the misconfiguration is visible in production logs.
+    /// </summary>
+    private static string? ResolveApiKey(string? configuredKey, bool isDevelopment, IServiceCollection services)
+    {
+        if (!isDevelopment && string.Equals(configuredKey, DevelopmentDefaultApiKey, StringComparison.Ordinal))
+        {
+            services.AddOptions<ModuleManagementApiKeyOptions>(SchemeName)
+                .PostConfigure<ILoggerFactory>((_, loggerFactory) =>
+                    loggerFactory.CreateLogger(typeof(ModuleManagementAuth)).LogWarning(
+                        "Studio:BackendModuleManagementApiKey is set to the well-known development default key outside the " +
+                        "Development environment. This key is public in the source tree, so it is treated as unconfigured " +
+                        "and the management surface fails closed. Configure a real key (or set Studio:AllowAnonymousManagementApi)."));
+            return null;
+        }
+
+        return configuredKey;
     }
 }
 
@@ -154,8 +189,13 @@ internal sealed class ModuleManagementApiKeyHandler(
 
     private static bool CryptographicEquals(string provided, string expected)
     {
-        var providedBytes = System.Text.Encoding.UTF8.GetBytes(provided);
-        var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expected);
-        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
+        // Hash both operands to a fixed 32-byte width before the constant-time compare. FixedTimeEquals returns early
+        // when the two spans differ in length, so comparing the raw UTF-8 bytes would leak the configured key's length
+        // through timing; SHA-256 makes every comparison the same width regardless of input length.
+        Span<byte> providedHash = stackalloc byte[SHA256.HashSizeInBytes];
+        Span<byte> expectedHash = stackalloc byte[SHA256.HashSizeInBytes];
+        SHA256.HashData(Encoding.UTF8.GetBytes(provided), providedHash);
+        SHA256.HashData(Encoding.UTF8.GetBytes(expected), expectedHash);
+        return CryptographicOperations.FixedTimeEquals(providedHash, expectedHash);
     }
 }

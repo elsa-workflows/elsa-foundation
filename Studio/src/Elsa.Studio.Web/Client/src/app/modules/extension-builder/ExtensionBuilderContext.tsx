@@ -185,8 +185,16 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
 
   // Debounced auto-save of the active file. The timer is keyed on the edited content, so each
   // keystroke reschedules it; it fires ~1s after the user stops typing.
+  //
+  // saveBusy is a dependency, not just a guard: while an explicit Save is in flight we skip
+  // scheduling (avoiding a double-save), but the effect must re-run when that Save completes so a
+  // trailing dirty edit made during the save still gets auto-persisted without a further keystroke.
+  // Omitting it (as the pre-decomposition code did after dropping operationBusy) silently dropped
+  // that last edit. autoSaveFile itself no-ops when the content already matches, so re-running after
+  // the Save settles cannot double-write the same content.
+  const saveBusy = tracker.isBusy("save");
   useEffect(() => {
-    if (!autoSave || !editorDirty || !activeFilePath || !selectedWorkspace || !capabilities?.canEditFiles || tracker.isBusy("save")) {
+    if (!autoSave || !editorDirty || !activeFilePath || !selectedWorkspace || !capabilities?.canEditFiles || saveBusy) {
       return;
     }
     const workspaceId = selectedWorkspace.id;
@@ -195,7 +203,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     const handle = window.setTimeout(() => { void fileEditing.autoSaveFile(workspaceId, path, content); }, 1000);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSave, editorText, editorDirty, activeFilePath, selectedWorkspace?.id, capabilities?.canEditFiles]);
+  }, [autoSave, editorText, editorDirty, activeFilePath, selectedWorkspace?.id, capabilities?.canEditFiles, saveBusy]);
 
   // Best-effort flush on unmount (e.g. navigating to another studio route).
   useEffect(() => () => {

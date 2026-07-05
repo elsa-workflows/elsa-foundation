@@ -75,7 +75,7 @@ builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 // can register its own authentication and reuse ModuleManagementAuth.PolicyName as the seam. The console-stream
 // hub path is allowed to carry the key as an access_token query parameter (browsers cannot set headers on the
 // WebSocket/SSE handshake); every other endpoint takes the key by header only, keeping it out of access logs.
-builder.Services.AddModuleManagementAuth(configuration, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
+builder.Services.AddModuleManagementAuth(configuration, builder.Environment, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
 
 var app = builder.Build();
 

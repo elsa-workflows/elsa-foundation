@@ -77,7 +77,16 @@ export function useFileEditing(core: BuilderCore, data: BuilderData): BuilderFil
     core.lastSavedContent.current.set(`${workspaceId}::${path}`, content);
     if (!core.mounted.current || core.selectedIds.current.workspaceId !== workspaceId) return saved;
     core.setFiles(current => upsertFile(current, saved));
-    core.setEditorTabs(current => upsertEditorTab(current, { path: saved.path, content, savedContent: content }));
+    // Advance the tab's savedContent to what we just wrote, but do NOT clobber its live content: an edit made
+    // while this write was in flight (a trailing keystroke during an explicit Save) leaves tab.content ahead of
+    // `content`. Overwriting it here would drop that edit and mark the tab clean, so the trailing edit would
+    // never be auto-persisted. Preserving the diverged content keeps the tab dirty so auto-save picks it up.
+    core.setEditorTabs(current => {
+      const existing = current.find(tab => tab.path === saved.path);
+      const liveContent = existing && existing.content !== content ? existing.content : content;
+      return upsertEditorTab(current, { path: saved.path, content: liveContent, savedContent: content });
+    });
+    // Only advance the saved-text baseline; leave editorText alone so a trailing edit stays dirty.
     if (core.activeFilePathRef.current === path) core.setSavedEditorText(content);
     return saved;
   }

@@ -613,6 +613,64 @@ describe("extension builder page", () => {
     await unmount();
   });
 
+  it("auto-saves a trailing edit made during an in-flight explicit Save (no further keystroke)", async () => {
+    // Regression (#210): the debounced auto-save effect omitted the save-busy signal from its deps, so a
+    // dirty edit made while an explicit Save was in flight was never rescheduled once the Save settled.
+    // Hold the first PUT (the explicit Save) open, edit again, then release it and assert the trailing
+    // edit auto-persists on its own.
+    const putBodies: string[] = [];
+    const firstPut = deferred<void>();
+    let putCount = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/log")) {
+        return new Response("Build succeeded.", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        putBodies.push(body.content);
+        putCount += 1;
+        // Only the first PUT (the explicit Save) is held open; the trailing auto-save resolves immediately.
+        if (putCount === 1) await firstPut.promise;
+        return new Response(JSON.stringify({ path: "Activities/HelloActivity.cs", type: "file", content: body.content }), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ path: "Activities/HelloActivity.cs", type: "file", content: JSON.parse(String(init?.body ?? "{}")).content }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    const editor = await waitForElement<HTMLTextAreaElement>(container, "[aria-label='Project file editor']");
+    await waitFor(() => editor.value.includes("HelloActivity"), "Expected editor content to load.");
+
+    // First edit + explicit Save; the PUT hangs, so the "save" scope stays busy.
+    await fill(editor, `${editor.value}\n// explicit-save`);
+    await clickButton(container, "Save");
+    await flushPromises();
+    await waitFor(() => putCount === 1, "Expected the explicit Save PUT to be in flight.");
+
+    // Trailing edit made while the Save is still in flight — no further keystroke after the Save settles.
+    await fill(editor, `${editor.value}\n// trailing-edit`);
+
+    // Release the explicit Save. The auto-save effect must re-run (save no longer busy) and persist the
+    // trailing edit after its debounce, with no additional user input.
+    firstPut.resolve();
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    await flushPromises();
+
+    await waitFor(() => putBodies.some(content => content.includes("// trailing-edit")),
+      "Expected the trailing edit to auto-save after the in-flight Save completed.");
+
+    await unmount();
+  });
+
   it("flushes a pending edit when navigating away with auto-save on", async () => {
     const fetchMock = mockFetch();
     const { container, unmount } = await renderExtensionBuilderPage(stubApi());
