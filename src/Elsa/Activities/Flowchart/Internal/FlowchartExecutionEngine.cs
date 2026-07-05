@@ -8,6 +8,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using static Elsa.Activities.Flowchart.Internal.FlowchartScheduler;
+using static Elsa.Activities.Flowchart.Internal.FlowchartScopeResolver;
 using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
 
 namespace Elsa.Activities.Flowchart.Internal;
@@ -162,7 +163,7 @@ public sealed class FlowchartExecutionEngine(
         foreach (var connection in outboundConnections)
         {
             var connectionId = graph.GetConnectionId(connection);
-            var targetScope = ResolveTargetScope(state, graph, continuationScope, connection);
+            var targetScope = ResolveTargetScope(reachabilityAnalyzer, state, graph, continuationScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, targetScope.ExecutionScopeId)))
                 state = AddScope(state, targetScope);
             var targetIterationKey = targetScope.LoopIterationKey ?? path.IterationKey;
@@ -389,7 +390,7 @@ public sealed class FlowchartExecutionEngine(
         {
             var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
                 ?? throw new InvalidOperationException($"Execution scope '{currentPath.ExecutionScopeId}' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
-            var loopScope = ResolveTargetScope(state, graph, currentScope, connection);
+            var loopScope = ResolveTargetScope(reachabilityAnalyzer, state, graph, currentScope, connection);
             if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, loopScope.ExecutionScopeId)))
                 state = AddScope(state, loopScope);
             executionScopeId = loopScope.ExecutionScopeId;
@@ -477,74 +478,6 @@ public sealed class FlowchartExecutionEngine(
             return null;
 
         return NewId(state, "scope");
-    }
-
-    private static ExecutionScope ResolveContinuationScope(FlowchartExecutionState state, ExecutionScope scope)
-    {
-        if (scope.Kind != ExecutionScopeKind.Race || string.IsNullOrWhiteSpace(scope.ParentExecutionScopeId))
-            return scope;
-
-        return state.Scopes.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionScopeId, scope.ParentExecutionScopeId))
-               ?? throw new FlowchartExecutionException($"Flowchart race parent scope '{scope.ParentExecutionScopeId}' was not found.");
-    }
-
-    private static FlowchartExecutionState CancelPendingPathsForBreak(FlowchartExecutionState state, ExecutionPath breakingPath, string breakNodeId)
-    {
-        state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, breakNodeId, null, breakingPath.ExecutionPathId, breakingPath.ExecutionScopeId, $"Flowchart ended early because node '{breakNodeId}' completed with a Break outcome.");
-
-        foreach (var pendingPath in state.ExecutionPaths
-                     .Where(path =>
-                         !StringComparer.Ordinal.Equals(path.ExecutionPathId, breakingPath.ExecutionPathId) &&
-                         (path.Status == ExecutionPathStatus.Active || path.Status == ExecutionPathStatus.Waiting))
-                     .ToArray())
-        {
-            state = UpdatePath(state, pendingPath with { Status = ExecutionPathStatus.Canceled });
-            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, pendingPath.CurrentNodeId, pendingPath.IncomingConnectionId, pendingPath.ExecutionPathId, pendingPath.ExecutionScopeId, $"Flowchart Break canceled pending path '{pendingPath.ExecutionPathId}'.");
-        }
-
-        return state with { ActiveChildren = [], Sequence = state.Sequence + 1 };
-    }
-
-    private static FlowchartExecutionState CompleteRaceScope(FlowchartExecutionState state, ExecutionScope raceScope, ExecutionPath winningPath)
-    {
-        foreach (var losingPath in state.ExecutionPaths
-                     .Where(path =>
-                         !StringComparer.Ordinal.Equals(path.ExecutionPathId, winningPath.ExecutionPathId) &&
-                         StringComparer.Ordinal.Equals(path.ExecutionScopeId, raceScope.ExecutionScopeId) &&
-                         (path.Status == ExecutionPathStatus.Active || path.Status == ExecutionPathStatus.Waiting))
-                     .ToArray())
-        {
-            state = UpdatePath(state, losingPath with { Status = ExecutionPathStatus.Canceled });
-            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, losingPath.CurrentNodeId, losingPath.IncomingConnectionId, losingPath.ExecutionPathId, losingPath.ExecutionScopeId, $"Flowchart first-wins race canceled losing path '{losingPath.ExecutionPathId}'.");
-        }
-
-        state = state with
-        {
-            ActiveChildren = state.ActiveChildren
-                .Where(child => !StringComparer.Ordinal.Equals(child.ExecutionScopeId, raceScope.ExecutionScopeId) || StringComparer.Ordinal.Equals(child.ExecutionPathId, winningPath.ExecutionPathId))
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
-        return UpdateScope(state, raceScope with { Status = ExecutionScopeStatus.Completed });
-    }
-
-    private ExecutionScope ResolveTargetScope(FlowchartExecutionState state, FlowchartGraph graph, ExecutionScope currentScope, FlowchartConnection connection)
-    {
-        if (!reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
-            return currentScope;
-
-        var iterationNumber = state.Scopes.Count(scope => scope.Kind == ExecutionScopeKind.LoopIteration && StringComparer.Ordinal.Equals(scope.OwnerNodeId, connection.Target.NodeId)) + 1;
-        var iterationKey = $"{connection.Target.NodeId}:{iterationNumber}";
-        var scope = new ExecutionScope(
-            executionScopeId: NewId(state, "scope"),
-            kind: ExecutionScopeKind.LoopIteration,
-            parentExecutionScopeId: currentScope.ExecutionScopeId,
-            createdByNodeId: connection.Source.NodeId,
-            startConnectionId: graph.GetConnectionId(connection),
-            ownerNodeId: connection.Target.NodeId,
-            loopIterationKey: iterationKey);
-
-        return scope;
     }
 
     private static bool ShouldWaitForImplicitJoin(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
