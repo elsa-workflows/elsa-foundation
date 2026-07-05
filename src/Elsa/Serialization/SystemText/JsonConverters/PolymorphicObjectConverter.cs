@@ -1,8 +1,6 @@
 using Elsa.Primitives.Extensions;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Extensions;
-using Elsa.Serialization.SystemText.ReferenceHandlers;
-using Elsa.Serialization.SystemText.ReferenceResolvers;
 using System.Collections;
 using System.Dynamic;
 using System.Reflection;
@@ -20,7 +18,6 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
     private const string TypePropertyName = "_type";
     private const string ItemsPropertyName = "_items";
     private const string IslandPropertyName = "_island";
-    private const string IdPropertyName = "$id";
     private const string RefPropertyName = "$ref";
     private const string ValuesPropertyName = "$values";
 
@@ -100,21 +97,16 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             throw new InvalidOperationException($"Cannot determine the element type of array '{targetType}'.");
 
         var model = JsonElement.ParseValue(ref reader);
-        var referenceResolver = (newOptions.ReferenceHandler as CrossScopedReferenceHandler)?.GetResolver();
 
-        if (model.TryGetProperty(RefPropertyName, out var refProperty))
-        {
-            var refId = refProperty.GetString()!;
-            return referenceResolver?.ResolveReference(refId)!;
-        }
+        // Reference metadata is not reconstructed: cyclic/shared references are not supported by this
+        // converter, so a wrapper carrying only a $ref yields null (#409 — the former
+        // CrossScopedReferenceHandler machinery was never wired up and has been removed).
+        if (model.TryGetProperty(RefPropertyName, out _))
+            return null!;
 
         var values = model.TryGetProperty(ItemsPropertyName, out var itemsProp) ? itemsProp.EnumerateArray().ToList() : model.GetProperty(ValuesPropertyName).EnumerateArray().ToList();
-        var id = model.TryGetProperty(IdPropertyName, out var idProp) ? idProp.GetString() : default;
         var collection = targetType.IsArray ? Array.CreateInstance(elementType, values.Count) : Activator.CreateInstance(targetType)!;
         var index = 0;
-
-        if (id != null)
-            referenceResolver?.AddReference(id, collection);
 
         var isHashSet = targetType.GenericTypeArguments.Length == 1 && typeof(ISet<>).MakeGenericType(targetType.GenericTypeArguments[0]).IsAssignableFrom(targetType);
         var addSetMethod = targetType.GetMethod("Add", [elementType])!;
@@ -191,17 +183,6 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             return;
         }
 
-        // Determine if the value is going to be serialized for the first time.
-        // Later on, we need to know this information to determine if we need to write the type name or not, so that we can reconstruct the actual type when deserializing.
-        var shouldWriteTypeField = true;
-        var referenceResolver = (CustomPreserveReferenceResolver?)(newOptions.ReferenceHandler as CrossScopedReferenceHandler)?.GetResolver();
-
-        if (referenceResolver != null)
-        {
-            var exists = referenceResolver.HasReference(value);
-            shouldWriteTypeField = !exists;
-        }
-
         // Before we serialize the value, check to see if it's an ExpandoObject.
         // If it is, we need to sanitize its property names, because they can contain invalid characters.
         if (value is ExpandoObject)
@@ -254,19 +235,17 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             }
         }
 
+        // Write the type name so the actual type can be reconstructed when deserializing.
         if (type != typeof(ExpandoObject))
         {
-            if (shouldWriteTypeField)
+            if (newOptions.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter)
             {
-                if (newOptions.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter)
-                {
-                    writer.WritePropertyName(TypePropertyName);
-                    typeJsonConverter.Write(writer, type, newOptions);
-                }
-                else
-                {
-                    writer.WriteString(TypePropertyName, type.GetSimpleAssemblyQualifiedName());
-                }
+                writer.WritePropertyName(TypePropertyName);
+                typeJsonConverter.Write(writer, type, newOptions);
+            }
+            else
+            {
+                writer.WriteString(TypePropertyName, type.GetSimpleAssemblyQualifiedName());
             }
         }
 
@@ -367,13 +346,13 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             }
             case JsonTokenType.StartObject:
                 var dict = new ExpandoObject() as IDictionary<string, object>;
-                var referenceResolver = (CustomPreserveReferenceResolver)(options.ReferenceHandler as CrossScopedReferenceHandler)?.GetResolver()!;
                 while (reader.Read())
                 {
                     switch (reader.TokenType)
                     {
                         case JsonTokenType.EndObject:
-                            // If the object contains a single entry with a key of $ref, return the referenced object.
+                            // Reference metadata is not reconstructed (#409): a $ref-only object resolves
+                            // to the raw reference id read below; $id keys are kept as ordinary data.
                             if (dict.Count == 1 && dict.TryGetValue(RefPropertyName, out var referencedObject))
                                 return referencedObject;
                             return dict;
@@ -381,26 +360,9 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
                         case JsonTokenType.PropertyName:
                             var key = reader.GetString()!;
                             reader.Read();
-                            if (referenceResolver != null && key == RefPropertyName)
-                            {
-                                var referenceId = reader.GetString();
-                                var reference = referenceResolver.ResolveReference(referenceId!);
-                                dict.Add(key, reference);
-                            }
-                            else if (referenceResolver != null && key == IdPropertyName)
-                            {
-                                var referenceId = reader.GetString()!;
-
-                                // Attempt to add the reference; if not found, we can ignore it and assume that the user is using the $id property for something else, such as in JSON $schema. 
-                                referenceResolver.TryAddReference(referenceId, dict);
-                            }
-                            else
-                            {
-                                var value = Read(ref reader, typeof(object), options);
-                                var unescapedKey = UnescapeKey(key);
-                                dict.Add(unescapedKey, value);
-                            }
-
+                            var value = Read(ref reader, typeof(object), options);
+                            var unescapedKey = UnescapeKey(key);
+                            dict.Add(unescapedKey, value);
                             break;
 
                         default:

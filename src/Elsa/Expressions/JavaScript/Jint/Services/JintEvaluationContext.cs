@@ -92,11 +92,12 @@ public sealed class JintExecutionContext(IPreparedScriptFactory preparedScriptFa
         var valueType = value.GetType();
         if (valueType.IsCollectionType())
         {
-            var list = (ICollection)value;
-            var jsArray = engine.Intrinsics.Array.Construct(list.Count);
+            // IsCollectionType() admits types that only implement ICollection<T> (e.g. HashSet<T>),
+            // which do not implement the non-generic ICollection — so enumerate generically (#407).
+            var jsArray = engine.Intrinsics.Array.Construct(0);
             var index = 0;
 
-            foreach (var item in list)
+            foreach (var item in (IEnumerable)value)
                 jsArray.Set(index++, ConvertToJsValue(item), true);
 
             return jsArray;
