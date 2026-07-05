@@ -19,11 +19,14 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy repo-root build configuration first so restore layers cache well.
-# Note: this repo has no root Directory.Build.props/targets.
+# Directory.Build.props carries package metadata only (no build-behavior changes);
+# it is copied so the image builds identically to local/CI. This repo has no root
+# Directory.Build.targets.
 #
 # NuGet.config is the repo-root config. Its packageSourceMapping maps every
 # package the solution uses to an explicit source, so restore is fully
 # self-contained here and needs no user-level NuGet config fallback.
+COPY Directory.Build.props ./
 COPY Directory.Packages.props ./
 COPY NuGet.config ./
 COPY Elsa.Server.slnx ./
