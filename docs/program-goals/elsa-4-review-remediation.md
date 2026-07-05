@@ -304,6 +304,18 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   Activities/Design AddVersion sibling hardening, #422 items 1–2 + out-of-domain slices),
   W32 cleanup batch. New Wave-C candidate from W22's #382 gate: flowchart `Scopes` residual
   O(n) growth (persisted per-node iteration counter = wire-shape change, own gate).
+  - **W30c (#421 ExtensionBuilderStorage slice) — done** (draft PR, `refactor/w30c-extension-builder-storage`):
+    behavior-preserving decomposition of the 2,211-line god class. Façade retains the single-writer
+    `_gate` + `state.json` lifecycle; extracted `GitClient` (canonical single git stack with
+    `GIT_TERMINAL_PROMPT=0` folded in, retiring the parallel Stack B + its three dead methods
+    `GetActiveBranch`/`IsRepositoryDirty`/`GetRemoteState` per #421 item 2), `RepositoryInspector`
+    (git-derived reads), `RepositoryFileSystem` (repo/tree/file ops), `RepositoryTemplateRenderer`,
+    and `BuildOrchestrator` (dotnet build/pack). `WithStateAsync`/`ReadStateAsync` collapse the
+    per-method gate boilerplate (#421 item 1). All seven frozen `state.json` top-level keys and enum
+    wire values preserved; guarded by a new characterization test pinning them plus a git
+    prompt-safety test. Façade 2210→1288 lines; 74 ExtensionBuilder tests green. No new project, no
+    DI/contract/maps change. #421 items 3 (BuildRunner semaphore leak), 4 (ManagementApi N+1), and
+    5 (duplicate `ActivityDefinitionImport`) are OUT of this slice — separate units.
 - **Product track:** server-side execution output **#254 CLOSED 2026-07-05**
   ([#477](https://github.com/elsa-workflows/elsa-foundation/pull/477), Seam R1): workflow
   outputs readable on the instance-details API with policy-driven redaction (QA hardened the
