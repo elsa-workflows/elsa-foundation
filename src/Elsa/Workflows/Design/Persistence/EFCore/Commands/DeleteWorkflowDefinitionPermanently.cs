@@ -22,9 +22,6 @@ public sealed class DeleteWorkflowDefinitionPermanently(IDbContextFactory<Workfl
             .Select(x => x.Id)
             .ToArrayAsync(cancellationToken);
 
-        await dbContext.WorkflowDefinitionDraftValidations
-            .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
-            .ExecuteDeleteAsync(cancellationToken);
         await dbContext.WorkflowDefinitionDraftLayouts
             .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
             .ExecuteDeleteAsync(cancellationToken);

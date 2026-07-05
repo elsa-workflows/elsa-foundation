@@ -124,9 +124,6 @@ public sealed class WorkflowDefinitionSoftDeleteTests
                 .Select(x => x.Id)
                 .ToArrayAsync();
 
-            await ctx.WorkflowDefinitionDraftValidations
-                .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
-                .ExecuteDeleteAsync();
             await ctx.WorkflowDefinitionDraftLayouts
                 .Where(x => draftIds.Contains(x.WorkflowDefinitionDraftId))
                 .ExecuteDeleteAsync();
@@ -152,7 +149,6 @@ public sealed class WorkflowDefinitionSoftDeleteTests
             Assert.False(await ctx.WorkflowDefinitionDrafts.AnyAsync(x => x.WorkflowDefinitionId == definitionId));
             Assert.False(await ctx.WorkflowDefinitionVersions.AnyAsync(x => x.DefinitionId == definitionId));
             Assert.False(await ctx.WorkflowDefinitionDraftLayouts.AnyAsync());
-            Assert.False(await ctx.WorkflowDefinitionDraftValidations.AnyAsync());
             Assert.False(await ctx.WorkflowDefinitionVersionLayouts.AnyAsync());
         }
     }

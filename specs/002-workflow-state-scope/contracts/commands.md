@@ -6,6 +6,8 @@
 > Draft mutation now operates over `WorkflowDefinitionState.RootActivity` and activity-owned
 > composition state.
 
+> **Supersession note (2026-07-05):** the command pipeline no longer publishes per-diff mutation events (event record declarations stand; diff engine unregistered) nor rebuilds `WorkflowDefinitionDraftValidation.Errors` — that entity is deleted and errors are derived state recomputed in-lock (spec.md FR-018/FR-021). The "rebuilds `WorkflowDefinitionDraftValidation.Errors`" step below is superseded. Reinstatable when a consumer exists.
+
 19 commands in total. All command contracts live in `Elsa.Workflows.Design.Persistence.Core.Contracts`; implementations live in `Elsa.Workflows.Design.Persistence.EFCore` (per FR-019a). All mutation/lifecycle commands take the per-Draft distributed lock per FR-027 / FR-027a.
 
 Naming convention: `I<Verb><Subject>InDraftCommand` (mutations) / `I<Verb><Subject>Command` (lifecycle).

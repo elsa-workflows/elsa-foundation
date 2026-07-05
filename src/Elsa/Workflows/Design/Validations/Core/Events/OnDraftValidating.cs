@@ -12,9 +12,11 @@ namespace Elsa.Workflows.Design.Validations.Core.Events;
 /// </summary>
 /// <remarks>
 /// <see cref="Errors"/> is a directly-accessible <see cref="ICollection{T}"/>: the aggregating
-/// handler writes into it; the publishing command reads it after dispatch and flushes wholesale
-/// to <c>WorkflowDefinitionDraftValidation</c> per FR-023 delete-and-re-add. Individual validators
-/// do not touch the event — they return their errors via <c>IDraftValidator.Validate</c>.
+/// handler writes into it; the publishing command reads it back after dispatch and surfaces it on
+/// <c>OnDraftValidated</c> (create/update) or uses it as the promotion gate (FR-024). Errors are
+/// derived state — recomputed from scratch against the post-mutation Draft on every pass — and are
+/// not persisted. Individual validators do not touch the event — they return their errors via
+/// <c>IDraftValidator.Validate</c>.
 /// </remarks>
 public sealed class OnDraftValidating(IWorkflowDefinitionDraft draft) : IEvent
 {

@@ -26,6 +26,18 @@ public sealed class RegistrationTests
         Assert.IsAssignableFrom<IUpdateDraftCommand>(resolved);
     }
 
+    [Fact]
+    public void DraftStateDiffEngine_is_not_registered()
+    {
+        // Per-diff mutation-event publication is retired until an event-sourcing consumer exists,
+        // so neither provider registers the diff engine. The engine + event records remain as the
+        // tested contract (constructed directly by the engine-level diff tests), not resolved from DI.
+        using var host = WorkflowsDesignTestHost.Create();
+        using var scope = host.Services.CreateScope();
+
+        Assert.Null(scope.ServiceProvider.GetService<IDraftStateDiffEngine>());
+    }
+
     [Theory]
     [InlineData(nameof(ICreateDraftCommand))]
     [InlineData(nameof(ICloneDraftFromVersionCommand))]

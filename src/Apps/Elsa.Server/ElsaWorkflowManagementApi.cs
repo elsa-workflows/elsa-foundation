@@ -6,6 +6,7 @@ using Elsa.Activities.Flowchart.Activities;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
+using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
@@ -17,6 +18,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -458,7 +460,13 @@ internal static class ElsaWorkflowManagementApi
 
         WorkflowDraftResponse? draftResponse = null;
         if (draft is not null)
-            draftResponse = await LoadDraftAsync(draftStore, draft, cancellationToken);
+        {
+            // This path resolves the draft by workflow-definition id (not by draft id), so it fetches
+            // the layout separately rather than adding a second combined by-definition port method. The
+            // GET-draft path below uses the single combined read instead.
+            var layout = await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken);
+            draftResponse = await ToDraftResponseAsync(services, draft, layout, cancellationToken);
+        }
 
         return Results.Ok(new WorkflowDefinitionDetailsResponse(
             new WorkflowDefinitionSummaryResponse(
@@ -479,9 +487,12 @@ internal static class ElsaWorkflowManagementApi
     private static async Task<IResult> LoadDraftResultAsync(IServiceProvider services, string draftId, CancellationToken cancellationToken)
     {
         var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
-        var draft = await draftStore.FindByIdAsync(draftId, cancellationToken);
-        if (draft is not null)
-            return Results.Ok(await LoadDraftAsync(draftStore, draft, cancellationToken));
+
+        // Single combined read: draft + layout come from one port call (one document load on Groundwork)
+        // instead of FindByIdAsync followed by FindLayoutByDraftIdAsync re-loading the same document.
+        var draftWithLayout = await draftStore.FindWithLayoutByIdAsync(draftId, cancellationToken);
+        if (draftWithLayout is not null)
+            return Results.Ok(await ToDraftResponseAsync(services, draftWithLayout.Draft, draftWithLayout.Layout, cancellationToken));
 
         return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition draft '{draftId}' was not found."));
     }
@@ -558,10 +569,18 @@ internal static class ElsaWorkflowManagementApi
         return !string.IsNullOrWhiteSpace(draftId);
     }
 
-    private static async Task<WorkflowDraftResponse> LoadDraftAsync(IWorkflowDefinitionDraftStore draftStore, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
+    private static async Task<WorkflowDraftResponse> ToDraftResponseAsync(
+        IServiceProvider services,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellationToken)
     {
-        var layout = await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken);
-        var errors = await draftStore.FindValidationErrorsByDraftIdAsync(draft.Id, cancellationToken);
+        var eventPublisher = services.GetRequiredService<IEventPublisher>();
+
+        // Derive validation errors from the already-loaded draft via the shielded read gate: a
+        // throwing validator yields a synthetic Validation/Faulted error instead of a 500. The draft
+        // (and its layout) were loaded once by the caller and are not re-loaded here.
+        var errors = await eventPublisher.TryDeriveValidationErrorsAsync(draft, cancellationToken);
 
         return new(
             draft.Id,

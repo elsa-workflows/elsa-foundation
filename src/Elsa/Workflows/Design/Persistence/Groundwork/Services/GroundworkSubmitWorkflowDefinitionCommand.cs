@@ -82,7 +82,7 @@ public sealed class GroundworkSubmitWorkflowDefinitionCommand(
                     WorkflowsDesignStorageManifest.SchemaVersion,
                     definition,
                     GroundworkDesignJson.Options),
-                draftDocuments.ToSaveRequest(draft, [], []),
+                draftDocuments.ToSaveRequest(draft, []),
                 GroundworkDocumentWriter.ToSaveRequest(
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionDocumentKind,
                     WorkflowsDesignStorageManifest.WorkflowDefinitionVersionCollection,

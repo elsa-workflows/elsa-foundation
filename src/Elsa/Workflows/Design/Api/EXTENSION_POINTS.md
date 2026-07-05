@@ -85,11 +85,11 @@ Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/E
 
 ### OnDraftDiscarded
 
-**Semantic.** A `WorkflowDefinitionDraft` was atomically deleted along with its layout + validation siblings. Terminal entry on the Draft's event stream.
+**Semantic.** A `WorkflowDefinitionDraft` was atomically deleted along with its layout sibling. Terminal entry on the Draft's event stream.
 **Payload.** `DraftId : string`, `WorkflowDefinitionId : string`.
 **Publication site.** `IDiscardDraftCommand`.
 
-**Mutation events — emitted by `IUpdateDraftCommand`.** Every event below is a per-diff emission of the single coarse `IUpdateDraftCommand`: the command diffs the desired `WorkflowDefinitionState` (+ layout sibling) against the stored snapshot under the per-Draft lock and emits one event per detected difference, published Background after `SaveChangesAsync` + lock release. Match keys: activities by `NodeId`, I/O by (`NodeId`,`ReferenceKey`), variables/inputs/outputs by `ReferenceKey`, layout by `NodeId`. Flowchart graph connection events belong to the future Flowchart activity module, not to Workflows.Design Core.
+**Mutation events — declared as tested contract; publication currently retired pending an event-sourcing consumer.** The event types below are the per-diff mutation-event surface computed by `IDraftStateDiffEngine` from the desired `WorkflowDefinitionState` (+ layout sibling) versus the stored snapshot. They have no subscriber today, so `IUpdateDraftCommand` no longer computes or publishes them and the diff engine is no longer registered in DI; the event records and the engine remain in place as the tested contract, to be re-wired when the FR-017/FR-018 event-sourcing consumer is built. The "Publication site" notes below describe the *intended* per-diff emission for that future wiring. Match keys: activities by `NodeId`, I/O by (`NodeId`,`ReferenceKey`), variables/inputs/outputs by `ReferenceKey`, layout by `NodeId`. Flowchart graph connection events belong to the future Flowchart activity module, not to Workflows.Design Core.
 
 **Activities.**
 

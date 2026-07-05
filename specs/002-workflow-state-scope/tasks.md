@@ -4,6 +4,8 @@ description: "Task list for Unit C — Workflow Definition State Scope + Workflo
 
 # Tasks: Unit C — Workflow Definition State Scope + Workflow Design Substrate
 
+> **Supersession note (2026-07-05):** this is a point-in-time execution log. Tasks that create/wire the `WorkflowDefinitionDraftValidation` entity, its EF config/DbSet, the `IWorkflowDefinitionDraftValidation` read contract, the validation-sibling rebuild in the mutation pipeline, and the per-diff mutation-event *publication* are superseded — the entity and contract are deleted; errors are derived state recomputed in-lock; the mutation-event declarations stand but are not published (diff engine unregistered from DI) (spec.md FR-018/FR-021/FR-023). The `*Layout` tasks and lifecycle-event tasks stand. Reinstatable when a consumer exists.
+
 **Input**: Design documents from `/specs/002-workflow-state-scope/`
 **Prerequisites**: [spec.md](./spec.md), [plan.md](./plan.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 

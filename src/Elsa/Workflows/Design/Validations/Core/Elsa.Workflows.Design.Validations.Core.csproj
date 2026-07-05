@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Events\Strategies\Elsa.Events.Strategies.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />
   </ItemGroup>
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Validations.Validators;
 using Xunit;
@@ -100,14 +101,19 @@ public sealed class RequiredInputOutputValidatorTests
     }
 
     [Fact]
-    public async Task Unknown_activity_version_is_skipped_gracefully()
+    public async Task Unknown_activity_version_faults_closed()
     {
+        // Fail-closed: production ActivityDefinitionLookup.GetVersion passes through the version store,
+        // and both store impls throw EntityNotFoundException on a missing id. The validator does not
+        // silently skip a missing version — the lookup propagates and the derivation faults. (Treating a
+        // missing version as a first-class validation error is a pending spec decision.)
         var lookup = StubLookup.Empty();
 
         var state = State(activities: [Node("n1", "av-missing")]);
-        var errors = await Validate(new RequiredInputOutputValidator(lookup, Options(), Walker()), state);
+        var validator = new RequiredInputOutputValidator(lookup, Options(), Walker());
 
-        Assert.Empty(errors);
+        await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => Validate(validator, state));
     }
 
     [Fact]
@@ -151,15 +157,24 @@ public sealed class RequiredInputOutputValidatorTests
         private readonly Dictionary<string, IActivityDefinitionVersion> _versions;
 
         private StubLookup(Dictionary<string, IActivityDefinitionVersion> versions)
-            => _versions = versions;
+        {
+            _versions = versions;
+            // The tree walker visits the synthetic $root container first; resolve its version (empty,
+            // no required args) so the fail-closed fake exercises the test's real nodes, not $root.
+            _versions[RootActivityVersionId] = new StubVersion(RootActivityVersionId, [], []);
+        }
 
         public static StubLookup Empty() => new(new());
 
         public static StubLookup WithVersion(string versionId, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs)
             => new(new() { [versionId] = new StubVersion(versionId, inputs, outputs) });
 
+        // Mirrors the production lookup contract: both store impls throw EntityNotFoundException on a
+        // missing id (never return null), so the fake is fail-closed too.
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
-            => Task.FromResult(_versions.TryGetValue(versionId, out var version) ? version : null!);
+            => _versions.TryGetValue(versionId, out var version)
+                ? Task.FromResult(version)
+                : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();

@@ -11,10 +11,11 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <remarks>
 /// <para>
 /// <b>Promotion gate (Unit C FR-024).</b> The implementation MUST throw
-/// <see cref="DraftHasValidationErrorsException"/> when the Draft's
-/// <c>WorkflowDefinitionDraftValidation</c> sibling carries a non-empty error set. Validation
-/// errors are compile errors for a workflow definition; promotion is a compile-success
-/// precondition. Bypassing the gate (e.g. inserting a Version row directly via
+/// <see cref="DraftHasValidationErrorsException"/> when re-running the validators against the
+/// Draft in-lock yields a non-empty error set. Validation errors are derived state (not
+/// persisted): the gate re-runs the validators at promotion time rather than reading a persisted
+/// row. Validation errors are compile errors for a workflow definition; promotion is a
+/// compile-success precondition. Bypassing the gate (e.g. inserting a Version row directly via
 /// <c>IAddCommand&lt;WorkflowDefinitionVersion&gt;</c>) is forbidden by domain contract.
 /// </para>
 /// <para>

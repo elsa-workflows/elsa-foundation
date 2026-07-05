@@ -3,6 +3,8 @@
 **Feature**: `003-single-update-command` (Unit 2) · **Date**: 2026-06-03
 **Inputs**: [spec.md](./spec.md), constitution `.specify/memory/constitution.md` §E2.2/§E2.5/§E2.6/§E2.9, framework constitution §2.6/§2.6.1/§2.10/§2.21.1/§2.23, three codebase-mapping sweeps (command surface, State model, events/validation/catalog).
 
+> **Supersession note (2026-07-05):** research items that assume per-diff mutation events are published, or that the `WorkflowDefinitionDraftValidation` sibling is written, are superseded — per-diff publication is retired (diff engine remains the tested contract) and the validation entity is deleted (errors are derived state; spec 002 FR-021 / this spec's top note). Reinstatable when an event-sourcing consumer exists.
+
 This document resolves every open decision the spec left for plan and records the verified codebase facts the design rests on. All spec `[NEEDS CLARIFICATION]` markers are resolved here (the last one, FR-021 naming, is decided in R7).
 
 ---
