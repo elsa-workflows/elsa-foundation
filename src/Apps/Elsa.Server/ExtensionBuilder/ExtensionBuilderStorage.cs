@@ -73,6 +73,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     private readonly ILogger<ExtensionBuilderStorage> _logger;
     private readonly string _dotNetExecutable;
     private readonly GitClient _git;
+    private readonly RepositoryInspector _inspector;
     private readonly string[] _serverLocalRepositoryRoots;
     private readonly string _statePath;
 
@@ -93,6 +94,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         _dotNetExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.DotNetExecutable) ? "dotnet" : extensionBuilderOptions.DotNetExecutable;
         var gitExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.GitExecutable) ? "git" : extensionBuilderOptions.GitExecutable;
         _git = new GitClient(gitExecutable, logger);
+        _inspector = new RepositoryInspector(_git);
         _statePath = Path.Combine(RootPath, "state.json");
     }
 
@@ -237,7 +239,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out _))
                 return null;
 
-            var repositoryState = GetRepositoryState(GetWorkspacePath(workspaceId));
+            var repositoryState = _inspector.GetRepositoryState(GetWorkspacePath(workspaceId));
             return state.WorkingCopies.Values
                 .Where(x => string.Equals(x.WorkspaceId, workspaceId, StringComparison.OrdinalIgnoreCase) &&
                             string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal) &&
@@ -284,7 +286,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 : existing with { IsActive = true, IsProtectedBranch = protectedBranch, UpdatedAt = now };
             state.WorkingCopies[workingCopy.Id] = workingCopy;
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = now };
-            return (ToWorkingCopySummary(workingCopy, GetRepositoryState(repositoryPath)), true);
+            return (ToWorkingCopySummary(workingCopy, _inspector.GetRepositoryState(repositoryPath)), true);
         }, cancellationToken);
     }
 
@@ -353,7 +355,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
 
-            var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
+            var dirtyPaths = _inspector.GetDirtyRepositoryPaths(repositoryPath);
             var summaries = renderedFiles
                 .Select(file =>
                 {
@@ -512,10 +514,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return ((RemoteSyncResult?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var remote = GetPrimaryRemote(repositoryPath);
-            var branch = GetRequiredActiveBranch(repositoryPath);
+            var remote = _inspector.GetPrimaryRemote(repositoryPath);
+            var branch = _inspector.GetRequiredActiveBranch(repositoryPath);
             EnsureCleanWorkingCopy(workspace.Id, "Commit or discard working-copy changes before pushing.");
-            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
+            var divergence = await _inspector.FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
             if (divergence.Behind > 0)
                 throw new InvalidOperationException("Push blocked because the remote branch contains commits that are not in the active working copy. Pull or resolve divergence outside Extension Builder first.");
 
@@ -531,10 +533,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return ((RemoteSyncResult?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var remote = GetPrimaryRemote(repositoryPath);
-            var branch = GetRequiredActiveBranch(repositoryPath);
+            var remote = _inspector.GetPrimaryRemote(repositoryPath);
+            var branch = _inspector.GetRequiredActiveBranch(repositoryPath);
             EnsureCleanWorkingCopy(workspace.Id, "Pull blocked because the working copy has uncommitted changes. Commit or discard changes before pulling.");
-            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
+            var divergence = await _inspector.FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
             if (!divergence.RemoteBranchExists)
                 throw new InvalidOperationException($"Pull blocked because remote branch '{remote}/{branch}' does not exist.");
             if (divergence.Ahead > 0 && divergence.Behind > 0)
@@ -573,7 +575,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var sourceBranch = _git.RunOrDefault(repositoryPath, "branch", "--show-current");
         if (string.IsNullOrWhiteSpace(sourceBranch))
             sourceBranch = null;
-        var sourceIsDirty = GetRepositoryState(repositoryPath).IsDirty;
+        var sourceIsDirty = _inspector.GetRepositoryState(repositoryPath).IsDirty;
 
         var created = new BuildResult(buildId, project.Id, workspaceId, sourceRevisionId, BuildStatus.Pending, [], null, logPath, createdAt, null, null);
         if (!await SaveBuildAsync(created, CancellationToken.None))
@@ -1001,7 +1003,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             .Where(projectId => state.Promotions.TryGetValue(projectId, out _))
             .Sum(projectId => state.Promotions[projectId].Count(promotion => promotion.ReconcileOutcome.IsDegraded));
         var repositoryPath = GetRepositoryPath(state, workspace);
-        var repositoryState = GetRepositoryState(repositoryPath);
+        var repositoryState = _inspector.GetRepositoryState(repositoryPath);
         return new(
             workspace.Id,
             workspace.DisplayName,
@@ -1050,64 +1052,11 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             "Initial managed repository");
     }
 
-    private RepositoryState GetRepositoryState(string repositoryPath)
-    {
-        if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
-            return new(null, false, "not-connected");
-
-        var activeBranch = _git.RunOrDefault(repositoryPath, "branch", "--show-current");
-        var status = _git.RunOrDefault(repositoryPath, "status", "--porcelain");
-        var remotes = _git.RunOrDefault(repositoryPath, "remote", "-v")
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var origin = remotes
-            .Select(ParseRemoteUrl)
-            .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
-        return new(
-            string.IsNullOrWhiteSpace(activeBranch) ? null : activeBranch,
-            !string.IsNullOrWhiteSpace(status),
-            origin ?? "not-connected");
-    }
-
-    private string GetPrimaryRemote(string repositoryPath)
-    {
-        var remote = _git.RunOrDefault(repositoryPath, "remote")
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(remote))
-            throw new InvalidOperationException("Remote sync requires a configured Git remote.");
-        return remote;
-    }
-
-    private string GetRequiredActiveBranch(string repositoryPath)
-    {
-        var branch = _git.RunOrDefault(repositoryPath, "branch", "--show-current");
-        if (string.IsNullOrWhiteSpace(branch))
-            throw new InvalidOperationException("Remote sync requires an active named branch.");
-        return branch;
-    }
-
     private void EnsureCleanWorkingCopy(string workspaceId, string message)
     {
         if (GetSourceControlStatus(workspaceId).IsDirty)
             throw new InvalidOperationException(message);
     }
-
-    private async Task<RemoteDivergence> FetchAndMeasureRemoteDivergenceAsync(string repositoryPath, string remote, string branch, CancellationToken cancellationToken)
-    {
-        if (!RemoteBranchExists(repositoryPath, remote, branch))
-            return new(false, 0, 0);
-
-        var remoteRef = $"refs/remotes/{remote}/{branch}";
-        await _git.RunAsync(repositoryPath, cancellationToken, "fetch", remote, $"{branch}:{remoteRef}");
-        var counts = _git.RunOrDefault(repositoryPath, "rev-list", "--left-right", "--count", $"HEAD...{remoteRef}")
-            .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
-        return counts.Length == 2 && int.TryParse(counts[0], out var ahead) && int.TryParse(counts[1], out var behind)
-            ? new(true, ahead, behind)
-            : new(true, 0, 0);
-    }
-
-    private bool RemoteBranchExists(string repositoryPath, string remote, string branch) =>
-        !string.IsNullOrWhiteSpace(_git.RunOrDefault(repositoryPath, "ls-remote", "--heads", remote, branch));
 
     private string? ResolveRepositoryBuildTarget(string repositoryPath, string? targetPath)
     {
@@ -1156,8 +1105,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
     private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
     {
-        var repositoryState = GetRepositoryState(repositoryPath);
-        var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
+        var repositoryState = _inspector.GetRepositoryState(repositoryPath);
+        var dirtyPaths = _inspector.GetDirtyRepositoryPaths(repositoryPath);
         var solutionPaths = EnumerateRepositoryFiles(repositoryPath, "*.sln*")
             .Select(path => Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/'))
             .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
@@ -1200,13 +1149,13 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     {
         var content = await File.ReadAllTextAsync(filePath, cancellationToken);
         var info = new FileInfo(filePath);
-        return new(relativePath, content, GetRepositoryFileKind(relativePath), info.Length, IsPathDirty(relativePath, GetDirtyRepositoryPaths(repositoryPath)), info.LastWriteTimeUtc);
+        return new(relativePath, content, GetRepositoryFileKind(relativePath), info.Length, IsPathDirty(relativePath, _inspector.GetDirtyRepositoryPaths(repositoryPath)), info.LastWriteTimeUtc);
     }
 
     private SourceControlStatus GetSourceControlStatus(string workspaceId)
     {
         var repositoryPath = GetWorkspacePath(workspaceId);
-        var repositoryState = GetRepositoryState(repositoryPath);
+        var repositoryState = _inspector.GetRepositoryState(repositoryPath);
         var changedFiles = _git.RunOrDefault(repositoryPath, "status", "--porcelain", "--untracked-files=all")
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
             .Select(ParseSourceControlStatus)
@@ -1235,33 +1184,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             $"{indexStatus}{workTreeStatus}".Trim(),
             indexStatus is not ' ' and not '?',
             workTreeStatus is not ' ' || indexStatus is '?');
-    }
-
-    private ISet<string> GetDirtyRepositoryPaths(string repositoryPath)
-    {
-        var status = _git.RunOrDefault(repositoryPath, "status", "--porcelain", "--untracked-files=all");
-        if (string.IsNullOrWhiteSpace(status))
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        return status.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-            .SelectMany(ParseDirtyStatusPaths)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static IEnumerable<string> ParseDirtyStatusPaths(string line)
-    {
-        if (line.Length < 4)
-            yield break;
-
-        var path = line[3..].Trim().Trim('"').Replace('\\', '/');
-        var renameSeparator = path.IndexOf(" -> ", StringComparison.Ordinal);
-        if (renameSeparator >= 0)
-        {
-            yield return path[(renameSeparator + 4)..];
-            yield break;
-        }
-
-        yield return path;
     }
 
     private static bool IsPathDirty(string path, ISet<string> dirtyPaths) =>
@@ -1720,14 +1642,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         return name;
     }
 
-    private static string? ParseRemoteUrl(string remoteLine)
-    {
-        var parts = remoteLine.Split('\t', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return parts.Length >= 2 && parts[0].Equals("origin", StringComparison.OrdinalIgnoreCase)
-            ? parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
-            : null;
-    }
-
     private static string ResolveConfiguredPath(string contentRootPath, string path) =>
         Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(contentRootPath, path));
 
@@ -1739,8 +1653,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     }
 
     private static string CreateId(string prefix) => $"{prefix}_{Guid.NewGuid():N}";
-
-    private sealed record RepositoryState(string? ActiveBranch, bool IsDirty, string RemoteState);
 
     private sealed record WorkingCopyState(
         string Id,
