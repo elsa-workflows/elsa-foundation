@@ -554,7 +554,7 @@ function Kc(e) {
       label: r.port && r.port !== "Done" ? r.port : void 0,
       data: a.length ? { vertices: a } : void 0
     };
-  }).filter((n) => !!n) : [];
+  }).filter((n) => n !== null) : [];
 }
 function Xc(e, t) {
   const n = Ds(e.cases);
@@ -9697,7 +9697,9 @@ function vb({
     const K = Xx(z, {
       ...H,
       sourceHandle: H.sourceHandle ?? "Done",
-      targetHandle: H.targetHandle ?? void 0
+      // Connection.targetHandle is string | null; null and undefined are indistinguishable downstream
+      // (every consumer checks truthiness), so keep the type-correct null.
+      targetHandle: H.targetHandle ?? null
     }, v, { shouldReplaceId: !1 });
     m(K), I(g, K);
   }, we = (z) => {
@@ -10036,7 +10038,8 @@ function Vb(e, t, n) {
   const o = e.parameters ?? {}, r = $e(o.activityVersionId) ?? $e(o.activityType) ?? "Elsa.Workflows.Activity", i = n.find((a) => a.activityVersionId === r || a.activityTypeKey === r || a.displayName === $e(o.displayName));
   return i ? yi(i, t) : {
     nodeId: t,
-    activityVersionId: i?.activityVersionId ?? r,
+    // catalogItem is provably undefined here (the truthy branch returned above), so use the id directly.
+    activityVersionId: r,
     inputs: [],
     outputs: [],
     ...$e(o.displayName) ? { displayName: $e(o.displayName) } : {},
@@ -12285,7 +12288,7 @@ function SN({ context: e, ai: t, workflowExecutionId: n }) {
         EN,
         {
           ai: t,
-          action: f,
+          action: f ?? void 0,
           summary: c.details.instance,
           details: c.details,
           state: "ready",

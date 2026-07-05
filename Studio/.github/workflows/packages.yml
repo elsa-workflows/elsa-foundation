@@ -6,10 +6,17 @@ name: Packages
 #   - a *published* GitHub Release additionally pushes the tagged version to nuget.org
 #
 # Frontend (React/Vite) client assets are pre-built and committed under each module's
-# wwwroot, so no Node/pnpm build step is needed to pack — packing uses the same committed
-# assets the Docker image ships. npm publishing is intentionally not wired here: the
-# workspace packages are internal build sources (all private, exporting raw .ts via
-# workspace:* references), not standalone npm deliverables.
+# wwwroot, so no Node/pnpm build step is needed to pack the NuGet packages — packing uses the
+# same committed assets the Docker image ships.
+#
+# Alongside the NuGet packages, four workspace libraries are also published to npm as standalone
+# deliverables (@elsa-workflows/studio-sdk, studio-ui, studio-code-editor, studio-workflows).
+# On disk those packages stay `private: true` and export raw `src/` for the in-repo workspace
+# dev flow; the `build_npm` job builds each one's `dist/` via `build:lib`, runs
+# scripts/prepare-npm-package.mjs to rewrite each manifest into publishable shape (see that
+# script for the why), then packs and publishes them — preview builds to the elsa-4 feedz.io npm
+# feed on push/release, and the tagged version to npmjs.org on a *published* release, in the
+# sdk -> ui -> code-editor -> workflows dependency order.
 
 on:
   workflow_dispatch:
@@ -32,6 +39,8 @@ env:
   base_version: '4.0.0'
   feedz_feed_source: 'https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json'
   nuget_feed_source: 'https://api.nuget.org/v3/index.json'
+  npm_feed_feedz: 'https://f.feedz.io/elsa-workflows/elsa-4/npm/'
+  npm_feed_npm: 'https://registry.npmjs.org/'
 
 jobs:
   build:
@@ -135,3 +144,222 @@ jobs:
 
       - name: Publish to nuget.org
         run: dotnet nuget push *.nupkg -k ${{ secrets.NUGET_API_KEY }} -s ${{ env.nuget_feed_source }} --skip-duplicate
+
+  # Builds, packs and verifies the four npm workspace libraries. Runs in parallel with the NuGet
+  # `build` job on the same triggers, sharing the identical versioning scheme.
+  build_npm:
+    name: Build npm packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Extract branch name
+        run: |
+          BRANCH_NAME=${{ github.ref }} # e.g., refs/heads/main
+          BRANCH_NAME=${BRANCH_NAME#refs/heads/} # remove the refs/heads/ prefix
+          # Use the last path segment of the branch name as the version prefix (e.g. feat/issue-123 -> issue-123).
+          PACKAGE_PREFIX=$(echo $BRANCH_NAME | rev | cut -d/ -f1 | rev | tr '_' '-')
+          # main and long-lived branches publish as 'preview'.
+          if [[ "${BRANCH_NAME}" == "main" || "${BRANCH_NAME}" =~ ^develop/ || "${BRANCH_NAME}" =~ ^release/ || "${BRANCH_NAME}" =~ ^rc/ ]]; then
+              PACKAGE_PREFIX="preview"
+          fi
+          echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
+          echo "PACKAGE_PREFIX=${PACKAGE_PREFIX}" >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify commit exists in branch
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
+            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
+            git branch --remote --contains | grep -E 'origin/(main|release/)'
+          else
+            git fetch --no-tags --prune origin +refs/heads/*:refs/remotes/origin/*
+            git branch --remote --contains | grep origin/${BRANCH_NAME}
+          fi
+
+      - name: Set VERSION variable
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* && "${{ github.event_name }}" == "release" && ("${{ github.event.action }}" == "published" || "${{ github.event.action }}" == "prereleased") ]]; then
+            TAG_NAME=${{ github.ref }} # e.g., refs/tags/4.0.0
+            TAG_NAME=${TAG_NAME#refs/tags/} # remove the refs/tags/ prefix
+            TAG_NAME=${TAG_NAME#v} # tolerate a leading v (v4.0.0 -> 4.0.0) so the npm version is valid
+            echo "VERSION=${TAG_NAME}" >> $GITHUB_ENV
+          else
+            echo "VERSION=${{env.base_version}}-${PACKAGE_PREFIX}.${{github.run_number}}" >> $GITHUB_ENV
+          fi
+
+      # pnpm must be set up BEFORE setup-node so that `cache: pnpm` can find the pnpm binary.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Build the four publishable libraries (each produces dist/index.js + dist/index.d.ts,
+      # plus dist/tokens.css for studio-ui and dist/style.css for studio-workflows).
+      - name: Build libraries
+        run: >-
+          pnpm
+          --filter @elsa-workflows/studio-sdk
+          --filter @elsa-workflows/studio-ui
+          --filter @elsa-workflows/studio-code-editor
+          --filter @elsa-workflows/studio-workflows
+          run build:lib
+
+      # Rewrite each on-disk (private, src-pointing) manifest into publishable shape. See
+      # scripts/prepare-npm-package.mjs for why this can't be done with publishConfig alone.
+      - name: Prepare npm manifests
+        run: |
+          for dir in \
+            src/Elsa.Studio.Web/StudioSdk \
+            src/Elsa.Studio.Web/StudioUi \
+            src/Elsa.Studio.CodeEditor/Client \
+            src/Elsa.Studio.Workflows/Client; do
+            node scripts/prepare-npm-package.mjs "$dir" "$VERSION"
+          done
+
+      # Pack each package into packages/npm. `pnpm pack` writes the tarball relative to the
+      # package dir by default, so we pin the destination to an absolute path shared by all four.
+      - name: Pack packages
+        run: |
+          mkdir -p packages/npm
+          DEST="$(pwd)/packages/npm"
+          for dir in \
+            src/Elsa.Studio.Web/StudioSdk \
+            src/Elsa.Studio.Web/StudioUi \
+            src/Elsa.Studio.CodeEditor/Client \
+            src/Elsa.Studio.Workflows/Client; do
+            (cd "$dir" && pnpm pack --pack-destination "$DEST")
+          done
+
+      # Guard against shipping a tarball that points at src/ or is missing its built output.
+      - name: Verify tarball contents
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tarballs=(packages/npm/*.tgz)
+          if [[ ${#tarballs[@]} -eq 0 ]]; then
+            echo "No .tgz files found in packages/npm" >&2
+            exit 1
+          fi
+          for tgz in "${tarballs[@]}"; do
+            echo "Verifying $tgz"
+            contents=$(tar -tzf "$tgz")
+            # Every package must ship its built entry point and types.
+            for required in package/dist/index.js package/dist/index.d.ts; do
+              if ! grep -qx "$required" <<< "$contents"; then
+                echo "  MISSING: $required in $tgz" >&2
+                exit 1
+              fi
+            done
+            # studio-ui must additionally ship its design tokens.
+            if [[ "$tgz" == *studio-ui-* ]]; then
+              if ! grep -qx "package/dist/tokens.css" <<< "$contents"; then
+                echo "  MISSING: package/dist/tokens.css in $tgz" >&2
+                exit 1
+              fi
+            fi
+            # studio-workflows must additionally ship its bundled stylesheet.
+            if [[ "$tgz" == *studio-workflows-* ]]; then
+              if ! grep -qx "package/dist/style.css" <<< "$contents"; then
+                echo "  MISSING: package/dist/style.css in $tgz" >&2
+                exit 1
+              fi
+            fi
+            # No raw source may leak into the published tarball.
+            if grep -q "^package/src/" <<< "$contents"; then
+              echo "  LEAKED src/ into $tgz" >&2
+              exit 1
+            fi
+          done
+          echo "All tarballs verified."
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: elsa-foundation-studio-npm-packages
+          path: packages/npm/*.tgz
+
+  # Publishes preview npm builds to the elsa-4 feedz.io npm feed on every push / release.
+  publish_npm_preview_feedz:
+    name: Publish npm to feedz.io
+    needs: build_npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event_name == 'release' || github.event_name == 'push' }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: ${{ env.npm_feed_feedz }}
+
+      - name: Download Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-studio-npm-packages
+          path: packages/npm
+
+      # Publish IN DEPENDENCY ORDER (sdk -> ui -> code-editor -> workflows) so each package's
+      # intra-monorepo deps already exist on the feed. We order explicitly by filename pattern
+      # rather than relying on glob order.
+      - name: Publish to feedz.io
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.FEEDZ_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
+            for file in packages/npm/*"$pattern"-*.tgz; do
+              echo "Publishing $file"
+              npm publish "$file" --access public --tag preview
+            done
+          done
+
+  # Publishes the tagged release version to npmjs.org on a *published* GitHub Release.
+  publish_npm_release:
+    name: Publish npm release to npmjs.org
+    needs: build_npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ github.event.action == 'published' }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: ${{ env.npm_feed_npm }}
+
+      - name: Download Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-studio-npm-packages
+          path: packages/npm
+
+      # Publish IN DEPENDENCY ORDER (sdk -> ui -> code-editor -> workflows). A prerelease tag
+      # (any version containing a '-' suffix, e.g. 4.0.0-preview.1) is published under the
+      # `preview` dist-tag so it never becomes `latest`; a clean release omits the flag.
+      # This job doesn't run the Set VERSION step, so we derive the version from the release tag
+      # (github.ref, e.g. refs/tags/v4.0.0) here purely to decide the dist-tag.
+      - name: Publish to npmjs.org
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_API_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION=${{ github.ref }}
+          VERSION=${VERSION#refs/tags/}
+          VERSION=${VERSION#v}
+          TAG_ARGS=""
+          if [[ "$VERSION" == *-* ]]; then
+            TAG_ARGS="--tag preview"
+          fi
+          for pattern in studio-sdk studio-ui studio-code-editor studio-workflows; do
+            for file in packages/npm/*"$pattern"-*.tgz; do
+              echo "Publishing $file"
+              npm publish "$file" --access public $TAG_ARGS
+            done
+          done

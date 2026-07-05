@@ -3,14 +3,39 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "types": "./src/module.tsx",
+  "exports": {
+    ".": "./src/module.tsx"
+  },
+  "publishConfig": {
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "scripts": {
     "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
     "test": "vitest run"
   },
   "dependencies": {
     "@elsa-workflows/studio-code-editor": "workspace:*",
+    "@elsa-workflows/studio-sdk": "workspace:*",
     "@elsa-workflows/studio-ui": "workspace:*",
-    "@xyflow/react": "^12.10.2"
+    "@xyflow/react": "^12.10.2",
+    "lucide-react": "^0.468.0"
   },
-  "devDependencies": {}
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.101.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "vite-plugin-dts": "^4.5.0"
+  }
 }

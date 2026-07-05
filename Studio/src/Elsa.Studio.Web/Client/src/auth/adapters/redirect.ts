@@ -25,7 +25,7 @@ export function createRedirectAuthAdapter(options: RedirectAuthAdapterOptions): 
     initialize: () => readSession(request, sessionEndpoint, options),
     login: loginOptions => {
       const challenge = options.challenge;
-      if (!challenge || challenge.type === "none") {
+      if (!isRedirectChallenge(challenge)) {
         throw new AuthAdapterError(`Provider '${options.id}' does not expose a redirect challenge.`);
       }
 
@@ -128,6 +128,13 @@ function normalizeStringArray(value: unknown) {
 
 function isAuthSessionStatus(value: unknown): value is AuthSession["status"] {
   return value === "unknown" || value === "anonymous" || value === "authenticated";
+}
+
+// The first AuthChallenge union member ({ url; method; ... }) has no `type` property, so `.type` can't
+// be read off the union directly; this guard both performs the original `!challenge || type === "none"`
+// runtime check and narrows the union so getChallengeUrl accepts the result.
+function isRedirectChallenge(challenge: AuthChallenge | undefined): challenge is Exclude<AuthChallenge, { type: "none" }> {
+  return !!challenge && !("type" in challenge && challenge.type === "none");
 }
 
 function getChallengeUrl(challenge: Exclude<AuthChallenge, { type: "none" }>) {

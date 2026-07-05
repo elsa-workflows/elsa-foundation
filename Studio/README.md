@@ -83,6 +83,43 @@ When `Studio:BackendBaseUrl` points at an Elsa Server backend, the console panel
 - `/_elsa/server/diagnostics/console-logs/sources`
 - `/_elsa/server/diagnostics/console-logs/hub`
 
+## Consuming Studio packages in your own app
+
+The Studio front-end ships four npm packages you can use in any host app —
+React or not. See runnable examples under [`examples/`](./examples): `react-host` (Vite + React)
+and `vanilla-host` (framework-free, no JSX).
+
+```bash
+npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
+            @elsa-workflows/studio-sdk @elsa-workflows/studio-workflows
+```
+
+| Package | What it gives you |
+| --- | --- |
+| `@elsa-workflows/studio-sdk` | Contribution/registry types and runtime helpers for building an `ElsaStudioModuleApi`. |
+| `@elsa-workflows/studio-ui` | Host-agnostic UI primitives (`DataGrid`, `StatusChip`, `Toolbar`, `Tabs`, `Field`, `Inspector`, feedback states) + `tokens.css`. |
+| `@elsa-workflows/studio-code-editor` | `StudioCodeEditor` component + `javaScriptLanguageAdapter`. |
+| `@elsa-workflows/studio-workflows` | The workflows module: `register(api)` + helpers, plus `style.css`. |
+
+**Peer dependencies:** `react` & `react-dom` (`^18`/`^19`) for all; `@tanstack/react-query` (`^5`)
+and `@xyflow/react` (`^12`) additionally for `@elsa-workflows/studio-workflows`.
+
+**Styles** (order matters — `tokens.css` aliases the `--studio-*` layer onto your own primitives):
+
+```ts
+import "./theme.css";                              // your layer-1 primitives (--background, --primary, …)
+import "@elsa-workflows/studio-ui/tokens.css";     // the --studio-* token layer
+import "@xyflow/react/dist/style.css";             // only if using studio-workflows
+import "@elsa-workflows/studio-workflows/style.css";
+```
+
+> `@elsa-workflows/studio-ui` ships the design-token layer (`tokens.css`), not per-component
+> visual rules. The examples include a `studio-components.css` you can copy as a starting point.
+
+Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on every push to
+`main`; published GitHub Releases ship the tagged version to npmjs.org (see
+`.github/workflows/packages.yml`).
+
 ## Docker
 
 `Elsa.Studio.Web` can be built and run as a container image. Build from the repository root

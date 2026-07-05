@@ -143,7 +143,8 @@ function createActivity(operation: WorkflowGraphOperation, nodeId: string, catal
 
   return {
     nodeId,
-    activityVersionId: catalogItem?.activityVersionId ?? activityVersionId,
+    // catalogItem is provably undefined here (the truthy branch returned above), so use the id directly.
+    activityVersionId,
     inputs: [],
     outputs: [],
     ...(readString(parameters.displayName) ? { displayName: readString(parameters.displayName) } : {}),

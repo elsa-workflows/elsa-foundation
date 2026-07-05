@@ -1,5 +1,5 @@
 import { generateId, readArgumentType, readStringField, referenceKeyKeys } from "./workflowProperties";
-import type { ActivityNode, WorkflowDefinitionState } from "./workflowTypes";
+import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
  * Bridges the Studio's in-memory model and the backend's canonical wire contract.
@@ -51,7 +51,9 @@ function mapState(
   const next: WorkflowDefinitionState = { ...state };
   if (state.rootActivity) next.rootActivity = mapActivityTree(state.rootActivity, transform);
   // Variables and inputs both carry a storage driver; outputs are minimal (produced, not consumed).
-  if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument);
+  // The normalizer is deliberately shape-loose (it repairs legacy/wire records), so its unknown[]
+  // result is asserted back to the declared variables type rather than validated per-field.
+  if (Array.isArray(state.variables)) next.variables = mapArgumentRecords(state.variables, normalizeStoredArgument) as VariableDefinition[];
   if (Array.isArray(state.inputs)) next.inputs = mapArgumentRecords(state.inputs, normalizeStoredArgument);
   if (Array.isArray(state.outputs)) next.outputs = mapArgumentRecords(state.outputs, record => normalizeArgumentRecord(record, false));
   return next;

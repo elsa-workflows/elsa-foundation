@@ -454,7 +454,7 @@ export function useWorkflowCanvas({
     });
   };
 
-  const onNodesChange = (changes: NodeChange[]) => {
+  const onNodesChange = (changes: NodeChange<Node<WorkflowNodeData>>[]) => {
     const allowedChanges = isUnsupportedDesigner
       ? changes.filter(change => change.type === "select")
       : changes;
@@ -535,7 +535,9 @@ export function useWorkflowCanvas({
     const nextEdges = reconnectEdge(oldEdge, {
       ...newConnection,
       sourceHandle: newConnection.sourceHandle ?? "Done",
-      targetHandle: newConnection.targetHandle ?? undefined
+      // Connection.targetHandle is string | null; null and undefined are indistinguishable downstream
+      // (every consumer checks truthiness), so keep the type-correct null.
+      targetHandle: newConnection.targetHandle ?? null
     }, edges, { shouldReplaceId: false }) as WorkflowEdge[];
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);

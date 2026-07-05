@@ -517,7 +517,7 @@ export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {
         data: vertices.length ? { vertices } : undefined
       } satisfies Edge<WorkflowEdgeData>;
     })
-    .filter((edge): edge is Edge => !!edge);
+    .filter(edge => edge !== null);
 }
 
 export function getActivitySourcePorts(activity: ActivityNode, catalogItem?: ActivityCatalogItem): WorkflowPortDescriptor[] {

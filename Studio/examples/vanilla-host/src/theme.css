@@ -1,0 +1,47 @@
+/*
+ * Consumer-side theming — the LAYER-1 primitive tokens.
+ *
+ * `@elsa-workflows/studio-ui/tokens.css` defines the *semantic* `--studio-*` vocabulary
+ * as aliases onto these lower-level primitives (e.g. `--studio-bg: var(--background)`,
+ * `--studio-accent: var(--primary)`). In Elsa.Studio.Web those primitives are (re)written
+ * per theme+mode by the host's ThemeProvider. Outside the host, YOU own them — this file
+ * is exactly that: a minimal, self-contained light theme a consuming app supplies so the
+ * primitives (and the `--studio-*` aliases layered on top) resolve to real colours.
+ *
+ * NOTE: the published `tokens.css` will be self-contained for the semantic layer, but it
+ * intentionally still aliases onto these host-provided primitives — a host must define
+ * them. This file demonstrates the consumer's half of that contract.
+ */
+:root {
+  --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", Monaco, "Cascadia Code", Consolas, "Courier New", monospace;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+
+  --shadow-sm: 0 1px 1px rgba(15, 23, 42, 0.03);
+
+  --primary: oklch(0.66 0.17 240);
+  --primary-foreground: oklch(0.985 0 0);
+  --success: oklch(0.75 0.16 150);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.72 0.18 60);
+  --warning-foreground: oklch(0.205 0 0);
+  --danger: oklch(0.577 0.245 27);
+  --danger-foreground: oklch(0.985 0 0);
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.205 0 0);
+  --card: oklch(1 0 0);
+  --muted: oklch(0.965 0.004 240);
+  --muted-foreground: oklch(0.45 0.012 250);
+  --border: oklch(0.89 0.006 250);
+  --ring: oklch(0.685 0.156 237);
+}

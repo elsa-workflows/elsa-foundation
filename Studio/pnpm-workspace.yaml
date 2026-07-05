@@ -1,5 +1,6 @@
 packages:
   - "src/Elsa.Studio.Web/Client"
+  - "src/Elsa.Studio.Web/StudioSdk"
   - "src/Elsa.Studio.Web/StudioUi"
   - "src/Elsa.Studio.ConsoleStream/Client"
   - "src/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
@@ -13,6 +14,8 @@ packages:
   - "src/Elsa.Studio.Workflows/Client"
   - "src/Elsa.Studio.Samples.Dashboard/Client"
   - "src/Elsa.Studio.Samples.WeatherForecast/Client"
+  - "examples/react-host"
+  - "examples/vanilla-host"
 allowBuilds:
   esbuild: true
 onlyBuiltDependencies:

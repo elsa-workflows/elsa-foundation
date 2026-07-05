@@ -1069,7 +1069,9 @@ function normalizeContributionDecision(
   }
 
   if (decision && typeof decision === "object") {
-    const record = decision as Record<string, unknown>;
+    // Runtime decisions may arrive as a { status, reason } shape rather than StudioContributionAvailability;
+    // the double assertion is needed because TS rejects a direct conversion from the narrowed union member.
+    const record = decision as unknown as Record<string, unknown>;
 
     if (!("state" in record) && typeof record.status === "string") {
       return {

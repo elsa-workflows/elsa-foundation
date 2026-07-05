@@ -113,13 +113,13 @@ function _(e) {
     initialize: () => S(t, r, e),
     login: (i) => {
       const o = e.challenge;
-      if (!o || o.type === "none")
+      if (!ce(o))
         throw new v(`Provider '${e.id}' does not expose a redirect challenge.`);
       const a = "method" in o ? o.method.toUpperCase() : "GET";
       if (a !== "GET")
         throw new v(`Provider '${e.id}' exposes an unsupported ${a} challenge.`);
-      const s = new URL(ce(o), U(e)), c = i?.returnUrl ?? e.location?.href ?? window.location.href;
-      return s.searchParams.set("returnUrl", de(c, i?.providerId ?? e.id, e)), (e.location ?? window.location).assign(s.toString()), Promise.resolve();
+      const s = new URL(de(o), U(e)), c = i?.returnUrl ?? e.location?.href ?? window.location.href;
+      return s.searchParams.set("returnUrl", ue(c, i?.providerId ?? e.id, e)), (e.location ?? window.location).assign(s.toString()), Promise.resolve();
     },
     handleCallback: () => S(t, r, e),
     logout: async () => {
@@ -188,6 +188,9 @@ function ae(e) {
   return e === "unknown" || e === "anonymous" || e === "authenticated";
 }
 function ce(e) {
+  return !!e && !("type" in e && e.type === "none");
+}
+function de(e) {
   return "loginPath" in e ? e.loginPath : e.url;
 }
 function E(e, t) {
@@ -196,14 +199,14 @@ function E(e, t) {
 function U(e) {
   return e?.baseUrl ?? e?.location?.origin ?? window.location.origin;
 }
-function de(e, t, r) {
-  const n = new URL(e, ue(r));
-  return n.searchParams.set("authProviderId", t), le(e) ? `${n.pathname}${n.search}${n.hash}` : n.toString();
-}
-function ue(e) {
-  return e?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? e?.location?.origin ?? U(e);
+function ue(e, t, r) {
+  const n = new URL(e, le(r));
+  return n.searchParams.set("authProviderId", t), fe(e) ? `${n.pathname}${n.search}${n.hash}` : n.toString();
 }
 function le(e) {
+  return e?.location?.href ?? (typeof window < "u" ? window.location.href : void 0) ?? e?.location?.origin ?? U(e);
+}
+function fe(e) {
   try {
     return new URL(e), !1;
   } catch {
@@ -215,9 +218,9 @@ class v extends Error {
     super(t), this.name = "AuthAdapterError";
   }
 }
-const fe = "/_elsa/identity/token";
-function Me(e = {}) {
-  const t = e.baseUrl ?? window.location.origin, r = e.fetch ?? fetch, n = e.tokenEndpoint ?? fe;
+const he = "/_elsa/identity/token";
+function Ne(e = {}) {
+  const t = e.baseUrl ?? window.location.origin, r = e.fetch ?? fetch, n = e.tokenEndpoint ?? he;
   return ie({
     bootstrap: () => q(r, t, "/_elsa/identity/bootstrap"),
     capabilities: () => q(r, t, "/_elsa/identity/capabilities"),
@@ -252,7 +255,7 @@ function L() {
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return e;
 }
-function Ne({ manager: e, children: t }) {
+function Be({ manager: e, children: t }) {
   const [r, n] = F(() => e.getSession() ?? O), [i, o] = F(null), a = $(!1), s = $(0), c = b((f) => a.current && s.current === f, []), l = b(async (f) => {
     if (c(f)) {
       o(null);
@@ -306,11 +309,11 @@ function Ne({ manager: e, children: t }) {
   }), [i, w, m, D, r]);
   return /* @__PURE__ */ p.jsx(G.Provider, { value: Z, children: t });
 }
-function he() {
+function pe() {
   return L().session;
 }
-function pe() {
-  const { permissions: e } = he();
+function we() {
+  const { permissions: e } = pe();
   return B(() => {
     const t = new Set(e);
     return {
@@ -320,18 +323,18 @@ function pe() {
     };
   }, [e]);
 }
-function Be() {
+function Oe() {
   return L().capabilities;
 }
-function Oe({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
-  const i = pe(), o = typeof e == "string" ? [e] : e ?? [];
+function _e({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
+  const i = we(), o = typeof e == "string" ? [e] : e ?? [];
   return o.length === 0 || (t ? i.hasAll(o) : i.hasAny(o)) ? /* @__PURE__ */ p.jsx(p.Fragment, { children: n }) : /* @__PURE__ */ p.jsx(p.Fragment, { children: r });
 }
-function _e({ children: e, fallback: t = null, loginOptions: r }) {
+function Ke({ children: e, fallback: t = null, loginOptions: r }) {
   const { session: n, login: i } = L(), o = $(null);
   return ne(() => {
     if (n.status === "anonymous") {
-      const a = we(r), s = o.current;
+      const a = ge(r), s = o.current;
       if (s?.key === a && s.login === i)
         return;
       const c = { key: a, login: i };
@@ -342,32 +345,32 @@ function _e({ children: e, fallback: t = null, loginOptions: r }) {
       o.current = null;
   }, [i, r, n.status]), n.status !== "authenticated" ? /* @__PURE__ */ p.jsx(p.Fragment, { children: t }) : /* @__PURE__ */ p.jsx(p.Fragment, { children: e });
 }
-function we(e) {
+function ge(e) {
   return `${e?.providerId ?? ""}
 ${e?.returnUrl ?? ""}`;
 }
-function Ke(e) {
+function Ge(e) {
   return _({
     ...e,
     kind: "external-oidc"
   });
 }
-function Ge(e, t, r = {}) {
+function Ve(e, t, r = {}) {
   return V(e, {
     defaultHeaders: r.defaultHeaders ?? r.headers,
     applyTimeout: !1,
-    fetch: ge(t, r)
+    fetch: ye(t, r)
   });
 }
 const j = /* @__PURE__ */ new Map();
-function ge(e, t) {
+function ye(e, t) {
   const r = t.fetch ?? fetch;
   return (async (n, i) => {
     const o = typeof n == "string" ? n : n.toString(), a = await r(o, await W(e, i));
-    return a.status !== 401 || t.refreshOnUnauthorized === !1 ? a : await ye(o, e) ? r(o, await W(e, i)) : new Response("Authentication required.", { status: 401 });
+    return a.status !== 401 || t.refreshOnUnauthorized === !1 ? a : await ve(o, e) ? r(o, await W(e, i)) : new Response("Authentication required.", { status: 401 });
   });
 }
-async function ye(e, t) {
+async function ve(e, t) {
   const r = new URL(e).origin, n = j.get(r);
   if (n)
     return n;
@@ -382,17 +385,17 @@ async function W(e, t) {
     headers: r
   };
 }
-function ve(e, t = {}) {
+function be(e, t = {}) {
   return async () => await e.getAccessToken() ?? await t.fallbackAccessTokenFactory?.() ?? t.anonymousToken ?? "";
 }
-function Ve(e, t) {
-  const r = be(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
+function Qe(e, t) {
+  const r = Ae(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
   return {
     ...e,
-    accessTokenFactory: ve(t, { fallbackAccessTokenFactory: r })
+    accessTokenFactory: be(t, { fallbackAccessTokenFactory: r })
   };
 }
-function be(e) {
+function Ae(e) {
   return typeof e == "function";
 }
 const J = 1e4, u = {
@@ -452,13 +455,13 @@ const J = 1e4, u = {
   diagnostics: { id: u.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: d() },
   diagnosticsWidgets: { id: u.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: d() }
 };
-function Qe(e) {
+function Xe(e) {
   return e;
 }
 function d(e = "studio-host") {
   return { kind: "host", id: e };
 }
-function Xe(e) {
+function Ye(e) {
   return { kind: "module", id: e, moduleId: e };
 }
 function k(e = {}) {
@@ -481,7 +484,7 @@ function k(e = {}) {
     }
   };
 }
-function Ye() {
+function Ze() {
   const e = /* @__PURE__ */ new Set(), t = /* @__PURE__ */ new Set();
   return {
     contextProviders: k({ slot: A.aiContextProviders }),
@@ -505,7 +508,7 @@ function Ye() {
     }
   };
 }
-function Ze() {
+function et() {
   const e = [], t = /* @__PURE__ */ new Set();
   let r = 1;
   const n = () => e[0] ?? null, i = () => {
@@ -561,13 +564,13 @@ function z(e, t, r, n = {}) {
   return e.map((i, o) => ({
     contribution: i,
     slot: t,
-    availability: Ae(i, t, r, n),
-    order: r.getOrder?.(i) ?? Pe(i),
-    stableKey: r.getStableKey?.(i) ?? Se(i, o),
+    availability: ke(i, t, r, n),
+    order: r.getOrder?.(i) ?? Se(i),
+    stableKey: r.getStableKey?.(i) ?? Ce(i, o),
     index: o
-  })).filter((i) => me(i.availability, n)).sort((i, o) => i.order - o.order || i.stableKey.localeCompare(o.stableKey) || i.index - o.index).map(({ index: i, ...o }) => o);
+  })).filter((i) => Pe(i.availability, n)).sort((i, o) => i.order - o.order || i.stableKey.localeCompare(o.stableKey) || i.index - o.index).map(({ index: i, ...o }) => o);
 }
-function Ae(e, t, r, n) {
+function ke(e, t, r, n) {
   const i = { contribution: e, slot: t, context: n.context }, o = C(r.slotOwner?.(i), "slot-owner");
   if (o.state !== "available")
     return o;
@@ -577,7 +580,7 @@ function Ae(e, t, r, n) {
   const s = M(e, "featureId");
   if (s && n.disabledFeatureIds?.includes(s))
     return { state: "hidden", reason: `Feature ${s} is disabled.`, source: "feature" };
-  const c = C(ke(e, n.context), "runtime"), l = C(r.hostPolicy?.(i), "host-policy");
+  const c = C(me(e, n.context), "runtime"), l = C(r.hostPolicy?.(i), "host-policy");
   if (l.state !== "available")
     return l;
   const w = C(n.hostPolicy?.(i), "host-policy");
@@ -596,19 +599,19 @@ function C(e, t) {
   }
   return { state: "available" };
 }
-function ke(e, t) {
+function me(e, t) {
   if (!R(e) || !("availability" in e))
     return !0;
   const r = e.availability;
   return typeof r == "function" ? r(t) : r;
 }
-function me(e, t) {
+function Pe(e, t) {
   return e.state === "available" ? !0 : e.state === "hidden" ? t.includeHidden === !0 : t.includeUnavailable === !0;
 }
-function Pe(e) {
-  return Ce(e, "order") ?? 500;
+function Se(e) {
+  return xe(e, "order") ?? 500;
 }
-function Se(e, t) {
+function Ce(e, t) {
   if (!R(e))
     return `_${t.toString().padStart(4, "0")}`;
   for (const r of ["id", "name", "label", "title", "path"]) {
@@ -624,7 +627,7 @@ function M(e, t) {
   const r = e[t];
   return typeof r == "string" ? r : void 0;
 }
-function Ce(e, t) {
+function xe(e, t) {
   if (!R(e))
     return;
   const r = e[t];
@@ -633,7 +636,7 @@ function Ce(e, t) {
 function R(e) {
   return typeof e == "object" && e !== null;
 }
-function et(e, t = {}) {
+function tt(e, t = {}) {
   return {
     baseUrl: e,
     headers: t.headers,
@@ -641,7 +644,7 @@ function et(e, t = {}) {
   };
 }
 function V(e, t) {
-  const r = xe(t), { defaultHeaders: n } = r, i = (o, a) => Re(e, o, a, r);
+  const r = Ee(t), { defaultHeaders: n } = r, i = (o, a) => Ie(e, o, a, r);
   return {
     requestJson(o, a) {
       return i(o, y(n, x(a)));
@@ -680,32 +683,32 @@ function V(e, t) {
     }
   };
 }
-function xe(e) {
-  return Ee(e) ? e : { defaultHeaders: e };
-}
 function Ee(e) {
+  return Te(e) ? e : { defaultHeaders: e };
+}
+function Te(e) {
   return typeof e == "object" && e !== null && !(e instanceof Headers) && !Array.isArray(e) && ("fetch" in e || "applyTimeout" in e || "defaultHeaders" in e);
 }
 function y(e, t = {}) {
   return e ? {
     ...t,
-    headers: Te(e, t.headers)
+    headers: Re(e, t.headers)
   } : t;
 }
-function Te(e, t) {
+function Re(e, t) {
   const r = new Headers(e);
   return new Headers(t).forEach((n, i) => r.set(i, n)), r;
 }
-async function Re(e, t, r, n = {}) {
-  const i = qe(e, t), o = n.fetch ?? fetch, a = n.applyTimeout === !1 ? await o(i, r) : await Ie(o, i, r);
-  return je(i, a);
+async function Ie(e, t, r, n = {}) {
+  const i = We(e, t), o = n.fetch ?? fetch, a = n.applyTimeout === !1 ? await o(i, r) : await je(o, i, r);
+  return $e(i, a);
 }
-async function Ie(e, t, r) {
+async function je(e, t, r) {
   const n = new AbortController(), i = globalThis.setTimeout(() => n.abort(), J);
   try {
     return await e(t, {
       ...r,
-      signal: $e(r?.signal, n.signal)
+      signal: Ue(r?.signal, n.signal)
     });
   } catch (o) {
     throw n.signal.aborted && !r?.signal?.aborted ? new Error(`Request to ${t} timed out after ${J / 1e3} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`) : o;
@@ -713,9 +716,9 @@ async function Ie(e, t, r) {
     globalThis.clearTimeout(i);
   }
 }
-async function je(e, t) {
+async function $e(e, t) {
   if (!t.ok)
-    throw await Le(t);
+    throw await De(t);
   const r = await t.text();
   if (!r.trim())
     return {};
@@ -724,11 +727,11 @@ async function je(e, t) {
   } catch {
     throw new I(
       t.status,
-      `Expected JSON from ${e}, but received ${We(t, r)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
+      `Expected JSON from ${e}, but received ${Je(t, r)}. Check Studio:BackendBaseUrl and make sure the backend maps this API route.`
     );
   }
 }
-function $e(e, t) {
+function Ue(e, t) {
   if (!e)
     return t;
   if (typeof AbortSignal.any == "function")
@@ -736,20 +739,20 @@ function $e(e, t) {
   const r = new AbortController(), n = () => r.abort();
   return e.aborted || t.aborted ? r.abort() : (e.addEventListener("abort", n, { once: !0 }), t.addEventListener("abort", n, { once: !0 })), r.signal;
 }
-async function Ue(e) {
+async function Le(e) {
   return (await Q(e)).message;
 }
-async function Le(e) {
+async function De(e) {
   const t = await Q(e);
   return new I(e.status, t.message, t.validationErrors, t.payload);
 }
 async function Q(e) {
   const t = e.headers.get("content-type") ?? "";
-  if (De(t))
+  if (Fe(t))
     try {
       const n = await e.json(), i = X(n);
       return {
-        message: Fe(n) ?? He(i) ?? `Request failed with ${e.status}.`,
+        message: He(n) ?? qe(i) ?? `Request failed with ${e.status}.`,
         validationErrors: i,
         payload: n
       };
@@ -758,21 +761,21 @@ async function Q(e) {
     }
   return { message: (await e.text()).trim() || `Request failed with ${e.status}.`, validationErrors: null, payload: null };
 }
-function De(e) {
+function Fe(e) {
   return e.toLowerCase().includes("json");
 }
-async function tt(e) {
+async function rt(e) {
   if (e instanceof I)
     return e.message;
   if (Y(e))
     try {
-      return await Ue(e.response.clone());
+      return await Le(e.response.clone());
     } catch {
       return e.response.statusText || "Request failed.";
     }
   return e instanceof Error ? e.message : "Unknown error.";
 }
-async function rt(e) {
+async function nt(e) {
   if (e instanceof I)
     return e.validationErrors;
   if (!Y(e))
@@ -784,7 +787,7 @@ async function rt(e) {
     return null;
   }
 }
-function Fe(e) {
+function He(e) {
   if (typeof e.detail == "string" && e.detail.length > 0) return e.detail;
   if (typeof e.title == "string" && e.title.length > 0) return e.title;
   if (typeof e.reason == "string" && e.reason.length > 0) return e.reason;
@@ -806,13 +809,13 @@ function X(e) {
   }
   return Object.keys(r).length > 0 ? r : null;
 }
-function He(e) {
+function qe(e) {
   return e ? Object.values(e).flat().join(" ") : null;
 }
 function Y(e) {
   return typeof e == "object" && e !== null && "response" in e && e.response instanceof Response;
 }
-function qe(e, t) {
+function We(e, t) {
   return new URL(t, e).toString();
 }
 function x(e) {
@@ -827,7 +830,7 @@ function N(e) {
   const t = new Headers(e);
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
-function We(e, t) {
+function Je(e, t) {
   const r = e.headers.get("content-type") ?? "an unknown content type", n = t.trim(), i = n.length > 0 ? `: ${n.slice(0, 80)}` : "";
   return `${r}${i}`;
 }
@@ -842,34 +845,34 @@ class I extends Error {
 export {
   v as AuthAdapterError,
   P as AuthConfigurationError,
-  Oe as AuthGuard,
-  Ne as AuthProvider,
-  _e as RequireAuth,
+  _e as AuthGuard,
+  Be as AuthProvider,
+  Ke as RequireAuth,
   I as StudioHttpError,
-  Ye as createAiContributionApi,
+  Ze as createAiContributionApi,
   ie as createAuthProviderManager,
-  Ge as createAuthenticatedHttpClient,
-  Me as createBackendAuthProviderManager,
+  Ve as createAuthenticatedHttpClient,
+  Ne as createBackendAuthProviderManager,
   k as createContributionRegistry,
-  Ze as createDialogController,
-  et as createEndpointContext,
+  et as createDialogController,
+  tt as createEndpointContext,
   V as createHttpClient,
-  Ke as createOidcAuthAdapter,
+  Ge as createOidcAuthAdapter,
   _ as createRedirectAuthAdapter,
-  ve as createSignalRAccessTokenFactory,
-  Le as createStudioHttpError,
-  Qe as defineStudioSlot,
-  tt as describeApiError,
+  be as createSignalRAccessTokenFactory,
+  De as createStudioHttpError,
+  Xe as defineStudioSlot,
+  rt as describeApiError,
   d as hostSlotOwner,
-  Xe as moduleSlotOwner,
-  Ue as readStudioHttpErrorMessage,
+  Ye as moduleSlotOwner,
+  Le as readStudioHttpErrorMessage,
   u as studioSlotIds,
   A as studioSlots,
-  rt as tryExtractValidationErrors,
-  Be as useAuthCapabilities,
+  nt as tryExtractValidationErrors,
+  Oe as useAuthCapabilities,
   L as useAuthContext,
-  he as useAuthSession,
-  pe as usePermissions,
-  Ve as withAuthenticatedSignalROptions,
+  pe as useAuthSession,
+  we as usePermissions,
+  Qe as withAuthenticatedSignalROptions,
   y as withDefaultHeaders
 };

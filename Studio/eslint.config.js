@@ -77,8 +77,16 @@ export default tseslint.config(
     },
   },
   {
-    // Config and Node-side tooling files run in a Node environment.
-    files: ['**/*.config.{js,ts,mjs,cjs}', '**/vite.*.config.ts'],
+    // Config and Node-side tooling files run in a Node environment. This includes the
+    // standalone node scripts (repo-root scripts/ and per-package scripts/ dirs, e.g.
+    // scripts/prepare-npm-package.mjs and StudioUi's build-tokens.mjs) which use
+    // `process`/`console` and are executed with `node`, never shipped to the browser.
+    files: [
+      '**/*.config.{js,ts,mjs,cjs}',
+      '**/vite.*.config.ts',
+      'scripts/**/*.mjs',
+      'src/**/scripts/**/*.mjs',
+    ],
     languageOptions: {
       globals: {
         ...globals.node,

@@ -222,7 +222,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
           />
           <WorkflowInstanceInspector
             ai={ai}
-            action={instanceAction}
+            action={instanceAction ?? undefined}
             summary={data.details.instance}
             details={data.details}
             state="ready"
