@@ -11,6 +11,18 @@ using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
 
 namespace Elsa.Activities.Flowchart.Internal;
 
+/// <summary>
+/// Orchestrates Flowchart composite execution across its three entry points (<see cref="Start"/>,
+/// <see cref="OnChildCompletedAsync"/>, <see cref="OnChildFaultedAsync"/>). It owns only the dispatch
+/// decisions — resolving the completing child's path/scope, routing to the policy applier or implicit-join
+/// path, break/race/fault handling, and composite completion — and delegates the mechanics to focused
+/// collaborators: <see cref="FlowchartJoinCoordinator"/> (join/arrival bookkeeping),
+/// <see cref="FlowchartPolicyApplier"/> (policy-decision scheduling), <see cref="FlowchartStatePersister"/>
+/// (load/save + #382 prune), plus the static <see cref="FlowchartStateMutator"/>,
+/// <see cref="FlowchartScopeResolver"/>, <see cref="FlowchartScheduler"/>, and
+/// <see cref="FlowchartDiagnosticAccumulator"/> helpers. All record ids remain a pure function of
+/// <see cref="FlowchartExecutionState.Sequence"/>, whose only mutation home is <see cref="FlowchartStateMutator"/>.
+/// </summary>
 public sealed class FlowchartExecutionEngine(
     FlowchartReachabilityAnalyzer reachabilityAnalyzer,
     IFlowchartPolicyRegistry policyRegistry,
@@ -263,5 +275,4 @@ public sealed class FlowchartExecutionEngine(
         StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.ImplicitActivationJoin) ||
         StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.ParallelJoin) ||
         StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.InclusiveJoin);
-
 }
