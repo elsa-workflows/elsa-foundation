@@ -4,8 +4,5 @@
 export const shellKeys = {
   all: ["studio-shell"] as const,
   manifest: ["studio-shell", "manifest"] as const,
-  hostHealth: ["studio-shell", "host-health"] as const,
-  // Keyed on the concrete probe target so the Studio-host, Server-host, and backend-liveness checks
-  // cache independently and can be invalidated as a group via `shellKeys.hostHealth`.
-  hostHealthProbe: (probe: "studio" | "server" | "backend") => ["studio-shell", "host-health", probe] as const
+  hostHealth: ["studio-shell", "host-health"] as const
 };

@@ -20,6 +20,7 @@ import {
   defaultPackageId,
   defaultProjectName,
   fileSortKey,
+  findPrimaryProjectTemplate,
   getExtensionBuilderSessionId,
   isBuildForCurrentRevision,
   isBuildRunning,
@@ -143,7 +144,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const core: BuilderCore = {
     api, context, tracker, sessionId, defaultWorkingBranchName,
     setState, capabilities, setCapabilities, repositories, setRepositories, workspaces, setWorkspaces,
-    templates, setTemplates, selectedWorkspaceId, setSelectedWorkspaceId, selectedProjectId, setSelectedProjectId,
+    templates, setTemplates, projectTemplates, selectedWorkspaceId, setSelectedWorkspaceId, selectedProjectId, setSelectedProjectId,
     setFiles, setSolutions, selectedSolutionPath, setSelectedSolutionPath, editorTabs, setEditorTabs,
     activeFilePath, setActiveFilePath, editorText, setEditorText, savedEditorText, setSavedEditorText, setLineHint,
     activeBuild, setActiveBuild, setBuildHistory, setBuildLog, setRuntimeStatus, setPromotionResult,
@@ -224,7 +225,8 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
 
   useEffect(() => {
     if (projectTemplates.length === 0 || projectDraft.templateId) return;
-    const primary = projectTemplates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? projectTemplates[0];
+    const primary = findPrimaryProjectTemplate(projectTemplates);
+    if (!primary) return;
     setProjectDraft(current => ({
       ...current,
       templateId: primary.id,

@@ -116,6 +116,8 @@ export function BottomDock({
   // active tab to "promote"/"runtime" even in simple mode, where only "build" is rendered;
   // without this the dock would open to an empty body.
   const effectiveTab: InspectorTab = tabs.some(tab => tab.id === activeTab) ? activeTab : "build";
+  // `effectiveTab` is always present in `tabs` (the "build" fallback exists in both modes).
+  const effectiveTabIndex = tabs.findIndex(tab => tab.id === effectiveTab);
   const changeCount = (sourceControlStatus?.changedFiles ?? []).length;
   const diagnosticCount = (activeBuild?.diagnostics ?? []).length;
   const tabsBaseId = useId();
@@ -130,9 +132,9 @@ export function BottomDock({
   return (
     <section className={open ? "extension-builder-dock open" : "extension-builder-dock"} aria-label="Build and runtime dock">
       <div className="extension-builder-dock-tabs" role="tablist" aria-label="Dock panels" onKeyDown={onTabsKeyDown}>
-        {tabs.map(tab => {
+        {tabs.map((tab, index) => {
           const isActive = open && tab.id === effectiveTab;
-          const ids = tabElementIds(tabsBaseId, tab.id);
+          const ids = tabElementIds(tabsBaseId, index);
           // Roving tabindex tracks the effective tab even while the dock is collapsed, so keyboard
           // users can always reach and arrow through the tablist to reopen it.
           const isRovingAnchor = tab.id === effectiveTab;
@@ -166,8 +168,8 @@ export function BottomDock({
         <div
           className="extension-builder-dock-body"
           role="tabpanel"
-          id={tabElementIds(tabsBaseId, effectiveTab).panelId}
-          aria-labelledby={tabElementIds(tabsBaseId, effectiveTab).tabId}
+          id={tabElementIds(tabsBaseId, effectiveTabIndex).panelId}
+          aria-labelledby={tabElementIds(tabsBaseId, effectiveTabIndex).tabId}
         >
           {effectiveTab === "build" ? (
             <BuildPanel

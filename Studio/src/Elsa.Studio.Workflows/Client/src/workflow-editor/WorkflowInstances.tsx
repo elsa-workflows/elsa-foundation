@@ -30,7 +30,7 @@ import {
   getVisibleWorkflowGraphNodeIds
 } from "./editorHelpers";
 
-export function WorkflowInstances({ context }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowInstances({ context }: { context: StudioEndpointContext }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("");

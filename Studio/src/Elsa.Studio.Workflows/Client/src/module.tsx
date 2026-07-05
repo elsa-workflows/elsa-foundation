@@ -54,7 +54,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instances",
         path: "/workflows/instances",
         label: "Workflow runs",
-        component: () => <WorkflowInstancesPage context={api.backend} ai={api.ai} />
+        component: () => <WorkflowInstancesPage context={api.backend} />
       },
       {
         id: "workflows-instance-detail",

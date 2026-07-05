@@ -59,9 +59,9 @@ export function EditorSurface({
     <div className="extension-builder-code-panel">
       {editorTabs.length > 0 ? (
         <div className="extension-builder-editor-tabs" role="tablist" aria-label="Open repository files" onKeyDown={onTabsKeyDown}>
-          {editorTabs.map(tab => {
+          {editorTabs.map((tab, index) => {
             const isActive = tab.path === activeFilePath;
-            const ids = tabElementIds(tabsBaseId, tab.path);
+            const ids = tabElementIds(tabsBaseId, index);
             return (
               <div key={tab.path} className={isActive ? "extension-builder-editor-tab active" : "extension-builder-editor-tab"}>
                 <button

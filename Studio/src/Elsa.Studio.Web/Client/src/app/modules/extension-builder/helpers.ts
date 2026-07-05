@@ -54,6 +54,13 @@ export function validateProjectDraft(draft: ProjectDraft) {
   return null;
 }
 
+// The default Project template to pre-select / bootstrap an extension with: an explicitly-flagged
+// `primary`, else the first Elsa-named template, else the first available. Single source of truth for
+// the heuristic shared by the project-draft defaults (context) and the one-click extension creator.
+export function findPrimaryProjectTemplate(projectTemplates: ExtensionTemplate[]): ExtensionTemplate | undefined {
+  return projectTemplates.find(template => template.primary || /elsa/i.test(`${template.name} ${template.id}`)) ?? projectTemplates[0];
+}
+
 export function applyTemplateDefaults(draft: ProjectDraft, template?: ExtensionTemplate) {
   if (!template) return draft;
   return {

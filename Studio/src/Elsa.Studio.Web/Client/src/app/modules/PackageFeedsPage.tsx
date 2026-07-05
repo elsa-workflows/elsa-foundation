@@ -6,7 +6,6 @@ import {
   addFeed,
   defaultRetentionPolicy,
   deleteFeed,
-  getErrorMessage,
   hostTabs,
   numberOrNull,
   postJson,
@@ -18,7 +17,7 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementRetentionPolicy
 } from "./moduleManagementApi";
-import { useHostMutationRunner, useModuleManagementRegistries } from "./useModuleManagement";
+import { useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 interface FeedDraft {
   name: string;
@@ -31,48 +30,24 @@ interface FeedDraft {
 export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   const { hosts, byHost } = useModuleManagementRegistries(api);
   const [activeHostId, setActiveHostId] = useState<HostId>("studio");
-  // Success/validation banners are transient UI; query/mutation failures surface via `activeError`.
-  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
-  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeQuery = byHost(activeHost.id);
   const registry = activeQuery.data ?? null;
-  const mutation = useHostMutationRunner(activeHost);
-  const activeError = localErrorByHost[activeHost.id] ?? errorMessageFor(activeQuery.error);
-  const activeStatus = statusByHost[activeHost.id] ?? null;
+  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error);
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
-  function setStatus(hostId: HostId, status: string | null) {
-    setStatusByHost(current => ({ ...current, [hostId]: status }));
-  }
-
-  function setLocalError(hostId: HostId, error: string | null) {
-    setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
-  }
-
-  async function runHostOperation(operation: () => Promise<unknown>, success: string) {
-    const hostId = activeHost.id;
-    setLocalError(hostId, null);
-    setStatus(hostId, null);
-    try {
-      // mutateAsync invalidates the host's registry on success so reads refetch (see useHostMutationRunner).
-      await mutation.mutateAsync(operation);
-      setStatus(hostId, success);
-    } catch (e) {
-      setLocalError(hostId, getErrorMessage(e));
-    }
-  }
-
   // Deleting a feed is destructive and irreversible from the UI, so confirm before firing.
-  async function confirmAndDeleteFeed(feedName: string) {
-    const confirmed = await api.dialogs.confirm({
-      title: "Delete feed",
-      message: `Delete feed "${feedName}" from ${activeHost.label}? This removes its package-source registration. A restart is required to apply the change.`,
-      confirmLabel: "Delete feed",
-      tone: "danger"
-    });
-    if (!confirmed) return;
-    await runHostOperation(() => deleteFeed(activeHost.context, feedName), `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`);
+  function confirmAndDeleteFeed(feedName: string) {
+    return confirmAndRun(
+      () => api.dialogs.confirm({
+        title: "Delete feed",
+        message: `Delete feed "${feedName}" from ${activeHost.label}? This removes its package-source registration. A restart is required to apply the change.`,
+        confirmLabel: "Delete feed",
+        tone: "danger"
+      }),
+      () => deleteFeed(activeHost.context, feedName),
+      `Deleted feed ${feedName} from ${activeHost.label}. Restart is required to activate feed registration changes.`
+    );
   }
 
   return (
@@ -100,7 +75,7 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
         <PackageFeedsWorkbench
           host={activeHost}
           registry={registry}
-          busy={mutation.isPending}
+          busy={isPending}
           onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
           onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
@@ -113,11 +88,6 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       )}
     </section>
   );
-}
-
-function errorMessageFor(error: unknown): string | null {
-  if (error === undefined || error === null) return null;
-  return getErrorMessage(error);
 }
 
 function PackageFeedsWorkbench({

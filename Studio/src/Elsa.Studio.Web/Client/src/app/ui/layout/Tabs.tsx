@@ -58,10 +58,16 @@ export function useTablistKeyboard(tabIds: string[], activeId: string, onSelect:
   );
 }
 
-/** Build stable, linkable ids for a tab and its panel so `aria-controls` / `aria-labelledby` line up. */
-export function tabElementIds(baseId: string, tabId: string) {
-  const safe = tabId.replace(/[^a-zA-Z0-9_-]/g, "-");
-  return { tabId: `${baseId}-tab-${safe}`, panelId: `${baseId}-panel-${safe}` };
+/**
+ * Build stable, linkable ids for a tab and its panel so `aria-controls` / `aria-labelledby` line up.
+ *
+ * Keyed on the tab's position, not its (arbitrary) id: sanitizing a raw id such as a file path with
+ * `[^a-zA-Z0-9_-] -> "-"` is lossy, so two tabs whose ids differ only in punctuation (`a/b` vs `a.b`)
+ * would collapse to the same DOM id and cross-wire their `aria-controls`/`aria-labelledby` linkage.
+ * A `useId()`-scoped `baseId` keeps ids unique across tablists; the index keeps them unique within one.
+ */
+export function tabElementIds(baseId: string, index: number) {
+  return { tabId: `${baseId}-tab-${index}`, panelId: `${baseId}-panel-${index}` };
 }
 
 function cssEscape(value: string) {
@@ -90,9 +96,9 @@ export function StudioTabs({
 
   return (
     <div className="studio-tabs" role="tablist" aria-label={ariaLabel} onKeyDown={onKeyDown}>
-      {tabs.map(tab => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab;
-        const ids = tabElementIds(baseId, tab.id);
+        const ids = tabElementIds(baseId, index);
         return (
           <button
             key={tab.id}
@@ -117,21 +123,21 @@ export function StudioTabs({
 
 /**
  * Optional wrapper that renders the `role="tabpanel"` region linked to a {@link StudioTabs} tab.
- * Pass the same `baseId`/`tabId` you would derive with {@link tabElementIds}; here we recompute the
+ * Pass the same `baseId`/`index` you would derive with {@link tabElementIds}; here we recompute the
  * ids from a shared `baseId` supplied by the caller so the linkage is explicit.
  */
 export function StudioTabPanel({
   baseId,
-  tabId,
+  index,
   children,
   className
 }: {
   baseId: string;
-  tabId: string;
+  index: number;
   children: React.ReactNode;
   className?: string;
 }) {
-  const ids = tabElementIds(baseId, tabId);
+  const ids = tabElementIds(baseId, index);
   return (
     <div id={ids.panelId} role="tabpanel" aria-labelledby={ids.tabId} tabIndex={0} className={className}>
       {children}

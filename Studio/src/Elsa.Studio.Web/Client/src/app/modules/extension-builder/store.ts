@@ -42,6 +42,7 @@ export interface BuilderCore {
   setWorkspaces: Setter<ExtensionWorkspace[]>;
   templates: ExtensionTemplate[];
   setTemplates: Setter<ExtensionTemplate[]>;
+  projectTemplates: ExtensionTemplate[];
   selectedWorkspaceId: string;
   setSelectedWorkspaceId: Setter<string>;
   selectedProjectId: string;

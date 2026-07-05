@@ -71,10 +71,10 @@ export function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpoi
   );
 }
 
-export function WorkflowInstancesPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowInstancesPage({ context }: { context: StudioEndpointContext }) {
   return (
     <WorkflowsPageFrame title="Runs">
-      <WorkflowInstances context={context} ai={ai} />
+      <WorkflowInstances context={context} />
     </WorkflowsPageFrame>
   );
 }

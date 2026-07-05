@@ -494,6 +494,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
+  // `activePanel` is `panels.find(...) ?? panels[0]`, so it is always a member of `panels`.
+  const activePanelIndex = panels.indexOf(activePanel);
   const ActivePanelComponent = activePanel.component;
   const tabsBaseId = useId();
   const panelKeyDown = useTablistKeyboard(
@@ -644,9 +646,9 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
       ) : null}
       <div className="bottom-panel-tabs">
         <div className="bottom-panel-tab-list" role="tablist" aria-label="Bottom panels" onKeyDown={panelKeyDown}>
-          {panels.map(panel => {
+          {panels.map((panel, index) => {
             const isActive = panel.id === activePanel.id;
-            const ids = tabElementIds(tabsBaseId, panel.id);
+            const ids = tabElementIds(tabsBaseId, index);
             return (
               <button
                 key={panel.id}
@@ -692,8 +694,8 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
       <div
         className="bottom-panel-content"
         role="tabpanel"
-        id={tabElementIds(tabsBaseId, activePanel.id).panelId}
-        aria-labelledby={tabElementIds(tabsBaseId, activePanel.id).tabId}
+        id={tabElementIds(tabsBaseId, activePanelIndex).panelId}
+        aria-labelledby={tabElementIds(tabsBaseId, activePanelIndex).tabId}
         // When collapsed the content is visually hidden; `inert` also removes it from the tab order and
         // the accessibility tree so keyboard/AT users don't land on off-screen controls (React 19).
         inert={collapsed}

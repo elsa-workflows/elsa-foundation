@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@elsa-workflows/studio-code-editor": "workspace:*",
+    "@elsa-workflows/studio-ui": "workspace:*",
     "@xyflow/react": "^12.10.2"
   },
   "devDependencies": {}

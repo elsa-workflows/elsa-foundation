@@ -5,7 +5,6 @@ import { EmptyState, StatusChip, StudioAlert, StudioDataGrid, StudioTabs, Studio
 import {
   deleteDropFolderPackage,
   formatFileSize,
-  getErrorMessage,
   hostTabs,
   uploadPackage,
   type HostId,
@@ -16,7 +15,7 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementStudioManifest
 } from "./moduleManagementApi";
-import { useHostMutationRunner, useModuleManagementRegistries } from "./useModuleManagement";
+import { useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 type InspectorTab = "overview" | "contributions" | "package" | "manifest" | "diagnostics";
 type ModuleOrigin = "built-in" | "nuplane";
@@ -64,20 +63,13 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     studio: createInitialViewState(),
     server: createInitialViewState()
   }));
-  // Success/validation banners are transient UI, kept local; query/mutation errors surface via `error`.
-  const [statusByHost, setStatusByHost] = useState<Partial<Record<HostId, string | null>>>({});
-  const [localErrorByHost, setLocalErrorByHost] = useState<Partial<Record<HostId, string | null>>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [uploadDragActive, setUploadDragActive] = useState(false);
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeView = viewByHost[activeHost.id];
   const activeQuery = byHost(activeHost.id);
   const registry = activeQuery.data ?? null;
-  const mutation = useHostMutationRunner(activeHost, followUpRefreshDelaysMs);
-  // A write error (set locally) takes precedence over a stale read error; otherwise surface the
-  // registry query's failure.
-  const activeError = localErrorByHost[activeHost.id] ?? errorMessageFor(activeQuery.error);
-  const activeStatus = statusByHost[activeHost.id] ?? null;
+  const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun, reportError } = useHostOperations(activeHost, activeQuery.error, followUpRefreshDelaysMs);
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
   const rows = useMemo(() => buildRows(registry), [registry]);
@@ -109,57 +101,37 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
     }));
   }
 
-  function setStatus(hostId: HostId, status: string | null) {
-    setStatusByHost(current => ({ ...current, [hostId]: status }));
-  }
-
-  function setLocalError(hostId: HostId, error: string | null) {
-    setLocalErrorByHost(current => ({ ...current, [hostId]: error }));
-  }
-
   function selectSourceView(sourceView: SourceView, packageSourceFilter = activeView.packageSourceFilter) {
     patchViewState(activeHost.id, { sourceView, packageSourceFilter, selectedKey: "" });
   }
 
-  async function runHostOperation(operation: () => Promise<unknown>, success: string) {
-    const hostId = activeHost.id;
-    setLocalError(hostId, null);
-    setStatus(hostId, null);
-    try {
-      // mutateAsync invalidates + schedules follow-up refetches on success (see useHostMutationRunner).
-      await mutation.mutateAsync(operation);
-      setStatus(hostId, success);
-    } catch (e) {
-      setLocalError(hostId, getErrorMessage(e));
-    }
-  }
-
   // Deleting a staged drop-folder package permanently removes the uploaded .nupkg, so confirm first
   // (#192 guard), then run the delete through the #189 Query mutation on confirm; cancel is a no-op.
-  async function confirmAndDeleteDropFolderPackage(fileName: string) {
-    const confirmed = await api.dialogs.confirm({
-      title: "Delete staged package",
-      message: `Delete "${fileName}" from the ${activeHost.label} drop folder? This permanently removes the uploaded package file.`,
-      confirmLabel: "Delete package",
-      tone: "danger"
-    });
-    if (!confirmed) return;
-    await runHostOperation(() => deleteDropFolderPackage(activeHost.context, fileName), `Deleted ${fileName} from ${activeHost.label}. Nuplane reconciliation is running.`);
+  function confirmAndDeleteDropFolderPackage(fileName: string) {
+    return confirmAndRun(
+      () => api.dialogs.confirm({
+        title: "Delete staged package",
+        message: `Delete "${fileName}" from the ${activeHost.label} drop folder? This permanently removes the uploaded package file.`,
+        confirmLabel: "Delete package",
+        tone: "danger"
+      }),
+      () => deleteDropFolderPackage(activeHost.context, fileName),
+      `Deleted ${fileName} from ${activeHost.label}. Nuplane reconciliation is running.`
+    );
   }
 
   function uploadSelectedFiles(files: FileList | File[]) {
     const packageFiles = Array.from(files).filter(file => file.name.toLowerCase().endsWith(".nupkg"));
     if (packageFiles.length === 0) {
-      setLocalError(activeHost.id, "Select one or more .nupkg package files.");
-      setStatus(activeHost.id, null);
+      reportError("Select one or more .nupkg package files.");
       return;
     }
 
-    void runHostOperation(async () => {
-      for (const file of packageFiles) {
-        await uploadPackage(activeHost.context, file);
-      }
-    }, `Uploaded ${packageFiles.length} package${packageFiles.length === 1 ? "" : "s"} to ${activeHost.label}. Reconcile completed; reload may be required.`);
+    // The uploads are independent drop-folder writes, so fan them out rather than awaiting one-by-one.
+    void runHostOperation(
+      () => Promise.all(packageFiles.map(file => uploadPackage(activeHost.context, file))),
+      `Uploaded ${packageFiles.length} package${packageFiles.length === 1 ? "" : "s"} to ${activeHost.label}. Reconcile completed; reload may be required.`
+    );
   }
 
   const isReady = activeQuery.isSuccess;
@@ -222,7 +194,7 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
               <InlinePackageUploads
                 host={activeHost}
                 registry={registry}
-                busy={mutation.isPending}
+                busy={isPending}
                 dragActive={uploadDragActive}
                 uploadInputRef={uploadInputRef}
                 onUploadFiles={uploadSelectedFiles}
@@ -270,11 +242,6 @@ function createInitialViewState(): HostViewState {
     sourceView: "built-in",
     packageSourceFilter: AllPackageSources
   };
-}
-
-function errorMessageFor(error: unknown): string | null {
-  if (error === undefined || error === null) return null;
-  return getErrorMessage(error);
 }
 
 function SummaryItem({ label, value }: { label: string; value: number }) {

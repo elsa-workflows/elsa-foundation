@@ -63,6 +63,19 @@ describe("StudioTabs keyboard navigation", () => {
     expect(first.id).not.toBe(panelId);
   });
 
+  it("gives tabs whose ids differ only in punctuation distinct element ids", () => {
+    // Element ids are keyed on position, not the (sanitized) tab id, so path-like ids that would
+    // collapse under a lossy `[^a-zA-Z0-9_-] -> '-'` sanitization stay unique and correctly wired.
+    const punctuated: StudioTabItem[] = [
+      { id: "src/a.ts", label: "A" },
+      { id: "src/a-ts", label: "B" }
+    ];
+    render(<StudioTabs tabs={punctuated} activeTab="src/a.ts" onSelect={() => {}} ariaLabel="Files" />);
+    const [first, second] = tabs();
+    expect(first.id).not.toBe(second.id);
+    expect(first.getAttribute("aria-controls")).not.toBe(second.getAttribute("aria-controls"));
+  });
+
   it("selects the next tab with ArrowRight and wraps at the end", () => {
     render(<ControlledTabs />);
     const list = container.querySelector('[role="tablist"]')!;

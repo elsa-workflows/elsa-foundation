@@ -16,6 +16,7 @@ import {
   collectTemplateParameters,
   derivePackageId,
   defaultPackageId,
+  findPrimaryProjectTemplate,
   formatDiagnosticLocation,
   isCurrentSelection,
   validateProjectDraft
@@ -157,8 +158,7 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
       setError("Extension name is required.");
       return;
     }
-    const projectTemplates = core.templates.filter(template => template.scope === "Project");
-    const template = projectTemplates.find(item => item.primary || /elsa/i.test(`${item.name} ${item.id}`)) ?? projectTemplates[0];
+    const template = findPrimaryProjectTemplate(core.projectTemplates);
     if (!template) {
       setError("No project template is available to create an extension.");
       return;
@@ -200,9 +200,13 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
     );
     if (workingCopy) {
       core.setWorkingBranchName(workingCopy.branchName);
-      await data.refreshWorkspacesSafely({ preserveSelection: true });
-      await data.loadRepositoryTree(workspaceId, core.selectedSolutionPath || null);
-      await data.loadSourceControlStatus(workspaceId);
+      // The workspace refresh, repository tree, and source-control status are independent reads for the
+      // same working copy, so fetch them concurrently rather than serially.
+      await Promise.all([
+        data.refreshWorkspacesSafely({ preserveSelection: true }),
+        data.loadRepositoryTree(workspaceId, core.selectedSolutionPath || null),
+        data.loadSourceControlStatus(workspaceId)
+      ]);
     }
   }
 
