@@ -71,6 +71,18 @@ internal sealed class GitClient(string gitExecutable, ILogger logger)
 
     private Process StartProcess(string workingDirectory, IReadOnlyList<string> arguments)
     {
+        var startInfo = CreateStartInfo(gitExecutable, workingDirectory, arguments);
+        return Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start '{gitExecutable}'.");
+    }
+
+    /// <summary>
+    /// Builds the <see cref="ProcessStartInfo"/> for a git invocation. Notably sets
+    /// <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected remote fails fast
+    /// instead of blocking on an interactive prompt. Exposed to tests so this env var can be asserted
+    /// directly, independent of whether the host has a TTY.
+    /// </summary>
+    internal static ProcessStartInfo CreateStartInfo(string gitExecutable, string workingDirectory, IReadOnlyList<string> arguments)
+    {
         var startInfo = new ProcessStartInfo(gitExecutable)
         {
             WorkingDirectory = workingDirectory,
@@ -82,7 +94,7 @@ internal sealed class GitClient(string gitExecutable, ILogger logger)
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
 
-        return Process.Start(startInfo) ?? throw new InvalidOperationException($"Could not start '{gitExecutable}'.");
+        return startInfo;
     }
 
     private static void TryKill(Process process)
