@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 119
 - Test projects: 53
-- Direct project references: 637
+- Direct project references: 636
 
 ## Projects
 
@@ -115,7 +115,7 @@ Records direct project references only.
 | [Elsa.Workflows.Design.Persistence.Groundwork](../../src/Elsa/Workflows/Design/Persistence/Groundwork/Elsa.Workflows.Design.Persistence.Groundwork.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Persistence.Groundwork.Querying<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Design.Reconciliation.Core](../../src/Elsa/Workflows/Design/Reconciliation/Core/Elsa.Workflows.Design.Reconciliation.Core.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Workflows.Design.Core |
 | [Elsa.Workflows.Design.Reconciliation](../../src/Elsa/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Locking.Core<br>Elsa.Tasks.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Reconciliation.Core |
-| [Elsa.Workflows.Design.Validations.Core](../../src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Workflows.Design.Core |
+| [Elsa.Workflows.Design.Validations.Core](../../src/Elsa/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Events.Core<br>Elsa.Workflows.Design.Core |
 | [Elsa.Workflows.Design.Validations](../../src/Elsa/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Activities.Design.Core<br>Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Workflows.Design.Validations.Core |
 | [Elsa.Workflows.Primitives](../../src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj) | source | Elsa.Workflows | net10.0 | default | - |
 | [Elsa.Workflows.Publishing.Api](../../src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj) | source | Elsa.Workflows | net10.0 | default | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Api.FastEndpoints<br>Elsa.Mediator.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
