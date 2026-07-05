@@ -221,19 +221,6 @@ public sealed class DefaultSecretManager(
         return result;
     }
 
-    public async ValueTask<SecretPayload> ResolvePayloadAsync(Secret secret, CancellationToken cancellationToken = default)
-    {
-        var versionDecision = lifecyclePolicy.EvaluateRuntimeVersion(secret);
-
-        if (!versionDecision.Allowed)
-            throw new InvalidOperationException(versionDecision.Reason);
-
-        var version = versionDecision.Version!;
-        var store = storeRegistry.Get(secret.StoreName);
-        var payload = await store.ReadAsync(new SecretReadContext(secret, version), cancellationToken);
-        return payload ?? throw new InvalidOperationException("Secret payload could not be resolved.");
-    }
-
     private async ValueTask<Secret> GetExistingSecretAsync(string name, CancellationToken cancellationToken)
     {
         var normalizedName = nameValidator.Normalize(name);

@@ -11,7 +11,7 @@ public sealed class SecretManagerTests : IDisposable
 {
     private readonly ServiceProvider _provider;
     private readonly ISecretManager _manager;
-    private readonly ISecretResolver _resolver;
+    private readonly ISecretValueResolver _resolver;
     private readonly ISecretRepository _repository;
 
     public SecretManagerTests()
@@ -26,7 +26,7 @@ public sealed class SecretManagerTests : IDisposable
         var services = new ServiceCollection().AddSingleton<IConfiguration>(configuration).AddSecrets(configuration);
         _provider = services.BuildServiceProvider();
         _manager = _provider.GetRequiredService<ISecretManager>();
-        _resolver = _provider.GetRequiredService<ISecretResolver>();
+        _resolver = _provider.GetRequiredService<ISecretValueResolver>();
         _repository = _provider.GetRequiredService<ISecretRepository>();
     }
 
