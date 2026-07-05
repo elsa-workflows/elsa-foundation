@@ -1,4 +1,5 @@
 using Elsa.Primitives.Extensions;
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 
 namespace Elsa.Persistence.EFCore.Extensions;
@@ -9,17 +10,26 @@ public static class EntityExtensions
     {
         var keyName = keySelector.GetProperty()!.Name;
 
-        // Define parameters for the lambda expression
+        // Reading the key off the entity uses a compiled accessor cached per (entity type, key name):
+        // compiling a throwaway expression tree on every call was a measurable hot-path cost (issue #394).
+        var entityKey = KeyAccessorCache<TEntity>.Get(keyName)(entity);
+
+        // Build the predicate that compares the key column against the entity's key value. This lambda
+        // is handed to the EF Core query provider for translation and is never compiled here.
         var parameter = Expression.Parameter(typeof(TEntity), "x");
-        var keySelectorLambda = Expression.Lambda<Func<TEntity, string>>(Expression.Property(parameter, keyName), parameter);
+        var comparison = Expression.Equal(Expression.Property(parameter, keyName), Expression.Constant(entityKey));
 
-        // Build the expression that compares the keys
-        var entityKey = keySelectorLambda.Compile()(entity);
-        var comparison = Expression.Equal(keySelectorLambda.Body, Expression.Constant(entityKey));
+        return Expression.Lambda<Func<TEntity, bool>>(comparison, parameter);
+    }
 
-        // Create the final lambda expression that can be used in AnyAsync
-        var lambda = Expression.Lambda<Func<TEntity, bool>>(comparison, parameter);
+    private static class KeyAccessorCache<TEntity>
+    {
+        private static readonly ConcurrentDictionary<string, Func<TEntity, string>> Accessors = new();
 
-        return lambda;
+        public static Func<TEntity, string> Get(string keyName) => Accessors.GetOrAdd(keyName, static name =>
+        {
+            var parameter = Expression.Parameter(typeof(TEntity), "x");
+            return Expression.Lambda<Func<TEntity, string>>(Expression.Property(parameter, name), parameter).Compile();
+        });
     }
 }

@@ -145,18 +145,36 @@ public sealed class EfCoreStructuredLogStoreTests
             store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
 
         // Eventually the table is pruned down to roughly the retention cap and the newest row survives.
+        // Generous deadline: prunes racing the probe can hit transient SQLite contention and go through
+        // retry cycles (1s delay each) before succeeding, especially on a loaded machine.
         var pruned = await WaitForConditionAsync(() =>
         {
             using var db = host.CreateDbContext();
             var count = db.StructuredLogEntries.Count();
             return count is > 0 and <= 9; // cap (5) + at most one prune-interval (4) of slack
-        });
+        }, timeoutMs: 30_000);
 
         Assert.True(pruned);
 
         var newest = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 1 });
         Assert.Equal(40L, Assert.Single(newest).Sequence);
 
+        store.Dispose();
+    }
+
+    /// <summary>
+    /// Covers the dispose-guard half of issue #403: a second Dispose() call must be a no-op (parity with
+    /// EfCoreOpenTelemetryStore) instead of throwing ObjectDisposedException from the already-disposed
+    /// CancellationTokenSource.
+    /// </summary>
+    [Fact]
+    public void DisposeIsIdempotent()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host);
+        store.StartDraining();
+
+        store.Dispose();
         store.Dispose();
     }
 

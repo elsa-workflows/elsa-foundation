@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,7 +54,7 @@ public sealed class PromoteDraftToVersion(
         var versionId = identityGenerator.Generate();
         var version = new WorkflowDefinitionVersion(
             draft.WorkflowDefinitionId,
-            NextVersion(lastVersion?.Version))
+            WorkflowVersionNumbering.NextMajor(lastVersion?.Version))
         {
             Id = versionId,
             State = draft.State,
@@ -75,9 +76,4 @@ public sealed class PromoteDraftToVersion(
 
         return versionId;
     }
-
-    private static string NextVersion(string? lastVersion) =>
-        lastVersion is not null && SemVer.TryParse(lastVersion, out var semVer)
-            ? $"{semVer.Major + 1}.0.0"
-            : "1.0.0";
 }
