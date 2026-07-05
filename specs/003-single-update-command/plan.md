@@ -3,6 +3,8 @@
 **Branch**: `main` (spec authored on main; feature dir tracked in `.specify/feature.json`) | **Date**: 2026-06-03 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/003-single-update-command/spec.md`
 
+> **Supersession note (2026-07-05):** the plan's semantic-diff-and-Background-publish stage is retired (no subscribers; event-sourcing slot unbuilt; diff engine remains the tested contract but is unregistered from DI) and the `WorkflowDefinitionDraftValidation` sibling write is gone (entity deleted; errors are derived state — spec 002 FR-021). The coarse `IUpdateDraftCommand`, per-Draft lock, `OnDraftValidating`/`OnDraftValidated` pair, and State persistence stand. Reinstatable when a consumer exists.
+
 ## Summary
 
 Unit 2 collapses Unit C's **20 granular Draft-mutation commands** into **one coarse diff-based command**, `IUpdateDraftCommand`. The command receives the *complete desired Draft state* (`UpdateDraftRequest(DraftId, WorkflowDefinitionState State, IReadOnlyCollection<DesignMetadataRecord> Layout)`), and — inside the existing per-Draft distributed lock `workflow-draft:{DraftId}` — loads the stored state, assigns the desired state wholesale, computes a **semantic per-concept diff** (1:1 to the existing 20 mutation event types), runs the unchanged `OnDraftValidating` Sequential gate, persists transactionally, and Background-publishes one event per detected difference followed by `OnDraftValidated`. The command **is** the mutation shell — it absorbs `DraftMutationPipeline.ExecuteMutation`; there is no standalone pipeline collaborator on the mutation path.

@@ -16,6 +16,14 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 internal static class ValidatorTestHelpers
 {
+    /// <summary>
+    /// Synthetic activity-version id assigned to the <c>$root</c> container node that
+    /// <see cref="RootActivity"/> wraps the test's activities under. It stands in for the real root
+    /// activity's catalog version — a fail-closed lookup fake must resolve it (as an empty version, no
+    /// required args) rather than throw, so tests exercise their real nodes, not the synthetic root.
+    /// </summary>
+    public const string RootActivityVersionId = "$workflow-root";
+
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
         IEnumerable<VariableDefinition>? variables = null,
@@ -117,7 +125,7 @@ internal static class ValidatorTestHelpers
         var startActivityNodeId = activitySnapshot.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId;
         return new ActivityNode(
             NodeId: "$root",
-            ActivityVersionId: "$workflow-root",
+            ActivityVersionId: RootActivityVersionId,
             Inputs: [],
             Outputs: [],
             Structure: TestActivityStructureHandler.CreateStructure(activitySnapshot, startActivityNodeId));

@@ -1,5 +1,7 @@
 # Contracts — Read Surfaces
 
+> **Supersession note (2026-07-05):** the `IWorkflowDefinitionDraftValidation` read contract (and its `WorkflowDefinitionDraftValidation` implementer) below is superseded — the entity and contract are deleted; validation errors are derived state, recomputed in-lock, not read from a persisted surface (spec.md FR-021). `IWorkflowDefinitionLayout` stands. Reinstatable when a cached-error consumer exists.
+
 Tier-1 read contracts that design-time consumers (UI, tooling, future Validations.<Domain> features) reference without depending on `*.Persistence.Core`. Matches the entity-design summary §3.5 pattern landed in Unit B (read interface in `*.Core`; entity in `*.Persistence.Core` implements the interface).
 
 ---

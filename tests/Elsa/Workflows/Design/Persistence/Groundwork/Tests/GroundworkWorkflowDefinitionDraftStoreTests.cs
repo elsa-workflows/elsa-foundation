@@ -65,6 +65,38 @@ public class GroundworkWorkflowDefinitionDraftStoreTests
     }
 
     [Fact]
+    public async Task Legacy_document_with_extra_Errors_property_deserializes_via_the_primary_path_and_retains_layout()
+    {
+        // Documents written before validation errors became derived state may still carry an
+        // "errors" property. The primary-path deserializer must accept the unknown member (STJ's
+        // default unmapped-member handling ignores it) rather than failing over to the legacy path
+        // and losing the Layout — this pins the behaviour the draft-document code comment relies on.
+        var raw = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
+        var options = GroundworkDesignDocumentSerialization.Create(Payloads);
+
+        var layout = new[] { new DesignMetadataRecord("root", 1, 2, 3, 4) };
+        // Primary-shape document (collection/entity/layout) plus an extra top-level "errors" member,
+        // serialized through the same options the store uses so the entity/State project correctly.
+        var content = JsonSerializer.Serialize(new
+        {
+            collection = WorkflowsDesignStorageManifest.WorkflowDefinitionDraftCollection,
+            entity = Draft("d1", "def1"),
+            layout,
+            errors = new[] { new { path = "$workflow", type = "Legacy/Error", message = "stale" } },
+        }, options);
+        await raw.SaveAsync(new SaveDocumentRequest(
+            WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, "d1", SchemaVersion, content));
+
+        var store = new GroundworkWorkflowDefinitionDraftStore(raw, Payloads);
+        var draft = await store.FindByIdAsync("d1");
+        var readLayout = await store.FindLayoutByDraftIdAsync("d1");
+
+        Assert.NotNull(draft);
+        Assert.Equal("def1", draft!.WorkflowDefinitionId);
+        Assert.Equal(layout.Single(), readLayout.Single());
+    }
+
+    [Fact]
     public async Task Stored_document_omits_persistence_artifacts()
     {
         var (_, raw) = await SeededAsync(Draft("d1", "def1"));

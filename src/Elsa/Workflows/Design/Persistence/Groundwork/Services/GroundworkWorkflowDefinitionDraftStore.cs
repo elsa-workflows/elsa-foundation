@@ -1,8 +1,8 @@
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Validations.Core.Models;
 using Groundwork.Documents.Store;
 
 namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
@@ -46,9 +46,11 @@ public sealed class GroundworkWorkflowDefinitionDraftStore : IWorkflowDefinition
         return document?.Layout.ToArray() ?? [];
     }
 
-    public async Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
+    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
+        // One document load feeds both the draft entity and its layout — the document already carries
+        // both, so this avoids re-loading and re-deserializing the same draft document a second time.
         var document = await _documents.FindByIdAsync(draftId, cancellationToken);
-        return document?.Errors.ToArray() ?? [];
+        return document is null ? null : new DraftWithLayout(document.Entity, document.Layout.ToArray());
     }
 }

@@ -10,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Validations.Core;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
@@ -39,12 +40,12 @@ public sealed class PromoteDraftToVersion(
             EventPublishingStrategy.Sequential,
             cancellationToken);
 
-        var validation = await dbContext.WorkflowDefinitionDraftValidations
-            .FirstOrDefaultAsync(v => v.WorkflowDefinitionDraftId == draftId, cancellationToken);
+        // FR-024 promotion gate: derive errors against the hydrated Draft (see DraftValidationGate).
+        // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
+        var errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
-        var errorCount = validation?.Errors.Count ?? 0;
-        if (errorCount > 0)
-            throw new DraftHasValidationErrorsException(draftId, errorCount);
+        if (errors.Count > 0)
+            throw new DraftHasValidationErrorsException(draftId, errors.Count);
 
         var lastVersion = await dbContext.WorkflowDefinitionVersions
             .Where(v => v.DefinitionId == draft.WorkflowDefinitionId)

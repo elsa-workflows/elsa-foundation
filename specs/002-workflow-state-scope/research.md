@@ -93,6 +93,8 @@ Mechanism:
 
 ## R5. EF cascade rules for `*Layout` and validation siblings
 
+> **Note (2026-07-05):** the validation-sibling cascade rows below are **moot** — the `WorkflowDefinitionDraftValidation` entity is deleted (spec.md FR-021 superseded); validation errors are derived state, not persisted, so there is no validation sibling to cascade. The `*Layout` cascade decisions stand unchanged.
+
 **Decision:**
 - `WorkflowDefinitionVersionLayout`: `OnDelete: Restrict` (parent Version delete is forbidden — versions are never deleted per Joey's 2026-05-19 Q3 stance; sibling cascade is moot but documented).
 - `WorkflowDefinitionDraftLayout`: `OnDelete: Cascade` (Draft deletion via `IDiscardDraftCommand` MUST atomically delete the layout sibling per FR-029).

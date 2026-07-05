@@ -45,19 +45,7 @@ public sealed class SubmitWorkflowDefinition(
             State = state,
         };
 
-        var draftLayout = new WorkflowDefinitionDraftLayout
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Records = [],
-        };
-
-        var draftValidation = new WorkflowDefinitionDraftValidation
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Errors = [],
-        };
+        var draftLayout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draftId);
 
         var version = new WorkflowDefinitionVersion(definitionId, InitialVersion)
         {
@@ -76,7 +64,6 @@ public sealed class SubmitWorkflowDefinition(
         await dbContext.WorkflowDefinitions.AddAsync(definition, cancellationToken);
         await dbContext.WorkflowDefinitionDrafts.AddAsync(draft, cancellationToken);
         await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(draftLayout, cancellationToken);
-        await dbContext.WorkflowDefinitionDraftValidations.AddAsync(draftValidation, cancellationToken);
         await dbContext.WorkflowDefinitionVersions.AddAsync(version, cancellationToken);
         await dbContext.WorkflowDefinitionVersionLayouts.AddAsync(versionLayout, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);

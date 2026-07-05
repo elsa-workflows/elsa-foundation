@@ -4,6 +4,8 @@
 **Layer**: `Elsa.Workflows.Design.Persistence.Core/Contracts/` (the provider-agnostic persistence command surface; sibling to the 4 retained lifecycle command contracts).
 **Resolves**: FR-021 naming (R7).
 
+> **Supersession note (2026-07-05):** the command contract stands as the canonical Draft-mutation surface, but its **per-diff event emission** and **`WorkflowDefinitionDraftValidation` sibling write** are retired — per-diff publication is dropped (no subscribers; `DraftStateDiffer` remains the tested contract but is unregistered from DI) and the validation entity is deleted (errors are derived state; spec 002 FR-021). The command still takes the lock, applies desired state, runs `OnDraftValidating`, persists State, and Background-publishes `OnDraftValidated`. Reinstatable when an event-sourcing consumer exists.
+
 This is the **only** new public contract Unit 2 introduces. It replaces the 20 deleted granular mutation command contracts as the canonical Draft-mutation surface. The internal `DraftStateDiffer` and the per-dimension apply/emit logic are **not** contracts (G2/G25 — no public indirection).
 
 ---
