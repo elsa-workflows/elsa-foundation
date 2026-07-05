@@ -79,6 +79,16 @@ public static class RuntimeMetadataKeys
     /// to rebuild the <c>input.*</c> snapshot for input materialization.
     /// </summary>
     public const string InputName = "runtime.inputName";
+    /// <summary>
+    /// Metadata key marking a durable value's payload as sensitive (<c>"true"</c>). Read by the workflow-output
+    /// read projection (#254 Seam R1): <see cref="Elsa.Workflows.Runtime.Core.Services.RuntimeWorkflowOutputStateProjection"/>
+    /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked
+    /// output surfaces on the read edge as an explicit redacted marker even under a payload-capturing policy.
+    /// Nothing writes this key yet — <c>SetWorkflowOutput</c> carries no sensitivity channel — it is the reserved
+    /// read-side contract for when a producer does.
+    /// </summary>
+    public const string IsSensitive = "runtime.isSensitive";
+
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>
