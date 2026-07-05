@@ -18,4 +18,13 @@ public static class DistributedRuntimeStorageManifest
     /// survives node death and a survivor can re-lease and re-drive it on failover.
     /// </summary>
     public const string ExecutionCommandTransportDocumentKind = "executionCommandTransport";
+
+    /// <summary>
+    /// Durable per-execution placement lease (W27). One document per workflow execution records which node currently
+    /// hosts its workflow-execution actor, so placement routing survives node death and a survivor can take over when
+    /// the lease expires. The persisted <c>ExecutionPlacementLease</c> shape is frozen by the committed
+    /// <c>Fixtures/v1/executionPlacement.json</c> golden fixture (drift-test-protected), exactly as the transport kind
+    /// froze its item shape.
+    /// </summary>
+    public const string ExecutionPlacementDocumentKind = "executionPlacement";
 }
