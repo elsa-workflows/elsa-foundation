@@ -87,6 +87,10 @@ public sealed class OpenIddictTokenService(
         }
         catch (Exception exception)
         {
+            // Deliberately broad (cancellation already rethrown above): this is a fail-closed validation
+            // boundary — any non-cancellation failure means the token is not valid. OpenIddict's validation
+            // service raises several exception families (protocol, security-token, invalid-operation) by version;
+            // narrowing risks converting a clean rejection into a 500 on the bearer path.
             return new TokenValidationResult(false, Failure: exception.Message);
         }
     }
@@ -183,9 +187,9 @@ public sealed class OpenIddictTokenService(
                 return true;
             }
         }
-        catch
+        catch (Exception exception) when (exception is SecurityTokenException or ArgumentException)
         {
-            // Not a JWT — fall through.
+            // Not a JWT (malformed/null) — fall through.
         }
 
         entryId = string.Empty;

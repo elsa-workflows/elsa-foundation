@@ -55,7 +55,10 @@ public static class OpenIddictSchemeSelector
         }
         catch
         {
-            // Not parseable as a JWT (opaque/garbage) — let the local handler produce the 401.
+            // Deliberately broad — this is a fail-closed routing boundary: any value that will not parse as a
+            // JWT (opaque/garbage, or a SecurityTokenMalformedException from the parser) must route to the local
+            // validation handler for a clean 401. A narrower filter risks letting an unforeseen parse-exception
+            // type escape onto the auth hot path as a 500, so anything unparseable is treated as locally issued.
             return true;
         }
     }

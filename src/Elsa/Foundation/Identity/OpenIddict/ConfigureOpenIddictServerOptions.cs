@@ -67,8 +67,9 @@ internal sealed class ConfigureOpenIddictServerOptions(
             {
                 rsa.ImportPkcs8PrivateKey(Convert.FromBase64String(material), out _);
             }
-            catch (Exception exception)
+            catch (Exception exception) when (exception is FormatException or CryptographicException)
             {
+                // Expected bad-key inputs: FormatException (not base64), CryptographicException (not PKCS#8 RSA).
                 rsa.Dispose();
                 throw new InvalidOperationException(
                     "The configured OpenIddict signing key must be a base64-encoded PKCS#8 RSA private key. Generate one with: " +
