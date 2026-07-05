@@ -94,6 +94,20 @@ public sealed class RequiredInputOutputValidatorTests
         Assert.Empty(errors);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Blank_activity_version_id_is_skipped_without_crashing(string? versionId)
+    {
+        // A null id would otherwise throw ArgumentNullException from CatalogVersionResolver's
+        // dictionary and fault the gate; the resolver folds blank ids to null and this validator
+        // skips the node (UnknownActivityVersionValidator owns the report).
+        var state = StateWithRoot(Node("n1", versionId!));
+        var errors = await Validate(Validator(new StubActivityCatalog()), state);
+
+        Assert.Empty(errors);
+    }
+
     [Fact]
     public async Task Required_input_missing_on_nested_child_activity_emits_error()
     {
