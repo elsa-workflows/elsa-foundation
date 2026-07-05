@@ -209,15 +209,54 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   v3.0.0 → v3.1.0, Elsa cascade v3.2.0 → v3.3.0 — see the
   [amendment index](../reports/constitution-amendment-index.md)) and
   [ADR 0033](../adr/0033-runtime-core-splits-contracts-from-engine.md) (accepted; execution is W28).
-- **Wave A (parallel, in flight):** W22 runtime/flowchart, W23 serialization/expressions,
-  W24 HTTP/files, W25 persistence/EFCore, W26 API/design correctness units, scoped per handoff §3.
-- **Wave B (sequenced after Wave A):** W27 Groundwork durable placement + transport stores,
+- **Wave A — COMPLETE 2026-07-05.** All five correctness units + the #378 hotfix merged,
+  22 issues closed, every unit failing-test-first with control-room QA (detached-worktree
+  suites + revert red-proof) before merge:
+  - **#378 hotfix** — **done** ([#474](https://github.com/elsa-workflows/elsa-foundation/pull/474)):
+    Elsa-3 import De Morgan inversion; inputs/outputs populate again.
+  - **W23 serialization/expressions** — **done** ([#476](https://github.com/elsa-workflows/elsa-foundation/pull/476)):
+    #407 Jint generic-collection enumeration, #408 identifier-start validator, #409 dead
+    `$ref`/`$id` machinery removed (byte-compare golden fixture proves wire shapes unchanged),
+    #422 item 3 Liquid double-parse-failure NRE.
+  - **W24 HTTP/files** — **done** ([#478](https://github.com/elsa-workflows/elsa-foundation/pull/478)):
+    #388 exhausted-stream XML, #389 dispose-before-cleanup, #390 cache rewind + truncation,
+    #416 slice 1 zip entry-stream leak; new `Elsa.Http.Tests` suite (public-sealed visibility,
+    no InternalsVisibleTo per constitution gate).
+  - **W25 persistence/EFCore** — **done** ([#480](https://github.com/elsa-workflows/elsa-foundation/pull/480)):
+    #394 type-wide save semaphore removed, #395 migrations DbContext disposal, #396
+    ChangeToken TOCTOU (generation marker + Lazy CTS), #403 OTel-parity prune retry +
+    idempotent dispose, #404 definition-scoped lock + exists-check + typed conflict
+    (`Design.Api → Locking.Core` edge, maps regenerated), #417 item 6
+    `WorkflowVersionNumbering.NextMajor` dedup.
+  - **W26 API/design** — **done** ([#481](https://github.com/elsa-workflows/elsa-foundation/pull/481)):
+    #384 PageArgs contract (new `Elsa.Primitives.Tests` suite), #387 dead exception filter,
+    #391 agent-proposal logging + cancellation propagation, #392 TenantAgnostic threading,
+    #411 async store trio + subscribe-before-replay SSE with sequence de-dup, #414 items 1+5
+    (`AgentSessionAuthorization`, `ElsaEndpointPermissions.Compose`).
+  - **W22 runtime/flowchart** — **done** ([#479](https://github.com/elsa-workflows/elsa-foundation/pull/479)):
+    #381 Do/While body validation, #383 output-argument contravariant rebinding, #386 outbox
+    validation un-wrapped, #399 ActivityExecutions StateId validation, #382 flowchart state
+    prune-on-save + diagnostics cap behind a Stage-1.5 design gate — §E6 golden fixture pins
+    the **ordinal** enum encodings + `elsa.flowchart.executionState` key; Canceled/Faulted
+    paths deliberately retained for race-loser late-completion absorption.
+- **Wave B (next, sequenced):** W27 Groundwork durable placement + transport stores,
   W28 ADR 0033 execution (solo — conflicts with anything touching Runtime.Core services),
-  W29 security/design follow-ups.
-- **Wave C (after correctness):** W30 god-class refactors, W31 DRY batch, W32 cleanup batch.
-- **Product track pulled forward by the user:** server-side execution output
-  ([#254](https://github.com/elsa-workflows/elsa-foundation/issues/254)) — scoping worker
-  launched alongside Wave A; Stage-1 plan goes to the user before implementation.
+  W29 security/design follow-ups (now incl. #414 item 7 unredacted provider `LogDebug`).
+- **Wave C (after structural):** W30 god-class refactors, W31 DRY batch (remaining #412/#413/
+  #414 items 3/4/6, #415 live slices — item 3 stale per W25, #416 slices 2–6 — slice 3 needs its
+  own gate for the EXTENSION_POINTS Priority-ordering contract, #417 remainder incl. the
+  Activities/Design AddVersion sibling hardening, #422 items 1–2 + out-of-domain slices),
+  W32 cleanup batch. New Wave-C candidate from W22's #382 gate: flowchart `Scopes` residual
+  O(n) growth (persisted per-node iteration counter = wire-shape change, own gate).
+- **Product track:** server-side execution output **#254 CLOSED 2026-07-05**
+  ([#477](https://github.com/elsa-workflows/elsa-foundation/pull/477), Seam R1): workflow
+  outputs readable on the instance-details API with policy-driven redaction (QA hardened the
+  non-inline-payload marker path). R2 (synchronous execute-and-return) routed into the W16
+  "HTTP synchronous response correlation" co-design; R3 filed as
+  [elsa-foundation-studio#218](https://github.com/elsa-workflows/elsa-foundation-studio/issues/218).
+- **New issue filed during the wave:** [#473](https://github.com/elsa-workflows/elsa-foundation/issues/473)
+  (design-context `IsValidVariableName` filter rejects all dotted activity type keys — likely
+  connected to the dead execution-time JS accessors gap).
 
 ### Follow-up findings recorded during Phase 0 execution
 
