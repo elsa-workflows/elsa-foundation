@@ -40,7 +40,7 @@ public sealed class UnknownActivityVersionValidator(
 
             errors.Add(new ValidationError(
                 Path: node.NodeId,
-                Type: "Graph/UnknownActivityVersion",
+                Type: ValidationCategories.UnknownActivityVersion,
                 Message: $"Activity '{node.NodeId}' references activity version '{node.ActivityVersionId}', which does not exist in the activity catalog."
             ));
         }
