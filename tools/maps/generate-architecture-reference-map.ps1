@@ -7,8 +7,30 @@ $docsReports = Join-Path $repoRoot "docs\reports"
 
 function To-RepoPath {
     param([string]$Path)
-    $full = (Resolve-Path $Path).Path
+    # Pure string normalization: Resolve-Path would substitute on-disk casing,
+    # churning committed maps on case-insensitive filesystems.
+    $full = [System.IO.Path]::GetFullPath($Path)
     return ($full.Substring($repoRoot.Length + 1) -replace '\\', '/')
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw directory walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+function Get-RepoFiles {
+    param([string[]]$PathSpecs)
+    try {
+        $listing = & git -C $repoRoot ls-files --cached --others --exclude-standard -- @PathSpecs 2>$null
+    } catch {
+        throw "git is required to enumerate repo files for map generation: $_"
+    }
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed; map generation requires a git checkout." }
+    $files = @()
+    foreach ($relative in @($listing)) {
+        if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        $file = [System.IO.FileInfo]::new((Join-Path $repoRoot $relative))
+        if ($file.Exists) { $files += $file }
+    }
+    return @($files | Sort-Object FullName)
 }
 
 function Escape-Cell {
@@ -26,13 +48,7 @@ function Get-Phase {
 }
 
 function Read-Projects {
-    $projectFiles = @()
-    foreach ($root in @("src", "tests")) {
-        $dir = Join-Path $repoRoot $root
-        if (Test-Path -LiteralPath $dir) {
-            $projectFiles += Get-ChildItem -LiteralPath $dir -Recurse -Filter "*.csproj" | Sort-Object FullName
-        }
-    }
+    $projectFiles = Get-RepoFiles @("src/*.csproj", "tests/*.csproj")
     $projects = @()
     foreach ($file in $projectFiles) {
         [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
@@ -40,10 +56,12 @@ function Read-Projects {
         $refs = @()
         foreach ($reference in @($xml.Project.SelectNodes("ItemGroup/ProjectReference"))) {
             if ($null -ne $reference -and -not [string]::IsNullOrWhiteSpace($reference.Include)) {
-                $refs += [System.IO.Path]::GetFileNameWithoutExtension($reference.Include)
+                # MSBuild backslash paths; normalize for non-Windows.
+                $refs += [System.IO.Path]::GetFileNameWithoutExtension(($reference.Include -replace '\\', '/'))
             }
         }
-        $projects += [pscustomobject]@{ Name = $name; Path = To-RepoPath $file.FullName; Kind = if ($file.FullName -like "*\tests\*") { "test" } else { "source" }; Phase = Get-Phase $name; References = @($refs | Sort-Object -Unique) }
+        $path = To-RepoPath $file.FullName
+        $projects += [pscustomobject]@{ Name = $name; Path = $path; Kind = if ($path -like "tests/*") { "test" } else { "source" }; Phase = Get-Phase $name; References = @($refs | Sort-Object -Unique) }
     }
     return @($projects | Sort-Object Kind, Name)
 }
