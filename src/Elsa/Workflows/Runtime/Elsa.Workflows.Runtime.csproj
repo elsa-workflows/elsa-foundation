@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Sibling runtime projects live under the same domain root; keep SDK globs scoped to this project. -->
+    <Compile Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <EmbeddedResource Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+    <None Remove="Api/**/*;Core/**/*;Distributed/**/*;Http/**/*;JavaScript/**/*;Resumption/**/*;Scheduling/**/*;Tracing/**/*" />
+  </ItemGroup>
+
+</Project>

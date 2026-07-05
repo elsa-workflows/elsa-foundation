@@ -205,12 +205,12 @@ coalescing never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (s
 ## Runtime composition root and lifetimes (RT-4)
 
 The hosting-agnostic runtime execution spine is registered by
-`RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntimeCore(this IServiceCollection)` in
-`Elsa.Workflows.Runtime.Core`. The FastEndpoints `WorkflowsRuntimeApiFeature` no longer owns those
+`RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntime(this IServiceCollection)` in the
+`Elsa.Workflows.Runtime` engine package (moved out of `.Core` and renamed from `AddWorkflowRuntimeCore` by ADR 0033). The FastEndpoints `WorkflowsRuntimeApiFeature` no longer owns those
 registrations — it composes the Core root and then adds only its HTTP request handlers. This makes the
 runtime usable from a non-HTTP host (a worker, another module, a test harness) without pulling in the
 API feature. The host-agnostic guard is `RuntimeCoreCompositionRootTests`: it composes
-`AddWorkflowRuntimeCore` into a bare `ServiceCollection` and drives a real Cancel drain end-to-end with
+`AddWorkflowRuntime` into a bare `ServiceCollection` and drives a real Cancel drain end-to-end with
 no API feature present.
 
 **Lifetime story — deliberate, not incidental.** The reference in-memory stores, handlers, pipelines and
@@ -219,7 +219,7 @@ the in-memory stores *are* the durable state for the reference host, so a single
 correct model. Two consequences are deliberately in scope, and one is deliberately out:
 
 - **Overridability is preserved.** Every Core registration uses `TryAdd*`, so a durable provider package
-  (EF Core, Mongo, etc.) can register its own store *before or after* `AddWorkflowRuntimeCore` and win,
+  (EF Core, Mongo, etc.) can register its own store *before or after* `AddWorkflowRuntime` and win,
   including choosing its own lifetime for that store. Composition order does not matter for correctness.
 - **W9 coalescing decorators still wrap.** The opt-in `AddCoalescingRuntimeCheckpointPersistence`
   decorates the commit store / queue / outbox / state stores registered here; the Core root does not

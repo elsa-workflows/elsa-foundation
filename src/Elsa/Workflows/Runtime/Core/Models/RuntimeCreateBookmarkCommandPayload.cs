@@ -78,7 +78,7 @@ public sealed class RuntimeCreateBookmarkCommandPayload
     /// <summary>
     /// Durable-value write-back the suspending activity produced before creating this bookmark (e.g. the
     /// mid-run workflow-scope variable write-back / SetOutput durable values, #286/#260). Carried so the
-    /// downstream <see cref="Services.WorkflowCreateBookmarkSchedulerWorkHandler"/> commits it atomically in
+    /// downstream <c>WorkflowCreateBookmarkSchedulerWorkHandler</c> (engine package) commits it atomically in
     /// the bookmark-created checkpoint rather than the invoke handler flushing it out-of-band before the
     /// continuation is durable (#310). Attached to the first bookmark of a suspending activity only; the
     /// changes are idempotent upserts, so committing them once on that checkpoint is sufficient.
@@ -86,5 +86,5 @@ public sealed class RuntimeCreateBookmarkCommandPayload
     public IReadOnlyCollection<RuntimeStateChange<DurableValueState>> DurableValueChanges { get; }
 }
 
-internal sealed class RuntimeCreateBookmarkCommandPayloadValidationException(string message, string? paramName)
+public sealed class RuntimeCreateBookmarkCommandPayloadValidationException(string message, string? paramName)
     : ArgumentException(message, paramName);
