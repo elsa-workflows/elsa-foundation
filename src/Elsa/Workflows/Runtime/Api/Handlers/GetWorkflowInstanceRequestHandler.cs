@@ -2,13 +2,16 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Handlers;
 
 public sealed class GetWorkflowInstanceRequestHandler(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IActivityExecutionInspectionStore activityExecutionInspectionStore,
-    IIncidentStateStore incidentStateStore)
+    IIncidentStateStore incidentStateStore,
+    IDurableValueStateStore durableValueStateStore,
+    IRuntimePayloadCapturePolicy payloadCapturePolicy)
     : IRequestHandler<GetWorkflowInstance, GetWorkflowInstanceResponse>
 {
     public async Task<GetWorkflowInstanceResponse> Handle(GetWorkflowInstance request, CancellationToken cancellationToken)
@@ -31,9 +34,17 @@ public sealed class GetWorkflowInstanceRequestHandler(
             .Select(IncidentStateView.From)
             .ToArray();
 
+        // Workflow outputs (#254 Seam R1): read-only projection of the instance's SetOutput-assigned durable
+        // values, with every payload routed through the configured capture policy (declined payloads surface
+        // as named redacted markers, never silently absent).
+        var outputs = RuntimeWorkflowOutputStateProjection
+            .Project(await durableValueStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken), payloadCapturePolicy)
+            .ToDictionary(output => output.Name, WorkflowOutputView.From, StringComparer.Ordinal);
+
         return new GetWorkflowInstanceResponse(new WorkflowInstanceDetailsView(
             WorkflowInstanceSummaryView.From(state, activities.Length, incidents.Length),
             activities,
-            incidents));
+            incidents,
+            outputs));
     }
 }
