@@ -97,54 +97,23 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
     public string RootPath { get; }
 
-    public async Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.Workspaces.Values
+    public Task<IReadOnlyList<ExtensionRepositorySummary>> ListRepositoriesAsync(string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<ExtensionRepositorySummary>>(state =>
+            state.Workspaces.Values
                 .Where(x => string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal))
                 .Select(workspace => ToRepositorySummary(state, workspace))
                 .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+                .ToArray(), cancellationToken);
 
-    public async Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.Workspaces.Values
+    public Task<IReadOnlyList<ExtensionWorkspace>> ListWorkspacesAsync(string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<ExtensionWorkspace>>(state =>
+            state.Workspaces.Values
                 .Where(x => string.Equals(x.OwnerId, ownerId, StringComparison.Ordinal))
                 .OrderBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+                .ToArray(), cancellationToken);
 
-    public async Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace) ? workspace : null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<ExtensionWorkspace?> GetWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state => TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace) ? workspace : null, cancellationToken);
 
     public async Task<ExtensionWorkspace> CreateWorkspaceAsync(string ownerId, string trustContext, string displayName, CancellationToken cancellationToken = default)
     {
@@ -240,14 +209,11 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         }
     }
 
-    public async Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> DeleteWorkspaceAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return false;
+                return (false, false);
 
             foreach (var projectId in workspace.ProjectIds)
                 RemoveProjectAuthoringState(state, projectId);
@@ -261,21 +227,12 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             }
             state.RepositoryPaths.Remove(workspace.Id);
             DeleteDirectoryIfExists(GetWorkspacePath(workspace.Id));
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(string workspaceId, string ownerId, string? sessionId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<IReadOnlyList<ExtensionWorkingCopySummary>?> ListWorkingCopiesAsync(string workspaceId, string ownerId, string? sessionId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<ExtensionWorkingCopySummary>?>(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out _))
                 return null;
 
@@ -288,23 +245,15 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 .OrderByDescending(x => x.IsActive)
                 .ThenBy(x => x.BranchName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(string workspaceId, string ownerId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default)
+    public Task<ExtensionWorkingCopySummary?> SelectWorkingCopyAsync(string workspaceId, string ownerId, SelectWorkingCopyRequest request, CancellationToken cancellationToken = default)
     {
         var sessionId = NormalizeSessionId(request.SessionId);
-
-        await _gate.WaitAsync(cancellationToken);
-        try
+        return WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((ExtensionWorkingCopySummary?)null, false);
 
             var branchName = NormalizeBranchName(request.BranchName, ownerId, sessionId);
             var protectedBranch = IsProtectedBranch(branchName);
@@ -312,7 +261,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 throw new InvalidOperationException($"Editing '{branchName}' requires explicit confirmation because it is a protected or common default branch.");
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await SwitchRepositoryBranchAsync(repositoryPath, branchName, cancellationToken);
+            await SwitchRepositoryBranchAsync(repositoryPath, branchName, ct);
 
             var now = DateTimeOffset.UtcNow;
             var existing = state.WorkingCopies.Values.FirstOrDefault(x =>
@@ -334,41 +283,25 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 : existing with { IsActive = true, IsProtectedBranch = protectedBranch, UpdatedAt = now };
             state.WorkingCopies[workingCopy.Id] = workingCopy;
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = now };
-            await SaveStateAsync(state, cancellationToken);
-            return ToWorkingCopySummary(workingCopy, GetRepositoryState(repositoryPath));
-        }
-        finally
-        {
-            _gate.Release();
-        }
+            return (ToWorkingCopySummary(workingCopy, GetRepositoryState(repositoryPath)), true);
+        }, cancellationToken);
     }
 
-    public async Task<RepositoryTree?> GetRepositoryTreeAsync(string workspaceId, string ownerId, string? selectedSolutionPath, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RepositoryTree?> GetRepositoryTreeAsync(string workspaceId, string ownerId, string? selectedSolutionPath, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<RepositoryTree?>(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
                 return null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             return BuildRepositoryTree(workspace.Id, repositoryPath, selectedSolutionPath);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<RepositoryFile?> ReadRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RepositoryFile?> ReadRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return (RepositoryFile?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var normalizedPath = NormalizeRepositoryRelativePath(path);
@@ -376,13 +309,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!File.Exists(filePath))
                 return null;
 
-            return await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, ct);
+        }, cancellationToken);
 
     public async Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(string workspaceId, string ownerId, ExtensionTemplate template, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default)
     {
@@ -393,12 +321,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var values = BuildTemplateParameterValues(template, request);
         var targetPath = NormalizeTemplateTargetPath(request.TargetPath, scope, values);
 
-        await _gate.WaitAsync(cancellationToken);
-        try
+        return await WithStateAsync(async (state, cancellationToken) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((AppliedRepositoryTemplate?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var renderedFiles = template.Files
@@ -425,7 +351,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             }
 
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
 
             var dirtyPaths = GetDirtyRepositoryPaths(repositoryPath);
             var summaries = renderedFiles
@@ -436,46 +361,30 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 })
                 .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            return new(template.Id, scope, summaries, BuildRepositoryTree(workspace.Id, repositoryPath, null));
-        }
-        finally
-        {
-            _gate.Release();
-        }
+            return ((AppliedRepositoryTemplate?)new AppliedRepositoryTemplate(template.Id, scope, summaries, BuildRepositoryTree(workspace.Id, repositoryPath, null)), true);
+        }, cancellationToken);
     }
 
-    public async Task<RepositoryFile?> WriteRepositoryFileAsync(string workspaceId, string ownerId, string path, string content, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RepositoryFile?> WriteRepositoryFileAsync(string workspaceId, string ownerId, string path, string content, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((RepositoryFile?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var normalizedPath = NormalizeRepositoryRelativePath(path);
             var filePath = ResolveRepositoryFilePath(repositoryPath, normalizedPath);
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
-            await File.WriteAllTextAsync(filePath, content, cancellationToken);
+            await File.WriteAllTextAsync(filePath, content, ct);
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, ct), true);
+        }, cancellationToken);
 
-    public async Task<RepositoryFile?> MoveRepositoryFileAsync(string workspaceId, string ownerId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RepositoryFile?> MoveRepositoryFileAsync(string workspaceId, string ownerId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((RepositoryFile?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var sourcePath = NormalizeRepositoryRelativePath(request.SourcePath);
@@ -483,70 +392,41 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var sourceFilePath = ResolveRepositoryFilePath(repositoryPath, sourcePath);
             var destinationFilePath = ResolveRepositoryFilePath(repositoryPath, destinationPath);
             if (!File.Exists(sourceFilePath))
-                return null;
+                return (null, false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath)!);
             File.Move(sourceFilePath, destinationFilePath, overwrite: false);
             DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(sourceFilePath));
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return await ReadRepositoryFileCoreAsync(repositoryPath, destinationFilePath, destinationPath, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (await ReadRepositoryFileCoreAsync(repositoryPath, destinationFilePath, destinationPath, ct), true);
+        }, cancellationToken);
 
-    public async Task<bool> DeleteRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> DeleteRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return false;
+                return (false, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var normalizedPath = NormalizeRepositoryRelativePath(path);
             var filePath = ResolveRepositoryFilePath(repositoryPath, normalizedPath);
             if (!File.Exists(filePath))
-                return false;
+                return (false, false);
 
             File.Delete(filePath);
             DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(filePath));
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<SourceControlStatus?> GetSourceControlStatusAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace)
-                ? GetSourceControlStatus(workspace.Id)
-                : null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<SourceControlStatus?> GetSourceControlStatusAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state => TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace)
+            ? GetSourceControlStatus(workspace.Id)
+            : null, cancellationToken);
 
-    public async Task<SourceControlDiff?> GetSourceControlDiffAsync(string workspaceId, string ownerId, string path, bool staged, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceControlDiff?> GetSourceControlDiffAsync(string workspaceId, string ownerId, string path, bool staged, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<SourceControlDiff?>(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
                 return null;
 
@@ -556,78 +436,46 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 ? new[] { "diff", "--cached", "--", normalizedPath }
                 : ["diff", "--", normalizedPath];
             return new(normalizedPath, staged, RunGitOrDefault(repositoryPath, arguments));
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<SourceControlStatus?> StageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceControlStatus?> StageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return (SourceControlStatus?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await RunGitAsync(repositoryPath, cancellationToken, "add", "--", NormalizeRepositoryRelativePath(path));
+            await RunGitAsync(repositoryPath, ct, "add", "--", NormalizeRepositoryRelativePath(path));
             return GetSourceControlStatus(workspace.Id);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<SourceControlStatus?> UnstageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceControlStatus?> UnstageRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return (SourceControlStatus?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await RunGitAsync(repositoryPath, cancellationToken, "restore", "--staged", "--", NormalizeRepositoryRelativePath(path));
+            await RunGitAsync(repositoryPath, ct, "restore", "--staged", "--", NormalizeRepositoryRelativePath(path));
             return GetSourceControlStatus(workspace.Id);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<SourceControlStatus?> StageAllRepositoryChangesAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceControlStatus?> StageAllRepositoryChangesAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return (SourceControlStatus?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await RunGitAsync(repositoryPath, cancellationToken, "add", "--all");
+            await RunGitAsync(repositoryPath, ct, "add", "--all");
             return GetSourceControlStatus(workspace.Id);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceControlCommitResult?> CommitRepositoryChangesAsync(string workspaceId, string ownerId, SourceControlCommitRequest request, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((SourceControlCommitResult?)null, false);
 
             var message = NormalizeCommitMessage(request.Message);
             var repositoryPath = GetWorkspacePath(workspace.Id);
@@ -637,7 +485,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
             await RunGitAsync(
                 repositoryPath,
-                cancellationToken,
+                ct,
                 "-c",
                 "user.name=Elsa Extension Builder",
                 "-c",
@@ -646,103 +494,57 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 "-m",
                 message);
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
             var commitId = RunGitOrDefault(repositoryPath, "rev-parse", "HEAD");
-            return new(commitId, message, GetSourceControlStatus(workspace.Id));
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (new SourceControlCommitResult(commitId, message, GetSourceControlStatus(workspace.Id)), true);
+        }, cancellationToken);
 
-    public async Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return TryGetOwnedProject(state, projectId, ownerId, out var project) ? project : null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<ExtensionProject?> GetProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state => TryGetOwnedProject(state, projectId, ownerId, out var project) ? project : null, cancellationToken);
 
-    public async Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.Projects.ContainsKey(projectId);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<bool> ProjectExistsAsync(string projectId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state => state.Projects.ContainsKey(projectId), cancellationToken);
 
-    public async Task<RemoteSyncResult?> PushRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RemoteSyncResult?> PushRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((RemoteSyncResult?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var remote = GetPrimaryRemote(repositoryPath);
             var branch = GetRequiredActiveBranch(repositoryPath);
             EnsureCleanWorkingCopy(workspace.Id, "Commit or discard working-copy changes before pushing.");
-            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, cancellationToken);
+            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
             if (divergence.Behind > 0)
                 throw new InvalidOperationException("Push blocked because the remote branch contains commits that are not in the active working copy. Pull or resolve divergence outside Extension Builder first.");
 
-            await RunGitAsync(repositoryPath, cancellationToken, "push", "-u", remote, branch);
+            await RunGitAsync(repositoryPath, ct, "push", "-u", remote, branch);
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return new(RemoteSyncOperation.Push, RemoteSyncState.Completed, $"Pushed {branch} to {remote}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id));
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (new RemoteSyncResult(RemoteSyncOperation.Push, RemoteSyncState.Completed, $"Pushed {branch} to {remote}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id)), true);
+        }, cancellationToken);
 
-    public async Task<RemoteSyncResult?> PullRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<RemoteSyncResult?> PullRepositoryAsync(string workspaceId, string ownerId, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
-                return null;
+                return ((RemoteSyncResult?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var remote = GetPrimaryRemote(repositoryPath);
             var branch = GetRequiredActiveBranch(repositoryPath);
             EnsureCleanWorkingCopy(workspace.Id, "Pull blocked because the working copy has uncommitted changes. Commit or discard changes before pulling.");
-            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, cancellationToken);
+            var divergence = await FetchAndMeasureRemoteDivergenceAsync(repositoryPath, remote, branch, ct);
             if (!divergence.RemoteBranchExists)
                 throw new InvalidOperationException($"Pull blocked because remote branch '{remote}/{branch}' does not exist.");
             if (divergence.Ahead > 0 && divergence.Behind > 0)
                 throw new InvalidOperationException("Pull blocked because the active branch has diverged from the remote branch. Resolve divergence outside Extension Builder before continuing.");
             if (divergence.Behind == 0)
-                return new(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Branch {branch} is already up to date with {remote}.", remote, branch, divergence.Ahead, divergence.Behind, GetSourceControlStatus(workspace.Id));
+                return (new RemoteSyncResult(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Branch {branch} is already up to date with {remote}.", remote, branch, divergence.Ahead, divergence.Behind, GetSourceControlStatus(workspace.Id)), false);
 
-            await RunGitAsync(repositoryPath, cancellationToken, "pull", "--ff-only", remote, branch);
+            await RunGitAsync(repositoryPath, ct, "pull", "--ff-only", remote, branch);
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return new(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Pulled {remote}/{branch}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id));
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (new RemoteSyncResult(RemoteSyncOperation.Pull, RemoteSyncState.Completed, $"Pulled {remote}/{branch}.", remote, branch, 0, 0, GetSourceControlStatus(workspace.Id)), true);
+        }, cancellationToken);
 
     public async Task<BuildResult?> SubmitRepositoryBuildAsync(string workspaceId, string ownerId, ExtensionProject project, SubmitRepositoryBuildRequest request, CancellationToken cancellationToken = default)
     {
@@ -846,10 +648,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         if (string.IsNullOrWhiteSpace(request.PackageId))
             throw new ArgumentException("Package id is required.", nameof(request));
 
-        await _gate.WaitAsync(cancellationToken);
-        try
+        return await WithStateAsync(async (state, cancellationToken) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
                 throw new KeyNotFoundException($"Workspace '{workspaceId}' was not found.");
 
@@ -898,23 +698,15 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 ProjectIds = workspace.ProjectIds.Concat([project.Id]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                 UpdatedAt = now
             };
-            await SaveStateAsync(state, cancellationToken);
-            return project;
-        }
-        finally
-        {
-            _gate.Release();
-        }
+            return (project, true);
+        }, cancellationToken);
     }
 
-    public async Task<bool> DeleteProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> DeleteProjectAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
-                return false;
+                return (false, false);
 
             RemoveProjectAuthoringState(state, project.Id);
             if (state.Workspaces.TryGetValue(project.WorkspaceId, out var workspace))
@@ -927,21 +719,12 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             }
 
             DeleteDirectoryIfExists(GetProjectPath(project.Id));
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<IReadOnlyList<ProjectFileSummary>?> ListFilesAsync(string projectId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<IReadOnlyList<ProjectFileSummary>?> ListFilesAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<ProjectFileSummary>?>(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out _))
                 return null;
 
@@ -958,222 +741,125 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 })
                 .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<ProjectFile?> ReadFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<ProjectFile?> ReadFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out _))
-                return null;
+                return (ProjectFile?)null;
 
             var filePath = ResolveProjectFilePath(projectId, path);
             if (!File.Exists(filePath))
                 return null;
 
-            return await ReadProjectFileAsync(filePath, NormalizeRelativePath(path), cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return await ReadProjectFileAsync(filePath, NormalizeRelativePath(path), ct);
+        }, cancellationToken);
 
-    public async Task<ProjectFile?> WriteFileAsync(string projectId, string ownerId, string path, string content, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<ProjectFile?> WriteFileAsync(string projectId, string ownerId, string path, string content, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
-                return null;
+                return ((ProjectFile?)null, false);
 
-            var normalizedPath = await WriteFileCoreAsync(projectId, path, content, cancellationToken);
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            var normalizedPath = await WriteFileCoreAsync(projectId, path, content, ct);
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, ct);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return await ReadProjectFileAsync(ResolveProjectFilePath(projectId, normalizedPath), normalizedPath, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (await ReadProjectFileAsync(ResolveProjectFilePath(projectId, normalizedPath), normalizedPath, ct), true);
+        }, cancellationToken);
 
-    public async Task<bool> DeleteFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> DeleteFileAsync(string projectId, string ownerId, string path, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
-                return false;
+                return (false, false);
 
             var filePath = ResolveProjectFilePath(projectId, path);
             if (!File.Exists(filePath))
-                return false;
+                return (false, false);
 
             File.Delete(filePath);
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, ct);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<SourceSnapshot?> CreateSourceSnapshotAsync(string projectId, string ownerId, CancellationToken cancellationToken = default) =>
+        WithStateAsync(async (state, ct) =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!TryGetOwnedProject(state, projectId, ownerId, out var project))
-                return null;
+                return ((SourceSnapshot?)null, false);
 
-            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, cancellationToken);
+            var snapshot = await CreateSourceSnapshotCoreAsync(projectId, ct);
             state.Projects[project.Id] = project with { CurrentSourceRevisionId = snapshot.Id, UpdatedAt = DateTimeOffset.UtcNow };
-            await SaveStateAsync(state, cancellationToken);
-            return snapshot;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return ((SourceSnapshot?)snapshot, true);
+        }, cancellationToken);
 
-    public async Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<BuildResult?> GetBuildAsync(string buildId, string ownerId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!state.Builds.TryGetValue(buildId, out var build))
                 return null;
 
             return TryGetOwnedProject(state, build.ProjectId, ownerId, out _) ? build : null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+        }, cancellationToken);
 
-    public async Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> SaveBuildAsync(BuildResult build, CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!state.Projects.ContainsKey(build.ProjectId))
-                return false;
+                return (false, false);
 
             state.Builds[build.Id] = build;
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.Builds.Values.Where(x => string.Equals(x.ProjectId, projectId, StringComparison.OrdinalIgnoreCase)).ToArray();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<IReadOnlyList<BuildResult>> ListProjectBuildsAsync(string projectId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<BuildResult>>(state =>
+            state.Builds.Values.Where(x => string.Equals(x.ProjectId, projectId, StringComparison.OrdinalIgnoreCase)).ToArray(), cancellationToken);
 
-    public async Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task<bool> AddPromotionAsync(string projectId, PackagePromotionRecord record, CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!state.Projects.ContainsKey(projectId))
-                return false;
+                return (false, false);
 
             var promotions = state.Promotions.TryGetValue(projectId, out var existing) ? existing.ToList() : [];
             promotions.RemoveAll(x => string.Equals(x.Version, record.Version, StringComparison.OrdinalIgnoreCase));
             promotions.Add(record);
             state.Promotions[projectId] = promotions.OrderBy(x => x.Version, StringComparer.OrdinalIgnoreCase).ToArray();
             state.ActiveVersions[projectId] = record.Version;
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (true, true);
+        }, cancellationToken);
 
-    public async Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.Promotions.TryGetValue(projectId, out var promotions) ? promotions : [];
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<IReadOnlyList<PackagePromotionRecord>> ListPromotionsAsync(string projectId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync<IReadOnlyList<PackagePromotionRecord>>(state =>
+            state.Promotions.TryGetValue(projectId, out var promotions) ? promotions : [], cancellationToken);
 
-    public async Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+    public Task UpdatePromotionReconcileOutcomeAsync(string projectId, ExtensionBuilderReconcileOutcome outcome, CancellationToken cancellationToken = default) =>
+        WithStateAsync<object?>(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!state.Promotions.TryGetValue(projectId, out var promotions))
-                return;
+                return (null, false);
 
             state.Promotions[projectId] = promotions
                 .Select(promotion => promotion with { ReconcileOutcome = outcome, LastReconciledAt = DateTimeOffset.UtcNow })
                 .ToArray();
-            await SaveStateAsync(state, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (null, true);
+        }, cancellationToken);
 
-    public async Task<bool> UpdatePromotionLifecycleAsync(
+    public Task<bool> UpdatePromotionLifecycleAsync(
         string projectId,
         string version,
         ExtensionBuilderReconcileOutcome outcome,
         bool requiresReload,
         bool requiresRestart,
         DateTimeOffset reconciledAt,
-        CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
+        CancellationToken cancellationToken = default) =>
+        WithStateAsync(state =>
         {
-            var state = await LoadStateAsync(cancellationToken);
             if (!state.Projects.ContainsKey(projectId) || !state.Promotions.TryGetValue(projectId, out var promotions))
-                return false;
+                return (false, false);
 
             var updated = false;
             state.Promotions[projectId] = promotions
@@ -1192,46 +878,18 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                     };
                 })
                 .ToArray();
-            if (!updated)
-                return false;
+            return updated ? (true, true) : (false, false);
+        }, cancellationToken);
 
-            await SaveStateAsync(state, cancellationToken);
-            return true;
-        }
-        finally
+    public Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default) =>
+        WithStateAsync<object?>(state =>
         {
-            _gate.Release();
-        }
-    }
-
-    public async Task SetActiveVersionAsync(string projectId, string version, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
             state.ActiveVersions[projectId] = version;
-            await SaveStateAsync(state, cancellationToken);
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+            return (null, true);
+        }, cancellationToken);
 
-    public async Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default)
-    {
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            var state = await LoadStateAsync(cancellationToken);
-            return state.ActiveVersions.TryGetValue(projectId, out var version) ? version : null;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    public Task<string?> GetActiveVersionAsync(string projectId, CancellationToken cancellationToken = default) =>
+        ReadStateAsync(state => state.ActiveVersions.TryGetValue(projectId, out var version) ? version : null, cancellationToken);
 
     public string GetBuildLogPath(string buildId)
     {
@@ -1265,6 +923,43 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             await JsonSerializer.SerializeAsync(stream, state, JsonOptions, cancellationToken);
         File.Move(tempPath, _statePath, overwrite: true);
     }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> under the single-writer state gate against a freshly loaded
+    /// <see cref="ExtensionBuilderState"/>, persisting the state only when the body returns
+    /// <c>Save: true</c>. This collapses the load/mutate/conditionally-save/finally-release pattern
+    /// that the uniform storage methods repeat. State never escapes the gate: the body receives the
+    /// state object and must not retain it. Methods that must run long-running work outside the lock
+    /// (or clean up on failure before persisting) keep their bespoke gate handling.
+    /// </summary>
+    private async Task<T> WithStateAsync<T>(Func<ExtensionBuilderState, CancellationToken, Task<(T Result, bool Save)>> body, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = await LoadStateAsync(cancellationToken);
+            var (result, save) = await body(state, cancellationToken);
+            if (save)
+                await SaveStateAsync(state, cancellationToken);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Gated mutate with a synchronous body; persists only when the body returns <c>Save: true</c>.</summary>
+    private Task<T> WithStateAsync<T>(Func<ExtensionBuilderState, (T Result, bool Save)> body, CancellationToken cancellationToken) =>
+        WithStateAsync<T>((state, _) => Task.FromResult(body(state)), cancellationToken);
+
+    /// <summary>Read-only projection over the gated state with an async body; never persists.</summary>
+    private Task<T> ReadStateAsync<T>(Func<ExtensionBuilderState, CancellationToken, Task<T>> body, CancellationToken cancellationToken) =>
+        WithStateAsync<T>(async (state, ct) => (await body(state, ct), false), cancellationToken);
+
+    /// <summary>Read-only projection over the gated state with a synchronous body; never persists.</summary>
+    private Task<T> ReadStateAsync<T>(Func<ExtensionBuilderState, T> body, CancellationToken cancellationToken) =>
+        WithStateAsync<T>(state => (body(state), false), cancellationToken);
 
     private bool TryGetOwnedWorkspace(ExtensionBuilderState state, string workspaceId, string ownerId, out ExtensionWorkspace workspace)
     {
