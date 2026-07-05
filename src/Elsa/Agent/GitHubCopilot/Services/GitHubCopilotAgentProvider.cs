@@ -74,7 +74,9 @@ public sealed class GitHubCopilotAgentProvider(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to resume GitHub Copilot session {SessionId}; creating a new session.", context.SessionId);
+            // Never hand the raw exception to the sink: its rendering (message, inner chain, stack)
+            // can embed the token. Log the redacted rendering instead (issue #414 item 7).
+            logger.LogDebug("Failed to resume GitHub Copilot session {SessionId}; creating a new session: {Error}", context.SessionId, NormalizeMessage(ex.ToString()));
             try
             {
                 session = await client.CreateSessionAsync(BuildSessionRequest(context.SessionId), cancellationToken);
@@ -152,7 +154,8 @@ public sealed class GitHubCopilotAgentProvider(
         }
         catch (Exception ex)
         {
-            logger.LogDebug(ex, "Failed to resume GitHub Copilot session {SessionId}; creating a new session.", request.SessionId);
+            // Redacted rendering, not the raw exception — see the ContinueTurnAsync site (issue #414 item 7).
+            logger.LogDebug("Failed to resume GitHub Copilot session {SessionId}; creating a new session: {Error}", request.SessionId, NormalizeMessage(ex.ToString()));
             try
             {
                 session = await client.CreateSessionAsync(BuildSessionRequest(request.SessionId, aiFunctions), cancellationToken);
@@ -261,7 +264,8 @@ public sealed class GitHubCopilotAgentProvider(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "GitHub Copilot diagnostics failed.");
+                // Redacted rendering, not the raw exception — see the ContinueTurnAsync site (issue #414 item 7).
+                logger.LogDebug("GitHub Copilot diagnostics failed: {Error}", NormalizeMessage(ex.ToString()));
                 readiness = readiness with
                 {
                     Available = false,

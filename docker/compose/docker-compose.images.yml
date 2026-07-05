@@ -1,0 +1,56 @@
+# =============================================================================
+# Elsa published-image stack: Elsa.Server + Elsa Studio — no clone, no build.
+#
+# Runs the images published to Docker Hub by CI (elsaworkflows/elsa-server and
+# elsaworkflows/elsa-studio). Download just this file and start it:
+#
+#   docker compose -f docker-compose.images.yml up
+#
+# URLs (host):
+#   Elsa.Server : http://localhost:13000   (root returns Healthy JSON)
+#   Elsa Studio : http://localhost:14000
+#
+# Persistence: the server image's baked-in default composition is SQLite, written
+# under the content root (/app). It is EPHEMERAL here — removing the elsa-server
+# container discards it. For durable, Postgres-backed persistence (or to build from
+# source), use the reference stack in docker-compose.yml instead.
+#
+# Pin a version for reproducible runs, e.g. elsaworkflows/elsa-server:4 or :4.0.0.
+# =============================================================================
+
+name: elsa-stack
+
+services:
+  elsa-server:
+    image: elsaworkflows/elsa-server:latest
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Module-management API key. MUST match Studio's Studio__BackendModuleManagementApiKey.
+      Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
+      # CORS: allow the browser origin Studio is served from (its host-published port).
+      Cors__AllowedOrigins__0: "http://localhost:14000"
+    ports:
+      - "13000:8080"
+    volumes:
+      # Nuplane directory feed: drop .nupkg activity/extension packages here to load them.
+      # (A subfolder mount — do NOT mount a volume over /app, that would shadow the app binaries.)
+      - server-packages:/app/packages
+
+  elsa-studio:
+    image: elsaworkflows/elsa-studio:latest
+    depends_on:
+      elsa-server:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Consumed by the Studio client IN THE BROWSER, so it must be the server's
+      # host-reachable URL — NOT the compose service name (http://elsa-server:8080),
+      # which only resolves inside the Docker network.
+      Studio__BackendBaseUrl: "http://localhost:13000"
+      # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
+      Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
+    ports:
+      - "14000:8080"
+
+volumes:
+  server-packages:

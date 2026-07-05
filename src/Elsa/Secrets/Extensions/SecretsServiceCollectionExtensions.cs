@@ -40,7 +40,7 @@ public static class SecretsServiceCollectionExtensions
         services.TryAddSingleton<SecretLifecyclePolicy>();
         services.TryAddSingleton<SecretModelMapper>();
         services.TryAddSingleton<ISecretManager, DefaultSecretManager>();
-        services.TryAddSingleton<ISecretResolver, DefaultSecretResolver>();
+        services.TryAddSingleton<ISecretValueResolver, DefaultSecretValueResolver>();
         services.TryAddSingleton<ISecretStoreRegistry, SecretStoreRegistry>();
         services.TryAddSingleton<ISecretTypeRegistry, SecretTypeRegistry>();
 

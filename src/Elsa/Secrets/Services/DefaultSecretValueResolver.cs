@@ -3,14 +3,19 @@ using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Secrets.Services;
 
-public sealed class DefaultSecretResolver(
+/// <summary>
+/// Default <see cref="ISecretValueResolver"/>: applies the lifecycle policy to the referenced secret
+/// and reads the payload from the per-provider store. Owns the whole resolution path (it does not
+/// route through <see cref="ISecretManager"/>, which is the lifecycle facade only).
+/// </summary>
+public sealed class DefaultSecretValueResolver(
     ISecretRepository repository,
     ISecretNameValidator nameValidator,
-    ISecretManager secretManager,
+    ISecretStoreRegistry storeRegistry,
     SecretLifecyclePolicy lifecyclePolicy,
     ISecretAuditSink auditSink,
     SecretModelMapper mapper,
-    TimeProvider timeProvider) : ISecretResolver
+    TimeProvider timeProvider) : ISecretValueResolver
 {
     public async ValueTask<ResolvedSecret> ResolveAsync(SecretReference reference, CancellationToken cancellationToken = default)
     {
@@ -31,7 +36,12 @@ public sealed class DefaultSecretResolver(
 
         try
         {
-            var payload = await secretManager.ResolvePayloadAsync(resolvedSecret, cancellationToken);
+            var store = storeRegistry.Get(resolvedSecret.StoreName);
+            var payload = await store.ReadAsync(new SecretReadContext(resolvedSecret, versionDecision.Version!), cancellationToken);
+
+            if (payload is null)
+                return await FailureAsync(resolvedSecret.Name, SecretResolutionFailureCode.StoreUnavailable, "Secret payload could not be resolved.", cancellationToken);
+
             if (payload.Value is null)
                 return await FailureAsync(resolvedSecret.Name, SecretResolutionFailureCode.CorruptState, "Secret store returned an empty value.", cancellationToken);
 

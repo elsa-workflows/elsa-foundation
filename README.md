@@ -37,6 +37,17 @@ dotnet build Elsa.Server.slnx
 
 ## Run with Docker
 
-To go from a fresh clone to a running full stack (PostgreSQL + Elsa.Server + Elsa Studio), follow the
-[Docker quickstart](docker/compose/README.md). For the full container/image reference (environment
-variables, mounts, persistence composition, troubleshooting), see [docs/docker.md](docs/docker.md).
+Fastest way to try the stack — pull the published images and run them, no clone or build:
+
+```bash
+curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
+docker compose -f docker-compose.images.yml up
+```
+
+This starts **Elsa.Server** (`http://localhost:13000`) and **Elsa Studio**
+(`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-server` and
+`elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
+covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
+Studio to the server backend (`Studio__BackendBaseUrl`, the module-management API key, CORS). For the
+full container/image reference (environment variables, mounts, persistence composition,
+troubleshooting), see [docs/docker.md](docs/docker.md).
