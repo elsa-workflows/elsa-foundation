@@ -17,9 +17,9 @@ namespace Elsa.Workflows.Runtime.Core.Diagnostics;
 /// a no-op when the activity is null.
 /// </para>
 /// <para>
-/// This is a single-implementation replacement contract: the default <see cref="NullWorkflowEngineTracer"/> is
+/// This is a single-implementation replacement contract: the default <c>NullWorkflowEngineTracer</c> (engine package) is
 /// registered by the runtime composition root; composing <c>WorkflowsRuntimeTracingFeature</c> replaces it with the
-/// <see cref="ActivitySourceWorkflowEngineTracer"/> that emits real spans (which still cost nothing until a listener
+/// <c>ActivitySourceWorkflowEngineTracer</c> (engine package) that emits real spans (which still cost nothing until a listener
 /// attaches).
 /// </para>
 /// </remarks>

@@ -1,0 +1,7 @@
+{
+  "acquiredAt": "1970-01-01T00:00:00\u002B00:00",
+  "expiresAt": "1970-01-01T00:00:30\u002B00:00",
+  "ownerId": "node-a",
+  "placementToken": 1,
+  "workflowExecutionId": "wf-1"
+}

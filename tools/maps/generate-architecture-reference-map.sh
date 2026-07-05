@@ -20,6 +20,32 @@ escape_cell() {
   if [ -z "${value// }" ]; then printf '%s' "-"; else printf '%s' "$value" | sed 's/|/\\|/g'; fi
 }
 
+run_git() {
+  if command -v git >/dev/null 2>&1; then
+    git "$@"
+  elif command -v git.exe >/dev/null 2>&1; then
+    git.exe "$@"
+  else
+    return 127
+  fi
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw filesystem walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+list_repo_files() {
+  local listing
+  if ! listing="$(run_git -C "$repo_root" ls-files --cached --others --exclude-standard -- "$@")"; then
+    echo "git ls-files failed; map generation requires a git checkout" >&2
+    return 1
+  fi
+  while IFS= read -r rel_file; do
+    [ -n "$rel_file" ] || continue
+    [ -f "$repo_root/$rel_file" ] || continue
+    printf '%s/%s\n' "$repo_root" "$rel_file"
+  done <<< "$listing"
+}
+
 project_name_from_include() {
   local include="$1"
   include="${include##*\\}"
@@ -45,7 +71,7 @@ phase() {
   esac
 }
 
-find "$repo_root/src" "$repo_root/tests" -name '*.csproj' -type f 2>/dev/null | sort > "$tmp_dir/projects.txt"
+list_repo_files 'src/*.csproj' 'tests/*.csproj' | sort > "$tmp_dir/projects.txt"
 : > "$tmp_dir/projects.tsv"
 : > "$tmp_dir/refs.tsv"
 while IFS= read -r project_file; do

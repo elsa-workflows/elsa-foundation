@@ -27,6 +27,32 @@ join_br() {
   awk 'BEGIN{first=1}{if(!first)printf "<br>"; printf "%s",$0; first=0}'
 }
 
+run_git() {
+  if command -v git >/dev/null 2>&1; then
+    git "$@"
+  elif command -v git.exe >/dev/null 2>&1; then
+    git.exe "$@"
+  else
+    return 127
+  fi
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw filesystem walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+list_repo_files() {
+  local listing
+  if ! listing="$(run_git -C "$repo_root" ls-files --cached --others --exclude-standard -- "$@")"; then
+    echo "git ls-files failed; map generation requires a git checkout" >&2
+    return 1
+  fi
+  while IFS= read -r rel_file; do
+    [ -n "$rel_file" ] || continue
+    [ -f "$repo_root/$rel_file" ] || continue
+    printf '%s/%s\n' "$repo_root" "$rel_file"
+  done <<< "$listing"
+}
+
 domain_group() {
   local project="$1"
   case "$project" in
@@ -243,7 +269,7 @@ default_feature_keys() {
   ' "$file" | sort
 }
 
-find "$repo_root/src" -name '*.csproj' -type f 2>/dev/null | sort > "$tmp_dir/project-files.txt"
+list_repo_files 'src/*.csproj' | sort > "$tmp_dir/project-files.txt"
 : > "$tmp_dir/projects.tsv"
 : > "$tmp_dir/project-dirs.tsv"
 
@@ -258,8 +284,8 @@ while IFS= read -r project_file; do
 done < "$tmp_dir/project-files.txt"
 
 : > "$tmp_dir/features.tsv"
-find "$repo_root/src" -name '*.cs' -type f -print0 2>/dev/null \
-  | xargs -0 grep -El '^[[:space:]]*public[[:space:]]+(abstract[[:space:]]+)?((sealed|partial)[[:space:]]+)*class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[^{\r\n]*(IShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase)' \
+list_repo_files 'src/*.cs' | tr '\n' '\0' \
+  | { xargs -0 grep -El '^[[:space:]]*public[[:space:]]+(abstract[[:space:]]+)?((sealed|partial)[[:space:]]+)*class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[^{\r\n]*(IShellFeature|FastEndpointsFeatureBase|EFCore.*FeatureBase|FeatureBase)' || true; } \
   | sort > "$tmp_dir/source-files.txt"
 
 while IFS= read -r file; do

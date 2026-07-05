@@ -49,7 +49,7 @@ public sealed class BookmarkConsumptionCheckpointRequest
     /// <summary>
     /// Durable-value changes (e.g. the resume callback's workflow-scope variable write-back, #286/#310) to commit
     /// atomically with the bookmark-consumed checkpoint. Mirrors how the invoke path folds
-    /// <see cref="Services.RuntimeContainerScopeService.BuildWorkflowScopeWriteBackChanges"/> output into its completion
+    /// <c>RuntimeContainerScopeService.BuildWorkflowScopeWriteBackChanges</c> (engine package) output into its completion
     /// commit, so a variable a resume callback mutated is durably re-projected for downstream activities rather
     /// than being lost when the in-memory scope is discarded. Empty unless the resume callback mutated a variable.
     /// </summary>

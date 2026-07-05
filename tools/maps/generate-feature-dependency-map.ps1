@@ -6,8 +6,30 @@ $docsMaps = Join-Path $repoRoot "docs\maps"
 
 function To-RepoPath {
     param([string]$Path)
-    $full = (Resolve-Path $Path).Path
+    # Pure string normalization: Resolve-Path would substitute on-disk casing,
+    # churning committed maps on case-insensitive filesystems.
+    $full = [System.IO.Path]::GetFullPath($Path)
     return ($full.Substring($repoRoot.Length + 1) -replace '\\', '/')
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw directory walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+function Get-RepoFiles {
+    param([string[]]$PathSpecs)
+    try {
+        $listing = & git -C $repoRoot ls-files --cached --others --exclude-standard -- @PathSpecs 2>$null
+    } catch {
+        throw "git is required to enumerate repo files for map generation: $_"
+    }
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed; map generation requires a git checkout." }
+    $files = @()
+    foreach ($relative in @($listing)) {
+        if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        $file = [System.IO.FileInfo]::new((Join-Path $repoRoot $relative))
+        if ($file.Exists) { $files += $file }
+    }
+    return @($files | Sort-Object FullName)
 }
 
 function Escape-Cell {
@@ -75,6 +97,7 @@ function Get-OwnerProject {
     while ($null -ne $dir) {
         $project = Get-ChildItem -LiteralPath $dir.FullName -Filter "*.csproj" -File | Select-Object -First 1
         if ($null -ne $project) { return $project }
+        if ($dir.FullName -eq $repoRoot) { break }
         $dir = $dir.Parent
     }
     return $null
@@ -82,14 +105,15 @@ function Get-OwnerProject {
 
 function Read-Projects {
     $projects = @()
-    foreach ($file in Get-ChildItem -LiteralPath (Join-Path $repoRoot "src") -Recurse -Filter "*.csproj" | Sort-Object FullName) {
+    foreach ($file in Get-RepoFiles @("src/*.csproj")) {
         [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
         $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
         $refs = @()
         $packages = @()
         foreach ($reference in @($xml.Project.SelectNodes("ItemGroup/ProjectReference"))) {
             if ($null -ne $reference -and -not [string]::IsNullOrWhiteSpace($reference.Include)) {
-                $refs += [System.IO.Path]::GetFileNameWithoutExtension($reference.Include)
+                # MSBuild backslash paths; normalize for non-Windows.
+                $refs += [System.IO.Path]::GetFileNameWithoutExtension(($reference.Include -replace '\\', '/'))
             }
         }
         foreach ($package in @($xml.Project.SelectNodes("ItemGroup/PackageReference"))) {
@@ -164,10 +188,9 @@ function Get-FeatureOptionSignals {
 
 function Read-Features {
     $features = @()
-    $sourceRoot = Join-Path $repoRoot "src"
     $classPattern = '(?m)^\s*public\s+(?:(?<abstract>abstract)\s+)?(?:(?:sealed|partial)\s+)*class\s+(?<class>\w+)\s*:\s*(?<base>[^{\r\n]+)'
 
-    foreach ($file in Get-ChildItem -LiteralPath $sourceRoot -Recurse -Filter "*.cs" | Sort-Object FullName) {
+    foreach ($file in Get-RepoFiles @("src/*.cs")) {
         $text = Get-Content -LiteralPath $file.FullName -Raw
         foreach ($match in [regex]::Matches($text, $classPattern)) {
             $className = $match.Groups["class"].Value

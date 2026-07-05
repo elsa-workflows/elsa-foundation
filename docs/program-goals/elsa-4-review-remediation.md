@@ -239,9 +239,47 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     prune-on-save + diagnostics cap behind a Stage-1.5 design gate — §E6 golden fixture pins
     the **ordinal** enum encodings + `elsa.flowchart.executionState` key; Canceled/Faulted
     paths deliberately retained for race-loser late-completion absorption.
-- **Wave B (next, sequenced):** W27 Groundwork durable placement + transport stores,
-  W28 ADR 0033 execution (solo — conflicts with anything touching Runtime.Core services),
-  W29 security/design follow-ups (now incl. #414 item 7 unredacted provider `LogDebug`).
+- **Wave B (in flight, sequenced):**
+  - **W27 Groundwork durable placement + transport stores — done 2026-07-05**
+    ([#484](https://github.com/elsa-workflows/elsa-foundation/pull/484), merge `c8f9b393`).
+    Durable stores for the frozen leaf contracts in a NEW bridge project
+    `Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork` (Identity-bridge shape,
+    self-contained against the Groundwork packages — no `Elsa.Persistence.Groundwork`
+    reference). The W20 "mechanical drop-in" claim was **refuted at Stage-1**: no reference
+    edge existed between the leaf and Groundwork persistence, and no shipped Groundwork store
+    did true cluster-safe CAS. Per user ruling ("no workarounds for Groundwork"), the missing
+    primitive was added UPSTREAM first:
+    [valence-works/Groundwork#23](https://github.com/valence-works/Groundwork/pull/23)
+    (`ExpectedVersion = 0` = create-only across all providers; spec 014 amendment makes the
+    full EV semantics matrix normative; published as `0.0.1-preview.18`, pins bumped 16 → 18).
+    On that primitive: strict store-enforced per-execution sequence uniqueness via create-only
+    `{executionId}:{sequence}` transport ids; exact single-lease placement first-claim (no
+    seed window); renewal/release via envelope-version CAS matched on owner+token. New §E6
+    kind `executionPlacement` frozen at v1 (golden fixture + drift test); the committed
+    `executionCommandTransport` fixture stayed byte-identical. Two-node kill-mid-drain
+    acceptance now runs over BOTH cluster flavors (in-memory + Groundwork over one shared
+    store). The repo test double `InMemoryDocumentStore` was aligned to provider-true EV
+    semantics with a double-vs-real-SQLite matrix contract test pinning them together.
+  - **W28 ADR 0033 execution — done 2026-07-05**
+    ([#487](https://github.com/elsa-workflows/elsa-foundation/pull/487), merge `2a05165b`).
+    Behavior-preserving split of `Elsa.Workflows.Runtime.Core`: `Services/` (96 files) +
+    `Resolvers/` + composition root (renamed `AddWorkflowRuntimeCore` → `AddWorkflowRuntime`) +
+    tracer implementations + concrete checkpoint/invoke middleware moved to the new engine
+    project `Elsa.Workflows.Runtime`; contracts/models stay in `.Core` (NuGet identity
+    preserved; namespaces retained on all moved types — zero persisted identifiers changed,
+    all golden fixtures byte-identical). **Models/ boundary ratified by user 2026-07-05: move
+    nothing** — full 77-file per-type audit committed as
+    [elsa-4-w28-models-boundary-audit.md](../reports/elsa-4-architecture-review-2026-07/elsa-4-w28-models-boundary-audit.md).
+    Two documented ADR deviations: the 2 coalescing interfaces (expose concrete
+    `RuntimeCoalescingSession`) and the 2 runtime pipeline builders (construct concrete
+    middleware) moved with the engine. Engine-side consumer set amended from the ADR's 5 to 8
+    (adds Distributed, Tracing, Flowchart — injects `RuntimeCheckpointCommitter` — and
+    Publishing.Api; Runtime.JavaScript verified contract-only). Five `internal`→`public`
+    widenings in `.Core` forced by the assembly boundary (no-IVT §2.23.3). New
+    `RuntimeCoreEngineShapeGuardTests` semantic guard (suffix-keyed, red-proven, with a
+    predicate-liveness fact); Architecture suite 47 → 49. All nine affected suites at
+    identical before/after counts.
+  - W29 security/design follow-ups (now incl. #414 item 7 unredacted provider `LogDebug`).
 - **Wave C (after structural):** W30 god-class refactors, W31 DRY batch (remaining #412/#413/
   #414 items 3/4/6, #415 live slices — item 3 stale per W25, #416 slices 2–6 — slice 3 needs its
   own gate for the EXTENSION_POINTS Priority-ordering contract, #417 remainder incl. the

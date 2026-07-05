@@ -221,12 +221,18 @@
   <Folder Name="/src/Elsa/Workflows/Runtime/">
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Workflows/Runtime/Distributed/Persistence/">
+    <Project Path="src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
@@ -376,6 +382,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Resumption/">
     <Project Path="tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj" />

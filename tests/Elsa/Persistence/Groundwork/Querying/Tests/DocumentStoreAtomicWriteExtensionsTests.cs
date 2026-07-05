@@ -34,13 +34,15 @@ public class GroundworkDocumentStoreAtomicWriteExtensionsTests
     {
         var store = new InMemoryDocumentStore(BuildManifest());
 
-        // The second write demands version 99 on a document that does not exist -> ConcurrencyConflict.
+        // The second write demands version 99 on a document that does not exist -> NotFound (a non-zero
+        // expectation can never match an absent document, per the published ExpectedVersion matrix that all
+        // real providers implement). Any non-success status aborts the batch before commit.
         var conflicting = new SaveDocumentRequest(Kind, "b", SchemaVersion, "{}", ExpectedVersion: 99);
 
         var ex = await Assert.ThrowsAsync<DocumentAtomicWriteException>(() =>
             store.SaveAllAsync(DocumentCommitScope.Of(Kind), [Save("a"), conflicting]));
 
-        Assert.Equal(DocumentStoreWriteStatus.ConcurrencyConflict, ex.Status);
+        Assert.Equal(DocumentStoreWriteStatus.NotFound, ex.Status);
         Assert.Equal("b", ex.Id);
 
         // The first write must not have been committed.

@@ -19,10 +19,10 @@
     <PackageVersion Include="Elsa.Platform.PackageManifest.Generator" Version="0.0.1-preview.58" />
     <PackageVersion Include="Elsa.Platform.PackageManifests" Version="0.0.1-preview.58" />
     <PackageVersion Include="Fluid.Core" Version="2.31.0" />
-    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.16" />
-    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.16" />
-    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.16" />
-    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.16" />
+    <PackageVersion Include="Groundwork.Core" Version="0.0.1-preview.18" />
+    <PackageVersion Include="Groundwork.Documents" Version="0.0.1-preview.18" />
+    <PackageVersion Include="Groundwork.PostgreSql" Version="0.0.1-preview.18" />
+    <PackageVersion Include="Groundwork.Sqlite" Version="0.0.1-preview.18" />
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />

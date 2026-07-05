@@ -15,7 +15,7 @@ public sealed record RuntimeFaultInfo(
 }
 
 /// <summary>
-/// Options controlling <see cref="Elsa.Workflows.Runtime.Core.Services.DefaultRuntimeFaultCapturePolicy"/>. The
+/// Options controlling <c>DefaultRuntimeFaultCapturePolicy</c> (engine package). The
 /// stack trace is captured only when <see cref="CaptureStackTrace"/> is enabled so the hot path does not
 /// unconditionally materialize a full stack string (which may be large or leak sensitive data).
 /// </summary>

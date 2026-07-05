@@ -78,5 +78,5 @@ public sealed class RuntimeCheckpointCommandPayload
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);
 }
 
-internal sealed class RuntimeCheckpointCommandPayloadValidationException(string message, string? paramName)
+public sealed class RuntimeCheckpointCommandPayloadValidationException(string message, string? paramName)
     : ArgumentException(message, paramName);

@@ -33,8 +33,8 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
             var key = (request.DocumentKind, request.Id);
             _docs.TryGetValue(key, out var existing);
 
-            if (request.ExpectedVersion is { } expected && (existing?.Version ?? 0) != expected)
-                return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
+            if (EvaluateSaveExpectedVersion(existing, request.ExpectedVersion) is { } failure)
+                return Task.FromResult(failure);
 
             var now = DateTimeOffset.UtcNow;
             var envelope = new DocumentEnvelope(
@@ -49,6 +49,18 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
             _docs[key] = envelope;
             return Task.FromResult(DocumentStoreWriteResult.Saved(envelope));
         }
+    }
+
+    // The published ExpectedVersion save matrix (Groundwork spec 014 amendment), matching the real providers
+    // exactly: null = upsert; 0 = create-only (conflict when a document exists); any other value = CAS update
+    // (conflict on version mismatch, NotFound against an absent document — a non-zero expectation can never match).
+    private static DocumentStoreWriteResult? EvaluateSaveExpectedVersion(DocumentEnvelope? existing, long? expectedVersion)
+    {
+        if (expectedVersion is not { } expected)
+            return null;
+        if (existing is null)
+            return expected == 0 ? null : DocumentStoreWriteResult.NotFound;
+        return existing.Version == expected ? null : DocumentStoreWriteResult.ConcurrencyConflict;
     }
 
     public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default) =>
@@ -140,8 +152,8 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
             var now = DateTimeOffset.UtcNow;
             var key = (request.DocumentKind, request.Id);
             var existing = ResolveCurrent(key);
-            if (request.ExpectedVersion is { } expected && (existing?.Version ?? 0) != expected)
-                return Task.FromResult(DocumentStoreWriteResult.ConcurrencyConflict);
+            if (EvaluateSaveExpectedVersion(existing, request.ExpectedVersion) is { } failure)
+                return Task.FromResult(failure);
             var envelope = new DocumentEnvelope(request.DocumentKind, request.Id, request.SchemaVersion,
                 (existing?.Version ?? 0) + 1, request.ContentJson, existing?.CreatedAt ?? now, now);
             _staged[key] = envelope;

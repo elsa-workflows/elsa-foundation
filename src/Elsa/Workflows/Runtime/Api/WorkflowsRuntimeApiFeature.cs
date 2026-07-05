@@ -24,8 +24,8 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
 
         // The runtime execution spine is host-agnostic (RT-4): it is composed here so the API endpoints can drive it,
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
-        // AddWorkflowRuntimeCore() without this API feature. See RuntimeCoreServiceCollectionExtensions.
-        services.AddWorkflowRuntimeCore();
+        // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
+        services.AddWorkflowRuntime();
 
         // API-only wiring: the FastEndpoints request handlers this feature's endpoints dispatch through.
         services.AddRequestHandlersFrom(GetType().Assembly);
