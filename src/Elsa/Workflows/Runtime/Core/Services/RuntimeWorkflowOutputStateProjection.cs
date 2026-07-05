@@ -14,11 +14,16 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// so every entry is routed through the configured <see cref="IRuntimePayloadCapturePolicy"/> before its payload
 /// is exposed. A declined payload (including a value marked <see cref="RuntimeMetadataKeys.IsSensitive"/>)
 /// projects as an explicit redacted marker — name present, no value, policy reason attached — never silently
-/// dropped. Activity-output captures share the <see cref="RuntimeMetadataKeys.OutputName"/> tag but derive their
+/// dropped. The same never-absent rule holds for a matching value whose payload is not stored inline (external
+/// or custom storage): it projects as a marker with <see cref="NotStoredInlineReason"/> rather than vanishing.
+/// Activity-output captures share the <see cref="RuntimeMetadataKeys.OutputName"/> tag but derive their
 /// value ids from the authored output reference, so the prefix filter keeps them out of this projection.
 /// </summary>
 public static class RuntimeWorkflowOutputStateProjection
 {
+    /// <summary>Marker reason for a workflow output whose payload is not stored inline (external/custom storage).</summary>
+    public const string NotStoredInlineReason = "Output payload is not stored inline.";
+
     /// <summary>
     /// Projects the workflow outputs from the execution's durable values, routing each payload through
     /// <paramref name="payloadCapturePolicy"/>. When several captures share an output name the most recently
@@ -43,7 +48,6 @@ public static class RuntimeWorkflowOutputStateProjection
     }
 
     private static bool IsWorkflowOutput(DurableValueState value) =>
-        value.InlineValue.HasValue &&
         value.ValueId.StartsWith(RuntimeWorkflowStateSeed.OutputValueIdPrefix, StringComparison.Ordinal) &&
         value.Metadata.ContainsKey(RuntimeMetadataKeys.OutputName);
 
@@ -52,6 +56,13 @@ public static class RuntimeWorkflowOutputStateProjection
         DurableValueState value,
         IRuntimePayloadCapturePolicy payloadCapturePolicy)
     {
+        // A workflow output whose payload is not stored inline (external or custom storage) has nothing this
+        // projection can expose — but the name must still surface (never absent). Project it as a marker; no
+        // policy consult is needed because there is no payload to disclose. Latent today: nothing writes
+        // externalized workflow outputs yet, but the read contract must be honest from day one.
+        if (!value.InlineValue.HasValue)
+            return new WorkflowOutputProjection(name, Value: null, IsRedacted: true, RedactionReason: NotStoredInlineReason, value.Type, value.CapturedAt);
+
         // The sensitivity marker is a read-side contract today (nothing writes it yet); threading it into the
         // policy request means a sensitive-marked output is redacted even by a payload-capturing host policy.
         var isSensitive = value.Metadata.TryGetValue(RuntimeMetadataKeys.IsSensitive, out var marker) &&

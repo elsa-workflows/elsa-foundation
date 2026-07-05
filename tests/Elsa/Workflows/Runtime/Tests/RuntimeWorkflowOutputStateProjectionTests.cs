@@ -108,6 +108,41 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
             });
     }
 
+    [Fact]
+    public void Project_ExternallyStoredOutput_SurfacesAsNamedMarker_NotAbsent()
+    {
+        // A workflow output whose payload is externalized carries no inline value: the projection must still
+        // surface the name — as a marker with the not-stored-inline reason — even under a payload-capturing
+        // policy, never silently dropping the entry. Latent today (nothing writes externalized workflow
+        // outputs yet), but the read contract is honest from day one.
+        var external = new DurableValueState(
+            durableValueId: "durable-output:Report",
+            workflowExecutionId: ExecutionId,
+            valueId: "output:Report",
+            type: new RuntimeValueTypeDescriptor("clr", "System.String", null),
+            lifecycle: DurableValueLifecycle.Instance,
+            storage: DurableValueStorage.External,
+            inlineValue: null,
+            externalReference: new DurableValueExternalReference(
+                StorageProfile: "blob",
+                Locator: "runs/exec-1/report",
+                Metadata: new Dictionary<string, string>()),
+            sourceActivityExecutionId: null,
+            capturedAt: _now,
+            metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.OutputName] = "Report"
+            });
+
+        var projections = RuntimeWorkflowOutputStateProjection.Project([external], _permissivePolicy);
+
+        var projection = Assert.Single(projections);
+        Assert.Equal("Report", projection.Name);
+        Assert.True(projection.IsRedacted);
+        Assert.Null(projection.Value);
+        Assert.Equal(RuntimeWorkflowOutputStateProjection.NotStoredInlineReason, projection.RedactionReason);
+    }
+
     private static IEnumerable<DurableValueState> States(IEnumerable<RuntimeStateChange<DurableValueState>> changes) =>
         changes.Select(change => change.State!);
 
