@@ -75,6 +75,25 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         Assert.Equal(expectedHash, executable.Identity.ArtifactHash);
     }
 
+    [Fact]
+    public async Task CompileProjectsEachActivityNodesChildrenExactlyOnce()
+    {
+        // W30b (#418) evidence for the traverse-once fix and the single INTENTIONAL observable change of the
+        // refactor: the compiler used to call IActivityStructureService.ProjectChildren twice per node (once in
+        // FlattenActivities, once in CompileNode). After the ActivityTreeProjector extraction it must call it
+        // exactly once per node. Output identity across this change is proven by the golden corpus above; this
+        // fact proves the call-count reduction actually landed.
+        var counting = new CountingActivityStructureService(_activityStructureService);
+        var definition = Corpus["nested-child-slots"]; // sequence root + two leaf nodes = 3 nodes.
+        var compiler = definition.BuildCompiler(counting);
+
+        await compiler.CompileAsync(definition.Request);
+
+        Assert.Equal(3, counting.ProjectChildrenCallsByNode.Count);
+        Assert.All(counting.ProjectChildrenCallsByNode, entry =>
+            Assert.True(entry.Value == 1, $"Node '{entry.Key}' had ProjectChildren called {entry.Value} times; expected exactly 1."));
+    }
+
     private static string Normalize(string json) => json.Replace("\r\n", "\n").TrimEnd('\n');
 
     // Resolves the source-tree Fixtures/CompilerGoldens directory (not the bin output copy), so a first-run
@@ -368,5 +387,32 @@ public sealed class WorkflowExecutableCompilerGoldenTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Decorates an <see cref="IActivityStructureService"/> and counts <c>ProjectChildren</c> calls per node id,
+    /// so the traverse-once fix (single projection per node) can be asserted.
+    /// </summary>
+    private sealed class CountingActivityStructureService(IActivityStructureService inner) : IActivityStructureService
+    {
+        public Dictionary<string, int> ProjectChildrenCallsByNode { get; } = new(StringComparer.Ordinal);
+
+        public IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityChildProjection> ProjectChildren(ActivityNode activity)
+        {
+            ProjectChildrenCallsByNode[activity.NodeId] =
+                ProjectChildrenCallsByNode.GetValueOrDefault(activity.NodeId) + 1;
+            return inner.ProjectChildren(activity);
+        }
+
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityChildProjection> childProjections) =>
+            inner.ReplaceChildren(activity, childProjections);
+
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) =>
+            inner.CompileExecutableStructure(activity);
+
+        public IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition> ProjectScopedVariables(ActivityNode activity) =>
+            inner.ProjectScopedVariables(activity);
+
+        public bool SupportsScopedVariables(ActivityNode activity) => inner.SupportsScopedVariables(activity);
     }
 }

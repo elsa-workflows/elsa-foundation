@@ -22,7 +22,8 @@ public sealed class WorkflowExecutableCompiler(
     IActivityStructureService activityStructureService,
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     RuntimeInputBindingCompiler inputBindingCompiler,
-    WorkflowExecutableHasher hasher)
+    WorkflowExecutableHasher hasher,
+    ActivityTreeProjector activityTreeProjector)
     : IWorkflowExecutableCompiler
 {
     public async ValueTask<WorkflowExecutable> CompileAsync(
@@ -39,16 +40,18 @@ public sealed class WorkflowExecutableCompiler(
             ArgumentNullException.ThrowIfNull(state);
 
             var rootActivity = state.RootActivity
-                ?? throw new ArgumentException("Workflow version has no root activity to publish.");
+                ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
 
-            var activities = FlattenActivities(rootActivity).ToArray();
-            ValidateActivityTree(activities);
+            // Single tree walk: children are projected once here and reused for both flattening and node
+            // compilation, replacing the former double ProjectChildren traversal.
+            var projection = activityTreeProjector.Project(rootActivity);
+            ActivityTreeProjector.Validate(projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
-            foreach (var activityVersionId in activities.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
+            foreach (var activityVersionId in projection.Nodes.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
-            var compiledRoot = CompileNode(rootActivity, activityRows);
+            var compiledRoot = CompileNode(rootActivity, projection, activityRows);
             var artifactHash = hasher.ComputeHash(source, compiledRoot);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
@@ -91,13 +94,14 @@ public sealed class WorkflowExecutableCompiler(
 
     private ExecutableNode CompileNode(
         ActivityNode activity,
+        ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
         var activityVersion = activityRows[activity.ActivityVersionId];
 
         var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var childSlots = CompileChildSlots(activityStructureService.ProjectChildren(activity), activityRows);
+        var childSlots = CompileChildSlots(projection.ChildProjections(activity), projection, activityRows);
 
         foreach (var inputState in activity.Inputs)
         {
@@ -194,12 +198,13 @@ public sealed class WorkflowExecutableCompiler(
 
     private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
         IEnumerable<ActivityChildProjection> childSlots,
+        ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
     {
         return childSlots
             .Select(slot => new ExecutableChildSlot(
                 slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray()))
+                slot.Activities.Select(activity => CompileNode(activity, projection, activityRows)).ToArray()))
             .ToArray();
     }
 
@@ -207,30 +212,4 @@ public sealed class WorkflowExecutableCompiler(
         structure is null
             ? null
             : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
-
-    private static void ValidateActivityTree(IReadOnlyCollection<ActivityNode> activities)
-    {
-        if (activities.Count == 0)
-            throw new ArgumentException("Workflow version has no root activity to publish.");
-
-        var duplicateNodeId = activities.GroupBy(activity => activity.NodeId, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1)?.Key;
-        if (duplicateNodeId is not null)
-            throw new ArgumentException($"Workflow version contains duplicate activity node id '{duplicateNodeId}'.");
-    }
-
-    private IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
-    {
-        var stack = new Stack<ActivityNode>();
-        stack.Push(rootActivity);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
-                stack.Push(child);
-        }
-    }
 }

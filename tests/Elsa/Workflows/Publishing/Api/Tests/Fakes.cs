@@ -48,7 +48,8 @@ internal static class TestCompiler
             activityStructureService,
             wellKnownTypeRegistry,
             new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry),
-            new Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableHasher());
+            new Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableHasher(),
+            new Elsa.Workflows.Publishing.Api.Services.ActivityTreeProjector(activityStructureService));
 }
 
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>
