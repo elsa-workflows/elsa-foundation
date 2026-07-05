@@ -50,6 +50,10 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
         await using var scope = _fixture.CreateScope();
         var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
 
+        // An unknown username still returns the same generic Failure. (The service also runs a dummy password
+        // verification on this path — see AspNetCoreIdentitySignInService — to equalize timing and close the
+        // username-enumeration timing oracle; a timing assertion would be inherently flaky, so this asserts the
+        // observable contract: unknown user → Failure, indistinguishable from a wrong password.)
         var outcome = await signIn.PasswordSignInAsync("nobody", "whatever", tenantId: null);
 
         Assert.False(outcome.Succeeded);

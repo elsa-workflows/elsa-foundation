@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// <summary>
 /// <see cref="ITokenService"/> over the real OpenIddict pipeline:
 /// <list type="bullet">
-/// <item><b>Issue</b> mints a signed JWT access token (readable <c>at+jwt</c>, HS256 with the server's
+/// <item><b>Issue</b> mints a signed JWT access token (readable <c>at+jwt</c>, RS256 with the server's
 /// signing credentials, carrying sub/tenant/provider/permission claims) plus an opaque, single-use refresh
 /// token. Both are backed by OpenIddict token-store entries so they can be revoked and rotated.</item>
 /// <item><b>Validate</b> runs OpenIddict's full local validation pipeline (signature, issuer, lifetime, and

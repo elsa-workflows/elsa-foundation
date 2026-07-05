@@ -17,17 +17,31 @@ public sealed class AspNetCoreIdentitySignInService(
     SignInManager<AspNetCoreIdentityUser> signInManager,
     UserManager<AspNetCoreIdentityUser> userManager,
     IUserClaimsPrincipalFactory<AspNetCoreIdentityUser> principalFactory,
+    IPasswordHasher<AspNetCoreIdentityUser> passwordHasher,
     IAuthSessionService sessionService,
     IHttpContextAccessor httpContextAccessor,
     IOptions<AspNetCoreIdentityOptions> options) : IIdentitySignInService
 {
+    // A precomputed PBKDF2 hash of a throwaway password, verified against when the user is not found so the
+    // no-such-user path performs the same password-hashing work as the wrong-password path. This equalizes
+    // response timing and closes the username-enumeration timing oracle (unknown users would otherwise return
+    // before any hashing). The value is never a valid credential; the verify result is discarded.
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<AspNetCoreIdentityUser>().HashPassword(new AspNetCoreIdentityUser(), "timing-equalizer-not-a-real-password");
+
     public async ValueTask<SignInOutcome> PasswordSignInAsync(string username, string password, string? tenantId, CancellationToken cancellationToken = default)
     {
         var effectiveTenant = string.IsNullOrWhiteSpace(tenantId) ? options.Value.DefaultTenantId : tenantId;
 
         var user = await FindUserAsync(username, effectiveTenant);
         if (user is null)
+        {
+            // Perform a dummy password verification against a fixed hash so an unknown username takes the same
+            // time as a wrong password for a real one, then fail with the same generic outcome. Prevents
+            // username enumeration via a timing side channel.
+            passwordHasher.VerifyHashedPassword(new AspNetCoreIdentityUser(), DummyPasswordHash, password);
             return SignInOutcome.Failure;
+        }
 
         var result = await signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
         if (!result.Succeeded)

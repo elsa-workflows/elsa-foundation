@@ -125,6 +125,26 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
    remove it to avoid the startup warning).
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
+10. **Apply the OpenIddict token-store migrations.** With `IsDevelopmentOrDemo = false`, the auto-initializer
+    that creates/migrates the token schema **does not run** — it is a dev-only convenience. A production host
+    with `FoundationIdentityOpenIddict` enabled but its migrations unapplied faults on the first token
+    issuance (`IssueAsync`, i.e. the first `GET /_elsa/identity/token` after login). Apply them explicitly as
+    a deploy step, against the `OpenIddictIdentityDbContext`:
+
+    ```bash
+    dotnet ef database update \
+      --context OpenIddictIdentityDbContext \
+      --project src/Elsa/Foundation/Identity/OpenIddict
+    ```
+
+    (The ASP.NET Core Identity feature's own `ApplicationIdentityDbContext` likewise relies on relational
+    migrations outside dev/demo; run `dotnet ef database update` for it too if you have not already.)
 
 If a required signing/encryption key is missing outside `IsDevelopmentOrDemo`, the host throws at startup with a
 message naming the setting to configure — a missing key never silently degrades to an insecure default.
+
+`IsDevelopmentOrDemo` is also **safe by construction**: if it is left `true` while the host runs in any
+environment other than `Development` (e.g. the unedited default deployed to Production), the host **hard-fails
+at startup** with an actionable message rather than silently booting the insecure posture (ephemeral keys +
+the seeded `admin`/`Password123!` account). There is no insecure escape hatch in production — set
+`IsDevelopmentOrDemo = false` (and configure real keys) for any non-Development deployment.
