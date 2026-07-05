@@ -23,7 +23,7 @@ public sealed class VariableUniquenessValidator : IDraftValidator
         foreach (var group in duplicates)
         {
             errors.Add(new ValidationError(
-                Path: $"$workflow/variables/{group.Key}",
+                Path: $"{ValidationPaths.Workflow}/variables/{group.Key}",
                 Type: "Variables/Uniqueness",
                 Message: $"Variable name '{group.Key}' is declared {group.Count()} times (case-insensitive). Variable names must be unique within the workflow."
             ));

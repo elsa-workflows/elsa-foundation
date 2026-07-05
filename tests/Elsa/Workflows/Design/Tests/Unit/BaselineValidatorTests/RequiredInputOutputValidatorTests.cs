@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 /// SC-022(d) + SC-022(e) activity-level. Branch coverage — required satisfied, required missing,
 /// required present-but-empty, recursion into ChildActivities, unknown version skipped (the
 /// unknown-version *error* is <see cref="UnknownActivityVersionValidator"/>'s concern per the
-/// FR-033 2026-07-05 amendment; this validator stays silent to avoid double-reporting or
-/// faulting the gate).
+/// FR-033 2026-07-05 amendment; this validator resolves via <c>CatalogVersionResolver</c> and
+/// skips the unresolvable node rather than double-reporting or faulting the gate).
 /// </summary>
 public sealed class RequiredInputOutputValidatorTests
 {
@@ -86,6 +86,8 @@ public sealed class RequiredInputOutputValidatorTests
     [Fact]
     public async Task Unknown_activity_version_is_skipped_gracefully()
     {
+        // The store's Get contract throws on a missing id; CatalogVersionResolver folds that to
+        // null and this validator skips the node — UnknownActivityVersionValidator owns the report.
         var state = State(activities: [Node("n1", "av-missing")]);
         var errors = await Validate(Validator(new StubActivityCatalog()), state);
 
@@ -107,7 +109,7 @@ public sealed class RequiredInputOutputValidatorTests
     }
 
     private static RequiredInputOutputValidator Validator(IActivityDefinitionLookup catalog) =>
-        new(Resolver(catalog), Options(), Walker());
+        new(CatalogResolver(catalog), Options(), Walker());
 
     private static InputDefinition RequiredInput(string referenceKey) => new(
         ReferenceKey: referenceKey,

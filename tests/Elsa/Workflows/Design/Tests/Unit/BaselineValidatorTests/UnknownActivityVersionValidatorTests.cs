@@ -71,5 +71,5 @@ public sealed class UnknownActivityVersionValidatorTests
     }
 
     private static UnknownActivityVersionValidator Validator(IActivityDefinitionLookup catalog) =>
-        new(Resolver(catalog), Options(), Walker());
+        new(CatalogResolver(catalog), Options(), Walker());
 }

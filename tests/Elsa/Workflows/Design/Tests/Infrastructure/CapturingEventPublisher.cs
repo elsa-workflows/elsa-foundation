@@ -1,5 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
+using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using System.Collections.Concurrent;
 
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
@@ -35,6 +37,18 @@ public sealed class CapturingEventPublisher : IEventPublisher
     /// handler-invoker middleware.
     /// </summary>
     public Action<IEvent>? OnPublish { get; set; }
+
+    /// <summary>
+    /// Convenience: install an <see cref="OnPublish"/> hook that contributes <paramref name="error"/>
+    /// onto every <c>OnDraftValidating</c> pass, simulating a validator that always emits it. Replaces
+    /// the copy-pasted "if OnDraftValidating add ValidationError" lambda at each call site.
+    /// </summary>
+    public void ContributeError(ValidationError error) =>
+        OnPublish = e =>
+        {
+            if (e is OnDraftValidating validating)
+                validating.Errors.Add(error);
+        };
 
     /// <summary>
     /// Register a subscriber for events assignable to <typeparamref name="T"/>, mirroring an

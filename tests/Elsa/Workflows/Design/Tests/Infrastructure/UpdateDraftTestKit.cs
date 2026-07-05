@@ -2,9 +2,11 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Microsoft.Extensions.DependencyInjection;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
@@ -50,6 +52,26 @@ internal static class UpdateDraftTestKit
             .Skip(skip)
             .Where(e => e.GetType().Namespace == "Elsa.Workflows.Design.Core.Events")
             .ToList();
+
+    /// <summary>
+    /// A standalone <see cref="DraftStateDiffEngine"/> wired to the test activity-structure handler,
+    /// so per-diff coverage can drive the engine directly (its per-diff mutation-event publication
+    /// having been retired from the mutation commands). Same activity flattening as production.
+    /// </summary>
+    public static DraftStateDiffEngine Engine() =>
+        new(new DefaultActivityStructureService([new TestActivityStructureHandler()]));
+
+    /// <summary>
+    /// Evaluate the engine over a stored → desired transition. Layouts default to empty; the diff
+    /// engine reads designer layout from the sibling collection, independent of State.
+    /// </summary>
+    public static IReadOnlyList<IEvent> Evaluate(
+        WorkflowDefinitionState stored,
+        WorkflowDefinitionState desired,
+        IReadOnlyCollection<DesignMetadataRecord>? storedLayout = null,
+        IReadOnlyCollection<DesignMetadataRecord>? desiredLayout = null,
+        string draftId = "draft-1") =>
+        Engine().Evaluate(draftId, stored, storedLayout ?? [], desired, desiredLayout ?? []);
 
     public static WorkflowDefinitionState State(
         IEnumerable<VariableDefinition>? variables = null,

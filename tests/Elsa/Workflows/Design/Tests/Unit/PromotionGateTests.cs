@@ -1,7 +1,5 @@
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
-using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
-using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 using Elsa.Workflows.Design.Validations.Core.Events;
@@ -15,13 +13,17 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-014 + Unit C FR-024. The promotion gate refuses to promote a Draft whose
-/// <c>WorkflowDefinitionDraftValidation</c> sibling carries any errors.
+/// SC-014 + Unit C FR-024. Validation errors are derived state (no persisted sibling): the
+/// promotion gate re-runs the validators in-lock via <c>OnDraftValidating</c> and refuses to
+/// promote a Draft whose current state produces any errors, throwing
+/// <c>DraftHasValidationErrorsException</c> with the error count. Validator contributions are
+/// simulated with the <c>CapturingEventPublisher.OnPublish</c> hook — the project-wide pattern for
+/// driving <c>OnDraftValidating</c> without spinning up the full event pipeline.
 /// </summary>
 public sealed class PromotionGateTests
 {
     [Fact]
-    public async Task Promotion_throws_when_validation_sibling_has_errors()
+    public async Task Promotion_throws_when_the_draft_state_produces_validation_errors()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
@@ -45,11 +47,11 @@ public sealed class PromotionGateTests
     }
 
     [Fact]
-    public async Task Promotion_succeeds_when_validation_sibling_is_empty()
+    public async Task Promotion_succeeds_when_the_draft_state_produces_no_errors()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
-        // No OnSend hook - validators contribute nothing; sibling persists with empty Errors.
+        // No OnPublish hook — validators contribute nothing, so the re-run gate finds no errors.
         var draftId = await CreateDraft(host);
 
         using var scope = host.Services.CreateScope();
@@ -77,7 +79,7 @@ public sealed class PromotionGateTests
         using var host = WorkflowsDesignTestHost.Create();
 
         var validator = new UnknownActivityVersionValidator(
-            ValidatorTestHelpers.Resolver(new StubActivityCatalog()),
+            ValidatorTestHelpers.CatalogResolver(new StubActivityCatalog()),
             ValidatorTestHelpers.Options(),
             ValidatorTestHelpers.Walker());
         var executeValidations = new ExecuteValidations([validator]);

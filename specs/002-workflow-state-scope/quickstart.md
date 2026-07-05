@@ -1,5 +1,7 @@
 # Quickstart — Unit C Workflow Design Substrate
 
+> **Supersession note (2026-07-05):** recipes below that rebuild `WorkflowDefinitionDraftValidation.Errors` are superseded — the entity is deleted; validation errors are derived state recomputed in-lock on each mutation (and re-derived by the promotion gate), never persisted (spec.md FR-021/FR-023). Per-diff mutation-event publication is likewise retired (declarations stand). The validators-as-`OnDraftValidating`-subscribers and wholesale-rebuild *semantics* survive in-memory. Reinstatable when a consumer exists.
+
 Developer onboarding for the Unit C deliverables. Five recipes covering the most common consumer scenarios.
 
 ---

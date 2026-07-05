@@ -1,6 +1,6 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Stores;
 
@@ -23,6 +23,12 @@ public interface IWorkflowDefinitionDraftStore
     /// <summary>Finds the complete designer layout records for the draft.</summary>
     Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default);
 
-    /// <summary>Finds the current validation errors for the draft.</summary>
-    Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Finds the draft with the given id together with its designer-layout records in a single read,
+    /// or <c>null</c> if the draft does not exist. Callers that need both (e.g. the GET-draft path)
+    /// use this instead of pairing <see cref="FindByIdAsync"/> with
+    /// <see cref="FindLayoutByDraftIdAsync"/> — on a document provider that avoids re-loading and
+    /// re-deserializing the same draft document twice.
+    /// </summary>
+    Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default);
 }

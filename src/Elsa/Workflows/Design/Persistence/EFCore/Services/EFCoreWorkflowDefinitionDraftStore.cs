@@ -2,9 +2,9 @@ using Elsa.Persistence.Core.Queries;
 using Elsa.Persistence.EFCore.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
-using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
@@ -33,21 +33,31 @@ public sealed class EFCoreWorkflowDefinitionDraftStore(IDbContextFactory<Workflo
     public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await LoadLayoutAsync(dbContext, draftId, cancellationToken);
+    }
+
+    public async Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
+    {
+        // Two cheap queries: the draft via the hydrating read store (so State is deserialized) and the
+        // layouts-table row. Relational providers do not benefit from a single-document load, so this
+        // matches the pre-existing pair of round-trips.
+        var draft = await FindByIdAsync(draftId, cancellationToken);
+        if (draft is null)
+            return null;
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var layout = await LoadLayoutAsync(dbContext, draftId, cancellationToken);
+        return new DraftWithLayout(draft, layout);
+    }
+
+    private static async Task<IReadOnlyCollection<DesignMetadataRecord>> LoadLayoutAsync(
+        WorkflowsDesignDbContext dbContext, string draftId, CancellationToken cancellationToken)
+    {
         var layout = await dbContext.WorkflowDefinitionDraftLayouts
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draftId, cancellationToken);
 
         return layout?.Records.ToArray() ?? [];
-    }
-
-    public async Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
-    {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var validation = await dbContext.WorkflowDefinitionDraftValidations
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == draftId, cancellationToken);
-
-        return validation?.Errors.ToArray() ?? [];
     }
 
     private static WorkflowDefinitionDraft? CurrentDraft(IReadOnlyCollection<WorkflowDefinitionDraft> drafts) =>

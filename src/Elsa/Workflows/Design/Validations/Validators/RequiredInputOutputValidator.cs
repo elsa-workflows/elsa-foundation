@@ -45,7 +45,9 @@ public sealed class RequiredInputOutputValidator(
 
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
-            // An unresolvable node is UnknownActivityVersionValidator's report — skip it here.
+            // CatalogVersionResolver memoizes per pass and translates the store's throwing Get
+            // contract to nullable. An unresolvable node is UnknownActivityVersionValidator's
+            // report (FR-033 2026-07-05 amendment) — skip it here rather than fault the gate.
             var version = await catalogResolver.Find(node.ActivityVersionId, cancellationToken);
             if (version is null)
                 continue;

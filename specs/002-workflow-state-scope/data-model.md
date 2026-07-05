@@ -4,6 +4,8 @@
 > data-model entries are superseded by
 > [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md).
 
+> **Supersession note (2026-07-05):** all `WorkflowDefinitionDraftValidation` entries below (entity §2.4, read contract §2.7, the Draft's validation-sibling relationship, the FR-023 rebuild step) are superseded — the entity, its EF config, and `IWorkflowDefinitionDraftValidation` are deleted; validation errors are derived state, recomputed in-lock, not persisted (spec.md FR-021/FR-023). The Draft's only surviving sibling is `WorkflowDefinitionDraftLayout`. Likewise, per-diff mutation-event *publication* is retired (declarations stand); the diff engine is unregistered from DI. Reinstatable when an event-sourcing / cached-error consumer exists.
+
 Entity inventory + relationships + lifecycle for the Workflow Design substrate landed by Unit C. Cross-references spec.md FRs at the entity level; the spec is the authoritative source for behavioural detail.
 
 ---
