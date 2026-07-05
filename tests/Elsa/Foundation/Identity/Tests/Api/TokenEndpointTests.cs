@@ -37,7 +37,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     public async Task Authenticated_Cookie_Principal_Gets_200_With_A_Bearer_Whose_Claims_RoundTrip()
     {
         var client = _fixture.Client;
-        await LoginAsync(client);
+        await LoginTestHelper.LoginAsync(client);
 
         var response = await client.GetAsync(TokenRoute);
 
@@ -50,8 +50,10 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var accessToken = accessTokenElement.GetString()!;
         Assert.False(string.IsNullOrWhiteSpace(accessToken));
 
-        // The issued JWT must carry the cookie principal's subject, tenant, and permission claims.
-        var validation = await _fixture.Services.GetRequiredService<ITokenService>()
+        // The issued JWT must carry the cookie principal's subject, tenant, and permission claims. Resolve the
+        // (scoped) token service from a scope — the Development environment enables scope validation.
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var validation = await scope.ServiceProvider.GetRequiredService<ITokenService>()
             .ValidateAsync(new TokenValidationRequest(accessToken));
 
         Assert.True(validation.Succeeded, validation.Failure);
@@ -66,7 +68,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     public async Task Login_Then_Token_Yields_A_Bearer_That_Authenticates_A_Protected_Endpoint()
     {
         var client = _fixture.Client;
-        await LoginAsync(client);
+        await LoginTestHelper.LoginAsync(client);
 
         var accessToken = await FetchAccessTokenAsync(client);
 
@@ -104,10 +106,37 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Form_Login_Without_A_Csrf_Token_And_Without_A_ReturnUrl_Is_Rejected()
+    {
+        var client = _fixture.Client;
+
+        // The exact bypass the fix closes: a form-urlencoded login POST that omits both the antiforgery token
+        // AND the returnUrl. Previously the antiforgery gate keyed off returnUrl presence, so this path
+        // skipped CSRF validation entirely while still authenticating and issuing the cookie. The gate now
+        // keys off Content-Type (this is not application/json), so it must be rejected with no session issued.
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["username"] = IdentitySeeder.AdminUserName,
+            ["password"] = IdentitySeeder.AdminPassword
+        });
+
+        var response = await client.PostAsync(LoginRoute, content);
+
+        // Rejected (401 — no returnUrl to redirect to) and crucially NO identity cookie was issued: the CSRF
+        // gate blocked sign-in before credentials were checked, even though none of the body named a returnUrl.
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var setCookie = response.Headers.TryGetValues("Set-Cookie", out var values) ? values : [];
+        Assert.DoesNotContain(setCookie, x => x.StartsWith("Elsa.Identity.Cookie", StringComparison.Ordinal));
+
+        // And the exchange still 401s — no session was established by the rejected login.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
     public async Task Logout_Then_Token_Returns_401()
     {
         var client = _fixture.Client;
-        await LoginAsync(client);
+        await LoginTestHelper.LoginAsync(client);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
 
         // Clearing the identity cookie (as POST /logout does) drops the session; the exchange must 401 again.
@@ -116,26 +145,49 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
     }
 
-    /// <summary>Drives the real POST /_elsa/identity/login form flow and captures the issued cookie.</summary>
-    private static async Task LoginAsync(HttpClient client)
+    [Fact]
+    public async Task Logout_For_An_Unknown_Provider_Returns_204_And_Does_Not_500()
     {
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        // Regression for the logout 500: an unregistered/bad provider scheme (e.g. "openiddict", which declares
+        // no sign-out handler) must be an idempotent no-op 204, never an InvalidOperationException → 500.
+        foreach (var provider in new[] { "openiddict", "does-not-exist" })
         {
-            ["username"] = IdentitySeeder.AdminUserName,
-            ["password"] = IdentitySeeder.AdminPassword
-        });
+            var response = await _fixture.Client.PostAsJsonAsync($"/_elsa/identity/logout/{provider}", new { });
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+    }
 
-        var response = await client.PostAsync(LoginRoute, content);
-        Assert.True(response.IsSuccessStatusCode, $"Login failed: {(int)response.StatusCode}");
+    [Fact]
+    public async Task Logout_On_The_Cookie_Provider_Clears_The_Session()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
 
-        var cookie = response.Headers.TryGetValues("Set-Cookie", out var values)
+        // Logout on the real first-party provider signs out its cookie scheme (an IAuthenticationSignOutHandler).
+        var logout = await client.PostAsJsonAsync("/_elsa/identity/logout/aspnetcore-identity", new { });
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        // The response expires the identity cookie; sending the (now-cleared) cookie no longer authenticates.
+        var cleared = logout.Headers.TryGetValues("Set-Cookie", out var values)
             ? values.FirstOrDefault(x => x.StartsWith("Elsa.Identity.Cookie", StringComparison.Ordinal))
             : null;
-        Assert.NotNull(cookie);
-
-        // TestServer's HttpClient doesn't persist cookies; attach it explicitly for subsequent requests.
+        Assert.NotNull(cleared);
         client.DefaultRequestHeaders.Remove("Cookie");
-        client.DefaultRequestHeaders.Add("Cookie", cookie!.Split(';', 2)[0]);
+        client.DefaultRequestHeaders.Add("Cookie", cleared!.Split(';', 2)[0]);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_With_A_Garbage_Token_Returns_401_Not_500()
+    {
+        // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
+        // RefreshAsync throw InvalidOperationException; the endpoint must map that to a clean 401, not a 500.
+        var response = await _fixture.Client.PostAsJsonAsync(
+            "/_elsa/identity/refresh", new { refreshToken = "not-a-real-refresh-token" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     private static async Task<string> FetchAccessTokenAsync(HttpClient client)

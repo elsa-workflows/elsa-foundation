@@ -34,7 +34,6 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// </summary>
 public sealed class EnabledShellCompositionTests : IAsyncLifetime
 {
-    private const string LoginRoute = "/_elsa/identity/login";
     private const string TokenRoute = "/_elsa/identity/token";
     private const string SecuredRoute = "/" + SecuredPingEndpoint.Route;
 
@@ -45,6 +44,10 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
         var databaseSuffix = Guid.NewGuid().ToString("n");
 
         _host = new HostBuilder()
+            // The dev/demo identity features register a DevelopmentOrDemoGuard that hard-fails startup outside
+            // Development (HostBuilder defaults to Production). This composition runs legitimately in dev/demo
+            // mode, so declare the Development environment.
+            .UseEnvironment(Environments.Development)
             .ConfigureWebHost(webHost =>
             {
                 webHost.UseTestServer();
@@ -115,7 +118,7 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
     public async Task Login_Then_Token_Yields_A_Bearer_That_Satisfies_ConfigurePermissions()
     {
         var client = _host.GetTestClient();
-        await LoginAsync(client);
+        await LoginTestHelper.LoginAsync(client);
 
         var accessToken = await FetchAccessTokenAsync(client);
 
@@ -125,26 +128,6 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("pong", (await response.Content.ReadAsStringAsync()).Trim('"'));
-    }
-
-    private static async Task LoginAsync(HttpClient client)
-    {
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["username"] = IdentitySeeder.AdminUserName,
-            ["password"] = IdentitySeeder.AdminPassword
-        });
-
-        var response = await client.PostAsync(LoginRoute, content);
-        Assert.True(response.IsSuccessStatusCode, $"Login failed: {(int)response.StatusCode}");
-
-        var cookie = response.Headers.TryGetValues("Set-Cookie", out var values)
-            ? values.FirstOrDefault(x => x.StartsWith("Elsa.Identity.Cookie", StringComparison.Ordinal))
-            : null;
-        Assert.NotNull(cookie);
-
-        client.DefaultRequestHeaders.Remove("Cookie");
-        client.DefaultRequestHeaders.Add("Cookie", cookie!.Split(';', 2)[0]);
     }
 
     private static async Task<string> FetchAccessTokenAsync(HttpClient client)
