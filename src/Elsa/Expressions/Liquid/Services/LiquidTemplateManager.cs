@@ -38,8 +38,12 @@ public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memor
             {
                 if (!TryParse(source, out var parsed, out var error))
                 {
-                    error = "{% raw %}\n" + error + "\n{% endraw %}";
-                    _ = TryParse(error, out parsed, out error);
+                    // Fall back to rendering the parse error itself. If that re-parse ALSO fails
+                    // (e.g. the error text embeds template markup), surface a clear error instead of
+                    // caching null and crashing on render (#422).
+                    var wrappedError = "{% raw %}\n" + error + "\n{% endraw %}";
+                    if (!TryParse(wrappedError, out parsed, out _))
+                        throw new InvalidOperationException($"Failed to parse Liquid template: {error}");
 
                     e.SetSlidingExpiration(TimeSpan.FromMilliseconds(100));
                     return parsed;
