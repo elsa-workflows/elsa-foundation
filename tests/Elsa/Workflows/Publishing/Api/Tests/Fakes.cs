@@ -31,6 +31,28 @@ internal static class TestWellKnownTypeRegistry
     }
 }
 
+/// <summary>
+/// Constructs the <see cref="WorkflowExecutableCompiler"/> and its decomposition collaborators (W30b, #418)
+/// for tests that exercise the compiler directly, keeping the collaborator wiring in one place.
+/// </summary>
+internal static class TestCompiler
+{
+    public static Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableCompiler Create(
+        Elsa.Workflows.Design.Persistence.Core.Stores.IWorkflowDefinitionVersionStore workflowVersions,
+        Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore activityVersions,
+        Elsa.Workflows.Design.Core.Contracts.IActivityStructureService activityStructureService,
+        IWellKnownTypeRegistry wellKnownTypeRegistry) =>
+        new(
+            workflowVersions,
+            activityVersions,
+            new Elsa.Workflows.Publishing.Api.Services.WorkflowExecutableHasher(),
+            new Elsa.Workflows.Publishing.Api.Services.ActivityTreeProjector(activityStructureService),
+            new Elsa.Workflows.Publishing.Api.Services.ExecutableNodeCompiler(
+                activityStructureService,
+                wellKnownTypeRegistry,
+                new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)));
+}
+
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>
 internal sealed class StubActivity : IActivity
 {

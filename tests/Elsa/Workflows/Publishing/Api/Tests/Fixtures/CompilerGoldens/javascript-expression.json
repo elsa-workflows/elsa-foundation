@@ -1,0 +1,65 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "expiresAt": null,
+  "identity": {
+    "artifactHash": "sha256:af096a196bb7aa9c5646c4e6496a9bed11fef2131c588ba1ea5909553a32bfe0",
+    "artifactId": "artifact-af096a196bb7",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1",
+    "source": {
+      "sourceId": "version-1",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceVersion": "1.0.0"
+    }
+  },
+  "publishedAt": "2026-06-24T12:00:00\u002B00:00",
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Test.WriteLine",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "write-js",
+    "childSlots": [],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "write-js",
+    "inputBindings": [
+      {
+        "expression": {
+          "expression": "\u0022Hello \u0022 \u002B \u0022World\u0022",
+          "language": "JavaScript",
+          "resultTypeId": "System.String, System.Private.CoreLib"
+        },
+        "inputName": "Text",
+        "key": "Text",
+        "literalValue": null,
+        "metadata": [
+          {
+            "Key": "referenceKey",
+            "Value": "Text"
+          },
+          {
+            "Key": "typeName",
+            "Value": "System.String, System.Private.CoreLib"
+          }
+        ],
+        "source": "Expression"
+      }
+    ],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "write-js"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": null
+  },
+  "scope": "Published"
+}

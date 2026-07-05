@@ -1,0 +1,51 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "expiresAt": null,
+  "identity": {
+    "artifactHash": "sha256:8d5bc246e7eed1042eb8dbc62477901f1aca16167257b22beab94dea8fcff589",
+    "artifactId": "artifact-8d5bc246e7ee",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1",
+    "source": {
+      "sourceId": "version-1",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceVersion": "1.0.0"
+    }
+  },
+  "publishedAt": "2026-06-24T12:00:00\u002B00:00",
+  "resumeTargets": [
+    {
+      "executableNodeId": "delay-1",
+      "handlerKey": "OnResumeAsync",
+      "key": "resume-target:probe",
+      "metadata": [],
+      "resumeTargetId": "resume-target:probe"
+    }
+  ],
+  "rootActivity": {
+    "activityType": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerGoldenTests\u002BResumeProbeActivity",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "delay-1",
+    "childSlots": [],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "delay-1",
+    "inputBindings": [],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "delay-1"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": null
+  },
+  "scope": "Published"
+}

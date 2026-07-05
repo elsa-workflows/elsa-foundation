@@ -1,42 +1,28 @@
-using System.Globalization;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using Elsa.Activities.Design.Core.Models;
-using Elsa.Activities.Runtime.Core.Attributes;
-using Elsa.Activities.Runtime.Core.Contracts;
-using Elsa.Primitives.Models;
-using Elsa.Serialization.Core;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Core.Contracts;
-using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Expressions.Core.Models;
-using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
+/// <summary>
+/// Orchestrates workflow-executable compilation (W30b, #418): resolves the compile source, drives a single
+/// authored-tree walk, and assembles the durable <see cref="WorkflowExecutable"/> artifact. Per-phase work is
+/// delegated to focused collaborators — <see cref="ActivityTreeProjector"/> (walk + validate),
+/// <see cref="ExecutableNodeCompiler"/> (node/resume-target compilation), and
+/// <see cref="WorkflowExecutableHasher"/> (content-addressable identity).
+/// </summary>
 public sealed class WorkflowExecutableCompiler(
     IWorkflowDefinitionVersionStore workflowVersions,
     IActivityDefinitionVersionStore activityVersions,
-    IActivityStructureService activityStructureService,
-    IWellKnownTypeRegistry wellKnownTypeRegistry)
+    WorkflowExecutableHasher hasher,
+    ActivityTreeProjector activityTreeProjector,
+    ExecutableNodeCompiler executableNodeCompiler)
     : IWorkflowExecutableCompiler
 {
-    private const string LiteralExpressionType = "Literal";
-    private const string VariableExpressionType = "Variable";
-    private const string InputTypeMetadataKey = "typeName";
-    private const string ReferenceKeyMetadataKey = "referenceKey";
-    private const string ArtifactHashPrefix = "sha256:";
-    private const int ArtifactIdHashLength = 12;
-
     public async ValueTask<WorkflowExecutable> CompileAsync(
         WorkflowExecutableCompileRequest request,
         CancellationToken cancellationToken = default)
@@ -51,18 +37,20 @@ public sealed class WorkflowExecutableCompiler(
             ArgumentNullException.ThrowIfNull(state);
 
             var rootActivity = state.RootActivity
-                ?? throw new ArgumentException("Workflow version has no root activity to publish.");
+                ?? throw new ArgumentException(ActivityTreeProjector.NoRootActivityMessage);
 
-            var activities = FlattenActivities(rootActivity).ToArray();
-            ValidateActivityTree(activities);
+            // Single tree walk: children are projected once here and reused for both flattening and node
+            // compilation, replacing the former double ProjectChildren traversal.
+            var projection = activityTreeProjector.Project(rootActivity);
+            ActivityTreeProjector.Validate(projection.Nodes);
 
             var activityRows = new Dictionary<string, ActivityDefinitionVersion>(StringComparer.Ordinal);
-            foreach (var activityVersionId in activities.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
+            foreach (var activityVersionId in projection.Nodes.Select(x => x.ActivityVersionId).Distinct(StringComparer.Ordinal))
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
-            var compiledRoot = CompileNode(rootActivity, activityRows);
-            var artifactHash = ComputeHash(source, compiledRoot);
-            var artifactId = CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows);
+            var artifactHash = hasher.ComputeHash(source, compiledRoot);
+            var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 
@@ -75,7 +63,7 @@ public sealed class WorkflowExecutableCompiler(
                     ArtifactHash: artifactHash,
                     Source: source.SourceReference),
                 rootActivity: compiledRoot,
-                resumeTargets: BuildResumeTargets(compiledRoot),
+                resumeTargets: executableNodeCompiler.BuildResumeTargets(compiledRoot),
                 createdAt: request.CreatedAt,
                 publishedAt: request.PublishedAt,
                 compatibilityMetadata: metadata,
@@ -99,368 +87,5 @@ public sealed class WorkflowExecutableCompiler(
             ArtifactVersion: version.Version,
             State: version.State,
             SourceReference: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version));
-    }
-
-    private static string CreateArtifactId(string artifactIdPrefix, string artifactHash)
-    {
-        if (!artifactHash.StartsWith(ArtifactHashPrefix, StringComparison.Ordinal) ||
-            artifactHash.Length < ArtifactHashPrefix.Length + ArtifactIdHashLength)
-            throw new ArgumentException($"Artifact hash '{artifactHash}' does not use the expected '{ArtifactHashPrefix}' format.", nameof(artifactHash));
-
-        return $"{artifactIdPrefix}{artifactHash[ArtifactHashPrefix.Length..(ArtifactHashPrefix.Length + ArtifactIdHashLength)]}";
-    }
-
-    private ExecutableNode CompileNode(
-        ActivityNode activity,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
-    {
-        var activityVersion = activityRows[activity.ActivityVersionId];
-
-        var inputDefinitionsByReferenceKey = activityVersion.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
-        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        var childSlots = CompileChildSlots(activityStructureService.ProjectChildren(activity), activityRows);
-
-        foreach (var inputState in activity.Inputs)
-        {
-            if (!inputDefinitionsByReferenceKey.TryGetValue(inputState.ReferenceKey, out var inputDefinition))
-                throw new ArgumentException($"Activity node '{activity.NodeId}' input '{inputState.ReferenceKey}' does not match any input definition on activity version '{activity.ActivityVersionId}'.");
-
-            inputBindings[inputDefinition.Name] = CompileInput(activity.NodeId, inputDefinition, inputState.Value);
-        }
-
-        var activityType = activityVersion.Definition?.ActivityTypeKey
-            ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
-
-        return new ExecutableNode(
-            executableNodeId: activity.NodeId,
-            authoredActivityId: activity.NodeId,
-            activityType: activityType,
-            activityTypeVersion: activityVersion.Version,
-            descriptorType: activityVersion.DescriptorType,
-            descriptorPayload: activityVersion.DescriptorPayload,
-            inputBindings: inputBindings,
-            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = activityVersion.ExecutionType.ToString()
-            },
-            childSlots: childSlots,
-            structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
-    }
-
-    private IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> BuildResumeTargets(ExecutableNode root)
-    {
-        // Index [ResumeTarget] handlers declared by each node's activity CLR type into the executable's
-        // resume-target map. Suspending activities (e.g. Delay) create a durable bookmark against a resume
-        // target id; the CreateBookmark handler validates that id against this map, and the resume handler
-        // reflects the matching method back at resume time. Activities without resume targets (all existing
-        // activities) contribute nothing, so the map stays empty for them.
-        var resumeTargets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
-
-        foreach (var node in FlattenExecutableNodes(root))
-        {
-            if (!wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var activityType) || activityType is null || activityType == typeof(object))
-                continue;
-
-            foreach (var method in activityType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-            {
-                var attribute = method.GetCustomAttribute<ResumeTargetAttribute>();
-                if (attribute is null)
-                    continue;
-
-                ValidateResumeTargetSignature(activityType, method);
-
-                var resumeTargetId = attribute.ResumeTargetId;
-                if (resumeTargets.TryGetValue(resumeTargetId, out var existing))
-                    throw new ArgumentException(
-                        $"Resume target '{resumeTargetId}' is declared by executable nodes '{existing.ExecutableNodeId}' and '{node.ExecutableNodeId}'. A resume target id must be unique within a workflow executable; multiple instances of the same resume-target activity in one workflow are not yet supported.");
-
-                resumeTargets[resumeTargetId] = new WorkflowExecutableResumeTarget(
-                    ResumeTargetId: resumeTargetId,
-                    ExecutableNodeId: node.ExecutableNodeId,
-                    HandlerKey: method.Name,
-                    Metadata: new Dictionary<string, string>(StringComparer.Ordinal));
-            }
-        }
-
-        return resumeTargets;
-    }
-
-    private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)
-    {
-        var parameters = method.GetParameters();
-        var hasSupportedParameter =
-            parameters.Length == 0 ||
-            parameters.Length == 1 && (parameters[0].ParameterType == typeof(IActivityExecutionContext) || parameters[0].ParameterType == typeof(JsonElement));
-        var hasSupportedReturn =
-            method.ReturnType == typeof(void) ||
-            method.ReturnType == typeof(Task) ||
-            method.ReturnType == typeof(ValueTask);
-
-        if (!hasSupportedParameter || !hasSupportedReturn)
-            throw new ArgumentException(
-                $"Resume target method '{activityType.FullName}.{method.Name}' has an unsupported signature. A resume target must take no parameters or a single {nameof(IActivityExecutionContext)}/{nameof(JsonElement)} parameter and return void, Task, or ValueTask.");
-    }
-
-    private static IEnumerable<ExecutableNode> FlattenExecutableNodes(ExecutableNode root)
-    {
-        yield return root;
-
-        foreach (var slot in root.ChildSlots)
-            foreach (var child in slot.Activities)
-                foreach (var descendant in FlattenExecutableNodes(child))
-                    yield return descendant;
-    }
-
-    private IReadOnlyCollection<ExecutableChildSlot> CompileChildSlots(
-        IEnumerable<ActivityChildProjection> childSlots,
-        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
-    {
-        return childSlots
-            .Select(slot => new ExecutableChildSlot(
-                slot.Name,
-                slot.Activities.Select(activity => CompileNode(activity, activityRows)).ToArray()))
-            .ToArray();
-    }
-
-    private static ExecutableActivityStructure? CompileStructure(ActivityNodeStructure? structure) =>
-        structure is null
-            ? null
-            : new ExecutableActivityStructure(structure.Kind, structure.SchemaVersion, structure.Payload);
-
-    private RuntimeInputBinding CompileInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
-    {
-        if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileLiteralInput(nodeId, inputDefinition, value);
-
-        if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
-            return CompileVariableInput(nodeId, inputDefinition, value);
-
-        return CompileExpressionInput(nodeId, inputDefinition, value);
-    }
-
-    /// <summary>
-    /// Compiles a structured <c>Variable</c> reference input into a runtime expression binding whose
-    /// language is <c>Variable</c> and whose expression text round-trips the reference (reference key
-    /// plus optional declaring scope) as a JSON object. The runtime materializer feeds that object to
-    /// the registered <c>VariableExpressionHandler</c>, which resolves it through the visible scope
-    /// chain at execution time (ADR 0027).
-    /// </summary>
-    private RuntimeInputBinding CompileVariableInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
-    {
-        var reference = ParseVariableReference(nodeId, inputDefinition, value.Value);
-        var referenceText = JsonSerializer.Serialize(new VariableReferencePayload(reference.ReferenceKey, reference.DeclaringScopeId));
-
-        var inputType = ResolveInputType(inputDefinition);
-        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
-
-        return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(VariableExpressionType, referenceText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
-    }
-
-    private static VariableReference ParseVariableReference(string nodeId, InputDefinition inputDefinition, object? value)
-    {
-        var unwrapped = value is JsonElement jsonElement ? jsonElement : JsonSerializer.SerializeToElement(value);
-        if (!VariableReference.TryParse(unwrapped, out var reference) || reference is null)
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type 'Variable' but carries no resolvable variable reference (a reference key is required).");
-
-        return reference;
-    }
-
-    private sealed record VariableReferencePayload(string referenceKey, string? declaringScopeId);
-
-    private RuntimeInputBinding CompileLiteralInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
-    {
-        var inputType = ResolveInputType(inputDefinition);
-        object? converted;
-        try
-        {
-            converted = ConvertLiteral(value.Value, inputType);
-        }
-        catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidCastException or OverflowException)
-        {
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' value '{value.Value}' cannot be converted to '{GetRuntimeTypeName(inputType)}'.", exception);
-        }
-
-        var literal = JsonSerializer.SerializeToElement(converted, inputType);
-
-        return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
-            source: RuntimeInputBindingSource.Literal,
-            literalValue: literal,
-            metadata: BuildInputMetadata(inputType, inputDefinition));
-    }
-
-    private RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
-    {
-        if (string.IsNullOrWhiteSpace(value.ExpressionType))
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' does not declare an expression type.");
-
-        var expressionText = ExtractExpressionText(value.Value);
-        if (string.IsNullOrWhiteSpace(expressionText))
-            throw new ArgumentException($"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' uses expression type '{value.ExpressionType}' but carries no expression text.");
-
-        var inputType = ResolveInputType(inputDefinition);
-        var resultType = new RuntimeValueTypeDescriptor("clr", GetRuntimeTypeName(inputType), null);
-
-        return new RuntimeInputBinding(
-            inputName: inputDefinition.Name,
-            source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
-            metadata: BuildInputMetadata(inputType, inputDefinition));
-    }
-
-    // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
-    // well-known type registry, mirroring VariableMapper's resolution (FR-007). Unknown alias → object.
-    private Type ResolveInputType(InputDefinition inputDefinition) =>
-        TypeReferenceFactory.Resolve(
-            inputDefinition.Type,
-            alias => wellKnownTypeRegistry.TryGetTypeOrDefault(alias, out var type) ? type : typeof(object));
-
-    private static string? ExtractExpressionText(object? value)
-    {
-        if (value is null)
-            return null;
-
-        if (value is JsonElement jsonElement)
-            return jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
-                ? null
-                : jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
-
-        return value.ToString();
-    }
-
-    private static Dictionary<string, string> BuildInputMetadata(Type inputType, InputDefinition inputDefinition) =>
-        new()
-        {
-            [InputTypeMetadataKey] = GetRuntimeTypeName(inputType),
-            [ReferenceKeyMetadataKey] = inputDefinition.ReferenceKey
-        };
-
-    private static string GetRuntimeTypeName(Type type)
-    {
-        var fullName = type.FullName
-            ?? throw new ArgumentException($"Input type '{type}' does not have a stable full name.", nameof(type));
-
-        return $"{fullName}, {type.Assembly.GetName().Name}";
-    }
-
-    private static object? ConvertLiteral(object? value, Type targetType)
-    {
-        if (value is null)
-            return null;
-
-        var nullableTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        if (value is JsonElement jsonElement)
-        {
-            if (jsonElement.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-                return null;
-
-            value = jsonElement.ValueKind == JsonValueKind.String ? jsonElement.GetString() : jsonElement.ToString();
-        }
-
-        if (nullableTargetType == typeof(string))
-            return $"{value}";
-
-        if (nullableTargetType.IsEnum)
-            return Enum.Parse(nullableTargetType, $"{value}", ignoreCase: true);
-
-        return Convert.ChangeType(value, nullableTargetType, CultureInfo.InvariantCulture);
-    }
-
-    private static void ValidateActivityTree(IReadOnlyCollection<ActivityNode> activities)
-    {
-        if (activities.Count == 0)
-            throw new ArgumentException("Workflow version has no root activity to publish.");
-
-        var duplicateNodeId = activities.GroupBy(activity => activity.NodeId, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1)?.Key;
-        if (duplicateNodeId is not null)
-            throw new ArgumentException($"Workflow version contains duplicate activity node id '{duplicateNodeId}'.");
-    }
-
-    private static string ComputeHash(
-        WorkflowExecutableCompileSource source,
-        ExecutableNode rootActivity)
-    {
-        var nodes = FlattenExecutableActivities(rootActivity).ToArray();
-        var payload = string.Join(
-            '\n',
-            source.SourceReference.SourceKind,
-            source.SourceReference.SourceId,
-            source.SourceReference.SourceVersion,
-            source.DefinitionId,
-            source.DefinitionVersionId,
-            source.ArtifactVersion,
-            rootActivity.ExecutableNodeId,
-            string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
-                .Select(FormatNode)));
-
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
-        return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
-    }
-
-    private static string FormatInputBinding(KeyValuePair<string, RuntimeInputBinding> input)
-    {
-        var metadata = string.Join(',', input.Value.Metadata
-            .OrderBy(item => item.Key, StringComparer.Ordinal)
-            .Select(item => $"{item.Key}={item.Value}"));
-
-        var payload = input.Value.Source switch
-        {
-            RuntimeInputBindingSource.Expression => $"{input.Value.Source}:{input.Value.Expression?.Language}:{input.Value.Expression?.Expression}",
-            _ => input.Value.LiteralValue?.GetRawText()
-        };
-
-        return $"{input.Key}={payload}[{metadata}]";
-    }
-
-    private static string FormatNode(ExecutableNode node)
-    {
-        var childSlots = string.Join(',', node.ChildSlots
-            .OrderBy(slot => slot.Name, StringComparer.Ordinal)
-            .Select(slot =>
-            {
-                var activities = string.Join(';', slot.Activities.Select(activity => activity.ExecutableNodeId).Order(StringComparer.Ordinal));
-                return $"{slot.Name}({activities})";
-            }));
-        var structure = node.Structure is null
-            ? string.Empty
-            : $"{node.Structure.Kind}:{node.Structure.SchemaVersion}:{node.Structure.Payload.GetRawText()}";
-        return $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.DescriptorType}:{node.DescriptorPayload.GetRawText()}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}";
-    }
-
-    private IEnumerable<ActivityNode> FlattenActivities(ActivityNode rootActivity)
-    {
-        var stack = new Stack<ActivityNode>();
-        stack.Push(rootActivity);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
-                stack.Push(child);
-        }
-    }
-
-    private static IEnumerable<ExecutableNode> FlattenExecutableActivities(ExecutableNode rootActivity)
-    {
-        var stack = new Stack<ExecutableNode>();
-        stack.Push(rootActivity);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            yield return node;
-
-            foreach (var child in node.ChildSlots.SelectMany(slot => slot.Activities))
-                stack.Push(child);
-        }
     }
 }

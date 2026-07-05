@@ -69,7 +69,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node"));
         var triggerActivity = TriggerActivityVersion();
         return new PublishWorkflowRequestHandler(
-            new WorkflowExecutableCompiler(
+            TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore([triggerActivity]),
                 BuildStructureService(),
