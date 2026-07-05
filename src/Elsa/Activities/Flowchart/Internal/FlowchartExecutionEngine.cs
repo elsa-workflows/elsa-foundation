@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
 
 namespace Elsa.Activities.Flowchart.Internal;
 
@@ -816,86 +817,6 @@ public sealed class FlowchartExecutionEngine(
             Sequence = state.Sequence + 1
         };
     }
-
-    private static FlowchartExecutionState RemoveActiveChild(FlowchartExecutionState state, string executionPathId, string nodeId) =>
-        state with
-        {
-            ActiveChildren = state.ActiveChildren
-                .Where(child => !StringComparer.Ordinal.Equals(child.ExecutionPathId, executionPathId) || !StringComparer.Ordinal.Equals(child.NodeId, nodeId))
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
-
-    private static ExecutionPath NewPath(
-        FlowchartExecutionState state,
-        string? parentExecutionPathId,
-        string executionScopeId,
-        string? currentNodeId,
-        string? incomingConnectionId,
-        string? schedulingActivityExecutionId,
-        ExecutionPathStatus status,
-        string? iterationKey) =>
-        new(
-            NewId(state, "path"),
-            executionScopeId,
-            parentExecutionPathId,
-            currentNodeId,
-            incomingConnectionId,
-            schedulingActivityExecutionId,
-            status,
-            iterationKey);
-
-    private static string NewId(FlowchartExecutionState state, string prefix) =>
-        $"{prefix}:{state.Sequence + 1}";
-
-    private static FlowchartExecutionState AddPath(FlowchartExecutionState state, ExecutionPath path) =>
-        state with { ExecutionPaths = state.ExecutionPaths.Append(path).ToArray(), Sequence = state.Sequence + 1 };
-
-    private static FlowchartExecutionState AddScope(FlowchartExecutionState state, ExecutionScope scope) =>
-        state with { Scopes = state.Scopes.Append(scope).ToArray(), Sequence = state.Sequence + 1 };
-
-    private static FlowchartExecutionState UpdatePath(FlowchartExecutionState state, ExecutionPath path) =>
-        state with
-        {
-            ExecutionPaths = state.ExecutionPaths
-                .Select(existing => StringComparer.Ordinal.Equals(existing.ExecutionPathId, path.ExecutionPathId) ? path : existing)
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
-
-    private static FlowchartExecutionState UpdateScope(FlowchartExecutionState state, ExecutionScope scope) =>
-        state with
-        {
-            Scopes = state.Scopes
-                .Select(existing => StringComparer.Ordinal.Equals(existing.ExecutionScopeId, scope.ExecutionScopeId) ? scope : existing)
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
-
-    private static FlowchartExecutionState AddArrival(FlowchartExecutionState state, ExecutionPath path, FlowchartConnection connection, string connectionId, string producingActivityExecutionId)
-    {
-        var arrival = new FlowchartArrival(
-            NewId(state, "arrival"),
-            path.ExecutionPathId,
-            path.ExecutionScopeId,
-            connection.Source.NodeId,
-            connection.Target.NodeId,
-            connectionId,
-            connection.Source.Port,
-            producingActivityExecutionId,
-            iterationKey: path.IterationKey);
-
-        return state with { Arrivals = state.Arrivals.Append(arrival).ToArray(), Sequence = state.Sequence + 1 };
-    }
-
-    private static FlowchartExecutionState UpdateArrival(FlowchartExecutionState state, FlowchartArrival arrival) =>
-        state with
-        {
-            Arrivals = state.Arrivals
-                .Select(existing => StringComparer.Ordinal.Equals(existing.ArrivalId, arrival.ArrivalId) ? arrival : existing)
-                .ToArray(),
-            Sequence = state.Sequence + 1
-        };
 
     private static FlowchartExecutionState AddDiagnostic(
         FlowchartExecutionState state,
