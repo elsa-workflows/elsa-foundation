@@ -22,6 +22,7 @@ public class ActivitiesFlowchartFeature : IShellFeature
     {
         services.AddSingleton<IActivityStructureHandler, FlowchartStructureHandler>();
         services.AddSingleton<FlowchartReachabilityAnalyzer>();
+        services.AddSingleton<FlowchartJoinCoordinator>();
         services.AddSingleton<FlowchartExecutionEngine>();
         services.AddSingleton<IFlowchartPolicy, DirectContinuationFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicy, ImplicitActivationJoinFlowchartPolicy>();

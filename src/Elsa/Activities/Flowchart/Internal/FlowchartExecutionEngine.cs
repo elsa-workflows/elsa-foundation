@@ -16,6 +16,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 public sealed class FlowchartExecutionEngine(
     FlowchartReachabilityAnalyzer reachabilityAnalyzer,
     IFlowchartPolicyRegistry policyRegistry,
+    FlowchartJoinCoordinator joinCoordinator,
     RuntimeCheckpointCommitter checkpointCommitter,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider? timeProvider = null)
@@ -153,7 +154,7 @@ public sealed class FlowchartExecutionEngine(
                 LastOutcomeNames = completionContext.OutcomeNames
             });
             state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
-            state = ReleaseReadyWaitingJoins(context, state, graph);
+            state = joinCoordinator.ReleaseReadyWaitingJoins(context, state, graph);
 
             await PersistAndMaybeCompleteAsync(context, state);
             return;
@@ -179,7 +180,7 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, completionContext.CompletedChildActivityExecutionId);
 
-            if (ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
+            if (FlowchartJoinCoordinator.ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");
@@ -187,7 +188,7 @@ public sealed class FlowchartExecutionEngine(
             }
 
             if (scheduledTargets.Add(connection.Target.NodeId))
-                state = FireJoinOrContinuation(context, state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey, completionContext.CompletedChildActivityExecutionId, connectionId);
+                state = joinCoordinator.FireJoinOrContinuation(context, state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey, completionContext.CompletedChildActivityExecutionId, connectionId);
         }
 
         state = UpdatePath(state, path with
@@ -196,7 +197,7 @@ public sealed class FlowchartExecutionEngine(
             CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
             LastOutcomeNames = completionContext.OutcomeNames
         });
-        state = ReleaseReadyWaitingJoins(context, state, graph);
+        state = joinCoordinator.ReleaseReadyWaitingJoins(context, state, graph);
 
         await PersistAndMaybeCompleteAsync(context, state);
     }
@@ -243,71 +244,6 @@ public sealed class FlowchartExecutionEngine(
 
         await SaveStateAsync(context, state);
         context.DeferCompositeCompletion();
-    }
-
-    private FlowchartExecutionState ReleaseReadyWaitingJoins(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, FlowchartGraph graph)
-    {
-        var groups = state.ExecutionPaths
-            .Where(path => path.Status == ExecutionPathStatus.Waiting && path.CurrentNodeId is not null)
-            .GroupBy(path => (path.CurrentNodeId!, path.ExecutionScopeId, path.IterationKey))
-            .ToArray();
-
-        foreach (var group in groups)
-        {
-            if (ShouldWaitForTarget(state, graph, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey))
-                continue;
-
-            var arrival = MatchingArrivals(state, group.Key.Item1, group.Key.ExecutionScopeId, group.Key.IterationKey).FirstOrDefault();
-            if (arrival is null)
-                continue;
-
-            state = FireJoinOrContinuation(
-                context,
-                state,
-                graph,
-                group.Key.Item1,
-                group.Key.ExecutionScopeId,
-                group.Key.IterationKey,
-                arrival.ProducingActivityExecutionId,
-                arrival.ConnectionId);
-        }
-
-        return state;
-    }
-
-    private FlowchartExecutionState FireJoinOrContinuation(
-        IRuntimeActivityExecutionContext context,
-        FlowchartExecutionState state,
-        FlowchartGraph graph,
-        string targetNodeId,
-        string executionScopeId,
-        string? iterationKey,
-        string schedulingActivityExecutionId,
-        string? connectionId)
-    {
-        var arrivals = MatchingArrivals(state, targetNodeId, executionScopeId, iterationKey).ToArray();
-        foreach (var arrival in arrivals)
-        {
-            state = UpdateArrival(state, arrival with { Status = FlowchartArrivalStatus.Consumed });
-            var arrivalPath = state.ExecutionPaths.FirstOrDefault(path => StringComparer.Ordinal.Equals(path.ExecutionPathId, arrival.ExecutionPathId));
-            if (arrivalPath is not null)
-                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Completed });
-        }
-
-        foreach (var waitingPath in state.ExecutionPaths.Where(path =>
-                     path.Status == ExecutionPathStatus.Waiting &&
-                     StringComparer.Ordinal.Equals(path.CurrentNodeId, targetNodeId) &&
-                     StringComparer.Ordinal.Equals(path.ExecutionScopeId, executionScopeId) &&
-                     StringComparer.Ordinal.Equals(path.IterationKey, iterationKey)).ToArray())
-            state = UpdatePath(state, waitingPath with { Status = ExecutionPathStatus.Completed });
-
-        var scheduledPath = NewPath(state, null, executionScopeId, targetNodeId, connectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
-        state = AddPath(state, scheduledPath);
-        state = FlowchartDiagnosticAccumulator.Add(state, arrivals.Length > 1 ? FlowchartDiagnosticKind.Joined : FlowchartDiagnosticKind.Scheduled, targetNodeId, connectionId, scheduledPath.ExecutionPathId, executionScopeId, arrivals.Length > 1
-            ? $"Implicit join '{targetNodeId}' fired after {arrivals.Length} active arrival(s)."
-            : $"Flowchart scheduled node '{targetNodeId}'.");
-
-        return ScheduleNode(context, state, targetNodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, arrivals.Length > 1 ? "join" : "continuation");
     }
 
     private FlowchartExecutionState ApplyDecision(
@@ -405,13 +341,13 @@ public sealed class FlowchartExecutionEngine(
             state = AddPath(state, arrivalPath);
             state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
 
-            if (ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
+            if (FlowchartJoinCoordinator.ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
                 return FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");
             }
 
-            return FireJoinOrContinuation(context, state, graph, nodeId, executionScopeId, iterationKey, schedulingActivityExecutionId, connectionId);
+            return joinCoordinator.FireJoinOrContinuation(context, state, graph, nodeId, executionScopeId, iterationKey, schedulingActivityExecutionId, connectionId);
         }
 
         var scheduledPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, command.ConnectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
@@ -480,44 +416,6 @@ public sealed class FlowchartExecutionEngine(
         return NewId(state, "scope");
     }
 
-    private static bool ShouldWaitForImplicitJoin(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
-    {
-        var inboundConnections = graph.GetInboundConnections(targetNodeId);
-        if (inboundConnections.Count <= 1)
-            return false;
-
-        var arrivedSourceIds = MatchingArrivals(state, targetNodeId, executionScopeId, iterationKey)
-            .Select(arrival => arrival.SourceNodeId)
-            .ToHashSet(StringComparer.Ordinal);
-
-        foreach (var inboundConnection in inboundConnections)
-        {
-            if (arrivedSourceIds.Contains(inboundConnection.Source.NodeId))
-                continue;
-
-            if (state.ActiveChildren.Any(child => StringComparer.Ordinal.Equals(child.ExecutionScopeId, executionScopeId) && graph.CanReach(child.NodeId, inboundConnection.Source.NodeId)))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool ShouldWaitForTarget(FlowchartExecutionState state, FlowchartGraph graph, string targetNodeId, string executionScopeId, string? iterationKey)
-    {
-        var policyKind = graph.GetNodeMetadata(targetNodeId).PolicyKind;
-        if (StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.Merge))
-            return false;
-
-        return ShouldWaitForImplicitJoin(state, graph, targetNodeId, executionScopeId, iterationKey);
-    }
-
-    private static IEnumerable<FlowchartArrival> MatchingArrivals(FlowchartExecutionState state, string targetNodeId, string executionScopeId, string? iterationKey) =>
-        state.Arrivals.Where(arrival =>
-            arrival.Status == FlowchartArrivalStatus.Arrived &&
-            StringComparer.Ordinal.Equals(arrival.TargetNodeId, targetNodeId) &&
-            StringComparer.Ordinal.Equals(arrival.ExecutionScopeId, executionScopeId) &&
-            StringComparer.Ordinal.Equals(arrival.IterationKey, iterationKey));
-
     private static FlowchartExecutionState CreateInitialState(string? startNodeId)
     {
         const string rootScopeId = "scope:root";
@@ -561,7 +459,7 @@ public sealed class FlowchartExecutionEngine(
     /// completion — O(n²) in CPU and storage across n iterations.
     /// <list type="bullet">
     /// <item><b>Arrivals:</b> <see cref="FlowchartArrivalStatus.Consumed"/> arrivals are dropped
-    /// unconditionally — the only arrival reader (<see cref="MatchingArrivals"/>) filters on
+    /// unconditionally — the only arrival reader (<see cref="FlowchartJoinCoordinator.MatchingArrivals"/>) filters on
     /// <see cref="FlowchartArrivalStatus.Arrived"/>.</item>
     /// <item><b>Paths:</b> only <see cref="ExecutionPathStatus.Completed"/> paths are dropped, and then
     /// only unless they are (a) the root path, (b) referenced by an
