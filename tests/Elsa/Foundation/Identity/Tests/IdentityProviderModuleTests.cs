@@ -132,8 +132,15 @@ public sealed class IdentityProviderModuleTests
     [Fact]
     public async Task OpenIddictTokenServiceIssuesRefreshesValidatesAndRevokesContractTokens()
     {
+        // Exercises the REAL OpenIddict pipeline (JWT issuance + local validation + EF token store):
+        // development/demo mode self-provisions an in-memory store and ephemeral keys.
         var services = new ServiceCollection();
-        services.AddFoundationIdentityOpenIddict(options => options.ProviderId = "local");
+        services.AddLogging();
+        services.AddFoundationIdentityOpenIddict(options =>
+        {
+            options.ProviderId = "local";
+            options.IsDevelopmentOrDemo = true;
+        });
         services.AddFoundationIdentityApi();
         using var provider = services.BuildServiceProvider();
         var tokenService = provider.GetRequiredService<ITokenService>();

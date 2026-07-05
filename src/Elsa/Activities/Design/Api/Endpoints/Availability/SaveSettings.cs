@@ -12,6 +12,6 @@ internal sealed class SaveSettings(ICommandSender commandSender, ILogger<SaveSet
     public override void Configure()
     {
         Put(RouteConstants.GetRoute("availability/settings"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

@@ -12,6 +12,6 @@ internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : E
     public override void Configure()
     {
         Post(RouteConstants.Definitions);
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

@@ -12,6 +12,6 @@ internal sealed class List(IRequestSender requestSender, ILogger<List> logger) :
     public override void Configure()
     {
         Get(RouteConstants.Definitions);
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

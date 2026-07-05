@@ -9,6 +9,7 @@ using Elsa.Foundation.Identity.Oidc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Api.FastEndpoints.Tests;
@@ -36,7 +37,9 @@ public sealed class ErrorContractIntegrationTests
 
     private static async Task<Host> StartHostAsync()
     {
-        var builder = WebApplication.CreateBuilder();
+        // This host reaches the endpoint anonymously via ApiSecurity.AllowAnonymous, which is honored only
+        // in Development (locked product decision — see ApiSecurityFastEndpointsConfigurator).
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
