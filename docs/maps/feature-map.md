@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 81
+- Discovered feature classes: 82
 
 ## Features
 
@@ -74,6 +74,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
 | WorkflowsRuntimeDistributedFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed | IShellFeature | [WorkflowsRuntimeDistributedFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/WorkflowsRuntimeDistributedFeature.cs) |
+| WorkflowsRuntimeDistributedGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork | IShellFeature | [WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs) |
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
 | WorkflowsRuntimeRecurringTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeRecurringTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Scheduling/WorkflowsRuntimeRecurringTriggersFeature.cs) |
 | WorkflowsRuntimeResumptionFeature | direct IShellFeature | Elsa.Workflows.Runtime.Resumption | IShellFeature | [WorkflowsRuntimeResumptionFeature.cs](../../src/Elsa/Workflows/Runtime/Resumption/WorkflowsRuntimeResumptionFeature.cs) |

@@ -216,7 +216,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
   - **Kind:** Replacement (one store owns per-execution placement lease records for a distributed composition).
   - **Signature:** `TryClaimAsync`, `FindAsync`, `ReleaseAsync`, `ListAsync` (compare-and-swap on placement token; claim doubles as renew).
   - **Usage:** the CAS claim/renew primitive under placement ownership. Claiming an unowned or expired placement issues a strictly greater placement token; a claim against a live foreign lease fails without mutation.
-  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default; a durable Groundwork store is a named follow-up)*.
+  - **Default implementation:** `InMemoryExecutionPlacementStore` *(single-process/two-node-harness default)*. `GroundworkExecutionPlacementStore` *(durable `IDocumentStore`-backed bridge, W27 — opt-in leaf `Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork`, swapped in by the `WorkflowsRuntimeDistributedGroundworkPersistence` feature; exact cross-node CAS via the provider's ExpectedVersion contract, including create-only first claims)*.
 - ### `IExecutionPlacementService` *(leaf)*
   - **Kind:** Replacement (one service owns this node's placement acquisition/renewal/release policy).
   - **Signature:** `NodeId`, `TryClaimAsync`, `FindOwnerAsync`, `ListOwnedAsync`, `ReleaseAsync`.
@@ -226,7 +226,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
   - **Kind:** Replacement (one transport owns the durable cross-node command inbox for a distributed composition).
   - **Signature:** `SendAsync`, `LeaseAsync`, `AckAsync`, `ListPendingExecutionIdsAsync`, `CountPendingAsync` (ack-based lease/visibility, at-least-once).
   - **Usage:** commands for an execution owned by another node are durably enqueued, then leased/acked by the owning node's pump. A lease hides an item from other nodes until acked or expired; only the live lease holder may ack, so a superseded node's ack is refused and the item is re-driven on failover. Wire shape is frozen by the committed v1 golden fixture (§E6 kind `executionCommandTransport`).
-  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default; a durable Groundwork store is a named follow-up)*.
+  - **Default implementation:** `InMemoryExecutionCommandTransport` *(single-process/two-node-harness default)*. `GroundworkExecutionCommandTransport` *(durable `IDocumentStore`-backed bridge, W27 — same leaf/feature as the placement store; persists the frozen v1 `executionCommandTransport` item shape, store-enforced unique per-execution sequences, version-guarded lease/ack CAS)*.
 
 ### `ExecutionPlacementPumpTask` *(leaf — `Elsa.Workflows.Runtime.Distributed`, W20/E3-3)*
 - **Kind:** Registered recurring task (`IRecurringTask`; one per node, DependsOn Tasks).
