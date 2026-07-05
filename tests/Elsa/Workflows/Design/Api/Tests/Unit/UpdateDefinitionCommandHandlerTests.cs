@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Xunit;
 
@@ -106,6 +107,12 @@ public sealed class UpdateDefinitionCommandHandlerTests
 
         public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>(draft is null ? [] : [draft]);
+
+        public Task<DraftWithLayout?> FindWithLayoutByIdAsync(string draftId, CancellationToken cancellationToken = default)
+        {
+            LayoutWasRead = true;
+            return Task.FromResult<DraftWithLayout?>(draft is null ? null : new DraftWithLayout(draft, layout ?? []));
+        }
     }
 
     private sealed class RecordingUpdateDraftCommand : IUpdateDraftCommand

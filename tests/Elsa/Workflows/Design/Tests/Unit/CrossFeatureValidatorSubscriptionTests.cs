@@ -97,7 +97,7 @@ public sealed class CrossFeatureValidatorSubscriptionTests
     /// </summary>
     private sealed class HttpActivityAuthPolicyValidatorStub : IDraftValidator
     {
-        public const string ExpectedPath = "$workflow";
+        public const string ExpectedPath = ValidationPaths.Workflow;
 
         public ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken) =>
             ValueTask.FromResult<IEnumerable<ValidationError>>([

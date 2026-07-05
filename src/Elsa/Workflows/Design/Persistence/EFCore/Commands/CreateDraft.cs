@@ -27,10 +27,8 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// <list type="number">
 /// <item>Acquire the <c>workflow-draft:{DraftId}</c> distributed lock.</item>
 /// <item>Add the new Draft (and its layout sibling).</item>
-/// <item><b>Sequential</b> publish <see cref="OnDraftValidating"/> — the in-lock validation gate;
-///       the single <c>ExecuteValidations</c> handler aggregates every <c>IDraftValidator</c>'s
-///       errors onto the event (§2.6.1 contribution). Errors are not persisted — they are
-///       surfaced on <see cref="OnDraftValidated"/> and re-derived on demand.</item>
+/// <item><b>Sequential</b> publish <see cref="OnDraftValidating"/> — the in-lock validation gate
+///       (see <see cref="DraftValidationGate"/>).</item>
 /// <item><c>SaveChangesAsync</c> — the Draft + layout persist atomically.</item>
 /// <item>Release the lock.</item>
 /// <item><b>Background</b> publish <see cref="OnDraftCreated"/> (the cause), then
@@ -76,12 +74,7 @@ public sealed class CreateDraft(
             State = state,
         };
 
-        var layout = new WorkflowDefinitionDraftLayout
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Records = initialLayout is null ? [] : [.. initialLayout],
-        };
+        var layout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draftId, initialLayout);
 
         IReadOnlyList<ValidationError> errors;
 

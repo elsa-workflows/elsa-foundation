@@ -45,12 +45,7 @@ public sealed class SubmitWorkflowDefinition(
             State = state,
         };
 
-        var draftLayout = new WorkflowDefinitionDraftLayout
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Records = [],
-        };
+        var draftLayout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draftId);
 
         var version = new WorkflowDefinitionVersion(definitionId, InitialVersion)
         {

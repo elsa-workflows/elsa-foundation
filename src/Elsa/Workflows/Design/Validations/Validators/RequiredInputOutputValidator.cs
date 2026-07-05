@@ -45,8 +45,13 @@ public sealed class RequiredInputOutputValidator(
         var errors = new List<ValidationError>();
 
         // Memoize catalog lookups per pass: ActivityDefinitionLookup is a passthrough to the version
-        // store, so repeated ActivityVersionIds across the tree would otherwise each round-trip.
-        var versionCache = new Dictionary<string, IActivityDefinitionVersion?>(StringComparer.Ordinal);
+        // store, so repeated ActivityVersionIds across the tree would otherwise each round-trip. The
+        // lookup is fail-closed — GetVersion throws EntityNotFoundException on a missing id (both store
+        // impls throw), so a resolved entry is always non-null. A missing version is therefore not
+        // silently skipped: it propagates and the gate faults (surfacing as Validation/Faulted on the
+        // shielded read path). Treating a missing version as a first-class validation error instead is
+        // tracked as a pending spec decision (missing-version-as-validation-error).
+        var versionCache = new Dictionary<string, IActivityDefinitionVersion>(StringComparer.Ordinal);
 
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
@@ -55,9 +60,6 @@ public sealed class RequiredInputOutputValidator(
                 version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
                 versionCache[node.ActivityVersionId] = version;
             }
-
-            if (version is null)
-                continue;
 
             var providedInputKeys = node.Inputs
                 .Where(IsBound)

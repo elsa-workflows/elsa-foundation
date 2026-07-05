@@ -16,12 +16,7 @@ public sealed class AddWorkflowDefinition(IIdentityGenerator identityGenerator, 
         // Create the empty layout sibling alongside the draft (mirrors SubmitWorkflowDefinition) so
         // the draft has a layout row from origin — otherwise a later layout submit has no row to
         // upsert into on providers that require one.
-        var draftLayout = new WorkflowDefinitionDraftLayout
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draft.Id,
-            Records = [],
-        };
+        var draftLayout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draft.Id);
 
         await dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
         await dbContext.WorkflowDefinitionDrafts.AddAsync(draft, cancellationToken);

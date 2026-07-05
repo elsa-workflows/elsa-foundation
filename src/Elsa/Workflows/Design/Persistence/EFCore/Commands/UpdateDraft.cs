@@ -76,12 +76,7 @@ public sealed class UpdateDraft(
             // which case create one so the submitted layout is not silently dropped.
             if (layout is null)
             {
-                layout = new WorkflowDefinitionDraftLayout
-                {
-                    Id = identityGenerator.Generate(),
-                    WorkflowDefinitionDraftId = request.DraftId,
-                    Records = [.. request.Layout],
-                };
+                layout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, request.DraftId, request.Layout);
                 await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
             }
             else

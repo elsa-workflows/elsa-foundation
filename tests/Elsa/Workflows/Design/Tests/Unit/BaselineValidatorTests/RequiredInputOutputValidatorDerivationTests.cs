@@ -1,6 +1,12 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Events.Core.Contracts;
+using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Validators;
 using Xunit;
@@ -10,9 +16,17 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
 /// Pins that the <see cref="RequiredInputOutputValidator"/> derives errors against the CURRENT
-/// catalog state on every pass (errors are derived, never cached against the draft), and that it
-/// looks each distinct <c>ActivityVersionId</c> up exactly once per pass (the per-pass memoization
-/// added in the review fix).
+/// catalog state on every pass (errors are derived, never cached against the draft), that it looks
+/// each distinct <c>ActivityVersionId</c> up exactly once per pass (per-pass memoization), and that
+/// a missing catalog version is FAIL-CLOSED: production <c>ActivityDefinitionLookup.GetVersion</c>
+/// passes through the version store, and both store impls throw <see cref="EntityNotFoundException"/>
+/// on a missing id (they never return null). So removing a node's version does not silently drop the
+/// error — it faults the gate: the unshielded write gate propagates the exception, and the shielded
+/// read gate folds it into the reserved <c>Validation/Faulted</c> synthetic.
+/// <para>
+/// Whether a missing catalog version should instead surface as a first-class validation error is a
+/// separate, pending spec decision (missing-version-as-validation-error), not pinned here.
+/// </para>
 /// </summary>
 public sealed class RequiredInputOutputValidatorDerivationTests
 {
@@ -26,31 +40,62 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         IsRequired: true);
 
     [Fact]
-    public async Task Live_derivation_reflects_current_catalog_state_when_the_version_is_removed()
+    public async Task Live_derivation_reflects_current_catalog_state_as_node_bindings_change()
     {
-        // This pins the CURRENT behaviour: because the error set is derived against the catalog on
-        // every pass, removing a node's version from the catalog makes the validator continue-on-
-        // missing-version (Unknown_activity_version_is_skipped_gracefully), so the previously-emitted
-        // required-input error DISAPPEARS on the next pass over the UNCHANGED draft.
-        //
-        // Whether a missing catalog version should itself be a validation error is deliberately NOT
-        // asserted here — it is tracked as a separate spec decision (missing-version-as-error), not
-        // pinned by this test.
+        // The valid catalog-mutation pin: the error set is derived against the catalog + draft on every
+        // pass. Version present + required "body" unbound → error; then bind "body" → error gone. No
+        // reliance on null-returns (the version stays present throughout).
+        var catalog = new MutableLookup();
+        catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
+        var validator = new RequiredInputOutputValidator(catalog, Options(), Walker());
+
+        var missing = State(activities: [Node("n1", "av-1")]);
+        var before = await Validate(validator, missing);
+        Assert.Single(before, e => e.Path == "n1/inputs/body");
+
+        var bound = State(activities: [Node("n1", "av-1", inputs: [LiteralInput("body", "hello")])]);
+        var after = await Validate(validator, bound);
+        Assert.Empty(after);
+    }
+
+    [Fact]
+    public async Task Removing_the_version_faults_the_unshielded_write_gate()
+    {
+        // Removing the version makes GetVersion throw EntityNotFoundException. Through the unshielded
+        // write gate (DeriveValidationErrorsAsync) that exception propagates — the caller's write fails.
         var catalog = new MutableLookup();
         catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
 
-        // Draft node declares av-1 with the required "body" input unbound → error present.
         var state = State(activities: [Node("n1", "av-1")]);
-        var validator = new RequiredInputOutputValidator(catalog, Options(), Walker());
+        var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(catalog, Options(), Walker()));
 
-        var before = await ValidateOnce(validator, state);
+        // Sanity: with the version present, deriving succeeds and yields the required-input error.
+        var before = await publisher.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
         Assert.Single(before, e => e.Path == "n1/inputs/body");
 
-        // Remove the version from the catalog; the draft is unchanged.
         catalog.Remove("av-1");
 
-        var after = await ValidateOnce(validator, state);
-        Assert.Empty(after);
+        await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => publisher.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Removing_the_version_surfaces_as_Validation_Faulted_on_the_shielded_read_gate()
+    {
+        // Same missing-version fault, seen through the shielded read gate (TryDeriveValidationErrorsAsync):
+        // the throw is folded into the reserved Validation/Faulted synthetic so the Draft stays readable.
+        var catalog = new MutableLookup();
+        catalog.Set("av-1", inputs: [RequiredInput("body")], outputs: []);
+        catalog.Remove("av-1");
+
+        var state = State(activities: [Node("n1", "av-1")]);
+        var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(catalog, Options(), Walker()));
+
+        var errors = await publisher.TryDeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
+
+        var faulted = Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
+        Assert.Equal(ValidationPaths.Workflow, faulted.Path);
+        Assert.Contains(nameof(EntityNotFoundException), faulted.Message);
     }
 
     [Fact]
@@ -67,17 +112,12 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         ]);
         var validator = new RequiredInputOutputValidator(catalog, Options(), Walker());
 
-        await ValidateOnce(validator, state);
+        await Validate(validator, state);
 
         Assert.Equal(1, catalog.CallCount("av-1"));
     }
 
-    private static async Task<IReadOnlyList<ValidationError>> ValidateOnce(
-        RequiredInputOutputValidator validator,
-        Core.Models.WorkflowDefinitionState state) =>
-        [.. await validator.Validate(new StubDraftForDerivation(state), CancellationToken.None)];
-
-    private sealed class StubDraftForDerivation(Core.Models.WorkflowDefinitionState state) : Core.Contracts.IWorkflowDefinitionDraft
+    private sealed class StubDraft(Core.Models.WorkflowDefinitionState state) : IWorkflowDefinitionDraft
     {
         public string Id => "draft-1";
         public string WorkflowDefinitionId => "wf-1";
@@ -86,18 +126,39 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
     }
 
+    /// <summary>
+    /// Minimal <see cref="IEventPublisher"/> that runs a single validator against
+    /// <see cref="OnDraftValidating"/> and aggregates its errors — exercising the gate's publish +
+    /// read-back contract with the real validator so its throwing behaviour reaches the gate.
+    /// </summary>
+    private sealed class ValidatingPublisher(IDraftValidator validator) : IEventPublisher
+    {
+        public async Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        {
+            if (@event is OnDraftValidating validating)
+                foreach (var error in await validator.Validate(validating.Draft, cancellationToken))
+                    validating.Errors.Add(error);
+        }
+    }
+
     /// <summary>In-memory catalog whose versions can be added and removed mid-test.</summary>
     private sealed class MutableLookup : IActivityDefinitionLookup
     {
-        private readonly Dictionary<string, IActivityDefinitionVersion> _versions = new(StringComparer.Ordinal);
+        // Seed the synthetic $root container's version (empty, no required args) so the fail-closed
+        // fake resolves it — see ValidatorTestHelpers.RootActivityVersionId.
+        private readonly Dictionary<string, IActivityDefinitionVersion> _versions =
+            new(StringComparer.Ordinal) { [RootActivityVersionId] = new StubVersion(RootActivityVersionId, [], []) };
 
         public void Set(string versionId, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs)
             => _versions[versionId] = new StubVersion(versionId, inputs, outputs);
 
         public void Remove(string versionId) => _versions.Remove(versionId);
 
+        // Fail-closed, mirroring the production store contract (throws on a missing id, never null).
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
-            => Task.FromResult(_versions.TryGetValue(versionId, out var version) ? version : null!);
+            => _versions.TryGetValue(versionId, out var version)
+                ? Task.FromResult(version)
+                : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
@@ -112,7 +173,9 @@ public sealed class RequiredInputOutputValidatorDerivationTests
     /// <summary>In-memory catalog that counts <see cref="GetVersion"/> calls per version id.</summary>
     private sealed class CountingLookup : IActivityDefinitionLookup
     {
-        private readonly Dictionary<string, IActivityDefinitionVersion> _versions = new(StringComparer.Ordinal);
+        // Seed the synthetic $root container's version so the fail-closed fake resolves it.
+        private readonly Dictionary<string, IActivityDefinitionVersion> _versions =
+            new(StringComparer.Ordinal) { [RootActivityVersionId] = new StubVersion(RootActivityVersionId, [], []) };
         private readonly Dictionary<string, int> _calls = new(StringComparer.Ordinal);
 
         public void Set(string versionId, IEnumerable<InputDefinition> inputs, IEnumerable<OutputDefinition> outputs)
@@ -123,7 +186,9 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
         {
             _calls[versionId] = CallCount(versionId) + 1;
-            return Task.FromResult(_versions.TryGetValue(versionId, out var version) ? version : null!);
+            return _versions.TryGetValue(versionId, out var version)
+                ? Task.FromResult(version)
+                : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
         }
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)

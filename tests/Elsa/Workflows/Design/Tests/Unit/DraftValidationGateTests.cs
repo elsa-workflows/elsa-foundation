@@ -42,8 +42,8 @@ public sealed class DraftValidationGateTests
 
         var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
 
-        var faulted = Assert.Single(errors, e => e.Type == "Validation/Faulted");
-        Assert.Equal("$workflow", faulted.Path);
+        var faulted = Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
+        Assert.Equal(ValidationPaths.Workflow, faulted.Path);
         Assert.Contains("InvalidOperationException", faulted.Message);
         Assert.Contains("boom", faulted.Message);
     }
@@ -58,17 +58,33 @@ public sealed class DraftValidationGateTests
         var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
 
         Assert.Contains(errors, e => e == PriorError);
-        Assert.Contains(errors, e => e.Type == "Validation/Faulted");
+        Assert.Contains(errors, e => e.Type == ValidationCategories.Faulted);
     }
 
     [Fact]
-    public async Task Shielded_derive_lets_OperationCanceledException_propagate()
+    public async Task Shielded_derive_lets_the_callers_own_cancellation_propagate()
     {
-        // Cancellation is not a validator fault — TryDerive must not swallow it into Validation/Faulted.
-        var publisher = new ThrowingPublisher(new OperationCanceledException());
+        // The CALLER's abort (its token is signalled) is not a validator fault — TryDerive must let it
+        // propagate rather than swallow it into Validation/Faulted.
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var publisher = new ThrowingPublisher(new OperationCanceledException(cts.Token));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None));
+            () => publisher.TryDeriveValidationErrorsAsync(Draft(), cts.Token));
+    }
+
+    [Fact]
+    public async Task Shielded_derive_folds_a_validators_internal_cancellation_into_Validation_Faulted()
+    {
+        // A validator's INTERNAL timeout surfaces as an OperationCanceledException whose token is NOT
+        // the caller's (the caller's token is unsignalled). That is a validator fault, not a caller
+        // abort, so the shield folds it into the synthetic instead of turning the read into a 500.
+        var publisher = new ThrowingPublisher(new TaskCanceledException("validator timed out"));
+
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
+
+        Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
     }
 
     private static IWorkflowDefinitionDraft Draft() => new StubDraft();

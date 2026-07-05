@@ -18,7 +18,7 @@ public sealed class StartActivityValidator : IDraftValidator
         IEnumerable<ValidationError> errors =
         [
             new ValidationError(
-                Path: "$workflow",
+                Path: ValidationPaths.Workflow,
                 Type: "RootActivity/Missing",
                 Message: "Workflow has no root activity."
             )

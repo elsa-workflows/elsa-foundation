@@ -10,9 +10,11 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "WorkflowDefinitionDraftValidations",
-                schema: "Elsa");
+            // Idempotent drop. The Sqlite provider emulates schemas by ignoring them, so the "Elsa"
+            // schema collapses to the plain table name "WorkflowDefinitionDraftValidations". Using
+            // DROP TABLE IF EXISTS (instead of MigrationBuilder.DropTable) makes a replay tolerate a DB
+            // where the table was never created — e.g. Initial ran before the table existed.
+            migrationBuilder.Sql("DROP TABLE IF EXISTS \"WorkflowDefinitionDraftValidations\";");
         }
 
         /// <inheritdoc />
