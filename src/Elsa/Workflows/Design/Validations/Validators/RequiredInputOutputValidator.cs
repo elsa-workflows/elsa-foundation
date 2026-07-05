@@ -44,9 +44,18 @@ public sealed class RequiredInputOutputValidator(
         var maxDepth = options.Value.MaxRecursionDepth;
         var errors = new List<ValidationError>();
 
+        // Memoize catalog lookups per pass: ActivityDefinitionLookup is a passthrough to the version
+        // store, so repeated ActivityVersionIds across the tree would otherwise each round-trip.
+        var versionCache = new Dictionary<string, IActivityDefinitionVersion?>(StringComparer.Ordinal);
+
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
-            var version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
+            if (!versionCache.TryGetValue(node.ActivityVersionId, out var version))
+            {
+                version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
+                versionCache[node.ActivityVersionId] = version;
+            }
+
             if (version is null)
                 continue;
 

@@ -1,6 +1,5 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
-using Elsa.Workflows.Design.Validations.Core.Models;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Stores;
 
@@ -22,7 +21,4 @@ public interface IWorkflowDefinitionDraftStore
 
     /// <summary>Finds the complete designer layout records for the draft.</summary>
     Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default);
-
-    /// <summary>Finds the current validation errors for the draft.</summary>
-    Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default);
 }

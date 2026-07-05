@@ -49,11 +49,11 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .HasDatabaseName("IX_WorkflowDefinition_Name");
-
                     b.HasIndex("DeletedAt")
                         .HasDatabaseName("IX_WorkflowDefinition_DeletedAt");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("IX_WorkflowDefinition_Name");
 
                     b.HasIndex("TenantId");
 
@@ -73,14 +73,14 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SourceVersionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("StateSource")
                         .HasMaxLength(-1)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SourceVersionId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionId")
@@ -148,6 +148,10 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SemVerSortKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SourceCreatedAt")
                         .HasColumnType("TEXT");
 
@@ -156,10 +160,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SemVerSortKey")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Version")

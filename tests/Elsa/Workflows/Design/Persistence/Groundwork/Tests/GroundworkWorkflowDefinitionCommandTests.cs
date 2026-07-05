@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -10,7 +9,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Groundwork.Services;
-using Elsa.Workflows.Design.Validations.Core.Events;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 
@@ -19,61 +18,79 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Tests;
 public class GroundworkWorkflowDefinitionCommandTests
 {
     private static readonly FakePayloadSerializer Payloads = new();
+
+    // Shared arrange graph: one document store, one lock provider, one hook publisher, and one
+    // identity generator per test instance. Every command/store below composes over these, so tests
+    // read as intent (seed → act → derive) instead of repeating the wiring (CLAUDE.md clean-tests).
+    private readonly InMemoryDocumentStore _store = new(WorkflowsDesignStorageManifest.Create());
+    private readonly InMemoryLockProvider _locks = new();
+    private readonly HookEventPublisher _events = new();
+    private readonly SequentialIdentityGenerator _identities = new();
     private readonly FakeSystemClock _clock = new();
+
+    private GroundworkCreateDraftCommand CreateCommand() =>
+        new(_identities, _locks, _store, Payloads, _events, _clock);
+
+    private GroundworkUpdateDraftCommand UpdateCommand() =>
+        new(_locks, _store, Payloads, _events, _clock);
+
+    private GroundworkWorkflowDefinitionVersionStore VersionStore() =>
+        new(_store, new GroundworkWorkflowDefinitionStore(_store), Payloads);
+
+    private GroundworkPromoteDraftToVersionCommand PromoteCommand() =>
+        new(_locks, _store, Payloads, _events, VersionStore(), _identities, _clock);
+
+    // Draft store reads only the draft/layout document; it never derives validation errors, so no
+    // publisher is threaded through it (the gate is invoked directly on the publisher below).
+    private GroundworkWorkflowDefinitionDraftStore DraftStore() => new(_store, Payloads);
+
+    private GroundworkWorkflowDefinitionVersionLayoutStore VersionLayoutStore() => new(_store);
+
+    /// <summary>
+    /// Derives the current validation error set the same way production does: load the draft, then
+    /// run the gate through the hook publisher (which re-publishes <c>OnDraftValidating</c>). Replaces
+    /// the retired store derive-port.
+    /// </summary>
+    private async Task<IReadOnlyList<ValidationError>> DeriveErrors(string draftId)
+    {
+        var draft = await DraftStore().FindByIdAsync(draftId);
+        Assert.NotNull(draft);
+        return await _events.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
+    }
 
     [Fact]
     public async Task CreateDraft_persists_layout_and_derives_validation_errors_from_the_draft_document()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var locks = new InMemoryLockProvider();
-        var events = new CapturingEventPublisher
-        {
-            OnPublish = e =>
-            {
-                if (e is OnDraftValidating validating)
-                    validating.Errors.Add(new ValidationError("$workflow", "Test/Error", "Invalid"));
-            }
-        };
-        var command = new GroundworkCreateDraftCommand(new SequentialIdentityGenerator(), locks, store, Payloads, events, _clock);
+        _events.ContributeError(new ValidationError("$workflow", "Test/Error", "Invalid"));
         var layout = new[] { new DesignMetadataRecord("root", 10, 20, 300, 200) };
 
-        var draftId = await command.Execute("definition-1", EmptyState(), layout, cancellationToken: CancellationToken.None);
+        var draftId = await CreateCommand().Execute("definition-1", EmptyState(), layout, cancellationToken: CancellationToken.None);
 
-        // Errors are derived state (no persisted sibling): the store re-runs the validation gate
-        // through the same publisher, so the hook contributes the error again on demand.
-        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads, events);
+        // Errors are derived state (no persisted sibling): deriving through the gate re-runs the hook,
+        // which contributes the error again on demand.
+        var draftStore = DraftStore();
         var draft = await draftStore.FindByIdAsync(draftId);
         var readLayout = await draftStore.FindLayoutByDraftIdAsync(draftId);
-        var errors = await draftStore.FindValidationErrorsByDraftIdAsync(draftId);
+        var errors = await DeriveErrors(draftId);
 
         Assert.NotNull(draft);
         Assert.Equal("definition-1", draft!.WorkflowDefinitionId);
         Assert.Equal(layout.Single(), readLayout.Single());
         Assert.Equal("Test/Error", errors.Single().Type);
-        Assert.Equal(1, locks.AcquireCounts[WorkflowDesignPersistenceLockKeys.DraftKey(draftId)]);
+        Assert.Equal(1, _locks.AcquireCounts[WorkflowDesignPersistenceLockKeys.DraftKey(draftId)]);
     }
 
     [Fact]
     public async Task UpdateDraft_replaces_layout_atomically_and_errors_are_derived()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var locks = new InMemoryLockProvider();
-        var events = new CapturingEventPublisher();
-        var create = new GroundworkCreateDraftCommand(new SequentialIdentityGenerator(), locks, store, Payloads, events, _clock);
-        var draftId = await create.Execute("definition-1", EmptyState(), [new DesignMetadataRecord("old", 0, 0, 100, 100)], cancellationToken: CancellationToken.None);
-        events.OnPublish = e =>
-        {
-            if (e is OnDraftValidating validating)
-                validating.Errors.Add(new ValidationError("root", "Updated/Error", "Still invalid"));
-        };
-        var update = new GroundworkUpdateDraftCommand(locks, store, Payloads, events, _clock);
+        var draftId = await CreateCommand().Execute("definition-1", EmptyState(), [new DesignMetadataRecord("old", 0, 0, 100, 100)], cancellationToken: CancellationToken.None);
+        _events.ContributeError(new ValidationError("root", "Updated/Error", "Still invalid"));
         var nextLayout = new[] { new DesignMetadataRecord("root", 1, 2, 3, 4) };
 
-        await update.Execute(new UpdateDraftRequest(draftId, EmptyState(), nextLayout), CancellationToken.None);
+        await UpdateCommand().Execute(new UpdateDraftRequest(draftId, EmptyState(), nextLayout), CancellationToken.None);
 
-        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads, events);
-        var readLayout = await draftStore.FindLayoutByDraftIdAsync(draftId);
-        var errors = await draftStore.FindValidationErrorsByDraftIdAsync(draftId);
+        var readLayout = await DraftStore().FindLayoutByDraftIdAsync(draftId);
+        var errors = await DeriveErrors(draftId);
 
         Assert.Equal(nextLayout.Single(), readLayout.Single());
         Assert.Equal("Updated/Error", errors.Single().Type);
@@ -82,33 +99,21 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task PromoteDraft_rejects_validation_errors_and_promotes_clean_drafts_with_layout()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var locks = new InMemoryLockProvider();
-        var identities = new SequentialIdentityGenerator();
-        var events = new CapturingEventPublisher
-        {
-            OnPublish = e =>
-            {
-                if (e is OnDraftValidating validating)
-                    validating.Errors.Add(new ValidationError("$workflow", "Blocking/Error", "Nope"));
-            }
-        };
-        var create = new GroundworkCreateDraftCommand(identities, locks, store, Payloads, events, _clock);
+        _events.ContributeError(new ValidationError("$workflow", "Blocking/Error", "Nope"));
+        var create = CreateCommand();
         var blockedDraftId = await create.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var versionStore = new GroundworkWorkflowDefinitionVersionStore(store, new GroundworkWorkflowDefinitionStore(store), Payloads);
-        var promote = new GroundworkPromoteDraftToVersionCommand(locks, store, Payloads, events, versionStore, identities, _clock);
+        var promote = PromoteCommand();
 
         await Assert.ThrowsAsync<DraftHasValidationErrorsException>(() => promote.Execute(blockedDraftId, CancellationToken.None));
 
-        events.OnPublish = null;
+        _events.OnPublish = null;
         var layout = new[] { new DesignMetadataRecord("root", 5, 6, 7, 8) };
         var cleanDraftId = await create.Execute("definition-1", EmptyState(), layout, cancellationToken: CancellationToken.None);
 
         var versionId = await promote.Execute(cleanDraftId, CancellationToken.None);
 
-        var version = await versionStore.GetAsync(versionId);
-        var versionLayout = await new GroundworkWorkflowDefinitionVersionLayoutStore(store)
-            .FindByVersionIdAsync(versionId);
+        var version = await VersionStore().GetAsync(versionId);
+        var versionLayout = await VersionLayoutStore().FindByVersionIdAsync(versionId);
 
         Assert.Equal("1.0.0", version.Version);
         Assert.Equal(layout.Single(), versionLayout!.Records.Single());
@@ -117,24 +122,18 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DiscardDraft_deletes_the_embedded_draft_document()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var locks = new InMemoryLockProvider();
-        var events = new CapturingEventPublisher();
-        var create = new GroundworkCreateDraftCommand(new SequentialIdentityGenerator(), locks, store, Payloads, events, _clock);
-        var draftId = await create.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var discard = new GroundworkDiscardDraftCommand(locks, store, Payloads, events);
+        var draftId = await CreateCommand().Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
+        var discard = new GroundworkDiscardDraftCommand(_locks, _store, Payloads, _events);
 
         await discard.Execute(draftId, CancellationToken.None);
 
-        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance);
-        Assert.Null(await draftStore.FindByIdAsync(draftId));
+        Assert.Null(await DraftStore().FindByIdAsync(draftId));
     }
 
     [Fact]
     public async Task SaveWorkflowDefinition_updates_definition_document()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var command = new GroundworkSaveWorkflowDefinitionCommand(store, _clock);
+        var command = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock);
         var definition = new WorkflowDefinition { Id = "definition-1", Name = "Original" };
         await command.Execute(definition, CancellationToken.None);
         definition.Name = "Updated";
@@ -143,7 +142,7 @@ public class GroundworkWorkflowDefinitionCommandTests
 
         await command.Execute(definition, CancellationToken.None);
 
-        var read = await new GroundworkWorkflowDefinitionStore(store).GetAsync("definition-1");
+        var read = await new GroundworkWorkflowDefinitionStore(_store).GetAsync("definition-1");
         Assert.Equal("Updated", read.Name);
         Assert.Equal(createdAt, read.CreatedAt);
         Assert.True(read.LastModifiedAt > read.CreatedAt);
@@ -152,65 +151,42 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task DeleteWorkflowDefinitionPermanently_removes_definition_draft_versions_and_layouts()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var identities = new SequentialIdentityGenerator();
-        var saveDefinition = new GroundworkSaveWorkflowDefinitionCommand(store, _clock);
-        var createDraft = new GroundworkCreateDraftCommand(
-            identities,
-            new InMemoryLockProvider(),
-            store,
-            Payloads,
-            new CapturingEventPublisher(),
-            _clock);
+        var saveDefinition = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock);
+        var createDraft = CreateCommand();
         await saveDefinition.Execute(new WorkflowDefinition { Id = "definition-1", Name = "Delete me" }, CancellationToken.None);
         var draftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var versionStore = new GroundworkWorkflowDefinitionVersionStore(store, new GroundworkWorkflowDefinitionStore(store), Payloads);
-        var promote = new GroundworkPromoteDraftToVersionCommand(
-            new InMemoryLockProvider(),
-            store,
-            Payloads,
-            NoOpEventPublisher.Instance,
-            versionStore,
-            identities,
-            _clock);
-        var draft = await new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance).FindByWorkflowDefinitionIdAsync("definition-1");
+        var versionStore = VersionStore();
+        var promote = PromoteCommand();
+        var draft = await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1");
         var versionId = await promote.Execute(draft!.Id, CancellationToken.None);
         _clock.Advance();
         var secondDraftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
-            store,
+            _store,
             Payloads,
-            new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance),
+            DraftStore(),
             versionStore,
-            new GroundworkWorkflowDefinitionVersionLayoutStore(store));
+            VersionLayoutStore());
 
         await delete.Execute("definition-1", CancellationToken.None);
 
-        Assert.Null(await new GroundworkWorkflowDefinitionStore(store).FindByIdAsync("definition-1"));
-        Assert.Null(await new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance).FindByWorkflowDefinitionIdAsync("definition-1"));
-        Assert.Empty(await new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance).ListByWorkflowDefinitionIdAsync("definition-1"));
+        Assert.Null(await new GroundworkWorkflowDefinitionStore(_store).FindByIdAsync("definition-1"));
+        Assert.Null(await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1"));
+        Assert.Empty(await DraftStore().ListByWorkflowDefinitionIdAsync("definition-1"));
         Assert.NotEqual(draftId, secondDraftId);
         Assert.Null(await versionStore.FindByIdAsync(versionId));
-        Assert.Null(await new GroundworkWorkflowDefinitionVersionLayoutStore(store).FindByVersionIdAsync(versionId));
+        Assert.Null(await VersionLayoutStore().FindByVersionIdAsync(versionId));
     }
 
     [Fact]
     public async Task FindByWorkflowDefinitionId_returns_latest_modified_draft()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
-        var createDraft = new GroundworkCreateDraftCommand(
-            new SequentialIdentityGenerator(),
-            new InMemoryLockProvider(),
-            store,
-            Payloads,
-            new CapturingEventPublisher(),
-            _clock);
+        var createDraft = CreateCommand();
         var firstDraftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         _clock.Advance();
         var secondDraftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
-        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance);
 
-        var current = await draftStore.FindByWorkflowDefinitionIdAsync("definition-1");
+        var current = await DraftStore().FindByWorkflowDefinitionIdAsync("definition-1");
 
         Assert.NotNull(current);
         Assert.Equal(secondDraftId, current!.Id);
@@ -220,21 +196,19 @@ public class GroundworkWorkflowDefinitionCommandTests
     [Fact]
     public async Task SubmitWorkflowDefinition_stamps_created_entities()
     {
-        var store = new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create());
         var command = new GroundworkSubmitWorkflowDefinitionCommand(
-            new SequentialIdentityGenerator(),
-            store,
+            _identities,
+            _store,
             Payloads,
             new EmptyActivityStructureService(),
             _clock);
 
         var submitted = await command.Execute("Definition", null, MinimalState(), CancellationToken.None);
 
-        var definition = await new GroundworkWorkflowDefinitionStore(store).GetAsync(submitted.DefinitionId);
-        var draft = await new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance).FindByIdAsync(submitted.DraftId);
-        var versionStore = new GroundworkWorkflowDefinitionVersionStore(store, new GroundworkWorkflowDefinitionStore(store), Payloads);
-        var version = await versionStore.GetAsync(submitted.VersionId);
-        var layout = await new GroundworkWorkflowDefinitionVersionLayoutStore(store).FindByVersionIdAsync(submitted.VersionId);
+        var definition = await new GroundworkWorkflowDefinitionStore(_store).GetAsync(submitted.DefinitionId);
+        var draft = await DraftStore().FindByIdAsync(submitted.DraftId);
+        var version = await VersionStore().GetAsync(submitted.VersionId);
+        var layout = await VersionLayoutStore().FindByVersionIdAsync(submitted.VersionId);
 
         AssertStamped(definition);
         AssertStamped(draft!);

@@ -24,8 +24,11 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// <para>
 /// <b>Type format (R3):</b> slash-delimited category. Reserved baseline categories:
 /// <c>Graph/OrphanActivity</c>, <c>Graph/StartActivity</c>, <c>Variables/Uniqueness</c>,
-/// <c>InputOutput/MissingRequired</c>, <c>Expressions/UnresolvedVariable</c>. External
-/// validators extend by prefixing with their domain (e.g. <c>Http/AuthPolicyUnknown</c>).
+/// <c>InputOutput/MissingRequired</c>, <c>Expressions/UnresolvedVariable</c>. The reserved
+/// <c>Validation/Faulted</c> category is never emitted by a validator — it is synthesized by the
+/// shielded read gate (<c>DraftValidationGate.TryDeriveValidationErrorsAsync</c>) when a validator
+/// throws, so a faulting validator surfaces as an error instead of a 500. External validators
+/// extend by prefixing with their domain (e.g. <c>Http/AuthPolicyUnknown</c>).
 /// </para>
 /// </remarks>
 public sealed record ValidationError(string Path, string Type, string Message);

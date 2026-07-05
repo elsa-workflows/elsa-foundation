@@ -6,6 +6,7 @@ using Elsa.Activities.Flowchart.Activities;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
+using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
@@ -17,6 +18,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -458,7 +460,7 @@ internal static class ElsaWorkflowManagementApi
 
         WorkflowDraftResponse? draftResponse = null;
         if (draft is not null)
-            draftResponse = await LoadDraftAsync(draftStore, draft, cancellationToken);
+            draftResponse = await LoadDraftAsync(services, draft, cancellationToken);
 
         return Results.Ok(new WorkflowDefinitionDetailsResponse(
             new WorkflowDefinitionSummaryResponse(
@@ -481,7 +483,7 @@ internal static class ElsaWorkflowManagementApi
         var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
         var draft = await draftStore.FindByIdAsync(draftId, cancellationToken);
         if (draft is not null)
-            return Results.Ok(await LoadDraftAsync(draftStore, draft, cancellationToken));
+            return Results.Ok(await LoadDraftAsync(services, draft, cancellationToken));
 
         return Results.NotFound(new WorkflowManagementErrorResponse($"Workflow definition draft '{draftId}' was not found."));
     }
@@ -558,10 +560,17 @@ internal static class ElsaWorkflowManagementApi
         return !string.IsNullOrWhiteSpace(draftId);
     }
 
-    private static async Task<WorkflowDraftResponse> LoadDraftAsync(IWorkflowDefinitionDraftStore draftStore, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
+    private static async Task<WorkflowDraftResponse> LoadDraftAsync(IServiceProvider services, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
+        var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var eventPublisher = services.GetRequiredService<IEventPublisher>();
+
         var layout = await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken);
-        var errors = await draftStore.FindValidationErrorsByDraftIdAsync(draft.Id, cancellationToken);
+
+        // Derive validation errors from the already-loaded draft via the shielded read gate: a
+        // throwing validator yields a synthetic Validation/Faulted error instead of a 500, and the
+        // draft is not re-loaded a second time.
+        var errors = await eventPublisher.TryDeriveValidationErrorsAsync(draft, cancellationToken);
 
         return new(
             draft.Id,

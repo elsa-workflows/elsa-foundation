@@ -27,7 +27,7 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 
 ## Document model
 
-The Groundwork `workflowDefinitionDraft` document embeds the draft entity and current designer layout records in one document. Validation errors are derived state, not persisted: create/update persist draft state and layout atomically through `IDocumentStore.SaveAllAsync`, and both the promotion gate and the read port re-run the validators in-lock to derive the current error set (promotion refuses to create a version while errors exist).
+The Groundwork `workflowDefinitionDraft` document embeds the draft entity and current designer layout records in one document. Validation errors are derived state, not persisted: create/update persist draft state and layout atomically through `IDocumentStore.SaveAllAsync`, and the mutation and promotion commands re-run the validators in-lock via the shared `DraftValidationGate` to derive the current error set (promotion refuses to create a version while errors exist). The read port (`IWorkflowDefinitionDraftStore`) no longer exposes a validation-error read — the draft API derives errors on demand from the already-loaded draft through the shielded gate.
 
 ## Cross-references
 

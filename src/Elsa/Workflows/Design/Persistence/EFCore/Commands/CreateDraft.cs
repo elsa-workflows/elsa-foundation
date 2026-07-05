@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -92,7 +93,10 @@ public sealed class CreateDraft(
             await dbContext.WorkflowDefinitionDrafts.AddAsync(draft, cancellationToken);
             await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
 
-            errors = await ExecuteValidationGate(draft, dbContext, cancellationToken);
+            // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         // Cause first. Background: fire-and-forget, subscribers must not break the publisher.
@@ -102,29 +106,5 @@ public sealed class CreateDraft(
         await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
 
         return draftId;
-    }
-
-    /// <summary>
-    /// Runs the synchronous validation gate (<see cref="OnDraftValidating"/>), flushes the
-    /// transaction, and returns the error set for the caller to surface on
-    /// <see cref="OnDraftValidated"/>. Errors are not persisted — they are re-derived on demand.
-    /// </summary>
-    private async Task<IReadOnlyList<ValidationError>> ExecuteValidationGate(
-        WorkflowDefinitionDraft draft,
-        WorkflowsDesignDbContext dbContext,
-        CancellationToken cancellationToken
-    )
-    {
-        var validatingEvent = new OnDraftValidating(draft);
-        // Sequential gate: the single ExecuteValidations handler runs every IDraftValidator and
-        // aggregates their errors onto the event; the publisher awaits the full chain and reads
-        // the accumulated errors back (§2.6.1 contribution).
-        await eventPublisher.Publish(validatingEvent, EventPublishingStrategy.Sequential, cancellationToken);
-
-        var errors = validatingEvent.Errors.ToArray();
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return errors;
     }
 }

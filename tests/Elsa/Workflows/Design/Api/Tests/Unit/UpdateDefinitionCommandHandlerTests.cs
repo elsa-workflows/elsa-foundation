@@ -7,7 +7,6 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
-using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
@@ -107,9 +106,6 @@ public sealed class UpdateDefinitionCommandHandlerTests
 
         public Task<IReadOnlyList<WorkflowDefinitionDraft>> ListByWorkflowDefinitionIdAsync(string workflowDefinitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<WorkflowDefinitionDraft>>(draft is null ? [] : [draft]);
-
-        public Task<IReadOnlyCollection<ValidationError>> FindValidationErrorsByDraftIdAsync(string draftId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyCollection<ValidationError>>([]);
     }
 
     private sealed class RecordingUpdateDraftCommand : IUpdateDraftCommand

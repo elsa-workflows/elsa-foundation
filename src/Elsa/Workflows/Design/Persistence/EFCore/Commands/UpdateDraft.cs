@@ -2,10 +2,12 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
+using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +48,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// </para>
 /// </remarks>
 public sealed class UpdateDraft(
+    IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
     IEventPublisher eventPublisher
@@ -66,14 +69,31 @@ public sealed class UpdateDraft(
             var layout = await dbContext.WorkflowDefinitionDraftLayouts
                 .FirstOrDefaultAsync(l => l.WorkflowDefinitionDraftId == request.DraftId, cancellationToken);
 
-            // Wholesale assign the desired state + layout (last-writer-wins, FR-022).
+            // Wholesale assign the desired state (last-writer-wins, FR-022).
             draft.State = request.State;
-            layout?.Records = [.. request.Layout];
+
+            // Upsert the layout: a draft may have no layout row yet (older origination paths), in
+            // which case create one so the submitted layout is not silently dropped.
+            if (layout is null)
+            {
+                layout = new WorkflowDefinitionDraftLayout
+                {
+                    Id = identityGenerator.Generate(),
+                    WorkflowDefinitionDraftId = request.DraftId,
+                    Records = [.. request.Layout],
+                };
+                await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
+            }
+            else
+            {
+                layout.Records = [.. request.Layout];
+            }
 
             // State is [NotMapped]; force-mark Modified so the saving handler re-serialises it.
             dbContext.Entry(draft).State = EntityState.Modified;
 
-            errors = await ExecuteValidationGate(draft, cancellationToken);
+            // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -100,19 +120,5 @@ public sealed class UpdateDraft(
         await eventPublisher.Publish(new OnEntityLoading(dbContext, draft), EventPublishingStrategy.Sequential, cancellationToken);
 
         return draft;
-    }
-
-    private async Task<IReadOnlyList<ValidationError>> ExecuteValidationGate(
-        WorkflowDefinitionDraft draft,
-        CancellationToken cancellationToken
-    )
-    {
-        var validatingEvent = new OnDraftValidating(draft);
-        // Sequential gate: the single ExecuteValidations handler runs every IDraftValidator and
-        // aggregates their errors onto the event; the publisher awaits the chain and we read the
-        // accumulated errors back (§2.6.1 contribution).
-        await eventPublisher.Publish(validatingEvent, EventPublishingStrategy.Sequential, cancellationToken);
-
-        return validatingEvent.Errors.ToArray();
     }
 }

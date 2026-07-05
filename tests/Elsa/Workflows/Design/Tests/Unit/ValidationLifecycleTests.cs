@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,15 +13,14 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// SC-013 + SC-022 + Unit C FR-023. End-to-end exercise of the validation lifecycle, driven through
 /// the single coarse <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/>. Errors are
 /// derived state (no persisted sibling): introducing a forbidden condition makes the derived error
-/// set (read via <see cref="IWorkflowDefinitionDraftStore.FindValidationErrorsByDraftIdAsync"/>)
-/// carry the error; removing the condition makes the next derivation clear it (recomputed wholesale,
-/// not appended).
+/// set (read on demand via the <see cref="DraftValidationGate"/>) carry the error; removing the
+/// condition makes the next derivation clear it (recomputed wholesale, not appended).
 /// </summary>
 /// <remarks>
 /// Uses the actual <see cref="VariableUniquenessValidator"/> wired into the
 /// <c>CapturingEventPublisher.OnPublish</c> hook — this exercises the validator's real logic
-/// end-to-end against every <c>OnDraftValidating</c> pass, including the one the derive port
-/// (<c>FindValidationErrorsByDraftIdAsync</c>) fires when it recomputes errors on demand.
+/// end-to-end against every <c>OnDraftValidating</c> pass, including the one the gate helper
+/// (<c>DeriveValidationErrorsAsync</c>) fires when it recomputes errors on demand.
 /// </remarks>
 public sealed class ValidationLifecycleTests
 {
@@ -58,9 +58,14 @@ public sealed class ValidationLifecycleTests
 
     private static async Task AssertDerivedErrors(WorkflowsDesignTestHost host, string draftId, string[] expectedTypes)
     {
+        // Errors are derived on demand through the gate (DeriveValidationErrorsAsync), which
+        // publishes OnDraftValidating on the loaded draft and reads the accumulated errors back —
+        // replacing the former store derive-port. Load the current draft first, then derive.
         using var scope = host.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
-        var errors = await store.FindValidationErrorsByDraftIdAsync(draftId);
+        var draft = await store.FindByIdAsync(draftId);
+        Assert.NotNull(draft);
+        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
 
         var actualTypes = errors.Select(e => e.Type).ToArray();
 
