@@ -72,7 +72,9 @@ public sealed class AnthropicAgentProvider(
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Anthropic streaming turn failed for session {SessionId}.", context.SessionId);
+                // Never hand the raw exception to the sink: its rendering (message, inner chain, stack)
+                // can embed the API key. Log the redacted rendering instead (issue #414 item 7).
+                logger.LogDebug("Anthropic streaming turn failed for session {SessionId}: {Error}", context.SessionId, Normalize(ex.ToString()));
                 failure = Error("agent.provider.anthropic.turn_failed", Normalize(ex), 502);
                 update = null!;
             }
@@ -298,8 +300,10 @@ public sealed class AnthropicAgentProvider(
     }
 
     private string Normalize(Exception ex)
+        => Normalize(string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
+
+    private string Normalize(string message)
     {
-        var message = string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message;
         var apiKey = ResolveApiKey(options.Value, out _);
         return string.IsNullOrWhiteSpace(apiKey) ? message : message.Replace(apiKey, "[redacted]", StringComparison.Ordinal);
     }
