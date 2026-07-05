@@ -1,4 +1,5 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core;
@@ -32,7 +33,7 @@ public sealed class DraftValidationGateTests
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => publisher.DeriveValidationErrorsAsync(Draft(), CancellationToken.None));
+            () => publisher.DeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None));
     }
 
     [Fact]
@@ -40,7 +41,7 @@ public sealed class DraftValidationGateTests
     {
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"));
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
 
         var faulted = Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
         Assert.Equal(ValidationPaths.Workflow, faulted.Path);
@@ -55,7 +56,7 @@ public sealed class DraftValidationGateTests
         // the accumulated error and the synthetic Validation/Faulted marker.
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"), contributeFirst: PriorError);
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
 
         Assert.Contains(errors, e => e == PriorError);
         Assert.Contains(errors, e => e.Type == ValidationCategories.Faulted);
@@ -71,7 +72,7 @@ public sealed class DraftValidationGateTests
         var publisher = new ThrowingPublisher(new OperationCanceledException(cts.Token));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => publisher.TryDeriveValidationErrorsAsync(Draft(), cts.Token));
+            () => publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, cts.Token));
     }
 
     [Fact]
@@ -82,7 +83,7 @@ public sealed class DraftValidationGateTests
         // abort, so the shield folds it into the synthetic instead of turning the read into a 500.
         var publisher = new ThrowingPublisher(new TaskCanceledException("validator timed out"));
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
 
         Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
     }
