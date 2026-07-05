@@ -227,6 +227,7 @@
     <Project Path="src/Elsa/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Tracing/Elsa.Workflows.Runtime.Tracing.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed.csproj" />
+    <Project Path="src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa3/">
     <Project Path="src/Elsa3/Mapping/Elsa3.Mapping.csproj" />
@@ -376,6 +377,7 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />
+    <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Resumption/">
     <Project Path="tests/Elsa/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj" />
