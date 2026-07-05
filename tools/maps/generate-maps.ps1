@@ -7,8 +7,30 @@ $docsReports = Join-Path $repoRoot "docs\reports"
 
 function To-RepoPath {
     param([string]$Path)
-    $full = (Resolve-Path $Path).Path
+    # Pure string normalization: Resolve-Path would substitute on-disk casing,
+    # churning committed maps on case-insensitive filesystems.
+    $full = [System.IO.Path]::GetFullPath($Path)
     return ($full.Substring($repoRoot.Length + 1) -replace '\\', '/')
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw directory walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+function Get-RepoFiles {
+    param([string[]]$PathSpecs)
+    try {
+        $listing = & git -C $repoRoot ls-files --cached --others --exclude-standard -- @PathSpecs 2>$null
+    } catch {
+        throw "git is required to enumerate repo files for map generation: $_"
+    }
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed; map generation requires a git checkout." }
+    $files = @()
+    foreach ($relative in @($listing)) {
+        if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        $file = [System.IO.FileInfo]::new((Join-Path $repoRoot $relative))
+        if ($file.Exists) { $files += $file }
+    }
+    return @($files | Sort-Object FullName)
 }
 
 function Escape-Cell {
@@ -94,19 +116,14 @@ function Get-OwnerProject {
     while ($null -ne $dir) {
         $project = Get-ChildItem -LiteralPath $dir.FullName -Filter "*.csproj" -File | Select-Object -First 1
         if ($null -ne $project) { return $project }
+        if ($dir.FullName -eq $repoRoot) { break }
         $dir = $dir.Parent
     }
     return $null
 }
 
 function Read-Projects {
-    $projectFiles = @()
-    foreach ($root in @("src", "tests")) {
-        $dir = Join-Path $repoRoot $root
-        if (Test-Path -LiteralPath $dir) {
-            $projectFiles += Get-ChildItem -LiteralPath $dir -Recurse -Filter "*.csproj" | Sort-Object FullName
-        }
-    }
+    $projectFiles = Get-RepoFiles @("src/*.csproj", "tests/*.csproj")
 
     $projects = @()
     foreach ($file in $projectFiles) {
@@ -127,7 +144,8 @@ function Read-Projects {
                 if (-not [string]::IsNullOrWhiteSpace($include)) {
                     $projectReferences += [pscustomobject]@{
                         Include = $include
-                        ProjectName = [System.IO.Path]::GetFileNameWithoutExtension($include)
+                        # MSBuild backslash paths; normalize for non-Windows.
+                        ProjectName = [System.IO.Path]::GetFileNameWithoutExtension(($include -replace '\\', '/'))
                     }
                 }
             }
@@ -146,10 +164,11 @@ function Read-Projects {
             }
         }
 
+        $path = To-RepoPath $file.FullName
         $projects += [pscustomobject]@{
             Name = $projectName
-            Path = To-RepoPath $file.FullName
-            Kind = $(if ($file.FullName -like "*\tests\*") { "test" } else { "source" })
+            Path = $path
+            Kind = $(if ($path -like "tests/*") { "test" } else { "source" })
             Domain = Get-DomainGroup $projectName
             TargetFramework = $targetFramework
             IsPackable = $isPackable
@@ -163,11 +182,9 @@ function Read-Projects {
 
 function Read-Features {
     $features = @()
-    $sourceRoot = Join-Path $repoRoot "src"
-    if (-not (Test-Path -LiteralPath $sourceRoot)) { return @() }
 
     $pattern = '(?m)^\s*public\s+(?:(?:abstract|sealed|partial)\s+)*class\s+(\w+)\s*:\s*([^{\r\n]+)'
-    foreach ($file in Get-ChildItem -LiteralPath $sourceRoot -Recurse -Filter "*.cs" | Sort-Object FullName) {
+    foreach ($file in Get-RepoFiles @("src/*.cs")) {
         $text = Get-Content -LiteralPath $file.FullName -Raw
         foreach ($match in [regex]::Matches($text, $pattern)) {
             $className = $match.Groups[1].Value
@@ -261,21 +278,7 @@ function Get-StringSha256 {
 
 function Get-InputFiles {
     $files = @()
-    $srcRoot = Join-Path $repoRoot "src"
-    $testsRoot = Join-Path $repoRoot "tests"
-    $specsRoot = Join-Path $repoRoot "specs"
-
-    if (Test-Path -LiteralPath $srcRoot) {
-        $files += Get-ChildItem -LiteralPath $srcRoot -Recurse -File -Include "*.csproj", "*.cs"
-    }
-
-    if (Test-Path -LiteralPath $testsRoot) {
-        $files += Get-ChildItem -LiteralPath $testsRoot -Recurse -File -Filter "*.csproj"
-    }
-
-    if (Test-Path -LiteralPath $specsRoot) {
-        $files += Get-ChildItem -LiteralPath $specsRoot -Recurse -File -Filter "*.md"
-    }
+    $files += Get-RepoFiles @("src/*.csproj", "src/*.cs", "tests/*.csproj", "specs/*.md")
 
     $directoryPackagesProps = Join-Path $repoRoot "Directory.Packages.props"
     if (Test-Path -LiteralPath $directoryPackagesProps) {
@@ -438,13 +441,11 @@ function Write-TestMap {
     }
     $lines += @("", "## Test Source Files", "", "| Test project | Source files |", "|---|---|")
     foreach ($test in $testProjects) {
-        $projectDir = Split-Path -Parent (Join-Path $repoRoot $test.Path)
+        $projectDir = $test.Path.Substring(0, $test.Path.LastIndexOf('/'))
         $files = @(
-            Get-ChildItem -Path $projectDir -Filter "*.cs" -Recurse -File |
-                Where-Object { $_.FullName -notmatch "[\\/](bin|obj)[\\/]" } |
-                Sort-Object FullName |
+            Get-RepoFiles @("$projectDir/*.cs") |
                 ForEach-Object {
-                    $relativePath = Get-RelativePath $_.FullName
+                    $relativePath = To-RepoPath $_.FullName
                     "[$($_.Name)](../../$relativePath)"
                 }
         )

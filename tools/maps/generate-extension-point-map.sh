@@ -19,6 +19,32 @@ escape_cell() {
   if [ -z "${value// }" ]; then printf '%s' "-"; else printf '%s' "$value" | sed 's/|/\\|/g'; fi
 }
 
+run_git() {
+  if command -v git >/dev/null 2>&1; then
+    git "$@"
+  elif command -v git.exe >/dev/null 2>&1; then
+    git.exe "$@"
+  else
+    return 127
+  fi
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw filesystem walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+list_repo_files() {
+  local listing
+  if ! listing="$(run_git -C "$repo_root" ls-files --cached --others --exclude-standard -- "$@")"; then
+    echo "git ls-files failed; map generation requires a git checkout" >&2
+    return 1
+  fi
+  while IFS= read -r rel_file; do
+    [ -n "$rel_file" ] || continue
+    [ -f "$repo_root/$rel_file" ] || continue
+    printf '%s/%s\n' "$repo_root" "$rel_file"
+  done <<< "$listing"
+}
+
 domain_group() {
   local project="$1"
   case "$project" in
@@ -28,12 +54,20 @@ domain_group() {
   esac
 }
 
+# Owner lookup stays inside the repo and skips gitignored scratch csprojs so
+# machine-local files cannot claim ownership of a catalog.
 owner_project() {
   local file="$1" dir match
   dir="$(dirname "$file")"
-  while [ "$dir" != "/" ]; do
-    match="$(find "$dir" -maxdepth 1 -name '*.csproj' -type f | sort | head -n 1)"
+  while :; do
+    match="$(find "$dir" -maxdepth 1 -name '*.csproj' -type f | sort | while IFS= read -r candidate; do
+      if ! run_git -C "$repo_root" check-ignore -q "$candidate"; then
+        printf '%s\n' "$candidate"
+        break
+      fi
+    done)"
     if [ -n "$match" ]; then basename "$match" .csproj; return 0; fi
+    [ "$dir" = "$repo_root" ] && break
     dir="$(dirname "$dir")"
   done
   printf '%s\n' "-"
@@ -46,7 +80,7 @@ join_br() {
 root_index="$repo_root/EXTENSION_POINTS.md"
 : > "$tmp_dir/catalogs.txt"
 [ -f "$root_index" ] && printf '%s\n' "$root_index" >> "$tmp_dir/catalogs.txt"
-find "$repo_root/src" -name 'EXTENSION_POINTS.md' -type f 2>/dev/null | sort >> "$tmp_dir/catalogs.txt"
+list_repo_files 'src/EXTENSION_POINTS.md' 'src/*/EXTENSION_POINTS.md' | sort >> "$tmp_dir/catalogs.txt"
 sort -u "$tmp_dir/catalogs.txt" -o "$tmp_dir/catalogs.txt"
 
 : > "$tmp_dir/indexed.txt"

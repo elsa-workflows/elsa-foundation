@@ -6,8 +6,30 @@ $docsMaps = Join-Path $repoRoot "docs\maps"
 
 function To-RepoPath {
     param([string]$Path)
-    $full = (Resolve-Path $Path).Path
+    # Pure string normalization: Resolve-Path would substitute on-disk casing,
+    # churning committed maps on case-insensitive filesystems.
+    $full = [System.IO.Path]::GetFullPath($Path)
     return ($full.Substring($repoRoot.Length + 1) -replace '\\', '/')
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw directory walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+function Get-RepoFiles {
+    param([string[]]$PathSpecs)
+    try {
+        $listing = & git -C $repoRoot ls-files --cached --others --exclude-standard -- @PathSpecs 2>$null
+    } catch {
+        throw "git is required to enumerate repo files for map generation: $_"
+    }
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed; map generation requires a git checkout." }
+    $files = @()
+    foreach ($relative in @($listing)) {
+        if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        $file = [System.IO.FileInfo]::new((Join-Path $repoRoot $relative))
+        if ($file.Exists) { $files += $file }
+    }
+    return @($files | Sort-Object FullName)
 }
 
 function Escape-Cell {
@@ -26,12 +48,26 @@ function Get-DomainGroup {
     return $ProjectName
 }
 
+function Test-RepoIgnored {
+    param([string]$Path)
+    try {
+        & git -C $repoRoot check-ignore -q $Path 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
+# Owner lookup stays inside the repo and skips gitignored scratch csprojs so
+# machine-local files cannot claim ownership of a catalog.
 function Get-OwnerProjectName {
     param([System.IO.FileInfo]$File)
     $dir = $File.Directory
     while ($null -ne $dir) {
-        $project = Get-ChildItem -LiteralPath $dir.FullName -Filter "*.csproj" -File | Select-Object -First 1
+        $project = Get-ChildItem -LiteralPath $dir.FullName -Filter "*.csproj" -File |
+            Sort-Object Name |
+            Where-Object { -not (Test-RepoIgnored $_.FullName) } |
+            Select-Object -First 1
         if ($null -ne $project) { return [System.IO.Path]::GetFileNameWithoutExtension($project.Name) }
+        if ($dir.FullName -eq $repoRoot) { break }
         $dir = $dir.Parent
     }
     return "-"
@@ -76,10 +112,7 @@ New-Item -ItemType Directory -Force -Path $docsMaps | Out-Null
 $catalogFiles = @()
 $rootCatalog = Join-Path $repoRoot "EXTENSION_POINTS.md"
 if (Test-Path -LiteralPath $rootCatalog) { $catalogFiles += Get-Item -LiteralPath $rootCatalog }
-$srcRoot = Join-Path $repoRoot "src"
-if (Test-Path -LiteralPath $srcRoot) {
-    $catalogFiles += Get-ChildItem -LiteralPath $srcRoot -Recurse -Filter "EXTENSION_POINTS.md" -File
-}
+$catalogFiles += Get-RepoFiles @("src/EXTENSION_POINTS.md", "src/*/EXTENSION_POINTS.md")
 $catalogs = @($catalogFiles | Sort-Object FullName | ForEach-Object { Read-Catalog $_ })
 $indexed = Read-RootIndexedCatalogs
 $discoveredSrc = @($catalogs | Where-Object { $_.Path -like "src/*" } | Select-Object -ExpandProperty Path)

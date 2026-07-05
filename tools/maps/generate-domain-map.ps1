@@ -6,8 +6,30 @@ $docsMaps = Join-Path $repoRoot "docs\maps"
 
 function To-RepoPath {
     param([string]$Path)
-    $full = (Resolve-Path $Path).Path
+    # Pure string normalization: Resolve-Path would substitute on-disk casing,
+    # churning committed maps on case-insensitive filesystems.
+    $full = [System.IO.Path]::GetFullPath($Path)
     return ($full.Substring($repoRoot.Length + 1) -replace '\\', '/')
+}
+
+# Enumerate repo files via git so .gitignore is respected and paths use the
+# git-tracked casing; a raw directory walk picks up machine-local scratch
+# files and on-disk casing, which churns the committed maps.
+function Get-RepoFiles {
+    param([string[]]$PathSpecs)
+    try {
+        $listing = & git -C $repoRoot ls-files --cached --others --exclude-standard -- @PathSpecs 2>$null
+    } catch {
+        throw "git is required to enumerate repo files for map generation: $_"
+    }
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed; map generation requires a git checkout." }
+    $files = @()
+    foreach ($relative in @($listing)) {
+        if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        $file = [System.IO.FileInfo]::new((Join-Path $repoRoot $relative))
+        if ($file.Exists) { $files += $file }
+    }
+    return @($files | Sort-Object FullName)
 }
 
 function Escape-Cell {
@@ -18,7 +40,9 @@ function Escape-Cell {
 
 function Get-ProjectNameFromInclude {
     param([string]$Include)
-    return [System.IO.Path]::GetFileNameWithoutExtension($Include)
+    # Include paths use MSBuild backslashes; normalize so the name extraction
+    # also works on non-Windows filesystems.
+    return [System.IO.Path]::GetFileNameWithoutExtension(($Include -replace '\\', '/'))
 }
 
 function Get-DomainGroup {
@@ -53,19 +77,14 @@ function Get-Role {
 }
 
 function Read-Projects {
-    $projectFiles = @()
-    foreach ($root in @("src", "tests")) {
-        $dir = Join-Path $repoRoot $root
-        if (Test-Path -LiteralPath $dir) {
-            $projectFiles += Get-ChildItem -LiteralPath $dir -Recurse -Filter "*.csproj" | Sort-Object FullName
-        }
-    }
+    $projectFiles = Get-RepoFiles @("src/*.csproj", "tests/*.csproj")
 
     $projects = @()
     foreach ($file in $projectFiles) {
         [xml]$xml = Get-Content -LiteralPath $file.FullName -Raw
         $projectName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-        $kind = if ($file.FullName -like "*\tests\*") { "test" } else { "source" }
+        $path = To-RepoPath $file.FullName
+        $kind = if ($path -like "tests/*") { "test" } else { "source" }
         $domain = Get-DomainGroup $projectName
         $refs = @()
         foreach ($reference in @($xml.Project.SelectNodes("ItemGroup/ProjectReference"))) {
@@ -75,11 +94,11 @@ function Read-Projects {
         }
         $projects += [pscustomobject]@{
             Name = $projectName
-            Path = To-RepoPath $file.FullName
+            Path = $path
             Kind = $kind
             Domain = $domain
             SubDomain = Get-SubDomain $projectName $domain
-            Role = Get-Role $projectName (To-RepoPath $file.FullName) $kind
+            Role = Get-Role $projectName $path $kind
             References = @($refs | Sort-Object -Unique)
         }
     }
