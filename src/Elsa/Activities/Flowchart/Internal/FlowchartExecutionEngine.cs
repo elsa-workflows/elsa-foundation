@@ -17,6 +17,7 @@ public sealed class FlowchartExecutionEngine(
     FlowchartReachabilityAnalyzer reachabilityAnalyzer,
     IFlowchartPolicyRegistry policyRegistry,
     FlowchartJoinCoordinator joinCoordinator,
+    FlowchartPolicyApplier policyApplier,
     RuntimeCheckpointCommitter checkpointCommitter,
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider? timeProvider = null)
@@ -119,7 +120,7 @@ public sealed class FlowchartExecutionEngine(
             {
                 decision = policy.Execute(policyContext);
                 var defaultScheduleScopeId = StringComparer.Ordinal.Equals(continuationScope.ExecutionScopeId, path.ExecutionScopeId) ? null : continuationScope.ExecutionScopeId;
-                state = ApplyDecision(context, state, graph, decision, path, completionContext.CompletedChildActivityExecutionId, policyKind, defaultScheduleScopeId);
+                state = policyApplier.ApplyDecision(context, state, graph, decision, path, completionContext.CompletedChildActivityExecutionId, policyKind, defaultScheduleScopeId);
             }
             catch (FlowchartExecutionException exception)
             {
@@ -244,176 +245,6 @@ public sealed class FlowchartExecutionEngine(
 
         await SaveStateAsync(context, state);
         context.DeferCompositeCompletion();
-    }
-
-    private FlowchartExecutionState ApplyDecision(
-        IRuntimeActivityExecutionContext context,
-        FlowchartExecutionState state,
-        FlowchartGraph graph,
-        FlowchartPolicyDecision decision,
-        ExecutionPath currentPath,
-        string schedulingActivityExecutionId,
-        string policyKind,
-        string? defaultScheduleScopeId = null)
-    {
-        ArgumentNullException.ThrowIfNull(decision);
-        var scheduledNodes = new HashSet<string>(StringComparer.Ordinal);
-        var firstWinsScopeId = ResolveFirstWinsScopeId(state, decision, currentPath, policyKind);
-        if (firstWinsScopeId is not null)
-        {
-            var parentScopeId = defaultScheduleScopeId ?? currentPath.ExecutionScopeId;
-            var scope = new ExecutionScope(
-                firstWinsScopeId,
-                ExecutionScopeKind.Race,
-                parentExecutionScopeId: parentScopeId,
-                createdByNodeId: currentPath.CurrentNodeId,
-                ownerNodeId: currentPath.CurrentNodeId);
-            state = AddScope(state, scope);
-        }
-
-        foreach (var diagnostic in decision.Diagnostics)
-            state = FlowchartDiagnosticAccumulator.Append(state, diagnostic);
-
-        foreach (var command in decision.Commands)
-        {
-            var effectiveCommand = command;
-            if (command.Kind == FlowchartPolicyCommandKind.ScheduleNode)
-            {
-                if (firstWinsScopeId is not null && string.IsNullOrWhiteSpace(command.TargetExecutionScopeId))
-                    effectiveCommand = command with { TargetExecutionScopeId = firstWinsScopeId };
-                else if (!string.IsNullOrWhiteSpace(defaultScheduleScopeId) && string.IsNullOrWhiteSpace(command.TargetExecutionScopeId) && string.IsNullOrWhiteSpace(command.ExecutionScopeId))
-                    effectiveCommand = command with { TargetExecutionScopeId = defaultScheduleScopeId };
-            }
-            state = command.Kind switch
-            {
-                FlowchartPolicyCommandKind.ScheduleNode => ApplyScheduleNodeCommand(context, state, graph, effectiveCommand, currentPath, schedulingActivityExecutionId, policyKind, scheduledNodes),
-                FlowchartPolicyCommandKind.WriteDiagnostic => ApplyDiagnosticCommand(state, effectiveCommand, currentPath),
-                FlowchartPolicyCommandKind.CompleteExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Completed }),
-                FlowchartPolicyCommandKind.WaitExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Waiting }),
-                FlowchartPolicyCommandKind.CancelExecutionPath => UpdatePath(state, currentPath with { Status = ExecutionPathStatus.Canceled }),
-                _ => throw NewInvalidPolicyCommand(policyKind, $"Policy command '{effectiveCommand.Kind}' is not supported by this Flowchart execution engine slice.")
-            };
-        }
-
-        return state;
-    }
-
-    private FlowchartExecutionState ApplyScheduleNodeCommand(
-        IRuntimeActivityExecutionContext context,
-        FlowchartExecutionState state,
-        FlowchartGraph graph,
-        FlowchartPolicyCommand command,
-        ExecutionPath currentPath,
-        string schedulingActivityExecutionId,
-        string policyKind,
-        HashSet<string> scheduledNodes)
-    {
-        if (string.IsNullOrWhiteSpace(command.NodeId))
-            throw NewInvalidPolicyCommand(policyKind, "ScheduleNode command requires a node id.");
-        var nodeId = command.NodeId;
-
-        graph.GetRequiredNode(nodeId);
-        if (!scheduledNodes.Add(nodeId))
-            throw NewInvalidPolicyCommand(policyKind, $"Policy returned duplicate ScheduleNode command for node '{nodeId}'.");
-
-        var executionScopeId = ResolveScheduleTargetScopeId(command, currentPath);
-        if (state.Scopes.All(scope => !StringComparer.Ordinal.Equals(scope.ExecutionScopeId, executionScopeId)))
-            throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command references unknown execution scope '{executionScopeId}'.");
-
-        var iterationKey = currentPath.IterationKey;
-        var connection = ResolveScheduleConnection(graph, command, currentPath, nodeId, policyKind);
-        if (connection is not null && reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
-        {
-            var currentScope = state.Scopes.FirstOrDefault(scope => StringComparer.Ordinal.Equals(scope.ExecutionScopeId, currentPath.ExecutionScopeId))
-                ?? throw new InvalidOperationException($"Execution scope '{currentPath.ExecutionScopeId}' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
-            var loopScope = ResolveTargetScope(reachabilityAnalyzer, state, graph, currentScope, connection);
-            if (state.Scopes.All(existing => !StringComparer.Ordinal.Equals(existing.ExecutionScopeId, loopScope.ExecutionScopeId)))
-                state = AddScope(state, loopScope);
-            executionScopeId = loopScope.ExecutionScopeId;
-            iterationKey = loopScope.LoopIterationKey;
-            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.LoopIteration, nodeId, graph.GetConnectionId(connection), currentPath.ExecutionPathId, executionScopeId, $"Flowchart created loop iteration scope '{executionScopeId}' for loopback to '{nodeId}'.");
-        }
-
-        if (connection is not null)
-        {
-            var connectionId = graph.GetConnectionId(connection);
-            var arrivalPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, connectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
-            state = AddPath(state, arrivalPath);
-            state = AddArrival(state, arrivalPath, connection, connectionId, schedulingActivityExecutionId);
-
-            if (FlowchartJoinCoordinator.ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
-            {
-                state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
-                return FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");
-            }
-
-            return joinCoordinator.FireJoinOrContinuation(context, state, graph, nodeId, executionScopeId, iterationKey, schedulingActivityExecutionId, connectionId);
-        }
-
-        var scheduledPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, command.ConnectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
-        state = AddPath(state, scheduledPath);
-        state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Scheduled, nodeId, command.ConnectionId, scheduledPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' scheduled node '{nodeId}'.");
-        return ScheduleNode(context, state, nodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, $"policy:{policyKind}");
-    }
-
-    private static string ResolveScheduleTargetScopeId(FlowchartPolicyCommand command, ExecutionPath currentPath)
-    {
-        if (!string.IsNullOrWhiteSpace(command.TargetExecutionScopeId))
-            return command.TargetExecutionScopeId;
-
-        return string.IsNullOrWhiteSpace(command.ExecutionScopeId)
-            ? currentPath.ExecutionScopeId
-            : command.ExecutionScopeId;
-    }
-
-    private static FlowchartConnection? ResolveScheduleConnection(FlowchartGraph graph, FlowchartPolicyCommand command, ExecutionPath currentPath, string nodeId, string policyKind)
-    {
-        if (!string.IsNullOrWhiteSpace(command.ConnectionId))
-        {
-            var connection = graph.FindConnectionById(command.ConnectionId)
-                             ?? throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command references unknown connection id '{command.ConnectionId}'.");
-
-            if (!StringComparer.Ordinal.Equals(connection.Target.NodeId, nodeId))
-                throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command connection id '{command.ConnectionId}' targets node '{connection.Target.NodeId}' instead of '{nodeId}'.");
-
-            if (currentPath.CurrentNodeId is not null && !StringComparer.Ordinal.Equals(connection.Source.NodeId, currentPath.CurrentNodeId))
-                throw NewInvalidPolicyCommand(policyKind, $"ScheduleNode command connection id '{command.ConnectionId}' starts at node '{connection.Source.NodeId}' instead of current node '{currentPath.CurrentNodeId}'.");
-
-            return connection;
-        }
-
-        return currentPath.CurrentNodeId is null
-            ? null
-            : graph.FindConnection(currentPath.CurrentNodeId, nodeId);
-    }
-
-    private static FlowchartExecutionState ApplyDiagnosticCommand(FlowchartExecutionState state, FlowchartPolicyCommand command, ExecutionPath currentPath)
-    {
-        if (string.IsNullOrWhiteSpace(command.Message))
-            throw new FlowchartExecutionException("WriteDiagnostic command requires a message.");
-
-        return FlowchartDiagnosticAccumulator.Add(
-            state,
-            FlowchartDiagnosticKind.PolicyFailure,
-            command.NodeId,
-            command.ConnectionId,
-            command.ExecutionPathId ?? currentPath.ExecutionPathId,
-            command.ExecutionScopeId ?? currentPath.ExecutionScopeId,
-            command.Message);
-    }
-
-    private static FlowchartExecutionException NewInvalidPolicyCommand(string policyKind, string reason) =>
-        new($"Flowchart policy '{policyKind}' returned an invalid command. {reason}");
-
-    private static string? ResolveFirstWinsScopeId(FlowchartExecutionState state, FlowchartPolicyDecision decision, ExecutionPath currentPath, string policyKind)
-    {
-        if (!StringComparer.Ordinal.Equals(policyKind, Internal.Policies.FlowchartPolicyKinds.FirstWins))
-            return null;
-
-        if (decision.Commands.All(command => command.Kind != FlowchartPolicyCommandKind.ScheduleNode))
-            return null;
-
-        return NewId(state, "scope");
     }
 
     private static FlowchartExecutionState CreateInitialState(string? startNodeId)
