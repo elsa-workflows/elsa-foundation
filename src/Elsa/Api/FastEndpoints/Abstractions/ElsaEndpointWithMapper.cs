@@ -1,4 +1,3 @@
-using Elsa.Api.FastEndpoints.Constants;
 using FastEndpoints;
 
 namespace Elsa.Api.FastEndpoints.Abstractions;
@@ -11,6 +10,6 @@ public abstract class ElsaEndpointWithMapper<TRequest, TMapper>
 {
     protected void ConfigurePermissions(params string[] permissions)
     {
-        Permissions([PermissionNames.All, .. permissions]);
+        Permissions(ElsaEndpointPermissions.Compose(permissions));
     }
 }
