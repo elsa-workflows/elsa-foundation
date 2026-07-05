@@ -40,6 +40,12 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
+        // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
+        services.TryAddScoped<RuntimeInputBindingCompiler>();
+        services.TryAddScoped<WorkflowExecutableHasher>();
+        services.TryAddScoped<ActivityTreeProjector>();
+        services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton<ITransientWorkflowExecutableStore, InMemoryTransientWorkflowExecutableStore>();

@@ -1,26 +1,19 @@
-using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-013 + Unit C FR-021/022. <see cref="IWorkflowDefinitionDraftValidation"/> is the
-/// design-time read surface over the persisted validation sibling. It lives in
-/// <c>Elsa.Workflows.Design.Validations.Core</c> so UI / promotion-gate consumers can read the
-/// current error set without taking a dependency on <c>*.Persistence.Core</c>. The grouping
-/// key is <c>(Path, Type)</c> per FR-022 — verified here against representative outputs that
-/// follow research items R2 (Path format) and R3 (Type categories).
+/// SC-013 + Unit C FR-021/022. Validation errors are derived state (no persisted sibling and no
+/// dedicated read contract — the former <c>IWorkflowDefinitionDraftValidation</c> was deleted).
+/// <see cref="ValidationError"/> still lives in <c>Elsa.Workflows.Design.Validations.Core</c> so UI
+/// / promotion-gate consumers read the derived error set without taking a dependency on
+/// <c>*.Persistence.Core</c>. The grouping key is <c>(Path, Type)</c> per FR-022 — verified here
+/// against representative outputs that follow research items R2 (Path format) and R3 (Type
+/// categories).
 /// </summary>
 public sealed class ValidationReadAccessTests
 {
-    [Fact]
-    public void Read_contract_lives_in_Validations_Core_not_Persistence_Core()
-    {
-        var assemblyName = typeof(IWorkflowDefinitionDraftValidation).Assembly.GetName().Name;
-        Assert.Equal("Elsa.Workflows.Design.Validations.Core", assemblyName);
-    }
-
     [Fact]
     public void ValidationError_lives_in_Validations_Core_not_Persistence_Core()
     {

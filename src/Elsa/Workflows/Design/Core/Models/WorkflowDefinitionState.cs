@@ -23,8 +23,8 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// instance/runtime/operational state · executable/build metadata · publication/deployment
 /// state · search/listing-projection types · security/ownership types · designer layout
 /// metadata (owned by <c>WorkflowDefinitionVersionLayout</c> / <c>WorkflowDefinitionDraftLayout</c>
-/// siblings via <c>IWorkflowDefinitionLayout</c>) · validation errors (owned by the
-/// <c>WorkflowDefinitionDraftValidation</c> sibling).
+/// siblings via <c>IWorkflowDefinitionLayout</c>) · validation errors (derived state, produced by
+/// the in-lock validation gate; not persisted).
 /// </para>
 /// <para>
 /// <b>Architectural triplet (§E2.9.3).</b> <c>WorkflowDefinitionState</c> ↔ read

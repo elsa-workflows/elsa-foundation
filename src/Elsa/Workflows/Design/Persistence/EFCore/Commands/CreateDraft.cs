@@ -8,6 +8,7 @@ using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +27,9 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// <list type="number">
 /// <item>Acquire the <c>workflow-draft:{DraftId}</c> distributed lock.</item>
 /// <item>Add the new Draft (and its layout sibling).</item>
-/// <item><b>Sequential</b> publish <see cref="OnDraftValidating"/> — the in-lock validation gate;
-///       the single <c>ExecuteValidations</c> handler aggregates every <c>IDraftValidator</c>'s
-///       errors onto the event (§2.6.1 contribution).</item>
-/// <item>Upsert the <see cref="WorkflowDefinitionDraftValidation"/> sibling with the collected
-///       errors (delete-and-re-add per FR-023).</item>
-/// <item><c>SaveChangesAsync</c> — state + validation sibling persist atomically.</item>
+/// <item><b>Sequential</b> publish <see cref="OnDraftValidating"/> — the in-lock validation gate
+///       (see <see cref="DraftValidationGate"/>).</item>
+/// <item><c>SaveChangesAsync</c> — the Draft + layout persist atomically.</item>
 /// <item>Release the lock.</item>
 /// <item><b>Background</b> publish <see cref="OnDraftCreated"/> (the cause), then
 ///       <see cref="OnDraftValidated"/> (the consequence) — cause-before-effect order.</item>
@@ -76,12 +74,7 @@ public sealed class CreateDraft(
             State = state,
         };
 
-        var layout = new WorkflowDefinitionDraftLayout
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Records = initialLayout is null ? [] : [.. initialLayout],
-        };
+        var layout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draftId, initialLayout);
 
         IReadOnlyList<ValidationError> errors;
 
@@ -93,7 +86,10 @@ public sealed class CreateDraft(
             await dbContext.WorkflowDefinitionDrafts.AddAsync(draft, cancellationToken);
             await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
 
-            errors = await ExecuteValidationGate(draft, dbContext, cancellationToken);
+            // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         // Cause first. Background: fire-and-forget, subscribers must not break the publisher.
@@ -103,62 +99,5 @@ public sealed class CreateDraft(
         await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
 
         return draftId;
-    }
-
-    /// <summary>
-    /// Runs the synchronous validation gate (<see cref="OnDraftValidating"/>), upserts the errors
-    /// into the validation sibling, flushes the transaction, and returns the persisted error set
-    /// for the caller to surface on <see cref="OnDraftValidated"/>.
-    /// </summary>
-    private async Task<IReadOnlyList<ValidationError>> ExecuteValidationGate(
-        WorkflowDefinitionDraft draft,
-        WorkflowsDesignDbContext dbContext,
-        CancellationToken cancellationToken
-    )
-    {
-        var validatingEvent = new OnDraftValidating(draft);
-        // Sequential gate: the single ExecuteValidations handler runs every IDraftValidator and
-        // aggregates their errors onto the event; the publisher awaits the full chain and reads
-        // the accumulated errors back (§2.6.1 contribution).
-        await eventPublisher.Publish(validatingEvent, EventPublishingStrategy.Sequential, cancellationToken);
-
-        var errors = validatingEvent.Errors.ToArray();
-
-        await UpsertValidationSibling(draft.Id, errors, dbContext, cancellationToken);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return errors;
-    }
-
-    /// <summary>
-    /// FR-023 delete-and-re-add semantics. If a sibling row exists for the Draft, replace its
-    /// <c>Errors</c> wholesale (EF tracks the change via the JSON-column <c>ValueComparer</c>).
-    /// If no row exists yet, create one.
-    /// </summary>
-    private async Task UpsertValidationSibling(
-        string draftId,
-        IReadOnlyList<ValidationError> errors,
-        WorkflowsDesignDbContext dbContext,
-        CancellationToken cancellationToken
-    )
-    {
-        var existing = await dbContext.WorkflowDefinitionDraftValidations
-            .FirstOrDefaultAsync(v => v.WorkflowDefinitionDraftId == draftId, cancellationToken);
-
-        if (existing is not null)
-        {
-            existing.Errors = [.. errors];
-            return;
-        }
-
-        var sibling = new WorkflowDefinitionDraftValidation
-        {
-            Id = identityGenerator.Generate(),
-            WorkflowDefinitionDraftId = draftId,
-            Errors = [.. errors],
-        };
-
-        await dbContext.WorkflowDefinitionDraftValidations.AddAsync(sibling, cancellationToken);
     }
 }

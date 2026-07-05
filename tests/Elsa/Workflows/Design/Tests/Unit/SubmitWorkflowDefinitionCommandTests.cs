@@ -47,7 +47,6 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         Assert.Equal("root", draft.State.RootActivity?.NodeId);
         Assert.Equal("root", version.State.RootActivity?.NodeId);
         Assert.NotNull(await ctx.WorkflowDefinitionDraftLayouts.FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == submitted.DraftId));
-        Assert.NotNull(await ctx.WorkflowDefinitionDraftValidations.FirstOrDefaultAsync(x => x.WorkflowDefinitionDraftId == submitted.DraftId));
         Assert.NotNull(await ctx.WorkflowDefinitionVersionLayouts.FirstOrDefaultAsync(x => x.WorkflowDefinitionVersionId == submitted.VersionId));
     }
 

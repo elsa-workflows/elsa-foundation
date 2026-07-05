@@ -1,0 +1,113 @@
+{
+  "compatibilityMetadata": [],
+  "createdAt": "2026-06-24T12:00:00\u002B00:00",
+  "expiresAt": null,
+  "identity": {
+    "artifactHash": "sha256:b154eb63e2a504b2198524eee0890532aa7ced020859731f6659a3396c96609b",
+    "artifactId": "artifact-b154eb63e2a5",
+    "artifactVersion": "1.0.0",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1",
+    "source": {
+      "sourceId": "version-1",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceVersion": "1.0.0"
+    }
+  },
+  "publishedAt": "2026-06-24T12:00:00\u002B00:00",
+  "resumeTargets": [],
+  "rootActivity": {
+    "activityType": "Elsa.Activities.Sequence.Activities.Sequence",
+    "activityTypeVersion": "1.0.0",
+    "authoredActivityId": "sequence",
+    "childSlots": [
+      {
+        "activities": [
+          {
+            "activityType": "Test.WriteLine",
+            "activityTypeVersion": "1.0.0",
+            "authoredActivityId": "write-one",
+            "childSlots": [],
+            "descriptorPayload": {
+              "TypeAlias": "Object"
+            },
+            "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+            "executableNodeId": "write-one",
+            "inputBindings": [
+              {
+                "expression": null,
+                "inputName": "Text",
+                "key": "Text",
+                "literalValue": "one",
+                "metadata": [
+                  {
+                    "Key": "referenceKey",
+                    "Value": "Text"
+                  },
+                  {
+                    "Key": "typeName",
+                    "Value": "System.String, System.Private.CoreLib"
+                  }
+                ],
+                "source": "Literal"
+              }
+            ],
+            "metadata": [
+              {
+                "Key": "authoredNodeId",
+                "Value": "write-one"
+              },
+              {
+                "Key": "executionType",
+                "Value": "Action"
+              }
+            ],
+            "structure": null
+          }
+        ],
+        "name": "Sequence.Activities"
+      }
+    ],
+    "descriptorPayload": {
+      "TypeAlias": "Object"
+    },
+    "descriptorType": "Elsa.Primitives.Models.ClrActivityDescriptor",
+    "executableNodeId": "sequence",
+    "inputBindings": [],
+    "metadata": [
+      {
+        "Key": "authoredNodeId",
+        "Value": "sequence"
+      },
+      {
+        "Key": "executionType",
+        "Value": "Action"
+      }
+    ],
+    "structure": {
+      "kind": "elsa.sequence.structure",
+      "payload": {
+        "activities": [
+          "write-one"
+        ],
+        "variables": [
+          {
+            "default": {
+              "expressionType": "Literal",
+              "value": "0"
+            },
+            "name": "Counter",
+            "referenceKey": "var-counter",
+            "storageDriverType": null,
+            "type": {
+              "alias": "String",
+              "collectionKind": 0
+            }
+          }
+        ]
+      },
+      "schemaVersion": "1.0.0"
+    }
+  },
+  "scope": "Published"
+}

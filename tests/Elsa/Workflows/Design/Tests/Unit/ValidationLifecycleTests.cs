@@ -1,34 +1,35 @@
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Validators;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-013 + SC-022 + Unit C FR-023. End-to-end exercise of the validation
-/// lifecycle, now driven through the single coarse <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/>:
-/// introducing a forbidden condition results in the persisted sibling carrying the error;
-/// removing the condition causes the next update to clear it (the sibling is rewritten
-/// wholesale, not appended to).
+/// SC-013 + SC-022 + Unit C FR-023. End-to-end exercise of the validation lifecycle, driven through
+/// the single coarse <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/>. Errors are
+/// derived state (no persisted sibling): introducing a forbidden condition makes the derived error
+/// set (read on demand via the <see cref="DraftValidationGate"/>) carry the error; removing the
+/// condition makes the next derivation clear it (recomputed wholesale, not appended).
 /// </summary>
 /// <remarks>
 /// Uses the actual <see cref="VariableUniquenessValidator"/> wired into the
 /// <c>CapturingEventPublisher.OnPublish</c> hook — this exercises the validator's real logic
-/// end-to-end against the pipeline's persistence flow, rather than re-testing the sibling
-/// wholesale-rewrite mechanism (which <c>ValidationSiblingPersistenceTests</c> already covers
-/// with a stub error).
+/// end-to-end against every <c>OnDraftValidating</c> pass, including the one the gate helper
+/// (<c>DeriveValidationErrorsAsync</c>) fires when it recomputes errors on demand.
 /// </remarks>
 public sealed class ValidationLifecycleTests
 {
     [Fact]
-    public async Task Validation_error_lifecycle_round_trips_through_sibling()
+    public async Task Validation_error_lifecycle_round_trips_through_the_derive_port()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
-        // Wire the real VariableUniquenessValidator into the capturing sender's hook so every
+        // Wire the real VariableUniquenessValidator into the capturing publisher's hook so every
         // OnDraftValidating dispatch runs the production validator code against the snapshot.
         var validator = new VariableUniquenessValidator();
         host.EventPublisher.OnPublish = evt =>
@@ -45,23 +46,28 @@ public sealed class ValidationLifecycleTests
             variables: [Variable("v1", "duplicate"), Variable("v2", "Duplicate")],
             activities: [Node("start", isStart: true)]));
 
-        await AssertSiblingErrors(host, draftId, expectedTypes: ["Variables/Uniqueness"]);
+        await AssertDerivedErrors(host, draftId, expectedTypes: ["Variables/Uniqueness"]);
 
-        // 2. Rename one variable; the next validation pass rewrites the sibling wholesale.
+        // 2. Rename one variable; the next validation pass recomputes the error set wholesale.
         await Update(host, draftId, State(
             variables: [Variable("v1", "duplicate"), Variable("v2", "unique")],
             activities: [Node("start", isStart: true)]));
 
-        await AssertSiblingErrors(host, draftId, expectedTypes: []);
+        await AssertDerivedErrors(host, draftId, expectedTypes: []);
     }
 
-    private static async Task AssertSiblingErrors(WorkflowsDesignTestHost host, string draftId, string[] expectedTypes)
+    private static async Task AssertDerivedErrors(WorkflowsDesignTestHost host, string draftId, string[] expectedTypes)
     {
-        using var ctx = host.CreateContext();
-        var sibling = await ctx.WorkflowDefinitionDraftValidations
-            .FirstAsync(v => v.WorkflowDefinitionDraftId == draftId);
+        // Errors are derived on demand through the gate (DeriveValidationErrorsAsync), which
+        // publishes OnDraftValidating on the loaded draft and reads the accumulated errors back —
+        // replacing the former store derive-port. Load the current draft first, then derive.
+        using var scope = host.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
+        var draft = await store.FindByIdAsync(draftId);
+        Assert.NotNull(draft);
+        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
 
-        var actualTypes = sibling.Errors.Select(e => e.Type).ToArray();
+        var actualTypes = errors.Select(e => e.Type).ToArray();
 
         Assert.Equal(expectedTypes.Length, actualTypes.Length);
         foreach (var expected in expectedTypes)

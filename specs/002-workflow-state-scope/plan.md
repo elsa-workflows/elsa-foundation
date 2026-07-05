@@ -3,6 +3,8 @@
 **Branch**: `002-workflow-state-scope` | **Date**: 2026-05-28 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `/specs/002-workflow-state-scope/spec.md`
 
+> **Supersession note (2026-07-05):** all `WorkflowDefinitionDraftValidation` entity / EF-config / `IWorkflowDefinitionDraftValidation` planning entries below are superseded — the entity and read contract are deleted; validation errors are derived state, recomputed in-lock, not persisted (spec.md FR-021). Per-diff mutation-event *publication* is retired (declarations stand; diff engine unregistered from DI). `*Layout` planning stands. Reinstatable when a consumer exists.
+
 ## Summary
 
 Unit C pins the scope of `WorkflowDefinitionState` as the canonical authored document of a workflow definition, ratifies the architectural triplet (`WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable`), and lands the supporting workflow-design substrate: layout sibling entities (FR-006..FR-008), NodeId rename + `ActivityVersionId` collapse (FR-009..FR-011a), legacy `WorkflowMetadata` deletion (FR-015..FR-015a), Model X reconciliation policy (FR-016..FR-016c), Draft event-sourcing architectural slot with 16 granular mutation events + 2 lifecycle events + 16 CQS commands + 1 coarse `OnDraftValidating` event (FR-017..FR-020), validation sibling + delete-and-re-add lifecycle + "no Version with errors" promotion gate (FR-021..FR-024a), per-Draft distributed lock with mutation/promotion serialisation (FR-027..FR-027c), Clone-from-Version + Discard-Draft commands (FR-028..FR-029), DOMAIN_EVENTS catalog + reflection-based parity test (FR-030..FR-031a), and the Validations sub-domain with five baseline validators (FR-032..FR-036).

@@ -262,7 +262,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activityVersions) =>
         new(
-            new WorkflowExecutableCompiler(
+            TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore(activityVersions.ToList()),
                 _activityStructureService,

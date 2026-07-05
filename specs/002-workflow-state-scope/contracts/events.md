@@ -1,5 +1,7 @@
 # Contracts — Domain Events
 
+> **Supersession note (2026-07-05):** the per-diff **mutation** events below remain *declared* as the tested contract but are **no longer published** — commands no longer compute or publish them and the diff engine is unregistered from DI, until an event-sourcing consumer (FR-017) exists. The "publishing command reads `event.Errors` … flushes to `WorkflowDefinitionDraftValidation`" step is superseded (entity deleted; errors derived, not persisted — spec.md FR-021). **Lifecycle** events (`OnDraftCreated`, `OnDraftDiscarded`, `OnDraftValidating`, `OnDraftValidated`) remain published. Reinstatable when a consumer exists.
+
 19 events in total. All events are `sealed class` `IDomainEvent` per framework §2.6.1's intent-revealing-methods sub-rule. Events that gather handler contributions expose `Add*(...)` methods + `public IReadOnlyList<T>` read accessors (private backing list).
 
 Pipeline behaviour for every event (framework §2.6.1 + clarify s2 Q1):

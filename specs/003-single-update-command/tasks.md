@@ -4,6 +4,8 @@ description: "Task list for Single Diff-Based Draft Update Command (Unit 2)"
 
 # Tasks: Single Diff-Based Draft Update Command
 
+> **Supersession note (2026-07-05):** this is a point-in-time execution log. Tasks that wire the semantic diff engine into the mutation path, compute/Background-publish per-diff mutation events, or rewrite the `WorkflowDefinitionDraftValidation` sibling are superseded — per-diff publication is retired (diff engine remains the tested contract but is unregistered from DI) and the validation entity is deleted (errors are derived state; spec 002 FR-021 / this spec's top note). Tasks for the coarse `IUpdateDraftCommand`, the per-Draft lock, the `OnDraftValidating`/`OnDraftValidated` pair, and State persistence stand. Reinstatable when a consumer exists.
+
 **Input**: Design documents from `/specs/003-single-update-command/`
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 

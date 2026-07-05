@@ -11,7 +11,9 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// <b>Full-state-always (FR-001).</b> The caller computes the entire desired Draft —
 /// the same way the designer already holds it — and submits it wholesale. There is no
 /// patch/partial mode: "move one activity" and "rewrite the whole graph" use the identical
-/// call; the diff against stored state decides which per-concept events fire.
+/// call; the desired State + layout are assigned wholesale (last-writer-wins). Per-diff
+/// mutation-event publication is retired until an event-sourcing consumer exists (spec 002
+/// FR-017/FR-018), so no per-concept events fire on this path today.
 /// </para>
 /// <para>
 /// <b>Layout is separate from State (§E2.9.2, FR-001a).</b> Designer-layout records live on

@@ -20,8 +20,6 @@ public sealed class WorkflowsDesignDbContext(DbContextOptions<WorkflowsDesignDbC
 
     public DbSet<WorkflowDefinitionDraftLayout> WorkflowDefinitionDraftLayouts { get; set; } = null!;
 
-    public DbSet<WorkflowDefinitionDraftValidation> WorkflowDefinitionDraftValidations { get; set; } = null!;
-
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
