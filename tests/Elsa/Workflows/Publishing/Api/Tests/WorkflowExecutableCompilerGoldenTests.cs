@@ -279,7 +279,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                 registry.RegisterType(typeof(SequenceActivity), typeof(SequenceActivity).FullName!);
             }
 
-            return new WorkflowExecutableCompiler(
+            return TestCompiler.Create(
                 new FakeVersionStore(Version),
                 new FakeActivityVersionStore([.. Activities]),
                 structureService,

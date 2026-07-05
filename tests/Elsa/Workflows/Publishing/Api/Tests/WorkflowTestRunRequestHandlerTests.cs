@@ -271,7 +271,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         ITransientWorkflowExecutableStore? transientStore = null,
         IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null) =>
         new(
-            new WorkflowExecutableCompiler(
+            TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
@@ -283,7 +283,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
 
     private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null) =>
         new(
-            new WorkflowExecutableCompiler(
+            TestCompiler.Create(
                 new ThrowingVersionStore(),
                 new FakeActivityVersionStore([_writeLineActivity]),
                 _activityStructureService,
