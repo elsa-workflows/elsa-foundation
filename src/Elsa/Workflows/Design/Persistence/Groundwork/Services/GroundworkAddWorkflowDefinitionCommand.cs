@@ -33,7 +33,7 @@ public sealed class GroundworkAddWorkflowDefinitionCommand(IDocumentStore store,
         var draftDocuments = new GroundworkWorkflowDefinitionDraftDocumentStore(
             store,
             GroundworkDesignDocumentSerialization.Create(payloadSerializer));
-        var draftSave = draftDocuments.ToSaveRequest(draft, [], []);
+        var draftSave = draftDocuments.ToSaveRequest(draft, []);
 
         await store.SaveAllAsync(
             DocumentCommitScope.Of(

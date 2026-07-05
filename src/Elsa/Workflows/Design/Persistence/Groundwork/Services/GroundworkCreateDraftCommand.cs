@@ -53,7 +53,7 @@ public sealed class GroundworkCreateDraftCommand(
 
             await store.SaveAllAsync(
                 DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),
-                [documents.ToSaveRequest(draft, layout, errors)],
+                [documents.ToSaveRequest(draft, layout)],
                 cancellationToken);
         }
 

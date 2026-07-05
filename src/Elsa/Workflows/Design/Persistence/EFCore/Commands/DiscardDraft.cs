@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
 /// <summary>
-/// Unit C FR-029 implementation. Removes a <c>WorkflowDefinitionDraft</c> + its sibling rows
-/// (<c>WorkflowDefinitionDraftLayout</c>, <c>WorkflowDefinitionDraftValidation</c>)
-/// atomically inside the per-Draft distributed lock. Versions are never touched.
+/// Unit C FR-029 implementation. Removes a <c>WorkflowDefinitionDraft</c> + its
+/// <c>WorkflowDefinitionDraftLayout</c> sibling row atomically inside the per-Draft
+/// distributed lock. Versions are never touched.
 /// </summary>
 /// <remarks>
 /// Discard is its own shape (deletion, no validation rebuild, no granular event) and shares no
@@ -42,7 +42,7 @@ public sealed class DiscardDraft(
 
             workflowDefinitionId = draft.WorkflowDefinitionId;
 
-            // Cascade configured on the FKs (R5) deletes the Layout + Validation siblings.
+            // Cascade configured on the FK (R5) deletes the Layout sibling.
             dbContext.WorkflowDefinitionDrafts.Remove(draft);
             await dbContext.SaveChangesAsync(cancellationToken);
         }

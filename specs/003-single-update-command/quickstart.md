@@ -2,6 +2,8 @@
 
 **Feature**: `003-single-update-command` (Unit 2) · **Date**: 2026-06-03
 
+> **Supersession note (2026-07-05):** `IUpdateDraftCommand`'s **per-diff event publication** and the **semantic diff engine** on the mutation path are retired (no subscribers; event-sourcing slot unbuilt; engine unregistered from DI), and the **validation-sibling write** is gone (`WorkflowDefinitionDraftValidation` deleted — spec 002 FR-021; errors are derived state). The command still takes the lock, applies the desired state, runs the `OnDraftValidating` gate, persists State, and Background-publishes `OnDraftValidated`. Diff engine + FR-023 stable-id matching remain the tested contract. Reinstatable when an event-sourcing consumer exists.
+
 This is the developer-facing orientation for the `IUpdateDraftCommand` collapse. It shows what changes for callers, how to drive the command, and where the moving parts live.
 
 ---

@@ -125,41 +125,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     b.ToTable("WorkflowDefinitionDraftLayouts", "Elsa");
                 });
 
-            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraftValidation", b =>
-                {
-                    b.Property<string>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CreatedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Errors")
-                        .IsRequired()
-                        .HasMaxLength(-1)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("LastModifiedAt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("TenantId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("WorkflowDefinitionDraftId")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("WorkflowDefinitionDraftId")
-                        .IsUnique();
-
-                    b.ToTable("WorkflowDefinitionDraftValidations", "Elsa");
-                });
-
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionVersion", b =>
                 {
                     b.Property<string>("Id")
@@ -257,17 +222,6 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Sqlite.Migrations
                     b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", "WorkflowDefinitionDraft")
                         .WithOne()
                         .HasForeignKey("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraftLayout", "WorkflowDefinitionDraftId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("WorkflowDefinitionDraft");
-                });
-
-            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraftValidation", b =>
-                {
-                    b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", "WorkflowDefinitionDraft")
-                        .WithOne()
-                        .HasForeignKey("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraftValidation", "WorkflowDefinitionDraftId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

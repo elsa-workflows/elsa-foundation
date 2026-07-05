@@ -33,7 +33,7 @@ public class GroundworkWorkflowDefinitionDraftStoreTests
                 WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind, draft.Id, SchemaVersion, content));
         }
 
-        return (new GroundworkWorkflowDefinitionDraftStore(raw, Payloads), raw);
+        return (new GroundworkWorkflowDefinitionDraftStore(raw, Payloads, NoOpEventPublisher.Instance), raw);
     }
 
     private static WorkflowDefinitionDraft Draft(string id, string definitionId) =>

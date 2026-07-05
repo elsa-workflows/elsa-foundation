@@ -15,22 +15,21 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// simulating an activity feature like <c>Elsa.Http.Activities.Design</c> that ships its
 /// own <see cref="IDraftValidator"/>) contributes a <see cref="ValidationError"/> by returning
 /// it from <c>Validate</c>; the aggregating handler writes it onto <c>event.Errors</c> and the
-/// mutation pipeline reads that collection after dispatch and persists the contribution to the
-/// <c>WorkflowDefinitionDraftValidation</c> sibling.
+/// mutation command surfaces that collection on the <c>OnDraftValidated</c> event after commit.
+/// (Errors are derived state — there is no persisted validation sibling.)
 /// </summary>
 /// <remarks>
 /// The exact wiring of <see cref="Elsa.Events.Core.Contracts.IEventPublisher"/> → handler dispatch
 /// via the production event pipeline (invoker middleware) is covered by the deferred
 /// <c>Elsa.Events.Tests</c> follow-on. This test verifies the contribution-flow contract
-/// end-to-end against the validation sibling using the established
-/// <c>CapturingEventPublisher.OnPublish</c> hook — the same pattern
-/// <see cref="DraftMutationCommandTests.ValidationSiblingPersistenceTests"/> uses to simulate
-/// validator contributions without spinning up the full pipeline.
+/// end-to-end using the established <c>CapturingEventPublisher.OnPublish</c> hook to simulate
+/// validator contributions onto <c>OnDraftValidating</c>, observed on the resulting
+/// <c>OnDraftValidated</c>.
 /// </remarks>
 public sealed class CrossFeatureValidatorSubscriptionTests
 {
     [Fact]
-    public async Task Cross_feature_validator_contributes_errors_that_land_in_the_sibling()
+    public async Task Cross_feature_validator_contributes_errors_surfaced_on_OnDraftValidated()
     {
         using var host = WorkflowsDesignTestHost.Create();
 
@@ -46,13 +45,10 @@ public sealed class CrossFeatureValidatorSubscriptionTests
                     validating.Errors.Add(error);
         };
 
-        var draftId = await CreateDraft(host, "wf-1");
+        await CreateDraft(host, "wf-1");
 
-        using var ctx = host.CreateContext();
-        var sibling = await ctx.WorkflowDefinitionDraftValidations
-            .FirstAsync(v => v.WorkflowDefinitionDraftId == draftId);
-
-        var error = Assert.Single(sibling.Errors);
+        var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
+        var error = Assert.Single(validated.Errors);
         Assert.Equal("Http/AuthPolicyUnknown", error.Type);
         Assert.Equal(HttpActivityAuthPolicyValidatorStub.ExpectedPath, error.Path);
     }
@@ -77,15 +73,12 @@ public sealed class CrossFeatureValidatorSubscriptionTests
             }
         };
 
-        var draftId = await CreateDraft(host, "wf-1");
+        await CreateDraft(host, "wf-1");
 
-        using var ctx = host.CreateContext();
-        var sibling = await ctx.WorkflowDefinitionDraftValidations
-            .FirstAsync(v => v.WorkflowDefinitionDraftId == draftId);
-
-        Assert.Equal(2, sibling.Errors.Count);
-        Assert.Contains(sibling.Errors, e => e.Type == "Graph/StartActivity");
-        Assert.Contains(sibling.Errors, e => e.Type == "Http/AuthPolicyUnknown");
+        var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
+        Assert.Equal(2, validated.Errors.Count);
+        Assert.Contains(validated.Errors, e => e.Type == "Graph/StartActivity");
+        Assert.Contains(validated.Errors, e => e.Type == "Http/AuthPolicyUnknown");
     }
 
     private static async Task<string> CreateDraft(WorkflowsDesignTestHost host, string workflowDefinitionId)

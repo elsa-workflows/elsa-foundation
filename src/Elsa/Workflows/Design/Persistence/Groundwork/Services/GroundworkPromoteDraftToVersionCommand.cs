@@ -1,3 +1,5 @@
+using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
@@ -8,6 +10,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Events;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -17,6 +20,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
+    IEventPublisher eventPublisher,
     IWorkflowDefinitionVersionStore versionStore,
     IIdentityGenerator identityGenerator,
     ISystemClock clock)
@@ -34,9 +38,14 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
         var document = await documents.FindByIdAsync(draftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition draft '{draftId}' not found");
 
-        var errorCount = document.Errors.Count;
-        if (errorCount > 0)
-            throw new DraftHasValidationErrorsException(draftId, errorCount);
+        // FR-024 promotion gate: re-run the validators against the loaded Draft (errors are
+        // derived state, not persisted). Runs inside the per-Draft lock, so the validated state
+        // is exactly the state that gets promoted.
+        var validatingEvent = new OnDraftValidating(document.Entity);
+        await eventPublisher.Publish(validatingEvent, EventPublishingStrategy.Sequential, cancellationToken);
+
+        if (validatingEvent.Errors.Count > 0)
+            throw new DraftHasValidationErrorsException(draftId, validatingEvent.Errors.Count);
 
         var draft = document.Entity;
         var lastVersion = await versionStore.FindLatestVersionAsync(draft.WorkflowDefinitionId, cancellationToken);

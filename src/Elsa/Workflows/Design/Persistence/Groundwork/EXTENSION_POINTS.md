@@ -20,13 +20,14 @@ Groundwork provider catalog for workflow-design persistence replacement contract
 | `ISubmitWorkflowDefinitionCommand` | `GroundworkSubmitWorkflowDefinitionCommand` |
 | `ICloneDraftFromVersionCommand` | `GroundworkCloneDraftFromVersionCommand` |
 | `IWorkflowDefinitionLookup` | Core `WorkflowDefinitionLookup` |
-| `IDraftStateDiffEngine` | Core `DraftStateDiffEngine` |
 
 `AddGroundworkWorkflowsDesignStores()` removes existing registrations for these contracts before adding the Groundwork implementations, preserving the one-active-implementation replacement-contract rule.
 
+`IDraftStateDiffEngine` is intentionally absent: per-diff mutation-event publication is retired until an event-sourcing consumer exists, so the engine is no longer registered by this provider (it remains in Core as the tested contract).
+
 ## Document model
 
-The Groundwork `workflowDefinitionDraft` document embeds the draft entity, current designer layout records, and current validation errors in one document. Promotion reads that embedded validation state and refuses to create a version while errors exist; create/update persist draft state, layout, and validation atomically through `IDocumentStore.SaveAllAsync`.
+The Groundwork `workflowDefinitionDraft` document embeds the draft entity and current designer layout records in one document. Validation errors are derived state, not persisted: create/update persist draft state and layout atomically through `IDocumentStore.SaveAllAsync`, and both the promotion gate and the read port re-run the validators in-lock to derive the current error set (promotion refuses to create a version while errors exist).
 
 ## Cross-references
 

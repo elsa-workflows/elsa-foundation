@@ -1,63 +1,50 @@
 using Elsa.Workflows.Design.Core.Events;
-using Elsa.Workflows.Design.Tests.Infrastructure;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T010 (FR-013, SC-010) — migrated workflow-level input/output diff coverage. Workflow inputs
-/// and outputs match by <c>ReferenceKey</c> and are distinct from per-activity I/O:
+/// T010 (FR-013, SC-010) — workflow-level input/output diff coverage, driving
+/// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
+/// (per-diff mutation-event publication retired from the mutation command). Workflow inputs and
+/// outputs match by <c>ReferenceKey</c> and are distinct from per-activity I/O:
 /// add/update/remove → <c>OnWorkflowInput*</c> / <c>OnWorkflowOutput*</c>.
 /// </summary>
 public sealed class WorkflowIoDiffTests
 {
     [Fact]
-    public async Task Workflow_input_add_update_remove_emit_OnWorkflowInput_events()
+    public void Workflow_input_add_update_remove_emit_OnWorkflowInput_events()
     {
-        using var host = WorkflowsDesignTestHost.Create();
-        var draftId = await SeedEmptyDraft(host);
-
         // Add.
-        var skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(inputs: [Input("in1", "Input1")]));
-        var added = Assert.IsType<OnWorkflowInputAddedToDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        var added = Assert.IsType<OnWorkflowInputAddedToDraft>(Assert.Single(
+            Evaluate(State(), State(inputs: [Input("in1", "Input1")]))));
         Assert.Equal("in1", added.Input.ReferenceKey);
-        // Workflow-level event is distinct from the per-activity event.
-        Assert.Null(host.EventPublisher.LastOf<OnActivityInputAddedToDraft>());
 
         // Update.
-        skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(inputs: [Input("in1", "Renamed")]));
-        var updated = Assert.IsType<OnWorkflowInputUpdatedInDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        var updated = Assert.IsType<OnWorkflowInputUpdatedInDraft>(Assert.Single(
+            Evaluate(State(inputs: [Input("in1", "Input1")]), State(inputs: [Input("in1", "Renamed")]))));
         Assert.Equal("in1", updated.InputReferenceKey);
 
         // Remove.
-        skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(inputs: []));
-        Assert.IsType<OnWorkflowInputRemovedFromDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        Assert.IsType<OnWorkflowInputRemovedFromDraft>(Assert.Single(
+            Evaluate(State(inputs: [Input("in1", "Renamed")]), State(inputs: []))));
     }
 
     [Fact]
-    public async Task Workflow_output_add_update_remove_emit_OnWorkflowOutput_events()
+    public void Workflow_output_add_update_remove_emit_OnWorkflowOutput_events()
     {
-        using var host = WorkflowsDesignTestHost.Create();
-        var draftId = await SeedEmptyDraft(host);
-
         // Add.
-        var skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(outputs: [Output("out1", "Output1")]));
-        var added = Assert.IsType<OnWorkflowOutputAddedToDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        var added = Assert.IsType<OnWorkflowOutputAddedToDraft>(Assert.Single(
+            Evaluate(State(), State(outputs: [Output("out1", "Output1")]))));
         Assert.Equal("out1", added.Output.ReferenceKey);
 
         // Update.
-        skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(outputs: [Output("out1", "Renamed")]));
-        Assert.IsType<OnWorkflowOutputUpdatedInDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        Assert.IsType<OnWorkflowOutputUpdatedInDraft>(Assert.Single(
+            Evaluate(State(outputs: [Output("out1", "Output1")]), State(outputs: [Output("out1", "Renamed")]))));
 
         // Remove.
-        skip = host.EventPublisher.CapturedEvents.Count;
-        await Update(host, draftId, State(outputs: []));
-        Assert.IsType<OnWorkflowOutputRemovedFromDraft>(Assert.Single(DiffEventsSince(host, skip)));
+        Assert.IsType<OnWorkflowOutputRemovedFromDraft>(Assert.Single(
+            Evaluate(State(outputs: [Output("out1", "Renamed")]), State(outputs: []))));
     }
 }

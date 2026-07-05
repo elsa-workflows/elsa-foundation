@@ -40,9 +40,9 @@ public abstract class EFCoreWorkflowsPersistenceFeatureBase : EFCorePersistenceS
                 .AddScoped<ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
                 .AddScoped<IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
                 .AddScoped<IDiscardDraftCommand, DiscardDraft>()
-                // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
-                // Supersedes the former 20 granular mutation commands.
-                .AddScoped<IDraftStateDiffEngine, DraftStateDiffEngine>()
+                // The single coarse Draft-mutation command (Unit 2). Supersedes the former 20
+                // granular mutation commands. The diff engine is not registered: per-diff event
+                // publication is retired until a consumer exists (see UpdateDraft remarks).
                 .AddScoped<IUpdateDraftCommand, UpdateDraft>();
         }
 

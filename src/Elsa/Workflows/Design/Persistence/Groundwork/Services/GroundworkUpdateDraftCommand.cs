@@ -18,13 +18,11 @@ public sealed class GroundworkUpdateDraftCommand(
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
     IEventPublisher eventPublisher,
-    IDraftStateDiffEngine diffEngine,
     ISystemClock clock)
     : IUpdateDraftCommand
 {
     public async Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<IEvent> diffEvents;
         WorkflowDefinitionDraft draft;
         IReadOnlyList<ValidationError> errors;
         var documents = DraftDocuments();
@@ -36,22 +34,17 @@ public sealed class GroundworkUpdateDraftCommand(
                 ?? throw new InvalidOperationException($"Workflow definition draft '{request.DraftId}' not found");
 
             draft = document.Entity;
-            var storedState = draft.State;
-            var storedLayout = document.Layout.ToArray();
 
+            // Wholesale assign the desired state (last-writer-wins, FR-022).
             draft.State = request.State;
-            diffEvents = diffEngine.Evaluate(request.DraftId, storedState, storedLayout, request.State, request.Layout);
             errors = await ExecuteValidationGate(draft, cancellationToken);
             GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
 
             await store.SaveAllAsync(
                 DocumentCommitScope.Of(WorkflowsDesignStorageManifest.WorkflowDefinitionDraftDocumentKind),
-                [documents.ToSaveRequest(draft, request.Layout.ToArray(), errors)],
+                [documents.ToSaveRequest(draft, request.Layout.ToArray())],
                 cancellationToken);
         }
-
-        foreach (var diffEvent in diffEvents)
-            await eventPublisher.Publish(diffEvent, EventPublishingStrategy.Background, cancellationToken);
 
         await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
     }

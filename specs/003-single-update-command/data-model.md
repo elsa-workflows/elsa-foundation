@@ -4,6 +4,8 @@
 > [070-workflow-root-activity-contract](../070-workflow-root-activity-contract/spec.md). The
 > corrected model uses `WorkflowDefinitionState.RootActivity`.
 
+> **Supersession note (2026-07-05):** model entries for the `WorkflowDefinitionDraftValidation` sibling are superseded — the entity is deleted; validation errors are derived state, recomputed in-lock, not persisted (spec 002 FR-021). Entries describing the semantic diff producing/publishing per-diff events are likewise moot on the mutation path — publication is retired (diff engine remains the tested contract but is unregistered from DI). Reinstatable when a consumer exists.
+
 **Feature**: `003-single-update-command` (Unit 2) · **Date**: 2026-06-03
 **Inputs**: [research.md](./research.md) (R2/R3/R5), [spec.md](./spec.md) FR-001/001a/019/020/022/023.
 

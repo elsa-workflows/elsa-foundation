@@ -32,7 +32,7 @@ public class GroundworkAddWorkflowDefinitionCommandTests
         await command.Execute(definition, draft, CancellationToken.None);
 
         var definitionStore = new GroundworkWorkflowDefinitionStore(store);
-        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads);
+        var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads, NoOpEventPublisher.Instance);
 
         var readDefinition = await definitionStore.FindByIdAsync("def-1");
         var readDraft = await draftStore.FindByWorkflowDefinitionIdAsync("def-1");

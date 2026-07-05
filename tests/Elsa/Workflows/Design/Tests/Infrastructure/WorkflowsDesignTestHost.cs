@@ -163,8 +163,9 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
             .AddScoped<Persistence.Core.Contracts.ICloneDraftFromVersionCommand, CloneDraftFromVersion>()
             .AddScoped<Persistence.Core.Contracts.IPromoteDraftToVersionCommand, PromoteDraftToVersion>()
             .AddScoped<Persistence.Core.Contracts.IDiscardDraftCommand, DiscardDraft>()
-            // The single coarse diff-based Draft-mutation command (Unit 2) + its diff engine.
-            .AddScoped<Persistence.Core.Contracts.IDraftStateDiffEngine, Persistence.Core.Services.DraftStateDiffEngine>()
+            // The single coarse Draft-mutation command (Unit 2). IDraftStateDiffEngine is deliberately
+            // NOT registered here — mirroring production, per-diff mutation-event publication is retired
+            // until an event-sourcing consumer exists, so the command no longer depends on the engine.
             .AddScoped<Persistence.Core.Contracts.IUpdateDraftCommand, UpdateDraft>();
     }
 
