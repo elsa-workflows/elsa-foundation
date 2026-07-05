@@ -4,7 +4,7 @@ namespace Elsa.Server.ExtensionBuilder;
 /// Stateless rendering of Extension Builder repository templates: resolves and validates the template
 /// parameter values, computes the safe target path, and renders each template file's path and content
 /// (including the special-cased .csproj and elsa-package.json files). Repository path safety is
-/// delegated to <see cref="ExtensionBuilderStorage.NormalizeRepositoryRelativePath"/>.
+/// delegated to <see cref="RepositoryFileSystem.NormalizeRelativePath"/>.
 /// </summary>
 internal static class RepositoryTemplateRenderer
 {
@@ -40,11 +40,11 @@ internal static class RepositoryTemplateRenderer
     public static string NormalizeTargetPath(string? targetPath, ExtensionTemplateScope scope, IReadOnlyDictionary<string, string> values)
     {
         if (!string.IsNullOrWhiteSpace(targetPath))
-            return ExtensionBuilderStorage.NormalizeRepositoryRelativePath(targetPath);
+            return RepositoryFileSystem.NormalizeRelativePath(targetPath);
 
         return scope switch
         {
-            ExtensionTemplateScope.Project => values.TryGetValue("name", out var name) ? ExtensionBuilderStorage.NormalizeRepositoryRelativePath(name) : "",
+            ExtensionTemplateScope.Project => values.TryGetValue("name", out var name) ? RepositoryFileSystem.NormalizeRelativePath(name) : "",
             ExtensionTemplateScope.Item => "src",
             _ => ""
         };

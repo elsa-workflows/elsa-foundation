@@ -70,6 +70,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly GitClient _git;
     private readonly RepositoryInspector _inspector;
+    private readonly RepositoryFileSystem _fs;
     private readonly BuildOrchestrator _builds;
     private readonly string[] _serverLocalRepositoryRoots;
     private readonly string _statePath;
@@ -91,6 +92,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         var gitExecutable = string.IsNullOrWhiteSpace(extensionBuilderOptions.GitExecutable) ? "git" : extensionBuilderOptions.GitExecutable;
         _git = new GitClient(gitExecutable, logger);
         _inspector = new RepositoryInspector(_git);
+        _fs = new RepositoryFileSystem(_git, _inspector);
         _builds = new BuildOrchestrator(dotNetExecutable);
         _statePath = Path.Combine(RootPath, "state.json");
     }
@@ -294,7 +296,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            return BuildRepositoryTree(workspace.Id, repositoryPath, selectedSolutionPath);
+            return _fs.BuildTree(workspace.Id, repositoryPath, selectedSolutionPath);
         }, cancellationToken);
 
     public Task<RepositoryFile?> ReadRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
@@ -304,12 +306,12 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return (RepositoryFile?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var normalizedPath = NormalizeRepositoryRelativePath(path);
-            var filePath = ResolveRepositoryFilePath(repositoryPath, normalizedPath);
+            var normalizedPath = RepositoryFileSystem.NormalizeRelativePath(path);
+            var filePath = _fs.ResolveFilePath(repositoryPath, normalizedPath);
             if (!File.Exists(filePath))
                 return null;
 
-            return await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, ct);
+            return await _fs.ReadFileAsync(repositoryPath, filePath, normalizedPath, ct);
         }, cancellationToken);
 
     public async Task<AppliedRepositoryTemplate?> ApplyRepositoryTemplateAsync(string workspaceId, string ownerId, ExtensionTemplate template, ApplyRepositoryTemplateRequest request, CancellationToken cancellationToken = default)
@@ -331,8 +333,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 .Select(file =>
                 {
                     var renderedPath = RepositoryTemplateRenderer.RenderText(file.Path, values);
-                    var relativePath = NormalizeRepositoryRelativePath(RepositoryTemplateRenderer.CombinePath(targetPath, renderedPath));
-                    var physicalPath = ResolveRepositoryFilePath(repositoryPath, relativePath);
+                    var relativePath = RepositoryFileSystem.NormalizeRelativePath(RepositoryTemplateRenderer.CombinePath(targetPath, renderedPath));
+                    var physicalPath = _fs.ResolveFilePath(repositoryPath, relativePath);
                     var content = RepositoryTemplateRenderer.RenderContent(template, file, relativePath, values);
                     return new RenderedTemplateFile(relativePath, physicalPath, content);
                 })
@@ -354,14 +356,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
 
             var dirtyPaths = _inspector.GetDirtyRepositoryPaths(repositoryPath);
             var summaries = renderedFiles
-                .Select(file =>
-                {
-                    var info = new FileInfo(file.PhysicalPath);
-                    return new RepositoryFileSummary(file.RelativePath, GetRepositoryFileKind(file.RelativePath), info.Length, IsPathDirty(file.RelativePath, dirtyPaths), info.LastWriteTimeUtc);
-                })
+                .Select(file => _fs.BuildFileSummary(repositoryPath, file.PhysicalPath, file.RelativePath, dirtyPaths))
                 .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            return ((AppliedRepositoryTemplate?)new AppliedRepositoryTemplate(template.Id, scope, summaries, BuildRepositoryTree(workspace.Id, repositoryPath, null)), true);
+            return ((AppliedRepositoryTemplate?)new AppliedRepositoryTemplate(template.Id, scope, summaries, _fs.BuildTree(workspace.Id, repositoryPath, null)), true);
         }, cancellationToken);
     }
 
@@ -372,12 +370,12 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return ((RepositoryFile?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var normalizedPath = NormalizeRepositoryRelativePath(path);
-            var filePath = ResolveRepositoryFilePath(repositoryPath, normalizedPath);
+            var normalizedPath = RepositoryFileSystem.NormalizeRelativePath(path);
+            var filePath = _fs.ResolveFilePath(repositoryPath, normalizedPath);
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
             await File.WriteAllTextAsync(filePath, content, ct);
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            return (await ReadRepositoryFileCoreAsync(repositoryPath, filePath, normalizedPath, ct), true);
+            return (await _fs.ReadFileAsync(repositoryPath, filePath, normalizedPath, ct), true);
         }, cancellationToken);
 
     public Task<RepositoryFile?> MoveRepositoryFileAsync(string workspaceId, string ownerId, MoveRepositoryFileRequest request, CancellationToken cancellationToken = default) =>
@@ -387,18 +385,18 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return ((RepositoryFile?)null, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var sourcePath = NormalizeRepositoryRelativePath(request.SourcePath);
-            var destinationPath = NormalizeRepositoryRelativePath(request.DestinationPath);
-            var sourceFilePath = ResolveRepositoryFilePath(repositoryPath, sourcePath);
-            var destinationFilePath = ResolveRepositoryFilePath(repositoryPath, destinationPath);
+            var sourcePath = RepositoryFileSystem.NormalizeRelativePath(request.SourcePath);
+            var destinationPath = RepositoryFileSystem.NormalizeRelativePath(request.DestinationPath);
+            var sourceFilePath = _fs.ResolveFilePath(repositoryPath, sourcePath);
+            var destinationFilePath = _fs.ResolveFilePath(repositoryPath, destinationPath);
             if (!File.Exists(sourceFilePath))
                 return (null, false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(destinationFilePath)!);
             File.Move(sourceFilePath, destinationFilePath, overwrite: false);
-            DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(sourceFilePath));
+            _fs.DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(sourceFilePath));
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
-            return (await ReadRepositoryFileCoreAsync(repositoryPath, destinationFilePath, destinationPath, ct), true);
+            return (await _fs.ReadFileAsync(repositoryPath, destinationFilePath, destinationPath, ct), true);
         }, cancellationToken);
 
     public Task<bool> DeleteRepositoryFileAsync(string workspaceId, string ownerId, string path, CancellationToken cancellationToken = default) =>
@@ -408,13 +406,13 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return (false, false);
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            var normalizedPath = NormalizeRepositoryRelativePath(path);
-            var filePath = ResolveRepositoryFilePath(repositoryPath, normalizedPath);
+            var normalizedPath = RepositoryFileSystem.NormalizeRelativePath(path);
+            var filePath = _fs.ResolveFilePath(repositoryPath, normalizedPath);
             if (!File.Exists(filePath))
                 return (false, false);
 
             File.Delete(filePath);
-            DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(filePath));
+            _fs.DeleteEmptyParentDirectories(repositoryPath, Path.GetDirectoryName(filePath));
             state.Workspaces[workspace.Id] = workspace with { UpdatedAt = DateTimeOffset.UtcNow };
             return (true, true);
         }, cancellationToken);
@@ -430,7 +428,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             if (!TryGetOwnedWorkspace(state, workspaceId, ownerId, out var workspace))
                 return null;
 
-            var normalizedPath = NormalizeRepositoryRelativePath(path);
+            var normalizedPath = RepositoryFileSystem.NormalizeRelativePath(path);
             var repositoryPath = GetWorkspacePath(workspace.Id);
             var arguments = staged
                 ? new[] { "diff", "--cached", "--", normalizedPath }
@@ -445,7 +443,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return (SourceControlStatus?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await _git.RunAsync(repositoryPath, ct, "add", "--", NormalizeRepositoryRelativePath(path));
+            await _git.RunAsync(repositoryPath, ct, "add", "--", RepositoryFileSystem.NormalizeRelativePath(path));
             return GetSourceControlStatus(workspace.Id);
         }, cancellationToken);
 
@@ -456,7 +454,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
                 return (SourceControlStatus?)null;
 
             var repositoryPath = GetWorkspacePath(workspace.Id);
-            await _git.RunAsync(repositoryPath, ct, "restore", "--staged", "--", NormalizeRepositoryRelativePath(path));
+            await _git.RunAsync(repositoryPath, ct, "restore", "--staged", "--", RepositoryFileSystem.NormalizeRelativePath(path));
             return GetSourceControlStatus(workspace.Id);
         }, cancellationToken);
 
@@ -584,7 +582,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             return null;
 
         var commandName = request.Command ?? RepositoryBuildCommand.Build;
-        var targetPath = ResolveRepositoryBuildTarget(repositoryPath, request.TargetPath);
+        var targetPath = _fs.ResolveBuildTarget(repositoryPath, request.TargetPath);
         if (targetPath is null)
         {
             var diagnostics = new List<BuildDiagnostic> { new(BuildDiagnosticSeverity.Error, "No solution or project file was found for the repository build.", null, null, null, null) };
@@ -1014,152 +1012,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             throw new InvalidOperationException(message);
     }
 
-    private string? ResolveRepositoryBuildTarget(string repositoryPath, string? targetPath)
-    {
-        if (!string.IsNullOrWhiteSpace(targetPath))
-        {
-            var normalized = NormalizeRepositoryRelativePath(targetPath);
-            var filePath = ResolveRepositoryFilePath(repositoryPath, normalized);
-            if (!File.Exists(filePath))
-                throw new ArgumentException($"Build target '{normalized}' was not found.", nameof(targetPath));
-            return filePath;
-        }
-
-        return EnumerateRepositoryFiles(repositoryPath, "*.sln*")
-            .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .Concat(EnumerateRepositoryFiles(repositoryPath, "*.*proj").Order(StringComparer.OrdinalIgnoreCase))
-            .FirstOrDefault();
-    }
-
-    private RepositoryTree BuildRepositoryTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
-    {
-        var repositoryState = _inspector.GetRepositoryState(repositoryPath);
-        var dirtyPaths = _inspector.GetDirtyRepositoryPaths(repositoryPath);
-        var solutionPaths = EnumerateRepositoryFiles(repositoryPath, "*.sln*")
-            .Select(path => Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/'))
-            .Where(path => Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase) || Path.GetExtension(path).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
-            .Order(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var selectedSolution = SelectSolution(solutionPaths, selectedSolutionPath);
-        var solutions = solutionPaths
-            .Select(path => new RepositorySolutionSummary(path, Path.GetFileNameWithoutExtension(path), string.Equals(path, selectedSolution, StringComparison.OrdinalIgnoreCase)))
-            .ToArray();
-        var entries = EnumerateRepositoryEntries(repositoryPath, dirtyPaths);
-        return new(workspaceId, repositoryState.ActiveBranch, repositoryState.IsDirty, solutions, entries);
-    }
-
-    private RepositoryFileSummary[] EnumerateRepositoryEntries(string repositoryPath, ISet<string> dirtyPaths)
-    {
-        if (!Directory.Exists(repositoryPath))
-            return [];
-
-        var directories = EnumerateRepositoryDirectories(repositoryPath)
-            .Select(path =>
-            {
-                var relative = Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/');
-                return new RepositoryFileSummary(relative, RepositoryFileKind.Folder, 0, false, Directory.GetLastWriteTimeUtc(path));
-            });
-        var files = EnumerateRepositoryFiles(repositoryPath, "*")
-            .Select(path =>
-            {
-                var info = new FileInfo(path);
-                var relative = Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/');
-                return new RepositoryFileSummary(relative, GetRepositoryFileKind(relative), info.Length, IsPathDirty(relative, dirtyPaths), info.LastWriteTimeUtc);
-            });
-
-        return directories.Concat(files)
-            .OrderBy(x => x.Kind is RepositoryFileKind.Folder ? 0 : 1)
-            .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private async Task<RepositoryFile> ReadRepositoryFileCoreAsync(string repositoryPath, string filePath, string relativePath, CancellationToken cancellationToken)
-    {
-        var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-        var info = new FileInfo(filePath);
-        return new(relativePath, content, GetRepositoryFileKind(relativePath), info.Length, IsPathDirty(relativePath, _inspector.GetDirtyRepositoryPaths(repositoryPath)), info.LastWriteTimeUtc);
-    }
-
-    private SourceControlStatus GetSourceControlStatus(string workspaceId)
-    {
-        var repositoryPath = GetWorkspacePath(workspaceId);
-        var repositoryState = _inspector.GetRepositoryState(repositoryPath);
-        var changedFiles = _git.RunOrDefault(repositoryPath, "status", "--porcelain", "--untracked-files=all")
-            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-            .Select(ParseSourceControlStatus)
-            .OrderBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        return new(
-            workspaceId,
-            repositoryState.ActiveBranch,
-            changedFiles.Length > 0,
-            changedFiles,
-            changedFiles.Where(x => x.IsStaged).ToArray(),
-            changedFiles.Where(x => x.IsUnstaged).ToArray());
-    }
-
-    private static SourceControlFileStatus ParseSourceControlStatus(string line)
-    {
-        var indexStatus = line.Length > 0 ? line[0] : ' ';
-        var workTreeStatus = line.Length > 1 ? line[1] : ' ';
-        var path = line.Length > 3 ? line[3..].Trim().Trim('"').Replace('\\', '/') : "";
-        var renameSeparator = path.IndexOf(" -> ", StringComparison.Ordinal);
-        if (renameSeparator >= 0)
-            path = path[(renameSeparator + 4)..];
-
-        return new(
-            path,
-            $"{indexStatus}{workTreeStatus}".Trim(),
-            indexStatus is not ' ' and not '?',
-            workTreeStatus is not ' ' || indexStatus is '?');
-    }
-
-    private static bool IsPathDirty(string path, ISet<string> dirtyPaths) =>
-        dirtyPaths.Contains(path) || dirtyPaths.Any(dirtyPath => dirtyPath.StartsWith(path.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase));
-
-    private static string? SelectSolution(IReadOnlyList<string> solutionPaths, string? selectedSolutionPath)
-    {
-        if (solutionPaths.Count == 0)
-            return null;
-        if (!string.IsNullOrWhiteSpace(selectedSolutionPath))
-        {
-            var normalized = NormalizeRepositoryRelativePath(selectedSolutionPath);
-            if (solutionPaths.Any(path => string.Equals(path, normalized, StringComparison.OrdinalIgnoreCase)))
-                return normalized;
-        }
-
-        return solutionPaths.Count == 1 ? solutionPaths[0] : null;
-    }
-
-    private static RepositoryFileKind GetRepositoryFileKind(string path)
-    {
-        var extension = Path.GetExtension(path);
-        if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase) || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
-            return RepositoryFileKind.Solution;
-        if (extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase) || extension.Equals(".fsproj", StringComparison.OrdinalIgnoreCase) || extension.Equals(".vbproj", StringComparison.OrdinalIgnoreCase))
-            return RepositoryFileKind.Project;
-        return RepositoryFileKind.File;
-    }
-
-    private string ResolveRepositoryFilePath(string repositoryPath, string relativePath)
-    {
-        var normalizedPath = NormalizeRepositoryRelativePath(relativePath);
-        var path = Path.GetFullPath(Path.Combine(repositoryPath, normalizedPath));
-        if (!path.StartsWith(repositoryPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("The resolved repository file path is outside the repository root.");
-        return path;
-    }
-
-    internal static string NormalizeRepositoryRelativePath(string path)
-    {
-        var normalized = (path ?? "").Replace('\\', '/').Trim('/');
-        if (string.IsNullOrWhiteSpace(normalized) ||
-            Path.IsPathRooted(normalized) ||
-            normalized.Split('/').Any(segment => segment is "" or "." or ".." || segment.Equals(".git", StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException("A safe relative repository file path is required.", nameof(path));
-        return normalized;
-    }
+    private SourceControlStatus GetSourceControlStatus(string workspaceId) =>
+        _fs.GetSourceControlStatus(workspaceId, GetWorkspacePath(workspaceId));
 
     private static string NormalizeCommitMessage(string message)
     {
@@ -1167,60 +1021,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         if (string.IsNullOrWhiteSpace(normalized))
             throw new ArgumentException("A commit message is required.", nameof(message));
         return normalized;
-    }
-
-    private static bool IsRepositoryPrivatePath(string repositoryPath, string path)
-    {
-        var relative = Path.GetRelativePath(repositoryPath, path).Replace(Path.DirectorySeparatorChar, '/');
-        return relative.Split('/').Any(segment => segment.Equals(".git", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<string> EnumerateRepositoryDirectories(string repositoryPath)
-    {
-        foreach (var directory in EnumerateRepositoryDirectoriesCore(repositoryPath))
-            yield return directory;
-    }
-
-    private static IEnumerable<string> EnumerateRepositoryFiles(string repositoryPath, string searchPattern)
-    {
-        foreach (var file in Directory.EnumerateFiles(repositoryPath, searchPattern, SearchOption.TopDirectoryOnly).Where(path => !IsRepositoryPrivatePath(repositoryPath, path)))
-            yield return file;
-
-        foreach (var directory in EnumerateRepositoryDirectoriesCore(repositoryPath))
-        {
-            foreach (var file in Directory.EnumerateFiles(directory, searchPattern, SearchOption.TopDirectoryOnly))
-                yield return file;
-        }
-    }
-
-    private static IEnumerable<string> EnumerateRepositoryDirectoriesCore(string repositoryPath)
-    {
-        var pending = new Stack<string>(Directory.EnumerateDirectories(repositoryPath, "*", SearchOption.TopDirectoryOnly).Reverse());
-        while (pending.Count > 0)
-        {
-            var directory = pending.Pop();
-            if (IsRepositoryPrivatePath(repositoryPath, directory))
-                continue;
-
-            yield return directory;
-            foreach (var child in Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly).Reverse())
-                pending.Push(child);
-        }
-    }
-
-    private static void DeleteEmptyParentDirectories(string repositoryPath, string? startPath)
-    {
-        var root = Path.GetFullPath(repositoryPath);
-        var current = string.IsNullOrWhiteSpace(startPath) ? null : Path.GetFullPath(startPath);
-        while (!string.IsNullOrWhiteSpace(current) &&
-               !string.Equals(current, root, StringComparison.OrdinalIgnoreCase) &&
-               current.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
-               Directory.Exists(current) &&
-               !Directory.EnumerateFileSystemEntries(current).Any())
-        {
-            Directory.Delete(current);
-            current = Path.GetDirectoryName(current);
-        }
     }
 
     private async Task SwitchRepositoryBranchAsync(string repositoryPath, string branchName, CancellationToken cancellationToken)
