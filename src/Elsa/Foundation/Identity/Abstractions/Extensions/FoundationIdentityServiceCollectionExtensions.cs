@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
@@ -33,6 +34,22 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers a <see cref="DevelopmentOrDemoGuard"/> for <paramref name="featureName"/> so that a host
+    /// which enables that identity feature's <c>IsDevelopmentOrDemo</c> flag outside the Development
+    /// environment hard-fails at startup instead of silently booting into the insecure development posture
+    /// (ephemeral signing keys + well-known seeded credentials). The guard is exposed under both the
+    /// <see cref="Microsoft.Extensions.Hosting.IHostedService"/> and CShells <see cref="IShellInitializer"/> hooks so it fires in plain
+    /// hosts/tests and in the shell-composed server alike.
+    /// </summary>
+    public static IServiceCollection AddIdentityDevelopmentOrDemoGuard(this IServiceCollection services, string featureName)
+    {
+        services.AddSingleton(sp => new DevelopmentOrDemoGuard(sp, featureName));
+        services.AddHostedService(sp => sp.GetRequiredService<DevelopmentOrDemoGuard>());
+        services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<DevelopmentOrDemoGuard>());
         return services;
     }
 

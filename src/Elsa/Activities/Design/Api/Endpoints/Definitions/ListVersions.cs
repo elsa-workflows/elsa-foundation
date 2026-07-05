@@ -12,6 +12,6 @@ internal sealed class ListVersions(IRequestSender requestSender, ILogger<List> l
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }

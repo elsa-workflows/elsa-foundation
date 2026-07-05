@@ -16,7 +16,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
 		<ProjectReference Include="..\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The EF Core persistence lives in its own nested project under this domain root; keep the base
+		     SDK globs from swallowing it. -->
+		<Compile Remove="EntityFrameworkCore/**/*" />
+		<EmbeddedResource Remove="EntityFrameworkCore/**/*" />
+		<None Remove="EntityFrameworkCore/**/*" />
 	</ItemGroup>
 
 </Project>

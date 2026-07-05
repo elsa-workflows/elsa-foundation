@@ -13,6 +13,6 @@ internal sealed class Submit(ICommandSender commandSender, ILogger<Submit> logge
     public override void Configure()
     {
         Post(RouteConstants.GetRoute("definitions/submit"));
-        AllowAnonymous();
+        ConfigurePermissions();
     }
 }
