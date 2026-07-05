@@ -17,16 +17,10 @@ internal sealed class CancelTurn(IAgentTurnRegistry turns, IAgentSessionService 
 
     public override async Task HandleAsync(AgentTurnCancelRequest req, CancellationToken ct)
     {
-        var session = await sessions.FindAsync(req.SessionId, ct);
-        if (session is null)
+        var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
+        if (error is not null)
         {
-            await Send.ResponseAsync(AgentApiResponse<AgentTurnCancelResponse>.Failure(new("agent.session.not_found", $"Agent session '{req.SessionId}' was not found.", 404)), 404, cancellation: ct);
-            return;
-        }
-
-        if (!AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, User))
-        {
-            await Send.ResponseAsync(AgentApiResponse<AgentTurnCancelResponse>.Failure(new("agent.session.forbidden", "The agent session is not available to the current principal.", 403)), 403, cancellation: ct);
+            await Send.ResponseAsync(AgentApiResponse<AgentTurnCancelResponse>.Failure(error), error.StatusCode, cancellation: ct);
             return;
         }
 
