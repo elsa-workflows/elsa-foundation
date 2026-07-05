@@ -70,7 +70,7 @@ public sealed class FlowchartExecutionEngine(
         state = RemoveActiveChild(state, path.ExecutionPathId, completionContext.CompletedChildExecutableNodeId);
         if (path.Status == ExecutionPathStatus.Canceled || scope.Status == ExecutionScopeStatus.Canceled)
         {
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, completionContext.CompletedChildExecutableNodeId, path.IncomingConnectionId, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart ignored completion for canceled path '{path.ExecutionPathId}'.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, completionContext.CompletedChildExecutableNodeId, path.IncomingConnectionId, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart ignored completion for canceled path '{path.ExecutionPathId}'.");
             await PersistAndMaybeCompleteAsync(context, state);
             return;
         }
@@ -120,7 +120,7 @@ public sealed class FlowchartExecutionEngine(
             }
             catch (FlowchartExecutionException exception)
             {
-                state = AddDiagnostic(state, FlowchartDiagnosticKind.PolicyFailure, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, exception.Message);
+                state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.PolicyFailure, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, exception.Message);
                 await SaveStateAsync(context, state);
                 throw;
             }
@@ -150,7 +150,7 @@ public sealed class FlowchartExecutionEngine(
                 CurrentNodeId = completionContext.CompletedChildExecutableNodeId,
                 LastOutcomeNames = completionContext.OutcomeNames
             });
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, completionContext.CompletedChildExecutableNodeId, null, path.ExecutionPathId, path.ExecutionScopeId, $"Flowchart path '{path.ExecutionPathId}' completed at terminal node '{completionContext.CompletedChildExecutableNodeId}'.");
             state = ReleaseReadyWaitingJoins(context, state, graph);
 
             await PersistAndMaybeCompleteAsync(context, state);
@@ -180,7 +180,7 @@ public sealed class FlowchartExecutionEngine(
             if (ShouldWaitForTarget(state, graph, connection.Target.NodeId, targetScope.ExecutionScopeId, targetIterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
-                state = AddDiagnostic(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");
+                state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, connection.Target.NodeId, connectionId, arrivalPath.ExecutionPathId, targetScope.ExecutionScopeId, $"Flowchart path '{arrivalPath.ExecutionPathId}' is waiting at implicit join '{connection.Target.NodeId}'.");
                 continue;
             }
 
@@ -223,7 +223,7 @@ public sealed class FlowchartExecutionEngine(
             state = RemoveActiveChild(state, faultedChild.ExecutionPathId, faultedNodeId);
 
         var message = $"Flowchart faulted because child node '{faultedNodeId}' faulted: a faulted child cannot complete, so its execution path — and any downstream join that requires it (a Flowchart join needs every inbound branch) — can no longer proceed.";
-        state = AddDiagnostic(state, FlowchartDiagnosticKind.Faulted, faultedNodeId, null, faultedChild?.ExecutionPathId, faultedChild?.ExecutionScopeId, message);
+        state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Faulted, faultedNodeId, null, faultedChild?.ExecutionPathId, faultedChild?.ExecutionScopeId, message);
         await SaveStateAsync(context, state);
 
         throw new FlowchartExecutionException(message);
@@ -233,7 +233,7 @@ public sealed class FlowchartExecutionEngine(
     {
         if (state.ActiveChildren.Count == 0 && state.ExecutionPaths.All(path => path.Status != ExecutionPathStatus.Waiting && path.Status != ExecutionPathStatus.Active))
         {
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.Completed, null, null, null, state.RootExecutionScopeId, "Flowchart completed because no active or waiting execution paths remain.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, null, null, null, state.RootExecutionScopeId, "Flowchart completed because no active or waiting execution paths remain.");
             await SaveStateAsync(context, state);
             context.CompleteCompositeActivity([ActivityOutcomes.Done]);
             return;
@@ -301,7 +301,7 @@ public sealed class FlowchartExecutionEngine(
 
         var scheduledPath = NewPath(state, null, executionScopeId, targetNodeId, connectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
         state = AddPath(state, scheduledPath);
-        state = AddDiagnostic(state, arrivals.Length > 1 ? FlowchartDiagnosticKind.Joined : FlowchartDiagnosticKind.Scheduled, targetNodeId, connectionId, scheduledPath.ExecutionPathId, executionScopeId, arrivals.Length > 1
+        state = FlowchartDiagnosticAccumulator.Add(state, arrivals.Length > 1 ? FlowchartDiagnosticKind.Joined : FlowchartDiagnosticKind.Scheduled, targetNodeId, connectionId, scheduledPath.ExecutionPathId, executionScopeId, arrivals.Length > 1
             ? $"Implicit join '{targetNodeId}' fired after {arrivals.Length} active arrival(s)."
             : $"Flowchart scheduled node '{targetNodeId}'.");
 
@@ -334,7 +334,7 @@ public sealed class FlowchartExecutionEngine(
         }
 
         foreach (var diagnostic in decision.Diagnostics)
-            state = state with { Diagnostics = state.Diagnostics.Append(diagnostic).ToArray(), Sequence = state.Sequence + 1 };
+            state = FlowchartDiagnosticAccumulator.Append(state, diagnostic);
 
         foreach (var command in decision.Commands)
         {
@@ -393,7 +393,7 @@ public sealed class FlowchartExecutionEngine(
                 state = AddScope(state, loopScope);
             executionScopeId = loopScope.ExecutionScopeId;
             iterationKey = loopScope.LoopIterationKey;
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.LoopIteration, nodeId, graph.GetConnectionId(connection), currentPath.ExecutionPathId, executionScopeId, $"Flowchart created loop iteration scope '{executionScopeId}' for loopback to '{nodeId}'.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.LoopIteration, nodeId, graph.GetConnectionId(connection), currentPath.ExecutionPathId, executionScopeId, $"Flowchart created loop iteration scope '{executionScopeId}' for loopback to '{nodeId}'.");
         }
 
         if (connection is not null)
@@ -406,7 +406,7 @@ public sealed class FlowchartExecutionEngine(
             if (ShouldWaitForTarget(state, graph, nodeId, executionScopeId, iterationKey))
             {
                 state = UpdatePath(state, arrivalPath with { Status = ExecutionPathStatus.Waiting });
-                return AddDiagnostic(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");
+                return FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Waiting, nodeId, connectionId, arrivalPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' is waiting at implicit join '{nodeId}'.");
             }
 
             return FireJoinOrContinuation(context, state, graph, nodeId, executionScopeId, iterationKey, schedulingActivityExecutionId, connectionId);
@@ -414,7 +414,7 @@ public sealed class FlowchartExecutionEngine(
 
         var scheduledPath = NewPath(state, currentPath.ExecutionPathId, executionScopeId, nodeId, command.ConnectionId, schedulingActivityExecutionId, ExecutionPathStatus.Active, iterationKey);
         state = AddPath(state, scheduledPath);
-        state = AddDiagnostic(state, FlowchartDiagnosticKind.Scheduled, nodeId, command.ConnectionId, scheduledPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' scheduled node '{nodeId}'.");
+        state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Scheduled, nodeId, command.ConnectionId, scheduledPath.ExecutionPathId, executionScopeId, $"Flowchart policy '{policyKind}' scheduled node '{nodeId}'.");
         return ScheduleNode(context, state, nodeId, scheduledPath.ExecutionPathId, executionScopeId, scheduledPath.IterationKey, schedulingActivityExecutionId, $"policy:{policyKind}");
     }
 
@@ -454,7 +454,7 @@ public sealed class FlowchartExecutionEngine(
         if (string.IsNullOrWhiteSpace(command.Message))
             throw new FlowchartExecutionException("WriteDiagnostic command requires a message.");
 
-        return AddDiagnostic(
+        return FlowchartDiagnosticAccumulator.Add(
             state,
             FlowchartDiagnosticKind.PolicyFailure,
             command.NodeId,
@@ -489,7 +489,7 @@ public sealed class FlowchartExecutionEngine(
 
     private static FlowchartExecutionState CancelPendingPathsForBreak(FlowchartExecutionState state, ExecutionPath breakingPath, string breakNodeId)
     {
-        state = AddDiagnostic(state, FlowchartDiagnosticKind.Completed, breakNodeId, null, breakingPath.ExecutionPathId, breakingPath.ExecutionScopeId, $"Flowchart ended early because node '{breakNodeId}' completed with a Break outcome.");
+        state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Completed, breakNodeId, null, breakingPath.ExecutionPathId, breakingPath.ExecutionScopeId, $"Flowchart ended early because node '{breakNodeId}' completed with a Break outcome.");
 
         foreach (var pendingPath in state.ExecutionPaths
                      .Where(path =>
@@ -498,7 +498,7 @@ public sealed class FlowchartExecutionEngine(
                      .ToArray())
         {
             state = UpdatePath(state, pendingPath with { Status = ExecutionPathStatus.Canceled });
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, pendingPath.CurrentNodeId, pendingPath.IncomingConnectionId, pendingPath.ExecutionPathId, pendingPath.ExecutionScopeId, $"Flowchart Break canceled pending path '{pendingPath.ExecutionPathId}'.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, pendingPath.CurrentNodeId, pendingPath.IncomingConnectionId, pendingPath.ExecutionPathId, pendingPath.ExecutionScopeId, $"Flowchart Break canceled pending path '{pendingPath.ExecutionPathId}'.");
         }
 
         return state with { ActiveChildren = [], Sequence = state.Sequence + 1 };
@@ -514,7 +514,7 @@ public sealed class FlowchartExecutionEngine(
                      .ToArray())
         {
             state = UpdatePath(state, losingPath with { Status = ExecutionPathStatus.Canceled });
-            state = AddDiagnostic(state, FlowchartDiagnosticKind.Canceled, losingPath.CurrentNodeId, losingPath.IncomingConnectionId, losingPath.ExecutionPathId, losingPath.ExecutionScopeId, $"Flowchart first-wins race canceled losing path '{losingPath.ExecutionPathId}'.");
+            state = FlowchartDiagnosticAccumulator.Add(state, FlowchartDiagnosticKind.Canceled, losingPath.CurrentNodeId, losingPath.IncomingConnectionId, losingPath.ExecutionPathId, losingPath.ExecutionScopeId, $"Flowchart first-wins race canceled losing path '{losingPath.ExecutionPathId}'.");
         }
 
         state = state with
@@ -816,26 +816,5 @@ public sealed class FlowchartExecutionEngine(
                 .ToArray(),
             Sequence = state.Sequence + 1
         };
-    }
-
-    private static FlowchartExecutionState AddDiagnostic(
-        FlowchartExecutionState state,
-        FlowchartDiagnosticKind kind,
-        string? nodeId,
-        string? connectionId,
-        string? executionPathId,
-        string? executionScopeId,
-        string message)
-    {
-        var diagnostic = new FlowchartDiagnosticEvent(
-            NewId(state, "diag"),
-            kind,
-            message,
-            nodeId,
-            connectionId,
-            executionPathId,
-            executionScopeId);
-
-        return state with { Diagnostics = state.Diagnostics.Append(diagnostic).ToArray(), Sequence = state.Sequence + 1 };
     }
 }
