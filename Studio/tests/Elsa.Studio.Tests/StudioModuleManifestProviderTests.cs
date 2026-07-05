@@ -297,6 +297,16 @@ public sealed class StudioModuleManifestProviderTests
         services.AddDashboardStudioSample();
         services.AddWeatherForecastStudioSample();
 
+        // Pin the host/SDK version so these tests are independent of the ambient build version.
+        // StudioApiOptions defaults HostVersion/SdkVersion to the Studio API assembly's informational
+        // version, which the Packages CI workflow stamps via /p:Version (e.g. 4.0.0-preview.N) — that
+        // would otherwise break the exact-version and major-compatibility assertions below.
+        services.PostConfigure<StudioApiOptions>(options =>
+        {
+            options.HostVersion = "1.0.0";
+            options.SdkVersion = "1.0.0";
+        });
+
         if (configure is not null)
             services.PostConfigure(configure);
 
