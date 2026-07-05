@@ -10,26 +10,31 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.Tests;
 
 /// <summary>
-/// A SQLite in-memory host exposing an <see cref="IDbContextFactory{TContext}"/> over a single open
-/// connection so the database survives across DbContext instances. Wires the services
-/// <c>ElsaDbContextBase</c> resolves at runtime (<see cref="ISystemClock"/> + the SQLite model-creating
-/// handler). Pass <c>createSchema: false</c> to simulate the pre-migration window.
+/// A SQLite in-memory host exposing an <see cref="IDbContextFactory{TContext}"/> over a named
+/// shared-cache in-memory database. A root connection is held open so the database survives across
+/// DbContext instances, but every context gets its own connection — <see cref="SqliteConnection"/> is
+/// not thread-safe, and the drain-loop tests probe the database concurrently with the store's writes
+/// (same pattern as <c>OpenTelemetryTestHost</c>). Wires the services <c>ElsaDbContextBase</c> resolves
+/// at runtime (<see cref="ISystemClock"/> + the SQLite model-creating handler). Pass
+/// <c>createSchema: false</c> to simulate the pre-migration window.
 /// </summary>
 internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsDbContext>, IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqliteConnection _rootConnection;
+    private readonly string _connectionString;
     private readonly ServiceProvider _services;
 
-    private StructuredLogsTestHost(SqliteConnection connection, ServiceProvider services)
+    private StructuredLogsTestHost(SqliteConnection rootConnection, string connectionString, ServiceProvider services)
     {
-        _connection = connection;
+        _rootConnection = rootConnection;
+        _connectionString = connectionString;
         _services = services;
     }
 
     public StructuredLogsDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<StructuredLogsDbContext>()
-            .UseSqlite(_connection)
+            .UseSqlite(_connectionString)
             .Options;
         return new StructuredLogsDbContext(options, _services);
     }
@@ -39,7 +44,8 @@ internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsD
 
     public static StructuredLogsTestHost Create(bool createSchema = true)
     {
-        var connection = new SqliteConnection("Data Source=:memory:");
+        var connectionString = $"Data Source=structured-logs-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        var connection = new SqliteConnection(connectionString);
         connection.Open();
 
         var services = new ServiceCollection();
@@ -47,7 +53,7 @@ internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsD
         services.AddScoped<IEntityModelCreatingHandler, SqliteEntityModelCreatingHandler>();
 
         var provider = services.BuildServiceProvider();
-        var host = new StructuredLogsTestHost(connection, provider);
+        var host = new StructuredLogsTestHost(connection, connectionString, provider);
 
         if (createSchema)
         {
@@ -61,6 +67,6 @@ internal sealed class StructuredLogsTestHost : IDbContextFactory<StructuredLogsD
     public void Dispose()
     {
         _services.Dispose();
-        _connection.Dispose();
+        _rootConnection.Dispose();
     }
 }
