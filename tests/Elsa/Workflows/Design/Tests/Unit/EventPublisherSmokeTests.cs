@@ -43,8 +43,8 @@ public sealed class EventPublisherSmokeTests
     {
         await using var provider = BuildProvider(services =>
         {
-            // RequiredInputOutputValidator depends on IActivityDefinitionLookup.
-            services.AddSingleton<IActivityDefinitionLookup, EmptyActivityDefinitionLookup>();
+            // RequiredInputOutputValidator's CatalogVersionResolver depends on IActivityDefinitionLookup.
+            services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
             // AddEventHandlersFrom discovers the single ExecuteValidations handler in the
             // Validations assembly; the feature registers its IDraftValidator impls separately,
             // so register the one this smoke check asserts against.
@@ -221,18 +221,4 @@ public sealed class EventPublisherSmokeTests
         }
     }
 
-    private sealed class EmptyActivityDefinitionLookup : IActivityDefinitionLookup
-    {
-        public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-
-        public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null, string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-
-        public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
-            => Task.FromResult<IActivityDefinitionVersion>(null!);
-
-        public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default)
-            => throw new NotImplementedException();
-    }
 }

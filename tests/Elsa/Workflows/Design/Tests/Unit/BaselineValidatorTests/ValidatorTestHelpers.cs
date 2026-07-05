@@ -16,6 +16,16 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 internal static class ValidatorTestHelpers
 {
+    /// <summary>
+    /// ActivityVersionId of the synthetic root node that <c>State(activities:)</c> fabricates for
+    /// multi-activity graphs. It is not a real activity's catalog version — a fail-closed lookup
+    /// fake must resolve it (as an empty version, no required args) rather than throw, so tests
+    /// exercise their real nodes, not the synthetic root. Mirrors PR #485's constant.
+    /// </summary>
+    public const string RootActivityVersionId = "$workflow-root";
+
+    public static CatalogVersionResolver Resolver(Elsa.Activities.Design.Core.Contracts.IActivityDefinitionLookup catalog) => new(catalog);
+
     public static WorkflowDefinitionState State(
         IEnumerable<ActivityNode>? activities = null,
         IEnumerable<VariableDefinition>? variables = null,
@@ -117,7 +127,7 @@ internal static class ValidatorTestHelpers
         var startActivityNodeId = activitySnapshot.FirstOrDefault(activity => activity.NodeId == "start")?.NodeId;
         return new ActivityNode(
             NodeId: "$root",
-            ActivityVersionId: "$workflow-root",
+            ActivityVersionId: RootActivityVersionId,
             Inputs: [],
             Outputs: [],
             Structure: TestActivityStructureHandler.CreateStructure(activitySnapshot, startActivityNodeId));

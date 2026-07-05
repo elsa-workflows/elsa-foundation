@@ -23,8 +23,10 @@ This domain exposes no swappable default-impl service. The validation *behaviour
 - **Register:** `services.AddScoped<IDraftValidator, MyValidator>()`.
 - **Aggregated by:** the single `ExecuteValidations : IEventHandler<OnDraftValidating>` (this feature), which injects `IEnumerable<IDraftValidator>` and aggregates every implementation's errors onto the event's `Errors` collection.
 - **Adding one does not replace the others:** all registered validators run. This is the *extend* path, not the *override* path.
+- **Faulting:** an exception escaping `Validate` propagates and faults the whole validation gate (fail-closed). In particular, `IActivityDefinitionLookup.GetVersion` **throws** `EntityNotFoundException` on a missing id — it never returns null. Catalog-consulting validators must resolve versions via `CatalogVersionResolver` (scoped; memoizes per pass and translates the throwing contract to nullable) and **skip** unresolvable nodes: the `Graph/UnknownActivityVersion` report is owned by `UnknownActivityVersionValidator`, so skipping neither hides the problem nor double-reports it.
 
 **Known implementations (shipped):**
+- `Elsa.Workflows.Design.Validations` — `UnknownActivityVersionValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `StartActivityValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `VariableUniquenessValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `RequiredInputOutputValidator` *(intra-domain — default)*

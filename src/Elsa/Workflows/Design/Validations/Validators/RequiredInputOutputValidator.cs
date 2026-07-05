@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -13,7 +12,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
 /// Baseline validator (Unit C FR-033). For every activity in the Draft (root + nested), looks
-/// up the catalog version via <see cref="IActivityDefinitionLookup"/> and reads
+/// up the catalog version via <see cref="CatalogVersionResolver"/> and reads
 /// <c>IsRequired</c> from each <see cref="InputDefinition"/> / <see cref="OutputDefinition"/>
 /// (per FR-036). Emits a <see cref="ValidationError"/> per required input or output where the
 /// corresponding <see cref="ArgumentState"/> on the activity is absent or carries an empty
@@ -34,7 +33,7 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </para>
 /// </remarks>
 public sealed class RequiredInputOutputValidator(
-    IActivityDefinitionLookup catalog,
+    CatalogVersionResolver catalogResolver,
     IOptions<WorkflowDesignValidatorOptions> options,
     ActivityTreeWalker activityTreeWalker
 ) : IDraftValidator
@@ -46,7 +45,8 @@ public sealed class RequiredInputOutputValidator(
 
         foreach (var node in activityTreeWalker.Walk(draft.State.RootActivity, maxDepth))
         {
-            var version = await catalog.GetVersion(node.ActivityVersionId, cancellationToken);
+            // An unresolvable node is UnknownActivityVersionValidator's report — skip it here.
+            var version = await catalogResolver.Find(node.ActivityVersionId, cancellationToken);
             if (version is null)
                 continue;
 

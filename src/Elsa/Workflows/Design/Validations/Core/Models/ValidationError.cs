@@ -17,13 +17,14 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// <item><c>$workflow/inputs/{InputReferenceKey}</c> — workflow-level input declaration.</item>
 /// <item><c>$workflow/outputs/{OutputReferenceKey}</c> — workflow-level output declaration.</item>
 /// <item><c>$workflow/variables/{VariableName}</c> — workflow variable.</item>
-/// <item><c>$workflow</c> — workflow-scope concern (e.g. missing start activity).</item>
+/// <item><c>$workflow</c> — workflow-scope concern (e.g. missing root activity).</item>
 /// </list>
 /// </para>
 /// <para>
-/// <b>Type format (R3):</b> slash-delimited category. Reserved baseline categories:
-/// <c>Graph/OrphanActivity</c>, <c>Graph/StartActivity</c>, <c>Variables/Uniqueness</c>,
-/// <c>InputOutput/MissingRequired</c>, <c>Expressions/UnresolvedVariable</c>. External
+/// <b>Type format (R3):</b> slash-delimited category. Reserved baseline categories (as shipped,
+/// incl. the FR-033 2026-07-05 amendment): <c>RootActivity/Missing</c>,
+/// <c>Variables/Uniqueness</c>, <c>InputOutput/MissingRequired</c>,
+/// <c>Expressions/UnresolvedVariable</c>, <c>Graph/UnknownActivityVersion</c>. External
 /// validators extend by prefixing with their domain (e.g. <c>Http/AuthPolicyUnknown</c>).
 /// </para>
 /// </remarks>
