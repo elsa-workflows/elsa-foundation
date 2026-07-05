@@ -6,7 +6,17 @@ using Microsoft.AspNetCore.Authentication;
 
 namespace Elsa.Foundation.Identity.Api.Endpoints;
 
-internal sealed class Logout(IAuthenticationProviderResolver providers) : ElsaEndpoint<ProviderRouteRequest>
+/// <summary>
+/// <c>POST /_elsa/identity/logout/{provider}</c> — idempotent sign-out. Resolves the target scheme from the
+/// provider's declared challenge scheme (falling back to the provider id), then signs out only when that
+/// scheme is registered and its handler is an <see cref="IAuthenticationSignOutHandler"/>. Anything else — an
+/// unknown provider, or a provider (like OpenIddict) whose handler cannot sign out — is a no-op 204 rather
+/// than a 500, so an anonymous or bad-provider logout never faults.
+/// </summary>
+internal sealed class Logout(
+    IAuthenticationProviderResolver providers,
+    IAuthenticationSchemeProvider schemeProvider,
+    IAuthenticationHandlerProvider handlerProvider) : ElsaEndpoint<ProviderRouteRequest>
 {
     public override void Configure()
     {
@@ -19,9 +29,19 @@ internal sealed class Logout(IAuthenticationProviderResolver providers) : ElsaEn
         // Sign out on the provider's own authentication scheme when it declares one (e.g. the first-party
         // Identity provider clears its cookie scheme), falling back to the provider id itself.
         var descriptor = await providers.FindAsync(req.Provider, allowGlobalFallback: true, cancellationToken: ct);
-        var scheme = descriptor?.Challenge?.Scheme ?? req.Provider;
+        var schemeName = descriptor?.Challenge?.Scheme ?? req.Provider;
 
-        await HttpContext.SignOutAsync(scheme);
+        // Only sign out when the scheme is actually registered AND its handler can sign out. OpenIddict's
+        // provider declares no challenge scheme, so schemeName falls back to an unregistered id — calling
+        // SignOutAsync on it would throw InvalidOperationException and surface a 500 from this anonymous
+        // endpoint. Resolving the scheme + confirming IAuthenticationSignOutHandler keeps logout idempotent.
+        if (!string.IsNullOrEmpty(schemeName) && await schemeProvider.GetSchemeAsync(schemeName) is not null)
+        {
+            var handler = await handlerProvider.GetHandlerAsync(HttpContext, schemeName);
+            if (handler is IAuthenticationSignOutHandler)
+                await HttpContext.SignOutAsync(schemeName);
+        }
+
         await Send.NoContentAsync(ct);
     }
 }
