@@ -162,6 +162,22 @@ public sealed class EfCoreStructuredLogStoreTests
         store.Dispose();
     }
 
+    /// <summary>
+    /// Covers the dispose-guard half of issue #403: a second Dispose() call must be a no-op (parity with
+    /// EfCoreOpenTelemetryStore) instead of throwing ObjectDisposedException from the already-disposed
+    /// CancellationTokenSource.
+    /// </summary>
+    [Fact]
+    public void DisposeIsIdempotent()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host);
+        store.StartDraining();
+
+        store.Dispose();
+        store.Dispose();
+    }
+
     private static async Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs = 5000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);

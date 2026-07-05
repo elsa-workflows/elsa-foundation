@@ -33,6 +33,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     private readonly CancellationTokenSource _cts = new();
     private int _draining;
     private int _insertedSincePrune;
+    private int _disposed;
     private Task? _drainLoop;
 
     public EfCoreStructuredLogStore(IDbContextFactory<StructuredLogsDbContext> dbContextFactory, IOptions<StructuredLogsOptions> options)
@@ -276,6 +277,11 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
 
     public void Dispose()
     {
+        // Idempotent (issue #403, parity with EfCoreOpenTelemetryStore): a second call must not throw
+        // ObjectDisposedException from the already-disposed CancellationTokenSource.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
         _channel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
