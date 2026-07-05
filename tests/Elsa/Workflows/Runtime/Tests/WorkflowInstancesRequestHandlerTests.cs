@@ -12,6 +12,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private readonly InMemoryActivityExecutionStateStore _activityStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
     private readonly InMemoryIncidentStateStore _incidentStore = new();
+    private readonly InMemoryDurableValueStateStore _durableValueStore = new();
+
+    private GetWorkflowInstanceRequestHandler NewGetInstanceHandler() =>
+        new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy());
 
     [Fact]
     public async Task ListWorkflowInstances_ReturnsFilteredSummariesWithActivityAndIncidentCounts()
@@ -44,7 +48,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
         await _inspectionStore.SaveAsync(Inspection(Activity("wf-1", "activity-2", ActivityExecutionStatus.Faulted, scheduledAt: Now(-1))));
         await _inspectionStore.SaveAsync(Inspection(Activity("wf-1", "activity-1", ActivityExecutionStatus.Completed, scheduledAt: Now(-2))));
         await _incidentStore.TryAddAsync(Incident("wf-1", "incident-1"));
-        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _inspectionStore, _incidentStore);
+        var handler = NewGetInstanceHandler();
 
         var result = await handler.Handle(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
@@ -58,7 +62,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task GetWorkflowInstance_ReturnsNullForMissingInstance()
     {
-        var handler = new GetWorkflowInstanceRequestHandler(_workflowStore, _inspectionStore, _incidentStore);
+        var handler = NewGetInstanceHandler();
 
         var result = await handler.Handle(new GetWorkflowInstance("missing"), CancellationToken.None);
 

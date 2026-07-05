@@ -36,6 +36,10 @@ internal sealed class WhileNavigator
         return new WhileNavigator(body);
     }
 
+    /// <summary>Whether the given executable node id is this loop's body branch.</summary>
+    public bool IsBody(string executableNodeId) =>
+        Body is { } body && StringComparer.Ordinal.Equals(body.ExecutableNodeId, executableNodeId);
+
     private static WhileExecutionException Fail(string message, Exception? inner) =>
         inner is null ? new(message) : new(message, inner);
 }

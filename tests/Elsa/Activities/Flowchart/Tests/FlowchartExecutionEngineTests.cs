@@ -336,6 +336,9 @@ public sealed class FlowchartExecutionEngineTests
 
         var flowchartState = await fixture.GetFlowchartStateAsync();
         Assert.Contains(flowchartState.Scopes, scope => scope.Kind == ExecutionScopeKind.Race && scope.Status == ExecutionScopeStatus.Completed);
+        // #382 retains Canceled paths in the persisted blob: race losers can receive late child
+        // completions after CompleteRaceScope strips their ActiveChildren entries, and the by-id
+        // "ignored completion for canceled path" lookup needs the record.
         Assert.Contains(flowchartState.ExecutionPaths, path => path.CurrentNodeId == "node-c" && path.Status == ExecutionPathStatus.Canceled);
         Assert.Contains(flowchartState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Canceled && diagnostic.NodeId == "node-c");
     }
@@ -374,10 +377,11 @@ public sealed class FlowchartExecutionEngineTests
         await fixture.ExecuteAsync(executable);
 
         var flowchartState = await fixture.GetFlowchartStateAsync();
-        Assert.Contains(flowchartState.ExecutionPaths, path =>
-            path.CurrentNodeId == "node-d" &&
-            path.ExecutionScopeId == flowchartState.RootExecutionScopeId &&
-            path.Status == ExecutionPathStatus.Completed);
+        // #382: the completed continuation path is pruned from the persisted blob; the durable evidence
+        // that node-d ran in the parent (root) scope is its inspection projection's provenance.
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
+        var winnerContinuation = projections.Single(projection => projection.ExecutableNodeId == "node-d");
+        Assert.Equal(flowchartState.RootExecutionScopeId, winnerContinuation.Provenance.ExecutionScopeId);
     }
 
     [Fact]
@@ -423,10 +427,11 @@ public sealed class FlowchartExecutionEngineTests
         var raceScopes = flowchartState.Scopes.Where(scope => scope.Kind == ExecutionScopeKind.Race).ToArray();
         Assert.Equal(2, raceScopes.Length);
         Assert.All(raceScopes, scope => Assert.Equal(flowchartState.RootExecutionScopeId, scope.ParentExecutionScopeId));
-        Assert.Contains(flowchartState.ExecutionPaths, path =>
-            path.CurrentNodeId == "node-f" &&
-            path.ExecutionScopeId == flowchartState.RootExecutionScopeId &&
-            path.Status == ExecutionPathStatus.Completed);
+        // #382: the completed continuation path is pruned from the persisted blob; the durable evidence
+        // that node-f ran in the root scope is its inspection projection's provenance.
+        var projections = await fixture.Provider.GetRequiredService<IActivityExecutionInspectionStore>().ListSummariesAsync("wfexec-1");
+        var innerContinuation = projections.Single(projection => projection.ExecutableNodeId == "node-f");
+        Assert.Equal(flowchartState.RootExecutionScopeId, innerContinuation.Provenance.ExecutionScopeId);
     }
 
     [Fact]

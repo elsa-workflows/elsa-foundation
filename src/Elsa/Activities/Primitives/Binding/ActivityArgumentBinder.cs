@@ -58,19 +58,31 @@ public sealed class ActivityArgumentBinder
 
     /// <summary>
     /// Returns <paramref name="argument"/> unchanged when it is already assignable to <paramref name="propertyType"/>.
-    /// Otherwise, when both are closed <c>InputArgument&lt;&gt;</c> types and the property's value type is assignable
-    /// from the argument's (a widening such as <c>InputArgument&lt;int&gt;</c> → <c>InputArgument&lt;object&gt;</c>),
-    /// rebuilds the argument as the property's declared type over the same <see cref="IMemoryBlockReference"/> so the
-    /// seeded value continues to resolve. Throws when the types are genuinely incompatible.
+    /// Otherwise, when both are closed generics of the <b>same</b> argument family (never cross-wrapping
+    /// Input↔Output) and the value types are compatible for that family's data-flow direction, rebuilds the
+    /// argument as the property's declared type over the same <see cref="IMemoryBlockReference"/> so the
+    /// seeded value continues to resolve. Direction per family (#313/#383):
+    /// <list type="bullet">
+    /// <item><c>InputArgument&lt;&gt;</c> — covariant: the activity <i>reads</i> the block, so the property's
+    /// value type must be assignable from the argument's (<c>InputArgument&lt;int&gt;</c> →
+    /// <c>InputArgument&lt;object&gt;</c> property).</item>
+    /// <item><c>OutputArgument&lt;&gt;</c> — contravariant: the activity <i>writes</i> the block, so the
+    /// argument's capture-slot value type must be assignable from the property's
+    /// (<c>OutputArgument&lt;object?&gt;</c> capture → <c>OutputArgument&lt;string&gt;</c> property).</item>
+    /// </list>
+    /// Throws when the types are genuinely incompatible.
     /// </summary>
     private static object CoerceToPropertyType(Argument argument, Type propertyType, string name)
     {
         if (propertyType.IsInstanceOfType(argument))
             return argument;
 
-        if (TryGetInputArgumentValueType(propertyType, out var targetValueType)
-            && TryGetInputArgumentValueType(argument.GetType(), out var sourceValueType)
-            && targetValueType.IsAssignableFrom(sourceValueType))
+        if (TryGetArgumentValueType(propertyType, out var targetFamily, out var targetValueType)
+            && TryGetArgumentValueType(argument.GetType(), out var sourceFamily, out var sourceValueType)
+            && targetFamily == sourceFamily
+            && (targetFamily == typeof(InputArgument<>)
+                ? targetValueType.IsAssignableFrom(sourceValueType)
+                : sourceValueType.IsAssignableFrom(targetValueType)))
         {
             var rebuilt = (Argument)Activator.CreateInstance(propertyType, argument.MemoryBlockReference())!;
             return rebuilt;
@@ -80,17 +92,23 @@ public sealed class ActivityArgumentBinder
             $"Argument for property '{name}' is '{argument.GetType().Name}', not assignable to '{propertyType.Name}'.");
     }
 
-    private static bool TryGetInputArgumentValueType(Type type, out Type valueType)
+    private static bool TryGetArgumentValueType(Type type, out Type family, out Type valueType)
     {
         for (var current = type; current is not null; current = current.BaseType)
         {
-            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(InputArgument<>))
+            if (current.IsGenericType)
             {
-                valueType = current.GetGenericArguments()[0];
-                return true;
+                var definition = current.GetGenericTypeDefinition();
+                if (definition == typeof(InputArgument<>) || definition == typeof(OutputArgument<>))
+                {
+                    family = definition;
+                    valueType = current.GetGenericArguments()[0];
+                    return true;
+                }
             }
         }
 
+        family = null!;
         valueType = null!;
         return false;
     }

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
 
@@ -48,7 +49,26 @@ public sealed record WorkflowInstanceSummaryView(
 public sealed record WorkflowInstanceDetailsView(
     WorkflowInstanceSummaryView Instance,
     IReadOnlyCollection<ActivityExecutionInspectionSummaryView> Activities,
-    IReadOnlyCollection<IncidentStateView> Incidents);
+    IReadOnlyCollection<IncidentStateView> Incidents,
+    IReadOnlyDictionary<string, WorkflowOutputView> Outputs);
+
+/// <summary>
+/// A named workflow output on the instance details view (#254 Seam R1): the durably captured value a
+/// <c>SetOutput</c> leaf assigned, projected read-only from the instance's <c>output:</c>-prefixed durable
+/// values. When the configured <c>IRuntimePayloadCapturePolicy</c> declines to expose the payload (including
+/// sensitive-marked values), the output surfaces as an explicit redacted marker — the name is present,
+/// <see cref="IsRedacted"/> is true, <see cref="Value"/> is null, and <see cref="RedactionReason"/> carries the
+/// policy's reason — never silently absent.
+/// </summary>
+public sealed record WorkflowOutputView(
+    object? Value,
+    bool IsRedacted,
+    string? RedactionReason,
+    DateTimeOffset CapturedAt)
+{
+    public static WorkflowOutputView From(WorkflowOutputProjection projection) =>
+        new(projection.Value, projection.IsRedacted, projection.RedactionReason, projection.CapturedAt);
+}
 
 public sealed record ActivityExecutionInspectionView(
     string ActivityExecutionId,

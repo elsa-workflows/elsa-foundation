@@ -81,6 +81,10 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
             try
             {
+                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
+                // are serialized by the write gate), so an exception here is a genuine partial-persistence
+                // risk — the projections above have been applied but the commit record/outbox may not be
+                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
                 lock (_syncRoot)
                 {
                     foreach (var item in pendingOutboxItems)
@@ -193,14 +197,33 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await _workflowExecutionStateStore.SaveAsync(stateChange.State, cancellationToken);
     }
 
+    /// <summary>
+    /// Validates every pending outbox item in the commit — status, conflicts against the store, and
+    /// conflicts <b>within the commit itself</b> — before any state is projected or mutated (#386).
+    /// This runs outside the inconsistent-durability guard so a data-conflict validation failure
+    /// surfaces as a plain <see cref="InvalidOperationException"/> instead of being misclassified as
+    /// a <see cref="RuntimeCheckpointInconsistentDurabilityException"/>: with all validation front-
+    /// loaded here (and commits serialized by the write gate), nothing validation-shaped can throw
+    /// inside the guarded mutation block.
+    /// </summary>
     private void ValidatePendingOutboxItems(IReadOnlyCollection<RuntimePostCommitOutboxItem> items)
     {
         lock (_syncRoot)
         {
+            var seen = new Dictionary<string, RuntimePostCommitOutboxItem>(StringComparer.Ordinal);
+
             foreach (var item in items)
             {
+                if (item.Status != RuntimePostCommitOutboxStatus.Pending)
+                    throw new InvalidOperationException("Only pending post-commit outbox items can be saved as pending.");
+
                 if (_outboxItems.TryGetValue(item.OutboxItemId, out var existing) && !IsSamePendingIntent(existing, item))
                     throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
+
+                if (seen.TryGetValue(item.OutboxItemId, out var duplicate) && !IsSamePendingIntent(duplicate, item))
+                    throw new InvalidOperationException($"Post-commit outbox item '{item.OutboxItemId}' already exists with a different intent or status.");
+
+                seen[item.OutboxItemId] = item;
             }
         }
     }
