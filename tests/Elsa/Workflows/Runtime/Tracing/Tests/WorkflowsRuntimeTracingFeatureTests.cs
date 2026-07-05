@@ -20,7 +20,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
     {
         var services = new ServiceCollection();
 
-        services.AddWorkflowRuntimeCore();
+        services.AddWorkflowRuntime();
 
         var tracer = services.BuildServiceProvider().GetRequiredService<IWorkflowEngineTracer>();
         Assert.IsType<NullWorkflowEngineTracer>(tracer);
@@ -31,7 +31,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
     public void TracingFeature_ReplacesNoOpWithActivitySourceTracer_WhenComposedAfterCore()
     {
         var services = new ServiceCollection();
-        services.AddWorkflowRuntimeCore();
+        services.AddWorkflowRuntime();
 
         new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
 
@@ -44,7 +44,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         var services = new ServiceCollection();
 
         new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
-        services.AddWorkflowRuntimeCore();
+        services.AddWorkflowRuntime();
 
         Assert.IsType<ActivitySourceWorkflowEngineTracer>(services.BuildServiceProvider().GetRequiredService<IWorkflowEngineTracer>());
     }
@@ -54,7 +54,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
     {
         // Zero-overhead default: without a sampling listener the tracer allocates no Activity.
         var services = new ServiceCollection();
-        services.AddWorkflowRuntimeCore();
+        services.AddWorkflowRuntime();
         new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
 
         var tracer = services.BuildServiceProvider().GetRequiredService<IWorkflowEngineTracer>();
@@ -70,7 +70,7 @@ public sealed class WorkflowsRuntimeTracingFeatureTests
         // ownership services, so the tracer-carrying constructor is selected — but only a real resolve proves it. Build
         // the full core + tracing feature, resolve the committer through DI, and assert a listener sees the span.
         var services = new ServiceCollection();
-        services.AddWorkflowRuntimeCore();
+        services.AddWorkflowRuntime();
         new WorkflowsRuntimeTracingFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 

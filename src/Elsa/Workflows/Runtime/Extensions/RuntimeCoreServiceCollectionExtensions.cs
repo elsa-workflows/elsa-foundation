@@ -36,7 +36,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     /// Registers the host-agnostic workflow runtime composition root. Idempotent (all registrations use <c>TryAdd</c>),
     /// so a host may register durable-provider overrides before or after calling this.
     /// </summary>
-    public static IServiceCollection AddWorkflowRuntimeCore(this IServiceCollection services)
+    public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 

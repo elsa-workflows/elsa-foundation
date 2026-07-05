@@ -77,7 +77,7 @@ public sealed class StimulusDispatchRequest
     public string RequestedBy { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
 
-    internal IReadOnlyDictionary<string, string> BuildDispatchMetadata()
+    public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {
         if (CorrelationId is null)
             return Metadata;

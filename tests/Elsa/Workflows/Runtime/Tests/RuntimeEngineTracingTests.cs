@@ -117,7 +117,7 @@ public sealed class RuntimeEngineTracingTests : RuntimePipelineTestSupport
         services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        // Mirror production's committer activation: AddWorkflowRuntimeCore registers the ownership services, so DI
+        // Mirror production's committer activation: AddWorkflowRuntime registers the ownership services, so DI
         // selects the widest constructor — the one that threads the tracer. Constructed explicitly here so the test
         // doesn't depend on the full ownership wiring while still exercising the tracer-carrying constructor.
         services.AddSingleton(sp => new RuntimeCheckpointCommitter(

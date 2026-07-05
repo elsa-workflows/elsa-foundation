@@ -52,7 +52,7 @@ public sealed class GlobalBookmarkStimulusLookupResult
     public IReadOnlyList<string> WorkflowExecutionIds =>
         Matches.Select(match => match.WorkflowExecutionId).Distinct(StringComparer.Ordinal).ToArray();
 
-    internal static bool CorrelationMatches(BookmarkState bookmark, string? correlationId)
+    public static bool CorrelationMatches(BookmarkState bookmark, string? correlationId)
     {
         if (correlationId is null)
             return true;

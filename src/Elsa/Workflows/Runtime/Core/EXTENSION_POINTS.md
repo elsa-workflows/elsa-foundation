@@ -2,6 +2,15 @@
 
 The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Core`; provider/default implementations may live in sibling runtime projects. Runtime execution contracts are Design-free and operate on runtime-owned executable artifacts and execution state.
 
+> **ADR 0033 split.** Since the contracts/engine split, `Elsa.Workflows.Runtime.Core` holds only the
+> contracts, models, constants, pipeline contract surface (middleware attribute/bases/placeholders,
+> `RuntimePipelinePlanBuilder`), and validators. Unless an entry states otherwise, every **default
+> implementation** named in this catalog now lives in the sibling
+> [`Elsa.Workflows.Runtime`](../EXTENSION_POINTS.md) implementation package (moved types keep their
+> `Elsa.Workflows.Runtime.Core.*` namespaces). Replacing a default still works the same way: register
+> your implementation against the `.Core` contract; the engine package's registrations all use
+> `TryAdd*`.
+
 ---
 
 ## Overridable replacement contracts
@@ -427,9 +436,9 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, and `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator).
 - **Known implementations (shipped):** workflow `Cancel` + `Checkpoint`; activity `CreateBookmark`, `ScheduleActivity`, `StartActivity` (stage), and the nested-invoke `InvokeActivity` + `ParentActivityCompletion` (inline-commit, stage nothing).
 
-### `AddWorkflowRuntimeCore(IServiceCollection)` *(Core — `Elsa.Workflows.Runtime.Core`)*
+### `AddWorkflowRuntime(IServiceCollection)` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Composition root (host-agnostic runtime registration).
-- **Usage:** RT-4. Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store; the reference stores/handlers are process-global **singletons** by design (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
+- **Usage:** RT-4; renamed from `AddWorkflowRuntimeCore` when the composition root moved to the engine package (ADR 0033). Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store; the reference stores/handlers are process-global **singletons** by design (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
@@ -482,13 +491,20 @@ checkpoint commit store, scheduler queue, post-commit outbox, and state stores. 
 [`docs/runtime-durable-resumption.md`](../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
 and the [benchmark results](../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
 
-### `IRuntimeCoalescingSessionAccessor` *(Core — `Elsa.Workflows.Runtime.Core`)*
+> **Documented ADR 0033 deviation.** The two coalescing interfaces below moved to the
+> `Elsa.Workflows.Runtime` engine package instead of staying in `.Core` with the other contracts:
+> both expose the concrete `RuntimeCoalescingSession` (engine working state) on their signatures, so
+> they cannot stand ahead of the engine, and their only consumers are the opt-in coalescing
+> composition in `Runtime.Api` plus its tests. They keep their `Elsa.Workflows.Runtime.Core.Contracts`
+> namespace. See the engine catalog: [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
+
+### `IRuntimeCoalescingSessionAccessor` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one ambient accessor exposes the active coalescing session to the decorators).
 - **Signature:** `RuntimeCoalescingSession? Current { get; }`, `IDisposable Push(RuntimeCoalescingSession? session)`.
 - **Usage:** an `AsyncLocal` push/pop stack that makes the current drain segment's in-memory working set ambient to the coalescing store/queue/outbox decorators, mirroring the existing ambient ownership-scope resolution. Only registered by the opt-in extension.
 - **Default implementation:** `AsyncLocalRuntimeCoalescingSessionAccessor` *(opt-in only)*.
 
-### `IRuntimeCoalescingDrainScopeFactory` *(Core — `Elsa.Workflows.Runtime.Core`)*
+### `IRuntimeCoalescingDrainScopeFactory` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
 - **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`.
 - **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Only registered by the opt-in extension.

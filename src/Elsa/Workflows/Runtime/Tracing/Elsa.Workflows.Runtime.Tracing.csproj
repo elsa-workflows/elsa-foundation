@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\Elsa.Workflows.Runtime.csproj" />
   </ItemGroup>
 
 </Project>

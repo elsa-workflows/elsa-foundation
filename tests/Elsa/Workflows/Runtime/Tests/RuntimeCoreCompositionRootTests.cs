@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// RT-4 guard: the runtime execution spine is composed by the host-agnostic <see cref="RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntimeCore"/>
+/// RT-4 guard: the runtime execution spine is composed by the host-agnostic <see cref="RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntime"/>
 /// composition root, so a non-HTTP host (worker, test harness, another module) can resolve and drive the runtime without
 /// the FastEndpoints <c>WorkflowsRuntimeApiFeature</c>. Mirrors the failure class the review flagged: the runtime must not
 /// be reachable only through the API feature.
@@ -17,9 +17,9 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
 {
     [Fact]
-    public void AddWorkflowRuntimeCore_ResolvesTheExecutionSpine_WithoutTheApiFeature()
+    public void AddWorkflowRuntime_ResolvesTheExecutionSpine_WithoutTheApiFeature()
     {
-        using var provider = new ServiceCollection().AddWorkflowRuntimeCore().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
 
         // The whole dispatch graph must resolve from the Core composition root alone.
         Assert.NotNull(provider.GetService<IWorkflowSchedulerDrainer>());
@@ -34,9 +34,9 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     }
 
     [Fact]
-    public async Task AddWorkflowRuntimeCore_DrivesADrainEndToEnd_WithoutTheApiFeature()
+    public async Task AddWorkflowRuntime_DrivesADrainEndToEnd_WithoutTheApiFeature()
     {
-        using var provider = new ServiceCollection().AddWorkflowRuntimeCore().BuildServiceProvider();
+        using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
         await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewActivityStateForStatus(ActivityExecutionStatus.Running));
         await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(NewCancelWorkItem());
