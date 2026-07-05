@@ -306,7 +306,16 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
 - **Design endpoints bypass endpoint security** (from W4, pre-existing): 15 endpoints under
   `src/Elsa/Activities/Design/Api/` and `src/Elsa/Workflows/Design/Api/` call
   `AllowAnonymous()` explicitly and serve anonymously even on secured shells. Candidate new
-  unit (or fold into W18 identity work).
+  unit (or fold into W18 identity work). **CLOSED via W29 disposition 2026-07-05:** the removal
+  itself had already landed pre-W29 — the W4 D5 sweep replaced every design-endpoint
+  `AllowAnonymous()` with `ConfigurePermissions()`, and the config-gated anonymous opt-in exists
+  as the per-shell `ApiSecurity` feature (`ApiSecurityOptions.AllowAnonymous`, default `false`,
+  honored only in the Development environment by `ApiSecurityFastEndpointsConfigurator`; identity
+  D1/D2/D4 kill-switch hardening, commit `8a0f4fb4`). W29 shipped the residual: the
+  Activities-side endpoint-security regression suite (`ActivityDesignEndpointSecurityTests`,
+  with an inventory guard), so all 18 design endpoint files are pinned permission-guarded.
+  Granular `DesignPermissions` constants were explicitly ruled OUT (would change the permission
+  contract for deployed principals and needs Studio coordination; its own gated unit if ever).
 - **Durable poison store** (from W1): `IWorkflowSchedulerPoisonStore` ships with an
   in-memory default; a Groundwork-backed implementation (through the W3 serializer) is the
   natural follow-up so poison records survive restarts.
@@ -382,8 +391,17 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
 - **`ISecretManager` store-vs-resolver split** (from W18): proposal-only in the
   [#461](https://github.com/elsa-workflows/elsa-foundation/pull/461) PR body (keep the facade,
   formalize the resolver boundary around `ISecretResolver`→`ISecretValueResolver`). Needs its own unit.
+  **Done in W29** exactly per the proposal: `ISecretValueResolver`/`DefaultSecretValueResolver`
+  own the whole resolution path (store registry injected, duplicate lifecycle-version evaluation
+  removed), `ISecretManager.ResolvePayloadAsync` deleted so the manager is a pure lifecycle
+  facade, per-provider `ISecretStore` untouched; swap-registration test proves resolution and
+  lifecycle are separately overridable.
 - **Secrets golden-fixture gate** (from W18): the Secrets Groundwork persistence has no fixture
   drift gate of its own (pre-existing gap flagged during MS-1; Identity got one, Secrets did not).
+  **Done in W29:** Identity-style drift + legacy-load tests pin kind `secret`
+  (manifest `elsa-secrets` @ 1.0.0) against `tests/Elsa/Secrets/Tests/Fixtures/v1/secret.json`,
+  covering both payload wire variants (encrypted metadata-only with a literal fake protected
+  value, and plain value).
 - **MD-5 amendment + ADR 0033 ratification** (from W21): **both ratified 2026-07-04** at Phase 4
   kickoff — MD-5 applied as framework §2.16.1, ADR 0033 accepted with execution scheduled as W28.
   18 feature-registration gaps remain filed in the MD-10 report (Wave C / W32).

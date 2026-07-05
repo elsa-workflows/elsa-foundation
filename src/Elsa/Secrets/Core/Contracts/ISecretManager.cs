@@ -13,5 +13,4 @@ public interface ISecretManager
     ValueTask<SecretMetadata?> RevokeAsync(string name, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteAsync(string name, CancellationToken cancellationToken = default);
     ValueTask<SecretTestResult> TestAsync(string name, CancellationToken cancellationToken = default);
-    ValueTask<SecretPayload> ResolvePayloadAsync(Secret secret, CancellationToken cancellationToken = default);
 }

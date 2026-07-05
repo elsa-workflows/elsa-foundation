@@ -15,7 +15,7 @@ public sealed class SecretAuditTests : IDisposable
     private readonly RecordingSecretAuditSink _auditSink = new();
     private readonly ServiceProvider _provider;
     private readonly ISecretManager _manager;
-    private readonly ISecretResolver _resolver;
+    private readonly ISecretValueResolver _resolver;
 
     public SecretAuditTests()
     {
@@ -25,7 +25,7 @@ public sealed class SecretAuditTests : IDisposable
         services.AddSingleton<ISecretAuditSink>(_auditSink);
         _provider = services.BuildServiceProvider();
         _manager = _provider.GetRequiredService<ISecretManager>();
-        _resolver = _provider.GetRequiredService<ISecretResolver>();
+        _resolver = _provider.GetRequiredService<ISecretValueResolver>();
     }
 
     [Fact]

@@ -6,7 +6,7 @@ using Elsa.Serialization.Core;
 
 namespace Elsa.Secrets.Expressions;
 
-public sealed class SecretExpressionHandler(ISecretResolver resolver, IObjectConverter objectConverter) : IExpressionHandler
+public sealed class SecretExpressionHandler(ISecretValueResolver resolver, IObjectConverter objectConverter) : IExpressionHandler
 {
     public async ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions options)
     {
