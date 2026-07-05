@@ -32,6 +32,14 @@
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityOidc": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {},
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": true
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": true
+          },
           "FoundationWorkflowsAgent": {},
           "GitHubCopilotAgent": {
             "Enabled": true,

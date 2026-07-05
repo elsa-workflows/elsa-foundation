@@ -10,6 +10,7 @@ using Elsa.Foundation.Identity.Oidc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Api.FastEndpoints.Tests;
@@ -115,7 +116,9 @@ public sealed class PerShellApiSecurityIntegrationTests
         public static async Task<ShellHost> StartAsync(SecurityMode mode)
         {
             var logs = new RecordingLoggerProvider();
-            var builder = WebApplication.CreateBuilder();
+            // The AllowAnonymous kill-switch is honored only in Development (locked product decision); this
+            // test exercises that honored path, so the host runs as Development.
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Development });
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Logging.ClearProviders();
             builder.Logging.AddProvider(logs);
