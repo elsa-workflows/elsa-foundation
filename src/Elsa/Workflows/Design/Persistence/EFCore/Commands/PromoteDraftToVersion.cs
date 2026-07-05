@@ -42,7 +42,7 @@ public sealed class PromoteDraftToVersion(
 
         // FR-024 promotion gate: derive errors against the hydrated Draft (see DraftValidationGate).
         // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
-        var errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+        var errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
 
         if (errors.Count > 0)
             throw new DraftHasValidationErrorsException(draftId, errors.Count);

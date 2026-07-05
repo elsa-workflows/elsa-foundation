@@ -88,7 +88,7 @@ public sealed class UpdateDraft(
             dbContext.Entry(draft).State = EntityState.Modified;
 
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }

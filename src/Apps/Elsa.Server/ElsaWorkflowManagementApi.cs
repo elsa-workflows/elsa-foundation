@@ -7,6 +7,7 @@ using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
@@ -580,7 +581,7 @@ internal static class ElsaWorkflowManagementApi
         // Derive validation errors from the already-loaded draft via the shielded read gate: a
         // throwing validator yields a synthetic Validation/Faulted error instead of a 500. The draft
         // (and its layout) were loaded once by the caller and are not re-loaded here.
-        var errors = await eventPublisher.TryDeriveValidationErrorsAsync(draft, cancellationToken);
+        var errors = await eventPublisher.TryDeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
 
         return new(
             draft.Id,

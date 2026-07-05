@@ -39,7 +39,7 @@ public sealed class GroundworkUpdateDraftCommand(
             // Wholesale assign the desired state (last-writer-wins, FR-022).
             draft.State = request.State;
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
             GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
 
             await store.SaveAllAsync(

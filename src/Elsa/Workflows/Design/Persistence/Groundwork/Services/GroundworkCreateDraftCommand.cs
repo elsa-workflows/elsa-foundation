@@ -50,7 +50,7 @@ public sealed class GroundworkCreateDraftCommand(
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         {
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
             GroundworkEntityTimestamps.StampAdded(draft, clock.UtcNow);
 
             await store.SaveAllAsync(

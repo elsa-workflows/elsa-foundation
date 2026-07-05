@@ -1,3 +1,4 @@
+using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Tests.Infrastructure;
@@ -89,7 +90,7 @@ public sealed class ValidationDerivationTests
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
         var draft = await store.FindByIdAsync(draftId);
         Assert.NotNull(draft);
-        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
+        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, EventPublishingStrategy.Sequential, CancellationToken.None);
 
         Assert.Equal(StubError, Assert.Single(errors));
     }

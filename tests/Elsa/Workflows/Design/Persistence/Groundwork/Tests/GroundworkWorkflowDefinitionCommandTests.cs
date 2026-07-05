@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -55,7 +56,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var draft = await DraftStore().FindByIdAsync(draftId);
         Assert.NotNull(draft);
-        return await _events.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
+        return await _events.DeriveValidationErrorsAsync(draft!, EventPublishingStrategy.Sequential, CancellationToken.None);
     }
 
     [Fact]

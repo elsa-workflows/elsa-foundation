@@ -1,4 +1,5 @@
 using Elsa.Events.Core.Contracts;
+using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Primitives.Contracts;
@@ -39,7 +40,7 @@ public sealed class GroundworkPromoteDraftToVersionCommand(
 
         // FR-024 promotion gate: derive errors against the loaded Draft (see DraftValidationGate).
         // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
-        var errors = await eventPublisher.DeriveValidationErrorsAsync(document.Entity, cancellationToken);
+        var errors = await eventPublisher.DeriveValidationErrorsAsync(document.Entity, EventPublishingStrategy.Sequential, cancellationToken);
 
         if (errors.Count > 0)
             throw new DraftHasValidationErrorsException(draftId, errors.Count);

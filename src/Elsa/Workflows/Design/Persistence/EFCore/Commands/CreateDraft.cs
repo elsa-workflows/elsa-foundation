@@ -87,7 +87,7 @@ public sealed class CreateDraft(
             await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
 
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
+            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
