@@ -9,15 +9,81 @@ Everything here runs from this directory:
 cd docker/compose
 ```
 
-Two paths are covered:
+Three ways to run, fastest first:
 
-- **Fast path** — Postgres + Elsa.Server only. No sibling checkout, no extra image. Good for
-  API/backend work.
-- **Full stack** — adds the Elsa Studio management UI, whose image is built from a *sibling* repo.
+- **Published images** — pull `elsaworkflows/elsa-server` + `elsaworkflows/elsa-studio` from Docker
+  Hub and run them; no clone, no build. See [Quick start — published images](#quick-start--published-images-no-clone-or-build)
+  right below. Best for just trying the stack.
+- **Fast path (build)** — Postgres + Elsa.Server only, built from this repo. Good for API/backend work.
+- **Full stack (build)** — adds the Elsa Studio management UI, whose image is built from a *sibling* repo.
 
 > This is a quickstart. For the full container/image reference — the complete environment-variable
 > surface, mounts, the demo persistence composition, and troubleshooting — see
 > [`docs/docker.md`](../../docs/docker.md).
+
+---
+
+## Quick start — published images (no clone or build)
+
+CI publishes two images to Docker Hub — **`elsaworkflows/elsa-server`** and
+**`elsaworkflows/elsa-studio`** — tagged with the Elsa major version (`4`, `4.0`, `4.0.0`), plus
+`latest` and `4.0.0-preview.<n>` from `main`. Run the whole stack straight from them.
+
+> **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
+> (written under `/app`), which is discarded when the `elsa-server` container is removed. For
+> durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3
+> below.
+
+### With Docker Compose
+
+Download just the compose file and start it:
+
+```bash
+curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
+docker compose -f docker-compose.images.yml up
+```
+
+### With the Docker CLI
+
+Same result without Compose — start the server, then Studio pointed at it:
+
+```bash
+# Elsa.Server (SQLite default composition; the volume is the Nuplane package feed)
+docker run -d --name elsa-server \
+  -p 13000:8080 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
+  -e Cors__AllowedOrigins__0=http://localhost:14000 \
+  -v elsa-server-packages:/app/packages \
+  elsaworkflows/elsa-server:latest
+
+# Elsa Studio, pointed at the server backend
+docker run -d --name elsa-studio \
+  -p 14000:8080 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e Studio__BackendBaseUrl=http://localhost:13000 \
+  -e Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
+  elsaworkflows/elsa-studio:latest
+```
+
+Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
+
+### Pointing Studio at the server backend
+
+Four environment variables wire the two containers together (double-underscore = config nesting):
+
+| Setting | On | Value | Why |
+|---|---|---|---|
+| `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* the compose service name `http://elsa-server:8080`, which only resolves inside the Docker network. |
+| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | Authenticates Studio's module-management calls to the server. **Must match** the server key below. |
+| `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The key the server accepts. |
+| `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
+
+To pin a version instead of `latest`, use a version tag, e.g. `elsaworkflows/elsa-server:4` or
+`:4.0.0`. Demo credentials and the demo-only warning are the same as the [table in section 4](#4-services-ports-and-demo-credentials).
+
+> ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on both
+> sides and scope CORS before exposing this anywhere.
 
 ---
 
