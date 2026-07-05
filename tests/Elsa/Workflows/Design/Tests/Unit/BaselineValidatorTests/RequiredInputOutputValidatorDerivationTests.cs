@@ -160,6 +160,10 @@ public sealed class RequiredInputOutputValidatorDerivationTests
                 ? Task.FromResult(version)
                 : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
 
+        // Nullable counterpart used by CatalogVersionResolver — null on a missing/removed id.
+        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_versions.GetValueOrDefault(versionId));
+
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
@@ -170,7 +174,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
             => throw new NotImplementedException();
     }
 
-    /// <summary>In-memory catalog that counts <see cref="GetVersion"/> calls per version id.</summary>
+    /// <summary>In-memory catalog that counts <see cref="FindVersion"/> calls per version id.</summary>
     private sealed class CountingLookup : IActivityDefinitionLookup
     {
         // Seed the synthetic $root container's version so the fail-closed fake resolves it.
@@ -184,11 +188,15 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         public int CallCount(string versionId) => _calls.TryGetValue(versionId, out var count) ? count : 0;
 
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
-        {
-            _calls[versionId] = CallCount(versionId) + 1;
-            return _versions.TryGetValue(versionId, out var version)
+            => _versions.TryGetValue(versionId, out var version)
                 ? Task.FromResult(version)
                 : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
+
+        // CatalogVersionResolver resolves through FindVersion, so per-pass memoization is asserted here.
+        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default)
+        {
+            _calls[versionId] = CallCount(versionId) + 1;
+            return Task.FromResult(_versions.GetValueOrDefault(versionId));
         }
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)

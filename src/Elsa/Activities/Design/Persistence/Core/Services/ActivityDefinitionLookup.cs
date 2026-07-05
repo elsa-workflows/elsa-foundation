@@ -22,6 +22,21 @@ public sealed class ActivityDefinitionLookup(
         return result;
     }
 
+    public async Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default)
+    {
+        // The store's Get contract throws on a missing id (no nullable by-id find exists on the
+        // store). Translate that single throw to null here so callers get the nullable outcome
+        // without catching EntityNotFoundException themselves.
+        try
+        {
+            return await versionStore.GetAsync(versionId, cancellationToken);
+        }
+        catch (EntityNotFoundException)
+        {
+            return null;
+        }
+    }
+
     public async Task<IEnumerable<IActivityDefinition>> ListDefinitions(
         string? id = null,
         string? category = null,

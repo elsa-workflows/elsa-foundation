@@ -113,6 +113,9 @@ public sealed class Elsa3ActivityToStateTests
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
             Task.FromResult(_version);
 
+        public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IActivityDefinitionVersion?>(_version);
+
         public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IEnumerable<ActivityDefinitionVersionSummary>>(
             [

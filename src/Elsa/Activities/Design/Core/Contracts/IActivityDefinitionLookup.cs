@@ -24,5 +24,13 @@ public interface IActivityDefinitionLookup
 
     Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Nullable counterpart to <see cref="GetVersion"/> (repo Get-throws / Find-nullable convention):
+    /// returns the version, or <c>null</c> when no version with <paramref name="versionId"/> exists.
+    /// Prefer this on paths that treat a missing version as a normal outcome (e.g. draft validation)
+    /// rather than catching <c>EntityNotFoundException</c> from <see cref="GetVersion"/> at each call site.
+    /// </summary>
+    Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default);
+
     Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
 }
