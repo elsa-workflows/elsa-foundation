@@ -321,8 +321,8 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
         if (scope != template.Scope)
             throw new ArgumentException($"Template '{template.Id}' supports {template.Scope} scope, not {scope}.", nameof(request));
 
-        var values = BuildTemplateParameterValues(template, request);
-        var targetPath = NormalizeTemplateTargetPath(request.TargetPath, scope, values);
+        var values = RepositoryTemplateRenderer.BuildParameterValues(template, request);
+        var targetPath = RepositoryTemplateRenderer.NormalizeTargetPath(request.TargetPath, scope, values);
 
         return await WithStateAsync(async (state, cancellationToken) =>
         {
@@ -333,10 +333,10 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             var renderedFiles = template.Files
                 .Select(file =>
                 {
-                    var renderedPath = RenderTemplateText(file.Path, values);
-                    var relativePath = NormalizeRepositoryRelativePath(CombineTemplatePath(targetPath, renderedPath));
+                    var renderedPath = RepositoryTemplateRenderer.RenderText(file.Path, values);
+                    var relativePath = NormalizeRepositoryRelativePath(RepositoryTemplateRenderer.CombinePath(targetPath, renderedPath));
                     var physicalPath = ResolveRepositoryFilePath(repositoryPath, relativePath);
-                    var content = RenderTemplateContent(template, file, relativePath, values);
+                    var content = RepositoryTemplateRenderer.RenderContent(template, file, relativePath, values);
                     return new RenderedTemplateFile(relativePath, physicalPath, content);
                 })
                 .ToArray();
@@ -1230,84 +1230,6 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
             normalized.Split('/').Any(segment => segment is "" or "." or ".." || segment.Equals(".git", StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("A safe relative repository file path is required.", nameof(path));
         return normalized;
-    }
-
-    private static IReadOnlyDictionary<string, string> BuildTemplateParameterValues(ExtensionTemplate template, ApplyRepositoryTemplateRequest request)
-    {
-        var provided = request.Parameters is null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(request.Parameters, StringComparer.OrdinalIgnoreCase);
-        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["packageId"] = template.DefaultPackageId,
-            ["packageVersion"] = template.DefaultPackageVersion,
-            ["targetFramework"] = template.DefaultTargetFramework
-        };
-
-        foreach (var parameter in template.Parameters)
-        {
-            provided.TryGetValue(parameter.Name, out var providedValue);
-            var value = string.IsNullOrWhiteSpace(providedValue) ? parameter.DefaultValue : providedValue.Trim();
-            if (parameter.Required && string.IsNullOrWhiteSpace(value))
-                throw new ArgumentException($"Template parameter '{parameter.Name}' is required.", nameof(request));
-
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                ValidateTemplateParameter(parameter.Name, value);
-                values[parameter.Name] = value;
-            }
-        }
-
-        return values;
-    }
-
-    private static void ValidateTemplateParameter(string name, string value)
-    {
-        if (name.Equals("name", StringComparison.OrdinalIgnoreCase) && !IsSafeTemplateIdentifier(value))
-            throw new ArgumentException("Template parameter 'name' must start with a letter and contain only letters, numbers, dots, underscores, or hyphens.", nameof(value));
-        if ((name.Equals("namespace", StringComparison.OrdinalIgnoreCase) || name.Equals("packageId", StringComparison.OrdinalIgnoreCase)) && !IsSafeTemplateIdentifier(value))
-            throw new ArgumentException($"Template parameter '{name}' must start with a letter and contain only letters, numbers, dots, underscores, or hyphens.", nameof(value));
-    }
-
-    private static bool IsSafeTemplateIdentifier(string value) =>
-        value.Length > 0 && char.IsLetter(value[0]) && value.All(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-');
-
-    private static string NormalizeTemplateTargetPath(string? targetPath, ExtensionTemplateScope scope, IReadOnlyDictionary<string, string> values)
-    {
-        if (!string.IsNullOrWhiteSpace(targetPath))
-            return NormalizeRepositoryRelativePath(targetPath);
-
-        return scope switch
-        {
-            ExtensionTemplateScope.Project => values.TryGetValue("name", out var name) ? NormalizeRepositoryRelativePath(name) : "",
-            ExtensionTemplateScope.Item => "src",
-            _ => ""
-        };
-    }
-
-    private static string CombineTemplatePath(string targetPath, string templatePath) =>
-        string.IsNullOrWhiteSpace(targetPath)
-            ? templatePath
-            : $"{targetPath.TrimEnd('/')}/{templatePath.TrimStart('/')}";
-
-    private static string RenderTemplateContent(ExtensionTemplate template, ProjectTemplateFile file, string renderedPath, IReadOnlyDictionary<string, string> values)
-    {
-        var packageId = values.TryGetValue("packageId", out var configuredPackageId) ? configuredPackageId : template.DefaultPackageId;
-        var packageVersion = values.TryGetValue("packageVersion", out var configuredPackageVersion) ? configuredPackageVersion : template.DefaultPackageVersion;
-        var targetFramework = values.TryGetValue("targetFramework", out var configuredTargetFramework) ? configuredTargetFramework : template.DefaultTargetFramework;
-        if (renderedPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-            return ExtensionBuilderTemplateCatalog.ProjectFile(packageId, packageVersion, targetFramework);
-        if (Path.GetFileName(renderedPath).Equals("elsa-package.json", StringComparison.OrdinalIgnoreCase))
-            return ExtensionBuilderTemplateCatalog.RewriteManifest(template.DefaultManifest.Content, packageId, packageVersion).GetRawText();
-        return RenderTemplateText(file.Content, values);
-    }
-
-    private static string RenderTemplateText(string text, IReadOnlyDictionary<string, string> values)
-    {
-        var rendered = text;
-        foreach (var (key, value) in values)
-            rendered = rendered.Replace("{{" + key + "}}", value, StringComparison.OrdinalIgnoreCase);
-        return rendered;
     }
 
     private static string NormalizeCommitMessage(string message)
