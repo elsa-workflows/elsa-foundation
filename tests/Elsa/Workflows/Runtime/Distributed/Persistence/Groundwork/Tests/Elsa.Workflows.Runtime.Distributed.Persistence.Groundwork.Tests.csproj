@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Groundwork.Sqlite" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The leaf's committed golden fixtures are the single source of truth for the frozen v1 wire shapes;
+         linked (not copied into the tree) so the wire-compatibility tests assert against the same files the
+         leaf drift tests protect. -->
+    <None Include="..\..\..\Tests\Fixtures\v1\*.json" Link="Fixtures\v1\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Persistence\Groundwork\Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Persistence\Groundwork\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
+    <Using Include="Elsa.Persistence.Groundwork.Testing" />
+  </ItemGroup>
+
+</Project>
