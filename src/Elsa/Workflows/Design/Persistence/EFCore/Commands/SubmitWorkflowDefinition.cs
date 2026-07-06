@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,7 +26,7 @@ public sealed class SubmitWorkflowDefinition(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(state);
-        ValidateActivityTree(state.RootActivity);
+        SubmittedActivityTreeValidator.Validate(state.RootActivity, activityStructureService);
 
         var definitionId = identityGenerator.Generate();
         var draftId = identityGenerator.Generate();
@@ -69,28 +70,5 @@ public sealed class SubmitWorkflowDefinition(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new SubmittedWorkflowDefinition(definitionId, draftId, versionId);
-    }
-
-    private void ValidateActivityTree(ActivityNode? rootActivity)
-    {
-        if (rootActivity is null)
-            throw new ArgumentException("Workflow definition state must specify a root activity.", nameof(rootActivity));
-
-        var stack = new Stack<ActivityNode>();
-        stack.Push(rootActivity);
-
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-
-            if (string.IsNullOrWhiteSpace(node.NodeId))
-                throw new ArgumentException("Activity node id cannot be empty.", nameof(rootActivity));
-
-            if (string.IsNullOrWhiteSpace(node.ActivityVersionId))
-                throw new ArgumentException($"Activity node '{node.NodeId}' must specify an activity version id.", nameof(rootActivity));
-
-            foreach (var child in activityStructureService.ProjectChildren(node).SelectMany(slot => slot.Activities))
-                stack.Push(child);
-        }
     }
 }
