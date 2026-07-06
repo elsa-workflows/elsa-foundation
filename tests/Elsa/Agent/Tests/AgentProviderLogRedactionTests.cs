@@ -88,6 +88,81 @@ public sealed class AgentProviderLogRedactionTests
         AssertSinkRedacted(logger, CopilotSecret);
     }
 
+    // --- GitHub Copilot: the redaction covers EVERY configured secret, not just GitHubToken ---
+    // (issue #414 item 3: the shared parameterized helper must not narrow the redacted set. The Copilot
+    // provider redacts three secrets — GitHubToken, RuntimeConnectionToken, and the environment-variable
+    // token — so a leak of any one is a security regression.)
+
+    [Fact]
+    public async Task Copilot_redacts_the_runtime_connection_token_from_the_log_sink()
+    {
+        const string runtimeSecret = "rt-conn-SECRET-9191";
+        var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+        var provider = BuildCopilotProvider(
+            new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "ghp_unused", RuntimeConnectionToken = runtimeSecret },
+            logger,
+            new ScriptableCopilotClient { PingException = new Exception($"handshake rejected: runtime token {runtimeSecret} invalid.") });
+
+        await provider.GetDiagnosticsAsync();
+
+        AssertSinkRedacted(logger, runtimeSecret);
+    }
+
+    [Fact]
+    public async Task Copilot_redacts_the_environment_variable_token_from_the_log_sink()
+    {
+        const string envVar = "ELSA_TEST_COPILOT_TOKEN_414";
+        const string envSecret = "ghp_ENVSECRET_5252";
+        Environment.SetEnvironmentVariable(envVar, envSecret);
+        try
+        {
+            var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+            var provider = BuildCopilotProvider(
+                new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = null, GitHubTokenEnvironmentVariable = envVar },
+                logger,
+                new ScriptableCopilotClient { PingException = new Exception($"401: bad credentials for {envSecret}.") });
+
+            await provider.GetDiagnosticsAsync();
+
+            AssertSinkRedacted(logger, envSecret);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(envVar, null);
+        }
+    }
+
+    // --- Anthropic: the redacted secret is the RESOLVED key, which may come from an env var ---
+    // (issue #414 item 3: the shared parameterized helper must redact the env-var-resolved key too.)
+
+    [Fact]
+    public async Task Anthropic_redacts_the_environment_variable_api_key_from_the_log_sink()
+    {
+        const string envVar = "ELSA_TEST_ANTHROPIC_KEY_414";
+        const string envSecret = "sk-ant-ENVSECRET-7373";
+        Environment.SetEnvironmentVariable(envVar, envSecret);
+        try
+        {
+            var logger = new CapturingLogger<AnthropicAgentProvider>();
+            var options = Options.Create(new AnthropicAgentOptions { Enabled = true, ApiKey = null, ApiKeyEnvironmentVariable = envVar, Model = "claude-test" });
+            var provider = new AnthropicAgentProvider(
+                new ThrowingChatClientFactory(new Exception($"401 Unauthorized: invalid x-api-key '{envSecret}'.")),
+                options,
+                logger);
+            var context = AgentTurnContext.ForMessage("s1", "Hi", []);
+
+            var events = await Collect(provider.ContinueTurnAsync(context));
+
+            var error = Assert.Single(events, e => e.Kind == AgentStreamEventKind.Error);
+            Assert.DoesNotContain(envSecret, error.Error!.Message);
+            AssertSinkRedacted(logger, envSecret);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(envVar, null);
+        }
+    }
+
     private static Exception SecretfulCopilotException() =>
         new Exception(
             "SDK handshake failed.",
@@ -118,15 +193,22 @@ public sealed class AgentProviderLogRedactionTests
         Exception? pingException = null)
     {
         var logger = new CapturingLogger<GitHubCopilotAgentProvider>();
+        var client = new ScriptableCopilotClient { ResumeException = resumeException, PingException = pingException };
+        var provider = BuildCopilotProvider(new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = CopilotSecret }, logger, client);
+        return (provider, logger, client);
+    }
+
+    private static GitHubCopilotAgentProvider BuildCopilotProvider(
+        GitHubCopilotAgentOptions options,
+        CapturingLogger<GitHubCopilotAgentProvider> logger,
+        ScriptableCopilotClient client)
+    {
         var audit = new InMemoryAgentAuditStore();
         var invoker = new DefaultAgentToolInvoker(
             new DefaultAgentToolRegistry([]),
             new InMemoryAgentProposalService(new NoopAgentActionProposalExecutor(), audit),
             audit);
-        var client = new ScriptableCopilotClient { ResumeException = resumeException, PingException = pingException };
-        var options = Options.Create(new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = CopilotSecret });
-        var provider = new GitHubCopilotAgentProvider(new ScriptableCopilotClientFactory(client), options, invoker, logger);
-        return (provider, logger, client);
+        return new GitHubCopilotAgentProvider(new ScriptableCopilotClientFactory(client), Options.Create(options), invoker, logger);
     }
 
     private static async Task<List<AgentStreamEvent>> Collect(IAsyncEnumerable<AgentStreamEvent> events)
