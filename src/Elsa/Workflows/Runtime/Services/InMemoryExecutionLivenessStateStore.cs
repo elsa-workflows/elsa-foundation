@@ -3,11 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryExecutionLivenessStateStore : IExecutionLivenessStateStore
+public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStore<InMemoryExecutionLivenessStateStore.ExecutionLivenessStateKey, ExecutionLivenessState>, IExecutionLivenessStateStore
 {
-    private readonly object _syncRoot = new();
-    private readonly Dictionary<ExecutionLivenessStateKey, ExecutionLivenessState> _states = new();
-
     public ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -15,12 +12,8 @@ public sealed class InMemoryExecutionLivenessStateStore : IExecutionLivenessStat
         ArgumentException.ThrowIfNullOrWhiteSpace(state.OperationalStateId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            var key = new ExecutionLivenessStateKey(state.WorkflowExecutionId, state.OperationalStateId);
-            _states[key] = state;
-            return new ValueTask<ExecutionLivenessState>(state);
-        }
+        var key = new ExecutionLivenessStateKey(state.WorkflowExecutionId, state.OperationalStateId);
+        return new(Save(key, state));
     }
 
     public ValueTask<ExecutionLivenessState?> FindAsync(string workflowExecutionId, string operationalStateId, CancellationToken cancellationToken = default)
@@ -29,11 +22,7 @@ public sealed class InMemoryExecutionLivenessStateStore : IExecutionLivenessStat
         ArgumentException.ThrowIfNullOrWhiteSpace(operationalStateId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            _states.TryGetValue(new ExecutionLivenessStateKey(workflowExecutionId, operationalStateId), out var state);
-            return new ValueTask<ExecutionLivenessState?>(state);
-        }
+        return new(Find(new ExecutionLivenessStateKey(workflowExecutionId, operationalStateId)));
     }
 
     public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -41,26 +30,15 @@ public sealed class InMemoryExecutionLivenessStateStore : IExecutionLivenessStat
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            var states = _states
-                .Where(item => item.Key.WorkflowExecutionId == workflowExecutionId)
-                .Select(item => item.Value)
-                .ToArray();
-
-            return new ValueTask<IReadOnlyCollection<ExecutionLivenessState>>(states);
-        }
+        return new(Snapshot(key => key.WorkflowExecutionId == workflowExecutionId));
     }
 
     public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            return new ValueTask<IReadOnlyCollection<ExecutionLivenessState>>(_states.Values.ToArray());
-        }
+        return new(SnapshotAll());
     }
 
-    private readonly record struct ExecutionLivenessStateKey(string WorkflowExecutionId, string OperationalStateId);
+    public readonly record struct ExecutionLivenessStateKey(string WorkflowExecutionId, string OperationalStateId);
 }
