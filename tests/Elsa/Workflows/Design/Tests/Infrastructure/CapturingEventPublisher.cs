@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using System.Collections.Concurrent;
@@ -7,21 +6,23 @@ using System.Collections.Concurrent;
 namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
-/// Stub <see cref="IEventPublisher"/> that captures every event passed to <see cref="Publish"/>.
-/// Replaces the former split capturing domain-event + lifecycle-event senders now that there is
-/// a single Event concept. Used to assert the mutation pipeline dispatches the expected gate +
-/// lifecycle events, and to let tests simulate validator contributions via <see cref="OnPublish"/>.
+/// Stub publisher implementing both delivery faces (<see cref="IInlineEventPublisher"/> and
+/// <see cref="IDeferredEventPublisher"/>) that captures every published event. Replaces the former
+/// split capturing domain-event + lifecycle-event senders now that there is a single Event concept.
+/// Used to assert the mutation pipeline dispatches the expected gate + lifecycle events, and to let
+/// tests simulate validator contributions via <see cref="OnPublish"/>. One instance satisfies both
+/// the inline and deferred ctor dependencies of the commands under test.
 /// </summary>
 /// <remarks>
-/// Production wiring routes Sequential events synchronously and Background events through the
-/// channel + worker. This stub captures every event synchronously regardless of strategy so
-/// test assertions can inspect captured events without timing concerns. Tests that exercise the
-/// event-sourcing seam (SC-012/SC-013) attach subscribers via <see cref="Subscribe{T}"/>; those
-/// honour the strategy's resilience contract — Sequential lets handler failures propagate to the
-/// publishing caller, Background isolates them (mirroring the production
-/// <c>BackgroundEventPublisher</c> worker that catches + logs handler faults).
+/// Production wiring routes inline events synchronously and deferred events through the channel +
+/// worker. This stub captures every event synchronously regardless of face so test assertions can
+/// inspect captured events without timing concerns. Tests that exercise the event-sourcing seam
+/// (SC-012/SC-013) attach subscribers via <see cref="Subscribe{T}"/>; those honour each face's
+/// resilience contract — inline lets handler failures propagate to the publishing caller, deferred
+/// isolates them (mirroring the production <c>BackgroundEventPublisher</c> worker that catches +
+/// logs handler faults).
 /// </remarks>
-public sealed class CapturingEventPublisher : IEventPublisher
+public sealed class CapturingEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
 {
     private readonly ConcurrentQueue<IEvent> _events = new();
     private readonly List<Subscription> _subscriptions = [];
@@ -52,22 +53,25 @@ public sealed class CapturingEventPublisher : IEventPublisher
 
     /// <summary>
     /// Register a subscriber for events assignable to <typeparamref name="T"/>, mirroring an
-    /// <c>IEventHandler&lt;T&gt;</c> on the production substrate. Dispatched during
-    /// <see cref="Publish"/> with the strategy's resilience semantics (see remarks on the class).
+    /// <c>IEventHandler&lt;T&gt;</c> on the production substrate. Dispatched during publish with the
+    /// resilience semantics of the face it was published through (see remarks on the class).
     /// </summary>
     public void Subscribe<T>(Func<T, Task> handler) where T : class, IEvent =>
         _subscriptions.Add(new Subscription(typeof(T), e => handler((T)e)));
 
-    public async Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+    /// <summary>Inline delivery: subscriber failures propagate to the publishing caller.</summary>
+    Task IInlineEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        PublishCore(@event, shielded: false);
+
+    /// <summary>Deferred delivery: subscriber failures are isolated (mirrors the worker).</summary>
+    Task IDeferredEventPublisher.Publish(IEvent @event, CancellationToken cancellationToken) =>
+        PublishCore(@event, shielded: true);
+
+    private async Task PublishCore(IEvent @event, bool shielded)
     {
         OnPublish?.Invoke(@event);
         _events.Enqueue(@event);
 
-        // Honour the resilience contract of the chosen strategy. Background owns its own
-        // resilience (fire-and-forget; the worker catches + logs), so a faulty subscriber can
-        // never break the publishing caller; Sequential awaits its handlers and lets a throw
-        // surface to the caller.
-        var shielded = strategy is BackgroundProcessingStrategy;
         foreach (var subscription in _subscriptions.Where(s => s.EventType.IsInstanceOfType(@event)))
         {
             if (shielded)

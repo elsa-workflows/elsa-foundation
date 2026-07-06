@@ -1,6 +1,5 @@
 using Elsa.Locking.Core;
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Events;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -17,12 +16,12 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 /// <remarks>
 /// Discard is its own shape (deletion, no validation rebuild, no granular event) and shares no
 /// flow with create or update. The lock + lifecycle-event semantics are preserved by invoking
-/// <see cref="IDistributedLockProvider"/> and <see cref="IEventPublisher"/> directly.
+/// <see cref="IDistributedLockProvider"/> and <see cref="IDeferredEventPublisher"/> directly.
 /// </remarks>
 public sealed class DiscardDraft(
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
-    IEventPublisher eventPublisher
+    IDeferredEventPublisher deferredEventPublisher
 ) : IDiscardDraftCommand
 {
     public async Task Execute(string draftId, CancellationToken cancellationToken = default)
@@ -49,6 +48,6 @@ public sealed class DiscardDraft(
 
         // Lock released + transaction committed — publish the terminal lifecycle event.
         // Background: fire-and-forget, the publisher must not be broken by a subscriber.
-        await eventPublisher.Publish(new OnDraftDiscarded(draftId, workflowDefinitionId), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftDiscarded(draftId, workflowDefinitionId), cancellationToken);
     }
 }

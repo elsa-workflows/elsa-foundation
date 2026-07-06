@@ -5,14 +5,14 @@ using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services;
 
-internal sealed class JavaScriptDeclarationsDocumentFactory(IEventPublisher mediator)
+internal sealed class JavaScriptDeclarationsDocumentFactory(IInlineEventPublisher eventPublisher)
     : IJavaScriptDeclarationsDocumentFactory
 {
     public async ValueTask<JavaScriptDeclarationsDocument> Create(CancellationToken cancellationToken = default)
     {
         var context = new JavaScriptDeclarationsContext();
         var domainEvent = new OnDeclarationsDocumentGenerating(context);
-        await mediator.Publish(domainEvent, cancellationToken: cancellationToken);
+        await eventPublisher.Publish(domainEvent, cancellationToken);
 
         return new JavaScriptDeclarationsDocument
         {

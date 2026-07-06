@@ -18,12 +18,14 @@ public class BackgroundEventPublisherTokenTests
 {
     private sealed record TestEvent : IEvent;
 
-    private sealed class CountingPublisher : IEventPublisher
+    // The background worker drains queued events through IInlineEventPublisher; the counting stub
+    // stands in for that face and records the token the worker dispatches under.
+    private sealed class CountingPublisher : IInlineEventPublisher
     {
         public int Count;
         public CancellationToken LastToken;
 
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref Count);
             LastToken = cancellationToken;
@@ -35,7 +37,7 @@ public class BackgroundEventPublisherTokenTests
     {
         var counting = new CountingPublisher();
         var services = new ServiceCollection();
-        services.AddSingleton<IEventPublisher>(counting);
+        services.AddSingleton<IInlineEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var channel = new EventChannel();

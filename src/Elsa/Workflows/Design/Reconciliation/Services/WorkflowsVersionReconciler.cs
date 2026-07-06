@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// </summary>
 public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
-    IEventPublisher sender,
+    IInlineEventPublisher eventPublisher,
     IOptions<WorkflowVersionReconcilerOptions> options,
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
@@ -36,7 +36,7 @@ public sealed class WorkflowsVersionReconciler(
         cancellationToken.ThrowIfCancellationRequested();
 
         var @event = new OnWorkflowVersionsReconciling();
-        await sender.Publish(@event, cancellationToken: cancellationToken);
+        await eventPublisher.Publish(@event, cancellationToken);
 
         foreach (var version in @event.Versions)
         {

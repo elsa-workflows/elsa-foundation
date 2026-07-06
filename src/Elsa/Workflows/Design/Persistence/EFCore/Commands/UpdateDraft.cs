@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
@@ -51,7 +50,8 @@ public sealed class UpdateDraft(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
-    IEventPublisher eventPublisher
+    IInlineEventPublisher inlineEventPublisher,
+    IDeferredEventPublisher deferredEventPublisher
 ) : IUpdateDraftCommand
 {
     public async Task Execute(UpdateDraftRequest request, CancellationToken cancellationToken = default)
@@ -88,14 +88,14 @@ public sealed class UpdateDraft(
             dbContext.Entry(draft).State = EntityState.Modified;
 
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
+            errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         // Lock released, transaction committed — surface the validation outcome.
         // Background: fire-and-forget, subscribers must not break the command.
-        await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftValidated(draft, errors), cancellationToken);
     }
 
     private async Task<WorkflowDefinitionDraft> LoadAndHydrate(
@@ -112,7 +112,7 @@ public sealed class UpdateDraft(
         // registered IEntityLoadingHandler<,>. Sequential so hydration completes before we read State.
         // (We deliberately do NOT route through a named read store, which returns an AsNoTracking
         // entity that this command could not save without re-attaching.)
-        await eventPublisher.Publish(new OnEntityLoading(dbContext, draft), EventPublishingStrategy.Sequential, cancellationToken);
+        await inlineEventPublisher.Publish(new OnEntityLoading(dbContext, draft), cancellationToken);
 
         return draft;
     }

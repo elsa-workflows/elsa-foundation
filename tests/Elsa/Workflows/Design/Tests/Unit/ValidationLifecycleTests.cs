@@ -1,4 +1,3 @@
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Validations.Core;
@@ -66,7 +65,7 @@ public sealed class ValidationLifecycleTests
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionDraftStore>();
         var draft = await store.FindByIdAsync(draftId);
         Assert.NotNull(draft);
-        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, EventPublishingStrategy.Sequential, CancellationToken.None);
+        var errors = await host.EventPublisher.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
 
         var actualTypes = errors.Select(e => e.Type).ToArray();
 

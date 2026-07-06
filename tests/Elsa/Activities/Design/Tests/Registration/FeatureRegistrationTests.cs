@@ -209,7 +209,7 @@ public sealed class FeatureRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<ISystemClock, SystemClock>();
-        services.AddSingleton<IEventPublisher, StubEventPublisher>();
+        services.AddSingleton<IInlineEventPublisher, StubEventPublisher>();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();
         return services;
@@ -232,9 +232,9 @@ public sealed class FeatureRegistrationTests
         services.AddSingleton<IAddCommand<ActivityDefinitionVersion>, StubAddCommand<ActivityDefinitionVersion>>();
     }
 
-    private sealed class StubEventPublisher : IEventPublisher
+    private sealed class StubEventPublisher : IInlineEventPublisher
     {
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubIdentityGenerator : IIdentityGenerator

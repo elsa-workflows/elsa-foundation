@@ -19,31 +19,31 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// through this gate rather than hand-rolling the publish + read-back.
 /// </para>
 /// <para>
-/// The caller supplies the <see cref="IEventPublishingStrategy"/>, which MUST be synchronous and
-/// awaited (i.e. <c>EventPublishingStrategy.Sequential</c>) so the errors are fully aggregated by
-/// the time we read them back. The concrete strategy is an implementation type
-/// (<c>Elsa.Events.Strategies</c>), so it is supplied by the implementation-layer callers rather
-/// than referenced from this <c>.Core</c> project — <c>.Core</c> depends only on the
-/// <see cref="IEventPublishingStrategy"/> abstraction (framework §2.1).
+/// The gate depends on <see cref="IInlineEventPublisher"/> — inline delivery awaits every handler,
+/// so the errors are fully aggregated by the time we read them back. Depending on the inline face
+/// (rather than <see cref="IEventPublisher"/> plus a caller-supplied strategy) makes the wrong
+/// semantics unrepresentable AT THE GATE: nobody can hand it a fire-and-forget publisher that would
+/// return before validators run and leave the error set silently empty. <c>.Core</c> depends only
+/// on <see cref="IInlineEventPublisher"/> (an <c>Elsa.Events.Core</c> abstraction), preserving
+/// framework §2.1 purity.
 /// </para>
 /// </remarks>
 public static class DraftValidationGate
 {
     /// <summary>
     /// Derives the validation error set for <paramref name="draft"/> by publishing
-    /// <see cref="OnDraftValidating"/> on the supplied synchronous <paramref name="strategy"/> and
-    /// reading the aggregated errors back. This IS the validation gate — a throwing validator
-    /// propagates (the caller's write should fail). Use <see cref="TryDeriveValidationErrorsAsync"/>
-    /// instead on read paths that must stay resilient to a faulting validator.
+    /// <see cref="OnDraftValidating"/> inline (every handler awaited) and reading the aggregated
+    /// errors back. This IS the validation gate — a throwing validator propagates (the caller's
+    /// write should fail). Use <see cref="TryDeriveValidationErrorsAsync"/> instead on read paths
+    /// that must stay resilient to a faulting validator.
     /// </summary>
     public static async Task<IReadOnlyList<ValidationError>> DeriveValidationErrorsAsync(
-        this IEventPublisher eventPublisher,
+        this IInlineEventPublisher eventPublisher,
         IWorkflowDefinitionDraft draft,
-        IEventPublishingStrategy strategy,
         CancellationToken cancellationToken)
     {
         var validatingEvent = new OnDraftValidating(draft);
-        await eventPublisher.Publish(validatingEvent, strategy, cancellationToken);
+        await eventPublisher.Publish(validatingEvent, cancellationToken);
         return validatingEvent.Errors.ToArray();
     }
 
@@ -59,16 +59,15 @@ public static class DraftValidationGate
     /// never emitted by a validator, only by this shield when a validator faults.
     /// </remarks>
     public static async Task<IReadOnlyList<ValidationError>> TryDeriveValidationErrorsAsync(
-        this IEventPublisher eventPublisher,
+        this IInlineEventPublisher eventPublisher,
         IWorkflowDefinitionDraft draft,
-        IEventPublishingStrategy strategy,
         CancellationToken cancellationToken)
     {
         var validatingEvent = new OnDraftValidating(draft);
         try
         {
-            // Same synchronous strategy contract as the write gate — see DeriveValidationErrorsAsync.
-            await eventPublisher.Publish(validatingEvent, strategy, cancellationToken);
+            // Inline delivery awaits every handler — see DeriveValidationErrorsAsync.
+            await eventPublisher.Publish(validatingEvent, cancellationToken);
             return validatingEvent.Errors.ToArray();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

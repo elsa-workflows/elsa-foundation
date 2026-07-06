@@ -61,14 +61,14 @@ public sealed class EFCoreBulkUpsert<TDbContext, TEntity>(IDbContextFactory<TDbC
     private async Task PublishEntitySavingEvents(TDbContext dbContext, IEnumerable<TEntity> entities, CancellationToken cancellationToken)
     {
         using var scope = serviceProvider.CreateScope();
-        var publisher = scope.ServiceProvider.GetService<IEventPublisher>();
-        if (publisher is null)
+        var eventPublisher = scope.ServiceProvider.GetService<IInlineEventPublisher>();
+        if (eventPublisher is null)
             return;
 
         // dbContext.Entry(entity) materialises the EntityEntry the event carries; it begins
         // tracking the entity as Unchanged, which is inert here since this path never calls
         // SaveChanges (it executes raw upsert SQL instead).
         foreach (var entity in entities)
-            await publisher.Publish(new OnEntitySaving(dbContext, dbContext.Entry(entity)), cancellationToken: cancellationToken);
+            await eventPublisher.Publish(new OnEntitySaving(dbContext, dbContext.Entry(entity)), cancellationToken);
     }
 }

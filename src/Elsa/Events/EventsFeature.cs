@@ -32,7 +32,11 @@ public sealed class EventsFeature : IShellFeature
             .AddSingleton(DefaultEventPublishingStrategy)
             .AddSingleton<IEventChannel, EventChannel>()
             .AddSingleton<IEventPipeline, EventPipeline>()
-            .AddScoped<IEventPublisher, EventPublisher>();
+            .AddScoped<IEventPublisher, EventPublisher>()
+            // Intent-revealing delivery faces over the strategy-selecting IEventPublisher: inline
+            // awaits handler effects (the read-back sites); deferred is fire-and-forget (notifications).
+            .AddScoped<IInlineEventPublisher, InlineEventPublisher>()
+            .AddScoped<IDeferredEventPublisher, DeferredEventPublisher>();
 
         // Background dispatcher for events published via EventPublishingStrategy.Background.
         services.AddSingleton<IBackgroundTask, BackgroundEventPublisher>();

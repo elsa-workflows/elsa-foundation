@@ -12,7 +12,7 @@ namespace Elsa.Expressions.Liquid.Services;
 /// <summary>
 /// Constructor.
 /// </summary>
-public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, IEventPublisher mediator, LiquidTemplateManagerOptions options)
+public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memoryCache, IInlineEventPublisher eventPublisher, LiquidTemplateManagerOptions options)
     : ILiquidTemplateManager
 {
 
@@ -64,7 +64,7 @@ public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memor
     private async Task<TemplateContext> CreateTemplateContextAsync(IExpressionExecutionContext expressionExecutionContext, CancellationToken cancellationToken)
     {
         var context = new TemplateContext(expressionExecutionContext, new TemplateOptions());
-        await mediator.Publish(new RenderingLiquidTemplate(context, expressionExecutionContext), cancellationToken: cancellationToken);
+        await eventPublisher.Publish(new RenderingLiquidTemplate(context, expressionExecutionContext), cancellationToken);
         context.SetValue("ExpressionExecutionContext", expressionExecutionContext);
         return context;
     }

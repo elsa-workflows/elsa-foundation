@@ -31,7 +31,9 @@ public class GroundworkWorkflowsDesignRegistrationTests
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(WorkflowsDesignStorageManifest.Create()));
         services.AddSingleton<IPayloadSerializer, FakePayloadSerializer>();
         services.AddSingleton<IDistributedLockProvider, StubLockProvider>();
-        services.AddSingleton<IEventPublisher, StubEventPublisher>();
+        services.AddSingleton<StubEventPublisher>();
+        services.AddSingleton<IInlineEventPublisher>(sp => sp.GetRequiredService<StubEventPublisher>());
+        services.AddSingleton<IDeferredEventPublisher>(sp => sp.GetRequiredService<StubEventPublisher>());
         services.AddSingleton<IActivityStructureService, EmptyActivityStructureService>();
         services.AddSingleton<ISystemClock, FakeSystemClock>();
         preRegister?.Invoke(services);
@@ -83,9 +85,9 @@ public class GroundworkWorkflowsDesignRegistrationTests
         public Task<IReadOnlyList<Core.Entities.WorkflowDefinition>> ListAsync(Core.Filters.WorkflowDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
-    private sealed class StubEventPublisher : IEventPublisher
+    private sealed class StubEventPublisher : IInlineEventPublisher, IDeferredEventPublisher
     {
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) =>
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 

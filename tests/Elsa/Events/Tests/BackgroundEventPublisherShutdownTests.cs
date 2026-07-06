@@ -21,10 +21,12 @@ public class BackgroundEventPublisherShutdownTests
 {
     private sealed record TestEvent : IEvent;
 
-    private sealed class CountingPublisher : IEventPublisher
+    // The background worker drains queued events through IInlineEventPublisher (its intent-revealing
+    // re-dispatch face), so the counting stub stands in for that face.
+    private sealed class CountingPublisher : IInlineEventPublisher
     {
         public int Count;
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref Count);
             return Task.CompletedTask;
@@ -38,7 +40,7 @@ public class BackgroundEventPublisherShutdownTests
         // and returns normally (no cancellation exception).
         var counting = new CountingPublisher();
         var services = new ServiceCollection();
-        services.AddSingleton<IEventPublisher>(counting);
+        services.AddSingleton<IInlineEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
         var channel = new EventChannel();
         var publisher = new BackgroundEventPublisher(channel, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundEventPublisher>.Instance);
@@ -71,7 +73,7 @@ public class BackgroundEventPublisherShutdownTests
         services.AddLogging();
         services.AddSingleton<IDistributedLockProvider, NoOpLockProvider>();
         services.AddSingleton<IEventChannel, EventChannel>();
-        services.AddSingleton<IEventPublisher>(counting);
+        services.AddSingleton<IInlineEventPublisher>(counting);
         services.AddSingleton<TaskExecutor>();
         services.AddSingleton<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddSingleton<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());

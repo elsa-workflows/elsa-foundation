@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -18,7 +17,8 @@ public sealed class GroundworkUpdateDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IEventPublisher eventPublisher,
+    IInlineEventPublisher inlineEventPublisher,
+    IDeferredEventPublisher deferredEventPublisher,
     ISystemClock clock)
     : IUpdateDraftCommand
 {
@@ -39,7 +39,7 @@ public sealed class GroundworkUpdateDraftCommand(
             // Wholesale assign the desired state (last-writer-wins, FR-022).
             draft.State = request.State;
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
+            errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
             GroundworkEntityTimestamps.StampModified(draft, clock.UtcNow);
 
             await store.SaveAllAsync(
@@ -48,7 +48,7 @@ public sealed class GroundworkUpdateDraftCommand(
                 cancellationToken);
         }
 
-        await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftValidated(draft, errors), cancellationToken);
     }
 
     private GroundworkWorkflowDefinitionDraftDocumentStore DraftDocuments() =>

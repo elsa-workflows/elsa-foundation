@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Events;
@@ -14,7 +13,7 @@ public sealed class GroundworkDiscardDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IEventPublisher eventPublisher)
+    IDeferredEventPublisher deferredEventPublisher)
     : IDiscardDraftCommand
 {
     public async Task Execute(string draftId, CancellationToken cancellationToken = default)
@@ -37,6 +36,6 @@ public sealed class GroundworkDiscardDraftCommand(
                 cancellationToken);
         }
 
-        await eventPublisher.Publish(new OnDraftDiscarded(draftId, workflowDefinitionId), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftDiscarded(draftId, workflowDefinitionId), cancellationToken);
     }
 }

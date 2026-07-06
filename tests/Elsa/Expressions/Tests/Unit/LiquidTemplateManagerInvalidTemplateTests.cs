@@ -44,9 +44,9 @@ public sealed class LiquidTemplateManagerInvalidTemplateTests
         Assert.Contains("An identifier was expected after the 'assign' tag", result);
     }
 
-    private sealed class StubEventPublisher : IEventPublisher
+    private sealed class StubEventPublisher : IInlineEventPublisher
     {
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
             => Task.CompletedTask;
     }
 

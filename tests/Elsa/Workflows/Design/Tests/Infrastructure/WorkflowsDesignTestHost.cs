@@ -109,7 +109,10 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // Lock + event publisher stubs (capturing variant — see CapturingEventPublisher for
         // the bypass-the-pipeline rationale).
         services.AddSingleton<IDistributedLockProvider>(lockProvider);
-        services.AddSingleton<IEventPublisher>(eventPublisher);
+        // One capturing instance registered under both delivery faces — the commands depend on
+        // IInlineEventPublisher (gate + hydration) and IDeferredEventPublisher (notifications).
+        services.AddSingleton<IInlineEventPublisher>(eventPublisher);
+        services.AddSingleton<IDeferredEventPublisher>(eventPublisher);
 
         // The DbContext factory bridges to the in-memory connection.
         services.AddSingleton<IDbContextFactory<WorkflowsDesignDbContext>>(sp =>
