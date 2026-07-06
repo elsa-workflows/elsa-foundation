@@ -70,6 +70,24 @@ public sealed class UnknownActivityVersionValidatorTests
         Assert.Empty(errors);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Blank_activity_version_id_is_reported_as_unknown(string? versionId)
+    {
+        // A node with no version id is unresolvable and must be reported, not crash the gate: a null
+        // id previously threw ArgumentNullException out of CatalogVersionResolver's dictionary,
+        // faulting the whole pass. null/empty is a real transient authoring state (both submit
+        // commands guard IsNullOrWhiteSpace on ActivityVersionId).
+        var state = StateWithRoot(Node("n1", versionId!));
+        var errors = await Validate(Validator(new StubActivityCatalog()), state);
+
+        var error = Assert.Single(errors);
+        Assert.Equal("n1", error.Path);
+        Assert.Equal("Graph/UnknownActivityVersion", error.Type);
+    }
+
     private static UnknownActivityVersionValidator Validator(IActivityDefinitionLookup catalog) =>
         new(CatalogResolver(catalog), Options(), Walker());
 }

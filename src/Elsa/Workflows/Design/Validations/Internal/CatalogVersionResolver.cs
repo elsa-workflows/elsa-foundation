@@ -17,6 +17,13 @@ public sealed class CatalogVersionResolver(IActivityDefinitionLookup catalog)
 
     public async Task<IActivityDefinitionVersion?> Find(string activityVersionId, CancellationToken cancellationToken)
     {
+        // A node with no version id is unresolvable, not a lookup — treat it as absent so callers
+        // report it (Graph/UnknownActivityVersion) rather than crash. A null id would also throw
+        // ArgumentNullException from the dictionary below; null/empty is a real transient authoring
+        // state (both submit commands guard IsNullOrWhiteSpace on ActivityVersionId).
+        if (string.IsNullOrWhiteSpace(activityVersionId))
+            return null;
+
         if (_cache.TryGetValue(activityVersionId, out var cached))
             return cached;
 

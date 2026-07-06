@@ -16,6 +16,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 internal static class ValidatorTestHelpers
 {
+    /// <summary>
     /// Synthetic activity-version id assigned to the <c>$root</c> container node that
     /// <see cref="RootActivity"/> wraps the test's activities under. It stands in for the real root
     /// activity's catalog version — a fail-closed lookup fake must resolve it (as an empty version, no
