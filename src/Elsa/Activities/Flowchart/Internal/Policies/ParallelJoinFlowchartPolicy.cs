@@ -1,6 +1,3 @@
-using Elsa.Activities.Flowchart.Contracts;
-using Elsa.Activities.Flowchart.Models;
-
 namespace Elsa.Activities.Flowchart.Internal.Policies;
 
 /// <summary>
@@ -11,11 +8,4 @@ namespace Elsa.Activities.Flowchart.Internal.Policies;
 /// Flowchart (#308), mirroring the <c>Parallel</c> composite — rather than releasing the join as if the faulted
 /// branch had simply taken an untaken outcome.
 /// </summary>
-public sealed class ParallelJoinFlowchartPolicy : IFlowchartPolicy
-{
-    public string PolicyKind => FlowchartPolicyKinds.ParallelJoin;
-    public string DisplayName => "Parallel Join";
-
-    public FlowchartPolicyDecision Execute(IFlowchartPolicyContext context) =>
-        new(FlowchartPolicyConnectionSelector.ScheduleMatchingOutbound(context));
-}
+public sealed class ParallelJoinFlowchartPolicy() : MatchingOutboundFlowchartPolicyBase(FlowchartPolicyKinds.ParallelJoin, "Parallel Join");
