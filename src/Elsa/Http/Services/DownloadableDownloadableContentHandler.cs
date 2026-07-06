@@ -1,20 +1,12 @@
-﻿using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 
 namespace Elsa.Http.Services;
 
 /// <summary>
-/// Handles content that represents a downloadable stream.
+/// Handles content that already is a <see cref="Downloadable"/>.
 /// </summary>
-internal sealed class DownloadableDownloadableContentHandler : IDownloadableContentHandler
+internal sealed class DownloadableDownloadableContentHandler : TypedDownloadableContentHandler<Downloadable>
 {
-    public float Priority => 0;
-
     /// <inheritdoc />
-    public bool SupportsContent(object content) => content is Downloadable;
-
-    public IEnumerable<Func<ValueTask<Downloadable>>> GetDownloadablesAsync(object content, CancellationToken cancellationToken)
-    {
-        yield return () => new((Downloadable)content);
-    }
+    protected override Downloadable Map(Downloadable content) => content;
 }
