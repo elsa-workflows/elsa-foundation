@@ -83,15 +83,6 @@ internal sealed class ParallelNavigator
         return _branchesByNodeId.ContainsKey(executableNodeId);
     }
 
-    /// <summary>The stable branch name a runnable branch node belongs to.</summary>
-    public string BranchNameFor(string executableNodeId)
-    {
-        if (_branchesByNodeId.TryGetValue(executableNodeId, out var branch))
-            return branch.Name;
-
-        throw new ParallelExecutionException($"Completed child executable node '{executableNodeId}' is not a Parallel branch.");
-    }
-
     private static ExecutableNode? MatchBranch(
         ExecutableNode executableNode,
         string branchName,

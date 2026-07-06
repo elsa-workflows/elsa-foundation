@@ -17,13 +17,6 @@ internal static class FlowchartPolicyConnectionSelector
     public static IReadOnlyCollection<FlowchartPolicyCommand> ScheduleAllOutbound(IFlowchartPolicyContext context) =>
         Outbound(context).Select(ToScheduleCommand).ToArray();
 
-    public static IReadOnlyCollection<FlowchartPolicyCommand> ScheduleFirstMatchingOutbound(IFlowchartPolicyContext context)
-    {
-        var outcomes = NormalizeOutcomes(context.OutcomeNames);
-        var connection = Outbound(context).FirstOrDefault(connection => outcomes.Contains(connection.Source.Port));
-        return connection is null ? [] : [ToScheduleCommand(connection)];
-    }
-
     private static IEnumerable<FlowchartConnection> Outbound(IFlowchartPolicyContext context) =>
         string.IsNullOrWhiteSpace(context.CurrentNodeId)
             ? []
