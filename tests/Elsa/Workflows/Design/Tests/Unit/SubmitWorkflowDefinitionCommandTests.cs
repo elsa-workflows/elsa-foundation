@@ -2,7 +2,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 using Elsa.Workflows.Design.Tests.Infrastructure;
-using Elsa.Events.Strategies;
+using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.EFCore.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -92,7 +92,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         string draftId)
     {
         var draft = await ctx.WorkflowDefinitionDrafts.FirstAsync(x => x.Id == draftId);
-        await host.EventPublisher.Publish(new OnEntityLoading(ctx, draft), EventPublishingStrategy.Sequential);
+        await ((IInlineEventPublisher)host.EventPublisher).Publish(new OnEntityLoading(ctx, draft));
         return draft;
     }
 
@@ -102,7 +102,7 @@ public sealed class SubmitWorkflowDefinitionCommandTests
         string versionId)
     {
         var version = await ctx.WorkflowDefinitionVersions.FirstAsync(x => x.Id == versionId);
-        await host.EventPublisher.Publish(new OnEntityLoading(ctx, version), EventPublishingStrategy.Sequential);
+        await ((IInlineEventPublisher)host.EventPublisher).Publish(new OnEntityLoading(ctx, version));
         return version;
     }
 }

@@ -1,7 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Primitives.Exceptions;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -68,7 +67,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
 
         // Sanity: with the version present, deriving yields the required-input error.
         var present = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
-        var before = await present.DeriveValidationErrorsAsync(new StubDraft(state), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var before = await present.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
         Assert.Single(before, e => e.Path == "n1/inputs/body");
 
         catalog.Remove("av-1");
@@ -76,7 +75,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         // A fresh pass gets a fresh resolver (production scopes one per pass), so the removal is seen:
         // the node is skipped and the gate completes empty rather than faulting.
         var afterRemoval = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
-        var after = await afterRemoval.DeriveValidationErrorsAsync(new StubDraft(state), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var after = await afterRemoval.DeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
         Assert.Empty(after);
     }
 
@@ -92,7 +91,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
         var state = State(activities: [Node("n1", "av-1")]);
         var publisher = new ValidatingPublisher(new RequiredInputOutputValidator(CatalogResolver(catalog), Options(), Walker()));
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(new StubDraft(state), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(new StubDraft(state), CancellationToken.None);
 
         Assert.DoesNotContain(errors, e => e.Type == ValidationCategories.Faulted);
         Assert.Empty(errors);
@@ -127,13 +126,13 @@ public sealed class RequiredInputOutputValidatorDerivationTests
     }
 
     /// <summary>
-    /// Minimal <see cref="IEventPublisher"/> that runs a single validator against
+    /// Minimal <see cref="IInlineEventPublisher"/> that runs a single validator against
     /// <see cref="OnDraftValidating"/> and aggregates its errors — exercising the gate's publish +
     /// read-back contract with the real validator so its throwing behaviour reaches the gate.
     /// </summary>
-    private sealed class ValidatingPublisher(IDraftValidator validator) : IEventPublisher
+    private sealed class ValidatingPublisher(IDraftValidator validator) : IInlineEventPublisher
     {
-        public async Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public async Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             if (@event is OnDraftValidating validating)
                 foreach (var error in await validator.Validate(validating.Draft, cancellationToken))

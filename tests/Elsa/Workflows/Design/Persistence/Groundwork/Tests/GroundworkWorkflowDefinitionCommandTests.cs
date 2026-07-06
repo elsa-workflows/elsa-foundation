@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -30,10 +29,10 @@ public class GroundworkWorkflowDefinitionCommandTests
     private readonly FakeSystemClock _clock = new();
 
     private GroundworkCreateDraftCommand CreateCommand() =>
-        new(_identities, _locks, _store, Payloads, _events, _clock);
+        new(_identities, _locks, _store, Payloads, _events, _events, _clock);
 
     private GroundworkUpdateDraftCommand UpdateCommand() =>
-        new(_locks, _store, Payloads, _events, _clock);
+        new(_locks, _store, Payloads, _events, _events, _clock);
 
     private GroundworkWorkflowDefinitionVersionStore VersionStore() =>
         new(_store, new GroundworkWorkflowDefinitionStore(_store), Payloads);
@@ -56,7 +55,7 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var draft = await DraftStore().FindByIdAsync(draftId);
         Assert.NotNull(draft);
-        return await _events.DeriveValidationErrorsAsync(draft!, EventPublishingStrategy.Sequential, CancellationToken.None);
+        return await _events.DeriveValidationErrorsAsync(draft!, CancellationToken.None);
     }
 
     [Fact]

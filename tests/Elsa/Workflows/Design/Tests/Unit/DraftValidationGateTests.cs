@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core;
@@ -33,7 +32,7 @@ public sealed class DraftValidationGateTests
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => publisher.DeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None));
+            () => publisher.DeriveValidationErrorsAsync(Draft(), CancellationToken.None));
     }
 
     [Fact]
@@ -41,7 +40,7 @@ public sealed class DraftValidationGateTests
     {
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"));
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
 
         var faulted = Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
         Assert.Equal(ValidationPaths.Workflow, faulted.Path);
@@ -56,7 +55,7 @@ public sealed class DraftValidationGateTests
         // the accumulated error and the synthetic Validation/Faulted marker.
         var publisher = new ThrowingPublisher(new InvalidOperationException("boom"), contributeFirst: PriorError);
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
 
         Assert.Contains(errors, e => e == PriorError);
         Assert.Contains(errors, e => e.Type == ValidationCategories.Faulted);
@@ -72,7 +71,7 @@ public sealed class DraftValidationGateTests
         var publisher = new ThrowingPublisher(new OperationCanceledException(cts.Token));
 
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, cts.Token));
+            () => publisher.TryDeriveValidationErrorsAsync(Draft(), cts.Token));
     }
 
     [Fact]
@@ -83,20 +82,50 @@ public sealed class DraftValidationGateTests
         // abort, so the shield folds it into the synthetic instead of turning the read into a 500.
         var publisher = new ThrowingPublisher(new TaskCanceledException("validator timed out"));
 
-        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), EventPublishingStrategy.Sequential, CancellationToken.None);
+        var errors = await publisher.TryDeriveValidationErrorsAsync(Draft(), CancellationToken.None);
 
         Assert.Single(errors, e => e.Type == ValidationCategories.Faulted);
+    }
+
+    [Fact]
+    public async Task Derive_reads_back_a_handler_contribution_made_inline()
+    {
+        // BITE (compile-pin + runtime): the gate takes IInlineEventPublisher and awaits the handler,
+        // so a contribution made synchronously during Publish is visible when Errors is read back.
+        // Reverting the fix — re-adding the strategy parameter or widening the gate back to
+        // IEventPublisher — makes this stub no longer satisfy the gate signature and fails to compile,
+        // which is the primary bite: a fire-and-forget publisher can no longer reach the gate at all.
+        var publisher = new InlineSpyPublisher(PriorError);
+
+        var errors = await publisher.DeriveValidationErrorsAsync(Draft(), CancellationToken.None);
+
+        Assert.Contains(errors, e => e == PriorError);
     }
 
     private static IWorkflowDefinitionDraft Draft() => new StubDraft();
 
     /// <summary>
-    /// Publisher whose <c>Publish(OnDraftValidating)</c> optionally contributes an error, then always
-    /// throws — modelling a faulting validator (or a throwing OnPublish hook) on the gate's chain.
+    /// Inline publisher whose <c>Publish(OnDraftValidating)</c> synchronously contributes an error
+    /// before returning — modelling a validator whose effect the gate must observe on read-back.
     /// </summary>
-    private sealed class ThrowingPublisher(Exception toThrow, ValidationError? contributeFirst = null) : IEventPublisher
+    private sealed class InlineSpyPublisher(ValidationError contribution) : IInlineEventPublisher
     {
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+        {
+            if (@event is OnDraftValidating validating)
+                validating.Errors.Add(contribution);
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Inline publisher whose <c>Publish(OnDraftValidating)</c> optionally contributes an error, then
+    /// always throws — modelling a faulting validator (or a throwing OnPublish hook) on the gate's chain.
+    /// </summary>
+    private sealed class ThrowingPublisher(Exception toThrow, ValidationError? contributeFirst = null) : IInlineEventPublisher
+    {
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             if (@event is OnDraftValidating validating && contributeFirst is not null)
                 validating.Errors.Add(contributeFirst);

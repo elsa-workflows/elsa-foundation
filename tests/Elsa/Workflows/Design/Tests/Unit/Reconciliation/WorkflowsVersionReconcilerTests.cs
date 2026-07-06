@@ -107,7 +107,7 @@ public sealed class WorkflowsVersionReconcilerTests
     }
 
     private static WorkflowsVersionReconciler NewReconciler(
-        IEventPublisher sender,
+        IInlineEventPublisher sender,
         IWorkflowDefinitionStore defs,
         IWorkflowDefinitionVersionStore versions,
         IAddCommand<WorkflowDefinition> addDef,
@@ -158,10 +158,10 @@ public sealed class WorkflowsVersionReconcilerTests
         public DateTimeOffset LastModifiedAt => DateTimeOffset.UtcNow;
     }
 
-    private sealed class CapturingSender : IEventPublisher
+    private sealed class CapturingSender : IInlineEventPublisher
     {
         public List<IWorkflowDefinitionVersion> ToContribute { get; init; } = new();
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
         {
             if (@event is OnWorkflowVersionsReconciling rec)
                 foreach (var v in ToContribute)
