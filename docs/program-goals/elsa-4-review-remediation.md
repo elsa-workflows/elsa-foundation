@@ -348,6 +348,40 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
   - **Deferred backlog → W32 / correctness follow-ups** (tracked, some may want Sipke input): #413 items 3/6,
     #412 items 3/5/8 + Start masking bug, #415 items 1 (Groundwork async-init design fork) + 5, #417 items
     1/3/4/7/8 + AddVersion hardening, and the UpsertCommandGenerator non-Sqlite dialect golden gap.
+- **Wave C — W32 follow-up wave COMPLETE 2026-07-06** (7 units from the #514 deferred backlog, ruled
+  one-at-a-time with Sipke, all control-room-QA'd — build + affected suites + arch guard 49/49 +
+  independent mutation/compile-pin bite — before each merge; maps regenerated in this closure PR):
+  - **#412 correctness (#517):** #412 item 5 Cancel terminal-state no-op guard (`IsTerminal()` → no
+    commit, preserves Completed/Faulted + cancel idempotency) + Start deserialize catch-filter
+    narrowed to a `ParamName` whitelist (stops masking unrelated `ArgumentException`s).
+  - **#417 correctness (#515):** item 4 silent-drop surfacing (duplicate-assembly `LogWarning`;
+    unknown `DuplicateHandling` → throw), item 7 `DescriptorPayload` deserialize guarded (soft-fail),
+    item 8 `GetWithDefinitionAsync` → `EntityNotFoundException` in both stores.
+  - **AddVersion hardening (#516):** author-supplied version collision check on the Activities
+    `AddVersionCommandHandler` via `FindByDefinitionAndSortKeyAsync` → new
+    `ActivityDefinitionVersionConflictException` (mirrors the Workflows sibling; Workflows path was
+    already guarded, not touched).
+  - **#415 item 1 async-init (#518):** Groundwork Sqlite/PostgreSql sync-over-async factory replaced
+    with an `IHostedService`/`IShellInitializer` (Prepare phase) that materializes the store at
+    startup into a `public sealed GroundworkDocumentStoreHolder` singleton (owns handle disposal —
+    conforms to the CShells shell-singleton-ownership rule). `Add*UnifiedPersistence` signatures
+    intact; `Microsoft.Extensions.Hosting.Abstractions` added to the two provider projects.
+  - **#417 item 3 attr-inheritance (#519):** `[Version]`/`[Required]` now inherit via a base-chain
+    walk (`ReflectionOnlyAttributes` helper); zero in-repo blast radius (no in-repo `[Version]` usage),
+    repairs behavior for external base-class-attribute libraries.
+  - **Flowchart `Scopes` §E6 (#520):** new persisted `loopIterationCounters` field (appended last,
+    golden re-frozen byte-identical through `sequence`, id-determinism preserved) decouples iteration
+    numbering from the scope count → `LoopIteration` scopes now pruned (bounded ≤4 after 100 iters).
+    No backward-compat (unshipped runtime, per Sipke).
+  - **#412 item 3 Window C (#521):** scheduler drainer reordered **peek → dispatch → ack-delete**
+    (Mechanism A, no §E6) — the source work item is only ack-deleted after its effect is durable, so a
+    fallback-write crash redelivers via the resumption sweep instead of stranding the activity;
+    ack-on-fault-before-poison prevents hot-looping. **Closes the documented "Window C"** durability
+    gap (`docs/runtime-durable-resumption.md` updated: dequeue side now at-least-once).
+  - **Still deferred in [#514](https://github.com/elsa-workflows/elsa-foundation/issues/514):** #413
+    items 3/6 (cross-provider N+1 + async-Start contract), #417 item 1 (reconciler N+1 cross-backend),
+    #412 item 8 (`ActivityFactory` ctor-contract), #415 item 5 (checkpoint store), UpsertCommandGenerator
+    non-Sqlite dialect golden hardening.
 - **Peer-session Validations work landed through the control-room gate** (Sipke ruled 2026-07-06 that
   peer PRs route through the gate — see the handoff §3): #485 (draft-validation persistence, user-merged),
   #496 (FR-033 unknown-activity-version validator, self-merged before the policy; its post-merge review

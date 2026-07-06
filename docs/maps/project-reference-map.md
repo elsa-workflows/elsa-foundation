@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 119
 - Test projects: 53
-- Direct project references: 636
+- Direct project references: 639
 
 ## Projects
 
@@ -164,12 +164,12 @@ Records direct project references only.
 | [Elsa.Modularity.Tests](../../tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj) | test | Elsa.Modularity | net10.0 | false | Elsa.Modularity.Api<br>Elsa.Modularity.Core<br>Elsa.Modularity.Nuplane<br>Elsa.Server |
 | [Elsa.Persistence.Core.Tests](../../tests/Elsa/Persistence/Core/Tests/Elsa.Persistence.Core.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Core |
 | [Elsa.Persistence.EFCore.Tests](../../tests/Elsa/Persistence/EFCore/Tests/Elsa.Persistence.EFCore.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Core<br>Elsa.Persistence.EFCore |
-| [Elsa.Persistence.Groundwork.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Workflows.Runtime.Api |
-| [Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.PostgreSql.Unified<br>Elsa.Serialization.Core |
+| [Elsa.Persistence.Groundwork.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
+| [Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.PostgreSql.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
 | [Elsa.Persistence.Groundwork.Querying.Tests](../../tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Querying<br>Elsa.Persistence.Groundwork.Testing |
 | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | test | Elsa.Persistence | net10.0 | false | - |
 | [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
-| [Elsa.Persistence.Groundwork.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Serialization.Core |
+| [Elsa.Persistence.Groundwork.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
 | [Elsa.Primitives.Hosting.Tests](../../tests/Elsa/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj) | test | Elsa.Primitives | net10.0 | false | Elsa.Primitives.Hosting |
 | [Elsa.Primitives.Tests](../../tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj) | test | Elsa.Primitives | net10.0 | false | Elsa.Primitives |
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
