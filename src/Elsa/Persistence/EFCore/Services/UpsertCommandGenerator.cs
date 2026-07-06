@@ -32,21 +32,82 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
         return generateSql(dbContext, entities, keySelector);
     }
 
+    /// <summary>
+    /// Provider-invariant table/column shape: the EF entity type, the store object the columns resolve
+    /// against, the ordered property/column lists, and the key column. Every dialect reads exactly this
+    /// before emitting its syntax, so it is resolved once here rather than re-derived in each Generate*
+    /// method (the source of the pre-refactor duplication, #415 item 2).
+    /// </summary>
+    private readonly record struct EntityShape(
+        IEntityType EntityType,
+        StoreObjectIdentifier StoreObject,
+        IReadOnlyList<IProperty> Properties,
+        string KeyColumnName,
+        IReadOnlyList<string> ColumnNames);
+
+    private static EntityShape ResolveEntityShape<TEntity>(DbContext dbContext, Expression<Func<TEntity, string>> keySelector)
+        where TEntity : class
+    {
+        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
+        var storeObject = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
+        var props = entityType.GetProperties().ToList();
+        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
+        var keyColumnName = keyProp.GetColumnName(storeObject)!;
+        var columnNames = props.Select(p => p.GetColumnName(storeObject)!).ToList();
+
+        return new(entityType, storeObject, props, keyColumnName, columnNames);
+    }
+
+    /// <summary>
+    /// Reads one entity's column values in <paramref name="properties"/> order — honoring shadow properties
+    /// and value converters exactly as EF would — appending each provider value to <paramref name="parameters"/>
+    /// and returning the placeholder fragment for each column. <paramref name="placeholderFactory"/> lets a
+    /// dialect wrap the <c>{n}</c> token (e.g. Postgres <c>CAST(... AS jsonb)</c>, SqlServer varbinary-NULL
+    /// cast, Oracle <c>AS column</c> alias) or substitute a literal; it receives the property, its provider
+    /// value, and the token. The value is always appended to <paramref name="parameters"/> so the parameter
+    /// sequence is identical across dialects even when a placeholder emits a literal — matching the
+    /// pre-refactor behavior byte-for-byte.
+    /// </summary>
+    private static List<string> ExtractRowValues(
+        DbContext dbContext,
+        object entity,
+        IReadOnlyList<IProperty> properties,
+        List<object> parameters,
+        ref int parameterCount,
+        Func<IProperty, object?, string, string> placeholderFactory)
+    {
+        var placeholders = new List<string>(properties.Count);
+
+        foreach (var property in properties)
+        {
+            var token = $"{{{parameterCount++}}}";
+
+            // If it's a shadow property, retrieve value via Entry(..).Property(..)
+            var value = property.IsShadowProperty()
+                ? dbContext.Entry(entity).Property(property.Name).CurrentValue
+                : property.PropertyInfo?.GetValue(entity);
+
+            var converter = property.GetTypeMapping().Converter;
+            if (converter != null)
+                value = converter.ConvertToProvider(value);
+
+            placeholders.Add(placeholderFactory(property, value, token));
+            parameters.Add(value!);
+        }
+
+        return placeholders;
+    }
+
     private static GeneratedCommand GenerateSqlServerUpsert<TEntity>(
         DbContext dbContext,
         IList<TEntity> entities,
         Expression<Func<TEntity, string>> keySelector)
         where TEntity : class
     {
-        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
-        var tableName = $"[{entityType.GetSchema()}].[{entityType.GetTableName()}]";
-        var storeObject = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
-        var props = entityType.GetProperties().ToList();
-        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
-        var keyColumnName = $"[{keyProp.GetColumnName(storeObject)}]";
-        var columnNames = props
-            .Select(p => $"[{p.GetColumnName(storeObject)}]")
-            .ToList();
+        var shape = ResolveEntityShape(dbContext, keySelector);
+        var tableName = $"[{shape.EntityType.GetSchema()}].[{shape.EntityType.GetTableName()}]";
+        var keyColumnName = $"[{shape.KeyColumnName}]";
+        var columnNames = shape.ColumnNames.Select(c => $"[{c}]").ToList();
 
         var mergeSql = new StringBuilder();
         mergeSql.AppendLine($"MERGE {tableName} AS Target");
@@ -57,30 +118,17 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         for (var i = 0; i < entities.Count; i++)
         {
-            var entity = entities[i];
-            var values = new List<string>();
-
-            foreach (var property in props)
-            {
-                var paramName = $"{{{parameterCount++}}}";
-
-                // If it's a shadow property, retrieve value via Entry(..).Property(..)
-                var value = property.IsShadowProperty()
-                    ? dbContext.Entry(entity).Property(property.Name).CurrentValue
-                    : property.PropertyInfo?.GetValue(entity);
-
-                var converter = property.GetTypeMapping().Converter;
-                if (converter != null)
-                    value = converter.ConvertToProvider(value)!;
-
-                // Explicitly cast null values for varbinary columns
-                if (property.GetColumnType().StartsWith("varbinary", StringComparison.OrdinalIgnoreCase) && value is null)
-                    values.Add("CAST(NULL AS varbinary(max))"); // Explicitly cast null
-                else
-                    values.Add(paramName);
-
-                parameters.Add(value!);
-            }
+            var values = ExtractRowValues(
+                dbContext,
+                entities[i],
+                shape.Properties,
+                parameters,
+                ref parameterCount,
+                // Explicitly cast null values for varbinary columns.
+                static (property, value, token) =>
+                    property.GetColumnType().StartsWith("varbinary", StringComparison.OrdinalIgnoreCase) && value is null
+                        ? "CAST(NULL AS varbinary(max))"
+                        : token);
 
             var line = $"({string.Join(", ", values)}){(i < entities.Count - 1 ? "," : string.Empty)}";
             mergeSql.AppendLine(line);
@@ -103,15 +151,10 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
         Expression<Func<TEntity, string>> keySelector)
         where TEntity : class
     {
-        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
-        var tableName = entityType.GetTableName();
-        var storeObject = StoreObjectIdentifier.Table(tableName!, entityType.GetSchema());
-        var props = entityType.GetProperties().ToList();
-        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
-        var keyColumnName = keyProp.GetColumnName(storeObject);
-        var columnNames = props
-            .Select(p => p.GetColumnName(storeObject)!)
-            .ToList();
+        var shape = ResolveEntityShape(dbContext, keySelector);
+        var tableName = shape.EntityType.GetTableName();
+        var keyColumnName = shape.KeyColumnName;
+        var columnNames = shape.ColumnNames;
 
         var sb = new StringBuilder();
         var parameters = new List<object>();
@@ -121,24 +164,7 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         for (var i = 0; i < entities.Count; i++)
         {
-            var entity = entities[i];
-            var placeholders = new List<string>();
-
-            foreach (var property in props)
-            {
-                var paramName = $"{{{parameterCount++}}}";
-
-                var value = property.IsShadowProperty()
-                    ? dbContext.Entry(entity).Property(property.Name).CurrentValue
-                    : property.PropertyInfo?.GetValue(entity);
-
-                var converter = property.GetTypeMapping().Converter;
-                if (converter != null)
-                    value = converter.ConvertToProvider(value);
-
-                placeholders.Add(paramName);
-                parameters.Add(value!);
-            }
+            var placeholders = ExtractRowValues(dbContext, entities[i], shape.Properties, parameters, ref parameterCount, PlainPlaceholder);
 
             sb.Append($"({string.Join(", ", placeholders)})");
             if (i < entities.Count - 1)
@@ -163,17 +189,10 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
         Expression<Func<TEntity, string>> keySelector)
         where TEntity : class
     {
-        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
-        var tableName = entityType.GetTableName();
-        var storeObject = StoreObjectIdentifier.Table(tableName!, entityType.GetSchema());
-
-        var props = entityType.GetProperties().ToList();
-
-        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
-        var keyColumnName = keyProp.GetColumnName(storeObject);
-        var columnNames = props
-            .Select(p => p.GetColumnName(storeObject)!)
-            .ToList();
+        var shape = ResolveEntityShape(dbContext, keySelector);
+        var storeObject = shape.StoreObject;
+        var keyColumnName = shape.KeyColumnName;
+        var columnNames = shape.ColumnNames;
 
         var sb = new StringBuilder();
         var parameters = new List<object>();
@@ -183,32 +202,22 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         for (var i = 0; i < entities.Count; i++)
         {
-            var entity = entities[i];
-            var placeholders = new List<string>();
-
-            foreach (var property in props)
-            {
-                var paramName = $"{{{parameterCount++}}}";
-
-                var value = property.IsShadowProperty()
-                    ? dbContext.Entry(entity).Property(property.Name).CurrentValue
-                    : property.PropertyInfo?.GetValue(entity);
-
-                var converter = property.GetTypeMapping().Converter;
-                if (converter != null)
-                    value = converter.ConvertToProvider(value);
-
+            var placeholders = ExtractRowValues(
+                dbContext,
+                entities[i],
+                shape.Properties,
+                parameters,
+                ref parameterCount,
                 // Detect json/jsonb column types and cast the parameter so PostgreSQL accepts it.
-                var columnType = property.GetColumnType();
-                if (columnType.StartsWith("jsonb", StringComparison.OrdinalIgnoreCase))
-                    placeholders.Add($"CAST({paramName} AS jsonb)");
-                else if (columnType.StartsWith("json", StringComparison.OrdinalIgnoreCase))
-                    placeholders.Add($"CAST({paramName} AS json)");
-                else
-                    placeholders.Add(paramName);
-
-                parameters.Add(value!);
-            }
+                static (property, _, token) =>
+                {
+                    var columnType = property.GetColumnType();
+                    if (columnType.StartsWith("jsonb", StringComparison.OrdinalIgnoreCase))
+                        return $"CAST({token} AS jsonb)";
+                    if (columnType.StartsWith("json", StringComparison.OrdinalIgnoreCase))
+                        return $"CAST({token} AS json)";
+                    return token;
+                });
 
             sb.Append($"({string.Join(", ", placeholders)})");
             if (i < entities.Count - 1)
@@ -230,17 +239,10 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
     private static GeneratedCommand GenerateMySqlUpsert<TEntity>(DbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector)
         where TEntity : class
     {
-        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
-        var tableName = entityType.GetTableName();
-        var storeObject = StoreObjectIdentifier.Table(tableName!, entityType.GetSchema());
-
-        var props = entityType.GetProperties().ToList();
-
-        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
-        var keyColumnName = keyProp.GetColumnName(storeObject);
-        var columnNames = props
-            .Select(p => p.GetColumnName(storeObject)!)
-            .ToList();
+        var shape = ResolveEntityShape(dbContext, keySelector);
+        var tableName = shape.EntityType.GetTableName();
+        var keyColumnName = shape.KeyColumnName;
+        var columnNames = shape.ColumnNames;
 
         var sb = new StringBuilder();
         var parameters = new List<object>();
@@ -250,24 +252,7 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         for (var i = 0; i < entities.Count; i++)
         {
-            var entity = entities[i];
-            var placeholders = new List<string>();
-
-            foreach (var property in props)
-            {
-                var paramName = $"{{{parameterCount++}}}";
-
-                var value = property.IsShadowProperty()
-                    ? dbContext.Entry(entity).Property(property.Name).CurrentValue
-                    : property.PropertyInfo?.GetValue(entity);
-
-                var converter = property.GetTypeMapping().Converter;
-                if (converter != null)
-                    value = converter.ConvertToProvider(value);
-
-                placeholders.Add(paramName);
-                parameters.Add(value!);
-            }
+            var placeholders = ExtractRowValues(dbContext, entities[i], shape.Properties, parameters, ref parameterCount, PlainPlaceholder);
 
             sb.Append($"({string.Join(", ", placeholders)})");
             if (i < entities.Count - 1)
@@ -289,20 +274,12 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
     private static GeneratedCommand GenerateOracleUpsert<TEntity>(DbContext dbContext, IList<TEntity> entities, Expression<Func<TEntity, string>> keySelector)
         where TEntity : class
     {
-        var entityType = dbContext.Model.FindEntityType(typeof(TEntity))!;
-        var schema = entityType.GetSchema();
-        var tableName = entityType.GetTableName();
-        var storeObject = StoreObjectIdentifier.Table(tableName!, schema);
+        var shape = ResolveEntityShape(dbContext, keySelector);
+        var schema = shape.EntityType.GetSchema();
+        var tableName = shape.EntityType.GetTableName();
         var fullName = !string.IsNullOrEmpty(schema) ? $"{schema}.{tableName}" : tableName;
-
-        var props = entityType.GetProperties().ToList();
-
-        var keyProp = entityType.FindProperty(keySelector.GetMemberAccess().Name)!;
-        var keyColumnName = keyProp.GetColumnName(storeObject);
-
-        var columnNames = props
-            .Select(p => p.GetColumnName(storeObject)!)
-            .ToList();
+        var keyColumnName = shape.KeyColumnName;
+        var columnNames = shape.ColumnNames;
 
         var sb = new StringBuilder();
         var parameters = new List<object>();
@@ -313,27 +290,15 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         for (var i = 0; i < entities.Count; i++)
         {
-            var entity = entities[i];
-            var lineParts = new List<string>();
-
-            foreach (var property in props)
-            {
-                var paramName = $"{{{parameterCount++}}}";
-
-                var value = property.IsShadowProperty()
-                    ? dbContext.Entry(entity).Property(property.Name).CurrentValue
-                    : property.PropertyInfo?.GetValue(entity);
-
-                var converter = property.GetTypeMapping().Converter;
-                if (converter != null)
-                    value = converter.ConvertToProvider(value);
-
-                parameters.Add(value!);
-
-                // Oracle aliases must match the column name
-                var alias = property.GetColumnName(storeObject);
-                lineParts.Add($"{paramName} AS {alias}");
-            }
+            var columnIndex = 0;
+            var lineParts = ExtractRowValues(
+                dbContext,
+                entities[i],
+                shape.Properties,
+                parameters,
+                ref parameterCount,
+                // Oracle aliases must match the column name.
+                (_, _, token) => $"{token} AS {columnNames[columnIndex++]}");
 
             // Comma if not last
             var suffix = (i < entities.Count - 1) ? " FROM DUAL UNION ALL SELECT" : " FROM DUAL";
@@ -354,4 +319,6 @@ public sealed class UpsertCommandGenerator : IUpsertCommandGenerator
 
         return new(sb.ToString(), [.. parameters]);
     }
+
+    private static string PlainPlaceholder(IProperty property, object? value, string token) => token;
 }
