@@ -1,8 +1,6 @@
 using Xunit;
 using Elsa.Events.Channels;
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Contexts;
-using Elsa.Events.Strategies;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -16,26 +14,9 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherTokenTests
 {
-    private sealed record TestEvent : IEvent;
-
-    // The background worker drains queued events through IInlineEventPublisher; the counting stub
-    // stands in for that face and records the token the worker dispatches under.
-    private sealed class CountingPublisher : IInlineEventPublisher
+    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingInlineEventPublisher counting) Build()
     {
-        public int Count;
-        public CancellationToken LastToken;
-
-        public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref Count);
-            LastToken = cancellationToken;
-            return Task.CompletedTask;
-        }
-    }
-
-    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingPublisher counting) Build()
-    {
-        var counting = new CountingPublisher();
+        var counting = new CountingInlineEventPublisher();
         var services = new ServiceCollection();
         services.AddSingleton<IInlineEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
@@ -53,7 +34,7 @@ public class BackgroundEventPublisherTokenTests
         // Enqueue a context whose OWN token is already cancelled (simulating a dead request scope).
         using var deadScope = new CancellationTokenSource();
         await deadScope.CancelAsync();
-        var context = new EventContext(new TestEvent(), EventPublishingStrategy.Background, null!, deadScope.Token);
+        var context = TestEvents.Background(deadScope.Token);
         await channel.Writer.WriteAsync(context);
 
         using var host = new CancellationTokenSource();
@@ -73,7 +54,7 @@ public class BackgroundEventPublisherTokenTests
 
         using var deadScope = new CancellationTokenSource();
         await deadScope.CancelAsync();
-        await channel.Writer.WriteAsync(new EventContext(new TestEvent(), EventPublishingStrategy.Background, null!, deadScope.Token));
+        await channel.Writer.WriteAsync(TestEvents.Background(deadScope.Token));
 
         using var host = new CancellationTokenSource();
         var run = publisher.ExecuteAsync(host.Token);
