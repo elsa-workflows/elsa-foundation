@@ -12,7 +12,8 @@ public sealed record FlowchartExecutionState
         IReadOnlyCollection<FlowchartArrival>? arrivals = null,
         IReadOnlyCollection<FlowchartActiveChild>? activeChildren = null,
         IReadOnlyCollection<FlowchartDiagnosticEvent>? diagnostics = null,
-        int sequence = 0)
+        int sequence = 0,
+        IReadOnlyDictionary<string, int>? loopIterationCounters = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootExecutionScopeId);
 
@@ -23,6 +24,7 @@ public sealed record FlowchartExecutionState
         ActiveChildren = activeChildren ?? [];
         Diagnostics = diagnostics ?? [];
         Sequence = sequence;
+        LoopIterationCounters = loopIterationCounters ?? new Dictionary<string, int>();
     }
 
     public string RootExecutionScopeId { get; init; }
@@ -32,4 +34,12 @@ public sealed record FlowchartExecutionState
     public IReadOnlyCollection<FlowchartActiveChild> ActiveChildren { get; init; }
     public IReadOnlyCollection<FlowchartDiagnosticEvent> Diagnostics { get; init; }
     public int Sequence { get; init; }
+
+    /// <summary>
+    /// Explicit monotonic loop-iteration counter per loop owner node (the backward-edge target). The value
+    /// is the highest iteration number minted so far for that owner; it only ever increases, which
+    /// decouples iteration-key numbering from the live loop-iteration scope count and lets stale scopes be
+    /// pruned without a later iteration reusing an earlier key (#382 / W32).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> LoopIterationCounters { get; init; }
 }

@@ -8,12 +8,15 @@ using Xunit;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// #382: the persisted <see cref="FlowchartExecutionState"/> blob must not grow O(n) with loop
-/// iterations. Consumed arrivals and unreachable terminal paths are pruned on save and diagnostics are
-/// capped, while scopes are intentionally never pruned (iteration-key numbering derives from their
-/// cumulative count) — so loop-iteration scopes still count the iterations, proving semantics survived.
-/// The cap value (200) is deliberately hard-coded here rather than referencing the engine constant, so
-/// reverting the engine fix makes this test fail instead of not compile.
+/// #382 / W32: the persisted <see cref="FlowchartExecutionState"/> blob must not grow O(n) with loop
+/// iterations. Consumed arrivals and unreachable terminal paths are pruned on save, diagnostics are
+/// capped, and stale loop-iteration scopes are pruned too — iteration-key numbering now derives from the
+/// explicit monotonic <see cref="FlowchartExecutionState.LoopIterationCounters"/> per owner node, not
+/// from the live scope count, so old scopes are prunable without ever letting a later iteration reuse an
+/// earlier key. The counter therefore witnesses that every iteration got a distinct key even though the
+/// scopes themselves stay bounded. The cap value (200) is deliberately hard-coded here rather than
+/// referencing the engine constant, so reverting the engine fix makes this test fail instead of not
+/// compile.
 /// </summary>
 public sealed class FlowchartStateGrowthTests
 {
@@ -62,19 +65,23 @@ public sealed class FlowchartStateGrowthTests
         var state = await fixture.GetFlowchartStateAsync();
 
         // Loop semantics preserved: the loop body really ran once per iteration plus the initial pass,
-        // and the post-loop node ran exactly once. Loop-iteration scopes are intentionally never pruned
-        // (iteration-key numbering derives from their cumulative count), so they must still witness the
-        // iterations.
+        // and the post-loop node ran exactly once.
         var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
         Assert.Equal(Iterations + 1, activityStates.Count(activityState => activityState.Execution.ExecutableNodeId == "node-a"));
         Assert.Single(activityStates.Where(activityState => activityState.Execution.ExecutableNodeId == "node-c"));
-        Assert.True(state.Scopes.Count(scope => scope.Kind == ExecutionScopeKind.LoopIteration) >= Iterations);
+
+        // Iteration numbering survives pruning: the monotonic per-owner counter climbed once per loopback
+        // (node-a is the loop owner reached by the backward edge), proving no iteration key was ever reused
+        // even though the scopes that carried those keys have been pruned away.
+        Assert.Equal(Iterations, state.LoopIterationCounters["node-a"]);
 
         // Bounded persisted state: consumed arrivals pruned, terminal paths pruned (root retained),
-        // diagnostics capped — none of these may scale with Iterations.
+        // stale loop-iteration scopes pruned, diagnostics capped — none of these may scale with Iterations.
         Assert.DoesNotContain(state.Arrivals, arrival => arrival.Status == FlowchartArrivalStatus.Consumed);
         Assert.True(state.ExecutionPaths.Count <= 4,
             $"Expected bounded ExecutionPaths after {Iterations} iterations, found {state.ExecutionPaths.Count}.");
+        Assert.True(state.Scopes.Count(scope => scope.Kind == ExecutionScopeKind.LoopIteration) <= 4,
+            $"Expected bounded LoopIteration scopes after {Iterations} iterations, found {state.Scopes.Count(scope => scope.Kind == ExecutionScopeKind.LoopIteration)}.");
         Assert.True(state.Diagnostics.Count <= 200,
             $"Expected Diagnostics capped at 200 after {Iterations} iterations, found {state.Diagnostics.Count}.");
     }

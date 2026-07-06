@@ -89,13 +89,23 @@ public sealed class FlowchartStatePersister(
     /// pruning; the engine never reads them.</item>
     /// <item><b>Diagnostics:</b> capped to the most recent <see cref="DiagnosticsCap"/>; they are
     /// audit-only and never read by the engine.</item>
-    /// <item><b>Scopes are never pruned:</b> loop iteration numbering derives from the cumulative
-    /// loop-iteration scope count per owner node (<see cref="FlowchartScopeResolver.ResolveTargetScope"/>); pruning would collapse
-    /// the count and let a later iteration reuse an earlier iteration key.</item>
+    /// <item><b>Scopes:</b> only <see cref="ExecutionScopeKind.LoopIteration"/> scopes are prunable — they
+    /// are the sole scope kind that scales with loop iterations; <c>Root</c>/<c>Branch</c>/<c>Join</c>/<c>Race</c>
+    /// counts are bounded by graph structure. A loop-iteration scope is retained iff it is still referenced
+    /// by a surviving path (post path-prune) or an <see cref="FlowchartExecutionState.ActiveChildren"/> entry,
+    /// or is the root scope. The safety invariant: the engine only ever dereferences a scope by the
+    /// <see cref="ExecutionPath.ExecutionScopeId"/> of a <b>live</b> (Active/Waiting) path
+    /// (<see cref="FlowchartExecutionEngine"/>, <see cref="FlowchartPolicyApplier"/>), and live paths are
+    /// never pruned — so every scope the engine can still reach is in the retained set, and only scopes of
+    /// fully-completed past iterations are dropped. Iteration numbering is unaffected because it derives from
+    /// the explicit monotonic <see cref="FlowchartExecutionState.LoopIterationCounters"/>, never from the
+    /// live scope count, so a pruned scope can never let a later iteration reuse its key.</item>
     /// </list>
-    /// Pruning shapes only what is written — the schema is unchanged and readers accept unpruned pre-#382
-    /// blobs (see the golden-fixture tests). The in-memory state within a callback is never pruned;
-    /// <see cref="FlowchartExecutionState.Sequence"/> is not bumped because no logical mutation occurs.
+    /// Pruning shapes only what is written — the persisted schema is unchanged and any unpruned state
+    /// deserializes losslessly (see the golden-fixture tests). The in-memory state within a callback is never
+    /// pruned; <see cref="FlowchartExecutionState.Sequence"/> is not bumped because no logical mutation
+    /// occurs, and <see cref="FlowchartExecutionState.LoopIterationCounters"/> is carried through untouched so
+    /// numbering keeps climbing after scopes are dropped.
     /// </summary>
     private static FlowchartExecutionState PruneForPersistence(FlowchartExecutionState state)
     {
@@ -112,11 +122,22 @@ public sealed class FlowchartStatePersister(
                            || retainedPathIds.Contains(path.ExecutionPathId))
             .ToArray();
 
+        var retainedScopeIds = new HashSet<string>(StringComparer.Ordinal) { state.RootExecutionScopeId };
+        foreach (var path in paths)
+            retainedScopeIds.Add(path.ExecutionScopeId);
+        foreach (var child in state.ActiveChildren)
+            retainedScopeIds.Add(child.ExecutionScopeId);
+
+        var scopes = state.Scopes
+            .Where(scope => scope.Kind != ExecutionScopeKind.LoopIteration
+                            || retainedScopeIds.Contains(scope.ExecutionScopeId))
+            .ToArray();
+
         var diagnostics = state.Diagnostics.Count <= DiagnosticsCap
             ? state.Diagnostics
             : state.Diagnostics.Skip(state.Diagnostics.Count - DiagnosticsCap).ToArray();
 
-        return state with { Arrivals = arrivals, ExecutionPaths = paths, Diagnostics = diagnostics };
+        return state with { Arrivals = arrivals, ExecutionPaths = paths, Scopes = scopes, Diagnostics = diagnostics };
     }
 
     public async ValueTask SaveStateAsync(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
