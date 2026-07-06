@@ -193,15 +193,31 @@ public sealed class ClrAssemblyScanner(
     // in-memory (no disk IO), so it stays live per call to preserve resolution behaviour exactly.
     private static readonly Lazy<IReadOnlyList<string>> InvariantFrameworkPaths = new(CollectInvariantFrameworkPaths);
 
-    private static Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
+    // Instance method (not static): the collision path logs through the injected logger. Precedence
+    // is unchanged (first-wins: folder → AppDomain → cached framework closure); we only surface the
+    // drop that was previously silent (issue #417 item 4).
+    private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         void Add(string path)
         {
             var name = Path.GetFileNameWithoutExtension(path);
-            if (!string.IsNullOrEmpty(name) && !byName.ContainsKey(name))
-                byName[name] = path;
+            if (string.IsNullOrEmpty(name))
+                return;
+
+            if (byName.TryGetValue(name, out var existing))
+            {
+                // A later source (AppDomain or framework closure) offers the same simple-name as an
+                // already-registered path. First-wins is intentional, but the drop must not be silent:
+                // divergent copies of the same assembly can otherwise mask a version the author shipped.
+                logger.LogWarning(
+                    "Duplicate assembly name '{AssemblyName}' during reflection-only resolver setup; keeping '{KeptPath}' and skipping '{SkippedPath}'.",
+                    name, existing, path);
+                return;
+            }
+
+            byName[name] = path;
         }
 
         // Author assemblies win over framework copies so we read the version the author shipped.
