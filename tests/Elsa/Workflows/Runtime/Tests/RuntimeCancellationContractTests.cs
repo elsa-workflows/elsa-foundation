@@ -245,6 +245,61 @@ public sealed class RuntimeCancellationContractTests
         Assert.Empty(commit.StateChanges.PostCommitOutbox);
     }
 
+    // ── terminal-state guard (#412 item 5): a Cancel must never clobber an already-terminal workflow ─
+
+    [Fact]
+    public async Task Cancel_OnAlreadyCompletedWorkflow_PreservesTerminalOutcome_AndEmitsNoCommit()
+    {
+        var harness = new Harness(_now);
+        await harness.SeedWorkflow(WorkflowExecutionStatus.Completed);
+        await harness.SeedActivity(ActivityExecutionStatus.Completed, "actexec-completed");
+
+        await harness.Handler().HandleAsync(harness.CancelWorkItem());
+
+        // The completed outcome is preserved verbatim — Cancel does not overwrite Status/CompletedAt.
+        var workflow = await harness.FindWorkflow();
+        Assert.NotNull(workflow);
+        Assert.Equal(WorkflowExecutionStatus.Completed, workflow.Status);
+        Assert.Equal(DateTimeOffset.UnixEpoch, workflow.UpdatedAt);
+        Assert.Null(workflow.CompletedAt);
+        // No clobbering commit was produced.
+        Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
+    [Fact]
+    public async Task Cancel_OnAlreadyFaultedWorkflow_PreservesTerminalOutcome_AndEmitsNoCommit()
+    {
+        var harness = new Harness(_now);
+        await harness.SeedWorkflow(WorkflowExecutionStatus.Faulted);
+        await harness.SeedActivity(ActivityExecutionStatus.Faulted, "actexec-faulted");
+
+        await harness.Handler().HandleAsync(harness.CancelWorkItem());
+
+        var workflow = await harness.FindWorkflow();
+        Assert.NotNull(workflow);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, workflow.Status);
+        Assert.Equal(DateTimeOffset.UnixEpoch, workflow.UpdatedAt);
+        Assert.Null(workflow.CompletedAt);
+        Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
+    [Fact]
+    public async Task Cancel_OnAlreadyCancelledWorkflow_IsNoOp_AndEmitsNoCommit()
+    {
+        // A redelivered cancel arriving after the workflow is already Cancelled is a no-op: the terminal
+        // guard short-circuits before any commit is built, so idempotency holds without re-committing.
+        var harness = new Harness(_now);
+        await harness.SeedWorkflow(WorkflowExecutionStatus.Cancelled);
+        await harness.SeedActivity(ActivityExecutionStatus.Cancelled, "actexec-cancelled");
+
+        await harness.Handler().HandleAsync(harness.CancelWorkItem());
+
+        var workflow = await harness.FindWorkflow();
+        Assert.NotNull(workflow);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, workflow.Status);
+        Assert.Empty(harness.CommitStore.ListCommits());
+    }
+
     // ── missing execution guard ─────────────────────────────────────────────────────────────────────
 
     [Fact]
