@@ -4,7 +4,7 @@
 # Elsa.Studio.Web production image
 #
 # Build context MUST be the repository root, because the build relies on
-# repo-root configuration (Directory.Build.props/targets, Directory.Packages.props,
+# repo-root configuration (Directory.Build.props, Directory.Packages.props,
 # NuGet.config). Example:
 #
 #   docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
@@ -19,7 +19,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy repo-root build configuration first so restore layers cache well.
-COPY Directory.Build.props Directory.Build.targets Directory.Packages.props ./
+COPY Directory.Build.props Directory.Packages.props ./
 COPY NuGet.config ./
 COPY Elsa.Studio.slnx ./
 
