@@ -96,6 +96,56 @@ public sealed class ForEachActivityTests : IDisposable
         Assert.Equal([ActivityOutcomes.Done], context.CompositeCompletionOutcomeNames);
     }
 
+    // Characterization for #413 item 4 (O(n²)->O(n) item resolution): the completion callback must
+    // publish the NEXT item's exact serialized value in the scheduling metadata. Pins the identity of the
+    // item resolved on advance (off-by-one guard): completing index 0 of ["x","y","z"] must schedule "y".
+    [Fact]
+    public async Task OnChildCompleted_PublishesNextItemSerializedValue()
+    {
+        var context = NewContext(new[] { "x", "y", "z" });
+
+        await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
+
+        var request = Assert.Single(context.GetChildActivityScheduleRequests());
+        Assert.Equal(JsonSerializer.Serialize("y"), request.Metadata[RuntimeMetadataKeys.LoopIterationItemValue]);
+    }
+
+    // The item value on the completion path must survive JsonElement unwrapping identically to Execute:
+    // a JSON array collection input resolves the scalar CLR item, whose re-serialized value is published.
+    [Fact]
+    public async Task OnChildCompleted_ResolvesJsonElementItem_ThroughScalarUnwrapping()
+    {
+        var collection = JsonSerializer.SerializeToElement(new[] { "alpha", "beta" });
+        var context = NewContext(collection);
+
+        await ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0));
+
+        var request = Assert.Single(context.GetChildActivityScheduleRequests());
+        // Unwrapped to the CLR string "beta", then re-serialized — not a raw JsonElement.
+        Assert.Equal(JsonSerializer.Serialize("beta"), request.Metadata[RuntimeMetadataKeys.LoopIterationItemValue]);
+    }
+
+    // The non-enumerable guard must fire on the completion path too, not only at Execute — the callback
+    // re-reads the collection to resolve the next item.
+    [Fact]
+    public async Task OnChildCompleted_Throws_WhenCollectionIsNotEnumerable()
+    {
+        var context = NewContext(collection: 42);
+
+        await Assert.ThrowsAsync<ForEachExecutionException>(() =>
+            ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0)).AsTask());
+    }
+
+    // A string collection input is rejected on the completion path with the same guard as Execute.
+    [Fact]
+    public async Task OnChildCompleted_Throws_WhenCollectionIsString()
+    {
+        var context = NewContext(collection: "not-a-list");
+
+        await Assert.ThrowsAsync<ForEachExecutionException>(() =>
+            ((ForEachActivity)context.Activity).OnChildCompletedAsync(NewCompletion(context, iterationIndex: 0)).AsTask());
+    }
+
     [Fact]
     public async Task OnChildCompleted_Throws_WhenCompletedChildIsNotTheBody()
     {
