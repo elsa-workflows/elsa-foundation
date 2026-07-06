@@ -80,11 +80,14 @@ public sealed class AgentTurnContractsTests
     }
 
     [Fact]
-    public void Tool_registry_deduplicates_tools_sharing_a_name()
+    public void Tool_registry_rejects_tools_sharing_a_name()
     {
-        var registry = new DefaultAgentToolRegistry([new StubTool("read-workflow"), new StubTool("read-workflow")]);
+        // Issue #414 item 6: duplicate names now fail fast (previously the first registration silently won).
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new DefaultAgentToolRegistry([new StubTool("read-workflow"), new StubTool("read-workflow")]));
 
-        Assert.Single(registry.Descriptors);
+        Assert.Contains("read-workflow", ex.Message);
+        Assert.Contains("Duplicate agent tool name", ex.Message);
     }
 
     [Fact]

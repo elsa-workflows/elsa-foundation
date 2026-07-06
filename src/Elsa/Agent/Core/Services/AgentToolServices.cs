@@ -21,6 +21,17 @@ public sealed partial class DefaultAgentToolRegistry : IAgentToolRegistry
         if (invalid.Count > 0)
             throw new InvalidOperationException($"Invalid agent tool name(s): {string.Join(", ", invalid)}. Tool names must match ^[a-zA-Z0-9_-]+$ (no dots) so they are accepted by agent harnesses.");
 
+        // Fail fast on duplicate names (case-insensitive, matching the lookup comparer) rather than
+        // silently keeping the first registration — two tools answering the same name is a composition
+        // bug the host should learn about at startup, consistent with the invalid-name guard above.
+        var duplicates = registered
+            .GroupBy(x => x.Descriptor.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        if (duplicates.Count > 0)
+            throw new InvalidOperationException($"Duplicate agent tool name(s): {string.Join(", ", duplicates)}. Each agent tool must have a unique name (case-insensitive) so registrations are not silently dropped.");
+
         _tools = registered
             .GroupBy(x => x.Descriptor.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(x => x.Key, x => x.First(), StringComparer.OrdinalIgnoreCase);

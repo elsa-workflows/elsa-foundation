@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using static Elsa.Agent.Core.Extensions.AgentConfigurationBinding;
 
 namespace Elsa.Agent.GitHubCopilot.Extensions;
 
@@ -40,12 +41,6 @@ public static class GitHubCopilotAgentServiceCollectionExtensions
         ReplaceList(section, nameof(options.AvailableTools), options.AvailableTools);
         ReplaceList(section, nameof(options.ExcludedTools), options.ExcludedTools);
     }
-
-    private static string? GetString(IConfiguration section, string key, string? fallback)
-        => string.IsNullOrWhiteSpace(section[key]) ? fallback : section[key];
-
-    private static bool GetBool(IConfiguration section, string key, bool fallback)
-        => bool.TryParse(section[key], out var value) ? value : fallback;
 
     private static void ReplaceList(IConfiguration section, string key, IList<string> target)
     {
