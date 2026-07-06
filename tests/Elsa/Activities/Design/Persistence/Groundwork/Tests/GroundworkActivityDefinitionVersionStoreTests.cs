@@ -100,6 +100,16 @@ public class GroundworkActivityDefinitionVersionStoreTests
     }
 
     [Fact]
+    public async Task GetWithDefinition_throws_EntityNotFound_when_absent()
+    {
+        // GetWithDefinitionAsync must use the same not-found convention as GetAsync (and the
+        // 404-mapping infrastructure / FindVersion assume) rather than ArgumentException (issue #417 item 8).
+        var (store, _) = await SeededAsync([Definition("def1")], Version("v1", "def1"));
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => store.GetWithDefinitionAsync("missing"));
+    }
+
+    [Fact]
     public async Task FindByDefinitionAndSortKey_matches_precomputed_key()
     {
         var v1 = Version("v1", "def1", "1.0.0");
