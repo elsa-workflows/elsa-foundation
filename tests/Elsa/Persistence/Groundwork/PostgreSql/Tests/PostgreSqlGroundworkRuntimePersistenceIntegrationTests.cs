@@ -1,4 +1,5 @@
 using Elsa.Persistence.Groundwork.Stores;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using global::Groundwork.Documents.Store;
@@ -27,8 +28,9 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
+        // Drive the startup initializer, as a host would, so the holder is populated and IDocumentStore resolves.
+        await provider.InitializeGroundworkStoreAsync();
 
-        Assert.IsType<PostgreSqlDocumentStoreHandle>(provider.GetRequiredService<PostgreSqlDocumentStoreHandle>());
         Assert.IsType<PostgreSqlDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
@@ -45,25 +47,27 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
 
         // First host process: compose the feature exactly as a host would, then persist through a resolved seam.
-        await using (var provider = BuildComposedProvider(connectionString))
+        await using (var provider = await BuildComposedProviderAsync(connectionString))
         {
             var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
             await bookmarks.SaveAsync(Bookmark("wf-1", "bm-1"));
         }
 
         // Second host process: a fresh container over the same database. State read back was genuinely durable.
-        await using (var provider = BuildComposedProvider(connectionString))
+        await using (var provider = await BuildComposedProviderAsync(connectionString))
         {
             var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
             Assert.NotNull(await bookmarks.FindAsync("wf-1", "bm-1"));
         }
     }
 
-    private static ServiceProvider BuildComposedProvider(string connectionString)
+    private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
-        return services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
+        await provider.InitializeGroundworkStoreAsync();
+        return provider;
     }
 
     private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId) => new(

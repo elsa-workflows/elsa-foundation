@@ -1,12 +1,10 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Groundwork.Core.Capabilities;
-using Groundwork.Documents.Store;
-using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
 
@@ -40,16 +38,10 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeatu
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 
-        services.RemoveAll<IDocumentStore>();
-        services.AddSingleton(_ => SqliteDocumentStoreFactory
-            .CreateAsync(
-                connectionString,
-                ElsaRuntimeStorageManifest.Create(),
-                new ProviderIdentity("groundwork-sqlite", "1.0.0"))
-            .GetAwaiter()
-            .GetResult());
-        services.AddSingleton<IDocumentStore>(provider =>
-            provider.GetRequiredService<SqliteDocumentStoreHandle>().Store);
+        services.AddSqliteGroundworkDocumentStore(
+            connectionString,
+            ElsaRuntimeStorageManifest.Create(),
+            new ProviderIdentity("groundwork-sqlite", "1.0.0"));
 
         services.AddGroundworkRuntimeStores();
     }

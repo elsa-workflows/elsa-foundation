@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
 </Project>
