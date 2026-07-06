@@ -18,10 +18,20 @@ public sealed class OidcAuthenticationProviderModule(IOptions<OidcAuthentication
 
     public ValueTask<AuthenticationProviderDescriptor> DescribeAsync(CancellationToken cancellationToken = default)
     {
-        var challenge = new AuthenticationChallengeMetadata(
-            Options.ChallengePath,
-            Scheme: Options.AuthenticationScheme,
-            Parameters: new Dictionary<string, string> { ["returnUrl"] = "optional" });
+        // The interactive OpenID Connect handler is only registered once a ClientId is configured (see
+        // AddFoundationIdentityOidc — registering it unconfigured faults every request). Until then this
+        // provider can validate external bearer tokens but cannot be interactively challenged: advertising a
+        // challenge to its (unregistered) scheme would 500 the challenge endpoint. So while unconfigured we
+        // surface no challenge — which makes /challenge/oidc a clean 404 (existing guard) — and can never be
+        // the default interactive provider (you cannot default to a provider you cannot challenge).
+        var interactive = !string.IsNullOrWhiteSpace(Options.ClientId);
+
+        var challenge = interactive
+            ? new AuthenticationChallengeMetadata(
+                Options.ChallengePath,
+                Scheme: Options.AuthenticationScheme,
+                Parameters: new Dictionary<string, string> { ["returnUrl"] = "optional" })
+            : null;
 
         return ValueTask.FromResult(new AuthenticationProviderDescriptor(
             Options.ProviderId,
@@ -30,7 +40,7 @@ public sealed class OidcAuthenticationProviderModule(IOptions<OidcAuthentication
             Capabilities,
             Options.TenantId,
             Options.Enabled,
-            Options.IsDefault,
+            Options.IsDefault && interactive,
             challenge));
     }
 }

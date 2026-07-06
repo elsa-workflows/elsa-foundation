@@ -2,20 +2,23 @@ using CShells.Lifecycle;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 
 /// <summary>
-/// Development/demo bootstrap for the OpenIddict token store: ensures the schema exists at startup so a
-/// fresh checkout can issue tokens immediately. Mirrors the identity module's <c>IdentitySeeder</c> approach;
-/// production deployments apply the migrations explicitly instead.
+/// Bootstraps the OpenIddict token store schema at startup so tokens can be issued immediately: it migrates
+/// the relational (durable) store or ensure-creates the in-memory (dev/demo) one. Runs on both paths — the
+/// token store has no seed step to piggyback the migration on (unlike the identity module's
+/// <c>IdentitySeeder</c>), so without this a durable deployment would 500 on first issuance with a missing
+/// <c>OpenIddictTokens</c> table.
 /// </summary>
 /// <remarks>
 /// Implemented as both an <see cref="IHostedService"/> (plain hosts / tests) and a CShells
 /// <see cref="IShellInitializer"/> (the shell-composed Elsa.Server host, where shell-scoped hosted services
 /// do not run). Ensure-created / migrate are idempotent, so running under either hook is safe.
 /// </remarks>
-public sealed class OpenIddictIdentityStoreInitializer(IServiceProvider services) : IHostedService, IShellInitializer
+public sealed class OpenIddictIdentityStoreInitializer(IServiceProvider services, IOptions<OpenIddictIdentityOptions> options) : IHostedService, IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken) => EnsureSchemaAsync(cancellationToken);
 
@@ -28,10 +31,12 @@ public sealed class OpenIddictIdentityStoreInitializer(IServiceProvider services
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OpenIddictIdentityDbContext>();
 
-        // Relational providers migrate; the in-memory provider has no migrations, so ensure-created instead.
-        if (db.Database.IsRelational())
-            await db.Database.MigrateAsync(cancellationToken);
-        else
+        // The in-memory (dev/demo) provider has no migrations, so it is always ensure-created. Relational
+        // providers migrate at startup unless AutoMigrate is turned off — a multi-instance deployment that
+        // applies migrations out-of-band opts out here to avoid concurrent MigrateAsync races.
+        if (!db.Database.IsRelational())
             await db.Database.EnsureCreatedAsync(cancellationToken);
+        else if (options.Value.AutoMigrate)
+            await db.Database.MigrateAsync(cancellationToken);
     }
 }

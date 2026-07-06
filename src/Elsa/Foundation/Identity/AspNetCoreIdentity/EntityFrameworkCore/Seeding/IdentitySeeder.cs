@@ -13,10 +13,11 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 
 /// <summary>
-/// Development/demo seeding: ensures the identity schema exists, then seeds an administrator role (granted
-/// the all-access permission plus every catalog permission) and an admin user so a fresh checkout can log in.
-/// The seeded credentials are logged clearly at startup. Runs only when the EF feature is registered with
-/// <c>isDevelopmentOrDemo: true</c>.
+/// Identity seeding: ensures the identity schema exists, then seeds an administrator role (granted the
+/// all-access permission plus every catalog permission) and an admin user so the deployment has a first
+/// account to sign in with. Runs when the EF feature is registered with <c>isDevelopmentOrDemo: true</c>
+/// (well-known dev admin) or with an explicitly configured initial admin (durable store). The account is
+/// taken from <see cref="IdentitySeedOptions"/>.
 /// </summary>
 /// <remarks>
 /// Implemented as both an <see cref="IHostedService"/> (for plain hosts / tests, where hosted services run at
@@ -27,9 +28,12 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seedin
 public sealed class IdentitySeeder(
     IServiceProvider services,
     IOptions<AspNetCoreIdentityOptions> identityOptions,
+    IOptions<IdentitySeedOptions> seedOptions,
     IPermissionCatalog permissionCatalog,
     ILogger<IdentitySeeder> logger) : IHostedService, IShellInitializer
 {
+    private IdentitySeedOptions Seed => seedOptions.Value;
+
     /// <summary>CShells shell-activation hook (see class remarks).</summary>
     public Task InitializeAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
 
@@ -65,9 +69,16 @@ public sealed class IdentitySeeder(
         var roleId = await EnsureAdminRoleAsync(roleStore, tenantId, cancellationToken);
         await EnsureAdminUserAsync(userManager, sp.GetRequiredService<IUserStore>(), tenantId, roleId, cancellationToken);
 
-        logger.LogInformation(
-            "Seeded ASP.NET Core Identity admin account. Sign in at /{LoginRoute} with username '{Username}' and password '{Password}' (development/demo only).",
-            AspNetCoreIdentityDefaults.LoginRoute, AdminUserName, AdminPassword);
+        // The password is only echoed for the well-known development/demo admin; a configured production
+        // admin logs the username alone so the secret never lands in application logs.
+        if (Seed.IsDevelopmentSeed)
+            logger.LogInformation(
+                "Seeded ASP.NET Core Identity admin account. Sign in at /{LoginRoute} with username '{Username}' and password '{Password}' (development/demo only).",
+                AspNetCoreIdentityDefaults.LoginRoute, Seed.UserName, Seed.Password);
+        else
+            logger.LogInformation(
+                "Ensured ASP.NET Core Identity admin account '{Username}'. Sign in at /{LoginRoute}.",
+                Seed.UserName, AspNetCoreIdentityDefaults.LoginRoute);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -75,7 +86,7 @@ public sealed class IdentitySeeder(
     private async Task<string> EnsureAdminRoleAsync(IRoleStore roleStore, string tenantId, CancellationToken cancellationToken)
     {
         var existing = (await roleStore.ListAsync(tenantId, cancellationToken))
-            .FirstOrDefault(x => string.Equals(x.Name, AdminRoleName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(x => string.Equals(x.Name, Seed.RoleName, StringComparison.OrdinalIgnoreCase));
 
         if (existing is not null)
             return existing.Id;
@@ -88,7 +99,7 @@ public sealed class IdentitySeeder(
         // every named identity permission, could not reach the workflow/design/runtime API surface.
         permissions.Add(AllAccessPermission);
 
-        var role = new RoleRecord(Guid.NewGuid().ToString("n"), tenantId, AdminRoleName, "Administrator", permissions, System: true);
+        var role = new RoleRecord(Guid.NewGuid().ToString("n"), tenantId, Seed.RoleName, "Administrator", permissions, System: true);
         await roleStore.SaveAsync(role, cancellationToken);
         return role.Id;
     }
@@ -100,24 +111,27 @@ public sealed class IdentitySeeder(
         string roleId,
         CancellationToken cancellationToken)
     {
-        var existing = await userManager.FindByNameAsync(AdminUserName);
+        var existing = await userManager.FindByNameAsync(Seed.UserName);
         if (existing is not null)
             return;
 
         var user = new AspNetCoreIdentityUser
         {
             Id = Guid.NewGuid().ToString("n"),
-            UserName = AdminUserName,
-            Email = AdminEmail,
+            UserName = Seed.UserName,
+            Email = Seed.Email,
             TenantId = tenantId,
             DisplayName = "Administrator"
         };
 
-        var result = await userManager.CreateAsync(user, AdminPassword);
+        var result = await userManager.CreateAsync(user, Seed.Password);
         if (!result.Succeeded)
         {
-            logger.LogError("Failed to seed admin user: {Errors}", string.Join("; ", result.Errors.Select(e => e.Description)));
-            return;
+            // Fail fast: a deployment that boots with an administrator role but no administrator account
+            // cannot be signed into (e.g. a configured password that violates the Identity password policy).
+            // Surface it at startup rather than silently continuing.
+            var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+            throw new InvalidOperationException($"Failed to seed the '{Seed.UserName}' administrator account: {errors}");
         }
 
         // Attach the admin role via the Elsa store adapter (writes the user-role join row).

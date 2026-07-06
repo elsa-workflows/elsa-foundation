@@ -16,9 +16,20 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity;
 )]
 public sealed class AspNetCoreIdentityFeature : FastEndpointsFeatureBase
 {
+    [ManifestSetting(DisplayName = "Is default provider", Description = "Advertises this password/login-page provider as the default in bootstrap, so Studio challenges it (redirecting to the login page) when a session is required.", Category = "Identity", DefaultValue = "false")]
+    public bool IsDefault { get; set; }
+
+    [ManifestSetting(DisplayName = "Allowed return URL origins", Description = "Absolute origins (e.g. https://localhost:7030) a post-login returnUrl may redirect back to, in addition to same-origin paths. Set to the Studio origin when Studio is hosted separately from the backend.", Category = "Identity")]
+    public string[]? AllowedReturnUrlOrigins { get; set; }
+
     public override void ConfigureServices(IServiceCollection services)
     {
         base.ConfigureServices(services);
-        services.AddFoundationAspNetCoreIdentity();
+        services.AddFoundationAspNetCoreIdentity(options =>
+        {
+            options.IsDefault = IsDefault;
+            if (AllowedReturnUrlOrigins is { Length: > 0 })
+                options.AllowedReturnUrlOrigins = AllowedReturnUrlOrigins;
+        });
     }
 }

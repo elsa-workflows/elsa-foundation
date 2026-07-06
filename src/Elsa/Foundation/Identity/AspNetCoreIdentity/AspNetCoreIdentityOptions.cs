@@ -36,4 +36,13 @@ public sealed class AspNetCoreIdentityOptions
     /// not specify one.
     /// </summary>
     public string DefaultTenantId { get; set; } = AspNetCoreIdentityDefaults.DefaultTenantId;
+
+    /// <summary>
+    /// Absolute origins (scheme + host + port, e.g. <c>https://localhost:7030</c>) that a post-login
+    /// <c>returnUrl</c> may redirect to in addition to same-origin local paths. Needed when Studio is hosted
+    /// on a different origin than the backend: without its origin listed here the open-redirect guard strips
+    /// the cross-origin return URL and the user lands on the backend instead of back in Studio. Keep this in
+    /// sync with the trusted Studio origins (the same ones allowed for credentialed CORS).
+    /// </summary>
+    public IList<string> AllowedReturnUrlOrigins { get; set; } = new List<string>();
 }

@@ -74,4 +74,32 @@ public sealed class LoginPageTests
         Assert.Equal("/", LocalUrl.Sanitize("https://evil.com"));
         Assert.Equal("/", LocalUrl.Sanitize("//evil.com"));
     }
+
+    [Fact]
+    public void Sanitize_Honours_Absolute_Url_On_A_Trusted_Origin()
+    {
+        var allowed = new[] { "https://localhost:7030" };
+
+        // The full cross-origin return URL (path + query) is preserved for a trusted Studio origin.
+        Assert.Equal("https://localhost:7030/?authProviderId=aspnetcore-identity",
+            LocalUrl.Sanitize("https://localhost:7030/?authProviderId=aspnetcore-identity", allowed));
+
+        // Local paths still pass regardless of the allow list.
+        Assert.Equal("/studio", LocalUrl.Sanitize("/studio", allowed));
+    }
+
+    [Theory]
+    [InlineData("https://localhost:7030/back", new[] { "https://localhost:7030" }, true)]   // exact origin
+    [InlineData("https://LOCALHOST:7030/back", new[] { "https://localhost:7030" }, true)]   // host case-insensitive
+    [InlineData("https://localhost:7030/back", new[] { "https://localhost:7030/" }, true)]  // trailing slash tolerated
+    [InlineData("https://localhost:7031/back", new[] { "https://localhost:7030" }, false)]  // wrong port
+    [InlineData("http://localhost:7030/back", new[] { "https://localhost:7030" }, false)]   // wrong scheme
+    [InlineData("https://evil.com/back", new[] { "https://localhost:7030" }, false)]        // wrong host
+    [InlineData("javascript:alert(1)", new[] { "https://localhost:7030" }, false)]          // non-http scheme
+    [InlineData("https://localhost:7030/back", new string[0], false)]                       // empty allow list
+    public void IsTrustedAbsolute_Matches_Only_Allow_Listed_Origins(string url, string[] allowed, bool expected)
+    {
+        Assert.Equal(expected, LocalUrl.IsTrustedAbsolute(url, allowed));
+        Assert.Equal(expected ? url : "/", LocalUrl.Sanitize(url, allowed));
+    }
 }

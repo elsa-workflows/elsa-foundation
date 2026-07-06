@@ -45,6 +45,11 @@ public sealed class IdentityProviderModuleTests
             options.AuthenticationScheme = "entra";
             options.ChallengePath = "/_elsa/identity/challenge/entra";
             options.IsDefault = true;
+            // A ClientId makes the interactive handler available, so the provider advertises its challenge.
+            // Without one it is validation-only and (correctly) surfaces no interactive challenge.
+            options.ClientId = "entra-client";
+            options.Authority = "https://login.example.com/";
+            options.RequireHttpsMetadata = false;
         });
         services.AddFoundationIdentityOpenIddict(options =>
         {

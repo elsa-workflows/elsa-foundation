@@ -46,6 +46,15 @@ public sealed class OpenIddictIdentityOptions
     public string? ConnectionString { get; set; }
 
     /// <summary>
+    /// Whether the token-store schema is migrated automatically at startup. Default <c>true</c> so a fresh
+    /// deployment (and dev/demo) works with no extra step. Set to <c>false</c> for controlled multi-instance
+    /// deployments that apply EF Core migrations out-of-band, which avoids concurrent <c>MigrateAsync</c>
+    /// races when several instances start at once. Ignored for the in-memory dev/demo store, which is always
+    /// ensure-created.
+    /// </summary>
+    public bool AutoMigrate { get; set; } = true;
+
+    /// <summary>
     /// The authentication scheme the bearer selector forwards to when an <c>Authorization: Bearer</c> token
     /// was NOT issued by this module (an external IdP JWT). Defaults to the OIDC module's JwtBearer scheme
     /// (<c>OidcAuthenticationOptions.JwtBearerScheme</c> default); only used when that scheme is registered.

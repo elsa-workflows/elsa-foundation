@@ -60,6 +60,11 @@ ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
+// Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
+// This keeps `git clone && dotnet run` (Development) working out of the box on in-memory stores + ephemeral
+// keys + a seeded well-known admin, while Production hardens to durable stores, a persistent signing key
+// (secret), and a configured initial admin (password supplied as a secret — never committed).
+builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
 
 // Console log streaming is a process-global, host-level diagnostic: capture is a static tee on Console.Out and the

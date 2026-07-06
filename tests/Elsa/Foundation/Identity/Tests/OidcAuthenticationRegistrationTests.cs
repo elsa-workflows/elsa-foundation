@@ -64,6 +64,33 @@ public sealed class OidcAuthenticationRegistrationTests
         Assert.Equal(jwtScheme, authenticationOptions.DefaultAuthenticateScheme);
     }
 
+    [Fact]
+    public async Task Describe_advertises_no_challenge_and_is_never_default_when_unconfigured()
+    {
+        // No ClientId → the interactive handler is not registered, so challenging the provider's scheme would
+        // 500. The descriptor must therefore surface no challenge (making /challenge/oidc a clean 404) and
+        // must not present as the default interactive provider even when IsDefault is set.
+        var module = new OidcAuthenticationProviderModule(Options.Create(new OidcAuthenticationOptions { IsDefault = true }));
+
+        var descriptor = await module.DescribeAsync();
+
+        Assert.Null(descriptor.Challenge);
+        Assert.False(descriptor.IsDefault);
+    }
+
+    [Fact]
+    public async Task Describe_advertises_the_challenge_and_honours_default_when_a_client_id_is_configured()
+    {
+        var module = new OidcAuthenticationProviderModule(
+            Options.Create(new OidcAuthenticationOptions { ClientId = "elsa-client", IsDefault = true }));
+
+        var descriptor = await module.DescribeAsync();
+
+        Assert.NotNull(descriptor.Challenge);
+        Assert.Equal(new OidcAuthenticationOptions().AuthenticationScheme, descriptor.Challenge!.Scheme);
+        Assert.True(descriptor.IsDefault);
+    }
+
     private static ServiceProvider BuildProvider(Action<OidcAuthenticationOptions>? configure = null)
     {
         var services = new ServiceCollection();
