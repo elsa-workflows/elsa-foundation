@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -29,12 +30,17 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests;
 [Collection(PostgresContainerCollection.Name)]
 public sealed class PostgreSqlUnifiedGroundworkHostTests(PostgresContainerFixture fixture)
 {
-    private async Task<ServiceProvider> BuildHostAsync() =>
-        new ServiceCollection()
+    private async Task<ServiceProvider> BuildHostAsync()
+    {
+        var provider = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
             .AddGroundworkPostgreSqlUnifiedPersistence(await fixture.CreateIsolatedDatabaseAsync())
             .BuildServiceProvider();
+        // A bare provider has no host lifecycle; drive the startup initializer that materializes the store.
+        await provider.InitializeGroundworkStoreAsync();
+        return provider;
+    }
 
     [SkippableFact]
     public async Task Host_registers_one_document_store_shared_by_every_lane()

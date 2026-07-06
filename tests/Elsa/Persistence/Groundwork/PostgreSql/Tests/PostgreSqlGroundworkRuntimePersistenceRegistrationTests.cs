@@ -1,7 +1,9 @@
+using CShells.Lifecycle;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using global::Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Tests;
@@ -25,12 +27,21 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     }
 
     [Fact]
-    public void Feature_registers_a_single_document_store_and_its_handle()
+    public void Feature_registers_a_single_document_store_and_its_startup_initializer()
     {
         var services = ConfiguredServices();
 
+        // IDocumentStore resolves from the shared holder, which is populated once at startup by the initializer
+        // (registered as both a hosted service and a shell initializer). The handle is owned by the holder, not
+        // registered in DI, so the wiring is asserted through the holder + initializer instead.
         Assert.Single(services, d => d.ServiceType == typeof(IDocumentStore));
-        Assert.Contains(services, d => d.ServiceType == typeof(global::Groundwork.PostgreSql.Documents.PostgreSqlDocumentStoreHandle));
+        Assert.Single(services, d => d.ServiceType == typeof(GroundworkDocumentStoreHolder));
+        Assert.Single(services, d => d.ServiceType == typeof(PostgreSqlGroundworkDocumentStoreInitializer));
+        Assert.Contains(services, d => d.ServiceType == typeof(IHostedService));
+        Assert.Contains(services, d => d.ServiceType == typeof(IShellInitializer));
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(ShellInitializerRegistration)
+            && d.ImplementationInstance is ShellInitializerRegistration { Phase: LifecyclePhase.Prepare });
     }
 
     [Fact]

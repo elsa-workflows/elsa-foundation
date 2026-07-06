@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
@@ -28,17 +29,23 @@ namespace Elsa.Persistence.Groundwork.UnifiedHost.Tests;
 /// </summary>
 public class UnifiedGroundworkHostTests
 {
-    private static ServiceProvider BuildHost() =>
-        new ServiceCollection()
+    // The store is materialized at startup by a hosted service / shell initializer that populates the holder;
+    // a bare provider has no host lifecycle, so drive that startup step explicitly before resolving the store.
+    private static async Task<ServiceProvider> BuildHostAsync()
+    {
+        var provider = new ServiceCollection()
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
             .AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:")
             .BuildServiceProvider();
+        await provider.InitializeGroundworkStoreAsync();
+        return provider;
+    }
 
     [Fact]
     public async Task Host_registers_one_document_store_shared_by_every_lane()
     {
-        await using var provider = BuildHost();
+        await using var provider = await BuildHostAsync();
 
         var store1 = provider.GetRequiredService<IDocumentStore>();
         var store2 = provider.GetRequiredService<IDocumentStore>();
@@ -58,7 +65,7 @@ public class UnifiedGroundworkHostTests
     [Fact]
     public async Task One_database_materializes_and_serves_all_three_lanes()
     {
-        await using var provider = BuildHost();
+        await using var provider = await BuildHostAsync();
         var store = provider.GetRequiredService<IDocumentStore>();
 
         // A document kind from each lane, written and read back through the single store. Success proves the
@@ -75,7 +82,7 @@ public class UnifiedGroundworkHostTests
     [Fact]
     public async Task Workflows_design_reads_run_off_the_unified_database()
     {
-        await using var provider = BuildHost();
+        await using var provider = await BuildHostAsync();
         var store = provider.GetRequiredService<IDocumentStore>();
 
         var definition = new WorkflowDefinition { Id = "wf-42", Name = "Order Processing", Description = "Handles orders" };
@@ -98,7 +105,7 @@ public class UnifiedGroundworkHostTests
     [Fact]
     public async Task Activities_design_reads_run_off_the_same_unified_database()
     {
-        await using var provider = BuildHost();
+        await using var provider = await BuildHostAsync();
         var store = provider.GetRequiredService<IDocumentStore>();
 
         var activity = new ActivityDefinition { Id = "ad-7", ActivityTypeKey = "Acme.SendEmail", Category = "Email", DisplayName = "Send Email" };
@@ -121,7 +128,7 @@ public class UnifiedGroundworkHostTests
     [Fact]
     public async Task Design_writes_and_reads_run_off_the_one_database()
     {
-        await using var provider = BuildHost();
+        await using var provider = await BuildHostAsync();
 
         using var scope = provider.CreateScope();
         var add = scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>();
