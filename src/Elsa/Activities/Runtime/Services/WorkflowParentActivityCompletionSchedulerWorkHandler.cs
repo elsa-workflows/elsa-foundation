@@ -121,7 +121,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
 
         if (!executable.NodesById.TryGetValue(payload.ExecutableNodeId, out var parentExecutableNode))
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{workItem.WorkItemId}' references parent executable node '{payload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -378,7 +378,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             executableNode.DescriptorType,
             executableNode.DescriptorPayload,
             inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            BuildOutputArguments(executableNode),
+            ActivityOutputPublisher.BuildOutputArguments(executableNode),
             cancellationToken);
 
         return new ConstructedActivity(activity, inputs, projections);
@@ -513,7 +513,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         Metadata: metadata)
                 ]),
             PostCommitIntents: childWorkItems
-                .Select(workItem => NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
+                .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
 
@@ -620,7 +620,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         State: inspection,
                         Metadata: metadata)
                 ]),
-            PostCommitIntents: [NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
+            PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -672,21 +672,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             await durableValueStateStore.SaveAsync(change.State, cancellationToken);
         }
     }
-
-    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
-        RuntimeSchedulerWorkItem sourceWorkItem,
-        string activityExecutionId,
-        RuntimeSchedulerWorkItem schedulerWorkItem,
-        DateTimeOffset recordedAt) =>
-        new(
-            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
-            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            recordedAt: recordedAt,
-            activityExecutionId: activityExecutionId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
-            metadata: sourceWorkItem.CommandMetadata);
 
     private async ValueTask EnqueueContinuationSchedulingAsync(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,
@@ -754,24 +739,17 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             ? value
             : null;
 
-    private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is null)
-            throw new InvalidOperationException("CompleteActivity scheduler work item requires a complete activity payload.");
-
-        try
-        {
+    private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "CompleteActivity scheduler work item requires a complete activity payload.",
+            resolvedToNullMessage: "CompleteActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "CompleteActivity scheduler work item payload is not a valid complete activity payload.",
             // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
-            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)
-                   ?? throw new InvalidOperationException("CompleteActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsCompletePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("CompleteActivity scheduler work item payload is not a valid complete activity payload.", exception);
-        }
-    }
+            deserialize: static (item, _) => RuntimeCompleteActivityPayloadMemo.Deserialize(item),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsCompletePayloadValidationException(argumentException));
 
     private static bool IsCompletePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is
@@ -785,12 +763,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             "completionKind" or
             "completedChildActivityExecutionId";
 
-    private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>
-        executableNode.OutputCaptures.ToDictionary(
-            item => item.Key,
-            item => (OutputArgument)new OutputArgument<object?>(new RuntimeOutputMemoryBlockReference(item.Key)),
-            StringComparer.Ordinal);
-
     private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
@@ -800,7 +772,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         inputs
             .Select(input =>
             {
-                var type = TypeDescriptorFor(input.Value);
+                var type = ActivityOutputPublisher.TypeDescriptorFor(input.Value);
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,
@@ -819,24 +791,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, input.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
             .ToArray();
-
-    private static JsonElement SerializeValue(object? value) =>
-        value is JsonElement json
-            ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
-
-    private static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value) =>
-        decision.CapturesPayload ? SerializeValue(value) : null;
-
-    private static RuntimeValueTypeDescriptor RuntimeObjectType { get; } = new("clr", typeof(object).FullName, null);
-
-    private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
-        value is null ? RuntimeObjectType : new RuntimeValueTypeDescriptor("clr", value.GetType().FullName, null);
 
     private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -895,38 +854,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
 
         return snapshot;
-    }
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"CompleteActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
-
-    private sealed class RuntimeOutputMemoryBlockReference(string id) : IMemoryBlockReference
-    {
-        public string Id { get; set; } = id;
-
-        public IMemoryBlock Declare() => new RuntimeOutputMemoryBlock();
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-
-        public T? Get<T>(IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-    }
-
-    private sealed class RuntimeOutputMemoryBlock : IMemoryBlock
-    {
-        public object? Value { get; set; }
-        public object? Metadata { get; set; }
     }
 
     private sealed record ConstructedActivity(

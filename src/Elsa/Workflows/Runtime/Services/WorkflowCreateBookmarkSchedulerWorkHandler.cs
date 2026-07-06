@@ -234,22 +234,13 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         };
     }
 
-    private static RuntimeCreateBookmarkCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("CreateBookmark scheduler work item requires a create bookmark payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeCreateBookmarkCommandPayload>()
-                   ?? throw new InvalidOperationException("CreateBookmark scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is RuntimeCreateBookmarkCommandPayloadValidationException)
-        {
-            throw new InvalidOperationException("CreateBookmark scheduler work item payload is not a valid create bookmark payload.", exception);
-        }
-    }
-
+    private static RuntimeCreateBookmarkCommandPayload DeserializePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "CreateBookmark scheduler work item requires a create bookmark payload.",
+            resolvedToNullMessage: "CreateBookmark scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "CreateBookmark scheduler work item payload is not a valid create bookmark payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeCreateBookmarkCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException or RuntimeCreateBookmarkCommandPayloadValidationException);
 }

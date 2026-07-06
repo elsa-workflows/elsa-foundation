@@ -298,21 +298,13 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason
             }));
 
-    private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("Checkpoint scheduler work item requires a checkpoint payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeCheckpointCommandPayload>()
-                   ?? throw new InvalidOperationException("Checkpoint scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is RuntimeCheckpointCommandPayloadValidationException)
-        {
-            throw new InvalidOperationException("Checkpoint scheduler work item payload is not a valid checkpoint payload.", exception);
-        }
-    }
+    private static RuntimeCheckpointCommandPayload DeserializeCheckpointPayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "Checkpoint scheduler work item requires a checkpoint payload.",
+            resolvedToNullMessage: "Checkpoint scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "Checkpoint scheduler work item payload is not a valid checkpoint payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeCheckpointCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException or RuntimeCheckpointCommandPayloadValidationException);
 }

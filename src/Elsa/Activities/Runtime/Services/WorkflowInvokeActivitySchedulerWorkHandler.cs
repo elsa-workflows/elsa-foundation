@@ -102,10 +102,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(invokePayload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, invokePayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, invokePayload.PinnedExecutable, executable.Identity);
 
-        if (!executable.NodesById.TryGetValue(invokePayload.ExecutableNodeId, out var executableNode))
-            throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references executable node '{invokePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+        var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, invokePayload.ExecutableNodeId, "InvokeActivity");
 
         var state = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, cancellationToken);
         if (state is null)
@@ -695,7 +694,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                         Metadata: metadata)
                 ]),
             PostCommitIntents: childWorkItems
-                .Select(workItem => NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
+                .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
 
@@ -870,7 +869,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                 ]),
             PostCommitIntents: finishWorkflowRequested
                 ? []
-                : [NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)],
+                : [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -906,38 +905,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
     }
 
-    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
-        RuntimeSchedulerWorkItem sourceWorkItem,
-        string activityExecutionId,
-        RuntimeSchedulerWorkItem schedulerWorkItem,
-        DateTimeOffset recordedAt) =>
-        new(
-            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
-            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            recordedAt: recordedAt,
-            activityExecutionId: activityExecutionId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
-            metadata: sourceWorkItem.CommandMetadata);
-
-    private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("InvokeActivity scheduler work item requires an invoke activity payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeInvokeActivityCommandPayload>()
-                   ?? throw new InvalidOperationException("InvokeActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsInvokePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("InvokeActivity scheduler work item payload is not a valid invoke activity payload.", exception);
-        }
-    }
+    private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "InvokeActivity scheduler work item requires an invoke activity payload.",
+            resolvedToNullMessage: "InvokeActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "InvokeActivity scheduler work item payload is not a valid invoke activity payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeInvokeActivityCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsInvokePayloadValidationException(argumentException));
 
     private static bool IsInvokePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is
@@ -945,19 +922,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             "executableNodeId" or
             "activityExecutionId" or
             "reason";
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"InvokeActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
 
     private ActivityExecutionState CompleteActivity(
         RuntimeSchedulerWorkItem workItem,
