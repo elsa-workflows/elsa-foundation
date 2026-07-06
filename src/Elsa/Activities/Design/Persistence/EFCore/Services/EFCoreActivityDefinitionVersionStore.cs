@@ -34,6 +34,9 @@ public sealed class EFCoreActivityDefinitionVersionStore(IDbContextFactory<Activ
     public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default)
         => await QueryAsync(Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId), cancellationToken: cancellationToken);
 
+    public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default)
+        => await QueryAsync(Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.In, definitionIds), cancellationToken: cancellationToken);
+
     public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default)
         => await QueryAsync(Query<ActivityDefinitionVersion>.All(), cancellationToken: cancellationToken);
 
