@@ -23,7 +23,7 @@ public sealed class EFCoreActivityDefinitionVersionStore(IDbContextFactory<Activ
 
     public async Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
         => await FirstOrDefaultAsync(ById(versionId), include: q => q.Include(x => x.Definition), cancellationToken: cancellationToken)
-           ?? throw new ArgumentException($"Activity definition version with id '{versionId}' does not exist");
+           ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinitionVersion), versionId);
 
     public Task<ActivityDefinitionVersion?> FindByDefinitionAndSortKeyAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default)
         => FirstOrDefaultAsync(

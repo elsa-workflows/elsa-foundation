@@ -40,9 +40,19 @@ public sealed class ActivityDefinitionVersionLoadingHandler(
 
         if (!string.IsNullOrWhiteSpace(entity.DescriptorPayloadSource))
         {
-            // Rehydrate through the canonical payload serializer (the rule: all domain-payload JSON
-            // goes through IPayloadSerializer). Clone so the element is self-contained.
-            entity.DescriptorPayload = payloadSerializer.Deserialize<JsonElement>(entity.DescriptorPayloadSource).Clone();
+            try
+            {
+                // Rehydrate through the canonical payload serializer (the rule: all domain-payload JSON
+                // goes through IPayloadSerializer). Clone so the element is self-contained. Guarded like
+                // its inputs/outputs/facets siblings so a malformed descriptor soft-fails to the default
+                // (Undefined) rather than aborting entity loading (issue #417 item 7). Kept in its own
+                // try so a bad descriptor doesn't discard successfully-parsed projections, and vice versa.
+                entity.DescriptorPayload = payloadSerializer.Deserialize<JsonElement>(entity.DescriptorPayloadSource).Clone();
+            }
+            catch (Exception exp)
+            {
+                logger.LogError(exp, "Could not deserialize activity version descriptor payload: {VersionId}. Reverting to default state", entity.Id);
+            }
         }
 
         return ValueTask.CompletedTask;

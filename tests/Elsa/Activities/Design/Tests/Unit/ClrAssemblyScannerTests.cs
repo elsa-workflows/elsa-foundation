@@ -3,6 +3,7 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Primitives.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -17,6 +18,9 @@ public sealed class ClrAssemblyScannerTests
 {
     private static ClrAssemblyScanner CreateScanner() =>
         new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), NullLogger<ClrAssemblyScanner>.Instance);
+
+    private static ClrAssemblyScanner CreateScanner(ILogger<ClrAssemblyScanner> logger) =>
+        new(new ActivityTypeVersionResolver(), new ActivityTypeCategoryResolver(), logger);
 
     [Fact]
     public void ActivityAssembly_IsDiscovered_WithResolvedVersions()
@@ -56,6 +60,23 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(ClrActivityDescriptor).Assembly);
 
         Assert.Empty(CreateScanner().Scan(folder.Path));
+    }
+
+    [Fact]
+    public void DuplicateAssemblyName_AcrossResolverSources_IsWarned()
+    {
+        // The folder DLL is added to the resolver map first (author-wins precedence), then the same
+        // simple-name is re-encountered while enumerating the AppDomain — Elsa.Primitives is already
+        // loaded into the test host's AppDomain, so copying it into the scan folder guarantees a
+        // simple-name collision. The scanner keeps the first (folder) path but must surface the drop.
+        var primitives = typeof(ClrActivityDescriptor).Assembly;
+        var simpleName = primitives.GetName().Name!;
+        using var folder = TempAssemblyFolder.WithCopyOf(primitives);
+        var logger = new CapturingLogger();
+
+        _ = CreateScanner(logger).Scan(folder.Path);
+
+        Assert.Contains(logger.Warnings, w => w.Contains(simpleName, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -115,6 +136,26 @@ public sealed class ClrAssemblyScannerTests
         var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
         Assert.Empty(CreateScanner().Scan(missing));
+    }
+
+    /// <summary>
+    /// Minimal <see cref="ILogger{T}"/> double that captures formatted <see cref="LogLevel.Warning"/>
+    /// messages. The project takes no logging-test package, so this hand-rolled double is the
+    /// zero-dependency way to assert a warning fired.
+    /// </summary>
+    private sealed class CapturingLogger : ILogger<ClrAssemblyScanner>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(formatter(state, exception));
+        }
     }
 
     private sealed class TempAssemblyFolder : IDisposable

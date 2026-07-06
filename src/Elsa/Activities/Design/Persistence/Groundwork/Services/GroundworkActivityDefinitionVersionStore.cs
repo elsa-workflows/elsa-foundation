@@ -42,7 +42,7 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
     public async Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default)
     {
         var version = await _reads.FirstOrDefaultAsync(ById(versionId), cancellationToken)
-                      ?? throw new ArgumentException($"Activity definition version with id '{versionId}' does not exist");
+                      ?? throw EntityNotFoundException.ForEntity(typeof(ActivityDefinitionVersion), versionId);
 
         // Non-relational providers satisfy the owning-definition load with an explicit second aggregate read
         // instead of a join — the document stores no embedded navigation copy.
