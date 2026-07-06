@@ -191,7 +191,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 executableNode.DescriptorType,
                 executableNode.DescriptorPayload,
                 inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-                BuildOutputArguments(executableNode),
+                ActivityOutputPublisher.BuildOutputArguments(executableNode),
                 cancellationToken);
 
             activity.NodeId = executableNode.ExecutableNodeId;
@@ -256,12 +256,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var completedState = CompleteActivity(workItem, resumePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
         await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, workflowVariableWriteBackChanges), cancellationToken);
     }
-
-    private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>
-        executableNode.OutputCaptures.ToDictionary(
-            item => item.Key,
-            item => (OutputArgument)new OutputArgument<object?>(new RuntimeOutputMemoryBlockReference(item.Key)),
-            StringComparer.Ordinal);
 
     private RuntimeSchedulerWorkItem NewCompletionWorkItem(
         RuntimeSchedulerWorkItem resumeWorkItem,
@@ -554,7 +548,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         inputs
             .Select(input =>
             {
-                var type = TypeDescriptorFor(input.Value);
+                var type = ActivityOutputPublisher.TypeDescriptorFor(input.Value);
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,
@@ -573,7 +567,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, input.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
@@ -590,7 +584,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             .Select(output =>
             {
                 executableNode.OutputCaptures.TryGetValue(output.OutputName, out var capture);
-                var type = capture?.Type ?? TypeDescriptorFor(output.Value);
+                var type = capture?.Type ?? ActivityOutputPublisher.TypeDescriptorFor(output.Value);
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,
@@ -609,44 +603,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, output.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, output.Value),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
             .ToArray();
-
-    private static JsonElement SerializeValue(object? value) =>
-        value is JsonElement json
-            ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
-
-    private static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value) =>
-        decision.CapturesPayload ? SerializeValue(value) : null;
-
-    private static RuntimeValueTypeDescriptor RuntimeObjectType { get; } = new("clr", typeof(object).FullName, null);
-
-    private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
-        value is null ? RuntimeObjectType : new RuntimeValueTypeDescriptor("clr", value.GetType().FullName, null);
-
-    private sealed class RuntimeOutputMemoryBlockReference(string id) : IMemoryBlockReference
-    {
-        public string Id { get; set; } = id;
-
-        public IMemoryBlock Declare() => new RuntimeOutputMemoryBlock();
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-
-        public T? Get<T>(IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-
-        public void Set<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context, T? value) =>
-            context.Set(this, value);
-    }
-
-    private sealed class RuntimeOutputMemoryBlock : IMemoryBlock
-    {
-        public object? Value { get; set; }
-        public object? Metadata { get; set; }
-    }
 }

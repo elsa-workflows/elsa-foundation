@@ -378,7 +378,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             executableNode.DescriptorType,
             executableNode.DescriptorPayload,
             inputs.ToDictionary(input => input.Name, input => input.Argument, StringComparer.OrdinalIgnoreCase),
-            BuildOutputArguments(executableNode),
+            ActivityOutputPublisher.BuildOutputArguments(executableNode),
             cancellationToken);
 
         return new ConstructedActivity(activity, inputs, projections);
@@ -770,12 +770,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             "completionKind" or
             "completedChildActivityExecutionId";
 
-    private static IDictionary<string, OutputArgument> BuildOutputArguments(ExecutableNode executableNode) =>
-        executableNode.OutputCaptures.ToDictionary(
-            item => item.Key,
-            item => (OutputArgument)new OutputArgument<object?>(new RuntimeOutputMemoryBlockReference(item.Key)),
-            StringComparer.Ordinal);
-
     private static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
         RuntimeSchedulerWorkItem workItem,
@@ -785,7 +779,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         inputs
             .Select(input =>
             {
-                var type = TypeDescriptorFor(input.Value);
+                var type = ActivityOutputPublisher.TypeDescriptorFor(input.Value);
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityInput,
                     workItem.WorkflowExecutionId,
@@ -804,24 +798,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, input.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
             .ToArray();
-
-    private static JsonElement SerializeValue(object? value) =>
-        value is JsonElement json
-            ? json.Clone()
-            : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
-
-    private static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value) =>
-        decision.CapturesPayload ? SerializeValue(value) : null;
-
-    private static RuntimeValueTypeDescriptor RuntimeObjectType { get; } = new("clr", typeof(object).FullName, null);
-
-    private static RuntimeValueTypeDescriptor TypeDescriptorFor(object? value) =>
-        value is null ? RuntimeObjectType : new RuntimeValueTypeDescriptor("clr", value.GetType().FullName, null);
 
     private static ActivityFaultIncidentRecordRequest NewFaultIncidentRecordRequest(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -893,25 +874,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         throw new InvalidOperationException(
             $"CompleteActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
             $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
-
-    private sealed class RuntimeOutputMemoryBlockReference(string id) : IMemoryBlockReference
-    {
-        public string Id { get; set; } = id;
-
-        public IMemoryBlock Declare() => new RuntimeOutputMemoryBlock();
-
-        public T? Get<T>(IMemoryRegister memoryRegister, IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-
-        public T? Get<T>(IExpressionExecutionContext context) =>
-            context.Get<T>(this);
-    }
-
-    private sealed class RuntimeOutputMemoryBlock : IMemoryBlock
-    {
-        public object? Value { get; set; }
-        public object? Metadata { get; set; }
     }
 
     private sealed record ConstructedActivity(
