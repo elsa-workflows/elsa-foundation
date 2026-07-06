@@ -101,23 +101,16 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         return await NewCommitAsync(workItem, schedulePayload, state, cancellationToken);
     }
 
-    private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("ScheduleActivity scheduler work item requires a schedule activity payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeScheduleActivityCommandPayload>()
-                   ?? throw new InvalidOperationException("ScheduleActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsSchedulePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("ScheduleActivity scheduler work item payload is not a valid schedule activity payload.", exception);
-        }
-    }
+    private static RuntimeScheduleActivityCommandPayload DeserializeSchedulePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "ScheduleActivity scheduler work item requires a schedule activity payload.",
+            resolvedToNullMessage: "ScheduleActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "ScheduleActivity scheduler work item payload is not a valid schedule activity payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeScheduleActivityCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsSchedulePayloadValidationException(argumentException));
 
     private static bool IsSchedulePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is

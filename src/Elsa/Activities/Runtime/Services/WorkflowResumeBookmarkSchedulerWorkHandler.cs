@@ -286,23 +286,16 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             envelopeMetadata: resumeWorkItem.EnvelopeMetadata);
     }
 
-    private static RuntimeResumeBookmarkCommandPayload DeserializeResumePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("ResumeBookmark scheduler work item requires a resume bookmark payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeResumeBookmarkCommandPayload>()
-                   ?? throw new InvalidOperationException("ResumeBookmark scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsResumePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("ResumeBookmark scheduler work item payload is not a valid resume bookmark payload.", exception);
-        }
-    }
+    private static RuntimeResumeBookmarkCommandPayload DeserializeResumePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "ResumeBookmark scheduler work item requires a resume bookmark payload.",
+            resolvedToNullMessage: "ResumeBookmark scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "ResumeBookmark scheduler work item payload is not a valid resume bookmark payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeResumeBookmarkCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsResumePayloadValidationException(argumentException));
 
     private static bool IsResumePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is

@@ -106,23 +106,16 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
         return await NewCommitAsync(workItem, startPayload, runningState, cancellationToken);
     }
 
-    private static RuntimeStartActivityCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("StartActivity scheduler work item requires a start activity payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeStartActivityCommandPayload>()
-                   ?? throw new InvalidOperationException("StartActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsStartPayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("StartActivity scheduler work item payload is not a valid start activity payload.", exception);
-        }
-    }
+    private static RuntimeStartActivityCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "StartActivity scheduler work item requires a start activity payload.",
+            resolvedToNullMessage: "StartActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "StartActivity scheduler work item payload is not a valid start activity payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeStartActivityCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsStartPayloadValidationException(argumentException));
 
     private static bool IsStartPayloadValidationException(ArgumentException exception) =>
         exception.ParamName is

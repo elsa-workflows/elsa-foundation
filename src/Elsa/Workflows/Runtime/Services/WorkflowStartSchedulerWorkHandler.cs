@@ -64,21 +64,18 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
         await _schedulerWorkQueue.EnqueueAsync(checkpointWorkItem, cancellationToken);
     }
 
-    private static WorkflowExecutionStartCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("Start scheduler work item requires a start command payload.");
-
-        try
-        {
-            return payload.Deserialize<WorkflowExecutionStartCommandPayload>()
-                   ?? throw new InvalidOperationException("Start scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
-        {
-            throw new InvalidOperationException("Start scheduler work item payload is not a valid start command payload.", exception);
-        }
-    }
+    private static WorkflowExecutionStartCommandPayload DeserializeStartPayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "Start scheduler work item requires a start command payload.",
+            resolvedToNullMessage: "Start scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "Start scheduler work item payload is not a valid start command payload.",
+            deserialize: static (_, payload) => payload.Deserialize<WorkflowExecutionStartCommandPayload>(),
+            // NOTE (#412 item 1): behavior preserved verbatim. Unlike the other handlers, Start has no
+            // ParamName whitelist, so ANY ArgumentException raised during deserialization is misreported
+            // as "invalid payload," masking unrelated bugs. Kept identical here on purpose; the masking
+            // bug is tracked as its own correctness follow-up (do not narrow this filter in the DRY unit).
+            isPayloadValidationException: static exception => exception is JsonException or NotSupportedException or ArgumentException);
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,

@@ -739,24 +739,17 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             ? value
             : null;
 
-    private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is null)
-            throw new InvalidOperationException("CompleteActivity scheduler work item requires a complete activity payload.");
-
-        try
-        {
+    private static RuntimeCompleteActivityCommandPayload DeserializeCompletePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "CompleteActivity scheduler work item requires a complete activity payload.",
+            resolvedToNullMessage: "CompleteActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "CompleteActivity scheduler work item payload is not a valid complete activity payload.",
             // RT-11: reuse the single per-work-item parse rather than deserializing the payload again.
-            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)
-                   ?? throw new InvalidOperationException("CompleteActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsCompletePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("CompleteActivity scheduler work item payload is not a valid complete activity payload.", exception);
-        }
-    }
+            deserialize: static (item, _) => RuntimeCompleteActivityPayloadMemo.Deserialize(item),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsCompletePayloadValidationException(argumentException));
 
     private static bool IsCompletePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is

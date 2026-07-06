@@ -905,23 +905,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             envelopeMetadata: invokeWorkItem.EnvelopeMetadata);
     }
 
-    private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem)
-    {
-        if (workItem.Payload is not { } payload)
-            throw new InvalidOperationException("InvokeActivity scheduler work item requires an invoke activity payload.");
-
-        try
-        {
-            return payload.Deserialize<RuntimeInvokeActivityCommandPayload>()
-                   ?? throw new InvalidOperationException("InvokeActivity scheduler work item payload resolved to null.");
-        }
-        catch (Exception exception) when (
-            exception is JsonException or NotSupportedException ||
-            exception is ArgumentException argumentException && IsInvokePayloadValidationException(argumentException))
-        {
-            throw new InvalidOperationException("InvokeActivity scheduler work item payload is not a valid invoke activity payload.", exception);
-        }
-    }
+    private static RuntimeInvokeActivityCommandPayload DeserializeInvokePayload(RuntimeSchedulerWorkItem workItem) =>
+        SchedulerWorkHandlerHelpers.DeserializePayload(
+            workItem,
+            requiresPayloadMessage: "InvokeActivity scheduler work item requires an invoke activity payload.",
+            resolvedToNullMessage: "InvokeActivity scheduler work item payload resolved to null.",
+            invalidPayloadMessage: "InvokeActivity scheduler work item payload is not a valid invoke activity payload.",
+            deserialize: static (_, payload) => payload.Deserialize<RuntimeInvokeActivityCommandPayload>(),
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsInvokePayloadValidationException(argumentException));
 
     private static bool IsInvokePayloadValidationException(ArgumentException exception) =>
         exception.ParamName is
