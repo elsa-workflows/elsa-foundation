@@ -125,27 +125,12 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                     ]),
             PostCommitIntents: request.CompletionWorkItem is null
                 ? []
-                : [NewEnqueueSchedulerWorkIntent(request.ResumeWorkItem, request.CompletedActivityExecutionState.Execution.ActivityExecutionId, request.CompletionWorkItem, occurredAt)],
+                : [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(request.ResumeWorkItem, request.CompletedActivityExecutionState.Execution.ActivityExecutionId, request.CompletionWorkItem, occurredAt)],
             Metadata: metadata);
 
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
         return new BookmarkConsumptionCheckpointResult(commitId, checkpointId, result);
     }
-
-    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
-        RuntimeSchedulerWorkItem sourceWorkItem,
-        string activityExecutionId,
-        RuntimeSchedulerWorkItem schedulerWorkItem,
-        DateTimeOffset recordedAt) =>
-        new(
-            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
-            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            recordedAt: recordedAt,
-            activityExecutionId: activityExecutionId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
-            metadata: sourceWorkItem.CommandMetadata);
 
     private static IReadOnlyCollection<string> ReadCompletionOutcomeNames(ActivityExecutionState completedState)
     {

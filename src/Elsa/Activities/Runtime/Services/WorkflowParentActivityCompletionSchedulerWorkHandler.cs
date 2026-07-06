@@ -513,7 +513,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         Metadata: metadata)
                 ]),
             PostCommitIntents: childWorkItems
-                .Select(workItem => NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
+                .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, workItem, occurredAt))
                 .ToArray(),
             Metadata: metadata);
 
@@ -620,7 +620,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                         State: inspection,
                         Metadata: metadata)
                 ]),
-            PostCommitIntents: [NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
+            PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(parentCompletionWorkItem, parentCompletionPayload.ActivityExecutionId, completionWorkItem, occurredAt)],
             Metadata: metadata);
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -672,21 +672,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             await durableValueStateStore.SaveAsync(change.State, cancellationToken);
         }
     }
-
-    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
-        RuntimeSchedulerWorkItem sourceWorkItem,
-        string activityExecutionId,
-        RuntimeSchedulerWorkItem schedulerWorkItem,
-        DateTimeOffset recordedAt) =>
-        new(
-            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
-            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            recordedAt: recordedAt,
-            activityExecutionId: activityExecutionId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
-            metadata: sourceWorkItem.CommandMetadata);
 
     private async ValueTask EnqueueContinuationSchedulingAsync(
         IWorkflowSchedulerWorkQueue schedulerWorkQueue,

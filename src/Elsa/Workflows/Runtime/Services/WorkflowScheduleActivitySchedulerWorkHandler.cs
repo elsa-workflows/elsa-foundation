@@ -225,7 +225,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
                         State: inspection,
                         Metadata: metadata)
                 ]),
-            PostCommitIntents: [NewEnqueueSchedulerWorkIntent(workItem, schedulePayload.ActivityExecutionId, startWorkItem, occurredAt)],
+            PostCommitIntents: [SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, schedulePayload.ActivityExecutionId, startWorkItem, occurredAt)],
             Metadata: metadata);
     }
 
@@ -263,21 +263,6 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             commandMetadata: scheduleWorkItem.CommandMetadata,
             envelopeMetadata: scheduleWorkItem.EnvelopeMetadata);
     }
-
-    private static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
-        RuntimeSchedulerWorkItem sourceWorkItem,
-        string activityExecutionId,
-        RuntimeSchedulerWorkItem schedulerWorkItem,
-        DateTimeOffset recordedAt) =>
-        new(
-            intentId: $"{sourceWorkItem.WorkItemId}:post-commit:{schedulerWorkItem.WorkItemId}",
-            workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
-            kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
-            recordedAt: recordedAt,
-            activityExecutionId: activityExecutionId,
-            idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
-            payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
-            metadata: sourceWorkItem.CommandMetadata);
 
     private static ActivitySchedulingProvenance NormalizeProvenance(
         string workflowExecutionId,
