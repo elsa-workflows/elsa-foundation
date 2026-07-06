@@ -322,6 +322,32 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     frozen `state.json` keys + enum wire values preserved; git prompt-safety guard strengthened to a
     direct assertion after QA found the first version vacuous (no-TTY env). Single-writer `_gate` intact.
     Items 3/4/5 OUT of scope. No project/DI/contract/maps change.
+- **Wave C — event-delivery split + W31 DRY batch COMPLETE 2026-07-06** (all 8 units control-room-QA'd
+  on detached worktrees — `/code-review` + build + affected suites + architecture guard 49/49 +
+  independent mutation/compile-pin bite — before each merge; every behavior-changing, cross-provider,
+  or design-fork item deferred to its own gate):
+  - **Event-delivery split (#505**, merge `e49195f6`): ratified `IInlineEventPublisher`/`IDeferredEventPublisher`
+    as thin PUBLIC wrappers over the retained (public, per Sipke's Stage-1 revision) `IEventPublisher`;
+    `DraftValidationGate` binds to `IInlineEventPublisher` (strategy param deleted) — the structural lock
+    that makes the merged-#500 footgun unrepresentable *at the gate* (compile-pin bite). `ParallelProcessingStrategy`
+    deleted (zero callers + `List` data race). 19 call sites migrated 1:1 (15 inline, 4 deferred).
+  - **W31 DRY batch (#506–#512):** #422 Expressions (#506 — JS library-resource static cache + Liquid
+    cache-key prefix); #414 Agent (#507 — parameterized `AgentLogRedaction.Redact(msg,secrets,fallback)`
+    preserving the Anthropic-1 vs Copilot-3-secrets difference, `AgentConfigurationBinding`, duplicate-tool-name
+    fail-fast); #413 Flowchart (#508 — `MatchingOutboundFlowchartPolicyBase` keeping all 8 public policy
+    types [W13 precedent], ForEach O(n²)→O(n), dead-code); #412 Scheduler (#509 — `SchedulerWorkHandlerHelpers`
+    public-ized, `NewEnqueueSchedulerWorkIntent`/`DeserializePayload`/`ResolveExecutableNode` dedup, §E6 intent
+    strings byte-identical); #415 Persistence (#510 — `UpsertCommandGenerator` `ResolveEntityShape`/`ExtractRowValues`
+    helpers [SQL byte-identical], `InMemoryKeyedStateStore<TKey,TState>` base for 5 clean stores); #416 Http
+    (#511 — `ResponseOwningStream` leak fix, `OrderBy(Priority)` contract-alignment [slice-3 gate], `Lazy<T>`
+    race fix via public factory ctor, parser/handler bases); #417 Design-persistence (#512 — `StateSource*HandlerBase`
+    [caught + red-first-fixed an abstract-base assembly-scan registration bug], `SubmittedActivityTreeValidator`,
+    scanner resolver-path cache). §2.23.3 honored throughout — types promoted to `public sealed` for testability,
+    **zero `[InternalsVisibleTo]`**. Batched `docs/maps` regen in this closure PR (test-file drift the per-PR
+    csproj-ref rule didn't trigger).
+  - **Deferred backlog → W32 / correctness follow-ups** (tracked, some may want Sipke input): #413 items 3/6,
+    #412 items 3/5/8 + Start masking bug, #415 items 1 (Groundwork async-init design fork) + 5, #417 items
+    1/3/4/7/8 + AddVersion hardening, and the UpsertCommandGenerator non-Sqlite dialect golden gap.
 - **Peer-session Validations work landed through the control-room gate** (Sipke ruled 2026-07-06 that
   peer PRs route through the gate — see the handoff §3): #485 (draft-validation persistence, user-merged),
   #496 (FR-033 unknown-activity-version validator, self-merged before the policy; its post-merge review
