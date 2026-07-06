@@ -1108,7 +1108,14 @@ export function App() {
   // Create the auth manager once per shell instance: null means no provider is configured, so the shell
   // boots anonymously (no login, no bearer token). When configured, the same manager instance backs both
   // the session provider (via StudioAuthBoundary) and the authenticated HTTP client passed to AppContent.
-  const authManager = useMemo(() => createStudioAuthManager(getStudioRuntimeConfig(), window.location.origin), []);
+  // The identity endpoints (`/_elsa/identity/*`) live on the backend, not the Studio host, so the manager
+  // must resolve them against the backend base URL — using the Studio origin makes bootstrap hit the SPA
+  // fallback (index.html) and the login flow stalls at "Signing in…".
+  const authManager = useMemo(() => {
+    const config = getStudioRuntimeConfig();
+    const backendBaseUrl = resolveRuntimeBaseUrl(config.backendBaseUrl, window.location.origin);
+    return createStudioAuthManager(config, backendBaseUrl);
+  }, []);
 
   // AuthProvider is mounted outermost so the login/redirect gate wraps the entire shell — including theming,
   // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
