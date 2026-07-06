@@ -1,6 +1,8 @@
 using System.Reflection;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
+using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
@@ -33,6 +35,39 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("2.1.0", byKey[typeof(UnannotatedFixtureActivity).FullName!]);
         Assert.Equal("3.0.0", byKey[typeof(VersionedFixtureActivity).FullName!]);
     }
+
+    [Fact]
+    public void SelfDeclaredRequiredInput_MapsIsRequired()
+    {
+        // Guards the pre-existing (previously unasserted) self-declared [Required] → IsRequired mapping
+        // so the base-chain refactor (issue #417 item 3) provably preserves it.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<UnannotatedFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(UnannotatedFixtureActivity.Message));
+
+        Assert.True(input.IsRequired);
+    }
+
+    [Fact]
+    public void InheritedRequiredInput_MapsIsRequired()
+    {
+        // The derived activity re-declares its input with `new` and no [Required]; the attribute lives
+        // only on the base declaration. The reflection-only scanner reads the attribute-less derived
+        // declaration first, so it must walk the base-property chain to find [Required] (issue #417 item 3).
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var inputs = InputsFor<InheritsRequiredFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(RequiredInputBaseActivity.InheritedRequired));
+
+        // Whatever the scanner surfaces for the hidden/new pair, the inherited [Required] must win.
+        Assert.All(inputs, input => Assert.True(input.IsRequired));
+        Assert.NotEmpty(inputs);
+    }
+
+    private static InputDefinition InputFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
+        models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Single(i => i.Name == inputName);
+
+    private static IReadOnlyList<InputDefinition> InputsFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
+        models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Where(i => i.Name == inputName).ToList();
 
     [Fact]
     public void ApplicationOutputFolder_DiscoversPrimitiveActivities()
@@ -85,8 +120,8 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         File.WriteAllText(Path.Combine(folder.Path, "garbage.dll"), "this is not a portable executable");
 
-        // The junk DLL is skipped; the valid fixture assembly still yields its three activities.
-        Assert.Equal(3, CreateScanner().Scan(folder.Path).Count);
+        // The junk DLL is skipped; the valid fixture assembly still yields its five concrete activities.
+        Assert.Equal(5, CreateScanner().Scan(folder.Path).Count);
     }
 
     [Fact]

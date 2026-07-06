@@ -27,11 +27,12 @@ public sealed class ActivityTypeVersionResolver : IActivityTypeVersionResolver
     public string Resolve(Type type, Assembly assembly)
     {
         var assemblyName = assembly.GetName();
-        var versionAttributeValue = ReadStringArgument(type.GetCustomAttributesData(), VersionAttributeFullName);
-        var activityTypeFullName = type.FullName!;        
-        var informationalVersion = ReadStringArgument(assembly.GetCustomAttributesData(), InformationalVersionAttributeFullName);
+        // Walk the base chain: a [Version] declared on a base class must be honoured even though a
+        // reflection-only MetadataLoadContext gives no inherit-aware attribute read (issue #417 item 3).
+        var versionAttributeValue = ReflectionOnlyAttributes.ReadStringArgumentUpTypeChain(type, VersionAttributeFullName);
+        var activityTypeFullName = type.FullName!;
+        var informationalVersion = ReflectionOnlyAttributes.ReadStringArgument(assembly.GetCustomAttributesData(), InformationalVersionAttributeFullName);
         var assemblyVersion = assemblyName.Version;
-   
 
         if (versionAttributeValue is not null)
         {
@@ -53,11 +54,5 @@ public sealed class ActivityTypeVersionResolver : IActivityTypeVersionResolver
         }
 
         throw new UnresolvableAssemblyVersionException(activityTypeFullName, assemblyName.Name ?? assemblyName.FullName ?? string.Empty);
-    }    
-
-    private static string? ReadStringArgument(IEnumerable<CustomAttributeData> attributes, string attributeFullName)
-    {
-        var data = attributes.FirstOrDefault(a => a.AttributeType.FullName == attributeFullName);
-        return data?.ConstructorArguments is [{ Value: string value }, ..] ? value : null;
     }
 }

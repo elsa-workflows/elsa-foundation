@@ -37,6 +37,16 @@ public sealed class ActivityVersionResolverTests
     }
 
     [Fact]
+    public void BaseClassVersionAttribute_IsInherited()
+    {
+        // The activity declares no [Version] of its own; the resolver must walk the base chain and read
+        // the base class's "4.0.0" rather than falling back to the assembly's 2.1.0 (issue #417 item 3).
+        var result = _resolver.Resolve(typeof(InheritedVersionFixtureActivity), typeof(InheritedVersionFixtureActivity).Assembly);
+
+        Assert.Equal("4.0.0", result);
+    }
+
+    [Fact]
     public void InvalidVersionAttribute_Throws_InvalidActivityVersionException()
     {
         WithEmitted(
