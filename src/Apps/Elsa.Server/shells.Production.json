@@ -1,0 +1,21 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Features": {
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": false,
+            "ConnectionString": "Data Source=elsa-identity.db",
+            "SeedAdminUserName": "admin",
+            "SeedAdminEmail": "admin@elsa.local"
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": false,
+            "Issuer": "https://localhost:7243/",
+            "ConnectionString": "Data Source=elsa-identity.db"
+          }
+        }
+      }
+    }
+  }
+}

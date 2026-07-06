@@ -4,9 +4,12 @@ using Elsa.Foundation.Identity.Abstractions.Authorization;
 using Elsa.Foundation.Identity.Abstractions.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
+using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
@@ -65,6 +68,70 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
 
         Assert.DoesNotContain(provider.GetServices<CShells.Lifecycle.IShellInitializer>(),
             x => x is Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.IdentitySeeder);
+    }
+
+    [Fact]
+    public void Configured_Initial_Admin_Registers_Seeder_When_Not_Dev()
+    {
+        // A durable-store deployment (dev/demo off) provisions its first admin from config; the seeder must
+        // then be registered under both lifecycle hooks, exactly as the dev/demo path is.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new AspNetCoreIdentityEntityFrameworkCoreFeature
+        {
+            IsDevelopmentOrDemo = false,
+            ConnectionString = "Data Source=:memory:",
+            SeedAdminUserName = "root",
+            SeedAdminPassword = "S3cret-Passw0rd!"
+        }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Contains(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), x => x is IdentitySeeder);
+        Assert.Contains(provider.GetServices<CShells.Lifecycle.IShellInitializer>(), x => x is IdentitySeeder);
+    }
+
+    [Fact]
+    public async Task Configured_Admin_Is_Seeded_And_Idempotent()
+    {
+        // dev/demo off + an explicit initial admin: the seeder creates exactly that account (and its
+        // administrator role), and a second run is a no-op rather than a duplicate/failure.
+        // One database name for every DbContext instance, so the seeder's scope and the assertion scope
+        // read the same store (the configure callback runs per-instance).
+        var databaseName = $"seed-{Guid.NewGuid():n}";
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
+            isDevelopmentOrDemo: false,
+            configureDbContext: builder => builder.UseInMemoryDatabase(databaseName),
+            initialAdmin: new IdentitySeedOptions
+            {
+                UserName = "root",
+                Password = "S3cret-Passw0rd!",
+                Email = "root@corp.example"
+            });
+
+        await using var provider = services.BuildServiceProvider();
+        var seeder = provider.GetRequiredService<IdentitySeeder>();
+
+        await seeder.StartAsync(CancellationToken.None);
+        await seeder.StartAsync(CancellationToken.None); // idempotent
+
+        await using var scope = provider.CreateAsyncScope();
+        var sp = scope.ServiceProvider;
+
+        var users = sp.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
+        var seeded = users.Users.Where(x => x.UserName == "root").ToList();
+        Assert.Single(seeded);
+        Assert.Equal("root@corp.example", seeded[0].Email);
+
+        // The seeded admin is wired to a role carrying the all-access permission the API surface requires.
+        var tenantId = AspNetCoreIdentityDefaults.DefaultTenantId;
+        var record = await sp.GetRequiredService<IUserStore>().FindAsync(tenantId, seeded[0].Id);
+        Assert.NotNull(record);
+        var roles = sp.GetRequiredService<IRoleStore>();
+        var adminRole = (await roles.ListAsync(tenantId)).Single(r => record!.RoleIds.Contains(r.Id));
+        Assert.Contains(IdentitySeeder.AllAccessPermission, adminRole.Permissions);
     }
 
     [Fact]

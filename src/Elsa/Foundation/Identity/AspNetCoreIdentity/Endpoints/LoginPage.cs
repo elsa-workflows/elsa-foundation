@@ -2,6 +2,7 @@ using System.Net;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 
@@ -12,7 +13,7 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 /// <c>returnUrl</c>. Non-local return URLs are dropped to prevent open redirects. The page embeds an
 /// antiforgery token (and sets the paired cookie) that the login POST validates for the HTML-form flow.
 /// </summary>
-public sealed class LoginPage(IAntiforgery antiforgery) : ElsaEndpointWithoutRequest
+public sealed class LoginPage(IAntiforgery antiforgery, IOptions<AspNetCoreIdentityOptions> options) : ElsaEndpointWithoutRequest
 {
     public override void Configure()
     {
@@ -22,7 +23,7 @@ public sealed class LoginPage(IAntiforgery antiforgery) : ElsaEndpointWithoutReq
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var returnUrl = LocalUrl.Sanitize(Query<string>("returnUrl", isRequired: false));
+        var returnUrl = LocalUrl.Sanitize(Query<string>("returnUrl", isRequired: false), options.Value.AllowedReturnUrlOrigins);
         var error = Query<string>("error", isRequired: false);
 
         // Issues the antiforgery cookie on this response and returns the request token to embed in the form.

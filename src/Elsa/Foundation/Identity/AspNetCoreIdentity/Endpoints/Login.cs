@@ -2,6 +2,7 @@ using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using FastEndpoints;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
@@ -27,8 +28,10 @@ namespace Elsa.Foundation.Identity.AspNetCoreIdentity.Endpoints;
 /// <c>ReturnUrl</c> — that is a response-format choice, not a security boundary.
 /// </para>
 /// </remarks>
-internal sealed class Login(IIdentitySignInService signInService, IAntiforgery antiforgery) : ElsaEndpoint<LoginRequest>
+internal sealed class Login(IIdentitySignInService signInService, IAntiforgery antiforgery, IOptions<AspNetCoreIdentityOptions> options) : ElsaEndpoint<LoginRequest>
 {
+    private ICollection<string> AllowedReturnOrigins => options.Value.AllowedReturnUrlOrigins;
+
     public override void Configure()
     {
         Post("/" + AspNetCoreIdentityDefaults.LoginRoute);
@@ -50,7 +53,7 @@ internal sealed class Login(IIdentitySignInService signInService, IAntiforgery a
             if (isFormFlow)
             {
                 // Missing/invalid CSRF token on the form flow: re-present the login page with an error banner.
-                var back = $"/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(req.ReturnUrl))}";
+                var back = $"/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(req.ReturnUrl, AllowedReturnOrigins))}";
                 await Send.RedirectAsync(back, isPermanent: false);
                 return;
             }
@@ -67,7 +70,7 @@ internal sealed class Login(IIdentitySignInService signInService, IAntiforgery a
             if (isFormFlow)
             {
                 // Re-present the login page with an error banner rather than a bare 401.
-                var back = $"/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(req.ReturnUrl))}";
+                var back = $"/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(req.ReturnUrl, AllowedReturnOrigins))}";
                 await Send.RedirectAsync(back, isPermanent: false);
                 return;
             }
@@ -78,7 +81,10 @@ internal sealed class Login(IIdentitySignInService signInService, IAntiforgery a
 
         if (isFormFlow)
         {
-            await Send.RedirectAsync(LocalUrl.Sanitize(req.ReturnUrl), isPermanent: false);
+            // The target is already constrained by LocalUrl.Sanitize to a same-origin path or an
+            // allow-listed origin, so remote redirects are safe to permit here — a trusted cross-origin
+            // Studio return URL would otherwise throw as "not local".
+            await Send.RedirectAsync(LocalUrl.Sanitize(req.ReturnUrl, AllowedReturnOrigins), isPermanent: false, allowRemoteRedirects: true);
             return;
         }
 

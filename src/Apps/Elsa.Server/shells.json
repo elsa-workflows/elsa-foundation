@@ -31,9 +31,17 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
-          "FoundationIdentityOidc": {},
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
           "FoundationIdentityApi": {},
-          "FoundationIdentityAspNetCoreIdentity": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "https://localhost:7030",
+              "http://localhost:5089"
+            ]
+          },
           "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
             "IsDevelopmentOrDemo": true
           },

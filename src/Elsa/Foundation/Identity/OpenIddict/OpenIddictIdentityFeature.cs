@@ -30,6 +30,9 @@ public sealed class OpenIddictIdentityFeature : IShellFeature
     [ManifestSetting(DisplayName = "Connection string", Description = "Sqlite connection string for the token store. Defaults to the shared identity database.", Category = "Persistence", Secret = true)]
     public string? ConnectionString { get; set; }
 
+    [ManifestSetting(DisplayName = "Auto-migrate", Description = "Migrates the durable token-store schema at startup. Leave on for zero-config and single-instance deployments; turn off for multi-instance deployments that apply EF Core migrations out-of-band.", Category = "Persistence", DefaultValue = "true")]
+    public bool AutoMigrate { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         // Capture setting values locally: the feature instance is configuration-bound before this runs.
@@ -38,10 +41,12 @@ public sealed class OpenIddictIdentityFeature : IShellFeature
         var signingKey = SigningKey;
         var encryptionKey = EncryptionKey;
         var connectionString = ConnectionString;
+        var autoMigrate = AutoMigrate;
 
         services.AddFoundationIdentityOpenIddict(options =>
         {
             options.IsDevelopmentOrDemo = isDevelopmentOrDemo;
+            options.AutoMigrate = autoMigrate;
 
             if (!string.IsNullOrWhiteSpace(issuer))
                 options.Issuer = issuer;
