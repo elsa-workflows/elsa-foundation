@@ -4,6 +4,7 @@ using Elsa.Agent.Core.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using static Elsa.Agent.Core.Extensions.AgentConfigurationBinding;
 
 namespace Elsa.Agent.Anthropic.Extensions;
 
@@ -31,13 +32,4 @@ public static class AnthropicAgentServiceCollectionExtensions
         options.MaxOutputTokens = GetInt(section, nameof(options.MaxOutputTokens), options.MaxOutputTokens);
         options.IncludeSensitiveContextContent = GetBool(section, nameof(options.IncludeSensitiveContextContent), options.IncludeSensitiveContextContent);
     }
-
-    private static string? GetString(IConfiguration section, string key, string? fallback)
-        => string.IsNullOrWhiteSpace(section[key]) ? fallback : section[key];
-
-    private static bool GetBool(IConfiguration section, string key, bool fallback)
-        => bool.TryParse(section[key], out var value) ? value : fallback;
-
-    private static int GetInt(IConfiguration section, string key, int fallback)
-        => int.TryParse(section[key], out var value) ? value : fallback;
 }
