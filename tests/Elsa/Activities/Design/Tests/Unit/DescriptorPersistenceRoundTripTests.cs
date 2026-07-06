@@ -79,4 +79,30 @@ public sealed class DescriptorPersistenceRoundTripTests
             Assert.Equal("2.0.0", loaded.DescriptorPayload.GetProperty("version").GetString());
         }
     }
+
+    [Fact]
+    public async Task MalformedDescriptorPayload_SoftFailsToDefault_WithoutThrowing()
+    {
+        // A corrupt DescriptorPayloadSource must degrade gracefully like its inputs/outputs/facets
+        // siblings — a single bad row must not abort entity loading (issue #417 item 7). The malformed
+        // string is set directly; no DB round-trip is needed to prove the handler's resilience.
+        var loadingHandler = new ActivityDefinitionVersionLoadingHandler(_serializer, NullLogger<ActivityDefinitionVersionLoadingHandler>.Instance);
+
+        var entity = new ActivityDefinitionVersion("1.0.0", "def-1")
+        {
+            Id = "ver-1",
+            DescriptorType = OpaqueDescriptorType,
+            DescriptorPayloadSource = "{ this is not valid json",
+            SourceKind = "Workflow",
+            SourceId = "src-1"
+        };
+
+        using var host = ActivitiesDesignTestHost.Create();
+        await using var ctx = host.CreateContext();
+
+        // Previously the descriptor deserialize sat outside the try/catch, so this threw JsonException.
+        await loadingHandler.Handle(ctx, entity, CancellationToken.None);
+
+        Assert.Equal(JsonValueKind.Undefined, entity.DescriptorPayload.ValueKind);
+    }
 }
