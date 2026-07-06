@@ -94,21 +94,16 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 break;
             }
 
-            var workItem = await _schedulerWorkQueue.DequeueAsync(request.WorkflowExecutionId, cancellationToken);
-            if (workItem is null)
-                break;
-
-            // Single-writer TOCTOU tripwire (RT-2): the pause decision above was computed for the peeked head; the
-            // dequeue must return that same head. A mismatch means another writer drained this execution concurrently
-            // between the peek and the dequeue — a violation of the single-writer ownership invariant (all dispatch
-            // MUST route through the agent mailbox). Fail fast rather than gate item B's dequeue on item A's decision.
-            if (!StringComparer.Ordinal.Equals(workItem.WorkItemId, nextWorkItem.WorkItemId))
-                throw new InvalidOperationException(
-                    $"Single-writer invariant violation: scheduler drain for workflow execution '{request.WorkflowExecutionId}' " +
-                    $"peeked work item '{nextWorkItem.WorkItemId}' but dequeued '{workItem.WorkItemId}'. A concurrent drainer " +
-                    "interleaved between the pause-gate peek and the dequeue; all dispatch must route through the agent mailbox.");
-
-            var result = await DispatchAsync(workItem, request.AmbientServices, cancellationToken);
+            // Redrive-safe drain (#412 item 3 / "Window C" closure): the peeked head is NOT destructively dequeued
+            // before dispatch. It is dispatched in place and only ack-deleted from the durable queue *after* its effect
+            // is durable — after a successful handler return, or (on fault) before the poison record is written and any
+            // RetryNow re-enqueue. A crash anywhere inside the handler therefore leaves the source item durably queued,
+            // so the resumption sweep's backlog discovery (ListPendingWorkflowExecutionIdsAsync) re-drives it and the
+            // handler re-runs idempotently (activity-execution status guards + deterministic follow-up work-item ids the
+            // idempotent queue absorbs). This replaces the previous load-first-then-delete dequeue, which stranded an
+            // activity when a crash fell between the fallback handler's two independent writes (save state, then enqueue
+            // the follow-up work item).
+            var result = await DispatchAsync(nextWorkItem, request.AmbientServices, cancellationToken);
             results.Add(result);
             remaining--;
 
@@ -175,6 +170,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             else
                 await handler.HandleAsync(workItem, cancellationToken);
 
+            // Ack-delete: the handler's effect is now durable, so remove the source item from the durable queue. A crash
+            // before this point leaves the item queued for idempotent re-drive; a crash after it has nothing left to
+            // re-drive (the effect is committed). The TOCTOU tripwire guards the single-writer invariant.
+            await AckAsync(workItem, cancellationToken);
+
             activity?.SetTag(WorkflowEngineTelemetry.OutcomeTag, WorkflowEngineTelemetry.OutcomeCompleted);
 
             return new RuntimeSchedulerWorkItemResult(
@@ -203,6 +203,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 activity.SetStatus(ActivityStatusCode.Error, faultInfo.ExceptionType);
             }
 
+            // Ack-delete BEFORE poison handling (#412 item 3): a *handler fault* is a decided outcome, not a crash — the
+            // drainer stays alive and records the item to the poison store. The source item must therefore be removed
+            // from the durable queue here, before HandleHandlerCrashAsync records poison / honors a RetryNow re-enqueue;
+            // otherwise the still-queued source item would be re-driven by the sweep AND re-enqueued by RetryNow, and a
+            // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
+            // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
+            // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
+            await AckAsync(workItem, cancellationToken);
+
             await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
@@ -217,13 +226,15 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
     }
 
-    // A dispatched handler threw. The work item was already dequeued (:128), so without this it would be dropped:
-    // no retry, no record, no incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the
-    // default (Noop → DoNotRetry) parks it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the
-    // queue's public contract; RetryAfter records a NextRetryAt for the durable resumption pump
-    // (RuntimeResumptionPumpTask; see docs/runtime-durable-resumption.md) to re-drive and does NOT
-    // re-enqueue here, since immediate re-enqueue would ignore the delay and hot-loop. This lives entirely in the
-    // crash path — it does not touch the peek/pause-gate/dequeue sequence.
+    // A dispatched handler threw. The work item has already been ack-deleted from the durable queue by the caller (the
+    // fault branch acks before invoking this method), so without this it would be dropped: no retry, no record, no
+    // incident. Record it to the poison store honoring IRuntimeDomainRetryPolicy — the default (Noop → DoNotRetry) parks
+    // it as Poisoned (safe, no loop). RetryNow re-enqueues immediately through the queue's public contract; RetryAfter
+    // records a NextRetryAt for the durable resumption pump (RuntimeResumptionPumpTask; see
+    // docs/runtime-durable-resumption.md) to re-drive and does NOT re-enqueue here, since immediate re-enqueue would
+    // ignore the delay and hot-loop. Because the source item was ack-deleted first, RetryNow's re-enqueue is the *only*
+    // requeue (the sweep's backlog discovery finds nothing to re-drive), so poison delivery stays bounded. This lives
+    // entirely in the fault path — it does not touch the peek/pause-gate/dispatch sequence.
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
@@ -290,6 +301,24 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     {
         var items = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
         return items.FirstOrDefault();
+    }
+
+    // Ack-deletes the dispatched item from the durable queue by consuming the head via DequeueAsync, and enforces the
+    // single-writer TOCTOU tripwire (RT-2): the head consumed here MUST be the item that was just dispatched. Because
+    // dispatch no longer dequeues up-front, the head cannot have advanced under a single writer between peek and ack —
+    // the drain owns the execution's fencing lease for its whole duration. A mismatch (or an empty queue) means another
+    // writer interleaved and drained this execution concurrently, violating the invariant that all dispatch routes
+    // through the agent mailbox; fail fast. The InMemory/Groundwork queues expose no delete-by-id, so the ack is
+    // expressed as "consume the FIFO head", which is the same item peek returned under single-writer ownership.
+    private async ValueTask AckAsync(RuntimeSchedulerWorkItem dispatchedWorkItem, CancellationToken cancellationToken)
+    {
+        var acked = await _schedulerWorkQueue.DequeueAsync(dispatchedWorkItem.WorkflowExecutionId, cancellationToken);
+
+        if (acked is null || !StringComparer.Ordinal.Equals(acked.WorkItemId, dispatchedWorkItem.WorkItemId))
+            throw new InvalidOperationException(
+                $"Single-writer invariant violation: scheduler drain for workflow execution '{dispatchedWorkItem.WorkflowExecutionId}' " +
+                $"dispatched work item '{dispatchedWorkItem.WorkItemId}' but ack-dequeued '{acked?.WorkItemId ?? "<none>"}'. A concurrent " +
+                "drainer interleaved between the pause-gate peek and the ack; all dispatch must route through the agent mailbox.");
     }
 
     private async ValueTask<SchedulerPauseDecision?> EvaluatePauseAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
