@@ -14,7 +14,67 @@ the repository root** because the build depends on repo-root configuration
 > complete, runnable app, so the image has **no Node/pnpm build stage**. All three NuGet
 > feeds used by the build are public, so no NuGet credentials are required.
 
-## Build
+## Quick start — prebuilt image (no clone or build)
+
+CI publishes a prebuilt image to Docker Hub as **`elsaworkflows/elsa-studio`**, tagged with the
+Elsa major version (`4`, `4.0`, `4.0.0`), plus `latest` and `4.0.0-preview.<n>` from `main`.
+
+### With Docker Compose
+
+Download the compose file from the `elsa-foundation` repo and start the full stack
+(PostgreSQL + Elsa.Server + Elsa Studio):
+
+```bash
+curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
+docker compose -f docker-compose.images.yml up
+```
+
+### With the Docker CLI
+
+Start the server, then Studio pointed at it:
+
+```bash
+# Elsa.Server
+docker run -d --name elsa-server \
+  -p 13000:8080 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
+  -e Cors__AllowedOrigins__0=http://localhost:14000 \
+  -v elsa-server-packages:/app/packages \
+  elsaworkflows/elsa-server:latest
+
+# Elsa Studio, pointed at the server backend
+docker run -d --name elsa-studio \
+  -p 14000:8080 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e Studio__BackendBaseUrl=http://localhost:13000 \
+  -e Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
+  elsaworkflows/elsa-studio:latest
+```
+
+Then open **http://localhost:14000** (Studio); it calls **http://localhost:13000** (the server).
+
+### Wiring Studio to the server
+
+Four environment variables wire the two containers together:
+
+| Setting | On | Value | Why |
+|---|---|---|---|
+| `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* a Docker-internal service name. |
+| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | Authenticates Studio's module-management calls to the server. **Must match** the server key. |
+| `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The key the server accepts. |
+| `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
+
+> **Persistence is ephemeral.** The server image defaults to SQLite under `/app`, which is
+> discarded when the container is removed. For durable Postgres-backed persistence, build from
+> source using the `elsa-foundation` repo's compose stack.
+
+> ⚠️ `elsa-docker-demo-key` and the wide-open CORS origin are **demo-only** — change the key on
+> both sides and scope CORS before exposing this anywhere.
+
+---
+
+## Build from source
 
 From the repository root:
 
