@@ -24,6 +24,37 @@ public sealed class UnannotatedFixtureActivity : ActivityBase
 [Version("3.0.0")]
 public sealed class VersionedFixtureActivity : ActivityBase;
 
+/// <summary>
+/// A base activity carrying a class-level <c>[Version]</c>. A reflection-only scan honours it only if
+/// the resolver walks the base chain (issue #417 item 3); <see cref="InheritedVersionFixtureActivity"/>
+/// declares no <c>[Version]</c> of its own and must inherit this value.
+/// </summary>
+[Version("4.0.0")]
+public abstract class VersionedBaseActivity : ActivityBase;
+
+/// <summary>
+/// An activity with no <c>[Version]</c> of its own; it must inherit <c>4.0.0</c> from
+/// <see cref="VersionedBaseActivity"/> rather than falling back to the assembly's <c>2.1.0</c>.
+/// </summary>
+public sealed class InheritedVersionFixtureActivity : VersionedBaseActivity;
+
+/// <summary>
+/// A base activity declaring a <c>[Required]</c> input. The scanner must map the input's
+/// <c>IsRequired</c> to <see langword="true"/> on derived activities that declare no input of their
+/// own, which requires walking the base-property chain (issue #417 item 3).
+/// </summary>
+public abstract class RequiredInputBaseActivity : ActivityBase
+{
+    [Required]
+    public InputArgument<string> InheritedRequired { get; set; } = null!;
+}
+
+/// <summary>
+/// An activity that inherits its only input — carrying <c>[Required]</c> on the base declaration —
+/// from <see cref="RequiredInputBaseActivity"/>. Exercises inherited <c>[Required]</c> mapping.
+/// </summary>
+public sealed class InheritsRequiredFixtureActivity : RequiredInputBaseActivity;
+
 /// <summary>An enum used as a complex (non-primitive) activity input value type.</summary>
 public enum FixtureMode
 {

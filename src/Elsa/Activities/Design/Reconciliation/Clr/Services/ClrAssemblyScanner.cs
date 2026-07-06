@@ -153,8 +153,11 @@ public sealed class ClrAssemblyScanner(
     private static bool IsRecoverableReflectionException(Exception exception) =>
         exception is FileNotFoundException or FileLoadException or TypeLoadException or BadImageFormatException;
 
+    // Walk the base-property chain: a [Required] declared on a base class's input/output property must
+    // be honoured even though a reflection-only MetadataLoadContext gives no inherit-aware attribute
+    // read (issue #417 item 3).
     private static bool HasRequired(PropertyInfo property) =>
-        property.GetCustomAttributesData().Any(a => a.AttributeType.FullName == RequiredAttributeFullName);
+        ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName);
 
     private static bool DerivesFrom(Type? type, string fullName)
     {
