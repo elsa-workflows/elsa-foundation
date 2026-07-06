@@ -71,11 +71,25 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             resolvedToNullMessage: "Start scheduler work item payload resolved to null.",
             invalidPayloadMessage: "Start scheduler work item payload is not a valid start command payload.",
             deserialize: static (_, payload) => payload.Deserialize<WorkflowExecutionStartCommandPayload>(),
-            // NOTE (#412 item 1): behavior preserved verbatim. Unlike the other handlers, Start has no
-            // ParamName whitelist, so ANY ArgumentException raised during deserialization is misreported
-            // as "invalid payload," masking unrelated bugs. Kept identical here on purpose; the masking
-            // bug is tracked as its own correctness follow-up (do not narrow this filter in the DRY unit).
-            isPayloadValidationException: static exception => exception is JsonException or NotSupportedException or ArgumentException);
+            // #412 (Start exception-masking): narrowed to a ParamName whitelist mirroring the sibling handlers.
+            // Previously ANY ArgumentException raised during deserialization was misreported as "invalid payload,"
+            // masking unrelated bugs. Only the payload's own constructor-validation ParamNames are treated as a
+            // payload-validation failure; an unrelated ArgumentException now propagates unwrapped.
+            isPayloadValidationException: static exception =>
+                exception is JsonException or NotSupportedException ||
+                exception is ArgumentException argumentException && IsStartPayloadValidationException(argumentException));
+
+    /// <summary>
+    /// Whitelist of the <see cref="WorkflowExecutionStartCommandPayload"/> constructor's own validation
+    /// <c>ParamName</c>s. Only these are classified as payload-validation failures (wrapped as an invalid-payload
+    /// <see cref="InvalidOperationException"/>); any other <see cref="ArgumentException"/> propagates so an
+    /// unrelated bug is not masked. Public so the narrowing boundary can be characterized without IVT
+    /// (constitution §2.23.3), matching the sibling handlers' predicate shape.
+    /// </summary>
+    public static bool IsStartPayloadValidationException(ArgumentException exception) =>
+        exception.ParamName is
+            "pinnedExecutable" or
+            "requestedArtifactId";
 
     private RuntimeSchedulerWorkItem NewRootActivityWorkItem(
         RuntimeSchedulerWorkItem startWorkItem,
