@@ -7,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
 public sealed class WorkflowDefinitionVersion(string definitionId, string version, string? stateSource = null, DateTimeOffset? sourceCreatedAt = null)
-    : TenantEntity, IWorkflowDefinitionVersion
+    : TenantEntity, IWorkflowDefinitionVersion, IStateSourcedEntity
 {
     /// <summary>
     /// Author-controlled SemVer 2.0.0 version string of this workflow definition version.

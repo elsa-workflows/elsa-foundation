@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 
-public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionDraft
+public sealed class WorkflowDefinitionDraft : TenantEntity, IWorkflowDefinitionDraft, IStateSourcedEntity
 {
     /// <summary>
     /// Foreign key to the owning <see cref="WorkflowDefinition"/>. Many Drafts may belong to one

@@ -5,18 +5,10 @@ using Elsa.Workflows.Design.Persistence.EFCore.DbContext;
 
 namespace Elsa.Workflows.Design.Persistence.EFCore.EntityHandlers;
 
-public sealed class WorkflowDefinitionDraftSavingHandler(IPayloadSerializer payloadSerializer) : IEntitySavingHandler<WorkflowsDesignDbContext, WorkflowDefinitionDraft>
+public sealed class WorkflowDefinitionDraftSavingHandler(IPayloadSerializer payloadSerializer)
+    : StateSourceSavingHandlerBase<WorkflowDefinitionDraft>(payloadSerializer),
+        IEntitySavingHandler<WorkflowsDesignDbContext, WorkflowDefinitionDraft>
 {
-    public ValueTask Handle(WorkflowsDesignDbContext dbContext, WorkflowDefinitionDraft entity, CancellationToken cancellationToken)
-    {
-        var stateSource = string.Empty;
-        if (entity.State is not null)
-        {
-            stateSource = payloadSerializer.Serialize(entity.State);
-        }
-
-        entity.StateSource = stateSource;
-
-        return ValueTask.CompletedTask;
-    }
+    public ValueTask Handle(WorkflowsDesignDbContext dbContext, WorkflowDefinitionDraft entity, CancellationToken cancellationToken) =>
+        Save(entity);
 }
