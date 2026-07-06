@@ -261,8 +261,7 @@ public sealed class AnthropicAgentProvider(
     }
 
     private bool CanIncludeContent(AgentContextAttachment attachment)
-        => attachment.Sensitivity <= AgentContextSensitivity.Internal
-           || (options.Value.IncludeSensitiveContextContent && attachment.Sensitivity <= AgentContextSensitivity.Sensitive);
+        => AgentProviderPrimitives.CanIncludeContent(attachment, options.Value.IncludeSensitiveContextContent);
 
     private AnthropicReadiness GetReadiness()
     {
@@ -302,16 +301,16 @@ public sealed class AnthropicAgentProvider(
     private string Normalize(Exception ex)
         => Normalize(string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
 
+    // Redacts the one secret this provider holds — the resolved API key (configured or env-var). The
+    // secret set is a single element; the shared helper's fallback is the message itself, so a blank
+    // message returns blank exactly as before.
     private string Normalize(string message)
-    {
-        var apiKey = ResolveApiKey(options.Value, out _);
-        return string.IsNullOrWhiteSpace(apiKey) ? message : message.Replace(apiKey, "[redacted]", StringComparison.Ordinal);
-    }
+        => AgentLogRedaction.Redact(message, [ResolveApiKey(options.Value, out _)], message);
 
     private static AgentStreamEvent Error(string code, string message, int statusCode)
-        => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, statusCode), DateTimeOffset.UtcNow, AgentResultKind.Error);
+        => AgentProviderPrimitives.Error(code, message, statusCode);
 
-    private static string NewId() => Guid.NewGuid().ToString("N");
+    private static string NewId() => AgentProviderPrimitives.NewId();
 
     private sealed record AnthropicReadiness(bool Available, string Code, string Status, string? ApiKey, string AuthMode);
 }

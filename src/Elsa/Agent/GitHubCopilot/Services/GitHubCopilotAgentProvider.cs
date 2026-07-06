@@ -498,8 +498,7 @@ public sealed class GitHubCopilotAgentProvider(
     }
 
     private bool CanIncludeContent(AgentContextAttachment attachment)
-        => attachment.Sensitivity <= AgentContextSensitivity.Internal
-           || (options.Value.IncludeSensitiveContextContent && attachment.Sensitivity <= AgentContextSensitivity.Sensitive);
+        => AgentProviderPrimitives.CanIncludeContent(attachment, options.Value.IncludeSensitiveContextContent);
 
     private AgentStreamEvent MapStreamEvent(GitHubCopilotStreamEvent item, AgentTurnContext context)
         => item.Kind switch
@@ -594,30 +593,27 @@ public sealed class GitHubCopilotAgentProvider(
     }
 
     private static AgentStreamEvent Error(string code, string message, int statusCode)
-        => new(NewId(), AgentStreamEventKind.Error, null, null, new(code, message, statusCode), DateTimeOffset.UtcNow, AgentResultKind.Error);
+        => AgentProviderPrimitives.Error(code, message, statusCode);
 
     private string NormalizeMessage(Exception ex)
         => NormalizeMessage(string.IsNullOrWhiteSpace(ex.Message) ? ex.GetType().Name : ex.Message);
 
+    // Redacts every secret this provider holds — the configured token, the runtime-connection token, and
+    // the environment-variable token — falling back to a fixed, secret-free diagnostic when the message is
+    // blank. The secret set and order are preserved from the previous inline implementation.
     private string NormalizeMessage(string? message)
     {
-        var normalized = string.IsNullOrWhiteSpace(message) ? "GitHub Copilot SDK call failed." : message;
         var value = options.Value;
-        if (!string.IsNullOrWhiteSpace(value.GitHubToken))
-            normalized = normalized.Replace(value.GitHubToken, "[redacted]", StringComparison.Ordinal);
-        if (!string.IsNullOrWhiteSpace(value.RuntimeConnectionToken))
-            normalized = normalized.Replace(value.RuntimeConnectionToken, "[redacted]", StringComparison.Ordinal);
-        if (!string.IsNullOrWhiteSpace(value.GitHubTokenEnvironmentVariable))
-        {
-            var environmentToken = Environment.GetEnvironmentVariable(value.GitHubTokenEnvironmentVariable);
-            if (!string.IsNullOrWhiteSpace(environmentToken))
-                normalized = normalized.Replace(environmentToken, "[redacted]", StringComparison.Ordinal);
-        }
-
-        return normalized;
+        var environmentToken = string.IsNullOrWhiteSpace(value.GitHubTokenEnvironmentVariable)
+            ? null
+            : Environment.GetEnvironmentVariable(value.GitHubTokenEnvironmentVariable);
+        return AgentLogRedaction.Redact(
+            message,
+            [value.GitHubToken, value.RuntimeConnectionToken, environmentToken],
+            "GitHub Copilot SDK call failed.");
     }
 
-    private static string NewId() => Guid.NewGuid().ToString("N");
+    private static string NewId() => AgentProviderPrimitives.NewId();
 
     private sealed record ProviderReadiness(
         bool Available,
