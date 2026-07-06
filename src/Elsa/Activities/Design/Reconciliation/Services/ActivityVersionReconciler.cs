@@ -137,7 +137,10 @@ public sealed class ActivityVersionReconciler(
                 break;
 
             default:
-                break;
+                // An out-of-range value (a future member, or an unchecked cast) is a programming error,
+                // not a data condition. Fail-fast rather than silently drop the duplicate (issue #417 item 4b).
+                throw new InvalidOperationException(
+                    $"Unknown {nameof(DuplicateHandling)} value '{options.Value.DuplicateHandling}'.");
         }
     }
 

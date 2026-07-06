@@ -69,6 +69,22 @@ public sealed class HashMismatchTests
         Assert.Single(store.Versions);
     }
 
+    [Fact]
+    public async Task SameVersionSameContent_ThrowsWhenDuplicateHandlingIsUnknown()
+    {
+        // An out-of-range DuplicateHandling value (a future member, or an unchecked cast) must not
+        // silently no-op the hash-matched duplicate path — a genuine duplicate would otherwise vanish
+        // with neither throw nor skip-log. Fail-fast instead (issue #417 item 4b).
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("same"))).Reconcile(CancellationToken.None);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("same")), (DuplicateHandling)999).Reconcile(CancellationToken.None));
+
+        Assert.Single(store.Versions);
+    }
+
     private static IActivityReconciliationSource Source(ActivityVersionReconciliationModel model) =>
         new InMemoryReconcilerHarness.InMemorySource("stub", "CLR", model);
 
