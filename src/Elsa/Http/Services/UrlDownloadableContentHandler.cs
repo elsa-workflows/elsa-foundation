@@ -7,7 +7,7 @@ namespace Elsa.Http.Services;
 /// <summary>
 /// Handles content that represents a downloadable URL.
 /// </summary>
-internal sealed class UrlDownloadableContentHandler(IFileDownloader fileDownloader, IContentTypeProvider contentTypeProvider)
+public sealed class UrlDownloadableContentHandler(IFileDownloader fileDownloader, IContentTypeProvider contentTypeProvider)
     : IDownloadableContentHandler
 {
     public float Priority => 0;
@@ -27,7 +27,10 @@ internal sealed class UrlDownloadableContentHandler(IFileDownloader fileDownload
         var eTag = response.Headers.ETag?.Tag;
         var filename = GetFilename(response) ?? url.Segments.Last();
         var contentType = response.Content.Headers.ContentType?.MediaType ?? GetContentType(filename);
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        // Hand ownership of the response to the stream so that disposing the downloadable's stream
+        // also disposes the HttpResponseMessage, releasing the underlying connection/lease.
+        var stream = new ResponseOwningStream(contentStream, response);
 
         return new Downloadable(stream, filename, contentType, eTag);
     }
