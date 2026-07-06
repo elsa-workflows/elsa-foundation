@@ -9,11 +9,26 @@ namespace Elsa.Persistence.EFCore.Tests;
 /// Golden-output guard for <see cref="UpsertCommandGenerator"/> (issue #415 item 2). The five
 /// provider-specific <c>Generate*Upsert</c> methods share identical column/parameter-extraction logic and
 /// differ only in SQL dialect; this test freezes the exact emitted SQL and parameter sequence for the
-/// Sqlite dialect (the only provider available in this test project) so the follow-up DRY refactor —
-/// extracting the shared shape/row-extraction helpers into the sealed class — stays byte-for-byte
-/// behavior-preserving. Mutating a shared helper (column order, parameter numbering, dialect syntax)
-/// flips this red.
+/// Sqlite dialect so the follow-up DRY refactor — extracting the shared shape/row-extraction helpers into
+/// the sealed class — stays byte-for-byte behavior-preserving. Mutating a shared helper (column order,
+/// parameter numbering, dialect syntax) flips this red.
 /// </summary>
+/// <remarks>
+/// Dialect coverage (issue #514): SqlServer and Postgres are golden-verified in sibling test files
+/// (<see cref="UpsertCommandGeneratorSqlServerTests"/>, <see cref="UpsertCommandGeneratorPostgresTests"/>),
+/// exercising the varbinary-NULL CAST and json/jsonb CAST branches respectively. MySql and Oracle are
+/// deliberately uncovered:
+/// <list type="bullet">
+/// <item>MySql — hard-blocked: the only EF provider (Pomelo.EntityFrameworkCore.MySql 9.0.0) pins
+/// Microsoft.EntityFrameworkCore to 9.x, which conflicts with this repo's EF 10 tree. No EF 10 build exists,
+/// so the MySql dialect cannot be exercised offline without dragging in a second, conflicting EF major.</item>
+/// <item>Oracle — deferred: an EF 10 provider exists (Oracle.EntityFrameworkCore) but it transitively pulls
+/// the heavyweight Oracle.ManagedDataAccess.Core 23.x driver, and its only dialect-specific branch is a
+/// cosmetic <c>AS column</c> alias. Not worth the dependency weight for a single alias golden.</item>
+/// </list>
+/// Both still share the same <c>ResolveEntityShape</c>/<c>ExtractRowValues</c> extraction as the covered
+/// dialects, so a regression in that shared code is caught by the Sqlite/SqlServer/Postgres goldens.
+/// </remarks>
 public sealed class UpsertCommandGeneratorTests : IDisposable
 {
     // EF model property order for the entity below: Id (key), then the Entity base columns and the
