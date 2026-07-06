@@ -40,7 +40,10 @@ public sealed class FlowchartLoopIterationTests
 
         var state = await fixture.GetFlowchartStateAsync();
         var activityStates = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync("wfexec-1");
-        Assert.Contains(state.Scopes, scope => scope.Kind == ExecutionScopeKind.LoopIteration && scope.OwnerNodeId == "node-a");
+        // W32: the loop-iteration scope minted on the backward edge to node-a is pruned once the run
+        // completes (no live path references it). Its durable evidence is the monotonic per-owner counter,
+        // which records that exactly one loopback iteration was created for node-a.
+        Assert.Equal(1, state.LoopIterationCounters["node-a"]);
         Assert.Single(activityStates.Where(activityState => activityState.Execution.ExecutableNodeId == "node-c"));
     }
 
@@ -73,10 +76,11 @@ public sealed class FlowchartLoopIterationTests
         await fixture.ExecuteAsync(executable);
 
         var state = await fixture.GetFlowchartStateAsync();
-        // #382: completed iteration paths are pruned from the persisted blob; the iteration identity
-        // evidence lives in the never-pruned loop-iteration scope and its key. No Waiting path may
-        // remain — a stale first-iteration arrival must not have satisfied the later iteration's join.
-        Assert.Contains(state.Scopes, scope => scope.Kind == ExecutionScopeKind.LoopIteration && scope.LoopIterationKey is not null && scope.OwnerNodeId == "node-a");
+        // #382 / W32: completed iteration paths and their now-unreferenced loop-iteration scopes are pruned
+        // from the persisted blob; the iteration identity evidence lives in the monotonic per-owner counter.
+        // No Waiting path may remain — a stale first-iteration arrival must not have satisfied the later
+        // iteration's join.
+        Assert.Equal(1, state.LoopIterationCounters["node-a"]);
         Assert.DoesNotContain(state.ExecutionPaths, path => path.Status == ExecutionPathStatus.Waiting);
     }
 
