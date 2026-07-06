@@ -35,12 +35,18 @@ public sealed class CollectActivityVersions(
         {
             var entries = (await source.Read(cancellationToken)).ToArray();
 
+            // Batch the per-entry definition lookup (issue #417 item 1): one IN read for every entry Id in
+            // this source instead of a FindAsync per entry. This is a pure read — the handler never persists,
+            // so no in-loop mutation is needed here; two entries sharing a missing Id both fabricate distinct
+            // in-memory definitions exactly as before, and the reconciler dedupes them on write.
+            var definitionsById = await PrefetchDefinitionsById(entries, cancellationToken);
+
             for (var i = 0; i < entries.Length; i++)
             {
                 var entry = entries[i];
                 var descriptorPayload = NormalizeDescriptor(entry, i);
 
-                IActivityDefinition definition = await FindDefinition(entry.Id, cancellationToken)
+                IActivityDefinition definition = FindDefinition(definitionsById, entry.Id)
                     ?? definitionFactory.Create(entry.ActivityTypeKey, entry.Category ?? string.Empty, entry.DisplayName, entry.Description, entry.Id);
 
                 // The factory generates the version Id and the content Hash.
@@ -61,13 +67,37 @@ public sealed class CollectActivityVersions(
         }
     }
 
-    private async Task<ActivityDefinition?> FindDefinition(string? definitionId, CancellationToken cancellationToken)
+    private async Task<Dictionary<string, ActivityDefinition>> PrefetchDefinitionsById(
+        ActivityVersionReconciliationModel[] entries,
+        CancellationToken cancellationToken)
+    {
+        var ids = entries
+            .Select(e => e.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length == 0)
+            return new Dictionary<string, ActivityDefinition>();
+
+        var definitions = await definitionStore.ListAsync(new ActivityDefinitionFilter { Ids = ids }, cancellationToken);
+
+        // First-wins on duplicate Ids mirrors the previous FindAsync (first match) semantics; Id is a
+        // surrogate key so duplicates are not expected in practice.
+        var byId = new Dictionary<string, ActivityDefinition>();
+        foreach (var definition in definitions)
+            byId.TryAdd(definition.Id, definition);
+
+        return byId;
+    }
+
+    private static ActivityDefinition? FindDefinition(Dictionary<string, ActivityDefinition> definitionsById, string? definitionId)
     {
         if (string.IsNullOrWhiteSpace(definitionId))
             return null;
 
-        var filter = new ActivityDefinitionFilter { Id = definitionId };
-        return await definitionStore.FindAsync(filter, cancellationToken);
+        return definitionsById.GetValueOrDefault(definitionId);
     }
 
     /// <summary>

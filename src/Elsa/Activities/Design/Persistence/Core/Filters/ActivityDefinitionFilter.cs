@@ -13,6 +13,9 @@ public class ActivityDefinitionFilter
 
     public IEnumerable<string>? Ids { get; init; }
 
+    /// <summary>Batch counterpart of <see cref="ActivityTypeKey"/>: matches definitions whose natural key is in this set (<c>IN</c>).</summary>
+    public IEnumerable<string>? ActivityTypeKeys { get; init; }
+
     public string? Category { get; init; }
 
     public string? SearchTerm { get; init; }
@@ -41,6 +44,7 @@ public class ActivityDefinitionFilter
         if (DisplayName != null) query.And(x => x.DisplayName, QueryOp.Equal, DisplayName);
         if (Description != null) query.And(x => x.Description, QueryOp.Contains, Description);
         if (ActivityTypeKey != null) query.And(x => x.ActivityTypeKey, QueryOp.Equal, ActivityTypeKey);
+        if (ActivityTypeKeys != null) query.And(x => x.ActivityTypeKey, QueryOp.In, ActivityTypeKeys);
 
         if (TenantAgnostic == true) query.IgnoreTenant();
 
