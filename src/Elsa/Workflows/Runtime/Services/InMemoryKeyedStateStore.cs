@@ -1,0 +1,92 @@
+namespace Elsa.Workflows.Runtime.Core.Services;
+
+/// <summary>
+/// Shared lock + dictionary core for the in-memory runtime state stores (#415 item 4). Each store
+/// previously hand-rolled the identical <c>object _syncRoot</c> + <c>Dictionary&lt;TKey,TState&gt;</c> +
+/// locked Save/Find/List/Remove pattern, so a change to the locking discipline (or a switch of the
+/// backing collection) had to be repeated in every copy and could silently miss one. Centralizing the
+/// primitives here keeps every locked access in one place while each store keeps its exact public
+/// contract by delegating to these <see langword="protected"/> members.
+/// </summary>
+/// <remarks>
+/// The store keeps its own key derivation (composite keys are private record structs) and its own
+/// argument validation, then calls into these primitives. All primitives take the store lock; callers
+/// must not hold it when calling in, and must not leak the returned collections back under the lock.
+/// </remarks>
+public abstract class InMemoryKeyedStateStore<TKey, TState>
+    where TKey : notnull
+    where TState : class
+{
+    private readonly object _syncRoot = new();
+    private readonly Dictionary<TKey, TState> _states;
+
+    /// <summary>Initializes the store, optionally with a key comparer (e.g. <see cref="StringComparer.Ordinal"/>).</summary>
+    protected InMemoryKeyedStateStore(IEqualityComparer<TKey>? keyComparer = null)
+    {
+        _states = new(keyComparer);
+    }
+
+    /// <summary>Upserts <paramref name="state"/> under <paramref name="key"/> and returns it.</summary>
+    protected TState Save(TKey key, TState state)
+    {
+        lock (_syncRoot)
+        {
+            _states[key] = state;
+            return state;
+        }
+    }
+
+    /// <summary>Adds <paramref name="state"/> under <paramref name="key"/> only if absent; returns whether it was added.</summary>
+    protected bool TryAdd(TKey key, TState state)
+    {
+        lock (_syncRoot)
+            return _states.TryAdd(key, state);
+    }
+
+    /// <summary>Returns the state under <paramref name="key"/>, or <see langword="null"/> if absent.</summary>
+    protected TState? Find(TKey key)
+    {
+        lock (_syncRoot)
+        {
+            _states.TryGetValue(key, out var state);
+            return state;
+        }
+    }
+
+    /// <summary>Removes the entry under <paramref name="key"/>; returns whether it existed.</summary>
+    protected bool Remove(TKey key)
+    {
+        lock (_syncRoot)
+            return _states.Remove(key);
+    }
+
+    /// <summary>Materializes every stored value under the lock into a stable snapshot array.</summary>
+    protected IReadOnlyCollection<TState> SnapshotAll()
+    {
+        lock (_syncRoot)
+            return _states.Values.ToArray();
+    }
+
+    /// <summary>Materializes the stored values whose key satisfies <paramref name="keyPredicate"/> into a snapshot array.</summary>
+    protected IReadOnlyCollection<TState> Snapshot(Func<TKey, bool> keyPredicate)
+    {
+        lock (_syncRoot)
+        {
+            return _states
+                .Where(entry => keyPredicate(entry.Key))
+                .Select(entry => entry.Value)
+                .ToArray();
+        }
+    }
+
+    /// <summary>Materializes the stored values that satisfy <paramref name="valuePredicate"/> into a snapshot array.</summary>
+    protected IReadOnlyCollection<TState> SnapshotValues(Func<TState, bool> valuePredicate)
+    {
+        lock (_syncRoot)
+        {
+            return _states.Values
+                .Where(valuePredicate)
+                .ToArray();
+        }
+    }
+}

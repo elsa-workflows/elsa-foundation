@@ -3,11 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
-public sealed class InMemoryDurableValueStateStore : IDurableValueStateStore
+public sealed class InMemoryDurableValueStateStore : InMemoryKeyedStateStore<InMemoryDurableValueStateStore.DurableValueStateKey, DurableValueState>, IDurableValueStateStore
 {
-    private readonly object _syncRoot = new();
-    private readonly Dictionary<DurableValueStateKey, DurableValueState> _states = new();
-
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -15,12 +12,8 @@ public sealed class InMemoryDurableValueStateStore : IDurableValueStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(state.DurableValueId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            var key = new DurableValueStateKey(state.WorkflowExecutionId, state.DurableValueId);
-            _states[key] = state;
-            return new ValueTask<DurableValueState>(state);
-        }
+        var key = new DurableValueStateKey(state.WorkflowExecutionId, state.DurableValueId);
+        return new(Save(key, state));
     }
 
     public ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
@@ -29,10 +22,7 @@ public sealed class InMemoryDurableValueStateStore : IDurableValueStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(durableValueId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            return new ValueTask<bool>(_states.Remove(new DurableValueStateKey(workflowExecutionId, durableValueId)));
-        }
+        return new(Remove(new DurableValueStateKey(workflowExecutionId, durableValueId)));
     }
 
     public ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
@@ -41,11 +31,7 @@ public sealed class InMemoryDurableValueStateStore : IDurableValueStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(durableValueId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            _states.TryGetValue(new DurableValueStateKey(workflowExecutionId, durableValueId), out var state);
-            return new ValueTask<DurableValueState?>(state);
-        }
+        return new(Find(new DurableValueStateKey(workflowExecutionId, durableValueId)));
     }
 
     public ValueTask<IReadOnlyCollection<DurableValueState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
@@ -53,16 +39,8 @@ public sealed class InMemoryDurableValueStateStore : IDurableValueStateStore
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
-        {
-            var states = _states
-                .Where(item => item.Key.WorkflowExecutionId == workflowExecutionId)
-                .Select(item => item.Value)
-                .ToArray();
-
-            return new ValueTask<IReadOnlyCollection<DurableValueState>>(states);
-        }
+        return new(Snapshot(key => key.WorkflowExecutionId == workflowExecutionId));
     }
 
-    private readonly record struct DurableValueStateKey(string WorkflowExecutionId, string DurableValueId);
+    public readonly record struct DurableValueStateKey(string WorkflowExecutionId, string DurableValueId);
 }
