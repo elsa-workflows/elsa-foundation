@@ -298,24 +298,46 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     cross-provider redaction-helper dedup deliberately left to W31. Granular design
     permissions (`Design:Read`/`Write`) explicitly NOT introduced — would change the deployed
     permission contract and needs Studio coordination; own gated unit if ever wanted.
-- **Wave C (after structural):** W30 god-class refactors, W31 DRY batch (remaining #412/#413/
-  #414 items 3/4/6, #415 live slices — item 3 stale per W25, #416 slices 2–6 — slice 3 needs its
-  own gate for the EXTENSION_POINTS Priority-ordering contract, #417 remainder incl. the
-  Activities/Design AddVersion sibling hardening, #422 items 1–2 + out-of-domain slices),
-  W32 cleanup batch. New Wave-C candidate from W22's #382 gate: flowchart `Scopes` residual
-  O(n) growth (persisted per-node iteration counter = wire-shape change, own gate).
-  - **W30c (#421 ExtensionBuilderStorage slice) — done** (draft PR, `refactor/w30c-extension-builder-storage`):
-    behavior-preserving decomposition of the 2,211-line god class. Façade retains the single-writer
-    `_gate` + `state.json` lifecycle; extracted `GitClient` (canonical single git stack with
-    `GIT_TERMINAL_PROMPT=0` folded in, retiring the parallel Stack B + its three dead methods
-    `GetActiveBranch`/`IsRepositoryDirty`/`GetRemoteState` per #421 item 2), `RepositoryInspector`
-    (git-derived reads), `RepositoryFileSystem` (repo/tree/file ops), `RepositoryTemplateRenderer`,
-    and `BuildOrchestrator` (dotnet build/pack). `WithStateAsync`/`ReadStateAsync` collapse the
-    per-method gate boilerplate (#421 item 1). All seven frozen `state.json` top-level keys and enum
-    wire values preserved; guarded by a new characterization test pinning them plus a git
-    prompt-safety test. Façade 2210→1288 lines; 74 ExtensionBuilder tests green. No new project, no
-    DI/contract/maps change. #421 items 3 (BuildRunner semaphore leak), 4 (ManagementApi N+1), and
-    5 (duplicate `ActivityDefinitionImport`) are OUT of this slice — separate units.
+- **Wave C — W30 god-class refactors COMPLETE 2026-07-06** (all three behavior-preserving, each with
+  bite-proven guards and control-room QA on a detached worktree before merge; handoff at
+  [wave-c-handoff.md](../reports/elsa-4-architecture-review-2026-07/wave-c-handoff.md)):
+  - **W30a FlowchartExecutionEngine (#275)** — done
+    ([#495](https://github.com/elsa-workflows/elsa-foundation/pull/495), merge `93864a53`): engine
+    920→267 lines; 7 collaborators; single-home `Sequence`/`ScheduleNode` rule; W22 `#382`
+    `PruneForPersistence` moved verbatim; `elsa.flowchart.executionState` wire byte-identical
+    (CT-1/CT-2/CT-3 determinism goldens, QA-bite-verified via a `NewId` sequence perturbation);
+    `Scopes` residual untouched (own later gate). Single project, no maps/guard churn.
+  - **W30b WorkflowExecutableCompiler (#418)** — done
+    ([#494](https://github.com/elsa-workflows/elsa-foundation/pull/494), merge `f756473a`): compiler
+    466→91-line orchestrator + 4 DI collaborators; duplicate `ProjectChildren` tree-traversal collapsed
+    to one walk (counting-decorator fact); 7-definition golden corpus pins `WorkflowExecutable` +
+    `ArtifactHash` byte-identical (QA-bite-verified via artifact-id hash length). Runtime.Core `Models/`
+    frozen (untouched).
+  - **W30c ExtensionBuilderStorage (#421)** — done
+    ([#497](https://github.com/elsa-workflows/elsa-foundation/pull/497), merge `418ad4db`): façade
+    2,210→1,288 (net −269 LoC); extracted `GitClient` (single git stack, `GIT_TERMINAL_PROMPT=0` folded
+    in, retiring Stack B + the three dead methods `GetActiveBranch`/`IsRepositoryDirty`/`GetRemoteState`
+    per item 2), `RepositoryInspector`, `RepositoryFileSystem`, `RepositoryTemplateRenderer`,
+    `BuildOrchestrator`; `WithStateAsync`/`ReadStateAsync` collapse the gate boilerplate (item 1). Seven
+    frozen `state.json` keys + enum wire values preserved; git prompt-safety guard strengthened to a
+    direct assertion after QA found the first version vacuous (no-TTY env). Single-writer `_gate` intact.
+    Items 3/4/5 OUT of scope. No project/DI/contract/maps change.
+- **Peer-session Validations work landed through the control-room gate** (Sipke ruled 2026-07-06 that
+  peer PRs route through the gate — see the handoff §3): #485 (draft-validation persistence, user-merged),
+  #496 (FR-033 unknown-activity-version validator, self-merged before the policy; its post-merge review
+  found a null-deref), then the QA'd stack — **#500** (Core-purity fix: `DraftValidationGate` depends on
+  the `IEventPublishingStrategy` abstraction, dropping the illegal `Validations.Core → Events.Strategies`
+  reference that had left the architecture guard red at 48/49), **#501** (maps regen #500 missed), **#498**
+  (null `ActivityVersionId` guard in `CatalogVersionResolver`, red-proof verified), **#499** (nullable
+  `IActivityDefinitionLookup.FindVersion` + superseded-category test sweep).
+- **Wave C tail (hand to the incoming control room):** the **ratified event-delivery split**
+  (`IInlineEventPublisher`/`IDeferredEventPublisher`, strategy param removed — closes the merged-#500
+  footgun where a caller could pass `Background` and silently bypass draft validation; design in the
+  handoff §2.1), then **W31 DRY batch** (remaining #412/#413/#414 items 3/4/6 — **incl. the cross-provider
+  agent log-redaction helper deferred from W29** — #415 live slices, #416 slices 2–6 with slice 3's own
+  EXTENSION_POINTS Priority-ordering gate, #417 remainder incl. the Activities/Design AddVersion sibling
+  hardening, #422 items 1–2), then **W32 cleanup** (#423, #279, MD-10 gaps, plus the flowchart `Scopes`
+  residual O(n) growth — wire-shape change, own §E6 gate).
 - **Product track:** server-side execution output **#254 CLOSED 2026-07-05**
   ([#477](https://github.com/elsa-workflows/elsa-foundation/pull/477), Seam R1): workflow
   outputs readable on the instance-details API with policy-driven redaction (QA hardened the
