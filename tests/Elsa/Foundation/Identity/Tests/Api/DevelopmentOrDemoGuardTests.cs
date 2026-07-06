@@ -1,6 +1,5 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Microsoft.AspNetCore.Builder;
@@ -54,7 +53,7 @@ public sealed class DevelopmentOrDemoGuardTests
         // The seeded admin exists — proof the dev/demo posture booted as before.
         await using var scope = host.Services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<Elsa.Foundation.Identity.AspNetCoreIdentity.Models.AspNetCoreIdentityUser>>();
-        Assert.NotNull(await userManager.FindByNameAsync(IdentitySeeder.AdminUserName));
+        Assert.NotNull(await userManager.FindByNameAsync(TestAdmin.UserName));
 
         await host.StopAsync();
     }
@@ -106,7 +105,9 @@ public sealed class DevelopmentOrDemoGuardTests
                     services.AddLogging();
                     services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
                         isDevelopmentOrDemo: isDevelopmentOrDemo,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"));
+                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{suffix}"),
+                        // Dev/demo hosts seed an explicitly configured admin; the Development boot test asserts it exists.
+                        initialAdmin: isDevelopmentOrDemo ? TestAdmin.SeedOptions() : null);
                     services.AddFoundationIdentityOpenIddict(
                         options => options.IsDevelopmentOrDemo = isDevelopmentOrDemo,
                         configureDbContext: builder => builder.UseInMemoryDatabase($"openiddict-{suffix}"));

@@ -7,8 +7,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
 ## Overridable contracts
 
 ### `ITaskManager` *(Core — `Elsa.Tasks.Core`)*
-- **Default impl:** `TaskManager` (this feature).
-- **Override:** `services.Replace(ServiceDescriptor.Scoped<ITaskManager, MyManager>())`.
+- **Default impl:** `TaskManager` (this feature). Registered as a **shell-singleton**: it owns the
+  start/stop lifecycle of shell-lifetime background and recurring tasks (and the singleton
+  `IEventChannel`), so it must live for the shell's lifetime — a scoped manager is disposed at the
+  end of the shell-initializer scope and would tear those singletons down shortly after activation.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature).

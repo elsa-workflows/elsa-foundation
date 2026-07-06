@@ -37,11 +37,6 @@ public sealed class IdentitySeeder(
     /// <summary>CShells shell-activation hook (see class remarks).</summary>
     public Task InitializeAsync(CancellationToken cancellationToken) => StartAsync(cancellationToken);
 
-    public const string AdminUserName = "admin";
-    public const string AdminPassword = "Password123!";
-    public const string AdminEmail = "admin@elsa.local";
-    public const string AdminRoleName = "administrator";
-
     /// <summary>
     /// The all-access permission ("*") that Elsa endpoints secured with <c>ConfigurePermissions()</c> require.
     /// Mirrors <c>Elsa.Api.FastEndpoints.Constants.PermissionNames.All</c>; kept as a literal here so the
@@ -51,6 +46,14 @@ public sealed class IdentitySeeder(
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // The seed account is supplied entirely from configuration (see the feature's SeedAdmin* settings).
+        // A registered seeder with no username/password is a wiring error — fail fast rather than attempt to
+        // create an unusable account.
+        if (string.IsNullOrWhiteSpace(Seed.UserName) || string.IsNullOrWhiteSpace(Seed.Password))
+            throw new InvalidOperationException(
+                "IdentitySeeder was registered without a configured admin username and password. " +
+                "Supply them via the FoundationIdentityAspNetCoreIdentityEntityFrameworkCore SeedAdmin* settings.");
+
         await using var scope = services.CreateAsyncScope();
         var sp = scope.ServiceProvider;
 

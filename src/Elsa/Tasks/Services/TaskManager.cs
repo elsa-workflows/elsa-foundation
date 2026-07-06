@@ -35,6 +35,13 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
             if (Volatile.Read(ref _disposeRequested) == 1)
                 return;
 
+            // Stop any previously-started tasks before (re)starting. On the supported path this runs
+            // once per shell: CShells builds a fresh provider (and thus a fresh singleton IEventChannel
+            // + this singleton manager) per shell generation, so BackgroundTasks is empty here and Stop
+            // is a no-op. Re-invoking Start on a live manager is NOT supported: Stop() completes the
+            // singleton IEventChannel writer via BackgroundEventPublisher.StopAsync, and a completed
+            // channel cannot be reopened — the restarted reader would drain-and-exit and every later
+            // background publish would throw. Restart means: dispose this manager (new shell generation).
             await stateManager.Stop();
             stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
             cancellationToken = stateManager.GetCancellationToken();
@@ -73,13 +80,20 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
 
     private static async Task RunStartupTasks(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, CancellationToken cancellationToken)
     {
-        var startupTasks = serviceProvider.GetServices<IStartupTask>()
+        // Startup tasks are scoped (migrations, seeding, activity registration — they use scoped
+        // stores/DbContexts). TaskManager is a shell-singleton, so its injected provider is the shell
+        // root; resolve and run the startup tasks in a dedicated scope. Background and recurring tasks
+        // are shell-singletons and are resolved from the root provider so they outlive this scope.
+        await using var scope = serviceProvider.CreateAsyncScope();
+        var scopedProvider = scope.ServiceProvider;
+
+        var startupTasks = scopedProvider.GetServices<IStartupTask>()
             .OrderBy(x => x.GetType().GetCustomAttribute<OrderAttribute>()?.Order ?? 0f)
             .ToList();
 
         // First apply OrderAttribute to determine a base order, then perform topological sorting.
         // The topological sort is the final ordering step to ensure dependency constraints are respected.
-        var topologicalSorter = serviceProvider.GetService<ITopologicalTaskSorter>();
+        var topologicalSorter = scopedProvider.GetService<ITopologicalTaskSorter>();
 
         var tasksToExecute = topologicalSorter is not null
             ? topologicalSorter.Sort(startupTasks)

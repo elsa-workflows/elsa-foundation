@@ -1,19 +1,22 @@
 namespace Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 
 /// <summary>
-/// The administrator account <see cref="IdentitySeeder"/> ensures at startup. Defaults reproduce the
-/// well-known development/demo admin; a durable-store deployment overrides <see cref="UserName"/>/
-/// <see cref="Password"/>/<see cref="Email"/> to provision its own first administrator.
+/// The administrator account <see cref="IdentitySeeder"/> ensures at startup. The username, password and
+/// email are supplied from configuration (the feature's <c>SeedAdmin*</c> settings) — there are no code-level
+/// credential defaults. <see cref="RoleName"/> keeps a structural fallback that the configuration overrides.
 /// </summary>
 public sealed class IdentitySeedOptions
 {
-    public string UserName { get; set; } = IdentitySeeder.AdminUserName;
+    /// <summary>Role granted to the seeded administrator when no role name is configured.</summary>
+    public const string DefaultRoleName = "administrator";
 
-    public string Password { get; set; } = IdentitySeeder.AdminPassword;
+    public string UserName { get; set; } = "";
 
-    public string Email { get; set; } = IdentitySeeder.AdminEmail;
+    public string Password { get; set; } = "";
 
-    public string RoleName { get; set; } = IdentitySeeder.AdminRoleName;
+    public string Email { get; set; } = "";
+
+    public string RoleName { get; set; } = DefaultRoleName;
 
     /// <summary>
     /// When <c>true</c> the seed is the well-known development/demo admin: the startup log includes the

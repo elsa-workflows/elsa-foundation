@@ -43,7 +43,11 @@
             ]
           },
           "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
-            "IsDevelopmentOrDemo": true
+            "IsDevelopmentOrDemo": true,
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
           },
           "FoundationIdentityOpenIddict": {
             "IsDevelopmentOrDemo": true

@@ -8,7 +8,6 @@ using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Extensions;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using FastEndpoints;
@@ -59,7 +58,8 @@ public sealed class EnabledShellCompositionTests : IAsyncLifetime
 
                     services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
                         isDevelopmentOrDemo: true,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"));
+                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"),
+                        initialAdmin: TestAdmin.SeedOptions());
 
                     services.AddFoundationIdentityOpenIddict(
                         options => options.IsDevelopmentOrDemo = true,

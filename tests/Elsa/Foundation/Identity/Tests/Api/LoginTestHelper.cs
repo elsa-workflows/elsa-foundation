@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
 
@@ -35,8 +34,8 @@ internal static class LoginTestHelper
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["username"] = IdentitySeeder.AdminUserName,
-                ["password"] = IdentitySeeder.AdminPassword,
+                ["username"] = TestAdmin.UserName,
+                ["password"] = TestAdmin.Password,
                 [AspNetCoreIdentityDefaults.AntiforgeryFieldName] = token
             })
         };
