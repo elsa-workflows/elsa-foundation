@@ -22,17 +22,20 @@ namespace Elsa.Persistence.Groundwork.Tests;
 // IRuntimeResumptionService.SweepAsync to drive the execution to the same terminal state a
 // crash-free ("control") run reaches.
 //
-// Two recoverable windows are covered:
+// Three recoverable windows are covered:
 //   Window A - crash AFTER checkpoint commit but BEFORE post-commit outbox delivery. The outbox row
 //              is durable and Pending; the scheduler work was never enqueued. The sweep's outbox
 //              delivery step re-delivers it, enqueues the work, then re-drives.
 //   Window B - crash AFTER outbox delivery (work durably queued) but BEFORE the scheduler drain. The
 //              work item survives in the durable queue; the sweep discovers the backlog via
 //              ListPendingWorkflowExecutionIdsAsync and re-drives.
-//
-// The residual, unrecoverable Window C (crash after dequeue-delete but before the handler's
-// checkpoint commit) is out of scope here and documented in docs/runtime-durable-resumption.md; it
-// closes with W5 lease/heartbeat drainer-ack semantics.
+//   Window C - crash AFTER the drainer picks up a work item but BEFORE the consuming handler's
+//              checkpoint commit lands. Closed by the redrive-safe drain (#412 item 3): the drainer no
+//              longer destructively dequeues up front — it ack-deletes the source item only AFTER the
+//              handler's effect is durable. A crash before the commit therefore leaves the source item
+//              durably queued; the sweep discovers it via ListPendingWorkflowExecutionIdsAsync and
+//              re-drives the handler idempotently. (Previously this window was residual/unrecoverable
+//              at item granularity — the up-front dequeue-delete had already dropped the source item.)
 public sealed class GroundworkDurableResumptionCrashTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 1, 12, 0, 0, TimeSpan.Zero);
@@ -110,6 +113,61 @@ public sealed class GroundworkDurableResumptionCrashTests
 
         // Generation 2: honest services over the surviving store. The sweep discovers the durable
         // backlog and re-drives to the terminal state, draining the queue.
+        await using (var recovered = BuildProvider(store))
+        {
+            var sweep = ResolveResumptionService(recovered);
+            await sweep.SweepAsync(new RuntimeResumptionSweepRequest());
+
+            var recoveredSnapshot = await SnapshotActivityStateAsync(recovered);
+            Assert.Equal(controlSnapshot, recoveredSnapshot);
+
+            var queue = recovered.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+            var remaining = await queue.ListPendingWorkflowExecutionIdsAsync(10);
+            Assert.DoesNotContain("wfexec-1", remaining);
+        }
+    }
+
+    [Fact]
+    public async Task WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState()
+    {
+        var manifest = ElsaRuntimeStorageManifest.Create();
+        var controlSnapshot = await RunControlAsync(manifest);
+        Assert.NotEmpty(controlSnapshot);
+
+        var store = new InMemoryDocumentStore(manifest);
+
+        // Generation 1: the checkpoint commit store throws OperationCanceledException on its first commit — a *process
+        // crash* (not a handler fault) landing after the drainer picked up the work item but before its checkpoint
+        // committed. Under the redrive-safe drain the source item is NOT ack-deleted until after a successful commit, so
+        // the crash leaves it durably queued. (Before the reorder, the up-front dequeue-delete had already dropped it,
+        // and this window was unrecoverable at item granularity.)
+        await using (var crashed = BuildProvider(store, services =>
+        {
+            // Manual decoration (Scrutor's Decorate is not referenced here): capture the durable writer type registered
+            // by AddGroundworkRuntimeStores and wrap it so the FIRST commit throws OperationCanceledException.
+            var innerDescriptor = services.Single(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointCommitStore));
+            var innerImplementationType = innerDescriptor.ImplementationType
+                ?? throw new InvalidOperationException("Expected a type-based IRuntimeCheckpointCommitStore registration to decorate.");
+            services.Remove(innerDescriptor);
+            services.AddSingleton<IRuntimeCheckpointCommitStore>(sp =>
+                new CrashOnceCheckpointCommitStore(
+                    (IRuntimeCheckpointCommitStore)ActivatorUtilities.CreateInstance(sp, innerImplementationType)));
+        }))
+        {
+            // The crash propagates out of the start dispatch as an OperationCanceledException.
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SeedAndStartAsync(crashed));
+
+            // The source scheduler work item survived the crash, so the execution is discoverable for redrive.
+            var queue = crashed.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+            var queued = await queue.ListPendingWorkflowExecutionIdsAsync(10);
+            Assert.Contains("wfexec-1", queued);
+
+            var crashedSnapshot = await SnapshotActivityStateAsync(crashed);
+            Assert.NotEqual(controlSnapshot, crashedSnapshot);
+        }
+
+        // Generation 2: honest services over the surviving store. The sweep discovers the durable backlog and re-drives
+        // the handler idempotently to the terminal state, draining the queue.
         await using (var recovered = BuildProvider(store))
         {
             var sweep = ResolveResumptionService(recovered);
@@ -224,6 +282,26 @@ public sealed class GroundworkDurableResumptionCrashTests
             createdAt: DateTimeOffset.UtcNow,
             publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+    }
+
+    // Simulates a Window C crash: the drainer has picked up the work item, but the very first checkpoint commit throws
+    // OperationCanceledException (a process crash, not a handler fault — so the drainer re-throws it rather than parking
+    // the item as poison). Under the redrive-safe drain the source item is only ack-deleted after a successful commit,
+    // so this crash leaves it durably queued for the resumption sweep to re-drive.
+    private sealed class CrashOnceCheckpointCommitStore(IRuntimeCheckpointCommitStore inner) : IRuntimeCheckpointCommitStore
+    {
+        private int _commitAttempts;
+
+        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
+            RuntimeCheckpointCommit commit,
+            RuntimeCheckpointPersistenceDecision decision,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _commitAttempts) == 1)
+                throw new OperationCanceledException($"Simulated crash before checkpoint commit '{commit.CommitId}'.");
+
+            return inner.CommitAsync(commit, decision, cancellationToken);
+        }
     }
 
     // Simulates a crash between checkpoint commit and post-commit outbox delivery: the outbox row is

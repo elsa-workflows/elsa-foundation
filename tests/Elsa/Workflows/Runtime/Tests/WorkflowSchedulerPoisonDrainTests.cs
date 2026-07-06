@@ -7,9 +7,17 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Guardrails for RT-1 gap b / RT-12: a scheduler work handler that throws must not have its already-dequeued work item
-/// silently dropped. The drainer records a poison record honoring <see cref="IRuntimeDomainRetryPolicy"/>, and only
-/// re-enqueues immediately for <see cref="RuntimeDomainRetryMode.RetryNow"/>.
+/// Guardrails for RT-1 gap b / RT-12: a scheduler work handler that throws must not have its work item silently
+/// dropped. The drainer records a poison record honoring <see cref="IRuntimeDomainRetryPolicy"/>, and only re-enqueues
+/// immediately for <see cref="RuntimeDomainRetryMode.RetryNow"/>.
+///
+/// #412 item 3 (redrive-safe drain): dispatch no longer destructively dequeues up front. On a *handler fault* the
+/// drainer ack-deletes the source item BEFORE recording poison / honoring a RetryNow re-enqueue, so a
+/// deterministically-poisoning handler cannot hot-loop: the item is either parked (no re-enqueue) or re-enqueued
+/// exactly once by RetryNow, never both. <see cref="DrainAsync_WithDefaultNoopRetryPolicy_RecordsPoisonWithoutRetryOrReEnqueue"/>
+/// (empty queue after a fault) and <see cref="DrainAsync_RetryNowPoisonedHandler_DeliversBoundedTimes_DoesNotHotLoop"/>
+/// are the bites: without the ack-on-fault, the still-queued source item would be re-driven by the sweep AND requeued
+/// by RetryNow, and repeated drains would redeliver forever.
 /// </summary>
 public sealed class WorkflowSchedulerPoisonDrainTests
 {
@@ -90,6 +98,71 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         Assert.Equal(_now, record.FirstFailedAt);
     }
 
+    [Fact]
+    public async Task DrainAsync_RetryNowPoisonedHandler_DeliversBoundedTimes_DoesNotHotLoop()
+    {
+        // #412 item 3 — the load-bearing poison-path edge under the redrive-safe drain. A handler that
+        // deterministically faults, paired with a RetryNow policy, must be delivered EXACTLY ONCE per drain and leave
+        // EXACTLY ONE copy of the source item queued afterwards. This holds only because the fault branch ack-deletes
+        // the source item BEFORE HandleHandlerCrashAsync re-enqueues it via RetryNow: the single drain terminates on
+        // fault (one delivery), and the queue converges to a single item (ack removed the original; RetryNow put one
+        // back). If the ack-on-fault were removed, the original would survive AND RetryNow would re-enqueue — the item
+        // would still be idempotent-by-id single-instance, but the source item would never be consumed, so a
+        // resumption re-drive plus RetryNow would keep redelivering it. This test pins the per-drain bound and the
+        // steady-state single-instance queue that make poison delivery bounded rather than an infinite hot-loop.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var handler = new AlwaysFaultingSchedulerWorkHandler();
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [handler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: new StubRetryPolicy(new RuntimeDomainRetryDecision(RuntimeDomainRetryMode.RetryNow, null, "retry-now")));
+
+        await queue.EnqueueAsync(NewWorkItem(1));
+
+        // Three successive drains (simulating the pump re-driving the RetryNow-requeued item). Each drain must fault
+        // once and stop — never loop within a single drain — and the queue must never accumulate duplicates.
+        const int drains = 3;
+        for (var i = 0; i < drains; i++)
+        {
+            var result = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+            Assert.True(result.StoppedOnFault);
+            Assert.Equal(1, result.DrainedCount); // exactly one item processed per drain — no in-drain hot-loop
+
+            var afterDrain = await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+            Assert.Single(afterDrain); // RetryNow re-enqueued exactly one copy; the ack-deleted original did not linger
+            Assert.Equal("work-1", afterDrain.Single().WorkItemId);
+        }
+
+        // Bounded delivery: exactly one handler invocation per drain, never an unbounded loop.
+        Assert.Equal(drains, handler.InvocationCount);
+
+        // The poison record accumulated one failure per drain (single logical item, not duplicated instances).
+        var record = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal(drains, record.FailureCount);
+
+        // Second leg — the ack-on-fault bite. With a NoopRetry policy (no re-enqueue), a single drain of a faulting
+        // handler must leave the queue EMPTY: the ack-delete on fault is the *only* thing that removes the source item.
+        // If the ack-on-fault were dropped, the faulted item would linger and the sweep would redeliver it forever.
+        var noopQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var noopHandler = new AlwaysFaultingSchedulerWorkHandler();
+        var noopDrainer = TestSchedulerDrainer.Create(
+            noopQueue,
+            [noopHandler, new NoopWorkflowSchedulerWorkHandler()],
+            new FixedTimeProvider(_now),
+            poisonStore: new InMemoryWorkflowSchedulerPoisonStore(),
+            retryPolicy: new NoopRuntimeDomainRetryPolicy());
+        await noopQueue.EnqueueAsync(NewWorkItem(2));
+
+        var noopResult = await noopDrainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+
+        Assert.True(noopResult.StoppedOnFault);
+        Assert.Equal(1, noopHandler.InvocationCount);
+        Assert.Empty(await noopQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"))); // ack-on-fault removed the item; NoopRetry did not re-enqueue
+    }
+
     private WorkflowSchedulerDrainer NewDrainer(
         InMemoryWorkflowSchedulerWorkQueue queue,
         IWorkflowSchedulerPoisonStore poisonStore,
@@ -124,10 +197,14 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     private sealed class AlwaysFaultingSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
     {
         public string Name => nameof(AlwaysFaultingSchedulerWorkHandler);
+        public int InvocationCount { get; private set; }
         public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
 
-        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
             throw new InvalidOperationException($"Handler crashed for {workItem.WorkItemId}.");
+        }
     }
 
     private sealed class StubRetryPolicy(RuntimeDomainRetryDecision decision) : IRuntimeDomainRetryPolicy
