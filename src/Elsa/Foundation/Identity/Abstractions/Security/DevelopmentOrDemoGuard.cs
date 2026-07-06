@@ -11,9 +11,9 @@ namespace Elsa.Foundation.Identity.Abstractions.Security;
 /// <para>
 /// The default <c>shells.json</c> ships <c>IsDevelopmentOrDemo: true</c> for the enabled-by-default identity
 /// features. That flag is bound purely from configuration; on its own it decides the insecure development
-/// posture — ephemeral per-process signing keys and a seeded, startup-logged <c>admin</c>/<c>Password123!</c>
-/// account. A host launched in the <b>Production</b> environment on the unedited default would otherwise boot
-/// straight into that posture.
+/// posture — ephemeral per-process signing keys and a seeded, startup-logged administrator whose well-known
+/// credentials are committed to <c>shells.json</c>. A host launched in the <b>Production</b> environment on the
+/// unedited default would otherwise boot straight into that posture.
 /// </para>
 /// <para>
 /// This guard hard-fails startup when <c>IsDevelopmentOrDemo == true</c> unless it can positively confirm the
@@ -52,7 +52,8 @@ public sealed class DevelopmentOrDemoGuard(IServiceProvider services, string fea
         throw new InvalidOperationException(
             $"The identity feature '{featureName}' is configured with IsDevelopmentOrDemo = true, but the host "
                 + $"environment is '{actual}', not 'Development'. This mode uses ephemeral "
-                + "per-process signing keys and seeds a well-known 'admin'/'Password123!' account, and is refused "
+                + "per-process signing keys and seeds an administrator from well-known credentials committed to "
+                + "shells.json, and is refused "
                 + "unless the environment is positively confirmed to be Development — there is no insecure escape "
                 + "hatch in production. To fix: set "
                 + $"IsDevelopmentOrDemo = false for '{featureName}' and configure a real signing key (and, for the "

@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 
@@ -62,13 +63,15 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
     [Fact]
     public async Task Seeder_Creates_Admin_That_Can_Sign_In_With_Admin_Permissions()
     {
-        var seeder = ActivatorUtilities.CreateInstance<IdentitySeeder>(_fixture.Services);
+        // The seed account is supplied from configuration; feed the seeder explicit options (the fixture host
+        // runs with dev/demo off and registers none of its own).
+        var seeder = ActivatorUtilities.CreateInstance<IdentitySeeder>(_fixture.Services, Options.Create(TestAdmin.SeedOptions()));
         await seeder.StartAsync(CancellationToken.None);
 
         await using var scope = _fixture.CreateScope();
         var signIn = scope.ServiceProvider.GetRequiredService<IIdentitySignInService>();
 
-        var outcome = await signIn.PasswordSignInAsync(IdentitySeeder.AdminUserName, IdentitySeeder.AdminPassword, tenantId: null);
+        var outcome = await signIn.PasswordSignInAsync(TestAdmin.UserName, TestAdmin.Password, tenantId: null);
 
         Assert.True(outcome.Succeeded);
         // The admin role is granted every catalog permission; a representative one should be projected.

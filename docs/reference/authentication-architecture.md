@@ -174,8 +174,9 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 "FoundationIdentityOpenIddict": { "IsDevelopmentOrDemo": true }
 ```
 
-Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!` under
-`IsDevelopmentOrDemo` only), cookie sign-in, and first-party JWT issuance. This is exactly what the
+Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
+`SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
+cookie sign-in, and first-party JWT issuance. This is exactly what the
 checked-in `src/Apps/Elsa.Server/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
 the default shell but is inert until you configure an `Authority`/`ClientId`** — with no provider
 configured, its interactive OpenID Connect handler is not even registered, and bearer validation

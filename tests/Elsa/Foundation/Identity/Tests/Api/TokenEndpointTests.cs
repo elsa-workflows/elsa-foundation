@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Elsa.Foundation.Identity.Abstractions.Authentication;
 using Elsa.Foundation.Identity.Abstractions.Authorization;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Foundation.Identity.Tests.Api;
@@ -90,8 +89,8 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         // antiforgery token must NOT establish a session — it redirects back to the login page with an error.
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["username"] = IdentitySeeder.AdminUserName,
-            ["password"] = IdentitySeeder.AdminPassword,
+            ["username"] = TestAdmin.UserName,
+            ["password"] = TestAdmin.Password,
             ["returnUrl"] = "/studio"
         });
 
@@ -116,8 +115,8 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         // keys off Content-Type (this is not application/json), so it must be rejected with no session issued.
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["username"] = IdentitySeeder.AdminUserName,
-            ["password"] = IdentitySeeder.AdminPassword
+            ["username"] = TestAdmin.UserName,
+            ["password"] = TestAdmin.Password
         });
 
         var response = await client.PostAsync(LoginRoute, content);

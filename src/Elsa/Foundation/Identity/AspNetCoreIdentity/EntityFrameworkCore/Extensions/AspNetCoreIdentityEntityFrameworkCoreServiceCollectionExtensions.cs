@@ -16,8 +16,8 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
     /// Wires the durable EF Core substrate for the ASP.NET Core Identity provider: registers
     /// <see cref="ApplicationIdentityDbContext"/>, replaces the in-memory Elsa IAM stores with EF-backed
     /// adapters over that context, adds ASP.NET Core Identity core (<c>SignInManager</c> + token providers)
-    /// with the EF stores and cookie scheme, and — when <paramref name="isDevelopmentOrDemo"/> — seeds an
-    /// admin user + role at startup.
+    /// with the EF stores and cookie scheme, and — when <paramref name="initialAdmin"/> is supplied — seeds
+    /// that admin user + role at startup.
     /// </summary>
     /// <param name="configureDbContext">
     /// Configures the provider. When <c>null</c> a Sqlite database (<c>Data Source=identity.db</c>) is used
@@ -25,8 +25,9 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
     /// set — honouring "keep the in-memory store for IsDevelopmentOrDemo only".
     /// </param>
     /// <param name="initialAdmin">
-    /// An administrator account to seed on a durable store when <paramref name="isDevelopmentOrDemo"/> is
-    /// <c>false</c> (the dev/demo path seeds its own well-known admin). <c>null</c> seeds no production admin.
+    /// The administrator account to seed at startup, sourced from configuration. Seeding is independent of
+    /// <paramref name="isDevelopmentOrDemo"/> (dev/demo supplies its credentials through committed config).
+    /// <c>null</c> seeds no admin.
     /// </param>
     public static IServiceCollection AddFoundationAspNetCoreIdentityEntityFrameworkCore(
         this IServiceCollection services,
@@ -66,15 +67,12 @@ public static class AspNetCoreIdentityEntityFrameworkCoreServiceCollectionExtens
             services.AddIdentityDevelopmentOrDemoGuard("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore");
         }
 
-        // Seed an admin either for dev/demo (well-known credentials, in-memory DB) or when a durable-store
-        // deployment configures its own initial admin. The dev/demo defaults reproduce the previous behaviour.
-        var seedOptions = isDevelopmentOrDemo
-            ? new IdentitySeedOptions { IsDevelopmentSeed = true }
-            : initialAdmin;
-
-        if (seedOptions is not null)
+        // Seed an admin whenever the caller supplies a configured account. Seeding is independent of
+        // isDevelopmentOrDemo: the dev/demo host supplies its well-known credentials through committed config
+        // just like any other deployment, so there are no code-level credential defaults here.
+        if (initialAdmin is not null)
         {
-            services.AddSingleton(Options.Create(seedOptions));
+            services.AddSingleton(Options.Create(initialAdmin));
 
             // Register once and expose under both lifecycle hooks: IHostedService for plain hosts/tests, and
             // the CShells IShellInitializer for the shell-composed Elsa.Server host (which does not run

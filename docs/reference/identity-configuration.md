@@ -29,7 +29,13 @@ intended **only** for local development and demos:
 ```jsonc
 "FoundationIdentityApi": {},
 "FoundationIdentityAspNetCoreIdentity": {},
-"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": { "IsDevelopmentOrDemo": true },
+"FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+  "IsDevelopmentOrDemo": true,
+  "SeedAdminUserName": "admin",
+  "SeedAdminPassword": "Password123!",
+  "SeedAdminEmail": "admin@elsa.local",
+  "SeedAdminRoleName": "administrator"
+},
 "FoundationIdentityOpenIddict": { "IsDevelopmentOrDemo": true }
 ```
 
@@ -37,9 +43,10 @@ Under `IsDevelopmentOrDemo`:
 
 - **Stores are in-memory** (EF in-memory database) — data does not survive a restart.
 - **Signing/encryption keys are ephemeral per process** — issued tokens do not survive a restart.
-- **An admin account is seeded**: username `admin`, password `Password123!` (logged prominently at startup).
-  The administrator role is granted the all-access permission (`*`), so it can reach every
-  `ConfigurePermissions()`-secured endpoint.
+- **An admin account is seeded** from the `SeedAdmin*` settings above — the committed dev defaults are
+  username `admin`, password `Password123!` (logged prominently at startup). There are no credential
+  constants in code; the values come entirely from configuration. The administrator role is granted the
+  all-access permission (`*`), so it can reach every `ConfigurePermissions()`-secured endpoint.
 - **The sign-in cookie relaxes to `SameAsRequest`** so a plain-HTTP `localhost` host can establish a session.
 
 ## Configuration surface (production)
@@ -51,12 +58,18 @@ etc.). Secrets should come from a secret store, not source control.
 
 | Setting | Meaning | Production requirement |
 |---|---|---|
-| `IsDevelopmentOrDemo` | In-memory store + admin seeding. | **`false`.** |
+| `IsDevelopmentOrDemo` | In-memory store + ephemeral keys. | **`false`.** |
 | `ConnectionString` | Sqlite connection string for the identity database. | Set to a durable path, e.g. `Data Source=/var/lib/elsa/identity.db`. Defaults to `identity.db` in the content root when unset. |
+| `SeedAdminUserName` | Username of an administrator to provision at startup. | Optional. Requires `SeedAdminPassword`. |
+| `SeedAdminPassword` | Password for the seeded administrator. | **Supply via a secret** (user-secrets / environment variable), never committed. |
+| `SeedAdminEmail` | Email for the seeded administrator. | Optional; defaults to `<username>@elsa.local`. |
+| `SeedAdminRoleName` | Role granted to the seeded administrator. | Optional; defaults to `administrator`. |
 
-The seeded `admin` / `Password123!` credentials exist **only** under `IsDevelopmentOrDemo`. In production no
-account is seeded — provision users through your own onboarding (the credentials are constants on
-`IdentitySeeder` if you script a first user).
+The seed account is defined **entirely by the `SeedAdmin*` settings** on both the dev/demo and production
+paths — there are no credential constants in code. The committed `admin` / `Password123!` values apply only
+under `IsDevelopmentOrDemo`. In production, either provision users through your own onboarding, or seed a first
+administrator by setting `SeedAdminUserName` and supplying `SeedAdminPassword` from a secret store (its password
+is never written to the log; the username xor password half-configured is a startup error).
 
 ### `FoundationIdentityOpenIddict`
 
@@ -121,7 +134,8 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
 5. `FoundationIdentityOpenIddict.Issuer` = your stable absolute issuer URI.
 6. `FoundationIdentityOptions.RequireHttpsMetadata = true` (default) and serve the server over **HTTPS** (so the
    `SecurePolicy=Always` session cookie is accepted).
-7. Provision real user accounts (the dev `admin`/`Password123!` seed does not run in production).
+7. Provision real user accounts — either through your own onboarding, or by setting `SeedAdminUserName` with a
+   secret `SeedAdminPassword` (the committed dev `admin`/`Password123!` values apply only under `IsDevelopmentOrDemo`).
 8. Ensure `ApiSecurity.AllowAnonymous` is **not** set on any shell (it is ignored outside `Development`, but
    remove it to avoid the startup warning).
 9. Host the Studio SPA same-origin, and set `Studio:Auth:Enabled=true`.
@@ -146,5 +160,5 @@ message naming the setting to configure — a missing key never silently degrade
 `IsDevelopmentOrDemo` is also **safe by construction**: if it is left `true` while the host runs in any
 environment other than `Development` (e.g. the unedited default deployed to Production), the host **hard-fails
 at startup** with an actionable message rather than silently booting the insecure posture (ephemeral keys +
-the seeded `admin`/`Password123!` account). There is no insecure escape hatch in production — set
+the administrator seeded from the committed dev credentials). There is no insecure escape hatch in production — set
 `IsDevelopmentOrDemo = false` (and configure real keys) for any non-Development deployment.

@@ -51,11 +51,12 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                     services.AddRouting();
                     services.AddAuthorization();
 
-                    // Workstream A: identity substrate + cookie sign-in + login endpoint (in dev/demo mode so
-                    // the admin user is seeded and we can log in through the real POST /login flow).
+                    // Workstream A: identity substrate + cookie sign-in + login endpoint (in dev/demo mode with
+                    // an explicitly configured admin so we can log in through the real POST /login flow).
                     services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
                         isDevelopmentOrDemo: true,
-                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"));
+                        configureDbContext: builder => builder.UseInMemoryDatabase($"identity-{databaseSuffix}"),
+                        initialAdmin: TestAdmin.SeedOptions());
 
                     // Workstream B: OpenIddict issuance + bearer validation + selector default scheme.
                     services.AddFoundationIdentityOpenIddict(

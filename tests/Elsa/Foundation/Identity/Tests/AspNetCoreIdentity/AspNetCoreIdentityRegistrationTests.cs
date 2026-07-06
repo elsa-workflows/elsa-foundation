@@ -44,10 +44,16 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
     {
         // The seeder must run in plain hosts (IHostedService) AND when composed inside a CShells shell
         // (IShellInitializer) — the Elsa.Server host does not run shell-scoped hosted services. Registering
-        // it under only one hook is the exact regression that left the enabled shell unseeded.
+        // it under only one hook is the exact regression that left the enabled shell unseeded. The dev/demo
+        // seed account now comes from config just like any other, so supply the credentials here.
         var services = new ServiceCollection();
         services.AddLogging();
-        new AspNetCoreIdentityEntityFrameworkCoreFeature { IsDevelopmentOrDemo = true }.ConfigureServices(services);
+        new AspNetCoreIdentityEntityFrameworkCoreFeature
+        {
+            IsDevelopmentOrDemo = true,
+            SeedAdminUserName = TestAdmin.UserName,
+            SeedAdminPassword = TestAdmin.Password
+        }.ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
 
@@ -108,7 +114,8 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
             {
                 UserName = "root",
                 Password = "S3cret-Passw0rd!",
-                Email = "root@corp.example"
+                Email = "root@corp.example",
+                RoleName = "custom-admins"
             });
 
         await using var provider = services.BuildServiceProvider();
@@ -131,6 +138,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
         Assert.NotNull(record);
         var roles = sp.GetRequiredService<IRoleStore>();
         var adminRole = (await roles.ListAsync(tenantId)).Single(r => record!.RoleIds.Contains(r.Id));
+        Assert.Equal("custom-admins", adminRole.Name); // the configured role name flowed through
         Assert.Contains(IdentitySeeder.AllAccessPermission, adminRole.Permissions);
     }
 

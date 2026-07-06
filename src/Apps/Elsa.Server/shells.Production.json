@@ -7,7 +7,8 @@
             "IsDevelopmentOrDemo": false,
             "ConnectionString": "Data Source=elsa-identity.db",
             "SeedAdminUserName": "admin",
-            "SeedAdminEmail": "admin@elsa.local"
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
           },
           "FoundationIdentityOpenIddict": {
             "IsDevelopmentOrDemo": false,
