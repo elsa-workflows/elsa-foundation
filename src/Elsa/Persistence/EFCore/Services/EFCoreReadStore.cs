@@ -84,11 +84,11 @@ public class EFCoreReadStore<TDbContext, TEntity>(IDbContextFactory<TDbContext> 
             return;
 
         using var scope = serviceProvider.CreateScope();
-        var publisher = scope.ServiceProvider.GetService<IEventPublisher>();
-        if (publisher is null)
+        var eventPublisher = scope.ServiceProvider.GetService<IInlineEventPublisher>();
+        if (eventPublisher is null)
             return;
 
         foreach (var entity in entities)
-            await publisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken: cancellationToken);
+            await eventPublisher.Publish(new OnEntityLoading(dbContext, entity), cancellationToken);
     }
 }

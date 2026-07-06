@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Persistence.EFCore.Events;
 using Elsa.Primitives.Contracts;
@@ -18,7 +17,7 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 public sealed class PromoteDraftToVersion(
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
-    IEventPublisher eventPublisher,
+    IInlineEventPublisher inlineEventPublisher,
     IIdentityGenerator identityGenerator)
     : IPromoteDraftToVersionCommand
 {
@@ -35,14 +34,13 @@ public sealed class PromoteDraftToVersion(
             .FirstOrDefaultAsync(d => d.Id == draftId, cancellationToken)
             ?? throw new InvalidOperationException($"Workflow definition draft '{draftId}' not found");
 
-        await eventPublisher.Publish(
+        await inlineEventPublisher.Publish(
             new OnEntityLoading(dbContext, draft),
-            EventPublishingStrategy.Sequential,
             cancellationToken);
 
         // FR-024 promotion gate: derive errors against the hydrated Draft (see DraftValidationGate).
         // Runs inside the per-Draft lock, so the validated state is exactly the state promoted.
-        var errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
+        var errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
         if (errors.Count > 0)
             throw new DraftHasValidationErrorsException(draftId, errors.Count);

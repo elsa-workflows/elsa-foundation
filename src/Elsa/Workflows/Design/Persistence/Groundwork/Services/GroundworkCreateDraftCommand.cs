@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
@@ -21,7 +20,8 @@ public sealed class GroundworkCreateDraftCommand(
     IDistributedLockProvider lockProvider,
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
-    IEventPublisher eventPublisher,
+    IInlineEventPublisher inlineEventPublisher,
+    IDeferredEventPublisher deferredEventPublisher,
     ISystemClock clock)
     : ICreateDraftCommand
 {
@@ -50,7 +50,7 @@ public sealed class GroundworkCreateDraftCommand(
         await using (var lockHandle = await lockProvider.AcquireLockAsync(lockKey, null, cancellationToken))
         {
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
+            errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
             GroundworkEntityTimestamps.StampAdded(draft, clock.UtcNow);
 
             await store.SaveAllAsync(
@@ -59,8 +59,8 @@ public sealed class GroundworkCreateDraftCommand(
                 cancellationToken);
         }
 
-        await eventPublisher.Publish(new OnDraftCreated(draftId, workflowDefinitionId, sourceVersionId), EventPublishingStrategy.Background, cancellationToken);
-        await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftCreated(draftId, workflowDefinitionId, sourceVersionId), cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftValidated(draft, errors), cancellationToken);
 
         return draftId;
     }

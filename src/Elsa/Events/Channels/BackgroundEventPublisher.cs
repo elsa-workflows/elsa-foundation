@@ -68,13 +68,14 @@ public sealed class BackgroundEventPublisher(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            var publisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
+            // Drained events are delivered inline (awaited, in order) — the same sequential dispatch
+            // the deferred face defers. Resolving the inline face here is intent-revealing.
+            var eventPublisher = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();
 
             // Dispatch under host lifetime only. The queued context's own CancellationToken (captured
             // at enqueue time) is intentionally NOT linked here — see the class remarks (IN-2).
-            await publisher.Publish(
+            await eventPublisher.Publish(
                 queuedContext.Event,
-                EventPublishingStrategy.Sequential,
                 cancellationToken
             );
         }

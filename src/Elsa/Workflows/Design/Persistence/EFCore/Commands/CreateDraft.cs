@@ -1,5 +1,4 @@
 using Elsa.Events.Core.Contracts;
-using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Workflows.Design.Core.Events;
@@ -46,7 +45,8 @@ public sealed class CreateDraft(
     IIdentityGenerator identityGenerator,
     IDistributedLockProvider lockProvider,
     IDbContextFactory<WorkflowsDesignDbContext> contextFactory,
-    IEventPublisher eventPublisher
+    IInlineEventPublisher inlineEventPublisher,
+    IDeferredEventPublisher deferredEventPublisher
 ) : ICreateDraftCommand
 {
     public async Task<string> Execute(
@@ -87,16 +87,16 @@ public sealed class CreateDraft(
             await dbContext.WorkflowDefinitionDraftLayouts.AddAsync(layout, cancellationToken);
 
             // In-lock validation gate (see DraftValidationGate); errors are derived, never persisted.
-            errors = await eventPublisher.DeriveValidationErrorsAsync(draft, EventPublishingStrategy.Sequential, cancellationToken);
+            errors = await inlineEventPublisher.DeriveValidationErrorsAsync(draft, cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        // Cause first. Background: fire-and-forget, subscribers must not break the publisher.
-        await eventPublisher.Publish(new OnDraftCreated(draftId, workflowDefinitionId, sourceVersionId), EventPublishingStrategy.Background, cancellationToken);
+        // Cause first. Deferred: fire-and-forget, subscribers must not break the publisher.
+        await deferredEventPublisher.Publish(new OnDraftCreated(draftId, workflowDefinitionId, sourceVersionId), cancellationToken);
 
         // Consequence second.
-        await eventPublisher.Publish(new OnDraftValidated(draft, errors), EventPublishingStrategy.Background, cancellationToken);
+        await deferredEventPublisher.Publish(new OnDraftValidated(draft, errors), cancellationToken);
 
         return draftId;
     }

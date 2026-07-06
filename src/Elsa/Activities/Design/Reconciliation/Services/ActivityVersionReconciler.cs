@@ -38,7 +38,7 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 public sealed class ActivityVersionReconciler(
     ILogger<ActivityVersionReconciler> logger,
     IActivityDefinitionHasher hasher,
-    IEventPublisher sender,
+    IInlineEventPublisher eventPublisher,
     IOptions<ActivityVersionReconcilerOptions> options,
     IActivityDefinitionStore definitionStore,
     IActivityDefinitionVersionStore versionStore,
@@ -54,7 +54,7 @@ public sealed class ActivityVersionReconciler(
         // Handlers contribute by adding to the event's directly-accessible Versions collection;
         // the reconciler reads the accumulated set after dispatch.
         var @event = new OnActivityVersionsReconciling();
-        await sender.Publish(@event, cancellationToken: cancellationToken);
+        await eventPublisher.Publish(@event, cancellationToken);
 
         foreach (var version in @event.Versions)
         {

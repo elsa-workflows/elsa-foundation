@@ -19,14 +19,14 @@ namespace Elsa.Serialization.SystemText.Services;
 /// synchronously while building <see cref="System.Text.Json.JsonSerializerOptions"/>.
 /// </summary>
 public sealed class JsonPayloadConvertersInitializingStartupTask(
-    IEventPublisher eventPublisher,
+    IInlineEventPublisher eventPublisher,
     JsonPayloadConverterRegistry registry)
     : IStartupTask
 {
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var @event = new OnJsonPayloadConvertersInitializing();
-        await eventPublisher.Publish(@event, cancellationToken: cancellationToken);
+        await eventPublisher.Publish(@event, cancellationToken);
         registry.RegisterAll(@event.Converters);
     }
 }

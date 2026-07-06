@@ -12,14 +12,14 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// §2.6.1 Registry + StartUp Task sub-pattern.
 /// </summary>
 public sealed class ActivityConstructorsStartupTask(
-    IEventPublisher publisher,
+    IInlineEventPublisher eventPublisher,
     IActivityConstructorRegistry registry)
     : IStartupTask
 {
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var constructors = new List<IActivityConstructor>();
-        await publisher.Publish(new OnActivityConstructorsInitializing(constructors), cancellationToken: cancellationToken);
+        await eventPublisher.Publish(new OnActivityConstructorsInitializing(constructors), cancellationToken);
         registry.AddAll(constructors);
     }
 }

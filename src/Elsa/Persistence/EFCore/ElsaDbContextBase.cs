@@ -89,12 +89,12 @@ public abstract class ElsaDbContextBase : DbContext, IElsaDbContextSchema
     /// </summary>
     private async Task DispatchEntitySavingEvents(IEnumerable<EntityEntry<Entity>> entries, IServiceScope scope, CancellationToken cancellationToken)
     {
-        var sender = scope.ServiceProvider.GetService<IEventPublisher>();
-        if (sender is null)
+        var eventPublisher = scope.ServiceProvider.GetService<IInlineEventPublisher>();
+        if (eventPublisher is null)
             return;
 
         foreach (var entry in entries.Where(IsModifiedEntity))
-            await sender.Publish(new OnEntitySaving(this, entry), cancellationToken: cancellationToken);
+            await eventPublisher.Publish(new OnEntitySaving(this, entry), cancellationToken);
     }
 
 
