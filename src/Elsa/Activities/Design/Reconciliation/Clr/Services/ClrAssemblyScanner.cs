@@ -186,6 +186,13 @@ public sealed class ClrAssemblyScanner(
             ? new TypeReference("Object")
             : TypeReferenceFactory.FromClrType(valueType, TypeAliasConvention.CanonicalAlias);
 
+    // The host's own dependency closure (base directory, trusted-platform-assemblies, runtime
+    // directory) is enumerated from disk and is process-lifetime-invariant, so it is read once and
+    // cached instead of re-globbing on every Scan() call (issue #417 item 2). AppDomain assemblies
+    // are NOT cached here: that set can grow as assemblies load lazily, and enumerating it is
+    // in-memory (no disk IO), so it stays live per call to preserve resolution behaviour exactly.
+    private static readonly Lazy<IReadOnlyList<string>> InvariantFrameworkPaths = new(CollectInvariantFrameworkPaths);
+
     private static Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -211,21 +218,30 @@ public sealed class ClrAssemblyScanner(
                 Add(location);
         }
 
+        // Cached framework closure (base directory → TPA → runtime directory), in the same
+        // first-wins order as before; folder + AppDomain entries above still take precedence.
+        foreach (var dll in InvariantFrameworkPaths.Value)
+            Add(dll);
+
+        return byName.Values;
+    }
+
+    private static IReadOnlyList<string> CollectInvariantFrameworkPaths()
+    {
+        var paths = new List<string>();
+
         // The host's own dependency closure (e.g. the activity base types and their references)
         // lives next to the host binary; these are not necessarily loaded into the AppDomain yet,
         // so add them explicitly to satisfy reflection-only base-type/reference resolution.
         var baseDirectory = AppContext.BaseDirectory;
         if (!string.IsNullOrEmpty(baseDirectory) && Directory.Exists(baseDirectory))
-            foreach (var dll in Directory.EnumerateFiles(baseDirectory, "*.dll"))
-                Add(dll);
+            paths.AddRange(Directory.EnumerateFiles(baseDirectory, "*.dll"));
 
         if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trustedPlatformAssemblies)
-            foreach (var dll in trustedPlatformAssemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                Add(dll);
+            paths.AddRange(trustedPlatformAssemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 
-        foreach (var dll in Directory.EnumerateFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll"))
-            Add(dll);
+        paths.AddRange(Directory.EnumerateFiles(RuntimeEnvironment.GetRuntimeDirectory(), "*.dll"));
 
-        return byName.Values;
+        return paths;
     }
 }

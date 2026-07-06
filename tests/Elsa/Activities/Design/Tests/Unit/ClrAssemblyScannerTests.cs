@@ -69,6 +69,39 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void RepeatedScans_YieldIdenticalResults_WithCachedFrameworkPaths()
+    {
+        // The framework resolver paths (base dir, TPA, runtime dir) are cached across Scan() calls
+        // (issue #417 item 2). A second scan must resolve exactly the same activities and versions —
+        // proving the cached overlay is re-applied intact and per-call state is not corrupted.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+        var scanner = CreateScanner();
+
+        var first = scanner.Scan(folder.Path).ToDictionary(m => m.ActivityTypeKey, m => m.Version);
+        var second = scanner.Scan(folder.Path).ToDictionary(m => m.ActivityTypeKey, m => m.Version);
+
+        Assert.Equal(first, second);
+        Assert.Equal("2.1.0", second[typeof(UnannotatedFixtureActivity).FullName!]);
+        Assert.Equal("3.0.0", second[typeof(VersionedFixtureActivity).FullName!]);
+    }
+
+    [Fact]
+    public void FolderAssembly_IsResolvable_EvenAfterCachedFrameworkPathsAreWarm()
+    {
+        // Warm the framework-path cache with a base-directory scan first, then scan a temp folder.
+        // The folder DLLs must still be added ahead of the cached framework closure so the author's
+        // assembly resolves (folder-precedence overlay preserved) — a broken overlay would drop these
+        // activities.
+        var scanner = CreateScanner();
+        _ = scanner.Scan(AppContext.BaseDirectory);
+
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+        var models = scanner.Scan(folder.Path);
+
+        Assert.Contains(models, m => m.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
+    }
+
+    [Fact]
     public void EmptyFolder_YieldsNoModels()
     {
         using var folder = TempAssemblyFolder.Empty();
