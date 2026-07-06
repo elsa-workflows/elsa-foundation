@@ -102,10 +102,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(invokePayload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, invokePayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, invokePayload.PinnedExecutable, executable.Identity);
 
-        if (!executable.NodesById.TryGetValue(invokePayload.ExecutableNodeId, out var executableNode))
-            throw new InvalidOperationException($"InvokeActivity scheduler work item '{workItem.WorkItemId}' references executable node '{invokePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+        var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, invokePayload.ExecutableNodeId, "InvokeActivity");
 
         var state = await activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, cancellationToken);
         if (state is null)
@@ -930,19 +929,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             "executableNodeId" or
             "activityExecutionId" or
             "reason";
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"InvokeActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
 
     private ActivityExecutionState CompleteActivity(
         RuntimeSchedulerWorkItem workItem,

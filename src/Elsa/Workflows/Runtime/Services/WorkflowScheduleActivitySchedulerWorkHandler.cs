@@ -76,8 +76,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
         SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, schedulePayload.PinnedExecutable, executable.Identity);
 
-        if (!executable.NodesById.TryGetValue(schedulePayload.ExecutableNodeId, out var executableNode))
-            throw new InvalidOperationException($"ScheduleActivity scheduler work item '{workItem.WorkItemId}' references executable node '{schedulePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+        var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, schedulePayload.ExecutableNodeId, "ScheduleActivity");
 
         var existing = await _activityExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, schedulePayload.ActivityExecutionId, cancellationToken);
         if (existing is not null)

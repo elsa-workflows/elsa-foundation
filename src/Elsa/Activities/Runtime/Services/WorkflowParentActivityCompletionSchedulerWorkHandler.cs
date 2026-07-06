@@ -121,7 +121,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, payload.PinnedExecutable, executable.Identity);
 
         if (!executable.NodesById.TryGetValue(payload.ExecutableNodeId, out var parentExecutableNode))
             throw new InvalidOperationException($"CompleteActivity scheduler work item '{workItem.WorkItemId}' references parent executable node '{payload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -861,19 +861,6 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
 
         return snapshot;
-    }
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"CompleteActivity scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
     }
 
     private sealed record ConstructedActivity(

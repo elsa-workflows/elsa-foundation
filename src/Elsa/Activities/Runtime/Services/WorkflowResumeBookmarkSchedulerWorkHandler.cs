@@ -69,10 +69,9 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(resumePayload.PinnedExecutable.ArtifactId);
 
-        ValidatePinnedExecutable(workItem, resumePayload.PinnedExecutable, executable.Identity);
+        SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(workItem, resumePayload.PinnedExecutable, executable.Identity);
 
-        if (!executable.NodesById.TryGetValue(resumePayload.ExecutableNodeId, out var executableNode))
-            throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references executable node '{resumePayload.ExecutableNodeId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
+        var executableNode = SchedulerWorkHandlerHelpers.ResolveExecutableNode(workItem, executable, resumePayload.ExecutableNodeId, "ResumeBookmark");
 
         if (!executable.ResumeTargets.TryGetValue(resumePayload.ResumeTargetId, out var resumeTarget))
             throw new InvalidOperationException($"ResumeBookmark scheduler work item '{workItem.WorkItemId}' references resume target '{resumePayload.ResumeTargetId}', which is missing from executable artifact '{WorkflowExecutableIdentityComparer.Format(executable.Identity)}'.");
@@ -315,19 +314,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             "stimulusType" or
             "stimulusHash" or
             "reason";
-
-    private static void ValidatePinnedExecutable(
-        RuntimeSchedulerWorkItem workItem,
-        WorkflowExecutableIdentity pinnedExecutable,
-        WorkflowExecutableIdentity loadedExecutable)
-    {
-        if (WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(loadedExecutable, pinnedExecutable))
-            return;
-
-        throw new InvalidOperationException(
-            $"ResumeBookmark scheduler work item '{workItem.WorkItemId}' loaded executable artifact '{WorkflowExecutableIdentityComparer.Format(loadedExecutable)}' " +
-            $"but pinned executable artifact '{WorkflowExecutableIdentityComparer.Format(pinnedExecutable)}'.");
-    }
 
     private static void ValidateBookmarkMatchesPayload(
         RuntimeSchedulerWorkItem workItem,
