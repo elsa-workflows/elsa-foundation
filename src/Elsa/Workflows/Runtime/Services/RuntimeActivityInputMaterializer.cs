@@ -81,6 +81,9 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         var expression = resolved.Expression
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' is an expression binding without an expression payload.");
 
+        if (string.Equals(expression.Language, WellKnownExpressionDescriptorTypes.Object, StringComparison.Ordinal))
+            return DeserializeObjectExpression(expression, type, nodeId, inputName);
+
         var serviceProvider = resolutionContext.ServiceProvider
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a '{expression.Language}' expression, but no service provider was supplied to evaluate it.");
 
@@ -100,6 +103,18 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         catch (Exception exception)
         {
             throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' failed to evaluate its '{expression.Language}' expression.", exception);
+        }
+    }
+
+    private static object? DeserializeObjectExpression(RuntimeExpressionBinding expression, Type type, string nodeId, string inputName)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(expression.Expression, type);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' carries an invalid '{expression.Language}' expression payload.", exception);
         }
     }
 
