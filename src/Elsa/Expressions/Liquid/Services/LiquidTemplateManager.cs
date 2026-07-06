@@ -32,8 +32,10 @@ public sealed class LiquidTemplateManager(FluidParser parser, IMemoryCache memor
 
     private IFluidTemplate GetCachedTemplate(string source)
     {
+        // Namespace the key so template source cannot collide with any other feature caching by literal
+        // string in the same shared app-wide IMemoryCache (mirrors PreparedScriptFactory's "jint:script:") (#422 item 2).
         var result = memoryCache.GetOrCreate(
-            source,
+            "liquid:template:" + source,
             e =>
             {
                 if (!TryParse(source, out var parsed, out var error))
