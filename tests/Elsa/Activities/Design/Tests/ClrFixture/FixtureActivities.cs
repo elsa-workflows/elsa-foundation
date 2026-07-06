@@ -39,21 +39,27 @@ public abstract class VersionedBaseActivity : ActivityBase;
 public sealed class InheritedVersionFixtureActivity : VersionedBaseActivity;
 
 /// <summary>
-/// A base activity declaring a <c>[Required]</c> input. The scanner must map the input's
-/// <c>IsRequired</c> to <see langword="true"/> on derived activities that declare no input of their
-/// own, which requires walking the base-property chain (issue #417 item 3).
+/// A base activity declaring a <c>[Required]</c> input. <see cref="InheritsRequiredFixtureActivity"/>
+/// re-declares this same property with <c>new</c> and no <c>[Required]</c> of its own, so the attribute
+/// lives only on this base declaration — the scanner must walk the base-property chain to see it
+/// (issue #417 item 3).
 /// </summary>
 public abstract class RequiredInputBaseActivity : ActivityBase
 {
     [Required]
-    public InputArgument<string> InheritedRequired { get; set; } = null!;
+    public virtual InputArgument<string> InheritedRequired { get; set; } = null!;
 }
 
 /// <summary>
-/// An activity that inherits its only input — carrying <c>[Required]</c> on the base declaration —
-/// from <see cref="RequiredInputBaseActivity"/>. Exercises inherited <c>[Required]</c> mapping.
+/// An activity that re-declares its input with <c>new</c> — deliberately WITHOUT re-applying
+/// <c>[Required]</c>. The scanner reads this attribute-less derived declaration first; only a
+/// base-property-chain walk finds the <c>[Required]</c> on <see cref="RequiredInputBaseActivity"/>
+/// and maps <c>IsRequired</c> to <see langword="true"/> (issue #417 item 3).
 /// </summary>
-public sealed class InheritsRequiredFixtureActivity : RequiredInputBaseActivity;
+public sealed class InheritsRequiredFixtureActivity : RequiredInputBaseActivity
+{
+    public new InputArgument<string> InheritedRequired { get; set; } = null!;
+}
 
 /// <summary>An enum used as a complex (non-primitive) activity input value type.</summary>
 public enum FixtureMode

@@ -47,17 +47,23 @@ public sealed class ClrAssemblyScannerTests
     [Fact]
     public void InheritedRequiredInput_MapsIsRequired()
     {
-        // A [Required] declared on a base-class input must be honoured; the reflection-only scanner has
-        // no inherit-aware attribute read, so it must walk the base-property chain (issue #417 item 3).
+        // The derived activity re-declares its input with `new` and no [Required]; the attribute lives
+        // only on the base declaration. The reflection-only scanner reads the attribute-less derived
+        // declaration first, so it must walk the base-property chain to find [Required] (issue #417 item 3).
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
 
-        var input = InputFor<InheritsRequiredFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(RequiredInputBaseActivity.InheritedRequired));
+        var inputs = InputsFor<InheritsRequiredFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(RequiredInputBaseActivity.InheritedRequired));
 
-        Assert.True(input.IsRequired);
+        // Whatever the scanner surfaces for the hidden/new pair, the inherited [Required] must win.
+        Assert.All(inputs, input => Assert.True(input.IsRequired));
+        Assert.NotEmpty(inputs);
     }
 
     private static InputDefinition InputFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
         models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Single(i => i.Name == inputName);
+
+    private static IReadOnlyList<InputDefinition> InputsFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
+        models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Where(i => i.Name == inputName).ToList();
 
     [Fact]
     public void ApplicationOutputFolder_DiscoversPrimitiveActivities()

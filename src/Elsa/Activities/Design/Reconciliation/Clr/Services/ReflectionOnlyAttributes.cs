@@ -29,14 +29,6 @@ public static class ReflectionOnlyAttributes
     }
 
     /// <summary>
-    /// Returns the first string constructor argument of the attribute named
-    /// <paramref name="attributeFullName"/> in <paramref name="attributes"/>, or <see langword="null"/>.
-    /// For metadata that does not inherit (e.g. an assembly-level attribute), read directly with this.
-    /// </summary>
-    public static string? ReadStringArgument(IReadOnlyList<CustomAttributeData> attributes, string attributeFullName) =>
-        ReadStringArgument((IEnumerable<CustomAttributeData>)attributes, attributeFullName);
-
-    /// <summary>
     /// Reports whether <paramref name="property"/> — or the same-named property declared on any base
     /// class in its inheritance chain — carries the attribute named <paramref name="attributeFullName"/>.
     /// </summary>
@@ -68,8 +60,9 @@ public static class ReflectionOnlyAttributes
     /// <summary>
     /// Extracts the first string constructor argument of the first attribute matching
     /// <paramref name="attributeFullName"/> in <paramref name="attributes"/>, or <see langword="null"/>.
+    /// For metadata that does not inherit (e.g. an assembly-level attribute), read directly with this.
     /// </summary>
-    private static string? ReadStringArgument(IEnumerable<CustomAttributeData> attributes, string attributeFullName)
+    public static string? ReadStringArgument(IEnumerable<CustomAttributeData> attributes, string attributeFullName)
     {
         var data = attributes.FirstOrDefault(a => a.AttributeType.FullName == attributeFullName);
         return data?.ConstructorArguments is [{ Value: string value }, ..] ? value : null;
