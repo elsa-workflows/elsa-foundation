@@ -64,7 +64,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     {
         var runtimeContext = RequireRuntimeContext(context);
         var navigator = ForEachNavigator.From(runtimeContext.ExecutableNode);
-        var items = MaterializeItems(context.Get(Collection));
+        var items = ForEachCollection.Resolve(context.Get(Collection));
 
         // Empty/null collection or empty body short-circuits without scheduling a pass.
         if (items.Count == 0 || navigator.Body is null)
@@ -96,7 +96,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         }
 
         var completedIndex = ResolveCompletedIndex(runtimeContext, context.CompletedChildIterationId);
-        var items = MaterializeItems(context.ParentContext.Get(Collection));
+        var items = ForEachCollection.Resolve(context.ParentContext.Get(Collection));
         var nextIndex = completedIndex + 1;
 
         if (nextIndex >= items.Count)
@@ -112,7 +112,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     private void ScheduleIteration(
         IRuntimeActivityExecutionContext runtimeContext,
         ExecutableNode body,
-        IReadOnlyList<object?> items,
+        ForEachCollection items,
         int index)
     {
         var ownerNodeId = runtimeContext.ExecutableNode.ExecutableNodeId;
@@ -132,7 +132,7 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
         {
             [RuntimeMetadataKeys.LoopIterationOwnerNodeId] = ownerNodeId,
             [RuntimeMetadataKeys.LoopIterationItemName] = CurrentItemVariableName,
-            [RuntimeMetadataKeys.LoopIterationItemValue] = JsonSerializer.Serialize(items[index]),
+            [RuntimeMetadataKeys.LoopIterationItemValue] = JsonSerializer.Serialize(items.ItemAt(index)),
             ["foreach.parentActivityExecutionId"] = parentActivityExecutionId,
             ["foreach.targetNodeId"] = body.ExecutableNodeId,
             ["foreach.iterationIndex"] = index.ToString(CultureInfo.InvariantCulture)
@@ -184,26 +184,58 @@ public sealed class ForEach : ActivityBase, IActivityChildCompletionHandler
     private static string IterationIdPrefix(string parentActivityExecutionId) =>
         $"{parentActivityExecutionId}:foreach-iteration:";
 
-    private static IReadOnlyList<object?> MaterializeItems(object? collection) =>
-        collection switch
-        {
-            null => [],
-            JsonElement element => MaterializeJsonItems(element),
-            string => throw new ForEachExecutionException("ForEach collection input must be an enumerable, not a string."),
-            IEnumerable enumerable => enumerable.Cast<object?>().ToArray(),
-            _ => throw new ForEachExecutionException($"ForEach collection input of type '{collection.GetType().FullName}' is not enumerable.")
-        };
+    /// <summary>
+    /// Indexed view over the ForEach <see cref="Collection"/> input that resolves <b>only the item the
+    /// current pass needs</b> instead of materializing the whole collection on every completion callback
+    /// (#413 item 4). For the runtime's real input shape — a JSON array (<c>object</c> inputs are
+    /// materialized as JSON) — <see cref="Count"/> is O(1) (<see cref="JsonElement.GetArrayLength"/>) and
+    /// <see cref="ItemAt"/> is O(1) indexed access, so an n-item loop is O(n) total rather than O(n²). A
+    /// non-JSON <see cref="IEnumerable"/> (reachable only via direct CLR collections) is materialized once
+    /// per callback, preserving the prior semantics exactly. Input validation — the null, string, and
+    /// non-enumerable/non-array guards — is byte-for-byte the same as the former <c>MaterializeItems</c>.
+    /// </summary>
+    private readonly struct ForEachCollection
+    {
+        private readonly JsonElement _jsonArray;
+        private readonly IReadOnlyList<object?>? _materialized;
+        private readonly bool _isJson;
 
-    // A literal/expression collection arrives as a JsonElement (the runtime materializes 'object' inputs
-    // as JSON). Enumerate array elements, unwrapping each to its scalar CLR value so the body observes a
-    // plain item rather than a JsonElement.
-    private static IReadOnlyList<object?> MaterializeJsonItems(JsonElement element) =>
-        element.ValueKind switch
+        private ForEachCollection(JsonElement jsonArray)
         {
-            JsonValueKind.Null or JsonValueKind.Undefined => [],
-            JsonValueKind.Array => element.EnumerateArray().Select(UnwrapJsonScalar).ToArray(),
-            _ => throw new ForEachExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
-        };
+            _jsonArray = jsonArray;
+            _isJson = true;
+        }
+
+        private ForEachCollection(IReadOnlyList<object?> materialized)
+        {
+            _materialized = materialized;
+        }
+
+        public int Count => _isJson ? _jsonArray.GetArrayLength() : _materialized!.Count;
+
+        public object? ItemAt(int index) => _isJson ? UnwrapJsonScalar(_jsonArray[index]) : _materialized![index];
+
+        public static ForEachCollection Resolve(object? collection) =>
+            collection switch
+            {
+                null => new(Array.Empty<object?>()),
+                JsonElement element => ResolveJson(element),
+                string => throw new ForEachExecutionException("ForEach collection input must be an enumerable, not a string."),
+                IEnumerable enumerable => new(enumerable.Cast<object?>().ToArray()),
+                _ => throw new ForEachExecutionException($"ForEach collection input of type '{collection.GetType().FullName}' is not enumerable.")
+            };
+
+        // A literal/expression collection arrives as a JsonElement (the runtime materializes 'object'
+        // inputs as JSON). An array is kept as-is for O(1) count/index; each item is unwrapped to its
+        // scalar CLR value at access time so the body observes a plain item rather than a JsonElement.
+        private static ForEachCollection ResolveJson(JsonElement element) =>
+            element.ValueKind switch
+            {
+                JsonValueKind.Null or JsonValueKind.Undefined => new(Array.Empty<object?>()),
+                JsonValueKind.Array => new(element),
+                _ => throw new ForEachExecutionException($"ForEach collection input JSON value kind '{element.ValueKind}' is not an array.")
+            };
+    }
 
     private static object? UnwrapJsonScalar(JsonElement element) =>
         element.ValueKind switch
