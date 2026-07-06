@@ -30,6 +30,9 @@ internal sealed class StubActivityCatalog : IActivityDefinitionLookup
             ? Task.FromResult(version)
             : throw EntityNotFoundException.ForEntity(typeof(IActivityDefinitionVersion), versionId);
 
+    public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_versions.GetValueOrDefault(versionId));
+
     public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default)
         => throw new NotImplementedException();
 

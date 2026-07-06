@@ -59,7 +59,7 @@ public sealed class CrossFeatureValidatorSubscriptionTests
         using var host = WorkflowsDesignTestHost.Create();
 
         var crossFeatureValidator = new HttpActivityAuthPolicyValidatorStub();
-        var baselineSimulation = new ValidationError("$workflow", "Graph/StartActivity", "No start activity");
+        var baselineSimulation = new ValidationError("$workflow", "RootActivity/Missing", "No root activity");
 
         host.EventPublisher.OnPublish = evt =>
         {
@@ -77,7 +77,7 @@ public sealed class CrossFeatureValidatorSubscriptionTests
 
         var validated = Assert.IsType<OnDraftValidated>(host.EventPublisher.LastOf<OnDraftValidated>());
         Assert.Equal(2, validated.Errors.Count);
-        Assert.Contains(validated.Errors, e => e.Type == "Graph/StartActivity");
+        Assert.Contains(validated.Errors, e => e.Type == "RootActivity/Missing");
         Assert.Contains(validated.Errors, e => e.Type == "Http/AuthPolicyUnknown");
     }
 

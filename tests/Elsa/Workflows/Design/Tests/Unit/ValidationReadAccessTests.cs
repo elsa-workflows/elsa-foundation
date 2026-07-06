@@ -29,8 +29,8 @@ public sealed class ValidationReadAccessTests
         IReadOnlyList<ValidationError> errors = [
             new("n1/inputs/body",   "InputOutput/MissingRequired", "body is required"),
             new("n1/inputs/header", "InputOutput/MissingRequired", "header is required"),
-            new("n2",               "Graph/OrphanActivity",        "orphan"),
-            new("$workflow",        "Graph/StartActivity",         "no start"),
+            new("n2",               "Graph/UnknownActivityVersion", "unknown version"),
+            new("$workflow",        "RootActivity/Missing",         "no root"),
         ];
 
         var groups = errors
@@ -57,8 +57,8 @@ public sealed class ValidationReadAccessTests
     }
 
     [Theory]
-    [InlineData("Graph/OrphanActivity")]
-    [InlineData("Graph/StartActivity")]
+    [InlineData("Graph/UnknownActivityVersion")]
+    [InlineData("RootActivity/Missing")]
     [InlineData("Variables/Uniqueness")]
     [InlineData("InputOutput/MissingRequired")]
     [InlineData("Expressions/UnresolvedVariable")]

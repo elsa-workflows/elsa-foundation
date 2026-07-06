@@ -1,15 +1,14 @@
 using Elsa.Activities.Design.Core.Contracts;
-using Elsa.Primitives.Exceptions;
 
 namespace Elsa.Workflows.Design.Validations.Internal;
 
 /// <summary>
 /// Scoped, memoizing catalog resolution for the baseline validators.
-/// <see cref="IActivityDefinitionLookup.GetVersion"/> is a passthrough to the version store, so
+/// <see cref="IActivityDefinitionLookup.FindVersion"/> is a passthrough to the version store, so
 /// repeated ActivityVersionIds across the activity tree — and across the validators sharing one
-/// validation pass — would otherwise each round-trip. Translates the store's throwing Get
-/// contract (<see cref="EntityNotFoundException"/> on a missing id; it never returns null) into
-/// a nullable result: null means the version does not exist in the catalog.
+/// validation pass — would otherwise each round-trip. <c>FindVersion</c> already yields the
+/// nullable outcome (null means the version does not exist in the catalog); this type adds the
+/// per-pass memoization plus a short-circuit for blank ids.
 /// </summary>
 public sealed class CatalogVersionResolver(IActivityDefinitionLookup catalog)
 {
@@ -27,16 +26,7 @@ public sealed class CatalogVersionResolver(IActivityDefinitionLookup catalog)
         if (_cache.TryGetValue(activityVersionId, out var cached))
             return cached;
 
-        IActivityDefinitionVersion? version;
-        try
-        {
-            version = await catalog.GetVersion(activityVersionId, cancellationToken);
-        }
-        catch (EntityNotFoundException)
-        {
-            version = null;
-        }
-
+        var version = await catalog.FindVersion(activityVersionId, cancellationToken);
         _cache[activityVersionId] = version;
         return version;
     }

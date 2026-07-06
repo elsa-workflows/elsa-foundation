@@ -266,6 +266,12 @@ Test csproj gained `ProjectReference` to `Elsa.Serialization`, `Elsa.Primitives`
 
 ### Validations baseline feature (FR-032 + FR-033)
 
+> **Superseded by spec 070 + FR-033 amendment (2026-06-11 / 2026-07-05) — read before trusting the [X] below.** These entries record what shipped in Phase 8 and stay checked as history, but the shipped baseline set has since changed:
+> - **T105/T112/T125 (`OrphanActivityValidator`, `Graph/OrphanActivity`):** removed by spec 070 when workflow-level `Activities`/`ActivityConnections` were replaced by a single `RootActivity` — the connection substrate no longer exists. Do not reintroduce the validator or the category.
+> - **T106 (`StartActivityValidator`, `IsStart` detection):** reshaped by spec 070 to a missing-`RootActivity` check emitting `Type="RootActivity/Missing"` (not the old zero/duplicate-`IsStart` logic).
+> - **Added (not in the original Phase 8 list):** `UnknownActivityVersionValidator` emitting `Graph/UnknownActivityVersion` (FR-033 amendment).
+> The authoritative shipped baseline set is enumerated in `spec.md` FR-033/SC-021.
+
 - [X] T104 Create `src/Elsa.Workflows.Design.Validations/WorkflowDesignValidationsFeature.cs`. `IShellFeature` with `MaxRecursionDepth` settings property; binds `WorkflowDesignValidatorOptions` and registers all 5 baseline validators via `AddDomainEventHandlersFrom(typeof(WorkflowDesignValidationsFeature).Assembly)`. FR-032.
 - [X] T105 [P] `OrphanActivityValidator` — root-level workflow-graph check; excludes `IsStart`. Emits `Path="{NodeId}"`, `Type="Graph/OrphanActivity"`. **Decision: workflow-graph concern, root-level only — nested children inside containers are container-driven, not connection-driven.**
 - [X] T106 [P] `StartActivityValidator` — emits one error for zero or >1 IsStart at root level. **Root-level only — start is workflow-scope.**

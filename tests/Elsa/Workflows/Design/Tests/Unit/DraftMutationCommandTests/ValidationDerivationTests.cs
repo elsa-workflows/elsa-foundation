@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 public sealed class ValidationDerivationTests
 {
     private static readonly ValidationError StubError =
-        new("$workflow", "Graph/StartActivity", "No start activity");
+        new("$workflow", "RootActivity/Missing", "No root activity");
 
     [Fact]
     public async Task CreateDraft_surfaces_an_empty_error_set_on_OnDraftValidated()
