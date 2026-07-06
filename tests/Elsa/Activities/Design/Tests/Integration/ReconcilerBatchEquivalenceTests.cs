@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Primitives.Models;
 using Xunit;
 
 namespace Elsa.Activities.Design.Tests.Integration;
