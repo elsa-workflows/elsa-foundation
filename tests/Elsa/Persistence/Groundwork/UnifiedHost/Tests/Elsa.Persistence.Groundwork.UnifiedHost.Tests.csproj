@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 
 </Project>

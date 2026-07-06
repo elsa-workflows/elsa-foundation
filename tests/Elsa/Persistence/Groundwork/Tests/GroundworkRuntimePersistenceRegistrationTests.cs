@@ -2,6 +2,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
+using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -110,13 +111,57 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         await using var provider = services.BuildServiceProvider();
 
-        Assert.IsType<SqliteDocumentStoreHandle>(provider.GetRequiredService<SqliteDocumentStoreHandle>());
+        // The store is now materialized at startup via a hosted service / shell initializer that populates the
+        // holder (the handle is owned by the holder, not registered in DI). Drive that startup step explicitly,
+        // as a real host would, before resolving IDocumentStore.
+        Assert.NotNull(provider.GetRequiredService<GroundworkDocumentStoreHolder>());
+        await provider.InitializeGroundworkStoreAsync();
+
         Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
         Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
+    }
+
+    [Fact] // The bite: resolving IDocumentStore before startup throws (no synchronous block resurrects it on the
+           // resolving thread), and the store is fully usable only after the startup initializer has run.
+    public async Task Sqlite_Store_Throws_Before_Init_Then_Is_Usable_After()
+    {
+        var services = new ServiceCollection();
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+
+        // Before the startup initializer runs, the holder is empty and resolving the store throws — it does not
+        // silently block the resolving thread the way the old sync-over-async factory did.
+        Assert.False(provider.GetRequiredService<GroundworkDocumentStoreHolder>().IsInitialized);
+        Assert.Throws<InvalidOperationException>(() => provider.GetRequiredService<IDocumentStore>());
+
+        await provider.InitializeGroundworkStoreAsync();
+
+        // After startup the singleton is fully initialized and the store round-trips a document.
+        var store = provider.GetRequiredService<IDocumentStore>();
+        await store.SaveAsync(new SaveDocumentRequest(
+            ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init", "1.0.0", "{\"ok\":true}"));
+        Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-init"));
+    }
+
+    [Fact] // Running the startup step twice is a no-op: the store is materialized once and the singleton is stable.
+    public async Task Sqlite_Store_Initialization_Is_Idempotent()
+    {
+        var services = new ServiceCollection();
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+
+        await provider.InitializeGroundworkStoreAsync();
+        var first = provider.GetRequiredService<IDocumentStore>();
+        await provider.InitializeGroundworkStoreAsync();
+        var second = provider.GetRequiredService<IDocumentStore>();
+
+        Assert.Same(first, second);
     }
 
     [Fact]
@@ -127,14 +172,14 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         try
         {
             // First host process: compose the feature exactly as a host would, then persist through a resolved seam.
-            await using (var provider = BuildComposedProvider(connectionString))
+            await using (var provider = await BuildComposedProviderAsync(connectionString))
             {
                 var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
                 await bookmarks.SaveAsync(Bookmark("wf-1", "bm-1"));
             }
 
             // Second host process: a fresh container over the same database file. State read back was genuinely durable.
-            await using (var provider = BuildComposedProvider(connectionString))
+            await using (var provider = await BuildComposedProviderAsync(connectionString))
             {
                 var bookmarks = provider.GetRequiredService<IBookmarkStateStore>();
                 Assert.NotNull(await bookmarks.FindAsync("wf-1", "bm-1"));
@@ -147,11 +192,13 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         }
     }
 
-    private static ServiceProvider BuildComposedProvider(string connectionString)
+    private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
-        return services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
+        await provider.InitializeGroundworkStoreAsync();
+        return provider;
     }
 
     private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId) => new(

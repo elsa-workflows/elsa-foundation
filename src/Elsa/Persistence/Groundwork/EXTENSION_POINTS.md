@@ -23,6 +23,20 @@ The unified features share one provider-neutral union manifest (`GroundworkUnifi
 once and materialized per provider. SQLite stays the default composition; PostgreSQL is opt-in via
 `shells.json` (e.g. `"GroundworkUnifiedPersistencePostgreSql": { "Options": { "ConnectionString": "Host=…" } }`).
 
+**Startup materialization — async initialization.** Materializing the document store (opening the connection
+and applying the manifest schema) is async, so it is not done inside the synchronous `ConfigureServices`
+factory. Instead each provider registers a document-store initializer as **both** an `IHostedService` (plain
+hosts / tests) and a CShells `IShellInitializer` in the `LifecyclePhase.Prepare` phase (shell-composed hosts,
+where shell-scoped hosted services do not run). The initializer awaits store creation once at host startup and
+populates a shared, provider-neutral `GroundworkDocumentStoreHolder`; the registered `IDocumentStore` resolves
+from that holder, so consumers still resolve a fully-initialized singleton with no synchronous block on the
+resolving thread. The `Prepare` phase guarantees the store is ready before any other shell initializer that
+reads it, and both host lifecycles await the initializer before request handling begins. The
+`AddGroundwork{Sqlite,PostgreSql}UnifiedPersistence` and provider shell-feature signatures are unchanged. A
+bare `IServiceProvider` built without a host lifecycle (e.g. some tests) has no hook to run the initializer, so
+it must drive it explicitly before resolving `IDocumentStore` — resolving beforehand throws a descriptive
+`InvalidOperationException` rather than silently blocking.
+
 **Query-shape validation (PostgreSQL).** The PostgreSQL Groundwork provider serves the same query shapes
 Elsa already relies on for SQLite: `PostgreSqlDocumentStore` derives from the shared
 `RelationalDocumentStore` base, `PostgreSqlGroundworkCapabilities.Runtime()` advertises the full

@@ -39,7 +39,30 @@ internal static class FlowchartStateMutator
         state with { ExecutionPaths = state.ExecutionPaths.Append(path).ToArray(), Sequence = state.Sequence + 1 };
 
     public static FlowchartExecutionState AddScope(FlowchartExecutionState state, ExecutionScope scope) =>
-        state with { Scopes = state.Scopes.Append(scope).ToArray(), Sequence = state.Sequence + 1 };
+        state with
+        {
+            Scopes = state.Scopes.Append(scope).ToArray(),
+            Sequence = state.Sequence + 1,
+            LoopIterationCounters = AdvanceLoopIterationCounter(state.LoopIterationCounters, scope)
+        };
+
+    /// <summary>
+    /// Advances the explicit monotonic per-owner loop-iteration counter when a <see cref="ExecutionScope"/>
+    /// of kind <see cref="ExecutionScopeKind.LoopIteration"/> is appended. The counter is bumped in lockstep
+    /// with the sole scope-append path here so iteration numbering can never drift from what
+    /// <see cref="FlowchartScopeResolver.ResolveTargetScope"/> minted (both read the same pre-append
+    /// counter). Non-loop scopes leave the map untouched. Keeping the bump atomic with the append is what
+    /// makes stale loop-iteration scopes prunable without ever reusing an earlier iteration key (#382 / W32).
+    /// </summary>
+    private static IReadOnlyDictionary<string, int> AdvanceLoopIterationCounter(IReadOnlyDictionary<string, int> counters, ExecutionScope scope)
+    {
+        if (scope.Kind != ExecutionScopeKind.LoopIteration || string.IsNullOrWhiteSpace(scope.OwnerNodeId))
+            return counters;
+
+        var ownerNodeId = scope.OwnerNodeId;
+        var next = (counters.TryGetValue(ownerNodeId, out var current) ? current : 0) + 1;
+        return new Dictionary<string, int>(counters, StringComparer.Ordinal) { [ownerNodeId] = next };
+    }
 
     public static FlowchartExecutionState UpdatePath(FlowchartExecutionState state, ExecutionPath path) =>
         state with

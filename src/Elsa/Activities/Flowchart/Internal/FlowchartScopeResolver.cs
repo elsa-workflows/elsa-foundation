@@ -7,9 +7,10 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// <summary>
 /// Execution-scope resolution and scope-scoped path cancellation for the Flowchart engine: race-continuation
 /// lookup, loop-iteration scope creation on backward edges, first-wins race completion, and Break-driven path
-/// cancellation. Loop-iteration numbering derives from the cumulative loop-iteration scope count per owner
-/// node (<see cref="ResolveTargetScope"/>) — the reason scopes are never pruned (#382). Mechanical extraction
-/// of the former engine helpers; behavior, ordering, and the iteration-numbering rule are unchanged.
+/// cancellation. Loop-iteration numbering derives from the explicit monotonic per-owner counter in
+/// <see cref="FlowchartExecutionState.LoopIterationCounters"/> (<see cref="ResolveTargetScope"/>), decoupled
+/// from the live scope count — this is what lets stale loop-iteration scopes be pruned on persistence
+/// without a later iteration reusing an earlier key (#382 / W32).
 /// </summary>
 internal static class FlowchartScopeResolver
 {
@@ -67,15 +68,20 @@ internal static class FlowchartScopeResolver
         if (!reachabilityAnalyzer.IsBackwardEdge(graph, connection.Source.NodeId, connection.Target.NodeId))
             return currentScope;
 
-        var iterationNumber = state.Scopes.Count(scope => scope.Kind == ExecutionScopeKind.LoopIteration && StringComparer.Ordinal.Equals(scope.OwnerNodeId, connection.Target.NodeId)) + 1;
-        var iterationKey = $"{connection.Target.NodeId}:{iterationNumber}";
+        // Iteration numbering derives from the explicit monotonic per-owner counter, not the live scope
+        // count — this is what lets stale loop-iteration scopes be pruned without a later iteration ever
+        // reusing an earlier key. FlowchartStateMutator.AddScope advances the counter atomically when this
+        // scope is appended, reading the same pre-append value, so the minted key and the bump stay in sync.
+        var ownerNodeId = connection.Target.NodeId;
+        var iterationNumber = (state.LoopIterationCounters.TryGetValue(ownerNodeId, out var lastIterationNumber) ? lastIterationNumber : 0) + 1;
+        var iterationKey = $"{ownerNodeId}:{iterationNumber}";
         var scope = new ExecutionScope(
             executionScopeId: NewId(state, "scope"),
             kind: ExecutionScopeKind.LoopIteration,
             parentExecutionScopeId: currentScope.ExecutionScopeId,
             createdByNodeId: connection.Source.NodeId,
             startConnectionId: graph.GetConnectionId(connection),
-            ownerNodeId: connection.Target.NodeId,
+            ownerNodeId: ownerNodeId,
             loopIterationKey: iterationKey);
 
         return scope;

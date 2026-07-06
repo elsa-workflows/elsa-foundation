@@ -62,7 +62,8 @@ unrelated command to arrive (**RT-3**).
 
 ## The idempotency / durability contract — read this carefully
 
-The durability guarantee is **asymmetric**, and the asymmetry is the whole story:
+The durability guarantee is **at-least-once on both sides**, and the redrive-safe drain (#412 item 3)
+is what made the dequeue side match the enqueue side:
 
 - **Enqueue side — at-least-once.** The post-commit outbox can be redelivered (by the drain
   coordinator during normal execution, or by the resumption sweep after a crash). Redelivery can
@@ -71,19 +72,25 @@ The durability guarantee is **asymmetric**, and the asymmetry is the whole story
   while the underlying work items stay single-instance. An execution whose backlog remains (e.g. a
   dispatch that raced a crash) is simply re-driven on the next sweep. This is why re-running the sweep
   is always safe.
-- **Dequeue side — at-most-once.** Dequeue is *load-first-then-delete*: the item is removed from the
-  durable queue **before** the handler that consumes it commits its own checkpoint. A crash in that
-  gap loses the item, because nothing re-delivers a dequeued item.
+- **Dequeue side — at-least-once (redrive-safe ack).** The drainer no longer destructively dequeues
+  before dispatch. `WorkflowSchedulerDrainer` peeks the head, dispatches it in place, and only then
+  ack-deletes it from the durable queue — **after** the consuming handler's effect is durable (a
+  successful commit, or, on a *handler fault*, before the poison record / RetryNow re-enqueue). A
+  process crash before the ack leaves the source item durably queued, so backlog discovery re-drives
+  it and the handler re-runs idempotently (activity-execution status guards + deterministic follow-up
+  work-item ids the idempotent queue absorbs). The underlying `IWorkflowSchedulerWorkQueue.DequeueAsync`
+  contract is unchanged (still load-first-then-delete); the ack is simply moved to *after* the durable
+  effect. (`GroundworkWorkflowSchedulerWorkQueue`'s own dequeue is likewise still crash-safe by
+  redelivery.)
 
-That asymmetry — at-least-once on enqueue, at-most-once on dequeue — is what creates the one crash
-window W2 does **not** close.
+With both sides at-least-once and every consumer idempotent, re-running the sweep is always safe and
+no crash window strands an activity.
 
 ## Crash windows
 
-Two recoverable windows and one residual window. The recoverable windows are covered by
-`GroundworkDurableResumptionCrashTests`, which runs two provider generations over a shared
-`IDocumentStore` and asserts the crashed execution converges to the same terminal state as a
-crash-free control run.
+Three recoverable windows, all covered by `GroundworkDurableResumptionCrashTests`, which runs two
+provider generations over a shared `IDocumentStore` and asserts the crashed execution converges to the
+same terminal state as a crash-free control run.
 
 ### Window A — after checkpoint commit, before outbox delivery *(recovered)*
 
@@ -97,37 +104,39 @@ The outbox row is `Delivered` and the scheduler work is durably queued, but it w
 restart, the sweep's **backlog discovery** (`ListPendingWorkflowExecutionIdsAsync`) finds the
 execution and re-drives, draining the queue. ✅
 
-### Window C — after dequeue-delete, before handler checkpoint commit *(detectable via W5; item-level replay still needs dequeue-ack)*
+### Window C — after the drainer picks up an item, before its handler checkpoint commit *(recovered)*
 
-A work item is dequeued (removed from the durable queue) and its handler begins, but the process
-crashes **before** the handler commits the checkpoint that would record the resulting progress. The
-item is already gone from the queue and nothing re-delivers a dequeued item. This is the direct
-consequence of the at-most-once dequeue described above.
+The drainer picks up a work item and its handler begins, but the process crashes **before** the handler
+commits the checkpoint that would record the resulting progress. Concretely this includes a crash between
+the fallback handler's two independent writes (save activity-execution state, then enqueue the follow-up
+work item) — the case #412 item 3 named.
 
-**What W5 changes.** W5 (single-writer ownership fencing, RT-2) makes the interrupted execution
-**detectable** instead of silently lost. `WorkflowDrainOrchestrator` now acquires a
-`RuntimeExecutionLease` at the start of a drain (writing `ExecutionLease` + `Heartbeat` to operational
-state), pushes it onto the ambient ownership scope, and releases it only in a `finally`. A crash mid-drain
-therefore never runs the release, so the lease/heartbeat **persist**. Once the lease's timeout elapses,
-`IRuntimeRecoveryScanner` yields the execution as a `LeaseLost`/`HeartbeatExpired` candidate — this is the
-operational-state data W2 said the scanner needs — and the sweep's discovery step (§What W2 adds) unions
-it with the durable backlog and **re-drives the execution through the agent mailbox** with a
-`RunSchedulerWork` recovery envelope. So the execution is no longer invisible: the crash surfaces, the
-single-writer discipline is preserved (re-drive goes through the mailbox), and a clean drain releases the
-lease so a *completed* execution is never mistaken for an interrupted one. This is covered by
-`RuntimeResumptionServiceTests.SweepAsync_DiscoversWindowCExecution_FromOwnershipLeaseLeftByCrash`
-(real scanner + real ownership lease, empty backlog) plus lease-detectability/no-false-positive tests in
-`RuntimeExecutionOwnershipTests`.
+**What closes it — the redrive-safe drain (#412 item 3).** `WorkflowSchedulerDrainer` no longer
+destructively dequeues before dispatch. It peeks the head, dispatches it in place, and only **ack-deletes**
+it from the durable queue *after* the handler's effect is durable (a successful commit; or, on a *handler
+fault*, before the poison record / RetryNow re-enqueue). A process crash before the ack therefore leaves the
+source item durably queued, so the sweep's **backlog discovery** (`ListPendingWorkflowExecutionIdsAsync`)
+finds the execution and re-drives it, and the handler re-runs **idempotently** — the activity-execution
+status guards (`existing.Status == Scheduled` / `state.Status == Running`) recognise the already-applied
+first write, and the deterministic follow-up work-item ids (`…:start:…`, `…:invoke:…`) are absorbed by the
+idempotent queue, so redelivery never double-applies. This is covered by
+`GroundworkDurableResumptionCrashTests.WindowC_CrashAfterDequeueBeforeCheckpoint_ResumptionConvergesToControlState`
+(shared-`IDocumentStore` two-generation convergence) and, at the unit level, by
+`RuntimeSchedulerDrainTests.DrainAsync_RedriveSafe_CrashBetweenFallbackWrites_…` (crash-between-writes
+injection over the real Schedule handler) and the poison-path bounding in
+`WorkflowSchedulerPoisonDrainTests` (ack-on-fault means a poisoned item is delivered a bounded number of
+times, never a hot-loop).
 
-**What is still open.** W5 delivers the *visibility* half of the closure W2 described (lease/heartbeat +
-scanner detection + re-drive). It deliberately does **not** change the dequeue itself, which remains
-load-first-then-delete on `IWorkflowSchedulerWorkQueue` (owned by W2). Guaranteed *item-level* replay — so
-the exact dequeued-but-uncommitted continuation is re-run rather than merely surfaced for re-drive — still
-requires **drainer acknowledgement semantics**: the item must stay durably owned (not deleted) until the
-consuming handler's checkpoint commits, at which point ownership is released. W5 supplies the
-lease/heartbeat ownership primitive that makes such an ack-based dequeue implementable without forking
-ownership semantics; wiring the dequeue to hold-until-commit is the remaining increment on W2's durable
-queue. Until then, window C is **detected and re-driven** rather than **replayed at item granularity**.
+**Belt-and-braces detection (W5).** Independently of the queue backlog, W5 (single-writer ownership
+fencing, RT-2) also makes an interrupted drain **detectable**: `WorkflowDrainOrchestrator` acquires a
+`RuntimeExecutionLease` (writing `ExecutionLease` + `Heartbeat` to operational state) and releases it in a
+`finally`. When a crash prevents the release, `IRuntimeRecoveryScanner` yields the execution as a
+`LeaseLost`/`HeartbeatExpired` candidate and the sweep unions it with the durable backlog before re-driving
+through the agent mailbox. The two mechanisms compose: the redrive-safe ack guarantees the *item* survives
+for item-level replay, and the lease/heartbeat guarantees the *execution* is surfaced even when a crash
+leaves no queued backlog. This is covered by
+`RuntimeResumptionServiceTests.SweepAsync_DiscoversWindowCExecution_FromOwnershipLeaseLeftByCrash` plus
+lease-detectability/no-false-positive tests in `RuntimeExecutionOwnershipTests`.
 
 ## Bounding the pump
 

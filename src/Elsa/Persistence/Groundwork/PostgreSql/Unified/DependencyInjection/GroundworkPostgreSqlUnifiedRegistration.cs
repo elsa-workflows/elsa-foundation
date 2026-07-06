@@ -1,12 +1,11 @@
 using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
+using Elsa.Persistence.Groundwork.PostgreSql.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
-using Groundwork.PostgreSql.Documents;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 
@@ -24,16 +23,10 @@ public static class GroundworkPostgreSqlUnifiedRegistration
     public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(this IServiceCollection services, string connectionString)
     {
         // One store, one database, one materialized union manifest — shared by every lane.
-        services.RemoveAll<IDocumentStore>();
-        services.AddSingleton(_ => PostgreSqlDocumentStoreFactory
-            .CreateAsync(
-                connectionString,
-                GroundworkUnifiedManifest.Create(),
-                new ProviderIdentity("groundwork-postgresql", "1.0.0"))
-            .GetAwaiter()
-            .GetResult());
-        services.AddSingleton<IDocumentStore>(provider =>
-            provider.GetRequiredService<PostgreSqlDocumentStoreHandle>().Store);
+        services.AddPostgreSqlGroundworkDocumentStore(
+            connectionString,
+            GroundworkUnifiedManifest.Create(),
+            new ProviderIdentity("groundwork-postgresql", "1.0.0"));
 
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkWorkflowsDesignStores();

@@ -107,6 +107,83 @@ public sealed class RuntimeSchedulerDrainTests
     }
 
     [Fact]
+    public async Task DrainAsync_RedriveSafe_CrashBetweenFallbackWrites_LeavesSourceItemQueuedForRedelivery_AndConvergesOnRedrive()
+    {
+        // #412 item 3 — "Window C" closure at item granularity, exercised through the REAL
+        // WorkflowScheduleActivitySchedulerWorkHandler in fallback mode (null committer). Its fallback does two
+        // independent writes: SaveAsync(state = Scheduled), then enqueue the follow-up StartActivity item. We inject a
+        // *process crash* (an OperationCanceledException the drainer re-throws rather than treating as a handler fault)
+        // precisely between those two writes by making the follow-up enqueue throw.
+        //
+        // BEFORE this change the drainer destructively dequeued the source item up front, so a crash here stranded the
+        // activity: source item gone, follow-up never enqueued, activity stuck at Scheduled, execution absent from
+        // ListPendingWorkflowExecutionIdsAsync — nothing to re-drive. AFTER: the source item is not ack-deleted until
+        // the effect is durable, so the crash leaves it queued; the execution is discoverable and a redrive with an
+        // honest queue converges (activity Running, follow-up enqueued exactly once, source item consumed).
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(NewExecutable(["node-start", "node-next"]));
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+
+        // Phase 1 — crash. The decorator lets peek/dequeue/source-enqueue through but throws OperationCanceledException
+        // on the follow-up StartActivity enqueue (WorkItemId ends ":start:...").
+        var crashingQueue = new CrashOnFollowUpEnqueueWorkQueue(innerQueue, followUpMarker: ":start:");
+        var crashingHandler = new WorkflowScheduleActivitySchedulerWorkHandler(
+            executableStore,
+            activityStateStore,
+            crashingQueue,
+            checkpointCommitter: null,
+            inspectionAccumulator: null,
+            new FixedTimeProvider(_now));
+        var crashingDrainer = TestSchedulerDrainer.Create(crashingQueue, [crashingHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+
+        var scheduleItem = NewScheduleActivityWorkItem(1);
+        await innerQueue.EnqueueAsync(scheduleItem);
+
+        // The crash propagates out of DrainAsync (it is not swallowed as a handler fault).
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => crashingDrainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1")).AsTask());
+
+        // First fallback write landed: the activity exists at Scheduled.
+        var afterCrash = await activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(afterCrash);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, afterCrash!.Status);
+
+        // The source ScheduleActivity item is STILL durably queued (this is the bite — RED before the reorder, when the
+        // up-front dequeue had already deleted it) and the execution is discoverable for redrive.
+        var pendingExecutions = await innerQueue.ListPendingWorkflowExecutionIdsAsync(10);
+        Assert.Contains("wfexec-1", pendingExecutions);
+        var queuedAfterCrash = await innerQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        Assert.Collection(queuedAfterCrash, item => Assert.Equal(scheduleItem.WorkItemId, item.WorkItemId));
+
+        // Phase 2 — redrive with an honest queue over the SAME durable stores. The handler re-runs idempotently.
+        var honestHandler = new WorkflowScheduleActivitySchedulerWorkHandler(
+            executableStore,
+            activityStateStore,
+            innerQueue,
+            checkpointCommitter: null,
+            inspectionAccumulator: null,
+            new FixedTimeProvider(_now));
+        var honestDrainer = TestSchedulerDrainer.Create(innerQueue, [honestHandler, new NoopWorkflowSchedulerWorkHandler()], new FixedTimeProvider(_now));
+
+        var redriveResult = await honestDrainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 1));
+
+        Assert.Equal(1, redriveResult.DrainedCount);
+        Assert.False(redriveResult.StoppedOnFault);
+
+        // Convergence: the activity remains a single Scheduled record (no duplicate), the source item was ack-consumed,
+        // and the follow-up StartActivity item was enqueued exactly once with the deterministic id.
+        var converged = await activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(converged);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, converged!.Status);
+
+        var queuedAfterRedrive = await innerQueue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1"));
+        var followUp = Assert.Single(queuedAfterRedrive);
+        Assert.Equal(WorkflowExecutionCommandKind.StartActivity, followUp.CommandKind);
+        Assert.Equal($"{scheduleItem.WorkItemId}:start:actexec-1", followUp.WorkItemId);
+    }
+
+    [Fact]
     public async Task DrainAsync_StopsBeforeDequeuingPauseBlockedWork()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -811,6 +888,16 @@ public sealed class RuntimeSchedulerDrainTests
             commandMetadata: commandMetadata);
     }
 
+    private RuntimeSchedulerWorkItem NewScheduleActivityWorkItem(int index) =>
+        NewWorkItem(
+            index,
+            commandKind: WorkflowExecutionCommandKind.ScheduleActivity,
+            payload: JsonSerializer.SerializeToElement(new RuntimeScheduleActivityCommandPayload(
+                NewPinnedExecutable(),
+                "node-start",
+                $"actexec-{index}",
+                RuntimeScheduleActivityCommandPayload.WorkflowStartReason)));
+
     private RuntimeSchedulerWorkItem NewStartActivityWorkItem(int index, JsonSerializerOptions? jsonSerializerOptions = null) =>
         NewWorkItem(
             index,
@@ -1125,6 +1212,31 @@ public sealed class RuntimeSchedulerDrainTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    // Wraps a real InMemory queue but throws OperationCanceledException when the drainer/handler enqueues a follow-up
+    // work item (whose WorkItemId contains followUpMarker, e.g. ":start:"). This simulates a *process crash* — not a
+    // handler fault — landing between the fallback handler's two independent writes (SaveAsync state, then enqueue the
+    // follow-up): OperationCanceledException is re-thrown by the drainer, so nothing is ack-deleted and the source item
+    // stays durably queued. Peek/dequeue/source-enqueue pass straight through to the inner queue.
+    private sealed class CrashOnFollowUpEnqueueWorkQueue(IWorkflowSchedulerWorkQueue inner, string followUpMarker) : IWorkflowSchedulerWorkQueue
+    {
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            if (workItem.WorkItemId.Contains(followUpMarker, StringComparison.Ordinal))
+                throw new OperationCanceledException($"Simulated crash before follow-up enqueue of '{workItem.WorkItemId}'.");
+
+            return inner.EnqueueAsync(workItem, cancellationToken);
+        }
+
+        public ValueTask<IReadOnlyCollection<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.DequeueAsync(workflowExecutionId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
+            inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
     }
 
     private sealed class PeekDequeueMismatchWorkQueue(RuntimeSchedulerWorkItem peeked, RuntimeSchedulerWorkItem dequeued) : IWorkflowSchedulerWorkQueue

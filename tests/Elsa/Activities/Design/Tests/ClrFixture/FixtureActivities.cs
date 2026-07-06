@@ -24,6 +24,43 @@ public sealed class UnannotatedFixtureActivity : ActivityBase
 [Version("3.0.0")]
 public sealed class VersionedFixtureActivity : ActivityBase;
 
+/// <summary>
+/// A base activity carrying a class-level <c>[Version]</c>. A reflection-only scan honours it only if
+/// the resolver walks the base chain (issue #417 item 3); <see cref="InheritedVersionFixtureActivity"/>
+/// declares no <c>[Version]</c> of its own and must inherit this value.
+/// </summary>
+[Version("4.0.0")]
+public abstract class VersionedBaseActivity : ActivityBase;
+
+/// <summary>
+/// An activity with no <c>[Version]</c> of its own; it must inherit <c>4.0.0</c> from
+/// <see cref="VersionedBaseActivity"/> rather than falling back to the assembly's <c>2.1.0</c>.
+/// </summary>
+public sealed class InheritedVersionFixtureActivity : VersionedBaseActivity;
+
+/// <summary>
+/// A base activity declaring a <c>[Required]</c> input. <see cref="InheritsRequiredFixtureActivity"/>
+/// re-declares this same property with <c>new</c> and no <c>[Required]</c> of its own, so the attribute
+/// lives only on this base declaration — the scanner must walk the base-property chain to see it
+/// (issue #417 item 3).
+/// </summary>
+public abstract class RequiredInputBaseActivity : ActivityBase
+{
+    [Required]
+    public virtual InputArgument<string> InheritedRequired { get; set; } = null!;
+}
+
+/// <summary>
+/// An activity that re-declares its input with <c>new</c> — deliberately WITHOUT re-applying
+/// <c>[Required]</c>. The scanner reads this attribute-less derived declaration first; only a
+/// base-property-chain walk finds the <c>[Required]</c> on <see cref="RequiredInputBaseActivity"/>
+/// and maps <c>IsRequired</c> to <see langword="true"/> (issue #417 item 3).
+/// </summary>
+public sealed class InheritsRequiredFixtureActivity : RequiredInputBaseActivity
+{
+    public new InputArgument<string> InheritedRequired { get; set; } = null!;
+}
+
 /// <summary>An enum used as a complex (non-primitive) activity input value type.</summary>
 public enum FixtureMode
 {
