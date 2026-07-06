@@ -39,6 +39,38 @@ public sealed class GroundworkRuntimeStateStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
+    public async Task ActivityExecutionState_ListByParent_Equals_ListWhereParent(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IActivityExecutionStateStore store = new GroundworkActivityExecutionStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        // Two children under composite "parent-a", one under "parent-b", one orphan (no parent), all in wf-1;
+        // plus a child under "parent-a" in a DIFFERENT workflow (wf-2) to prove the (wf, parent) scoping.
+        await store.SaveAsync(ChildState("wf-1", "ae-a1", "parent-a"));
+        await store.SaveAsync(ChildState("wf-1", "ae-a2", "parent-a"));
+        await store.SaveAsync(ChildState("wf-1", "ae-b1", "parent-b"));
+        await store.SaveAsync(ChildState("wf-1", "ae-orphan", parentActivityExecutionId: null));
+        await store.SaveAsync(ChildState("wf-2", "ae-a3", "parent-a"));
+
+        var byParent = await store.ListByParentAsync("wf-1", "parent-a");
+        var expected = (await store.ListAsync("wf-1"))
+            .Where(s => s.ParentActivityExecutionId == "parent-a");
+
+        Assert.Equal(
+            expected.Select(s => s.Execution.ActivityExecutionId).OrderBy(x => x),
+            byParent.Select(s => s.Execution.ActivityExecutionId).OrderBy(x => x));
+        Assert.Equal(new[] { "ae-a1", "ae-a2" }, byParent.Select(s => s.Execution.ActivityExecutionId).OrderBy(x => x));
+
+        // The wf-2 child under the same parent id must not leak into wf-1's parent-scoped read (defensive wf filter).
+        Assert.DoesNotContain(byParent, s => s.Execution.ActivityExecutionId == "ae-a3");
+
+        // A parent with no children returns empty, not the whole workflow.
+        Assert.Empty(await store.ListByParentAsync("wf-1", "parent-missing"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
     public async Task WorkflowExecutionState_RoundTrips_Replaces_And_Lists_All(string provider)
     {
         await using var fixture = CreateStore(provider);
@@ -180,6 +212,24 @@ public sealed class GroundworkRuntimeStateStoreTests
         CompletedAt: null,
         SchedulingActivityExecutionId: null,
         ParentActivityExecutionId: null,
+        BranchId: null,
+        IterationId: null,
+        CallStackDepth: 0,
+        BookmarkIds: [],
+        IncidentIds: [],
+        FaultCount: 0,
+        AggregateFaultCount: 0,
+        Metadata: new Dictionary<string, string>());
+
+    private static ActivityExecutionState ChildState(string workflowExecutionId, string activityExecutionId, string? parentActivityExecutionId) => new(
+        new ActivityExecution(activityExecutionId, workflowExecutionId, $"node-{activityExecutionId}", "authored", "Elsa.Log", "1.0.0"),
+        ActivityExecutionStatus.Running,
+        SubStatus: null,
+        ScheduledAt: DateTimeOffset.UnixEpoch,
+        StartedAt: DateTimeOffset.UnixEpoch,
+        CompletedAt: null,
+        SchedulingActivityExecutionId: parentActivityExecutionId,
+        ParentActivityExecutionId: parentActivityExecutionId,
         BranchId: null,
         IterationId: null,
         CallStackDepth: 0,

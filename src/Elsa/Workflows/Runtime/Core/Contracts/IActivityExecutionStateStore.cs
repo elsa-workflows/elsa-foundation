@@ -21,4 +21,14 @@ public interface IActivityExecutionStateStore
     /// Returns all activity execution states for the given workflow execution ID.
     /// </summary>
     ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the activity execution states directly parented by <paramref name="parentActivityExecutionId"/> within the
+    /// given workflow execution. This is the parent-scoped read the whole-workflow <see cref="ListAsync(string, CancellationToken)"/>
+    /// would otherwise be filtered down to; it lets callers that only need a composite's direct children (e.g. the Parallel
+    /// fork/join counting the completed branches) avoid loading and filtering every activity-execution state in the workflow.
+    /// The result is exactly the subset of <see cref="ListAsync(string, CancellationToken)"/> whose
+    /// <see cref="ActivityExecutionState.ParentActivityExecutionId"/> equals <paramref name="parentActivityExecutionId"/>.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default);
 }

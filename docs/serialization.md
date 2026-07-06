@@ -126,6 +126,19 @@ serializer, versioning, and fixture gate as every other runtime kind.
 - **New `by-stimulus` index on the existing `bookmarkState` kind.** Added additively so a single stimulus
   can resume *waiting instances across executions* (E3-5 fan-in), not only within one `workflowExecutionId`.
   No version bump or upcaster is needed: the state record shape is unchanged; only a new index was declared.
+- **New `by-parent-activity-execution` index on the existing `activityExecutionState` kind (#514 / #413 item 3).**
+  Added additively so a composite (e.g. a `Parallel` fork/join) can read only the activity-execution states
+  *directly parented by it* via `IActivityExecutionStateStore.ListByParentAsync`, instead of loading every
+  activity-execution state in the workflow and filtering in memory — the join fires once per branch completion,
+  so the whole-workflow read made it O(branches × workflow states). The index is a keyword over the **already
+  persisted** nested field `state.parentActivityExecutionId` (Groundwork index fields are dot-paths resolved by
+  walking nested JSON), so **no version bump, upcaster, or new golden fixture is needed: the document shape is
+  unchanged; only a new index was declared** — the existing `GroundworkRuntimeDocumentFixtureTests` drift test
+  stays green, which is the wire-safety proof. Adding the index bumps the manifest `SchemaVersion` (1.0.0 → 1.1.0),
+  which triggers the Condition 7 backfill below so activity-execution states written before the index existed
+  become visible through it without a re-save. The store queries the single-field parent index and then applies a
+  defensive in-memory `workflowExecutionId` filter, so the full `(workflowExecutionId, parentActivityExecutionId)`
+  semantics hold identically across providers without relying on parent activity-execution ids being globally unique.
 
 ### Condition 7 — added indexes backfill pre-existing documents (fixed in Groundwork preview.16)
 

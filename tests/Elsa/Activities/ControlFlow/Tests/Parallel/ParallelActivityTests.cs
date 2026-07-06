@@ -91,6 +91,24 @@ public sealed class ParallelActivityTests : IDisposable
     }
 
     [Fact]
+    public async Task OnChildCompleted_IgnoresActivityUnderDifferentParent_WithSameBranchNodeId()
+    {
+        var context = NewContext();
+        // Two of three branches of THIS composite completed.
+        _store.SeedCompletedBranch("node-a");
+        _store.SeedCompletedBranch("node-b");
+        // A completed activity elsewhere in the same workflow that reuses branch node id "node-c" but is parented by a
+        // DIFFERENT composite. It must not be counted toward this join. If parent-scoping leaked it in, the count would
+        // reach the threshold of 3 and wrongly complete; correct behavior is to keep deferring.
+        _store.SeedForeignParentActivity("node-c", parentActivityExecutionId: "actexec-other-composite");
+
+        await CompleteAsync(context, "node-b");
+
+        Assert.True(context.CompositeCompletionDeferred);
+        Assert.False(context.CompositeCompletionRequested);
+    }
+
+    [Fact]
     public async Task OnChildCompleted_CompletesAtThreshold_WhenSubsetConfigured()
     {
         var context = NewContext(threshold: 2);
@@ -302,7 +320,18 @@ public sealed class ParallelActivityTests : IDisposable
 
         public void SeedFaultedBranch(string executableNodeId) => SeedBranch(executableNodeId, ActivityExecutionStatus.Faulted);
 
-        private void SeedBranch(string executableNodeId, ActivityExecutionStatus status)
+        private void SeedBranch(string executableNodeId, ActivityExecutionStatus status) =>
+            SeedActivity(executableNodeId, status, ParallelExecutionId);
+
+        /// <summary>
+        /// Seeds an activity state parented by a DIFFERENT composite than the Parallel under test (a sibling elsewhere in the
+        /// same workflow). It must never be counted by the parallel join: with the parent-scoped read it is not even returned
+        /// by <see cref="ListByParentAsync"/>. This guards that parent-scoping neither widens nor narrows the counted set.
+        /// </summary>
+        public void SeedForeignParentActivity(string executableNodeId, string parentActivityExecutionId) =>
+            SeedActivity(executableNodeId, ActivityExecutionStatus.Completed, parentActivityExecutionId);
+
+        private void SeedActivity(string executableNodeId, ActivityExecutionStatus status, string parentActivityExecutionId)
         {
             _states.Add(new ActivityExecutionState(
                 Execution: new ActivityExecution($"actexec-{executableNodeId}-{_states.Count}", "wfexec-1", executableNodeId, $"authored-{executableNodeId}", "test/probe", "1.0.0"),
@@ -311,9 +340,9 @@ public sealed class ParallelActivityTests : IDisposable
                 ScheduledAt: DateTimeOffset.UnixEpoch,
                 StartedAt: DateTimeOffset.UnixEpoch,
                 CompletedAt: DateTimeOffset.UnixEpoch,
-                SchedulingActivityExecutionId: ParallelExecutionId,
-                ParentActivityExecutionId: ParallelExecutionId,
-                BranchId: $"{ParallelExecutionId}:parallel-branch:{executableNodeId}",
+                SchedulingActivityExecutionId: parentActivityExecutionId,
+                ParentActivityExecutionId: parentActivityExecutionId,
+                BranchId: $"{parentActivityExecutionId}:parallel-branch:{executableNodeId}",
                 IterationId: null,
                 CallStackDepth: 0,
                 BookmarkIds: [],
@@ -333,7 +362,14 @@ public sealed class ParallelActivityTests : IDisposable
             new(_states.FirstOrDefault(s => s.Execution.ActivityExecutionId == activityExecutionId));
 
         public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
-            new(_states.ToArray());
+            new(_states.Where(s => s.Execution.WorkflowExecutionId == workflowExecutionId).ToArray());
+
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
+            new(_states
+                .Where(s =>
+                    s.Execution.WorkflowExecutionId == workflowExecutionId &&
+                    StringComparer.Ordinal.Equals(s.ParentActivityExecutionId, parentActivityExecutionId))
+                .ToArray());
     }
 
     private sealed class NonRuntimeActivityExecutionContext(IServiceProvider serviceProvider, IActivity activity) : IActivityExecutionContext

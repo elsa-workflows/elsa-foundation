@@ -12,7 +12,12 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public static class ElsaRuntimeStorageManifest
 {
-    public const string SchemaVersion = "1.0.0";
+    // Bumped to 1.1.0 by the additive activityExecutionState by-parent-activity-execution index (#514/#413 item 3).
+    // The change is index-only: no document shape changed, so no per-kind version bump / upcaster / new golden
+    // fixture is required. On deploy this manifest version bump triggers Groundwork's added-index backfill
+    // (Condition 7, preview.16) so activity-execution states written before the index existed become visible
+    // through it without a re-save. See docs/serialization.md.
+    public const string SchemaVersion = "1.1.0";
 
     // Shared index identities and field names. Index identities only need to be unique within a unit,
     // so the same strings are reused across units that expose the same logical access pattern.
@@ -20,10 +25,16 @@ public static class ElsaRuntimeStorageManifest
     public const string ByCollectionIndex = "by-collection";
     public const string ByStimulusIndex = "by-stimulus";
     public const string ByArtifactIndex = "by-artifact";
+    public const string ByParentActivityExecutionIndex = "by-parent-activity-execution";
     public const string WorkflowExecutionIdField = "workflowExecutionId";
     public const string CollectionField = "collection";
     public const string StimulusHashField = "stimulusHash";
     public const string ArtifactIdField = "artifactId";
+    // Nested dot-path into the persisted activity-execution document: the parent id already lives under
+    // the document's "state" envelope, so indexing this path adds an index over an EXISTING serialized
+    // field without changing the document shape. Groundwork index fields are dot-paths resolved by walking
+    // nested JSON (relational RelationalPhysicalizationValues.TryGetPropertyPath, Mongo content.<path> BSON key).
+    public const string ParentActivityExecutionIdField = "state.parentActivityExecutionId";
 
     public const string BookmarkStateDocumentKind = "bookmarkState";
 
@@ -50,6 +61,16 @@ public static class ElsaRuntimeStorageManifest
     public const string WorkflowExecutableCollection = "workflowExecutable";
 
     public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
+
+    /// <summary>
+    /// Parent-scoped index used by <c>IActivityExecutionStateStore.ListByParentAsync</c> (#514/#413 item 3) so a
+    /// composite (e.g. a Parallel fork/join) can read only the activity-execution states directly parented by it,
+    /// instead of loading every activity-execution state in the workflow and filtering in memory. Keyed by the
+    /// already-persisted nested <c>state.parentActivityExecutionId</c> field; the store post-filters the result by
+    /// workflow execution id (parent ids are activity-execution ids, but the store honours the full (wf, parent)
+    /// contract rather than relying on their global uniqueness).
+    /// </summary>
+    public const string ActivityExecutionStateByParent = ByParentActivityExecutionIndex;
     public const string ActivityExecutionInspectionDocumentKind = "activityExecutionInspection";
     public const string WorkflowExecutionStateDocumentKind = "workflowExecutionState";
     public const string DurableValueStateDocumentKind = "durableValueState";
@@ -131,8 +152,14 @@ public static class ElsaRuntimeStorageManifest
             Unit(
                 ActivityExecutionStateDocumentKind,
                 "Activity execution state",
-                [Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField)],
-                [Query("list-by-workflow-execution", ByWorkflowExecutionIndex)]),
+                [
+                    Keyword(ByWorkflowExecutionIndex, WorkflowExecutionIdField),
+                    Keyword(ByParentActivityExecutionIndex, ParentActivityExecutionIdField)
+                ],
+                [
+                    Query("list-by-workflow-execution", ByWorkflowExecutionIndex),
+                    Query("list-by-parent-activity-execution", ByParentActivityExecutionIndex)
+                ]),
             Unit(
                 ActivityExecutionInspectionDocumentKind,
                 "Activity execution inspection projection",
