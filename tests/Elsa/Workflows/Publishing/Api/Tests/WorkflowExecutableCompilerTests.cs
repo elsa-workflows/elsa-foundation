@@ -28,6 +28,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class WorkflowExecutableCompilerTests
 {
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
+    private readonly ActivityDefinitionVersion _writeLinesActivity = ActivityVersion("activity-write-lines", "Lines", new TypeReference("String", CollectionKind.List));
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
 
@@ -229,6 +230,27 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task CompiledObjectCollectionInputMaterializesAuthoredArrayForTheRuntime()
+    {
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+        var compiler = Compiler(WorkflowVersion(WriteLinesNode("write-lines", ObjectLines(["Hello", "World"]))));
+
+        var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
+            VersionId: "version-1",
+            Scope: WorkflowExecutableScope.Published,
+            CreatedAt: now,
+            PublishedAt: now,
+            ExpiresAt: null,
+            ArtifactIdPrefix: "artifact-"));
+
+        var materialized = await new RuntimeActivityInputMaterializer().MaterializeInputsAsync(executable.RootActivity);
+
+        var linesInput = Assert.Single(materialized);
+        var lines = Assert.IsAssignableFrom<ICollection<string>>(linesInput.Value);
+        Assert.Equal(["Hello", "World"], lines);
+    }
+
+    [Fact]
     public async Task CompilesTransientWorkflowExecutableWithExpirationAndMetadata()
     {
         var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
@@ -401,7 +423,7 @@ public sealed class WorkflowExecutableCompilerTests
     private WorkflowExecutableCompiler Compiler(WorkflowDefinitionVersion workflowVersion) =>
         TestCompiler.Create(
             new FakeVersionStore(workflowVersion),
-            new FakeActivityVersionStore([_writeLineActivity, _sequenceActivity]),
+            new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity]),
             _activityStructureService,
             TestWellKnownTypeRegistry.Create());
 
@@ -415,6 +437,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static ActivityNode Node(string nodeId, params WorkflowArgumentState[] inputs) =>
         new(nodeId, "activity-write-line", inputs, Outputs: []);
+
+    private static ActivityNode WriteLinesNode(string nodeId, params WorkflowArgumentState[] inputs) =>
+        new(nodeId, "activity-write-lines", inputs, Outputs: []);
 
     private static ActivityNode SequenceNode(
         string nodeId,
@@ -438,6 +463,9 @@ public sealed class WorkflowExecutableCompilerTests
 
     private static WorkflowArgumentState VariableText(JsonElement reference) =>
         new("Text", new ArgumentValue(reference, "Variable"), null, null, null, null);
+
+    private static WorkflowArgumentState ObjectLines(IReadOnlyCollection<string> lines) =>
+        new("Lines", new ArgumentValue(JsonSerializer.SerializeToElement(lines), "Object"), null, null, null, null);
 
     private static ActivityDefinitionVersion ActivityVersion(string id, string inputName, TypeReference inputType) =>
         ActivityVersion(id, "Test.WriteLine", [new InputDefinition(inputName, inputName, inputType, null, inputName, null)]);
