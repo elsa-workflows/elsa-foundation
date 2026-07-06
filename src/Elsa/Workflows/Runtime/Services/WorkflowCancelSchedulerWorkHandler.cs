@@ -46,17 +46,20 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         var commit = await BuildCommitAsync(workItem, cancellationToken);
-        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        if (commit is not null)
+            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
     /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pipelineContext);
-        pipelineContext.Workspace.PendingCheckpointCommit = await BuildCommitAsync(workItem, cancellationToken);
+        var commit = await BuildCommitAsync(workItem, cancellationToken);
+        if (commit is not null)
+            pipelineContext.Workspace.PendingCheckpointCommit = commit;
     }
 
-    private async ValueTask<RuntimeCheckpointCommit> BuildCommitAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
+    private async ValueTask<RuntimeCheckpointCommit?> BuildCommitAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
@@ -65,6 +68,13 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
         var workflowState = await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken);
         if (workflowState is null)
             throw new InvalidOperationException($"Cancel scheduler work item '{workItem.WorkItemId}' references missing workflow execution '{workItem.WorkflowExecutionId}'.");
+
+        // #412 item 5: a Cancel that arrives after the workflow already reached a terminal status
+        // (Completed/Faulted/Cancelled) must not clobber that outcome. Short-circuit to a no-op (no commit)
+        // rather than overwriting Status/CompletedAt — this preserves the real terminal result for
+        // Completed/Faulted and keeps a redelivered cancel idempotent for the already-Cancelled case.
+        if (workflowState.Status.IsTerminal())
+            return null;
 
         var cancelledWorkflowState = workflowState with
         {

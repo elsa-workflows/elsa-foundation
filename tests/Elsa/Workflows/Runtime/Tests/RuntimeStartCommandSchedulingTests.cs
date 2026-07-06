@@ -243,6 +243,53 @@ public sealed class RuntimeStartCommandSchedulingTests
         Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
+    // ── #412 Start exception-masking: the deserialize catch-filter is a ParamName whitelist ──────────
+
+    [Fact]
+    public async Task HandleAsync_WrapsPayloadConstructorValidationFailure_ForWhitelistedParamName()
+    {
+        // A genuine payload-validation ArgumentException (blank requestedArtifactId → whitelisted ParamName)
+        // is still reported as an invalid-payload InvalidOperationException — narrowing preserves wrapping.
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            PinnedExecutable = NewIdentity(),
+            RequestedArtifactId = ""
+        });
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var handler = NewHandler(store, queue);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.HandleAsync(NewStartWorkItem(payload: payload)).AsTask());
+
+        Assert.Contains("not a valid start command payload", exception.Message);
+        Assert.IsType<ArgumentException>(exception.InnerException);
+        Assert.Empty(await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public void IsStartPayloadValidationException_ClassifiesOnlyPayloadConstructorParamNames()
+    {
+        // The whitelist matches exactly the WorkflowExecutionStartCommandPayload constructor's own
+        // validation ParamNames — and nothing else.
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "pinnedExecutable")));
+        Assert.True(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "requestedArtifactId")));
+    }
+
+    [Fact]
+    public void IsStartPayloadValidationException_DoesNotMaskUnrelatedArgumentException()
+    {
+        // The masking bug: an unrelated ArgumentException (a ParamName outside the payload's own validated
+        // parameters) must NOT be classified as a payload-validation failure, so it propagates unwrapped
+        // instead of being misreported as an invalid-payload InvalidOperationException.
+        Assert.False(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", "unrelated")));
+        Assert.False(WorkflowStartSchedulerWorkHandler.IsStartPayloadValidationException(
+            new ArgumentException("boom", paramName: null)));
+    }
+
     [Fact]
     public void CanHandle_AcceptsOnlyStartCommandWork()
     {
