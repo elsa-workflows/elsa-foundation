@@ -60,7 +60,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();
         services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
-        services.AddSingleton<IEventPublisher, StubEventPublisher>();
+        services.AddSingleton<IInlineEventPublisher, StubEventPublisher>();
         services.AddSingleton<IWorkflowDefinitionStore, ThrowingDefinitionStore>();
         services.AddSingleton<IWorkflowDefinitionVersionStore, ThrowingVersionStore>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
@@ -87,9 +87,9 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         public string Generate() => Guid.NewGuid().ToString("N");
     }
 
-    private sealed class StubEventPublisher : IEventPublisher
+    private sealed class StubEventPublisher : IInlineEventPublisher
     {
-        public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task Publish(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity
