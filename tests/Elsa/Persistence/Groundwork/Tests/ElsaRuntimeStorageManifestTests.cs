@@ -27,10 +27,13 @@ public sealed class ElsaRuntimeStorageManifestTests
     }
 
     [Fact]
-    public void SchemaVersion_Is_Bumped_For_The_Additive_Index()
+    public void SchemaVersion_Stays_The_Frozen_Legacy_Stamp_Despite_The_Additive_Index()
     {
-        // The added index is a manifest change, so the manifest version is bumped past the original 1.0.0 to trigger
-        // Groundwork's added-index backfill (Condition 7). It is NOT a document-shape change: no per-kind version bump.
-        Assert.Equal("1.1.0", ElsaRuntimeStorageManifest.SchemaVersion);
+        // Adding an index must NOT change this constant. It is the frozen legacy stamp that
+        // ElsaRuntimeDocumentVersions.Parse recognizes (only a positive integer or "1.0.0" is accepted); documents/tests
+        // stamp with it, so any other value makes Parse reject every kind. Added-index backfill (Condition 7) triggers on
+        // the physicalized index-set change, not on this string — the pre-existing bookmarkState by-stimulus index added
+        // an index without bumping it too.
+        Assert.Equal("1.0.0", ElsaRuntimeStorageManifest.SchemaVersion);
     }
 }

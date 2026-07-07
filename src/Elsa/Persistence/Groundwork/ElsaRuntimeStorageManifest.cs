@@ -12,12 +12,13 @@ namespace Elsa.Persistence.Groundwork;
 /// </summary>
 public static class ElsaRuntimeStorageManifest
 {
-    // Bumped to 1.1.0 by the additive activityExecutionState by-parent-activity-execution index (#514/#413 item 3).
-    // The change is index-only: no document shape changed, so no per-kind version bump / upcaster / new golden
-    // fixture is required. On deploy this manifest version bump triggers Groundwork's added-index backfill
-    // (Condition 7, preview.16) so activity-execution states written before the index existed become visible
-    // through it without a re-save. See docs/serialization.md.
-    public const string SchemaVersion = "1.1.0";
+    // FROZEN legacy stamp. This is NOT a migration knob: ElsaRuntimeDocumentVersions.Parse recognizes only a
+    // positive integer or this exact "1.0.0" string (which it maps to version 1), and documents/tests stamp
+    // with this value — changing it makes Parse reject every kind. Per-kind schema versions live separately in
+    // ElsaRuntimeDocumentVersions.Current. Adding an index (like #514's by-parent-activity-execution, or the
+    // pre-existing bookmarkState by-stimulus) does NOT bump this: Groundwork's added-index backfill (Condition 7)
+    // triggers on the physicalized index-set change, not on this string. See docs/serialization.md.
+    public const string SchemaVersion = "1.0.0";
 
     // Shared index identities and field names. Index identities only need to be unique within a unit,
     // so the same strings are reused across units that expose the same logical access pattern.
