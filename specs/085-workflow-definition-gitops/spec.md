@@ -41,7 +41,9 @@ decision log are in ADR 0034; this spec is the implementation skeleton.
    + `GitClientOptions` + `AddGitClient()`; true leaf project (only DI/Logging abstractions). The
    Design feature just adds a `<ProjectReference>` — no extraction work remains.
 2. **Deterministic shared payload serializer (prereq, D3/D8)** — the real weight of "canonical."
+   Own unit: [`specs/086-deterministic-payload-serialization`](../086-deterministic-payload-serialization/spec.md).
 3. **Import-reconciler definition-metadata update path (D5)** — new capability the reconciler lacks.
+   Own unit: [`specs/087-reconciler-definition-metadata-update`](../087-reconciler-definition-metadata-update/spec.md).
 4. Then: **inbound source (US2)** → **export reconciler (US3)** → **coherence hardening (US4)** as
    FR-016a lands a persisted content hash.
 
