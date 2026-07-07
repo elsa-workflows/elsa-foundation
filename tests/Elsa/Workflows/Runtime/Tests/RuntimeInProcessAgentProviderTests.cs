@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -92,11 +94,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         var provider = new InProcessWorkflowExecutionActorProvider();
         var oldAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1"));
 
-        await provider.PassivateAsync(new WorkflowExecutionActorPassivationRequest(
-            workflowExecutionId: "wfexec-1",
-            boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
-            requestedAt: _now,
-            reason: "Host drain"));
+        await provider.PassivateAsync(NewPassivationRequest("wfexec-1"));
 
         var oldResult = await oldAgent.EnqueueAsync(NewEnvelope(1));
         var newAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-1", WorkflowExecutionActorActivationReason.Recovery));
@@ -116,11 +114,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         var enqueueTask = oldAgent.EnqueueAsync(NewEnvelope(1)).AsTask();
         await processor.WaitUntilStartedAsync();
 
-        var passivationTask = provider.PassivateAsync(new WorkflowExecutionActorPassivationRequest(
-            workflowExecutionId: "wfexec-1",
-            boundary: WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
-            requestedAt: _now,
-            reason: "Host drain")).AsTask();
+        var passivationTask = provider.PassivateAsync(NewPassivationRequest("wfexec-1")).AsTask();
         await WaitUntilStatusAsync(oldAgent, WorkflowExecutionActorStatus.Passivating);
 
         var unrelatedAgent = await provider.GetAgentAsync(NewActivationRequest("wfexec-2", WorkflowExecutionActorActivationReason.Recovery));
@@ -138,6 +132,49 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.Equal(WorkflowExecutionActorStatus.Passivated, oldAgent.Descriptor.Status);
         Assert.NotSame(oldAgent, newAgent);
         Assert.Equal(WorkflowExecutionActorStatus.Active, newAgent.Descriptor.Status);
+    }
+
+    [Fact]
+    public async Task ActivateThenPassivate_ForManyDistinctIds_LeavesLifecycleLockTableEmpty()
+    {
+        var provider = new InProcessWorkflowExecutionActorProvider();
+
+        // Regression for the unbounded-growth leak: without cleanup, _lifecycleLocks would retain one entry per
+        // distinct execution id ever activated. After a full activate -> passivate cycle each entry must be released.
+        const int distinctExecutions = 500;
+        for (var index = 0; index < distinctExecutions; index++)
+        {
+            var workflowExecutionId = $"wfexec-{index}";
+            await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+            await provider.PassivateAsync(NewPassivationRequest(workflowExecutionId));
+        }
+
+        Assert.Equal(0, LifecycleLockCount(provider));
+    }
+
+    [Fact]
+    public async Task ActivateRacingPassivate_ForSameId_DoesNotThrowDeadlockOrLeakLocks()
+    {
+        var provider = new InProcessWorkflowExecutionActorProvider();
+        const string workflowExecutionId = "wfexec-race";
+
+        // Repeatedly race a passivation against a re-activation for the same id. The verify-after-acquire retry loop
+        // must keep them serialized on the canonical lock without disposing an instance out from under a waiter.
+        for (var round = 0; round < 250; round++)
+        {
+            await provider.GetAgentAsync(NewActivationRequest(workflowExecutionId));
+
+            var passivate = Task.Run(() => provider.PassivateAsync(NewPassivationRequest(workflowExecutionId)).AsTask());
+            var activate = Task.Run(() => provider.GetAgentAsync(
+                NewActivationRequest(workflowExecutionId, WorkflowExecutionActorActivationReason.Recovery)).AsTask());
+
+            // WaitAsync surfaces a deadlock as a timeout rather than hanging the test run; await surfaces any throw.
+            await Task.WhenAll(passivate, activate).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        // Only a single id is ever used, so a live-but-uncleaned table would hold at most one entry; the leak fix keeps
+        // it from accumulating stale, orphaned locks from the racing rounds.
+        Assert.True(LifecycleLockCount(provider) <= 1);
     }
 
     [Fact]
@@ -171,6 +208,26 @@ public sealed class RuntimeInProcessAgentProviderTests
             requestedAt: _now,
             requestedBy: "runtime-test",
             requiredCapabilities: requiredCapabilities);
+
+    private WorkflowExecutionActorPassivationRequest NewPassivationRequest(
+        string workflowExecutionId,
+        WorkflowExecutionActorPassivationBoundary boundary = WorkflowExecutionActorPassivationBoundary.AfterCheckpointCommit,
+        string reason = "Host drain") =>
+        new(
+            workflowExecutionId: workflowExecutionId,
+            boundary: boundary,
+            requestedAt: _now,
+            reason: reason);
+
+    // The provider keeps its lifecycle-lock table private (public sealed type, no InternalsVisibleTo), so the
+    // growth-regression assertions read its size via reflection rather than a test-only public surface.
+    private static int LifecycleLockCount(InProcessWorkflowExecutionActorProvider provider)
+    {
+        var field = typeof(InProcessWorkflowExecutionActorProvider)
+            .GetField("_lifecycleLocks", BindingFlags.Instance | BindingFlags.NonPublic);
+        var locks = (IDictionary)field!.GetValue(provider)!;
+        return locks.Count;
+    }
 
     private WorkflowExecutionCommandEnvelope NewEnvelope(
         int index,
