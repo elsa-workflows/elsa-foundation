@@ -5,6 +5,7 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Enums;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -48,20 +49,23 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Existing_definition_new_version_calls_add_version_only()
     {
-        var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: "2.0.0");
+        // Incoming metadata matches the persisted definition, so only the new version is added.
+        var incoming = BuildIncomingVersion(definitionId: "wf-existing", version: "2.0.0", name: "Existing");
         var existingDef = new WorkflowDefinition { Id = "wf-existing", Name = "Existing" };
 
         var defs = new StubDefinitionStore().With(existingDef);
         var versions = new StubVersionStore(); // No existing versions.
         var addDef = new SpyAddCommand<WorkflowDefinition>();
         var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var saveDef = new SpySaveDefinitionCommand();
 
         var reconciler = NewReconciler(
             new CapturingSender { ToContribute = [incoming] },
-            defs, versions, addDef, addVer, DuplicateHandling.Skip);
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
         await reconciler.Reconcile(CancellationToken.None);
 
         Assert.Empty(addDef.Added);
+        Assert.Empty(saveDef.Saved);
         Assert.Single(addVer.Added);
         Assert.Equal("2.0.0", addVer.Added[0].Version);
     }
@@ -85,6 +89,86 @@ public sealed class WorkflowsVersionReconcilerTests
 
         Assert.Empty(addDef.Added);
         Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Changed_metadata_on_existing_definition_saves_updated_name_and_description()
+    {
+        // Same (definitionId, version) as the persisted one — a rename with no version change.
+        var incoming = BuildIncomingVersion(definitionId: "wf-rename", version: "1.0.0", name: "New Name", description: "New description");
+        var existingDef = new WorkflowDefinition { Id = "wf-rename", Name = "Old Name", Description = "Old description" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-rename", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyAddCommand<WorkflowDefinition>();
+        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Empty(addDef.Added);
+        var saved = Assert.Single(saveDef.Saved);
+        Assert.Equal("wf-rename", saved.Id);
+        Assert.Equal("New Name", saved.Name);
+        Assert.Equal("New description", saved.Description);
+        // Retention authority: a metadata-only change never touches versions.
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Unchanged_metadata_on_existing_definition_writes_nothing()
+    {
+        // Incoming metadata is byte-for-byte the persisted metadata.
+        var incoming = BuildIncomingVersion(definitionId: "wf-same", version: "1.0.0", name: "Same", description: "Same description");
+        var existingDef = new WorkflowDefinition { Id = "wf-same", Name = "Same", Description = "Same description" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-same", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyAddCommand<WorkflowDefinition>();
+        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        // Idempotent: no add and no save when nothing changed.
+        Assert.Empty(addDef.Added);
+        Assert.Empty(saveDef.Saved);
+        Assert.Empty(addVer.Added);
+    }
+
+    [Fact]
+    public async Task Metadata_update_does_not_add_or_alter_versions()
+    {
+        // A rename arriving with a brand-new version number: the definition metadata updates, and the
+        // version is added exactly once — the metadata path itself adds/alters no versions.
+        var incoming = BuildIncomingVersion(definitionId: "wf-both", version: "2.0.0", name: "Renamed");
+        var existingDef = new WorkflowDefinition { Id = "wf-both", Name = "Original" };
+        var existingVersion = new WorkflowDefinitionVersion("wf-both", "1.0.0");
+
+        var defs = new StubDefinitionStore().With(existingDef);
+        var versions = new StubVersionStore().With(existingVersion);
+        var addDef = new SpyAddCommand<WorkflowDefinition>();
+        var addVer = new SpyAddCommand<WorkflowDefinitionVersion>();
+        var saveDef = new SpySaveDefinitionCommand();
+
+        var reconciler = NewReconciler(
+            new CapturingSender { ToContribute = [incoming] },
+            defs, versions, addDef, addVer, DuplicateHandling.Skip, saveDef);
+        await reconciler.Reconcile(CancellationToken.None);
+
+        Assert.Single(saveDef.Saved);
+        Assert.Equal("Renamed", saveDef.Saved[0].Name);
+        // The pre-existing 1.0.0 is untouched; only the genuinely-new 2.0.0 is added.
+        var added = Assert.Single(addVer.Added);
+        Assert.Equal("2.0.0", added.Version);
     }
 
     [Fact]
@@ -112,7 +196,8 @@ public sealed class WorkflowsVersionReconcilerTests
         IWorkflowDefinitionVersionStore versions,
         IAddCommand<WorkflowDefinition> addDef,
         IAddCommand<WorkflowDefinitionVersion> addVer,
-        DuplicateHandling duplicateHandling)
+        DuplicateHandling duplicateHandling,
+        ISaveWorkflowDefinitionCommand? saveDef = null)
     {
         var options = Microsoft.Extensions.Options.Options.Create(new WorkflowVersionReconcilerOptions { DuplicateHandling = duplicateHandling });
         return new WorkflowsVersionReconciler(
@@ -122,15 +207,16 @@ public sealed class WorkflowsVersionReconcilerTests
             defs,
             versions,
             addDef,
-            addVer);
+            addVer,
+            saveDef ?? new SpySaveDefinitionCommand());
     }
 
-    private static IWorkflowDefinitionVersion BuildIncomingVersion(string definitionId, string version) => new StubIncomingVersion
+    private static IWorkflowDefinitionVersion BuildIncomingVersion(string definitionId, string version, string name = "Stub", string? description = null) => new StubIncomingVersion
     {
         Id = string.Empty,
         Version = version,
         DefinitionId = definitionId,
-        DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = "Stub" },
+        DefinitionFacade = new StubIncomingDefinition { Id = definitionId, Name = name, Description = description },
         State = new WorkflowDefinitionState([], null, [], [], null, null),
     };
 
@@ -207,6 +293,12 @@ public sealed class WorkflowsVersionReconcilerTests
     {
         public List<TEntity> Added { get; } = new();
         public Task Add(TEntity entity, CancellationToken cancellationToken = default) { Added.Add(entity); return Task.CompletedTask; }
+    }
+
+    private sealed class SpySaveDefinitionCommand : ISaveWorkflowDefinitionCommand
+    {
+        public List<WorkflowDefinition> Saved { get; } = new();
+        public Task Execute(WorkflowDefinition definition, CancellationToken cancellationToken = default) { Saved.Add(definition); return Task.CompletedTask; }
     }
 
     private sealed class SequentialIdGenerator : IIdentityGenerator

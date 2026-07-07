@@ -3,6 +3,7 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -65,6 +66,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton<IWorkflowDefinitionVersionStore, ThrowingVersionStore>();
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
         services.AddSingleton<IAddCommand<WorkflowDefinitionVersion>, StubAddCommand<WorkflowDefinitionVersion>>();
+        services.AddSingleton<ISaveWorkflowDefinitionCommand, ThrowingSaveDefinitionCommand>();
         // Entity factories are registered by the persistence feature in the host; the universal
         // reconciling handler depends on them, so the smoke test supplies the real implementations.
         services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
@@ -95,6 +97,12 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
     private sealed class StubAddCommand<TEntity> : IAddCommand<TEntity> where TEntity : Entity
     {
         public Task Add(TEntity entity, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingSaveDefinitionCommand : ISaveWorkflowDefinitionCommand
+    {
+        public Task Execute(WorkflowDefinition definition, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Registration smoke test: command should not have been called.");
     }
 
     private sealed class ThrowingDefinitionStore : IWorkflowDefinitionStore
