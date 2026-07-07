@@ -2,7 +2,7 @@ using Elsa.Modularity.Core.Contracts;
 using Microsoft.Extensions.Logging;
 using Nuplane.Admin;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 internal interface IExtensionBuilderService
 {

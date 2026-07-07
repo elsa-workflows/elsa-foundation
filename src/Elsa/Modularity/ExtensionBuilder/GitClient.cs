@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
 /// Canonical Git process invocation for the Extension Builder. This is the single Git stack:

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum ExtensionTemplateKind

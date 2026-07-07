@@ -1,4 +1,4 @@
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 internal sealed class ExtensionBuilderOptions
 {

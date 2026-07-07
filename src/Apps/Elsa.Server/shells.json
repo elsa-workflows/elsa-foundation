@@ -17,7 +17,6 @@
               "FolderPath": ""
             }
           },
-          "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
           "DiagnosticsStructuredLogs": {},

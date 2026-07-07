@@ -136,6 +136,7 @@
   <Folder Name="/src/Elsa/Modularity/">
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <Project Path="src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">

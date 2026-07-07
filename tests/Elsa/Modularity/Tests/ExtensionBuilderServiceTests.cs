@@ -3,7 +3,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
-using Elsa.Server.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
