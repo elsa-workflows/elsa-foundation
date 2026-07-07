@@ -163,22 +163,37 @@ serialized state (activity reconciliation already relies on a content hash), so 
 system-wide. **No migration / backward-compat work** — this is unreleased software; the serializer
 simply becomes deterministic.
 
-### D9 — One shared `Elsa.Git` library
+### D9 — One shared `Elsa.Git` library ✅ DONE
 
-Promote `GitClient` out of the Server app (it is `internal sealed` in `Elsa.Server.ExtensionBuilder`)
-into a **dedicated public `Elsa.Git` library holding `IGitClient` + `GitClient` together** — a thin
-§2.17 mechanical utility (shells out to git, `GIT_TERMINAL_PROMPT=0`, zero domain deps) referenceable
-by both the Extension Builder module and the Design-layer git feature. Contract+impl live in one lib
-(the strict `.Core`+impl split of ADR 0033 is overkill for a ~100-line utility). This removes the
-"internal to the app" blocker; the Design layer must not (and now need not) reference the app.
+**Landed 2026-07-07 (commit `7275e0d8`, "refactor(git): extract shared Elsa.Git library from
+ExtensionBuilder"), pending merge into this branch/main.** The shared **public `Elsa.Git`** library
+now exists at `src/Elsa/Git/`, holding `IGitClient` + `GitClient` + `GitClientOptions` +
+`AddGitClient()` (DI extension) together — a thin §2.17 mechanical utility (shells out to git,
+`GIT_TERMINAL_PROMPT=0`, zero domain deps). Contract+impl in one lib (the strict `.Core`+impl split of
+ADR 0033 is overkill for a ~100-line utility). It is a **true leaf project** (`net10.0`, only
+`Microsoft.Extensions.DependencyInjection.Abstractions` + `Logging.Abstractions` — no Elsa coupling),
+so any layer may reference it and the dependency-envelope guard stays clean.
 
-### D10 — Sequence `Elsa.Git` behind the ExtensionBuilder module refactor
+`IGitClient` exposes exactly the three original methods (`RunAsync`, `RunOrDefault`,
+`IsGitRepository`). DI consumers call `AddGitClient(...)` (registers `IGitClient` as a singleton);
+consumers needing a per-repository executable (Extension Builder, whose git path is per
+`ExtensionBuilderOptions`) construct `new GitClient(gitExecutable, logger)` directly. The Design-layer
+git feature resolves `IGitClient` via `AddGitClient`.
 
-The in-flight **ExtensionBuilder module refactor** already owns GitClient's relocation. Doing a
-parallel extraction would collide. This unit **sequences behind** that refactor and **coordinates the
-landing spot**: the refactor should land GitClient in the shared public `Elsa.Git` lib (D9), serving
-both consumers in one move. If it instead lands GitClient module-internal, this unit's first task is
-to promote it to `Elsa.Git`. (Coordination flagged to that session.)
+**Correction to the framing above:** at design time the wrapper was reported as `internal sealed` in
+the `Elsa.Server` app, but the Extension-Builder-to-module refactor had already relocated it to
+`Elsa.Modularity.ExtensionBuilder`; this extraction pulled it from there into `Elsa.Git`. Either way
+the "not referenceable from the Design layer" blocker is now gone.
+
+### D10 — Sequence `Elsa.Git` behind the ExtensionBuilder module refactor ✅ RESOLVED
+
+The ExtensionBuilder module refactor owned GitClient's relocation, so a parallel extraction would
+have collided. This unit sequenced behind it and coordinated the landing spot; the refactor landed
+GitClient in the shared public `Elsa.Git` lib (D9) rather than module-internal, and rewired the EB
+module to `IGitClient` (deleting the old module-internal `GitClient`) — serving both consumers in one
+move. **The coordination succeeded**: the GitOps unit's original FR-001 (extract the client) is
+**obviated** — the Design.Reconciliation feature now only adds a `<ProjectReference>` to `Elsa.Git`.
+Validation reported green (75/75 Extension Builder tests, 49/49 architecture guard).
 
 ### D11 — Asymmetric roles, two clone modes
 
@@ -248,9 +263,9 @@ Each role gets its own clone mode:
 The empty reconciliation seam gets its first concrete workflow source; Elsa gains reviewable,
 distributable, out-of-DB GitOps for workflow definitions with the runtime read path untouched and
 loop/conflict handling reduced to structural properties (immutability + ff-only + hash). The costs
-are three prerequisites and one behavior change:
+are three prerequisites (one already satisfied) and one behavior change:
 
-1. **`Elsa.Git` extraction** — sequenced behind the ExtensionBuilder module refactor (D9/D10).
+1. **`Elsa.Git` extraction** — ✅ **done** (commit `7275e0d8`, D9/D10); the feature now just references it.
 2. **Deterministic shared serializer** — the real weight of the "canonical" prerequisite (D3/D8).
 3. **Import-reconciler definition-metadata update path** — new capability (D5).
 4. Enabling the feature **activates the dormant workflow reconciliation lifecycle** for the first
@@ -273,7 +288,7 @@ are three prerequisites and one behavior change:
 ## Follow-up
 
 - Spec: [`specs/085-workflow-definition-gitops`](../../specs/085-workflow-definition-gitops/spec.md).
-- Prerequisites: (1) `Elsa.Git` (behind ExtensionBuilder module refactor); (2) deterministic shared
+- Prerequisites: (1) `Elsa.Git` — ✅ done (commit `7275e0d8`); (2) deterministic shared
   payload serializer; (3) import-reconciler definition-metadata update path.
 - Cross-references: `IWorkflowReconciliationSource`; `WorkflowsDesignReconciliationFeature`;
   [`specs/002` Model X / FR-016 / FR-016a](../../specs/002-workflow-state-scope/spec.md);

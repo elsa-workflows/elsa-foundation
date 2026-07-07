@@ -35,8 +35,11 @@ decision log are in ADR 0034; this spec is the implementation skeleton.
 
 ## Dependencies & Sequencing
 
-1. **`Elsa.Git` shared library (prereq, D9/D10)** — sequenced **behind the ExtensionBuilder module
-   refactor**, which owns GitClient's relocation. Coordinate the landing spot (shared public lib).
+1. **`Elsa.Git` shared library (prereq, D9/D10)** — ✅ **DONE** (commit `7275e0d8`, "refactor(git):
+   extract shared Elsa.Git library from ExtensionBuilder"; pending merge to main). Public `Elsa.Git`
+   at `src/Elsa/Git/` exposes `IGitClient` (`RunAsync`/`RunOrDefault`/`IsGitRepository`) + `GitClient`
+   + `GitClientOptions` + `AddGitClient()`; true leaf project (only DI/Logging abstractions). The
+   Design feature just adds a `<ProjectReference>` — no extraction work remains.
 2. **Deterministic shared payload serializer (prereq, D3/D8)** — the real weight of "canonical."
 3. **Import-reconciler definition-metadata update path (D5)** — new capability the reconciler lacks.
 4. Then: **inbound source (US2)** → **export reconciler (US3)** → **coherence hardening (US4)** as
@@ -44,21 +47,28 @@ decision log are in ADR 0034; this spec is the implementation skeleton.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — One shared git stack, reusable outside the app (Priority: P1)
+### User Story 1 — One shared git stack, reusable outside the app (Priority: P1) — ✅ DELIVERED
 
-`GitClient` lives in a shared public `Elsa.Git` library (`IGitClient` + `GitClient`), produced by the
-ExtensionBuilder module refactor; both the EB module and the Design-layer git feature consume it.
+`GitClient` lives in a shared public `Elsa.Git` library (`IGitClient` + `GitClient` +
+`GitClientOptions` + `AddGitClient()`) at `src/Elsa/Git/`, delivered by the ExtensionBuilder module
+refactor (commit `7275e0d8`); the EB module was rewired to `IGitClient` and its module-internal
+`GitClient` deleted. The Design-layer git feature consumes it by `<ProjectReference>` — no extraction
+work remains in this unit (the original FR-001 is obviated). *This story is recorded for provenance;
+the only residual task is adding the reference once `7275e0d8` merges to this branch.*
 
-**Why this priority**: The Design layer cannot reference the Server app; nothing compiles until the
-client has a shared home. Sequenced behind the EB module refactor to avoid a colliding extraction.
+**Why this priority**: The Design layer cannot reference the Server app / EB module; nothing compiles
+until the client has a shared home. That home now exists as a true leaf lib (only DI/Logging
+abstractions), so the dependency-envelope guard stays clean.
 
 **Independent Test**: A Design-layer project resolves `IGitClient` and runs a git command in a temp
-repo; EB tests still pass against the shared type; the `GIT_TERMINAL_PROMPT=0` assertion holds.
+repo; EB tests still pass against the shared type (reported 75/75); the `GIT_TERMINAL_PROMPT=0`
+assertion holds.
 
 **Acceptance Scenarios**:
 
 1. **Given** the extracted `Elsa.Git`, **When** the EB module and the git feature both resolve
-   `IGitClient`, **Then** they share one implementation and no second git wrapper exists.
+   `IGitClient`, **Then** they share one implementation and no second git wrapper exists. *(Met:
+   EB rewired, old wrapper deleted, 49/49 arch guard green.)*
 2. **Given** a credential-protected remote, **When** any `IGitClient` call runs, **Then** it fails
    fast (no interactive prompt).
 
@@ -140,10 +150,11 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 
 ### Functional Requirements
 
-- **FR-001**: `GitClient` MUST be available as a shared public `Elsa.Git` library (`IGitClient` +
-  `GitClient`, `GIT_TERMINAL_PROMPT=0`). **Depends on the ExtensionBuilder module refactor**, which
-  owns GitClient's relocation; if that refactor lands it module-internal, this unit's first task is to
-  promote it into `Elsa.Git`. The Design feature MUST NOT depend on the Server app or the EB module.
+- **FR-001**: ✅ **Satisfied** by `Elsa.Git` (commit `7275e0d8`). The shared public `Elsa.Git` library
+  (`IGitClient` + `GitClient` + `GitClientOptions` + `AddGitClient()`, `GIT_TERMINAL_PROMPT=0`) exists
+  as a true leaf project. The Design feature MUST consume it by `<ProjectReference>` (resolving
+  `IGitClient` via `AddGitClient()`), and MUST NOT depend on the Server app or the EB module. Residual:
+  add the reference once `7275e0d8` is merged into this branch/main.
 - **FR-002**: The **shared payload serializer** MUST be made **deterministic** (stable dictionary-key
   ordering; fixed polymorphic-discriminator placement) so `StateSource` is a canonical, stable hash
   preimage. No migration / backward-compat is required (unreleased software).
@@ -203,7 +214,8 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 
 ### Measurable Outcomes
 
-- **SC-001**: Exactly one git wrapper exists post-extraction; EB behavior unchanged.
+- **SC-001**: ✅ Met by `7275e0d8` — exactly one git wrapper (`Elsa.Git`) exists; EB rewired to it,
+  module-internal wrapper deleted, EB tests 75/75 and arch guard 49/49 green.
 - **SC-002**: The shared serializer emits byte-stable output for equal state across runs (proven by a
   determinism test), so equal state hashes identically.
 - **SC-003**: N git version files reconcile into N `WorkflowDefinitionVersion` rows with correct
