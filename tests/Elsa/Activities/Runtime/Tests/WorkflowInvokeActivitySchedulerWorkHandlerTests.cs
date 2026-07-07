@@ -875,7 +875,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
-        services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         if (includeInspection)
         {
             services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);

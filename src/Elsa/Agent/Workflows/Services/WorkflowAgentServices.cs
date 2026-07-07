@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Models;
 
@@ -64,7 +65,7 @@ public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
     {
         var message = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
         await Task.Yield();
-        var messageId = Guid.NewGuid().ToString("N");
+        var messageId = AgentProviderPrimitives.NewId();
         yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow);
 
         if (ShouldReturnError(message.Content))
@@ -572,7 +573,7 @@ public sealed class DefaultWorkflowAuthoringAuditService(IAgentAuditSink auditSi
         };
 
         return auditSink.EmitAsync(new(
-            Guid.NewGuid().ToString("N"),
+            AgentProviderPrimitives.NewId(),
             AgentAuditEventKind.WorkflowAuthoringInteraction,
             request.SessionId,
             request.ActorId,
@@ -598,7 +599,7 @@ public sealed class DefaultWorkflowChangeProposalService(
 
         var now = DateTimeOffset.UtcNow;
         var proposal = new AgentActionProposal(
-            Guid.NewGuid().ToString("N"),
+            AgentProviderPrimitives.NewId(),
             request.SessionId,
             null,
             "workflow.propose-change",

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
+using Elsa.Primitives.Identity;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Ingestion.HttpProtobuf;
 
@@ -350,7 +351,7 @@ public static class OtlpHttpProtobufParser
                 AddAttribute(attributes, field.Bytes);
         }
 
-        return new MetricPoint(Guid.NewGuid().ToString("N"), instrumentId, "", resourceId, timestamp, value, null, null, attributes, null, null);
+        return new MetricPoint(NewId(), instrumentId, "", resourceId, timestamp, value, null, null, attributes, null, null);
     }
 
     private static List<MetricPoint> ParseHistogramDataPoints(ReadOnlySpan<byte> payload, string resourceId, Func<string> instrumentIdFactory)
@@ -387,7 +388,7 @@ public static class OtlpHttpProtobufParser
                 AddAttribute(attributes, field.Bytes);
         }
 
-        return new MetricPoint(Guid.NewGuid().ToString("N"), instrumentId, "", resourceId, timestamp, null, sum, count, attributes, null, null);
+        return new MetricPoint(NewId(), instrumentId, "", resourceId, timestamp, null, sum, count, attributes, null, null);
     }
 
     private static (TelemetryResource Resource, List<OtlpLogRecord> Logs) ParseResourceLogs(ReadOnlySpan<byte> payload)
@@ -470,8 +471,10 @@ public static class OtlpHttpProtobufParser
         if (string.IsNullOrWhiteSpace(severityText) && severityNumber != null)
             severityText = SeverityName(severityNumber.Value);
 
-        return new OtlpLogRecord(Guid.NewGuid().ToString("N"), resourceId, timestamp, severityText, severityNumber, body, traceId, spanId, attributes);
+        return new OtlpLogRecord(NewId(), resourceId, timestamp, severityText, severityNumber, body, traceId, spanId, attributes);
     }
+
+    private static string NewId() => ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
 
     private static Dictionary<string, string?> ParseResourceAttributes(ReadOnlySpan<byte> payload)
     {

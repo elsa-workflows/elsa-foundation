@@ -4,6 +4,7 @@ using Elsa.Agent.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Agent.Api.Endpoints;
@@ -29,7 +30,7 @@ internal sealed class StreamSession(IAgentStreamingService streaming, IAgentSess
         var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, User, req.SessionId, ct);
         if (error is not null)
         {
-            await WriteAsync(response, new AgentStreamEvent(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow), ct);
+            await WriteAsync(response, new AgentStreamEvent(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow), ct);
             return;
         }
 

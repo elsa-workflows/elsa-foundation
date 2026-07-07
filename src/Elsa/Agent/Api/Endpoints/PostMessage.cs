@@ -3,6 +3,7 @@ using Elsa.Agent.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 
 namespace Elsa.Agent.Api.Endpoints;
 
@@ -76,7 +77,7 @@ internal sealed class PostMessage(
     private async Task SendDeniedAsync(string sessionId, AgentPolicyDecision decision, CancellationToken ct)
     {
         await auditSink.EmitAsync(new(
-            Guid.NewGuid().ToString("N"),
+            AgentProviderPrimitives.NewId(),
             AgentAuditEventKind.ContextDenied,
             sessionId,
             null,

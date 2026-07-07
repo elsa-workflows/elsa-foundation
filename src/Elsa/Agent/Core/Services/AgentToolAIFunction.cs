@@ -65,7 +65,7 @@ internal sealed class AgentToolAIFunction(AgentToolDescriptor descriptor, AgentT
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         var args = arguments.ToDictionary(pair => pair.Key, pair => pair.Value);
-        var invocation = new AgentToolInvocation(Guid.NewGuid().ToString("N"), descriptor.Name, context.SessionId, context.ActorId, args, context.Context);
+        var invocation = new AgentToolInvocation(AgentProviderPrimitives.NewId(), descriptor.Name, context.SessionId, context.ActorId, args, context.Context);
         var dispatch = await context.Invoker.DispatchAsync(invocation, context.Policy, cancellationToken);
 
         return dispatch.Outcome switch

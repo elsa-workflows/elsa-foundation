@@ -1,4 +1,5 @@
 using Elsa.Agent.Core.Models;
+using Elsa.Primitives.Identity;
 
 namespace Elsa.Agent.Core.Services;
 
@@ -10,8 +11,8 @@ namespace Elsa.Agent.Core.Services;
 /// </summary>
 public static class AgentProviderPrimitives
 {
-    /// <summary>Generates a fresh event/call id (compact GUID), matching the id shape all adapters emit.</summary>
-    public static string NewId() => Guid.NewGuid().ToString("N");
+    /// <summary>Generates a fresh event/call id using Elsa's short identity format.</summary>
+    public static string NewId() => ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
 
     /// <summary>Builds a provider error <see cref="AgentStreamEvent"/> with a fresh id and current timestamp.</summary>
     public static AgentStreamEvent Error(string code, string message, int statusCode)

@@ -3,6 +3,7 @@ using Elsa.Agent.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Agent.Core.Services;
 
 namespace Elsa.Agent.Api.Endpoints;
 
@@ -40,7 +41,7 @@ internal sealed class Feedback(IAgentFeedbackService feedback, IAgentSessionServ
         }
 
         var item = new AgentFeedback(
-            Guid.NewGuid().ToString("N"),
+            AgentProviderPrimitives.NewId(),
             req.SessionId,
             req.MessageId,
             req.Rating > 0 ? "positive" : "negative",

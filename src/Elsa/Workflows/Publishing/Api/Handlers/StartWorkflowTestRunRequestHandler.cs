@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Identity;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -39,7 +40,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
-        var testRunId = $"testrun-{Guid.NewGuid():N}";
+        var testRunId = ShortIdentityGenerator.Generate(now);
 
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
@@ -63,7 +64,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
-        var testRunId = $"testrun-{Guid.NewGuid():N}";
+        var testRunId = ShortIdentityGenerator.Generate(now);
         var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
         var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
 
