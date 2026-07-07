@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.JsonConverters;
@@ -153,6 +155,38 @@ public sealed class DeterministicSerializationTests
             count++;
         return count;
     }
+
+    [Fact]
+    public void EmbeddedJsonElement_IsCanonicalized_RegardlessOfKeyOrder()
+    {
+        var serializer = CreateSerializer();
+
+        // StateSource embeds raw JSON (e.g. ActivityNode.Structure.Payload is a JsonElement). STJ writes it
+        // verbatim in parse order; the deterministic serializer must canonicalize inside it too (#555).
+        var forward = new EmbeddedJsonHolder(JsonSerializer.Deserialize<JsonElement>("""{"z":1,"a":{"y":2,"x":3}}"""));
+        var reversed = new EmbeddedJsonHolder(JsonSerializer.Deserialize<JsonElement>("""{"a":{"x":3,"y":2},"z":1}"""));
+
+        var json = serializer.Serialize(forward);
+        Assert.Equal(json, serializer.Serialize(reversed));
+        Assert.Contains("\"payload\":{\"a\":{\"x\":3,\"y\":2},\"z\":1}", json);
+    }
+
+    [Fact]
+    public void EmbeddedJsonNode_IsCanonicalized_RegardlessOfKeyOrder()
+    {
+        var serializer = CreateSerializer();
+
+        var forward = new EmbeddedNodeHolder((JsonObject)JsonNode.Parse("""{"z":1,"a":{"y":2,"x":3}}""")!);
+        var reversed = new EmbeddedNodeHolder((JsonObject)JsonNode.Parse("""{"a":{"x":3,"y":2},"z":1}""")!);
+
+        var json = serializer.Serialize(forward);
+        Assert.Equal(json, serializer.Serialize(reversed));
+        Assert.Contains("\"payload\":{\"a\":{\"x\":3,\"y\":2},\"z\":1}", json);
+    }
+
+    private sealed record EmbeddedJsonHolder(JsonElement Payload);
+
+    private sealed record EmbeddedNodeHolder(JsonObject Payload);
 
     private static JsonPayloadSerializer CreateSerializer()
     {

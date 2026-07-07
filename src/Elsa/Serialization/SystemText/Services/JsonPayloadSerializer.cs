@@ -110,13 +110,20 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
 
             // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
-            // byte-identical JSON so the output can be content-hashed. The resolver fixes object member
-            // order; DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the
-            // polymorphic converters sort their own object/dictionary paths). This is baked into the
-            // per-revision options built once and cached by GetOptions — no per-call cost is added.
+            // byte-identical JSON so the output can be content-hashed. SortObjectMembers fixes object member
+            // order; DeterministicJsonNodeConverter.Modifier canonicalizes embedded JSON (JsonElement/JsonNode
+            // members such as ActivityNode.Structure.Payload — otherwise written verbatim in parse order, #555);
+            // DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the polymorphic
+            // converters sort their own paths). Baked into the per-revision options GetOptions caches — no
+            // per-call cost. NB the embedded-JSON hook is a property-scoped modifier, not a global JsonElement/
+            // JsonNode converter (which collides with PolymorphicObjectConverter's internal buffer handling).
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
-                Modifiers = { DeterministicOrderTypeInfoModifier.SortObjectMembers },
+                Modifiers =
+                {
+                    DeterministicOrderTypeInfoModifier.SortObjectMembers,
+                    DeterministicJsonNodeConverter.Modifier,
+                },
             },
         };
 
