@@ -18,6 +18,21 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// bespoke dictionary implementations fall through to the built-in converter — none appear in serialized
 /// workflow state, and claiming them would add key-conversion surface without a canonical-scope payoff.
 /// </remarks>
+/// <remarks>
+/// Because this claims the dictionary shape by <em>type</em> (not by member), a few System.Text.Json member
+/// roles it cannot see are unsupported for a claimed shape — none occur in serialized workflow state today,
+/// but wiring these options into a new read path could surface them:
+/// <list type="bullet">
+/// <item>A <c>[JsonExtensionData]</c> member typed <see cref="IDictionary{TKey,TValue}"/> of
+/// <c>JsonElement</c> — STJ forbids a custom converter on extension data and throws when building the
+/// contract.</item>
+/// <item>A get-only (setter-less, populate-in-place) dictionary member — the converter returns a fresh
+/// <see cref="Dictionary{TKey,TValue}"/> STJ cannot assign back, so entries would be lost.</item>
+/// <item>A caller that casts a deserialized value to a stricter concrete read-only type
+/// (<c>FrozenDictionary</c>/<c>ImmutableDictionary</c>) — read always materializes a mutable
+/// <see cref="Dictionary{TKey,TValue}"/>.</item>
+/// </list>
+/// </remarks>
 public sealed class DeterministicDictionaryConverterFactory : JsonConverterFactory
 {
     /// <inheritdoc />

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.JsonConverters;
@@ -24,13 +25,13 @@ public sealed class DeterministicSerializationTests
     /// </summary>
     private const string CanonicalDigest = "1ea56144563e03c373da7df075bdaf8f8e5b10dc61f69f237847699d1fadcaa2";
 
+    private readonly JsonPayloadSerializer _serializer = CreateSerializer();
+
     [Fact]
     public void EqualGraphs_WithDifferentDictionaryOrder_SerializeByteIdentically()
     {
-        var serializer = CreateSerializer();
-
-        var forward = serializer.Serialize(BuildFixture(reversed: false));
-        var reversed = serializer.Serialize(BuildFixture(reversed: true));
+        var forward = _serializer.Serialize(BuildFixture(reversed: false));
+        var reversed = _serializer.Serialize(BuildFixture(reversed: true));
 
         Assert.Equal(forward, reversed);
     }
@@ -38,18 +39,15 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void Serialization_IsRepeatable_ForTheSameGraph()
     {
-        var serializer = CreateSerializer();
         var fixture = BuildFixture(reversed: false);
 
-        Assert.Equal(serializer.Serialize(fixture), serializer.Serialize(fixture));
+        Assert.Equal(_serializer.Serialize(fixture), _serializer.Serialize(fixture));
     }
 
     [Fact]
     public void CanonicalDigest_IsStable()
     {
-        var serializer = CreateSerializer();
-
-        var json = serializer.Serialize(BuildFixture(reversed: false));
+        var json = _serializer.Serialize(BuildFixture(reversed: false));
         var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 
         Assert.Equal(CanonicalDigest, digest);
@@ -58,16 +56,14 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void PolymorphicDiscriminator_IsFixedAndLast()
     {
-        var serializer = CreateSerializer();
-
         // A typed value boxed as object is wrapped with a trailing "_type" discriminator; its position must
         // be deterministic (FR-002). Two equal-but-differently-ordered maps must agree byte-for-byte.
         var a = new Dictionary<string, object?> { ["b"] = "2", ["a"] = "1", ["map"] = Reverse(new Dictionary<string, string> { ["y"] = "1", ["x"] = "2" }) };
         var b = new Dictionary<string, object?> { ["a"] = "1", ["map"] = new Dictionary<string, string> { ["x"] = "2", ["y"] = "1" }, ["b"] = "2" };
 
-        var json = serializer.Serialize(a);
+        var json = _serializer.Serialize(a);
 
-        Assert.Equal(json, serializer.Serialize(b));
+        Assert.Equal(json, _serializer.Serialize(b));
         Assert.EndsWith("\"}}", json);                              // the wrapped map ends with its _type
         Assert.Equal(1, CountOccurrences(json, "\"_type\""));       // exactly one discriminator, fixed placement
     }
@@ -75,13 +71,11 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void TypedDictionary_RoundTripsLosslessly_ThroughTheSortingConverter()
     {
-        var serializer = CreateSerializer();
-
         // The sorting rewrites byte order only, never semantics (FR-004): a typed dictionary serialized in
         // sorted-key order deserializes back to an equal map.
         var original = Reverse(new Dictionary<string, string> { ["x"] = "1", ["y"] = "2", ["z"] = "3" });
-        var json = serializer.Serialize(original);
-        var roundTripped = (Dictionary<string, string>)serializer.Deserialize(json, typeof(Dictionary<string, string>));
+        var json = _serializer.Serialize(original);
+        var roundTripped = (Dictionary<string, string>)_serializer.Deserialize(json, typeof(Dictionary<string, string>));
 
         Assert.Equal(original.OrderBy(e => e.Key), roundTripped.OrderBy(e => e.Key));
     }
@@ -89,8 +83,6 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void ObjectGraph_RoundTripsLosslessly()
     {
-        var serializer = CreateSerializer();
-
         IDictionary<string, object?> nestedInput = new System.Dynamic.ExpandoObject();
         nestedInput["y"] = "2";
         nestedInput["x"] = "1";
@@ -103,8 +95,8 @@ public sealed class DeterministicSerializationTests
             ["nested"] = nestedInput,
         };
 
-        var json = serializer.Serialize(graph);
-        var roundTripped = Assert.IsAssignableFrom<IDictionary<string, object>>(serializer.Deserialize<object>(json));
+        var json = _serializer.Serialize(graph);
+        var roundTripped = Assert.IsAssignableFrom<IDictionary<string, object>>(_serializer.Deserialize<object>(json));
 
         Assert.Equal("a", roundTripped["alpha"]);
         Assert.Equal(42L, roundTripped["count"]);
@@ -113,6 +105,22 @@ public sealed class DeterministicSerializationTests
         Assert.Equal("1", nested["x"]);
         Assert.Equal("2", nested["y"]);
     }
+
+    [Fact]
+    public void EmbeddedOpaqueJson_IsPreservedVerbatim_NotReordered()
+    {
+        // ADR 0035 D3: opaque embedded JSON (e.g. ActivityNode.Structure.Payload, a JsonElement) is stored
+        // verbatim and NEVER rewritten — a JsonElement re-emits in parse order with no hashing, so it is
+        // already byte-stable across processes; reordering it would mutate the author's bytes. This pins that
+        // decision so a future change can't silently re-introduce embedded-JSON canonicalization.
+        var payload = JsonSerializer.Deserialize<JsonElement>("""{"z":1,"a":{"y":2,"x":3}}""");
+
+        var json = _serializer.Serialize(new OpaqueJsonHolder(payload));
+
+        Assert.Contains("\"payload\":{\"z\":1,\"a\":{\"y\":2,\"x\":3}}", json); // verbatim, NOT sorted
+    }
+
+    private sealed record OpaqueJsonHolder(JsonElement Payload);
 
     /// <summary>
     /// Builds the same logical graph either forward or reversed. The two must serialize identically: every
@@ -160,18 +168,16 @@ public sealed class DeterministicSerializationTests
     [InlineData(typeof(IReadOnlyDictionaryHolder))]
     public void StringKeyedDictionaryShapes_SortAndRoundTrip(Type holderType)
     {
-        var serializer = CreateSerializer();
-
         // The sorting factory must handle every string-keyed dictionary shape it claims — Dictionary<>,
         // IDictionary<>, IReadOnlyDictionary<> — not just the concrete Dictionary<> (guards the STJ
         // converter-compatibility crash where the worker's declared type didn't match IDictionary<>).
         var forward = MakeHolder(holderType, [("b", "2"), ("a", "1"), ("c", "3")]);
         var reversed = MakeHolder(holderType, [("c", "3"), ("a", "1"), ("b", "2")]);
 
-        var json = serializer.Serialize(forward);
-        Assert.Equal(json, serializer.Serialize(reversed));                       // byte-identical regardless of order
+        var json = _serializer.Serialize(forward);
+        Assert.Equal(json, _serializer.Serialize(reversed));                       // byte-identical regardless of order
         Assert.Contains("\"map\":{\"a\":\"1\",\"b\":\"2\",\"c\":\"3\"}", json);   // sorted
-        Assert.NotNull(serializer.Deserialize(json, holderType));                 // and round-trips (no crash)
+        Assert.NotNull(_serializer.Deserialize(json, holderType));                 // and round-trips (no crash)
     }
 
     private static object MakeHolder(Type holderType, (string Key, string Value)[] entries)

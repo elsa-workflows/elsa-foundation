@@ -25,12 +25,10 @@ public static class DeterministicOrderTypeInfoModifier
         if (typeInfo.Kind != JsonTypeInfoKind.Object || typeInfo.Properties.Count < 2)
             return;
 
-        var ordered = typeInfo.Properties
-            .OrderBy(property => property.Name, StringComparer.Ordinal)
-            .ToArray();
-
-        typeInfo.Properties.Clear();
-        foreach (var property in ordered)
-            typeInfo.Properties.Add(property);
+        // Assign the documented JsonPropertyInfo.Order sort key (the writer emits by Order) rather than
+        // clearing and rebuilding the live Properties collection.
+        var order = 0;
+        foreach (var property in typeInfo.Properties.InCanonicalOrder(property => property.Name))
+            property.Order = order++;
     }
 }

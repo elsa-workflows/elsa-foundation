@@ -233,7 +233,7 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             // this loop, giving it a fixed final position (spec 086 FR-001/FR-002; ADR 0034 D3/D8).
             foreach (var property in jsonElement.EnumerateObject()
                          .Where(property => !property.NameEquals(TypePropertyName))
-                         .OrderBy(property => property.Name, StringComparer.Ordinal))
+                         .InCanonicalOrder(property => property.Name))
             {
                 writer.WritePropertyName(property.Name);
                 property.Value.WriteTo(writer);

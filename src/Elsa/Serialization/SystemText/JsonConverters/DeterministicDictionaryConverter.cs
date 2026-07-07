@@ -49,7 +49,7 @@ public sealed class DeterministicDictionaryConverter<TDictionary, TValue> : Json
 
         // Ordinal by key. Keys are written verbatim (DictionaryKeyPolicy is unset), so the key is the
         // serialized property name and sorting by key equals sorting by serialized name (FR-001).
-        foreach (var entry in value.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        foreach (var entry in value.InCanonicalOrder(entry => entry.Key))
         {
             writer.WritePropertyName(entry.Key);
             JsonSerializer.Serialize(writer, entry.Value, options);
