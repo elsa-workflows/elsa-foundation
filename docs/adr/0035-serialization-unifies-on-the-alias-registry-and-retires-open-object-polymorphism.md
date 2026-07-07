@@ -8,8 +8,7 @@
 [#549](https://github.com/elsa-workflows/elsa-foundation/pull/549) / `specs/086` (deterministic serializer),
 `specs/081` (typed argument model), [ADR 0034](0034-workflow-definitions-reconcile-from-and-export-to-git.md)
 (git content-hash). Implementation sequenced across
-[#553](https://github.com/elsa-workflows/elsa-foundation/issues/553),
-[#555](https://github.com/elsa-workflows/elsa-foundation/issues/555),
+[#553](https://github.com/elsa-workflows/elsa-foundation/issues/553) and
 [#551](https://github.com/elsa-workflows/elsa-foundation/issues/551).
 
 ---
@@ -92,12 +91,18 @@ serialization-layer win is not blocked by the runtime change.
 `IDictionary<string, object>?` to `JsonElement?` (opaque, Studio-authored UI metadata). This removes open
 polymorphism from `StateSource` entirely.
 
-*Rider — a determinism dependency (#555).* The deterministic serializer (`specs/086`) sorts dictionary keys
-and object members but does **not** canonicalize the contents *inside* an embedded `JsonElement`.
-`StateSource` already embeds one (`ActivityNode.Structure.Payload`); D3 widens that surface. So D3 depends on
-extending the serializer to recursively canonicalize embedded `JsonElement`/`JsonNode` — otherwise it *moves*
-a determinism hole rather than closing it, and ADR 0034's hash tripwire would false-positive on key-order
-noise. Tracked as #555 (needed regardless of D3).
+*Rider — opaque JSON stays verbatim, and that is already deterministic.* An initial worry (#555, since
+withdrawn) was that the deterministic serializer sorts dictionary keys and object members but not the contents
+*inside* an embedded `JsonElement`, so D3's opaque bags (and the existing `ActivityNode.Structure.Payload`)
+would leak key-order noise into the content hash. That worry was wrong: a `JsonElement` re-emits **verbatim in
+parse order** with no hashing, so a given stored blob is already byte-stable across processes — the
+cross-process nondeterminism the serializer fixes is specific to hash-seeded `Dictionary` enumeration and
+unfixed reflection order, neither of which applies to a stored `JsonElement`. Reordering an opaque blob would
+only make two *differently-authored* blobs hash equal — asserting a semantic equality Elsa does not own over
+opaque data, and mutating the author's bytes. So the rule is: **opaque JSON is stored as `JsonElement` and
+never rewritten.** The only invariant to preserve is that an opaque bag is kept as `JsonElement` end-to-end
+and never round-tripped through a `Dictionary<string, object>` (which *would* reintroduce hash-seeded order);
+D3's move from `IDictionary<string, object>?` to `JsonElement?` is exactly what secures that.
 
 Because this changes authored-content modeling (§E2.9), it is an architecture-meeting decision, folded into
 this ADR.
@@ -126,19 +131,20 @@ clear error instead of recursing.
 
 ### D7 — Sequencing and tests (unreleased → no shims)
 
-Ship-now, independent: **D4** (Type.GetType removal) and **#555** (embedded-JSON canonicalization). Coupled
-sequence: **#553 (JsonNode runtime) → converter removal + D3 (designer bags opaque) + D5 (retire wire ids)**.
-Unreleased software means no data migration — frozen `StateSource` is never re-serialized (`specs/086`
-constraint). `PolymorphicObjectConverterReferenceTests` is *retired* (not re-baselined) when the converter is
-deleted; `DeterministicSerializationTests` stays and gains an embedded-JSON fixture; the `specs/086` golden
-digest is deliberately re-based when designer-bag handling changes.
+Ship-now, independent: **D4** (Type.GetType removal). Coupled sequence: **#553 (JsonNode runtime) → converter
+removal + D3 (designer bags opaque) + D5 (retire wire ids)**. Unreleased software means no data migration —
+frozen `StateSource` is never re-serialized (`specs/086` constraint). `PolymorphicObjectConverterReferenceTests`
+is *retired* (not re-baselined) when the converter is deleted; the `specs/086` golden digest is deliberately
+re-based when designer-bag handling changes. (Embedded opaque JSON needs no canonicalization — see the D3
+rider — so no embedded-JSON fixture is required.)
 
 ---
 
 **Consequences.** One type mechanism (the alias registry) instead of two. The most complex, riskiest, and
 least safe converter in serialization is deleted rather than maintained. Content hashing (ADR 0034) becomes
-sound: no AQN/version noise, and — once #555 lands — no embedded-JSON key-order noise. Dynamic JSON gets a
-single canonical representation (`JsonNode`) with a clean per-language extension seam. The cost is a real
+sound: no AQN/version noise, and no embedded-JSON key-order noise (opaque JSON is stored verbatim as a
+byte-stable `JsonElement`, D3 rider). Dynamic JSON gets a single canonical representation (`JsonNode`) with a
+clean per-language extension seam. The cost is a real
 runtime/expressions refactor (#553) and two constitutional amendments (§E2.9, §E6).
 
 **Alternatives considered.** *Keep the converter but only harden it* (do D4, stop) — leaves two type systems,
@@ -149,6 +155,6 @@ variant rather than deleting it* — still maintains the `_type` machinery and i
 today, but requires a serialization converter, is lossy on number kinds, and perpetuates the ExpandoObject
 special-casing this ADR removes; rejected in favour of lossless STJ-native `JsonNode`.
 
-**Follow-up.** D4 → standalone hardening PR. #555 → deterministic serializer extension. #553 → JsonNode
-adoption + expressions ADR. Converter removal + D3 + D5 → lands after #553; closes #551 and #552. §E2.9 and
-§E6 amendments ratified with this ADR.
+**Follow-up.** D4 → standalone hardening PR (#558). #553 → JsonNode adoption + expressions ADR. Converter
+removal + D3 + D5 → lands after #553; closes #551 and #552. §E2.9 and §E6 amendments ratified with this ADR.
+(#555 was withdrawn — opaque JSON needs no canonicalization; see the D3 rider.)
