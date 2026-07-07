@@ -228,7 +228,12 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
         }
         else
         {
-            foreach (var property in jsonElement.EnumerateObject().Where(property => !property.NameEquals(TypePropertyName)))
+            // Ordinal by member/key name so equal graphs (dictionaries filled in any order, host-dependent
+            // reflection order) serialize identically; the injected _type discriminator is written after
+            // this loop, giving it a fixed final position (spec 086 FR-001/FR-002; ADR 0034 D3/D8).
+            foreach (var property in jsonElement.EnumerateObject()
+                         .Where(property => !property.NameEquals(TypePropertyName))
+                         .InCanonicalOrder(property => property.Name))
             {
                 writer.WritePropertyName(property.Name);
                 property.Value.WriteTo(writer);

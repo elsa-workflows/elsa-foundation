@@ -48,7 +48,9 @@ public sealed class PolymorphicDictionaryConverter : JsonConverter<IDictionary<s
     {
         writer.WriteStartObject();
 
-        foreach (var kvp in value)
+        // Ordinal by key so equal maps serialize to byte-identical JSON regardless of insertion order or
+        // per-process string-hash randomization (spec 086 FR-001; ADR 0034 D3/D8).
+        foreach (var kvp in value.InCanonicalOrder(entry => entry.Key))
         {
             writer.WritePropertyName(kvp.Key);
             _objectConverter.Write(writer, kvp.Value, options);
