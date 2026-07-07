@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.For.Exceptions;
 using Elsa.Activities.For.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -41,6 +42,8 @@ namespace Elsa.Activities.For.Activities;
 /// activity module.
 /// </para>
 /// </remarks>
+[ActivityStructure("elsa.for.structure", "1.0.0")]
+[ActivityChildSlot("For.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 public sealed class For : ActivityBase, IActivityChildCompletionHandler
 {
     public const string BodySlotName = "For.Body";

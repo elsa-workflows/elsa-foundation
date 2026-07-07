@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Switch.Exceptions;
@@ -21,6 +22,17 @@ namespace Elsa.Activities.Switch.Activities;
 /// non-nullable strings and selection compares them ordinally against the value, so a null value never
 /// equals any declared case.
 /// </remarks>
+[ActivityStructure("elsa.switch.structure", "1.0.0")]
+[ActivityChildSlot(
+    "Switch.Case",
+    "cases",
+    "Cases",
+    ActivityChildSlotCardinalities.Single,
+    CollectionProperty = "cases",
+    ChildProperty = "activity",
+    LabelProperty = "match",
+    SlotNameTemplate = "Switch.Case[{match}]")]
+[ActivityChildSlot("Switch.Default", "default", "Default", ActivityChildSlotCardinalities.Single)]
 public sealed class Switch : ActivityBase, IActivityChildCompletionHandler
 {
     public const string DefaultSlotName = "Switch.Default";

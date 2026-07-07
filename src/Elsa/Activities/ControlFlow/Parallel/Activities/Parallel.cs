@@ -1,6 +1,7 @@
 using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -55,6 +56,16 @@ namespace Elsa.Activities.Parallel.Activities;
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </para>
 /// </remarks>
+[ActivityStructure("elsa.parallel.structure", "1.0.0")]
+[ActivityChildSlot(
+    "Parallel.Branch",
+    "branches",
+    "Branches",
+    ActivityChildSlotCardinalities.Single,
+    CollectionProperty = "branches",
+    ChildProperty = "activity",
+    LabelProperty = "name",
+    SlotNameTemplate = "Parallel.Branch[{name}]")]
 public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";

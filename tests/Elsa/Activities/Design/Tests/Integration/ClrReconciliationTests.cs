@@ -38,14 +38,14 @@ public sealed class ClrReconciliationTests
         // Inherited [Version] on a base class is honoured (issue #417 item 3): no own [Version], so 4.0.0
         // comes from VersionedBaseActivity rather than the assembly's 2.1.0.
         Assert.Equal("4.0.0", VersionFor<InheritedVersionFixtureActivity>(store));
-        // The fixture assembly carries five concrete activities: UnannotatedFixtureActivity,
+        // The fixture assembly carries six concrete activities: UnannotatedFixtureActivity,
         // VersionedFixtureActivity, ComplexInputFixtureActivity, InheritedVersionFixtureActivity, and
-        // InheritsRequiredFixtureActivity (the abstract bases are not activity types).
-        Assert.Equal(5, store.Versions.Count);
+        // InheritsRequiredFixtureActivity, StructuredFixtureActivity (the abstract bases are not activity types).
+        Assert.Equal(6, store.Versions.Count);
 
         // Re-run: same content + same versions → zero new rows (SC-003 idempotency, DuplicateHandling.Skip).
         await reconciler.Reconcile(CancellationToken.None);
-        Assert.Equal(5, store.Versions.Count);
+        Assert.Equal(6, store.Versions.Count);
     }
 
     [Fact]
@@ -54,16 +54,16 @@ public sealed class ClrReconciliationTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         var store = new InMemoryReconcilerHarness.CatalogStore();
 
-        // First pass via the real CLR source persists all five concrete fixture activities (five rows).
+        // First pass via the real CLR source persists all six concrete fixture activities (six rows).
         await InMemoryReconcilerHarness.BuildReconciler(store, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
-        Assert.Equal(5, store.Versions.Count);
+        Assert.Equal(6, store.Versions.Count);
 
         // Author bumps the versioned activity to 4.0.0 (new content + new version). The reconciler
         // matches the existing definition by ActivityTypeKey and appends the new version row.
         var bumped = StubSource("4.0.0");
         await InMemoryReconcilerHarness.BuildReconciler(store, bumped).Reconcile(CancellationToken.None);
 
-        Assert.Equal(6, store.Versions.Count);
+        Assert.Equal(7, store.Versions.Count);
         var versioned = store.Definitions.Single(d => d.ActivityTypeKey == typeof(VersionedFixtureActivity).FullName);
         var versionsForVersioned = store.Versions.Where(v => v.DefinitionId == versioned.Id).Select(v => v.Version).OrderBy(v => v).ToList();
         Assert.Equal(new List<string> { "3.0.0", "4.0.0" }, versionsForVersioned);

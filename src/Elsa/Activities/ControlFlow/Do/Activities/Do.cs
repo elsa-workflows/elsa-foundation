@@ -1,6 +1,7 @@
 using Elsa.Activities.Do.Exceptions;
 using Elsa.Activities.Do.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -54,6 +55,8 @@ namespace Elsa.Activities.Do.Activities;
 /// completes, because the post-completion re-evaluation reads <c>false</c>.
 /// </para>
 /// </remarks>
+[ActivityStructure("elsa.do.structure", "1.0.0")]
+[ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 public sealed class Do : ActivityBase, IActivityChildCompletionHandler
 {
     public const string BodySlotName = "Do.Body";
