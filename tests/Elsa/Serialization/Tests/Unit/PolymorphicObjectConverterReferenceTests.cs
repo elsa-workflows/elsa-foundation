@@ -38,8 +38,10 @@ public sealed class PolymorphicObjectConverterReferenceTests
 
         var json = JsonSerializer.Serialize((object)root, _options);
 
+        // Members are emitted in ordinal-by-name order (child, name, quantity, tags), not insertion order:
+        // the serializer is deterministic (spec 086; ADR 0034 D3/D8), so equal graphs serialize identically.
         Assert.Equal(
-            """{"name":"Order-1","quantity":42,"tags":{"_items":["a","b"],"_type":"System.Collections.Generic.List\u00601[[System.String, System.Private.CoreLib]], System.Private.CoreLib"},"child":{"city":"Amsterdam"}}""",
+            """{"child":{"city":"Amsterdam"},"name":"Order-1","quantity":42,"tags":{"_items":["a","b"],"_type":"System.Collections.Generic.List\u00601[[System.String, System.Private.CoreLib]], System.Private.CoreLib"}}""",
             json);
 
         // And the graph must round-trip through the read path.

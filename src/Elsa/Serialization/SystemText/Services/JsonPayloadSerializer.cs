@@ -1,6 +1,9 @@
 using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.JsonConverters;
+using Elsa.Serialization.SystemText.Resolvers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Serialization.SystemText.Services;
 
@@ -105,7 +108,19 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+
+            // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
+            // byte-identical JSON so the output can be content-hashed. The resolver fixes object member
+            // order; DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the
+            // polymorphic converters sort their own object/dictionary paths). This is baked into the
+            // per-revision options built once and cached by GetOptions — no per-call cost is added.
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers = { DeterministicOrderTypeInfoModifier.SortObjectMembers },
+            },
         };
+
+        options.Converters.Add(new DeterministicDictionaryConverterFactory());
 
         // Sync access to the registry populated at startup. No DI enumeration here —
         // the registry is the seam between the async contribution pipeline and the
