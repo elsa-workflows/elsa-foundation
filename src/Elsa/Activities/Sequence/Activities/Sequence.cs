@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence.Exceptions;
@@ -8,6 +9,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Sequence.Activities;
 
+[ActivityStructure("elsa.sequence.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
+[ActivityChildSlot("Sequence.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 public sealed class Sequence : ActivityBase, IActivityChildCompletionHandler
 {
     public const string ActivitiesSlotName = "Sequence.Activities";

@@ -1,9 +1,11 @@
 using System.Reflection;
+using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -78,6 +80,37 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void StructureAttributes_MapToDesignFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(StructuredFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets);
+
+        Assert.Equal("fixture.structure", facet.Kind);
+        Assert.Equal("1.0.0", facet.SchemaVersion);
+
+        var payload = facet.Payload;
+        Assert.Equal("sequence", payload.GetProperty("mode").GetString());
+        Assert.True(payload.GetProperty("supportsScopedVariables").GetBoolean());
+
+        var slots = payload.GetProperty("slots").EnumerateArray().ToArray();
+        Assert.Equal(2, slots.Length);
+        Assert.Contains(slots, slot =>
+            slot.GetProperty("name").GetString() == "Fixture.Activities" &&
+            slot.GetProperty("property").GetString() == "activities" &&
+            slot.GetProperty("cardinality").GetString() == ActivityChildSlotCardinalities.Many);
+        Assert.Contains(slots, slot =>
+            slot.GetProperty("name").GetString() == "Fixture.Body" &&
+            slot.GetProperty("property").GetString() == "body" &&
+            slot.GetProperty("cardinality").GetString() == ActivityChildSlotCardinalities.Single);
+
+        var initialPayload = payload.GetProperty("initialPayload");
+        Assert.Equal(JsonValueKind.Array, initialPayload.GetProperty("activities").ValueKind);
+        Assert.Equal(JsonValueKind.Null, initialPayload.GetProperty("body").ValueKind);
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
@@ -120,8 +153,8 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         File.WriteAllText(Path.Combine(folder.Path, "garbage.dll"), "this is not a portable executable");
 
-        // The junk DLL is skipped; the valid fixture assembly still yields its five concrete activities.
-        Assert.Equal(5, CreateScanner().Scan(folder.Path).Count);
+        // The junk DLL is skipped; the valid fixture assembly still yields its six concrete activities.
+        Assert.Equal(6, CreateScanner().Scan(folder.Path).Count);
     }
 
     [Fact]
