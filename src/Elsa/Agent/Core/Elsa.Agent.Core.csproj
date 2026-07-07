@@ -14,4 +14,8 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+	</ItemGroup>
+
 </Project>

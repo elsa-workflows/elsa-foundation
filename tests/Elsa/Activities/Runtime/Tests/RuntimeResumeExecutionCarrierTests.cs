@@ -127,7 +127,7 @@ public sealed class RuntimeResumeExecutionCarrierTests
         services.AddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
-        services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         return services.BuildServiceProvider();
     }

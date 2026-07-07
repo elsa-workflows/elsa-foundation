@@ -2,6 +2,7 @@ using Elsa.Expressions.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Models;
+using Elsa.Primitives.Identity;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ public sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry,
         var variable = (Variable)Activator.CreateInstance(variableGenericType)!;
 
         // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
-        variable.Id = source.ReferenceKey ?? Guid.NewGuid().ToString("N"); // Temporarily assign a new ID if the source doesn't have one.
+        variable.Id = source.ReferenceKey ?? ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow); // Temporarily assign a new ID if the source doesn't have one.
         variable.Name = source.Name;
 
         var value = source.Default?.Value;

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Elsa.Primitives.Identity;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -55,7 +56,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
             var now = _timeProvider.GetUtcNow();
 
             var lease = new RuntimeExecutionLease(
-                leaseId: Guid.NewGuid().ToString("N"),
+                leaseId: ShortIdentityGenerator.Generate(now),
                 workflowExecutionId: workflowExecutionId,
                 ownerId: _options.OwnerId,
                 acquiredAt: now,
@@ -137,7 +138,7 @@ public sealed class RuntimeExecutionOwnershipService : IRuntimeExecutionOwnershi
 
     private RuntimeHeartbeat NewHeartbeat(string workflowExecutionId, RuntimeExecutionLease lease, DateTimeOffset now) =>
         new(
-            heartbeatId: Guid.NewGuid().ToString("N"),
+            heartbeatId: ShortIdentityGenerator.Generate(now),
             workflowExecutionId: workflowExecutionId,
             ownerId: lease.OwnerId,
             leaseId: lease.LeaseId,

@@ -216,7 +216,7 @@ public sealed class RuntimeResumptionServiceTests
             workQueue,
             recoveryScanner,
             agentProvider,
-            new GuidRuntimeExecutionIdGenerator(),
+            new ShortRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(afterLeaseExpiry));
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
@@ -253,7 +253,7 @@ public sealed class RuntimeResumptionServiceTests
                 WorkQueue,
                 RecoveryScanner,
                 AgentProvider,
-                new GuidRuntimeExecutionIdGenerator(),
+                new ShortRuntimeExecutionIdGenerator(),
                 new FixedTimeProvider(Now));
         }
 

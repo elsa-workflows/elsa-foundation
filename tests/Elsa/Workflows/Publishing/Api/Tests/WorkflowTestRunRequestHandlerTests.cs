@@ -297,7 +297,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         new(
             _executableStore,
             new InProcessWorkflowExecutionActorProvider(),
-            new GuidRuntimeExecutionIdGenerator());
+            new ShortRuntimeExecutionIdGenerator());
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         new("definition-1", "1.0.0")

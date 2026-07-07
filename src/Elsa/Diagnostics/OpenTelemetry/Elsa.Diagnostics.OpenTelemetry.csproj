@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
   <ItemGroup>

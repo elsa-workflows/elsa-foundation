@@ -1,3 +1,4 @@
+using Elsa.Primitives.Identity;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -69,7 +70,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
             var now = timeProvider.GetUtcNow();
             var checkpoint = new RuntimeCheckpoint(
-                CheckpointId: Guid.NewGuid().ToString("N"),
+                CheckpointId: ShortIdentityGenerator.Generate(now),
                 Name: RuntimeCoalescingMetadataKeys.FlushCheckpointName,
                 WorkflowExecutionId: session.WorkflowExecutionId,
                 OccurredAt: now,
@@ -80,7 +81,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
                 });
 
             return new RuntimeCheckpointCommit(
-                CommitId: Guid.NewGuid().ToString("N"),
+                CommitId: ShortIdentityGenerator.Generate(now),
                 Checkpoint: checkpoint,
                 StateChanges: foldedState,
                 PostCommitIntents: remainingIntents,

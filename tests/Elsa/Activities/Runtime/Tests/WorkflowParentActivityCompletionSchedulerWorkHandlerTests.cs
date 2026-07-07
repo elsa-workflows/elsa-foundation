@@ -185,7 +185,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandlerTests
         services.AddSingleton<IDurableValueStateStore>(_ => _durableValueStateStore);
         services.AddSingleton(_incidentStateStore);
         services.AddSingleton<IIncidentStateStore>(_ => _incidentStateStore);
-        services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
         services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_ => _checkpointWriter);

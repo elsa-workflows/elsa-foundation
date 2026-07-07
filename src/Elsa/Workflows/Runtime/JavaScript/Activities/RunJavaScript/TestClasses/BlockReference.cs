@@ -1,11 +1,12 @@
 ﻿using Elsa.Expressions.Core.Contracts;
+using Elsa.Primitives.Identity;
 
 namespace Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.TestClasses;
 
 internal sealed class BlockReference(object? value) : IMemoryBlockReference
 {
     private readonly Block block = new(value);
-    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Id { get; set; } = ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
 
     public IMemoryBlock Declare()
     {
