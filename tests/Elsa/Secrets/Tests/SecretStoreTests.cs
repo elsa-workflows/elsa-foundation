@@ -37,6 +37,33 @@ public sealed class SecretStoreTests
         Assert.Equal("configured", read!.Value);
     }
 
+    [Fact]
+    public async Task Encrypted_Store_Test_Surfaces_Unavailable_Failure()
+    {
+        var store = new EncryptedSecretStore(new DefaultSecretValueProtector(new DefaultSecretKeyRing(Microsoft.Extensions.Options.Options.Create(new SecretsOptions { EncryptionKey = "test-key" }))));
+        var secret = Secret(SecretStoreNames.Encrypted);
+        var version = secret.LatestActiveVersion!;
+
+        var result = await store.TestAsync(new(secret, version));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("unavailable", result.Code);
+    }
+
+    [Fact]
+    public async Task Configuration_Store_Test_Surfaces_NotFound_Failure()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var store = new ConfigurationSecretStore(configuration);
+        var secret = Secret(SecretStoreNames.Configuration);
+        var version = secret.LatestActiveVersion!;
+
+        var result = await store.TestAsync(new(secret, version));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("not-found", result.Code);
+    }
+
     private static Secret Secret(string storeName) => new()
     {
         Name = "payments.api",
