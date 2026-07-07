@@ -30,7 +30,28 @@ public sealed class HashMismatchTests
         var ex = await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
             () => InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("second"))).Reconcile(CancellationToken.None));
 
-        Assert.Equal("1.0.0", ex.Version);
+        Assert.Equal("1.0.0", ex.PersistedVersion);
+        Assert.Equal("1.0.0", ex.IncomingVersion);
+        Assert.Single(store.Versions);
+    }
+
+    [Fact]
+    public async Task SameCoreVersionDifferentBuildMetadataDifferentContent_ThrowsWithBothVersionsSurfaced()
+    {
+        // The real-world case (the DesignFacets scenario): a persisted row built from one commit
+        // (build metadata 'oldbuild') and an incoming candidate built from another ('newbuild') share
+        // SemVer core 1.0.0 — so they are the same logical version — but their version-level content
+        // differs. The exception must surface each side's full version string so the operator can tell
+        // the two builds apart (the message previously showed the incoming metadata on both sides).
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(version: "1.0.0+oldbuild", descriptorAlias: "Object"))).Reconcile(CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
+            () => InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(version: "1.0.0+newbuild", descriptorAlias: "String"))).Reconcile(CancellationToken.None));
+
+        Assert.Equal("1.0.0+oldbuild", ex.PersistedVersion);
+        Assert.Equal("1.0.0+newbuild", ex.IncomingVersion);
         Assert.Single(store.Versions);
     }
 
@@ -88,7 +109,12 @@ public sealed class HashMismatchTests
     private static IActivityReconciliationSource Source(ActivityVersionReconciliationModel model) =>
         new InMemoryReconcilerHarness.InMemorySource("stub", "CLR", model);
 
-    private static ActivityVersionReconciliationModel Model(string description, string version = "1.0.0") =>
+    // Single factory for both cases: vary `description` for a definition-level content difference,
+    // or `descriptorAlias` (carried into DescriptorPayload) for a version-level one.
+    private static ActivityVersionReconciliationModel Model(
+        string description = "same",
+        string version = "1.0.0",
+        string descriptorAlias = "Object") =>
         new(
             Id: null,
             Version: version,
@@ -97,7 +123,7 @@ public sealed class HashMismatchTests
             Category: "Acme",
             Description: description,
             DescriptorType: typeof(ClrActivityDescriptor).FullName!,
-            Descriptor: new ClrActivityDescriptor("Object"),
+            Descriptor: new ClrActivityDescriptor(descriptorAlias),
             Inputs: [],
             Outputs: [],
             DesignFacets: []);
