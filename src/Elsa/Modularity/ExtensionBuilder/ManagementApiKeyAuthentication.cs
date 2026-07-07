@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Server;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
 /// Shared authentication primitive for the management API surfaces (extension builder and module
@@ -12,7 +12,7 @@ namespace Elsa.Server;
 /// the single source of truth for the header name, configuration key, key comparison and validation
 /// flow so the two surfaces cannot drift apart.
 /// </summary>
-internal static class ManagementApiKeyAuthentication
+public static class ManagementApiKeyAuthentication
 {
     /// <summary>Configuration key holding the expected management API key.</summary>
     public const string ConfigurationKey = "Elsa:ModuleManagement:ApiKey";

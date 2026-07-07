@@ -2,7 +2,7 @@ using System.Text.Json;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Server;
 
 internal sealed class NullShellFeatureConfigurationStore : IShellFeatureConfigurationStore
 {

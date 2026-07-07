@@ -87,6 +87,7 @@
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Persistence\Groundwork\Sqlite\Unified\Elsa.Persistence.Groundwork.Sqlite.Unified.csproj" />
@@ -121,10 +122,10 @@
 
 	<ItemGroup>
 		<!--
-			Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the ExtensionBuilder subsystem
-			is a large, host-private surface (~80 interlocking internal types) whose contracts are not meant
-			for consumption outside the Elsa.Server host. Publicizing it to satisfy tests would promote a
-			host-private API into the public surface. Tracked by the InternalsVisibleTo allow-list guard test
+			Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the host-only module-management
+			registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised directly by
+			ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a host-private
+			API into the public surface. Tracked by the InternalsVisibleTo allow-list guard test
 			(ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
 		-->
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />

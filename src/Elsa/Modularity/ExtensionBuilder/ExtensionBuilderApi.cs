@@ -1,11 +1,14 @@
 using System.Security.Claims;
-using Elsa.Server.ExtensionBuilder;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Server;
+namespace Elsa.Modularity.ExtensionBuilder;
 
-internal static class ElsaExtensionBuilderApi
+public static class ElsaExtensionBuilderApi
 {
     private const string CallerItemKey = "__ElsaExtensionBuilderCaller";
     private const string ElsaIdentityRoleClaimType = "elsa.identity.role";

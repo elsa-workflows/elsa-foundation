@@ -1,6 +1,6 @@
 using Elsa.Modularity.Core.Contracts;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Server;
 
 internal sealed class NullShellReloader : IShellReloader
 {

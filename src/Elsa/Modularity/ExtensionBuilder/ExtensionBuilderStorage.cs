@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 internal interface IExtensionBuilderStorage
 {

@@ -1,4 +1,4 @@
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>Point-in-time snapshot of a managed repository's Git state.</summary>
 internal sealed record RepositoryState(string? ActiveBranch, bool IsDirty, string RemoteState);

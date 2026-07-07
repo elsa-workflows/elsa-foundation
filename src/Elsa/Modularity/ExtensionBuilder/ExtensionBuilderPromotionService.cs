@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 using Nuplane.Admin;
 using Nuplane.Reconciliation;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 internal interface IExtensionBuilderPromotionService
 {

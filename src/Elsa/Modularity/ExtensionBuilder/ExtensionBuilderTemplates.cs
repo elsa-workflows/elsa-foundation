@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 internal interface IExtensionBuilderTemplateCatalog
 {

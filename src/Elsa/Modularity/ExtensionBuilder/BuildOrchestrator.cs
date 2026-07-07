@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
 /// Runs a resolved repository build or pack by shelling out to the configured <c>dotnet</c>

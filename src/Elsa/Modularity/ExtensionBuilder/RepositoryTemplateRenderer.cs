@@ -1,4 +1,4 @@
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
 /// Stateless rendering of Extension Builder repository templates: resolves and validates the template

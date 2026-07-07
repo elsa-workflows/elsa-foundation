@@ -1,4 +1,4 @@
-namespace Elsa.Server.ExtensionBuilder;
+namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
 /// Repository-path-scoped file-system surface for the Extension Builder: builds the repository tree,
