@@ -111,19 +111,17 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
 
             // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
             // byte-identical JSON so the output can be content-hashed. SortObjectMembers fixes object member
-            // order; DeterministicJsonNodeConverter.Modifier canonicalizes embedded JSON (JsonElement/JsonNode
-            // members such as ActivityNode.Structure.Payload — otherwise written verbatim in parse order, #555);
-            // DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the polymorphic
-            // converters sort their own paths). Baked into the per-revision options GetOptions caches — no
-            // per-call cost. NB the embedded-JSON hook is a property-scoped modifier, not a global JsonElement/
-            // JsonNode converter (which collides with PolymorphicObjectConverter's internal buffer handling).
+            // order; DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the
+            // polymorphic converters sort their own paths). These target the real cross-process nondeterminism
+            // — per-process string-hash-seeded dictionary enumeration and unfixed reflection member order.
+            // Embedded opaque JSON (a JsonElement such as ActivityNode.Structure.Payload) is deliberately NOT
+            // rewritten: it re-emits verbatim in parse order with no hashing, so it is already byte-stable
+            // across processes, and reordering an opaque blob would assert a semantic equality Elsa does not
+            // own (ADR 0035 D3 — opaque JSON stays verbatim). Baked into the per-revision options GetOptions
+            // caches — no per-call cost.
             TypeInfoResolver = new DefaultJsonTypeInfoResolver
             {
-                Modifiers =
-                {
-                    DeterministicOrderTypeInfoModifier.SortObjectMembers,
-                    DeterministicJsonNodeConverter.Modifier,
-                },
+                Modifiers = { DeterministicOrderTypeInfoModifier.SortObjectMembers },
             },
         };
 

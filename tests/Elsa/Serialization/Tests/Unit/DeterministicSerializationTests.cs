@@ -1,7 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.JsonConverters;
@@ -156,37 +154,42 @@ public sealed class DeterministicSerializationTests
         return count;
     }
 
-    [Fact]
-    public void EmbeddedJsonElement_IsCanonicalized_RegardlessOfKeyOrder()
+    [Theory]
+    [InlineData(typeof(DictionaryHolder))]
+    [InlineData(typeof(IDictionaryHolder))]
+    [InlineData(typeof(IReadOnlyDictionaryHolder))]
+    public void StringKeyedDictionaryShapes_SortAndRoundTrip(Type holderType)
     {
         var serializer = CreateSerializer();
 
-        // StateSource embeds raw JSON (e.g. ActivityNode.Structure.Payload is a JsonElement). STJ writes it
-        // verbatim in parse order; the deterministic serializer must canonicalize inside it too (#555).
-        var forward = new EmbeddedJsonHolder(JsonSerializer.Deserialize<JsonElement>("""{"z":1,"a":{"y":2,"x":3}}"""));
-        var reversed = new EmbeddedJsonHolder(JsonSerializer.Deserialize<JsonElement>("""{"a":{"x":3,"y":2},"z":1}"""));
+        // The sorting factory must handle every string-keyed dictionary shape it claims — Dictionary<>,
+        // IDictionary<>, IReadOnlyDictionary<> — not just the concrete Dictionary<> (guards the STJ
+        // converter-compatibility crash where the worker's declared type didn't match IDictionary<>).
+        var forward = MakeHolder(holderType, [("b", "2"), ("a", "1"), ("c", "3")]);
+        var reversed = MakeHolder(holderType, [("c", "3"), ("a", "1"), ("b", "2")]);
 
         var json = serializer.Serialize(forward);
-        Assert.Equal(json, serializer.Serialize(reversed));
-        Assert.Contains("\"payload\":{\"a\":{\"x\":3,\"y\":2},\"z\":1}", json);
+        Assert.Equal(json, serializer.Serialize(reversed));                       // byte-identical regardless of order
+        Assert.Contains("\"map\":{\"a\":\"1\",\"b\":\"2\",\"c\":\"3\"}", json);   // sorted
+        Assert.NotNull(serializer.Deserialize(json, holderType));                 // and round-trips (no crash)
     }
 
-    [Fact]
-    public void EmbeddedJsonNode_IsCanonicalized_RegardlessOfKeyOrder()
+    private static object MakeHolder(Type holderType, (string Key, string Value)[] entries)
     {
-        var serializer = CreateSerializer();
+        var map = new Dictionary<string, string>();
+        foreach (var (key, value) in entries)
+            map[key] = value;
 
-        var forward = new EmbeddedNodeHolder((JsonObject)JsonNode.Parse("""{"z":1,"a":{"y":2,"x":3}}""")!);
-        var reversed = new EmbeddedNodeHolder((JsonObject)JsonNode.Parse("""{"a":{"x":3,"y":2},"z":1}""")!);
-
-        var json = serializer.Serialize(forward);
-        Assert.Equal(json, serializer.Serialize(reversed));
-        Assert.Contains("\"payload\":{\"a\":{\"x\":3,\"y\":2},\"z\":1}", json);
+        if (holderType == typeof(DictionaryHolder)) return new DictionaryHolder(map);
+        if (holderType == typeof(IDictionaryHolder)) return new IDictionaryHolder(map);
+        return new IReadOnlyDictionaryHolder(map);
     }
 
-    private sealed record EmbeddedJsonHolder(JsonElement Payload);
+    private sealed record DictionaryHolder(Dictionary<string, string> Map);
 
-    private sealed record EmbeddedNodeHolder(JsonObject Payload);
+    private sealed record IDictionaryHolder(IDictionary<string, string> Map);
+
+    private sealed record IReadOnlyDictionaryHolder(IReadOnlyDictionary<string, string> Map);
 
     private static JsonPayloadSerializer CreateSerializer()
     {

@@ -32,7 +32,10 @@ public sealed class DeterministicDictionaryConverterFactory : JsonConverterFacto
         if (!TryGetValueType(typeToConvert, out var valueType))
             throw new NotSupportedException($"'{typeToConvert}' is not a supported deterministic dictionary shape.");
 
-        var converterType = typeof(DeterministicDictionaryConverter<>).MakeGenericType(valueType);
+        // Instantiate the converter over the exact requested dictionary type so its declared type always
+        // matches (Dictionary<>, IDictionary<>, and IReadOnlyDictionary<> are otherwise mutually incompatible
+        // from System.Text.Json's converter-compatibility check).
+        var converterType = typeof(DeterministicDictionaryConverter<,>).MakeGenericType(typeToConvert, valueType);
         return (JsonConverter)Activator.CreateInstance(converterType)!;
     }
 
