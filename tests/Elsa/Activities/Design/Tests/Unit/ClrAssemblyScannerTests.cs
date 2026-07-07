@@ -148,6 +148,19 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void DuplicateResolverPath_IsIgnoredWithoutWarning()
+    {
+        var logger = new CapturingLogger();
+        var scanner = CreateScanner(logger);
+        var path = typeof(ClrActivityDescriptor).Assembly.Location;
+
+        var paths = InvokeBuildResolverPaths(scanner, [path, path]);
+
+        Assert.Equal(1, paths.Count(candidate => candidate == path));
+        Assert.Empty(logger.Warnings);
+    }
+
+    [Fact]
     public void UnreadableDll_IsLoggedAndSkipped_ScanStillCompletes()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
@@ -204,6 +217,13 @@ public sealed class ClrAssemblyScannerTests
         var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
         Assert.Empty(CreateScanner().Scan(missing));
+    }
+
+    private static IReadOnlyCollection<string> InvokeBuildResolverPaths(ClrAssemblyScanner scanner, IEnumerable<string> folderDlls)
+    {
+        var method = typeof(ClrAssemblyScanner).GetMethod("BuildResolverPaths", BindingFlags.Instance | BindingFlags.NonPublic);
+        var result = method?.Invoke(scanner, [folderDlls]);
+        return Assert.IsAssignableFrom<IReadOnlyCollection<string>>(result);
     }
 
     /// <summary>
