@@ -240,18 +240,15 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             }
         }
 
-        // Write the type name so the actual type can be reconstructed when deserializing.
-        if (type != typeof(ExpandoObject))
+        // Write the type discriminator so the actual type can be reconstructed when deserializing. Identity is
+        // a registry alias via TypeJsonConverter — never an assembly-qualified name (ADR 0035 D1/D4). Without a
+        // TypeJsonConverter there is no registry-backed writer, so the discriminator is omitted rather than
+        // falling back to an AQN (the removed gadget path — see the symmetric read in ReadType).
+        if (type != typeof(ExpandoObject)
+            && newOptions.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter)
         {
-            if (newOptions.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter)
-            {
-                writer.WritePropertyName(TypePropertyName);
-                typeJsonConverter.Write(writer, type, newOptions);
-            }
-            else
-            {
-                writer.WriteString(TypePropertyName, type.GetSimpleAssemblyQualifiedName());
-            }
+            writer.WritePropertyName(TypePropertyName);
+            typeJsonConverter.Write(writer, type, newOptions);
         }
 
         writer.WriteEndObject();
@@ -263,24 +260,19 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             return null;
 
         reader.Read(); // Move to the first token inside the object.
-        string? typeName = null;
 
         // Read while we haven't reached the end of the object.
         while (reader.TokenType != JsonTokenType.EndObject)
         {
-            // If we find the _type property, read its value and break out of the loop.
+            // If we find the _type property, resolve it through the registry-backed TypeJsonConverter. There is
+            // no assembly-qualified-name fallback: without a TypeJsonConverter the type stays unresolved (the
+            // removed Type.GetType gadget path — ADR 0035 D1/D4), so the value is read as untyped.
             if (reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals(TypePropertyName))
             {
                 reader.Read(); // Move to the value of the _type property
-                if (options.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter)
-                {
-                    return typeJsonConverter.Read(ref reader, typeof(Type), options);
-                }
-                else
-                {
-                    typeName = reader.GetString();
-                }
-                break;
+                return options.Converters.OfType<TypeJsonConverter>().FirstOrDefault() is { } typeJsonConverter
+                    ? typeJsonConverter.Read(ref reader, typeof(Type), options)
+                    : null;
             }
 
             // Skip through nested objects and arrays.
@@ -308,9 +300,8 @@ public sealed class PolymorphicObjectConverter(IEnumerable<IJsonIslandTypeHandle
             reader.Read(); // Move to the next token
         }
 
-        // If we found the _type property, attempt to resolve the type.
-        var targetType = typeName != null ? Type.GetType(typeName) : default;
-        return targetType;
+        // No _type discriminator present: the value is untyped.
+        return null;
     }
 
     private static object ReadPrimitive(ref Utf8JsonReader reader, JsonSerializerOptions options)

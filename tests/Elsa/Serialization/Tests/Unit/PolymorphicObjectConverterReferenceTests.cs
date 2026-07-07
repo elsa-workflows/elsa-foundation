@@ -1,4 +1,3 @@
-using Elsa.Primitives.Extensions;
 using Elsa.Serialization.SystemText.JsonConverters;
 using Elsa.Serialization.SystemText.Services;
 using System.Dynamic;
@@ -13,16 +12,29 @@ namespace Elsa.Serialization.Tests.Unit;
 /// reconstructed. The dead machinery has been removed; these tests pin the wire shape and the observable
 /// read behavior so the removal is provably behavior-preserving (constitution §E6: `$id`/`$ref`/`$values`/
 /// `_type`/`_items` are frozen wire identifiers; cyclic/shared references are NOT reconstructed).
+///
+/// The type discriminator is a registry alias resolved through <see cref="TypeJsonConverter"/> — the
+/// assembly-qualified-name + Type.GetType fallback was removed (ADR 0035 D1/D4), so these options register a
+/// <see cref="TypeJsonConverter"/> over a registry seeded with the aliases the wire shape references.
 /// </summary>
 public sealed class PolymorphicObjectConverterReferenceTests
 {
-    private readonly JsonSerializerOptions _options = new()
+    private readonly JsonSerializerOptions _options;
+
+    public PolymorphicObjectConverterReferenceTests()
     {
-        Converters =
+        var typeRegistry = new WellKnownTypeRegistry();
+        typeRegistry.RegisterType(typeof(string), "String");
+
+        _options = new JsonSerializerOptions
         {
-            new PolymorphicObjectConverterFactory(new WellKnownTypeRegistry())
-        }
-    };
+            Converters =
+            {
+                new PolymorphicObjectConverterFactory(typeRegistry),
+                new TypeJsonConverter(typeRegistry),
+            }
+        };
+    }
 
     [Fact]
     public void Write_RepresentativeGraph_ProducesStableWireShape()
@@ -41,7 +53,7 @@ public sealed class PolymorphicObjectConverterReferenceTests
         // Members are emitted in ordinal-by-name order (child, name, quantity, tags), not insertion order:
         // the serializer is deterministic (spec 086; ADR 0034 D3/D8), so equal graphs serialize identically.
         Assert.Equal(
-            """{"child":{"city":"Amsterdam"},"name":"Order-1","quantity":42,"tags":{"_items":["a","b"],"_type":"System.Collections.Generic.List\u00601[[System.String, System.Private.CoreLib]], System.Private.CoreLib"}}""",
+            """{"child":{"city":"Amsterdam"},"name":"Order-1","quantity":42,"tags":{"_items":["a","b"],"_type":"List\u003CString\u003E"}}""",
             json);
 
         // And the graph must round-trip through the read path.
@@ -74,9 +86,9 @@ public sealed class PolymorphicObjectConverterReferenceTests
     [Fact]
     public void TypedCollectionRefWrapper_DeserializesToNull()
     {
-        // A typed collection wrapper carrying only $ref cannot be resolved and yields null.
-        var typeName = typeof(List<string>).GetSimpleAssemblyQualifiedName();
-        var json = $$"""{"_type":{{JsonSerializer.Serialize(typeName)}},"$ref":"1"}""";
+        // A typed collection wrapper (resolved via its registry alias) carrying only $ref cannot be
+        // reconstructed and yields null.
+        var json = """{"_type":"List<String>","$ref":"1"}""";
 
         var result = JsonSerializer.Deserialize<object>(json, _options);
 
