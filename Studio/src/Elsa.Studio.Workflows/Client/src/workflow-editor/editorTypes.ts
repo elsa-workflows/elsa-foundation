@@ -76,7 +76,7 @@ export interface WorkflowDesignerPanelContext {
   frames: ScopeFrame[];
 }
 
-export type InstanceInspectorTab = "timeline" | "issues" | "details";
+export type InstanceInspectorTab = "timeline" | "activity" | "issues" | "details";
 
 export interface WorkflowInstanceInspectionData {
   details: WorkflowInstanceDetails;

@@ -619,7 +619,7 @@ function groupBy<T>(items: T[], getKey: (item: T) => string) {
   return groups;
 }
 
-function latestActivityExecution(activities: ActivityExecutionStateSummary[]) {
+export function latestActivityExecution(activities: ActivityExecutionStateSummary[]) {
   return [...activities].sort((left, right) =>
     activityExecutionTime(right).localeCompare(activityExecutionTime(left)))[0];
 }

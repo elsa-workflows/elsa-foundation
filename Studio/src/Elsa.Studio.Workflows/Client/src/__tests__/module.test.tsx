@@ -1321,6 +1321,10 @@ describe("workflows module", () => {
     // Timeline is the default instance tab and lists executed activities.
     expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");
+    await click(container.querySelector(".wf-timeline-entry"));
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Activity Execution ID");
+    expect(container.textContent).toContain("activity-execution-1");
     // Run metadata moved to the Details tab.
     await click(buttonByText(container, "Details"));
     expect(container.textContent).toContain("Published Run");

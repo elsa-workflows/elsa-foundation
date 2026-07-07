@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
-import { AlertCircle, Boxes, ChevronLeft, ListTree, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ListTree, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
-import type { ActivityCatalogItem, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
   getActivityDesignerSupport,
+  latestActivityExecution,
   resolveScope,
   type WorkflowEdgeData,
   type WorkflowNodeData
@@ -351,10 +352,16 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   }
 
   const incidentCount = details?.incidents.length ?? 0;
+  const selectedActivity = findSelectedActivityExecution(details?.activities ?? [], selectedEvidenceId);
+  const openActivityEvidence = (evidenceId: string) => {
+    onSelectEvidence?.(evidenceId);
+    setActiveTab("activity");
+  };
   const tabs: WorkflowEditorPanelTab[] = [
     { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
-    { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 1, icon: <AlertCircle size={14} />, render: () => null },
-    { id: "details", title: "Details", order: 2, icon: <SlidersHorizontal size={14} />, render: () => null }
+    { id: "activity", title: "Activity", order: 1, icon: <ActivityIcon size={14} />, render: () => null },
+    { id: "issues", title: incidentCount > 0 ? `Issues (${incidentCount})` : "Issues", order: 2, icon: <AlertCircle size={14} />, render: () => null },
+    { id: "details", title: "Details", order: 3, icon: <SlidersHorizontal size={14} />, render: () => null }
   ];
 
   return (
@@ -382,8 +389,10 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
               activities={details.activities}
               activityCatalog={activityCatalog}
               selectedEvidenceId={selectedEvidenceId}
-              onSelectEvidence={onSelectEvidence}
+              onSelectEvidence={openActivityEvidence}
             />
+          ) : activeTab === "activity" ? (
+            <WorkflowActivityExecutionDetails activity={selectedActivity} activityCatalog={activityCatalog} />
           ) : activeTab === "issues" ? (
             <>
               <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
@@ -412,6 +421,63 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
         </div>
       ) : null}
     </aside>
+  );
+}
+
+function findSelectedActivityExecution(activities: ActivityExecutionStateSummary[], selectedEvidenceId: string | null) {
+  if (!selectedEvidenceId) return null;
+
+  const exactActivity = activities.find(activity => activity.activityExecutionId === selectedEvidenceId);
+  if (exactActivity) return exactActivity;
+
+  const nodeActivities = activities.filter(activity =>
+    activity.executableNodeId === selectedEvidenceId ||
+    activity.authoredActivityId === selectedEvidenceId);
+  return nodeActivities.length > 0 ? latestActivityExecution(nodeActivities) : null;
+}
+
+function WorkflowActivityExecutionDetails({ activity, activityCatalog }: {
+  activity: ActivityExecutionStateSummary | null;
+  activityCatalog: ActivityCatalogItem[];
+}) {
+  if (!activity) {
+    return (
+      <section className="wf-instance-section">
+        <h4>Activity</h4>
+        <p>No activity selected.</p>
+      </section>
+    );
+  }
+
+  const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
+  const activityLabel = catalogItem?.displayName || shortTypeName(activity.activityType) || activity.activityType;
+
+  return (
+    <section className="wf-instance-section">
+      <h4>Activity</h4>
+      <dl className="wf-instance-meta">
+        <dt>Name</dt>
+        <dd>{activityLabel}</dd>
+        <dt>Status</dt>
+        <dd><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></dd>
+        <dt>Activity Execution ID</dt>
+        <dd>{activity.activityExecutionId}</dd>
+        <dt>Authored Activity ID</dt>
+        <dd>{activity.authoredActivityId}</dd>
+        <dt>Type</dt>
+        <dd>{shortTypeName(activity.activityType) ?? activity.activityType} <small>{activity.activityTypeVersion}</small></dd>
+        <dt>Started</dt>
+        <dd>{formatDate(activity.startedAt)}</dd>
+        <dt>Completed</dt>
+        <dd>{formatDate(activity.completedAt)}</dd>
+        <dt>Duration</dt>
+        <dd>{formatDuration(activity.startedAt, activity.completedAt) || "Unknown"}</dd>
+        <dt>Bookmarks</dt>
+        <dd>{activity.bookmarkIds.length}</dd>
+        <dt>Incidents</dt>
+        <dd>{activity.incidentIds.length}</dd>
+      </dl>
+    </section>
   );
 }
 
