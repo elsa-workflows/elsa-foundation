@@ -58,6 +58,21 @@ public sealed class CoalescingActivityExecutionStateStore(
 
         return innerList;
     }
+
+    public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default)
+    {
+        var innerList = await _inner.ListByParentAsync(workflowExecutionId, parentActivityExecutionId, cancellationToken);
+
+        // MergeActivityList overlays every activity upsert for the workflow execution regardless of parent, so a merge over
+        // the parent-scoped inner list would re-introduce sibling rows under other parents. Re-scope to the requested parent
+        // after merging so the overlay's own upserts/tombstones are honoured while the parent-scoped contract still holds.
+        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
+            return session.MergeActivityList(innerList)
+                .Where(state => StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, parentActivityExecutionId))
+                .ToArray();
+
+        return innerList;
+    }
 }
 
 /// <summary>Coalescing-aware overlay for <see cref="IDurableValueStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>

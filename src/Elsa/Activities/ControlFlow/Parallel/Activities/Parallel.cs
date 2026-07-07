@@ -187,12 +187,15 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         string compositeExecutionId)
     {
         var store = runtimeContext.GetRequiredService<IActivityExecutionStateStore>();
-        var states = await store.ListAsync(runtimeContext.WorkflowExecutionId, runtimeContext.CancellationToken);
+
+        // Read only this composite's direct children rather than every activity-execution state in the workflow: the join
+        // fires once per branch-completion/fault event, so a whole-workflow list here made the join O(branches × workflow
+        // states) — effectively quadratic on wide/large workflows (#514/#413 item 3). The parent-scoped read returns exactly
+        // the ParentActivityExecutionId == compositeExecutionId subset; the branch/grouping filters stay here.
+        var states = await store.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
 
         var branchGroups = states
-            .Where(state =>
-                StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, compositeExecutionId) &&
-                navigator.IsBranch(state.Execution.ExecutableNodeId))
+            .Where(state => navigator.IsBranch(state.Execution.ExecutableNodeId))
             .GroupBy(state => state.Execution.ExecutableNodeId, StringComparer.Ordinal);
 
         var completed = 0;
