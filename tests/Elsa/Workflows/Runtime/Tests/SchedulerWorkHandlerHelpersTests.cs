@@ -174,6 +174,61 @@ public sealed class SchedulerWorkHandlerHelpersTests
         Assert.Equal("follow-work", roundTripped!.WorkItemId);
     }
 
+    // --- NormalizeOutcomeNames (extracted from three byte-identical handler copies) ---
+
+    [Fact]
+    public void NormalizeOutcomeNames_ReturnsDoneForEmptyWhenDefaultToDone()
+    {
+        var result = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames([], defaultToDone: true);
+
+        Assert.Equal([ActivityOutcomes.Done], result);
+    }
+
+    [Fact]
+    public void NormalizeOutcomeNames_ReturnsEmptyForEmptyWhenNotDefaultToDone()
+    {
+        var result = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames([], defaultToDone: false);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void NormalizeOutcomeNames_SnapshotsAndPreservesProvidedNames()
+    {
+        var result = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(["Yes", "No"], defaultToDone: true);
+
+        Assert.Equal(["Yes", "No"], result);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void NormalizeOutcomeNames_ThrowsOnBlankNames(string blank)
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(["Yes", blank], defaultToDone: true));
+
+        Assert.Equal("Activity completion outcome names cannot contain blank values.", exception.Message);
+    }
+
+    [Fact]
+    public void NormalizeOutcomeNames_ThrowsOnDuplicateNames()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(["Yes", "Yes"], defaultToDone: false));
+
+        Assert.Equal("Activity completion outcome names cannot contain duplicates.", exception.Message);
+    }
+
+    [Fact]
+    public void NormalizeOutcomeNames_TreatsOrdinalCaseAsDistinct()
+    {
+        // Distinctness is Ordinal, so casing differences are NOT duplicates.
+        var result = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(["Done", "done"], defaultToDone: false);
+
+        Assert.Equal(["Done", "done"], result);
+    }
+
     // Mirrors the production catch filters, which whitelist the JSON/serialization exception family
     // and (deliberately) never include InvalidOperationException.
     private static bool IsProductionShapedFilter(Exception exception) =>

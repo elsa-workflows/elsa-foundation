@@ -252,7 +252,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
 
         valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
-        var completedState = CompleteActivity(workItem, resumePayload, state, NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
+        var completedState = CompleteActivity(workItem, resumePayload, state, SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
         await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, workflowVariableWriteBackChanges), cancellationToken);
     }
 
@@ -431,25 +431,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
 
-            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+            return SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
         }
 
         return [ActivityOutcomes.Done];
-    }
-
-    private static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
-    {
-        var snapshot = outcomeNames.ToArray();
-        if (snapshot.Length == 0)
-            return defaultToDone ? [ActivityOutcomes.Done] : [];
-
-        if (snapshot.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
-
-        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
-            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
-
-        return snapshot;
     }
 
     // Records a blocking fault incident for the resumed activity and commits it. Each fault arm in
