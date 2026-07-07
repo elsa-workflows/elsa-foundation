@@ -1,3 +1,5 @@
+using Elsa.Git;
+
 namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>Point-in-time snapshot of a managed repository's Git state.</summary>
@@ -9,7 +11,7 @@ internal sealed record RepositoryState(string? ActiveBranch, bool IsDirty, strin
 /// interpreting <see cref="GitClient"/> output. It owns no persisted state and mutates nothing except
 /// via the explicit fetch inside <see cref="FetchAndMeasureRemoteDivergenceAsync"/>.
 /// </summary>
-internal sealed class RepositoryInspector(GitClient git)
+internal sealed class RepositoryInspector(IGitClient git)
 {
     public RepositoryState GetRepositoryState(string repositoryPath)
     {

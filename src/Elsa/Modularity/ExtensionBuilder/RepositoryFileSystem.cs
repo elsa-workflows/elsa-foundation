@@ -1,3 +1,5 @@
+using Elsa.Git;
+
 namespace Elsa.Modularity.ExtensionBuilder;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace Elsa.Modularity.ExtensionBuilder;
 /// source-control view. It is stateless over a repository path — it holds no <c>RootPath</c> and no
 /// persisted state — and reads Git state through <see cref="RepositoryInspector"/> / <see cref="GitClient"/>.
 /// </summary>
-internal sealed class RepositoryFileSystem(GitClient git, RepositoryInspector inspector)
+internal sealed class RepositoryFileSystem(IGitClient git, RepositoryInspector inspector)
 {
     public RepositoryTree BuildTree(string workspaceId, string repositoryPath, string? selectedSolutionPath)
     {
