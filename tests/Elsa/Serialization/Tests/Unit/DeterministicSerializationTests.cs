@@ -91,13 +91,16 @@ public sealed class DeterministicSerializationTests
     {
         var serializer = CreateSerializer();
 
+        IDictionary<string, object?> nestedInput = new System.Dynamic.ExpandoObject();
+        nestedInput["y"] = "2";
+        nestedInput["x"] = "1";
         IDictionary<string, object?> graph = new Dictionary<string, object?>
         {
             ["zebra"] = "z",
             ["alpha"] = "a",
             ["count"] = 42,
             ["flag"] = true,
-            ["nested"] = new Dictionary<string, object?> { ["y"] = "2", ["x"] = "1" },
+            ["nested"] = nestedInput,
         };
 
         var json = serializer.Serialize(graph);
