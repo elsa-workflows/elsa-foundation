@@ -143,6 +143,47 @@ public sealed class ReconcilerBatchEquivalenceTests
     }
 
     [Fact]
+    public async Task UnchangedActivityTypeAndVersion_KeepStableIdsAcrossCatalogRebuild()
+    {
+        var firstCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(firstCatalog, Source(Model("same", "Acme.Greet")))
+            .Reconcile(CancellationToken.None);
+
+        var firstDefinition = Assert.Single(firstCatalog.Definitions);
+        var firstVersion = Assert.Single(firstCatalog.Versions);
+
+        var rebuiltCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(rebuiltCatalog, Source(Model("same", "Acme.Greet")))
+            .Reconcile(CancellationToken.None);
+
+        var rebuiltDefinition = Assert.Single(rebuiltCatalog.Definitions);
+        var rebuiltVersion = Assert.Single(rebuiltCatalog.Versions);
+        Assert.Equal(firstDefinition.Id, rebuiltDefinition.Id);
+        Assert.Equal(firstVersion.Id, rebuiltVersion.Id);
+        Assert.Equal(firstVersion.Id, rebuiltCatalog.Versions.Single(v => v.Id == firstVersion.Id).Id);
+    }
+
+    [Fact]
+    public async Task LogicalVersionId_IgnoresBuildMetadataAcrossCatalogRebuild()
+    {
+        var firstCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(firstCatalog, Source(Model("same", "Acme.Greet", version: "1.0.0+oldbuild")))
+            .Reconcile(CancellationToken.None);
+
+        var firstVersionId = Assert.Single(firstCatalog.Versions).Id;
+
+        var rebuiltCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(rebuiltCatalog, Source(Model("same", "Acme.Greet", version: "1.0.0+newbuild")))
+            .Reconcile(CancellationToken.None);
+
+        Assert.Equal(firstVersionId, Assert.Single(rebuiltCatalog.Versions).Id);
+    }
+
+    [Fact]
     public async Task DistinctAndSharedKeys_SinglePass_MixedCreatesAndAppends()
     {
         var store = new InMemoryReconcilerHarness.CatalogStore();
