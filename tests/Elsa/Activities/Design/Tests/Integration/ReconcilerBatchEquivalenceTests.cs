@@ -101,7 +101,8 @@ public sealed class ReconcilerBatchEquivalenceTests
                     Source(Model("first", "Acme.Greet"), Model("second", "Acme.Greet")))
                 .Reconcile(CancellationToken.None));
 
-        Assert.Equal("1.0.0", ex.Version);
+        Assert.Equal("1.0.0", ex.PersistedVersion);
+        Assert.Equal("1.0.0", ex.IncomingVersion);
         Assert.Single(store.Definitions);
         Assert.Single(store.Versions);
     }

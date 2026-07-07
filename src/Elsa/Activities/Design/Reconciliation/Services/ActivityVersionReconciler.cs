@@ -160,7 +160,8 @@ public sealed class ActivityVersionReconciler(
             throw new ActivityVersionHashMismatchException(
                 definitionId: definition.Id,
                 activityTypeKey: definition.ActivityTypeKey,
-                version: incomingVersion.Version,
+                persistedVersion: existingVersion.Version,
+                incomingVersion: incomingVersion.Version,
                 persistedHash: existingVersion.Hash,
                 incomingHash: incomingHash
             );
