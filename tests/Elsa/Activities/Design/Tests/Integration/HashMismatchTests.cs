@@ -93,7 +93,8 @@ public sealed class HashMismatchTests
         var ex = await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
             () => InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("second", "1.0.0+newbuild"))).Reconcile(CancellationToken.None));
 
-        Assert.Equal("1.0.0+newbuild", ex.Version);
+        Assert.Equal("1.0.0+oldbuild", ex.PersistedVersion);
+        Assert.Equal("1.0.0+newbuild", ex.IncomingVersion);
         Assert.Single(store.Versions);
     }
 
