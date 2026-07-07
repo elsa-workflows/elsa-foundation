@@ -78,6 +78,26 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
+    public async Task SameCoreVersionDifferentBuildMetadataDefinitionLevelChange_ThrowsHashMismatch()
+    {
+        // Regression (issue #537): a definition-level content change (here Description) that arrives
+        // under differing build metadata (1.0.0+oldbuild vs 1.0.0+newbuild) must NOT be misclassified
+        // as a build-metadata-only duplicate. The build-metadata check has to hash the INCOMING
+        // definition's content, so a genuine definition-level edit falls through to the hash-mismatch
+        // throw rather than being silently skipped.
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("first", "1.0.0+oldbuild"))).Reconcile(CancellationToken.None);
+        Assert.Single(store.Versions);
+
+        var ex = await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
+            () => InMemoryReconcilerHarness.BuildReconciler(store, Source(Model("second", "1.0.0+newbuild"))).Reconcile(CancellationToken.None));
+
+        Assert.Equal("1.0.0+newbuild", ex.Version);
+        Assert.Single(store.Versions);
+    }
+
+    [Fact]
     public async Task SameVersionSameContent_ThrowsWhenDuplicateHandlingIsThrow()
     {
         var store = new InMemoryReconcilerHarness.CatalogStore();
