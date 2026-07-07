@@ -286,9 +286,13 @@ public sealed class ClrAssemblyScanner(
     private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
         void Add(string path)
         {
+            if (!seenPaths.Add(path))
+                return;
+
             var name = Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrEmpty(name))
                 return;
