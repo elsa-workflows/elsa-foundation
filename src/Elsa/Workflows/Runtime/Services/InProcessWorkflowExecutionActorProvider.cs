@@ -50,9 +50,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
         if (unsupportedCapabilities != WorkflowExecutionActorCapabilities.None)
             throw new NotSupportedException($"The in-process workflow execution agent provider does not support required capabilities: {unsupportedCapabilities}.");
 
-        var lifecycleLock = GetLifecycleLock(request.WorkflowExecutionId);
-
-        await lifecycleLock.WaitAsync(cancellationToken);
+        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
         try
         {
             var agent = _agents.GetOrAdd(request.WorkflowExecutionId, workflowExecutionId =>
@@ -73,25 +71,60 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var lifecycleLock = GetLifecycleLock(request.WorkflowExecutionId);
-
-        await lifecycleLock.WaitAsync(cancellationToken);
+        var lifecycleLock = await AcquireLifecycleLockAsync(request.WorkflowExecutionId, cancellationToken);
         try
         {
-            if (!_agents.TryGetValue(request.WorkflowExecutionId, out var agent))
-                return;
+            if (_agents.TryGetValue(request.WorkflowExecutionId, out var agent))
+            {
+                await agent.PassivateAsync(request, cancellationToken);
+                _agents.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, agent));
+            }
 
-            await agent.PassivateAsync(request, cancellationToken);
-            _agents.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, agent));
+            // Drop the per-execution lifecycle lock so the dictionary does not grow with every distinct workflow
+            // execution ever activated. We remove the exact instance we currently hold (TryRemove on the key/value
+            // pair), which is the canonical lock for this id — AcquireLifecycleLockAsync guarantees the holder always
+            // owns the instance still registered in the dictionary.
+            //
+            // The removed SemaphoreSlim is deliberately NOT disposed: this type only ever calls WaitAsync/Release and
+            // never touches AvailableWaitHandle, so no unmanaged wait handle is ever allocated and there is nothing to
+            // release — dropping the reference lets the GC reclaim it. Disposing would instead risk
+            // ObjectDisposedException for any activation still parked on this instance (the classic
+            // dispose-out-from-under-a-waiter race), so we rely on the release-and-retry chain in
+            // AcquireLifecycleLockAsync rather than explicit disposal.
+            _lifecycleLocks.TryRemove(KeyValuePair.Create(request.WorkflowExecutionId, lifecycleLock));
         }
         finally
         {
+            // A concurrent activation for the same id may already be parked on this instance; releasing (rather than
+            // disposing) lets it wake, observe that the instance is no longer canonical, and retry onto the fresh lock.
             lifecycleLock.Release();
         }
     }
 
-    private SemaphoreSlim GetLifecycleLock(string workflowExecutionId) =>
-        _lifecycleLocks.GetOrAdd(workflowExecutionId, _ => new SemaphoreSlim(1, 1));
+    // Acquires the lifecycle lock for an execution id and returns it already held (WaitAsync completed).
+    //
+    // The lock serializes activation and passivation for a single execution id. Passivation removes an id's lock from
+    // the dictionary while still holding it, so a caller that resolved the lock via GetOrAdd just before the removal
+    // could otherwise end up holding an orphaned instance while a later caller installs a fresh one — two callers
+    // serialized on different semaphores, breaking mutual exclusion. To prevent that we re-check identity after
+    // acquiring: only the instance that is still the registered (canonical) lock for the id is accepted; a stale
+    // instance is released and the acquisition retried so every caller rendezvous on the single current lock. The
+    // holder of the canonical lock is the only party that can remove it, so it cannot be pulled out mid-critical-section.
+    private async ValueTask<SemaphoreSlim> AcquireLifecycleLockAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var lifecycleLock = _lifecycleLocks.GetOrAdd(workflowExecutionId, _ => new SemaphoreSlim(1, 1));
+            await lifecycleLock.WaitAsync(cancellationToken);
+
+            if (_lifecycleLocks.TryGetValue(workflowExecutionId, out var current) && ReferenceEquals(current, lifecycleLock))
+                return lifecycleLock;
+
+            // The instance we acquired was removed by a concurrent passivation (and possibly replaced). Release it —
+            // which also wakes any other waiters parked on the same stale instance so they retry too — and loop.
+            lifecycleLock.Release();
+        }
+    }
 
     private sealed class InProcessWorkflowExecutionActor : IWorkflowExecutionActor
     {
