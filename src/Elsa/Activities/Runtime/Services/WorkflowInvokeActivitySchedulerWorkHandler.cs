@@ -353,10 +353,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
                     }
 
                     var outcomeNames = context.CompositeCompletionRequested
-                        ? NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
+                        ? SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.CompositeCompletionOutcomeNames, defaultToDone: true)
                         : finishWorkflowRequested
-                            ? NormalizeOutcomeNames(finishWorkflowOutcomeNames, defaultToDone: true)
-                            : NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
+                            ? SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(finishWorkflowOutcomeNames, defaultToDone: true)
+                            : SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true);
                     completedState = CompleteActivity(workItem, invokePayload, state, outcomeNames, skipped: false);
 
                     // A completing container's scope is no longer live for runtime expressions; its
@@ -954,25 +954,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : IWorkflowSchedu
             var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
 
-            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+            return SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
         }
 
         return completedState.SubStatus == SkippedSubStatus ? [] : [ActivityOutcomes.Done];
-    }
-
-    private static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
-    {
-        var snapshot = outcomeNames.ToArray();
-        if (snapshot.Length == 0)
-            return defaultToDone ? [ActivityOutcomes.Done] : [];
-
-        if (snapshot.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
-
-        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
-            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
-
-        return snapshot;
     }
 
 }

@@ -714,7 +714,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
         ActivityExecutionState state,
         IReadOnlyCollection<string> outcomeNames)
     {
-        var normalizedOutcomeNames = NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
+        var normalizedOutcomeNames = SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: true);
         var metadata = state.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         metadata[RuntimeMetadataKeys.InvokeReason] = payload.Reason;
         metadata[RuntimeMetadataKeys.InvokeSchedulerWorkItemId] = workItem.WorkItemId;
@@ -835,25 +835,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
             var outcomeNames = JsonSerializer.Deserialize<string[]>(serializedOutcomeNames)
                 ?? throw new InvalidOperationException("Persisted completion outcome names resolved to null.");
 
-            return NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
+            return SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(outcomeNames, defaultToDone: false);
         }
 
         return [ActivityOutcomes.Done];
-    }
-
-    private static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
-    {
-        var snapshot = outcomeNames.ToArray();
-        if (snapshot.Length == 0)
-            return defaultToDone ? [ActivityOutcomes.Done] : [];
-
-        if (snapshot.Any(string.IsNullOrWhiteSpace))
-            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
-
-        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
-            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
-
-        return snapshot;
     }
 
     private sealed record ConstructedActivity(
