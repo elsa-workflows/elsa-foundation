@@ -308,7 +308,7 @@ export function getVisibleWorkflowGraphNodeIds(definitionVersion: WorkflowDefini
   const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
   if (getActivityDesignerSupport(root, rootCatalogItem) === "unsupported") return new Set([root.nodeId]);
 
-  const scope = resolveScope(root, []);
+  const scope = resolveScope(root, [], activityCatalog);
   return new Set(scope?.slot.activities.map(activity => activity.nodeId) ?? [root.nodeId]);
 }
 
@@ -376,7 +376,7 @@ export function collectWorkflowContextActivities(activity: ActivityNode | null |
     displayName: catalogItem ? getActivityDisplay(catalogItem) : undefined
   });
 
-  for (const slot of getChildSlots(activity)) {
+  for (const slot of getChildSlots(activity, catalogByVersion)) {
     for (const child of slot.activities) collectWorkflowContextActivities(child, catalogByVersion, result);
   }
 
@@ -385,6 +385,7 @@ export function collectWorkflowContextActivities(activity: ActivityNode | null |
 
 export function collectWorkflowContextConnections(
   activity: ActivityNode | null | undefined,
+  catalogByVersion?: Map<string, ActivityCatalogItem>,
   result: WorkflowGraphConnection[] = []
 ) {
   if (!activity) return result;
@@ -395,8 +396,8 @@ export function collectWorkflowContextConnections(
     result.push({ source: edge.source, target: edge.target, sourcePort: edge.sourceHandle ?? undefined, targetPort: edge.targetHandle ?? undefined });
   }
 
-  for (const slot of getChildSlots(activity)) {
-    for (const child of slot.activities) collectWorkflowContextConnections(child, result);
+  for (const slot of getChildSlots(activity, catalogByVersion)) {
+    for (const child of slot.activities) collectWorkflowContextConnections(child, catalogByVersion, result);
   }
 
   return result;

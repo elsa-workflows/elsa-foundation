@@ -10,6 +10,7 @@ import {
   type ScopeFrame
 } from "../workflowAdapter";
 import { useScopedVariableAnalysis } from "../api/workflows";
+import { supportsScopedVariables } from "../scopedVariables";
 import { indexActivityDescriptors, resolveActivityDescriptor } from "./editorHelpers";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";
 
@@ -43,10 +44,10 @@ export function useWorkflowScope({
     [availabilityDiagnostics]
   );
   const descriptorsByType = useMemo(() => indexActivityDescriptors(activityDescriptors), [activityDescriptors]);
-  const scopeOwner = useMemo(() => resolveScopeOwner(root, frames), [root, frames]);
+  const scopeOwner = useMemo(() => resolveScopeOwner(root, frames, catalogByVersion), [root, frames, catalogByVersion]);
   const designerSupport = getActivityDesignerSupport(scopeOwner, scopeOwner ? catalogByVersion.get(scopeOwner.activityVersionId) : undefined);
   const isUnsupportedDesigner = !!scopeOwner && designerSupport === "unsupported";
-  const scope = useMemo(() => isUnsupportedDesigner ? null : resolveScope(root, frames), [root, frames, isUnsupportedDesigner]);
+  const scope = useMemo(() => isUnsupportedDesigner ? null : resolveScope(root, frames, catalogByVersion), [root, frames, catalogByVersion, isUnsupportedDesigner]);
   const selectedNode = useMemo(() => {
     if (isUnsupportedDesigner && scopeOwner?.nodeId === selectedNodeId) return scopeOwner;
     return scope?.slot.activities.find(activity => activity.nodeId === selectedNodeId) ?? null;
@@ -61,10 +62,13 @@ export function useWorkflowScope({
       : null,
     [availabilityLookup, catalogByVersion, selectedNode]
   );
-  const selectedSlots = selectedNode ? getChildSlots(selectedNode) : [];
+  const selectedSlots = selectedNode ? getChildSlots(selectedNode, catalogByVersion) : [];
+  const selectedSupportsScopedVariables = selectedNode
+    ? supportsScopedVariables(selectedNode, catalogByVersion.get(selectedNode.activityVersionId))
+    : false;
   // Scope-aware variable visibility + shadowing for the selected activity (ADR-0027). Backed by a
   // pending design endpoint; degrades to status "unavailable" until it ships.
-  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNodeId);
+  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNodeId, catalogByVersion);
   const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
 
@@ -78,6 +82,7 @@ export function useWorkflowScope({
     selectedDescriptor,
     selectedNodeAvailability,
     selectedSlots,
+    selectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
     canAddActivitiesToCanvas

@@ -137,7 +137,7 @@ export function useWorkflowCanvas({
     }
 
     if (!scope) {
-      const childSlot = getChildSlots(next)[0];
+      const childSlot = getChildSlots(next, activity)[0];
       if (!childSlot) {
         setStatus("");
         setError("The current root activity does not accept child activities. Drop Flowchart or Sequence to wrap it in a composite root.");
@@ -148,7 +148,7 @@ export function useWorkflowCanvas({
         if (!current?.state.rootActivity) return null;
 
         const existingRoot = current.state.rootActivity;
-        const wrappedRoot = updateScopeActivities(next, [], [existingRoot]);
+        const wrappedRoot = updateScopeActivities(next, [], [existingRoot], activity);
         const layout = position
           ? [
               ...current.layout.filter(record => record.nodeId !== existingRoot.nodeId),
@@ -177,10 +177,13 @@ export function useWorkflowCanvas({
     editDraftAndSelect(({ draft: current, frames: currentFrames }) => {
       if (!current?.state.rootActivity) return null;
 
-      const currentScope = resolveScope(current.state.rootActivity, currentFrames);
+      const currentScope = resolveScope(current.state.rootActivity, currentFrames, catalogByVersion);
       if (!currentScope) return null;
 
-      const updatedRoot = updateScopeActivities(current.state.rootActivity, currentFrames, [...currentScope.slot.activities, next]);
+      const nextActivities = currentScope.slot.cardinality === "single"
+        ? [next]
+        : [...currentScope.slot.activities, next];
+      const updatedRoot = updateScopeActivities(current.state.rootActivity, currentFrames, nextActivities, catalogByVersion);
       const layout = position
         ? [
             ...current.layout.filter(record => record.nodeId !== next.nodeId),
@@ -201,7 +204,7 @@ export function useWorkflowCanvas({
         }
       };
     }, next.nodeId);
-  }, [draft?.state.rootActivity, isUnsupportedDesigner, scope, editDraftAndSelect, setError, setStatus]);
+  }, [catalogByVersion, draft?.state.rootActivity, isUnsupportedDesigner, scope, editDraftAndSelect, setError, setStatus]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
     const activityNode = createActivityNode(activity, createNodeId(activity));
@@ -217,7 +220,7 @@ export function useWorkflowCanvas({
         category: activity.category,
         executionType: activity.executionType,
         icon: resolveActivityIcon(activity),
-        childSlots: getChildSlots(activityNode),
+        childSlots: getChildSlots(activityNode, activity),
         acceptsInbound: String(activity.executionType ?? "").toLowerCase() !== "trigger",
         sourcePorts: getActivitySourcePorts(activityNode, activity)
       }
@@ -236,7 +239,7 @@ export function useWorkflowCanvas({
       const rootActivity = current.state.rootActivity;
       if (!rootActivity) return { ...current, layout: nextLayout };
 
-      const currentScope = resolveScope(rootActivity, currentFrames);
+      const currentScope = resolveScope(rootActivity, currentFrames, catalogByVersion);
       if (!currentScope) return { ...current, layout: nextLayout };
 
       const ownerWithActivities = syncCanvasToScope(currentScope, nextNodes, nextEdges, additionalActivities);
@@ -249,11 +252,11 @@ export function useWorkflowCanvas({
         layout: nextLayout,
         state: {
           ...current.state,
-          rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner)
+          rootActivity: updateScopeOwner(rootActivity, currentFrames, nextOwner, catalogByVersion)
         }
       };
     });
-  }, [isUnsupportedDesigner, editDraft]);
+  }, [catalogByVersion, isUnsupportedDesigner, editDraft]);
 
   const toCanvasPosition = useCallback((clientX: number, clientY: number): XYPosition | null => {
     if (!canvasRef.current) return null;

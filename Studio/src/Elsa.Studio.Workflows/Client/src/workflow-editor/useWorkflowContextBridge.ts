@@ -36,7 +36,7 @@ export function useWorkflowContextBridge({
       selectedActivityType: selectedDescriptor?.typeName ?? (selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? selectedNode.activityVersionId : null),
       summary: details.definition.name,
       activities: collectWorkflowContextActivities(draft.state.rootActivity, catalogByVersion),
-      connections: collectWorkflowContextConnections(draft.state.rootActivity),
+      connections: collectWorkflowContextConnections(draft.state.rootActivity, catalogByVersion),
       diagnostics: draft.validationErrors.map(error => ({ severity: error.code ?? "warning", message: error.message ?? "Workflow validation issue." }))
     };
 

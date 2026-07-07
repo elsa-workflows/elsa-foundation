@@ -6,6 +6,7 @@ import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   findNodeScopePath,
   getActivityDisplay,
+  normalizeActivityStructures,
   updateActivity
 } from "../workflowAdapter";
 import { buildDraftFromJson } from "../workflowSerialization";
@@ -128,6 +129,7 @@ export function WorkflowEditor({
     selectedDescriptor,
     selectedNodeAvailability,
     selectedSlots,
+    selectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
     canAddActivitiesToCanvas
@@ -201,6 +203,24 @@ export function WorkflowEditor({
   // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
   // reducer's batch transition.
   useWorkflowGraphOperationBatch({ draft, details, catalog, replaceDraftByBatch, setStatus, setError });
+
+  useEffect(() => {
+    if (!draft?.state.rootActivity || catalog.length === 0) return;
+
+    editDraft(({ draft: current }) => {
+      if (!current?.state.rootActivity) return null;
+      const normalizedRoot = normalizeActivityStructures(current.state.rootActivity, catalogByVersion);
+      if (!normalizedRoot || normalizedRoot === current.state.rootActivity) return null;
+
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: normalizedRoot
+        }
+      };
+    });
+  }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
   useWorkflowContextBridge({ details, draft, selectedNode, selectedNodeId, selectedDescriptor, catalogByVersion });
@@ -282,11 +302,11 @@ export function WorkflowEditor({
         ...current,
         state: {
           ...current.state,
-          rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity)
+          rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity, catalogByVersion)
         }
       };
     });
-  }, [editDraft]);
+  }, [catalogByVersion, editDraft]);
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
   // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027).
@@ -297,7 +317,7 @@ export function WorkflowEditor({
     const path = findNodeScopePath(currentRoot, nodeId, activity => {
       const item = catalogByVersion.get(activity.activityVersionId);
       return item ? getActivityDisplay(item) : activity.nodeId;
-    });
+    }, catalogByVersion);
     if (!path) return;
     setCanvasView("designer");
     navigateToScope(path, nodeId);
@@ -386,6 +406,8 @@ export function WorkflowEditor({
           selectedActivityType={selectedNode ? (selectedDescriptor?.typeName ?? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
           selectedDescriptor={selectedDescriptor}
           selectedNodeAvailability={selectedNodeAvailability}
+          selectedSlots={selectedSlots}
+          selectedSupportsScopedVariables={selectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
           expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}

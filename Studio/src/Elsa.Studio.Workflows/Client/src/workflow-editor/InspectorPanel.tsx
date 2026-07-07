@@ -2,11 +2,11 @@ import { AlertTriangle } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityNode, VariableDefinition } from "../workflowTypes";
 import type { ScopedVariableAnalysis } from "../api/workflows";
-import { getChildSlots } from "../workflowAdapter";
+import type { ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
-import { readContainerVariables, shadowingWarningMap, supportsScopedVariables, writeContainerVariables } from "../scopedVariables";
+import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
 
 interface InspectorPanelProps {
   context: StudioEndpointContext;
@@ -15,6 +15,8 @@ interface InspectorPanelProps {
   selectedActivityType: string;
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
+  selectedSlots: ChildSlot[];
+  selectedSupportsScopedVariables: boolean;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
@@ -33,6 +35,8 @@ export function InspectorPanel({
   selectedActivityType,
   selectedDescriptor,
   selectedNodeAvailability,
+  selectedSlots,
+  selectedSupportsScopedVariables,
   propertyEditors,
   expressionEditors,
   expressionDescriptors,
@@ -45,7 +49,6 @@ export function InspectorPanel({
     return <p className="wf-muted">Select an activity to inspect properties and embedded slots.</p>;
   }
 
-  const selectedSlots = getChildSlots(selectedNode);
   return (
     <div className="wf-inspector-content">
       <h3>{selectedNodeLabel}</h3>
@@ -74,7 +77,7 @@ export function InspectorPanel({
         scopeStatus={scopedVariableAnalysis.status}
         onChange={onSelectedActivityChange}
       />
-      {supportsScopedVariables(selectedNode) ? (
+      {selectedSupportsScopedVariables ? (
         <div className="wf-container-variables">
           <ScopedVariablesEditor
             context={context}

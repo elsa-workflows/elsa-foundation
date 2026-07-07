@@ -8,6 +8,9 @@ import {
   getActivityDesignerSupport,
   getActivityDisplay,
   getChildSlots,
+  normalizeActivityStructures,
+  readStructureDesignFacet,
+  replaceSlotActivities,
   sequenceStructureKind,
   spliceWorkflowEdge,
   syncCanvasToScope,
@@ -46,6 +49,29 @@ const flowchartActivity: ActivityCatalogItem = {
   displayName: "Flowchart"
 };
 
+const forEachActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "activity-for-each-v1",
+  activityTypeKey: "Elsa.Activities.ControlFlow.Activities.ForEach",
+  category: "Control Flow",
+  displayName: "For Each",
+  designFacets: [{
+    kind: "elsa.foreach.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "sequence",
+      supportsScopedVariables: true,
+      slots: [{
+        name: "Body",
+        property: "body",
+        displayName: "Body",
+        cardinality: "single"
+      }],
+      initialPayload: { body: null }
+    }
+  }]
+};
+
 describe("workflow adapter", () => {
   it("uses friendly activity display names and falls back from fully-qualified names", () => {
     expect(getActivityDisplay(writeLine)).toBe("Write Line");
@@ -79,6 +105,156 @@ describe("workflow adapter", () => {
       label: "Primary Branch",
       mode: "generic"
     });
+  });
+
+  it("creates structure from activity structure design facets", () => {
+    const activity = createActivityNode(forEachActivity, "foreach");
+
+    expect(readStructureDesignFacet(forEachActivity)).toMatchObject({
+      kind: "elsa.foreach.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        mode: "sequence",
+        supportsScopedVariables: true,
+        slots: [expect.objectContaining({ property: "body", cardinality: "single" })]
+      }
+    });
+    expect(activity.structure).toEqual({
+      kind: "elsa.foreach.structure",
+      schemaVersion: "1.0.0",
+      payload: { body: null }
+    });
+  });
+
+  it("returns facet-declared single child slots when the payload value is null", () => {
+    const activity = createActivityNode(forEachActivity, "foreach");
+
+    const slots = getChildSlots(activity, forEachActivity);
+
+    expect(slots).toEqual([expect.objectContaining({
+      id: "elsa.foreach.structure:body",
+      label: "Body",
+      property: "body",
+      cardinality: "single",
+      mode: "sequence",
+      activities: []
+    })]);
+  });
+
+  it("does not infer generic child slots from null payload fields without a facet", () => {
+    const activity: ActivityNode = {
+      nodeId: "custom",
+      activityVersionId: "custom-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "acme.custom.structure",
+        schemaVersion: "1.0.0",
+        payload: { body: null }
+      }
+    };
+
+    expect(getChildSlots(activity)).toEqual([]);
+  });
+
+  it("stores a single slot child as an object instead of an array", () => {
+    const activity = createActivityNode(forEachActivity, "foreach");
+    const child = node("body-child");
+    const slot = getChildSlots(activity, forEachActivity)[0];
+
+    const updated = replaceSlotActivities(activity, slot, [child]);
+
+    expect(updated.structure?.payload.body).toEqual(child);
+  });
+
+  it("keeps Sequence and Flowchart structure fallbacks for older catalogs", () => {
+    expect(createActivityNode(sequenceActivity, "sequence").structure).toEqual({
+      kind: sequenceStructureKind,
+      schemaVersion: "1.0.0",
+      payload: { activities: [] }
+    });
+    expect(createActivityNode(flowchartActivity, "flowchart").structure).toEqual({
+      kind: flowchartStructureKind,
+      schemaVersion: "1.0.0",
+      payload: {
+        activities: [],
+        connections: [],
+        startNodeId: null,
+        nodeMetadata: {},
+        connectionMetadata: {}
+      }
+    });
+  });
+
+  it("normalizes existing nodes with null structure from the catalog facet", () => {
+    const root = node("foreach");
+    root.activityVersionId = forEachActivity.activityVersionId;
+
+    const normalized = normalizeActivityStructures(root, [forEachActivity]);
+
+    expect(normalized?.structure).toEqual({
+      kind: "elsa.foreach.structure",
+      schemaVersion: "1.0.0",
+      payload: { body: null }
+    });
+    expect(getChildSlots(normalized!, forEachActivity)[0]).toMatchObject({ label: "Body", cardinality: "single" });
+  });
+
+  it("updates repeatable collection child slots without replacing authored collection items", () => {
+    const switchActivity: ActivityCatalogItem = {
+      ...writeLine,
+      activityVersionId: "activity-switch-v1",
+      activityTypeKey: "Elsa.Activities.ControlFlow.Activities.Switch",
+      displayName: "Switch",
+      designFacets: [{
+        kind: "elsa.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          mode: "sequence",
+          supportsScopedVariables: false,
+          slots: [{
+            name: "Case",
+            property: "case",
+            displayName: "Case",
+            cardinality: "single",
+            collectionProperty: "cases",
+            childProperty: "activity",
+            labelProperty: "name",
+            slotNameTemplate: "Case {label}"
+          }],
+          initialPayload: { cases: [] }
+        }
+      }]
+    };
+    const root: ActivityNode = {
+      nodeId: "switch",
+      activityVersionId: switchActivity.activityVersionId,
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          cases: [
+            { name: "A", expression: "a", activity: null },
+            { name: "B", expression: "b", activity: null },
+            { name: "B", expression: "b2", activity: node("old") }
+          ]
+        }
+      }
+    };
+    const body = node("new");
+
+    const slots = getChildSlots(root, switchActivity);
+    const updated = replaceSlotActivities(root, slots[2], [body]);
+
+    expect(new Set(slots.map(slot => slot.id)).size).toBe(3);
+    expect(slots.map(slot => slot.label)).toEqual(["Case A", "Case B", "Case B"]);
+    expect(updated.structure?.payload.cases).toEqual([
+      { name: "A", expression: "a", activity: null },
+      { name: "B", expression: "b", activity: null },
+      { name: "B", expression: "b2", activity: body }
+    ]);
   });
 
   it("resolves explicit designer support for flowchart and sequence activities", () => {

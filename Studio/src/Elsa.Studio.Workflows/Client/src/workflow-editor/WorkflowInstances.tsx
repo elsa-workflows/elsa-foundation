@@ -266,7 +266,7 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
 
     const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
     const support = getActivityDesignerSupport(root, rootCatalogItem);
-    const scope = support === "unsupported" ? null : resolveScope(root, []);
+    const scope = support === "unsupported" ? null : resolveScope(root, [], activityCatalog);
     const baseCanvas = support === "unsupported"
       ? buildUnsupportedActivityCanvas(root, activityCatalog, definitionVersion.layout)
       : scope

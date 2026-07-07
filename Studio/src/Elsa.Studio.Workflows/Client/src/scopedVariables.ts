@@ -1,6 +1,6 @@
-import { flowchartStructureKind, getChildSlots, sequenceStructureKind } from "./workflowAdapter";
+import { flowchartStructureKind, getChildSlots, readStructureDesignFacet, sequenceStructureKind, type ActivityCatalogLookup } from "./workflowAdapter";
 import { isPlainRecord } from "./workflowProperties";
-import type { ActivityNode, ScopedVariableShadowingWarning, VariableDefinition, VariableReference, WorkflowDefinitionState } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, ScopedVariableShadowingWarning, VariableDefinition, VariableReference, WorkflowDefinitionState } from "./workflowTypes";
 
 /**
  * Scoped-variable helpers (ADR-0027). Container-scoped variable declarations live on a container
@@ -17,9 +17,15 @@ export const WORKFLOW_SCOPE_ID = "workflow";
 // IActivityStructureService.SupportsScopedVariables (Sequence and Flowchart).
 const scopedVariableContainerKinds = new Set([sequenceStructureKind, flowchartStructureKind]);
 
-export function supportsScopedVariables(node: ActivityNode | null | undefined): boolean {
+export function supportsScopedVariables(node: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem | null): boolean {
   const kind = node?.structure?.kind;
-  return !!kind && scopedVariableContainerKinds.has(kind);
+  if (!kind) return false;
+  if (scopedVariableContainerKinds.has(kind)) return true;
+
+  const structureFacet = catalogItem?.activityVersionId === node?.activityVersionId
+    ? readStructureDesignFacet(catalogItem)
+    : null;
+  return structureFacet?.kind === kind && structureFacet.payload.supportsScopedVariables;
 }
 
 export function readContainerVariables(node: ActivityNode | null | undefined): VariableDefinition[] {
@@ -79,12 +85,12 @@ export function readVariableReference(value: unknown): VariableReference | null 
 // A cheap signature of everything that affects scoped-variable visibility/shadowing: workflow-scoped
 // declarations, each container's declarations, and the parent→child tree shape. Used to key the design
 // analysis query so it re-runs on relevant edits but not on every unrelated keystroke.
-export function scopedVariableSignature(state: WorkflowDefinitionState | null | undefined): string {
+export function scopedVariableSignature(state: WorkflowDefinitionState | null | undefined, catalog?: ActivityCatalogLookup): string {
   if (!state) return "";
   const parts: string[] = [`workflow:${declarationSignature(state.variables)}`];
 
   const visit = (node: ActivityNode) => {
-    const slots = getChildSlots(node);
+    const slots = getChildSlots(node, catalog);
     const childIds = slots.flatMap(slot => slot.activities.map(activity => activity.nodeId));
     parts.push(`${node.nodeId}:${declarationSignature(readContainerVariables(node))}>${childIds.join(",")}`);
     slots.forEach(slot => slot.activities.forEach(visit));

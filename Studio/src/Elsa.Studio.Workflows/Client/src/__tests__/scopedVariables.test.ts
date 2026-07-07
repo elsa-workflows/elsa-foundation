@@ -10,7 +10,7 @@ import {
   supportsScopedVariables,
   writeContainerVariables
 } from "../scopedVariables";
-import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 
 const variable = (referenceKey: string, name: string): VariableDefinition => ({
   referenceKey,
@@ -30,12 +30,45 @@ const sequence = (nodeId: string, activities: ActivityNode[], variables: Variabl
   structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities, variables } }
 });
 
+const forEachCatalog: ActivityCatalogItem = {
+  activityVersionId: "foreach-v1",
+  activityTypeKey: "Elsa.Activities.ControlFlow.Activities.ForEach",
+  version: "1.0.0",
+  category: "Control Flow",
+  displayName: "For Each",
+  executionType: "Action",
+  inputs: [],
+  outputs: [],
+  designFacets: [{
+    kind: "elsa.foreach.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "sequence",
+      supportsScopedVariables: true,
+      slots: [{ name: "Body", property: "body", displayName: "Body", cardinality: "single" }],
+      initialPayload: { body: null }
+    }
+  }]
+};
+
+const forEach = (nodeId: string, body: ActivityNode | null): ActivityNode => ({
+  nodeId,
+  activityVersionId: forEachCatalog.activityVersionId,
+  inputs: [],
+  outputs: [],
+  structure: { kind: "elsa.foreach.structure", schemaVersion: "1.0.0", payload: { body } }
+});
+
 describe("supportsScopedVariables", () => {
   it("is true for Sequence and Flowchart containers, false otherwise", () => {
     expect(supportsScopedVariables(sequence("s", []))).toBe(true);
     expect(supportsScopedVariables({ ...leaf("f"), structure: { kind: "elsa.flowchart.structure", schemaVersion: "1.0.0", payload: {} } })).toBe(true);
     expect(supportsScopedVariables(leaf("x"))).toBe(false);
     expect(supportsScopedVariables(null)).toBe(false);
+  });
+
+  it("uses structure design facets for scoped-variable support", () => {
+    expect(supportsScopedVariables(forEach("foreach", null), forEachCatalog)).toBe(true);
   });
 });
 
@@ -106,6 +139,13 @@ describe("scopedVariableSignature", () => {
   it("changes when the tree shape changes", () => {
     const moved: WorkflowDefinitionState = { ...base, rootActivity: sequence("root", [leaf("a"), leaf("b")], [variable("c", "Counter")]) };
     expect(scopedVariableSignature(moved)).not.toBe(scopedVariableSignature(base));
+  });
+
+  it("uses catalog facets when computing child tree shape", () => {
+    const empty: WorkflowDefinitionState = { variables: [], rootActivity: forEach("foreach", null) };
+    const withBody: WorkflowDefinitionState = { variables: [], rootActivity: forEach("foreach", leaf("body")) };
+
+    expect(scopedVariableSignature(withBody, [forEachCatalog])).not.toBe(scopedVariableSignature(empty, [forEachCatalog]));
   });
 });
 

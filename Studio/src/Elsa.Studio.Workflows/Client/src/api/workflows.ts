@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { scopedVariableSignature } from "../scopedVariables";
+import type { ActivityCatalogLookup } from "../workflowAdapter";
 import type {
   ActivityAvailabilityDiagnostics,
   ActivityAvailabilitySettings,
@@ -200,9 +201,10 @@ const emptyAnalysis = (status: ScopedVariableAnalysisStatus): ScopedVariableAnal
 export function useScopedVariableAnalysis(
   context: StudioEndpointContext,
   state: WorkflowDefinitionState | null | undefined,
-  nodeId: string | null
+  nodeId: string | null,
+  catalog?: ActivityCatalogLookup
 ): ScopedVariableAnalysis {
-  const signature = useMemo(() => scopedVariableSignature(state), [state]);
+  const signature = useMemo(() => scopedVariableSignature(state, catalog), [catalog, state]);
   const [result, setResult] = useState<ScopedVariableAnalysis>(() => emptyAnalysis("loading"));
 
   useEffect(() => {

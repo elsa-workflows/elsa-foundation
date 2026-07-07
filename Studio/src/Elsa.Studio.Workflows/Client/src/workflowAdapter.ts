@@ -43,9 +43,42 @@ export interface ChildSlot {
   id: string;
   label: string;
   property: string;
+  cardinality: "single" | "many";
   mode: "sequence" | "flowchart" | "generic";
   activities: ActivityNode[];
+  collectionProperty?: string;
+  childProperty?: string;
+  labelProperty?: string;
+  slotNameTemplate?: string;
+  collectionIndex?: number;
+  collectionItemLabel?: string;
 }
+
+export interface StructureDesignFacet {
+  kind: string;
+  schemaVersion: string;
+  payload: StructureDesignFacetPayload;
+}
+
+export interface StructureDesignFacetPayload {
+  mode: ChildSlot["mode"];
+  supportsScopedVariables: boolean;
+  slots: StructureDesignSlotDescriptor[];
+  initialPayload: Record<string, unknown>;
+}
+
+export interface StructureDesignSlotDescriptor {
+  name: string;
+  property: string;
+  displayName: string;
+  cardinality: ChildSlot["cardinality"];
+  collectionProperty?: string;
+  childProperty?: string;
+  labelProperty?: string;
+  slotNameTemplate?: string;
+}
+
+export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
 
 export interface CanvasScope {
   owner: ActivityNode;
@@ -60,12 +93,12 @@ export interface ScopeFrame {
 
 export type WorkflowDesignerSupport = "flowchart" | "sequence" | "unsupported";
 
-export function resolveScopeOwner(root: ActivityNode | null | undefined, frames: ScopeFrame[]): ActivityNode | null {
+export function resolveScopeOwner(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ActivityNode | null {
   if (!root) return null;
 
   let owner = root;
   for (const frame of frames) {
-    const slot = getChildSlots(owner).find(candidate => candidate.id === frame.slotId);
+    const slot = getChildSlots(owner, catalog).find(candidate => candidate.id === frame.slotId);
     if (!slot) return null;
     const nextOwner = slot.activities.find(activity => activity.nodeId === frame.ownerNodeId);
     if (!nextOwner) return null;
@@ -82,14 +115,15 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
 export function findNodeScopePath(
   root: ActivityNode | null | undefined,
   nodeId: string,
-  labelFor: (activity: ActivityNode) => string = activity => activity.nodeId
+  labelFor: (activity: ActivityNode) => string = activity => activity.nodeId,
+  catalog?: ActivityCatalogLookup
 ): ScopeFrame[] | null {
   if (!root) return null;
   // The root scope itself is reached with no frames.
   if (root.nodeId === nodeId) return [];
 
   const visit = (owner: ActivityNode, frames: ScopeFrame[]): ScopeFrame[] | null => {
-    const slots = getChildSlots(owner);
+    const slots = getChildSlots(owner, catalog);
     // A node is "landable" only when it sits in its parent's primary slot (matching how resolveScope
     // surfaces nodes on the canvas); descent still walks every slot to reach deeper primary slots.
     if (slots[0]?.activities.some(activity => activity.nodeId === nodeId)) return frames;
@@ -107,21 +141,24 @@ export function findNodeScopePath(
   return visit(root, []);
 }
 
-export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[]): CanvasScope | null {
-  const owner = resolveScopeOwner(root, frames);
+export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): CanvasScope | null {
+  const owner = resolveScopeOwner(root, frames, catalog);
   if (!owner) return null;
 
-  const slot = getChildSlots(owner)[0];
+  const slot = getChildSlots(owner, catalog)[0];
   if (!slot) return null;
 
   return { owner, slot };
 }
 
-export function getChildSlots(activity: ActivityNode): ChildSlot[] {
+export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogLookup): ChildSlot[] {
   const structure = activity.structure;
   if (!structure || !structure.payload || typeof structure.payload !== "object") return [];
 
   const payload = structure.payload;
+  const structureFacet = readStructureDesignFacet(resolveCatalogItem(activity, catalog));
+  if (structureFacet?.kind === structure.kind) return getFacetChildSlots(structure, structureFacet);
+
   const mode = getStructureMode(structure);
   const activities = readActivityArray(payload.activities);
   if (activities) {
@@ -129,20 +166,153 @@ export function getChildSlots(activity: ActivityNode): ChildSlot[] {
       id: `${structure.kind}:activities`,
       label: getDefaultSlotLabel(structure),
       property: "activities",
+      cardinality: "many",
       mode,
       activities
     }];
   }
 
   return Object.entries(payload)
-    .filter(([, value]) => readActivityArray(value))
+    .filter(([, value]) => readActivityArray(value) || isActivityNode(value))
     .map(([property, value]) => ({
       id: `${structure.kind}:${property}`,
       label: toDisplayLabel(property),
       property,
+      cardinality: readActivityArray(value) ? "many" as const : "single" as const,
       mode: "generic",
-      activities: readActivityArray(value) ?? []
+      activities: readActivityArray(value) ?? (isActivityNode(value) ? [value] : [])
     }));
+}
+
+export function readStructureDesignFacet(activity: ActivityCatalogItem | null | undefined): StructureDesignFacet | null {
+  for (const facet of activity?.designFacets ?? []) {
+    if (!isRecord(facet)) continue;
+    const kind = typeof facet.kind === "string" ? facet.kind : "";
+    const schemaVersion = typeof facet.schemaVersion === "string" ? facet.schemaVersion : "";
+    if (!kind || !schemaVersion || !isRecord(facet.payload)) continue;
+
+    const payload = readStructureDesignFacetPayload(facet.payload);
+    if (payload) return { kind, schemaVersion, payload };
+  }
+
+  return null;
+}
+
+function readStructureDesignFacetPayload(payload: Record<string, unknown>): StructureDesignFacetPayload | null {
+  const mode = payload.mode;
+  if (mode !== "sequence" && mode !== "flowchart" && mode !== "generic") return null;
+  if (typeof payload.supportsScopedVariables !== "boolean") return null;
+  if (!Array.isArray(payload.slots) || !isRecord(payload.initialPayload)) return null;
+
+  const slots = payload.slots.map(readStructureDesignSlotDescriptor).filter(slot => slot !== null);
+  return {
+    mode,
+    supportsScopedVariables: payload.supportsScopedVariables,
+    slots,
+    initialPayload: payload.initialPayload
+  };
+}
+
+function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotDescriptor | null {
+  if (!isRecord(value)) return null;
+  const name = typeof value.name === "string" ? value.name : "";
+  const property = typeof value.property === "string" ? value.property : "";
+  const displayName = typeof value.displayName === "string" ? value.displayName : "";
+  const cardinality = value.cardinality;
+  if (!name || !property || !displayName || (cardinality !== "single" && cardinality !== "many")) return null;
+
+  return {
+    name,
+    property,
+    displayName,
+    cardinality,
+    collectionProperty: readOptionalString(value.collectionProperty),
+    childProperty: readOptionalString(value.childProperty),
+    labelProperty: readOptionalString(value.labelProperty),
+    slotNameTemplate: readOptionalString(value.slotNameTemplate)
+  };
+}
+
+function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+  return facet.payload.slots.flatMap(descriptor => {
+    if (descriptor.collectionProperty && descriptor.childProperty) {
+      const collection = structure.payload[descriptor.collectionProperty];
+      if (!Array.isArray(collection)) return [];
+
+      return collection.flatMap((item, index) => {
+        if (!isRecord(item)) return [];
+        const labelValue = descriptor.labelProperty ? readOptionalString(item[descriptor.labelProperty]) : undefined;
+        return [createChildSlot(structure.kind, descriptor, item[descriptor.childProperty], facet.payload.mode, index, labelValue)];
+      });
+    }
+
+    return [createChildSlot(structure.kind, descriptor, structure.payload[descriptor.property], facet.payload.mode)];
+  });
+}
+
+function createChildSlot(
+  structureKind: string,
+  descriptor: StructureDesignSlotDescriptor,
+  value: unknown,
+  mode: ChildSlot["mode"],
+  collectionIndex?: number,
+  collectionItemLabel?: string
+): ChildSlot {
+  const collectionSuffix = collectionIndex === undefined
+    ? ""
+    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionIndex}`;
+
+  return {
+    id: `${structureKind}:${descriptor.property}${collectionSuffix}`,
+    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel),
+    property: descriptor.property,
+    cardinality: descriptor.cardinality,
+    mode,
+    activities: readSlotActivities(value, descriptor.cardinality),
+    collectionProperty: descriptor.collectionProperty,
+    childProperty: descriptor.childProperty,
+    labelProperty: descriptor.labelProperty,
+    slotNameTemplate: descriptor.slotNameTemplate,
+    collectionIndex,
+    collectionItemLabel
+  };
+}
+
+function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"]) {
+  if (cardinality === "many") return readActivityArray(value) ?? [];
+  return isActivityNode(value) ? [value] : [];
+}
+
+function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
+  if (descriptor.slotNameTemplate) {
+    return descriptor.slotNameTemplate
+      .replaceAll("{name}", descriptor.name)
+      .replaceAll("{displayName}", descriptor.displayName)
+      .replaceAll("{label}", labelValue ?? String(index + 1))
+      .replaceAll("{index}", String(index + 1));
+  }
+
+  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${index + 1}`;
+}
+
+function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
+  if (!catalog) return undefined;
+  if (catalog instanceof Map) return catalog.get(activity.activityVersionId);
+  if (Array.isArray(catalog)) return catalog.find(item => item.activityVersionId === activity.activityVersionId);
+  return catalog.activityVersionId === activity.activityVersionId ? catalog : undefined;
+}
+
+function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
+  if (slot.labelProperty && slot.collectionItemLabel) {
+    const matches = collection
+      .map((item, index) => isRecord(item) && readOptionalString(item[slot.labelProperty!]) === slot.collectionItemLabel ? index : -1)
+      .filter(index => index >= 0);
+    if (matches.length === 1) return matches[0];
+  }
+
+  return typeof slot.collectionIndex === "number" && slot.collectionIndex >= 0 && slot.collectionIndex < collection.length
+    ? slot.collectionIndex
+    : -1;
 }
 
 export function buildCanvas(scope: CanvasScope, catalog: ActivityCatalogItem[], layout: DesignMetadataRecord[]) {
@@ -222,49 +392,53 @@ export function applyRuntimeOverlays(
 export function getActivityDesignerSupport(activity: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem): WorkflowDesignerSupport {
   if (activity?.structure?.kind === flowchartStructureKind || isFlowchartCatalogItem(catalogItem)) return "flowchart";
   if (activity?.structure?.kind === sequenceStructureKind || isSequenceCatalogItem(catalogItem)) return "sequence";
+  if (activity) {
+    const primarySlot = getChildSlots(activity, catalogItem)[0];
+    if (primarySlot) return primarySlot.mode === "flowchart" ? "flowchart" : "sequence";
+  }
   return "unsupported";
 }
 
-export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], activities: ActivityNode[]): ActivityNode {
+export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], activities: ActivityNode[], catalog?: ActivityCatalogLookup): ActivityNode {
   if (frames.length === 0) {
-    const slot = getChildSlots(root)[0];
+    const slot = getChildSlots(root, catalog)[0];
     return slot ? replaceSlotActivities(root, slot, activities) : root;
   }
 
   const [frame, ...rest] = frames;
-  const slot = getChildSlots(root).find(candidate => candidate.id === frame.slotId);
+  const slot = getChildSlots(root, catalog).find(candidate => candidate.id === frame.slotId);
   if (!slot) return root;
 
   const updatedActivities = slot.activities.map(activity =>
-    activity.nodeId === frame.ownerNodeId ? updateScopeActivities(activity, rest, activities) : activity);
+    activity.nodeId === frame.ownerNodeId ? updateScopeActivities(activity, rest, activities, catalog) : activity);
 
   return replaceSlotActivities(root, slot, updatedActivities);
 }
 
-export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode): ActivityNode {
+export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
   if (frames.length === 0) return owner;
 
   const [frame, ...rest] = frames;
-  const slot = getChildSlots(root).find(candidate => candidate.id === frame.slotId);
+  const slot = getChildSlots(root, catalog).find(candidate => candidate.id === frame.slotId);
   if (!slot) return root;
 
   const updatedActivities = slot.activities.map(activity =>
-    activity.nodeId === frame.ownerNodeId ? updateScopeOwner(activity, rest, owner) : activity);
+    activity.nodeId === frame.ownerNodeId ? updateScopeOwner(activity, rest, owner, catalog) : activity);
 
   return replaceSlotActivities(root, slot, updatedActivities);
 }
 
-export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode): ActivityNode {
+export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
   if (root.nodeId === nodeId) return update(root);
 
-  const slots = getChildSlots(root);
+  const slots = getChildSlots(root, catalog);
   if (slots.length === 0) return root;
 
   let changed = false;
   let next = root;
   for (const slot of slots) {
     const updatedActivities = slot.activities.map(activity => {
-      const updated = updateActivity(activity, nodeId, update);
+      const updated = updateActivity(activity, nodeId, update, catalog);
       if (updated !== activity) changed = true;
       return updated;
     });
@@ -277,6 +451,35 @@ export function updateActivity(root: ActivityNode, nodeId: string, update: (acti
 
 export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, activities: ActivityNode[]): ActivityNode {
   if (!activity.structure) return activity;
+  const nextValue = slot.cardinality === "single" ? activities[0] ?? null : activities;
+
+  if (slot.collectionProperty && slot.childProperty) {
+    const previousCollection = activity.structure.payload[slot.collectionProperty];
+    if (!Array.isArray(previousCollection)) return activity;
+
+    const collectionIndex = findCollectionItemIndex(previousCollection, slot);
+    if (collectionIndex < 0) return activity;
+
+    const previousItem = previousCollection[collectionIndex];
+    if (!isRecord(previousItem)) return activity;
+
+    const nextCollection = [...previousCollection];
+    nextCollection[collectionIndex] = {
+      ...previousItem,
+      [slot.childProperty]: nextValue
+    };
+
+    return {
+      ...activity,
+      structure: {
+        ...activity.structure,
+        payload: {
+          ...activity.structure.payload,
+          [slot.collectionProperty]: nextCollection
+        }
+      }
+    };
+  }
 
   return {
     ...activity,
@@ -284,7 +487,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
       ...activity.structure,
       payload: {
         ...activity.structure.payload,
-        [slot.property]: activities
+        [slot.property]: nextValue
       }
     }
   };
@@ -338,6 +541,24 @@ export function createActivityNode(activity: ActivityCatalogItem, nodeId: string
   };
 }
 
+export function normalizeActivityStructures(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup): ActivityNode | null {
+  if (!root) return null;
+
+  const catalogItem = resolveCatalogItem(root, catalog);
+  const normalizedStructure = root.structure ?? (catalogItem ? createStructureForActivity(catalogItem) : null);
+  let next: ActivityNode = normalizedStructure === root.structure ? root : { ...root, structure: normalizedStructure };
+
+  const slots = getChildSlots(next, catalog);
+  for (const slot of slots) {
+    const normalizedActivities = slot.activities.map(activity => normalizeActivityStructures(activity, catalog) ?? activity);
+    if (normalizedActivities.some((activity, index) => activity !== slot.activities[index])) {
+      next = replaceSlotActivities(next, slot, normalizedActivities);
+    }
+  }
+
+  return next;
+}
+
 export function getActivityDisplay(activity: ActivityCatalogItem) {
   const shortName = activity.activityTypeKey.split(".").at(-1) || activity.activityTypeKey;
   const displayName = activity.displayName?.trim();
@@ -368,7 +589,7 @@ function createWorkflowNode(
       category: catalogItem?.category,
       executionType: catalogItem?.executionType,
       icon: resolveActivityIcon(catalogItem),
-      childSlots: getChildSlots(activity),
+      childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts
@@ -422,6 +643,15 @@ function humanizeActivityTypeName(name: string) {
 }
 
 function createStructureForActivity(activity: ActivityCatalogItem): ActivityNodeStructure | null {
+  const structureFacet = readStructureDesignFacet(activity);
+  if (structureFacet) {
+    return {
+      kind: structureFacet.kind,
+      schemaVersion: structureFacet.schemaVersion,
+      payload: clonePayload(structureFacet.payload.initialPayload)
+    };
+  }
+
   if (activity.activityTypeKey.endsWith(".Sequence") || activity.displayName === "Sequence") {
     return {
       kind: sequenceStructureKind,
@@ -606,6 +836,14 @@ function uniquePorts(ports: WorkflowPortDescriptor[]) {
 
 function readStringList(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function readOptionalString(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function clonePayload(payload: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
 }
 
 function groupBy<T>(items: T[], getKey: (item: T) => string) {
