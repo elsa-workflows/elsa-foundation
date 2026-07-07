@@ -150,7 +150,7 @@ public sealed class ActivityVersionReconciler(
         // (DefinitionId, Version) is already persisted — Model X duplicate path.
         if (!string.Equals(existingVersion.Hash, incomingHash, StringComparison.Ordinal))
         {
-            if (IsBuildMetadataOnlyDuplicate(definition, existingVersion, incomingVersion))
+            if (IsBuildMetadataOnlyDuplicate(existingVersion, incomingVersion))
             {
                 LogSkipBuildMetadataOnlyDuplicate(definition.Id, definition.ActivityTypeKey, existingVersion.Version, incomingVersion.Version);
                 return;
@@ -199,14 +199,20 @@ public sealed class ActivityVersionReconciler(
     }
 
     private bool IsBuildMetadataOnlyDuplicate(
-        IActivityDefinition definition,
         IActivityDefinitionVersion existingVersion,
         IActivityDefinitionVersion incomingVersion)
     {
         if (string.Equals(existingVersion.Version, incomingVersion.Version, StringComparison.Ordinal))
             return false;
 
-        var incomingWithPersistedVersion = new ActivityDefinitionVersionModel(
+        // "Is the ONLY difference the version's build metadata?" To answer that, hash the INCOMING
+        // definition + version content with the version's build metadata neutralised by rebasing onto
+        // the persisted version string. Hashing the incoming projection (not the persisted definition)
+        // is what makes this blind to build metadata alone: any genuine definition-level change
+        // (Description/Category/DisplayName) or version-level change flows into the hash and fails the
+        // match, so the caller falls through to ActivityVersionHashMismatchException.
+        var incomingDefinition = incomingVersion.Definition;
+        var incomingRebasedToPersistedVersion = new ActivityDefinitionVersionModel(
             Id: incomingVersion.Id,
             Version: existingVersion.Version,
             DefinitionId: incomingVersion.DefinitionId,
@@ -214,14 +220,14 @@ public sealed class ActivityVersionReconciler(
             DescriptorPayload: incomingVersion.DescriptorPayload,
             SourceKind: incomingVersion.SourceKind,
             SourceId: incomingVersion.SourceId,
-            Definition: definition,
+            Definition: incomingDefinition,
             Inputs: incomingVersion.Inputs,
             Outputs: incomingVersion.Outputs,
             DesignFacets: incomingVersion.DesignFacets,
             ExecutionType: incomingVersion.ExecutionType,
             Hash: string.Empty);
 
-        var compatibilityHash = hasher.Hash(definition, incomingWithPersistedVersion);
+        var compatibilityHash = hasher.Hash(incomingDefinition, incomingRebasedToPersistedVersion);
         return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
     }
 
