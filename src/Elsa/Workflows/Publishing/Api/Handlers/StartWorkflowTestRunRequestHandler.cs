@@ -57,6 +57,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             now,
             expiresAt,
             ToInputValues(request.Inputs),
+            draftSnapshot: null,
             cancellationToken);
     }
 
@@ -91,6 +92,13 @@ public sealed class StartWorkflowTestRunRequestHandler(
             now,
             expiresAt,
             ToInputValues(request.Inputs),
+            new WorkflowTestRunDraftSnapshot(
+                DefinitionId: request.DefinitionId,
+                DefinitionVersionId: sourceDefinitionVersionId,
+                ArtifactVersion: artifactVersion,
+                State: request.State,
+                RequestedAt: now,
+                ExpiresAt: expiresAt),
             cancellationToken);
     }
 
@@ -102,6 +110,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         DateTimeOffset now,
         DateTimeOffset expiresAt,
         IReadOnlyDictionary<string, object?> inputs,
+        WorkflowTestRunDraftSnapshot? draftSnapshot,
         CancellationToken cancellationToken)
     {
         WorkflowExecutable executable;
@@ -147,6 +156,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         }
 
         await transientExecutableStore.SaveAsync(executable, cancellationToken);
+        if (draftSnapshot is not null)
+            await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);
 
         // Seed authored workflow variable defaults from the compiled executable's root structure so a test
         // run resolves `variables.*` input expressions to their declared values (Seam C, #254), matching the

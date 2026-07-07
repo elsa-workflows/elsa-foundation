@@ -3,6 +3,7 @@ using Elsa.Persistence.Core;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation.Core;
@@ -27,7 +28,8 @@ public sealed class WorkflowsVersionReconciler(
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
-    IAddCommand<WorkflowDefinitionVersion> addVersionCommand
+    IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
+    ISaveWorkflowDefinitionCommand saveDefinitionCommand
 )
     : IWorkflowVersionReconciler
 {
@@ -53,6 +55,10 @@ public sealed class WorkflowsVersionReconciler(
         {
             await addDefinitionCommand.Add(WorkflowDefinition.From(version.Definition), cancellationToken);
         }
+        else
+        {
+            await UpdateDefinitionMetadata(definition, version.Definition, cancellationToken);
+        }
 
         var candidateSortKey = SemVer.ToSortKey(version.Version);
 
@@ -71,6 +77,28 @@ public sealed class WorkflowsVersionReconciler(
         }
 
         HandleDuplicate(definitionId, version.Version);
+    }
+
+    /// <summary>
+    /// Applies the incoming source model's mutable definition-level metadata (name, description) to an
+    /// already-persisted definition. Idempotent — writes only when a value actually changed — and never
+    /// touches any <see cref="WorkflowDefinitionVersion"/>: versions are immutable and
+    /// retention-authoritative, whereas name/description are latest-wins per ADR 0034 (D5). Runs for
+    /// every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git.
+    ///
+    /// This is the seam <c>specs/085</c> extends: it applies whatever metadata the incoming model
+    /// carries, so soft-delete (<c>deleted</c>) propagation can be added by widening the diff here once
+    /// the reconciliation model grows a delete flag — no second refactor of the reconciler required.
+    /// </summary>
+    private async Task UpdateDefinitionMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming, CancellationToken cancellationToken)
+    {
+        if (persisted.Name == incoming.Name && persisted.Description == incoming.Description)
+            return;
+
+        persisted.Name = incoming.Name;
+        persisted.Description = incoming.Description;
+        await saveDefinitionCommand.Execute(persisted, cancellationToken);
+        LogMetadataUpdated(persisted.Id);
     }
 
     private void HandleDuplicate(string definitionId, string version)
@@ -99,6 +127,12 @@ public sealed class WorkflowsVersionReconciler(
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Skipping outdated workflow definition '{def}' v{v}", definitionId, version);
+    }
+
+    private void LogMetadataUpdated(string definitionId)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation("Updated metadata for workflow definition '{def}'", definitionId);
     }
 
     private async Task<bool> VersionExists(string definitionId, string sortKey, CancellationToken cancellationToken)
