@@ -10,6 +10,7 @@ import {
   type StudioEndpointContext
 } from "../../sdk";
 import { isStudioAuthEnabled, type StudioRuntimeConfig } from "../runtime";
+import elsaLogo from "../../assets/images/icon.png";
 
 /**
  * Builds the user-auth provider manager for the shell, or returns null when no provider is configured.
@@ -104,8 +105,17 @@ function createHubCredentialFactory(
 
 function StudioSigningIn() {
   return (
-    <div className="studio-shell studio-auth-signing-in" role="status" aria-live="polite">
-      <div className="empty-state">Signing in…</div>
+    <div className="studio-shell studio-auth-signing-in" role="status" aria-live="polite" aria-busy="true">
+      <div className="studio-auth-card">
+        <span className="studio-auth-brand-mark" aria-hidden="true">
+          <img src={elsaLogo} alt="" />
+        </span>
+        <span className="studio-auth-copy">
+          <strong>Elsa Studio</strong>
+          <span>Signing in…</span>
+        </span>
+        <span className="studio-auth-spinner" aria-hidden="true" />
+      </div>
     </div>
   );
 }
