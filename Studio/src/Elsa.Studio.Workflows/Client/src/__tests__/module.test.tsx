@@ -1314,6 +1314,10 @@ describe("workflows module", () => {
     await waitForText(container, "Definition version");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
+    await click(buttonByText(container, "Designer"));
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+    window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
     // Timeline is the default instance tab and lists executed activities.
     expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");

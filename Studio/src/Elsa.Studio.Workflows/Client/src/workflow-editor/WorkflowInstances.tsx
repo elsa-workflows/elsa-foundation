@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
-import { AlertCircle, Boxes, ChevronLeft, ListTree, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { AlertCircle, Boxes, ChevronLeft, ListTree, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
 import type { ActivityCatalogItem, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
@@ -197,10 +197,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
+  const openDefinitionDesigner = () => {
+    const definitionId = data?.details.instance.definitionId;
+    if (!definitionId) return;
+
+    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+
   return (
     <>
       <div className="wf-toolbar">
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
+        {data?.details.instance.definitionId ? (
+          <button type="button" onClick={openDefinitionDesigner}><WorkflowIcon size={14} /> Designer</button>
+        ) : null}
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data && instanceAction ? (
           <button type="button" onClick={() => dispatchAiAction(ai, instanceAction, data.details)}>
