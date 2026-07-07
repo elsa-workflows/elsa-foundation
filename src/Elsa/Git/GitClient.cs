@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Elsa.Modularity.ExtensionBuilder;
+namespace Elsa.Git;
 
 /// <summary>
-/// Canonical Git process invocation for the Extension Builder. This is the single Git stack:
+/// Canonical Git process invocation for the foundation. This is the single Git stack:
 /// <list type="bullet">
 /// <item><see cref="RunAsync"/> awaits a mutating Git command and throws on a non-zero exit.</item>
 /// <item><see cref="RunOrDefault"/> runs a read-only Git command synchronously and returns an empty
@@ -14,7 +14,7 @@ namespace Elsa.Modularity.ExtensionBuilder;
 /// Every invocation runs with <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected
 /// remote fails fast instead of blocking on an interactive prompt.
 /// </summary>
-internal sealed class GitClient(string gitExecutable, ILogger logger)
+public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
 {
     public async Task RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments)
     {
@@ -78,10 +78,11 @@ internal sealed class GitClient(string gitExecutable, ILogger logger)
     /// <summary>
     /// Builds the <see cref="ProcessStartInfo"/> for a git invocation. Notably sets
     /// <c>GIT_TERMINAL_PROMPT=0</c> so an unreachable or credential-protected remote fails fast
-    /// instead of blocking on an interactive prompt. Exposed to tests so this env var can be asserted
+    /// instead of blocking on an interactive prompt. Public (per §2.23.3, logic-bearing implementations
+    /// are directly testable without <c>InternalsVisibleTo</c>) so tests can assert this env var
     /// directly, independent of whether the host has a TTY.
     /// </summary>
-    internal static ProcessStartInfo CreateStartInfo(string gitExecutable, string workingDirectory, IReadOnlyList<string> arguments)
+    public static ProcessStartInfo CreateStartInfo(string gitExecutable, string workingDirectory, IReadOnlyList<string> arguments)
     {
         var startInfo = new ProcessStartInfo(gitExecutable)
         {

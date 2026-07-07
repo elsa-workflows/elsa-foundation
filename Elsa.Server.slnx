@@ -11,7 +11,9 @@
   <Folder Name="/src/Apps/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/" />
+  <Folder Name="/src/Elsa/">
+    <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />

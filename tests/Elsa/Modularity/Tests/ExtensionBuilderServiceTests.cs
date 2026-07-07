@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
+using Elsa.Git;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.ExtensionBuilder;

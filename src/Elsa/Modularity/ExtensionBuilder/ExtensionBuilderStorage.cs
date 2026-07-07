@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Git;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -68,7 +69,7 @@ internal sealed class ExtensionBuilderStorage : IExtensionBuilderStorage
     };
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly GitClient _git;
+    private readonly IGitClient _git;
     private readonly RepositoryInspector _inspector;
     private readonly RepositoryFileSystem _fs;
     private readonly BuildOrchestrator _builds;
