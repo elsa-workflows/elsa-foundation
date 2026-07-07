@@ -26,10 +26,10 @@ public sealed class Flowchart : ActivityBase, IActivityChildCompletionHandler, I
     public const string StructureKind = "elsa.flowchart.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    protected override void Execute(IActivityExecutionContext context)
+    protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        runtimeContext.GetRequiredService<FlowchartExecutionEngine>().Start(runtimeContext);
+        await runtimeContext.GetRequiredService<FlowchartExecutionEngine>().StartAsync(runtimeContext);
     }
 
     public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)

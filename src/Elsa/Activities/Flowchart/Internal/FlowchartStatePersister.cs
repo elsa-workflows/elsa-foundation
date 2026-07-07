@@ -59,14 +59,6 @@ public sealed class FlowchartStatePersister(
         }
     }
 
-    public void SaveState(IRuntimeActivityExecutionContext context, FlowchartExecutionState state)
-    {
-        SaveStateAsync(context, state)
-            .AsTask()
-            .GetAwaiter()
-            .GetResult();
-    }
-
     /// <summary>
     /// Trims records that can never influence a future engine decision before the state is persisted
     /// (#382): without this, a loop-heavy flowchart re-serializes an ever-growing blob on every child
