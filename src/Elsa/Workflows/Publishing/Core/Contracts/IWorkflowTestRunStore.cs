@@ -8,5 +8,9 @@ public interface IWorkflowTestRunStore
 
     ValueTask<WorkflowTestRun?> FindAsync(string testRunId, CancellationToken cancellationToken = default);
 
+    ValueTask SaveDraftSnapshotAsync(WorkflowTestRunDraftSnapshot snapshot, CancellationToken cancellationToken = default);
+
+    ValueTask<WorkflowTestRunDraftSnapshot?> FindDraftSnapshotAsync(string definitionVersionId, CancellationToken cancellationToken = default);
+
     ValueTask<int> CleanupExpiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default);
 }

@@ -66,6 +66,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.NotNull(view.WorkflowExecutionId);
         Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
         Assert.Empty(await _executableStore.ListAsync());
+        var snapshot = await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId);
+        Assert.NotNull(snapshot);
+        Assert.Equal("write-one", snapshot.State.RootActivity!.NodeId);
         await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
             dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
     }
@@ -88,6 +91,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
+        Assert.Null(await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId));
     }
 
     [Fact]
@@ -233,6 +237,28 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task TestRunStoreKeepsUnexpiredDraftSnapshot()
+    {
+        var store = new InMemoryWorkflowTestRunStore();
+        var snapshot = DraftSnapshot("draft:snapshot-live", expiresAt: DateTimeOffset.UtcNow.AddMinutes(30));
+        await store.SaveDraftSnapshotAsync(snapshot);
+
+        var stored = await store.FindDraftSnapshotAsync("draft:snapshot-live");
+
+        Assert.NotNull(stored);
+        Assert.Equal("write-one", stored.State.RootActivity!.NodeId);
+    }
+
+    [Fact]
+    public async Task TestRunStoreDropsExpiredDraftSnapshotOnRead()
+    {
+        var store = new InMemoryWorkflowTestRunStore();
+        await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-expired", expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        Assert.Null(await store.FindDraftSnapshotAsync("draft:snapshot-expired"));
+    }
+
+    [Fact]
     public async Task CleanupExpiredTestRunsRemovesOnlyExpiredRuns()
     {
         // #398: the store used to grow without bound; CleanupExpiredAsync now evicts every run whose retention
@@ -251,6 +277,21 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.NotNull(await store.FindAsync("testrun-eternal"));
     }
 
+    [Fact]
+    public async Task CleanupExpiredTestRunsRemovesExpiredDraftSnapshots()
+    {
+        var store = new InMemoryWorkflowTestRunStore();
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-old", expiresAt: now.AddMinutes(-5)));
+        await store.SaveDraftSnapshotAsync(DraftSnapshot("draft:snapshot-live", expiresAt: now.AddMinutes(30)));
+
+        var deleted = await store.CleanupExpiredAsync(now);
+
+        Assert.Equal(1, deleted);
+        Assert.Null(await store.FindDraftSnapshotAsync("draft:snapshot-old"));
+        Assert.NotNull(await store.FindDraftSnapshotAsync("draft:snapshot-live"));
+    }
+
     private static WorkflowTestRun TestRun(string testRunId, DateTimeOffset? expiresAt) =>
         new(
             TestRunId: testRunId,
@@ -264,6 +305,15 @@ public sealed class WorkflowTestRunRequestHandlerTests
             ExpiresAt: expiresAt,
             Reason: null,
             Metadata: new Dictionary<string, string>());
+
+    private static WorkflowTestRunDraftSnapshot DraftSnapshot(string definitionVersionId, DateTimeOffset? expiresAt) =>
+        new(
+            DefinitionId: "definition-1",
+            DefinitionVersionId: definitionVersionId,
+            ArtifactVersion: "draft",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
+            RequestedAt: expiresAt?.AddMinutes(-30) ?? DateTimeOffset.UtcNow,
+            ExpiresAt: expiresAt);
 
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
