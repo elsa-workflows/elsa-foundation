@@ -5,6 +5,7 @@ using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation.Core;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Exceptions;
+using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Serialization.Core;
@@ -46,10 +47,12 @@ public sealed class CollectActivityVersions(
                 var entry = entries[i];
                 var descriptorPayload = NormalizeDescriptor(entry, i);
 
-                IActivityDefinition definition = FindDefinition(definitionsById, entry.Id)
-                    ?? definitionFactory.Create(entry.ActivityTypeKey, entry.Category ?? string.Empty, entry.DisplayName, entry.Description, entry.Id);
+                var definitionId = StableDefinitionId(entry);
+                IActivityDefinition definition = FindDefinition(definitionsById, definitionId)
+                    ?? definitionFactory.Create(entry.ActivityTypeKey, entry.Category ?? string.Empty, entry.DisplayName, entry.Description, definitionId);
 
-                // The factory generates the version Id and the content Hash.
+                // Stable ids keep unchanged activity type/logical version pairs resolvable across
+                // catalog rebuilds; the factory still owns the content Hash.
                 var version = versionFactory.Create(
                     definition,
                     entry.Version,
@@ -60,7 +63,8 @@ public sealed class CollectActivityVersions(
                     entry.Inputs,
                     entry.Outputs,
                     entry.DesignFacets,
-                    entry.ExecutionType);
+                    entry.ExecutionType,
+                    ActivityCatalogStableIds.VersionId(entry.ActivityTypeKey, entry.Version));
 
                 domainEvent.Versions.Add(version);
             }
@@ -99,6 +103,11 @@ public sealed class CollectActivityVersions(
 
         return definitionsById.GetValueOrDefault(definitionId);
     }
+
+    private static string? StableDefinitionId(ActivityVersionReconciliationModel entry) =>
+        !string.IsNullOrWhiteSpace(entry.Id)
+            ? entry.Id
+            : ActivityCatalogStableIds.DefinitionId(entry.ActivityTypeKey);
 
     /// <summary>
     /// Validates the entry and returns its descriptor as an opaque <see cref="JsonElement"/>. The

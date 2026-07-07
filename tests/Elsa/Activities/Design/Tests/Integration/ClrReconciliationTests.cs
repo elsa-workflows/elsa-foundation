@@ -44,8 +44,10 @@ public sealed class ClrReconciliationTests
         Assert.Equal(6, store.Versions.Count);
 
         // Re-run: same content + same versions → zero new rows (SC-003 idempotency, DuplicateHandling.Skip).
+        var idsBeforeRerun = store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray();
         await reconciler.Reconcile(CancellationToken.None);
         Assert.Equal(6, store.Versions.Count);
+        Assert.Equal(idsBeforeRerun, store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray());
     }
 
     [Fact]
@@ -69,11 +71,40 @@ public sealed class ClrReconciliationTests
         Assert.Equal(new List<string> { "3.0.0", "4.0.0" }, versionsForVersioned);
     }
 
+    [Fact]
+    public async Task FolderSource_RebuildsCatalogWithTheSameActivityAndVersionIds()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+        var firstCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(firstCatalog, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
+
+        var firstIds = CatalogIds(firstCatalog);
+        var versionedDefinitionId = firstCatalog.Definitions.Single(d => d.ActivityTypeKey == typeof(VersionedFixtureActivity).FullName).Id;
+        var authoredVersionId = firstCatalog.Versions.Single(v => v.DefinitionId == versionedDefinitionId).Id;
+        var rebuiltCatalog = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(rebuiltCatalog, FolderSource(folder.Path)).Reconcile(CancellationToken.None);
+
+        Assert.Equal(firstIds, CatalogIds(rebuiltCatalog));
+        Assert.NotNull(rebuiltCatalog.Versions.SingleOrDefault(v => v.Id == authoredVersionId));
+    }
+
     private static string VersionFor<TActivity>(InMemoryReconcilerHarness.CatalogStore store)
     {
         var definition = store.Definitions.Single(d => d.ActivityTypeKey == typeof(TActivity).FullName);
         return store.Versions.Single(v => v.DefinitionId == definition.Id).Version;
     }
+
+    private static string[] CatalogIds(InMemoryReconcilerHarness.CatalogStore store) =>
+        store.Versions
+            .Select(v =>
+            {
+                var definition = store.Definitions.Single(d => d.Id == v.DefinitionId);
+                return $"{definition.ActivityTypeKey}:{v.DefinitionId}:{v.Id}:{v.Version}";
+            })
+            .OrderBy(x => x)
+            .ToArray();
 
     private static ClrActivityReconciliationSource FolderSource(string folderPath)
     {
