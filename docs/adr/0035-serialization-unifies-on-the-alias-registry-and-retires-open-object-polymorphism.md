@@ -91,6 +91,13 @@ serialization-layer win is not blocked by the runtime change.
 `IDictionary<string, object>?` to `JsonElement?` (opaque, Studio-authored UI metadata). This removes open
 polymorphism from `StateSource` entirely.
 
+*Extended beyond `StateSource` (spec 088):* the same move applies to the designer **layout** document —
+`DesignMetadataRecord.AdditionalProperties` (the opaque, Studio-authored per-node layout bag, carried on
+`WorkflowDefinitionVersionLayout`/`DraftLayout` and surfaced via `IWorkflowDefinitionLayout`) changes from
+`Dictionary<string, object?>?` to `JsonElement?`, kept verbatim end-to-end. Layout is a separate document from
+`StateSource`, so it was the last open-object-polymorphism holdout in serialized design content; it is now
+opaque too, satisfying the rider's "never round-tripped through a `Dictionary<string, object>`" invariant.
+
 *Rider — opaque JSON stays verbatim, and that is already deterministic.* An initial worry (#555, since
 withdrawn) was that the deterministic serializer sorts dictionary keys and object members but not the contents
 *inside* an embedded `JsonElement`, so D3's opaque bags (and the existing `ActivityNode.Structure.Payload`)

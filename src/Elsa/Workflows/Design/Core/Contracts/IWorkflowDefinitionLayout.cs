@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Elsa.Workflows.Design.Core.Contracts;
 
 /// <summary>
@@ -24,5 +26,10 @@ public interface IDesignMetadataRecord
     double Y { get; }
     double? Width { get; }
     double? Height { get; }
-    IReadOnlyDictionary<string, object?>? AdditionalProperties { get; }
+
+    /// <summary>
+    /// Opaque, Studio-authored per-node layout metadata, stored verbatim as a <see cref="JsonElement"/>
+    /// (ADR 0035 D3) — read as JSON, never indexed as a CLR dictionary.
+    /// </summary>
+    JsonElement? AdditionalProperties { get; }
 }
