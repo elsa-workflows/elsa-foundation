@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Elsa.Workflows.Design.Core.Events;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Xunit;
 using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 
@@ -56,4 +58,36 @@ public sealed class LayoutDiffTests
 
         Assert.Empty(diff.OfType<OnActivityMovedInDraft>());
     }
+
+    [Fact]
+    public void An_unchanged_record_with_an_opaque_bag_emits_no_move()
+    {
+        // The stored bag is rehydrated from JSON into a JsonElement backed by a *different* JsonDocument than
+        // the desired side (two independent parses of identical bytes) — exactly the persistence round-trip.
+        // Record equality on JsonElement is reference-based, so the diff must normalise the bag by canonical
+        // JSON rather than by record equality, or an unchanged node emits a phantom move.
+        var diff = Evaluate(
+            State(activities: [Node("n1")]),
+            State(activities: [Node("n1")]),
+            storedLayout: [RecordWithBag("n1", 10, 20, """{"z":1,"a":2}""")],
+            desiredLayout: [RecordWithBag("n1", 10, 20, """{"z":1,"a":2}""")]);
+
+        Assert.Empty(diff.OfType<OnActivityMovedInDraft>());
+    }
+
+    [Fact]
+    public void A_changed_opaque_bag_still_emits_OnActivityMovedInDraft()
+    {
+        // The normalisation must not blind the diff to a genuine bag change on an otherwise-unmoved node.
+        var diff = Evaluate(
+            State(activities: [Node("n1")]),
+            State(activities: [Node("n1")]),
+            storedLayout: [RecordWithBag("n1", 10, 20, """{"label":"Start"}""")],
+            desiredLayout: [RecordWithBag("n1", 10, 20, """{"label":"Begin"}""")]);
+
+        Assert.Single(diff.OfType<OnActivityMovedInDraft>());
+    }
+
+    private static DesignMetadataRecord RecordWithBag(string nodeId, double x, double y, string bagJson) =>
+        new(nodeId, x, y, AdditionalProperties: JsonSerializer.Deserialize<JsonElement>(bagJson));
 }
