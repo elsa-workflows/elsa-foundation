@@ -62,9 +62,12 @@ Each expression module owns an **adapter** that binds `JsonNode` into that engin
 idiomatic interop point. There is **no new shared Elsa interface** for dynamic values — the seam is the engine's
 own extension mechanism:
 
-- **JavaScript (Jint):** a Jint `IObjectConverter` maps `JsonObject` / `JsonArray` / `JsonValue` to `JsValue`.
-  This *generalises the existing* `JsonElementConverter` (which already bridges `JsonElement → JsonObject → JS`),
-  so the JS side is a small extension of code that already exists.
+- **JavaScript (Jint):** Jint (4.9) **binds `JsonObject` / `JsonArray` / `JsonValue` natively** — `SetValue` /
+  `JsValue.FromObject` surface member access, indexing, enumeration, and scalar coercion without a custom
+  converter (verified empirically; the existing `JsonElementConverter` already relies on this by converting
+  `JsonElement → JsonObject → JS`). No new Jint `IObjectConverter` is therefore required; `JsonElementConverter`
+  is retained to bridge the `JsonElement` form until the next unit. The engine's `IObjectConverter` set remains
+  the extension seam should a future Jint version need explicit `JsonNode` handling.
 - **Liquid (Fluid):** a `FluidValue` / `MemberAccessStrategy` registration for `JsonObject` / `JsonArray` /
   `JsonValue`. Fluid (2.31) ships native `System.Text.Json.Nodes` support, so `{{ var.field }}` resolves through
   the built-in JSON value model.
@@ -80,7 +83,7 @@ own extension mechanism:
 2. **Lift (outbound):** a dynamic value *produced* by an expression (a script that returns/mutates an object)
    destined for an `Any` slot is normalised back to `JsonNode` so it re-enters the canonical form. An engine that
    has no bespoke outbound representation may satisfy this by the D2 serialization round-trip (engine value →
-   JSON → `JsonNode`); an engine that natively yields `JsonNode` (Jint, via the converter) lifts directly.
+   JSON → `JsonNode`), which is how the runtime captures a dynamic result to durable state today.
 
 Adapters convert **at the engine boundary only.** They do **not** register a global `JsonConverter<JsonNode>` /
 `<JsonElement>` — see D4.
