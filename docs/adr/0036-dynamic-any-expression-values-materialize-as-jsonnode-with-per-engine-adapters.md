@@ -1,6 +1,6 @@
 # Dynamic (`Any`) Expression Values Materialize As `JsonNode` With Per-Engine Adapters
 
-**Status:** Proposed — requires architecture-meeting ratification (no constitution amendment; realises the direction fixed by [ADR 0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) D2).
+Status: accepted (2026-07-08; no constitution amendment; realises the direction fixed by [ADR 0035](0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md) D2).
 
 **Date:** 2026-07-08
 

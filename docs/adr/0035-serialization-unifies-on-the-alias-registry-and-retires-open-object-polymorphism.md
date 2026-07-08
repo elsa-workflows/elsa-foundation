@@ -1,6 +1,6 @@
 # Serialization Unifies On The Alias Registry And Retires Open-Object Polymorphism
 
-**Status:** Proposed — requires architecture-meeting ratification (amends constitution §E2.9 and §E6; see D3/D5).
+Status: accepted (2026-07-08; amends constitution §E2.9 and §E6 — see D3/D5; implementation sequenced across #553 (done) and the converter-removal unit).
 
 **Date:** 2026-07-07
 
