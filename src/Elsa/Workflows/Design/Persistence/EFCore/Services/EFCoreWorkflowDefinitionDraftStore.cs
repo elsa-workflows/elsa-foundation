@@ -14,9 +14,16 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Services;
 /// <see cref="EFCoreReadStore{TDbContext,TEntity}"/> so the <c>OnEntityLoading</c> pipeline hydrates
 /// the <c>[NotMapped]</c> <see cref="WorkflowDefinitionDraft.State"/> from its serialized source.
 /// </summary>
-public sealed class EFCoreWorkflowDefinitionDraftStore(IDbContextFactory<WorkflowsDesignDbContext> dbContextFactory, IServiceProvider serviceProvider)
-    : EFCoreReadStore<WorkflowsDesignDbContext, WorkflowDefinitionDraft>(dbContextFactory, serviceProvider), IWorkflowDefinitionDraftStore
+public sealed class EFCoreWorkflowDefinitionDraftStore : EFCoreReadStore<WorkflowsDesignDbContext, WorkflowDefinitionDraft>, IWorkflowDefinitionDraftStore
 {
+    private readonly IDbContextFactory<WorkflowsDesignDbContext> _dbContextFactory;
+
+    public EFCoreWorkflowDefinitionDraftStore(IDbContextFactory<WorkflowsDesignDbContext> dbContextFactory, IServiceProvider serviceProvider)
+        : base(dbContextFactory, serviceProvider)
+    {
+        _dbContextFactory = dbContextFactory;
+    }
+
     public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
         => FirstOrDefaultAsync(
             Query<WorkflowDefinitionDraft>.Where(x => x.Id, QueryOp.Equal, draftId),
@@ -32,7 +39,7 @@ public sealed class EFCoreWorkflowDefinitionDraftStore(IDbContextFactory<Workflo
 
     public async Task<IReadOnlyCollection<DesignMetadataRecord>> FindLayoutByDraftIdAsync(string draftId, CancellationToken cancellationToken = default)
     {
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         return await LoadLayoutAsync(dbContext, draftId, cancellationToken);
     }
 
@@ -45,7 +52,7 @@ public sealed class EFCoreWorkflowDefinitionDraftStore(IDbContextFactory<Workflo
         if (draft is null)
             return null;
 
-        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var layout = await LoadLayoutAsync(dbContext, draftId, cancellationToken);
         return new DraftWithLayout(draft, layout);
     }
