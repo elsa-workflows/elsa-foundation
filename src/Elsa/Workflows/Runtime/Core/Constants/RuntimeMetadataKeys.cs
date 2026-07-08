@@ -19,6 +19,8 @@ public static class RuntimeMetadataKeys
     public const string ExecutableArtifactId = "runtime.executableArtifactId";
     public const string ExecutableArtifactVersion = "runtime.executableArtifactVersion";
     public const string ExecutableNodeId = "runtime.executableNodeId";
+    public const string FaultInnerMessage = "runtime.faultInnerMessage";
+    public const string FaultInnerType = "runtime.faultInnerType";
     public const string FaultMessage = "runtime.faultMessage";
     public const string FaultSubStatus = "runtime.faultSubStatus";
     public const string FaultType = "runtime.faultType";

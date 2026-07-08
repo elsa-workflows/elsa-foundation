@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Expressions.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -607,6 +608,38 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_RecordsInputMaterializationInnerExceptionMetadata()
+    {
+        await _executableStore.SaveAsync(NewExecutableWithInputBinding(JavaScriptTextBinding("[1.2.3]")));
+        await _activityStateStore.SaveAsync(NewRunningState());
+        await using var provider = NewProvider(
+            new RecordingActivityFactory(new RecordingActivity()),
+            includeInspection: true,
+            expressionEvaluator: new ThrowingExpressionEvaluator(new FormatException("Unexpected token '.'."))
+        );
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(state);
+        Assert.Equal("InputMaterializationFailed", state.SubStatus);
+        Assert.Contains("failed to evaluate", state.Metadata[RuntimeMetadataKeys.FaultMessage]);
+        Assert.Equal(typeof(FormatException).FullName, state.Metadata[RuntimeMetadataKeys.FaultInnerType]);
+        Assert.Equal("Unexpected token '.'.", state.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+
+        var incident = await _incidentStateStore.FindAsync("wfexec-1", "incident:invoke-work:actexec-1:InputMaterializationFailed");
+        Assert.NotNull(incident);
+        Assert.Equal(state.Metadata[RuntimeMetadataKeys.FaultInnerType], incident.Metadata[RuntimeMetadataKeys.FaultInnerType]);
+        Assert.Equal(state.Metadata[RuntimeMetadataKeys.FaultInnerMessage], incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+
+        var projection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.NotNull(projection);
+        Assert.Equal("Unexpected token '.'.", projection.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+        Assert.Equal("Unexpected token '.'.", Assert.Single(projection.Incidents).Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+    }
+
+    [Fact]
     public async Task HandleAsync_PropagatesCompletionPersistenceFailureWithoutRecordingActivityFault()
     {
         var activity = new RecordingActivity();
@@ -848,10 +881,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         IActivityExecutionStateStore? activityExecutionStateStore = null,
         bool includeInspection = false,
         IRuntimePayloadCapturePolicy? payloadCapturePolicy = null,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IExpressionEvaluator? expressionEvaluator = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
+        if (expressionEvaluator is not null)
+            services.AddSingleton(expressionEvaluator);
         if (workflowExecutionStateStore is not null)
             services.AddSingleton(workflowExecutionStateStore);
         services.AddSingleton(_executableStore);
@@ -1046,6 +1082,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             literalValue: JsonSerializer.SerializeToElement("hello"),
             metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
 
+    private static RuntimeInputBinding JavaScriptTextBinding(string expression) =>
+        new(
+            inputName: "Text",
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("JavaScript", expression),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = $"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}" });
+
     private static RuntimeInputBinding ActivityOutputTextBinding(string producerActivityExecutionId, string outputName) =>
         new(
             inputName: "Text",
@@ -1104,6 +1147,15 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             IDictionary<string, InputArgument>? inputs,
             IDictionary<string, OutputArgument>? outputs,
             CancellationToken cancellationToken = default) =>
+            throw exception;
+    }
+
+    private sealed class ThrowingExpressionEvaluator(Exception exception) : IExpressionEvaluator
+    {
+        public ValueTask<T?> EvaluateAsync<T>(IExpression expression, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
+            throw exception;
+
+        public ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions? options = default) =>
             throw exception;
     }
 
