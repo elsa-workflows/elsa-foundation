@@ -151,8 +151,7 @@ public sealed class ActivityFaultIncidentRecorder
         foreach (var item in request.ActivityMetadata)
             metadata[item.Key] = item.Value;
 
-        metadata[RuntimeMetadataKeys.FaultType] = request.Exception.GetType().FullName ?? request.Exception.GetType().Name;
-        metadata[RuntimeMetadataKeys.FaultMessage] = request.Exception.Message;
+        AddExceptionMetadata(metadata, request.Exception);
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
 
         return request.State with
@@ -175,6 +174,7 @@ public sealed class ActivityFaultIncidentRecorder
         var metadata = request.IncidentMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         foreach (var item in NewBaseMetadata(request))
             metadata[item.Key] = item.Value;
+        AddExceptionMetadata(metadata, request.Exception);
 
         return new IncidentState(
             incidentId: incidentId,
@@ -189,6 +189,18 @@ public sealed class ActivityFaultIncidentRecorder
             createdAt: occurredAt,
             resolvedAt: null,
             metadata: metadata);
+    }
+
+    private static void AddExceptionMetadata(IDictionary<string, string> metadata, Exception exception)
+    {
+        metadata[RuntimeMetadataKeys.FaultType] = exception.GetType().FullName ?? exception.GetType().Name;
+        metadata[RuntimeMetadataKeys.FaultMessage] = exception.Message;
+
+        if (exception.InnerException is not { } inner)
+            return;
+
+        metadata[RuntimeMetadataKeys.FaultInnerType] = inner.GetType().FullName ?? inner.GetType().Name;
+        metadata[RuntimeMetadataKeys.FaultInnerMessage] = inner.Message;
     }
 }
 
