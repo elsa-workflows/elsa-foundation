@@ -159,13 +159,15 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Active work unit: specs/084-runtime-move2-slot-decomposition-remainder (elsa-4 review
-unit W12 "Runtime structure" — completes ADR 0029 Move 2 across all remaining scheduler
-handlers via the slot-invoked model, and folds in the surrounding structural remediation:
-split the hosting-agnostic composition root out of the API feature (RT-4), remove the two
-ambient service locators from the drain path (RT-7), collapse the telescoping constructors
-(RT-8), and deserialize the CompleteActivity payload once (RT-11); behavior-preserving).
-Read specs/084-runtime-move2-slot-decomposition-remainder/plan.md for context. The last
-completed unit was specs/083-runtime-checkpoint-slot-decomposition (ADR 0029 Move 2, first
-slice — Cancel only, merged #366).
+Active work unit: specs/085-workflow-definition-gitops (Workflow-Definition GitOps — a git
+reconciliation source + export sink layered on the operational catalog per ADR 0034; NOT a
+replacement operational store, NOT the Extension Builder git stack, v1 single-writer). All
+prerequisites have landed on main: deterministic payload serializer (086, #549 + ADR 0035
+#570), the reconciler definition-metadata path (087/#546, refined here as FR-008a), the shared
+Elsa.Git library (src/Elsa/Git), and layout AdditionalProperties → opaque JsonElement (088).
+Read specs/085-workflow-definition-gitops/spec.md and
+docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md for context; the unit
+still needs plan/tasks (run speckit-plan → tasks → implement). The last completed unit was
+specs/084-runtime-move2-slot-decomposition-remainder (elsa-4 review unit W12 "Runtime
+structure" — ADR 0029 Move 2 remainder + drain-path de-ambienting; merged, Move 2 complete).
 <!-- SPECKIT END -->
