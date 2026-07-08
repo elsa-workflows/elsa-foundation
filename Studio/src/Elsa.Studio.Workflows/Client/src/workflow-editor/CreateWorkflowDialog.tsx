@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
-import { createWorkflowRootOptions, type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
+import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
 import { parseWorkflowMetadataSuggestion } from "./editorHelpers";
+import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 
 export function CreateWorkflowDialog({ draft, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
@@ -150,25 +151,10 @@ export function CreateWorkflowDialog({ draft, creating, ai, suggestMetadataActio
           </label>
           <fieldset className="wf-form-field wf-root-field">
             <legend>Root activity</legend>
-            <div className="wf-root-cards" role="radiogroup" aria-label="Root activity">
-              {createWorkflowRootOptions.map(option => {
-                const checked = draft.rootKind === option.value;
-                return (
-                  <label key={option.value} className="wf-root-card" data-checked={checked || undefined}>
-                    <input
-                      type="radio"
-                      name="wf-root-kind"
-                      aria-label={option.label}
-                      value={option.value}
-                      checked={checked}
-                      onChange={() => onChange({ ...draft, rootKind: option.value, rootActivityVersionId: null })}
-                    />
-                    <span className="wf-root-card-title">{option.label}</span>
-                    <span className="wf-root-card-hint">{option.hint}</span>
-                  </label>
-                );
-              })}
-            </div>
+            <WorkflowRootRadioCards
+              value={draft.rootKind}
+              onChange={rootKind => onChange({ ...draft, rootKind, rootActivityVersionId: null })}
+            />
           </fieldset>
           <div className="wf-dialog-actions">
             <button type="button" onClick={onClose} disabled={creating}>Cancel</button>

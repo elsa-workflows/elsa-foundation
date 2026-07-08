@@ -38,6 +38,7 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
+import { SlotEmptyState } from "./SlotEmptyState";
 
 export function WorkflowEditor({
   context,
@@ -157,6 +158,7 @@ export function WorkflowEditor({
     draft,
     scope,
     scopeOwner,
+    frames,
     catalog,
     catalogByVersion,
     isUnsupportedDesigner,
@@ -166,6 +168,7 @@ export function WorkflowEditor({
     editDraft,
     editDraftAndSelect,
     select,
+    resetToRoot,
     setStatus,
     setError
   });
@@ -194,11 +197,21 @@ export function WorkflowEditor({
     onCanvasDrop,
     openEmptyConnectMenu,
     onConnectMenuPick,
+    addActivity,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
     onPalettePointerDown
   } = canvas;
+
+  // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
+  // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
+  // the first-drop-becomes-root flow), so this is gated on frames.length > 0.
+  const insideEmptySlot = !isUnsupportedDesigner
+    && frames.length > 0
+    && !!scope
+    && scope.slot.activities.length === 0
+    && nodes.length === 0;
 
   // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
   // reducer's batch transition.
@@ -407,6 +420,7 @@ export function WorkflowEditor({
           selectedDescriptor={selectedDescriptor}
           selectedNodeAvailability={selectedNodeAvailability}
           selectedSlots={selectedSlots}
+          catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={selectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
           expressionEditors={expressionEditors}
@@ -636,7 +650,14 @@ export function WorkflowEditor({
               </ReactFlow>
               </WorkflowNodeAvailabilityContext.Provider>
             </WorkflowEdgeActionsContext.Provider>
-            {isFlowchartDesigner && nodes.length === 0 ? (
+            {insideEmptySlot ? (
+              <SlotEmptyState
+                slotLabel={scope?.slot.label ?? "this slot"}
+                catalog={catalog}
+                onPickActivity={addActivity}
+                onBrowseAll={openEmptyConnectMenu}
+              />
+            ) : isFlowchartDesigner && nodes.length === 0 ? (
               <button type="button" className="wf-empty-canvas-add" onClick={() => openEmptyConnectMenu()}>
                 <Plus size={15} /> Add activity
               </button>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
-import { findNodeScopePath } from "../workflowAdapter";
-import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
+import { findNodeScopePath, resolveScope } from "../workflowAdapter";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 
 const leaf = (nodeId: string, extra: Record<string, unknown> = {}): ActivityNode => ({
   nodeId,
@@ -19,7 +19,44 @@ const sequence = (nodeId: string, activities: ActivityNode[]): ActivityNode => (
   structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities, variables: [] } }
 });
 
+// A facet-backed container with two single-cardinality slots, to exercise findNodeScopePath landing a
+// node in a NON-primary slot (impossible under the old primary-slot-only semantics).
+const twoSlotCatalog: ActivityCatalogItem = {
+  activityVersionId: "two-slot-v1",
+  activityTypeKey: "Acme.TwoSlot",
+  version: "1.0.0",
+  category: "Composition",
+  displayName: "Two Slot",
+  description: null,
+  executionType: "Action",
+  inputs: [],
+  outputs: [],
+  designFacets: [{
+    kind: "acme.two-slot.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "sequence",
+      supportsScopedVariables: false,
+      slots: [
+        { name: "Primary", property: "primary", displayName: "Primary", cardinality: "single" },
+        { name: "Secondary", property: "secondary", displayName: "Secondary", cardinality: "single" }
+      ],
+      initialPayload: { primary: null, secondary: null }
+    }
+  }]
+};
+
+const twoSlot = (nodeId: string, primary: ActivityNode | null, secondary: ActivityNode | null): ActivityNode => ({
+  nodeId,
+  activityVersionId: twoSlotCatalog.activityVersionId,
+  inputs: [],
+  outputs: [],
+  structure: { kind: "acme.two-slot.structure", schemaVersion: "1.0.0", payload: { primary, secondary } }
+});
+
 describe("findNodeScopePath", () => {
+  // Contract: findNodeScopePath returns frames such that resolveScope(root, frames).slot.activities
+  // contains nodeId. The last frame names the container that directly holds the node and its slot.
   const root = sequence("root", [leaf("a"), sequence("c", [leaf("b")])]);
 
   it("returns an empty path for a direct child of the root scope", () => {
@@ -43,6 +80,29 @@ describe("findNodeScopePath", () => {
 
   it("returns null for an unknown node", () => {
     expect(findNodeScopePath(root, "missing")).toBeNull();
+  });
+
+  it("lands a node that lives in a child container's non-primary slot and round-trips", () => {
+    // The target sits in the SECONDARY slot of a child container — reachable only because the last
+    // frame descends into that child and names its secondary slot (impossible under old semantics).
+    const container = twoSlot("container", leaf("in-primary"), leaf("in-secondary"));
+    const rootWithChild = sequence("root", [container]);
+
+    const path = findNodeScopePath(rootWithChild, "in-secondary", activity => activity.nodeId, twoSlotCatalog);
+
+    expect(path).toEqual([
+      { ownerNodeId: "container", slotId: "acme.two-slot.structure:secondary", label: "container" }
+    ]);
+    const scope = resolveScope(rootWithChild, path!, twoSlotCatalog);
+    expect(scope?.slot.activities.map(activity => activity.nodeId)).toEqual(["in-secondary"]);
+  });
+
+  it("returns null for a node stranded in the root's own non-primary slot", () => {
+    // Frames only ever descend into children, so the root's non-primary slots are unreachable — the
+    // canvas can't surface them either, so navigation must honestly report "no path".
+    const rootWithSlots = twoSlot("root", leaf("in-primary"), leaf("in-secondary"));
+
+    expect(findNodeScopePath(rootWithSlots, "in-secondary", activity => activity.nodeId, twoSlotCatalog)).toBeNull();
   });
 });
 

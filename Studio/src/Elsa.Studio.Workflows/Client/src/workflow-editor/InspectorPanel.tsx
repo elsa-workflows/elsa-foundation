@@ -1,12 +1,13 @@
 import { AlertTriangle } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityAvailabilityDiagnosticEntry, ActivityNode, VariableDefinition } from "../workflowTypes";
+import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
 import type { ScopedVariableAnalysis } from "../api/workflows";
 import type { ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
 import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
+import { describeSlotContents } from "./editorHelpers";
 
 interface InspectorPanelProps {
   context: StudioEndpointContext;
@@ -16,6 +17,7 @@ interface InspectorPanelProps {
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
   selectedSlots: ChildSlot[];
+  catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -36,6 +38,7 @@ export function InspectorPanel({
   selectedDescriptor,
   selectedNodeAvailability,
   selectedSlots,
+  catalogByVersion,
   selectedSupportsScopedVariables,
   propertyEditors,
   expressionEditors,
@@ -96,7 +99,7 @@ export function InspectorPanel({
           {selectedSlots.map(slot => (
             <button type="button" key={slot.id} onClick={() => onEnterSlot(selectedNode, slot.id, `${selectedNodeLabel} / ${slot.label}`)}>
               {slot.label}
-              <small>{slot.activities.length} activit{slot.activities.length === 1 ? "y" : "ies"}</small>
+              <small>{describeSlotContents(slot, catalogByVersion)}</small>
             </button>
           ))}
         </div>

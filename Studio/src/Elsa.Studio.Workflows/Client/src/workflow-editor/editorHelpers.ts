@@ -1,6 +1,7 @@
 import type { Node } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ChildSlot } from "../workflowAdapter";
 import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
@@ -65,7 +66,7 @@ export function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activ
   return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? null;
 }
 
-function findRootKindActivity(activities: ActivityCatalogItem[], rootKind: CreateWorkflowKind) {
+export function findRootKindActivity(activities: ActivityCatalogItem[], rootKind: CreateWorkflowKind) {
   return activities.find(activity => getRootKind(activity) === rootKind);
 }
 
@@ -364,6 +365,27 @@ export function getDraftSignature(draft: WorkflowDraft) {
 
 export function getDraftRevision(draft: WorkflowDraft) {
   return hashString(getDraftSignature(draft));
+}
+
+// Resolves a child activity's friendly name from the catalog, falling back to a short type name and
+// finally the version id so the inspector never renders an empty label.
+function resolveChildActivityName(child: ActivityNode, catalogByVersion?: Map<string, ActivityCatalogItem>): string {
+  const catalogItem = catalogByVersion?.get(child.activityVersionId);
+  if (catalogItem) return getActivityDisplay(catalogItem);
+  return shortTypeName(child.activityVersionId) ?? child.activityVersionId;
+}
+
+// Human-readable summary of what an embedded slot currently holds, honouring the slot's cardinality.
+// Single slots describe the one child (or invite the author to pick one when empty); many slots keep a
+// pluralized count. Used by the inspector's embedded-slot chips.
+export function describeSlotContents(slot: ChildSlot, catalogByVersion?: Map<string, ActivityCatalogItem>): string {
+  if (slot.cardinality === "single") {
+    const child = slot.activities[0];
+    return child ? resolveChildActivityName(child, catalogByVersion) : "Empty — click to choose";
+  }
+
+  const count = slot.activities.length;
+  return `${count} activit${count === 1 ? "y" : "ies"}`;
 }
 
 export function collectWorkflowContextActivities(activity: ActivityNode | null | undefined, catalogByVersion: Map<string, ActivityCatalogItem>, result: Array<{ id: string; type: string; displayName?: string }> = []) {
