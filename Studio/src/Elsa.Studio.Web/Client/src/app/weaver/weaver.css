@@ -334,6 +334,7 @@ html[data-theme="black-glass"] .weaver-scroll {
 html[data-theme-material] .weaver-surface {
   border-color: var(--studio-material-edge-strong);
   background: var(--studio-material-panel-bg-strong);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow-strong);
 }
 
@@ -346,6 +347,7 @@ html[data-theme-material] .weaver-status,
 html[data-theme-material] .weaver-composer {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg-soft);
+  background-size: var(--studio-material-panel-bg-size);
 }
 
 html[data-theme-material] .weaver-surface-title span {
@@ -371,6 +373,7 @@ html[data-theme-material] .weaver-followup-chip,
 html[data-theme-material] .weaver-composer-input textarea {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-control-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-inset-low);
 }
 
@@ -379,6 +382,7 @@ html[data-theme-material] .agent-proposal,
 html[data-theme-material] .agent-workflow-batch {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
 }
 
@@ -397,7 +401,7 @@ html[data-theme-material] .weaver-send {
 
 html[data-theme-material] .weaver-scroll {
   background: var(--studio-material-content-bg);
-  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+  background-size: var(--studio-material-content-bg-size);
 }
 
 html[data-theme="paper"] .weaver-surface[data-variant="dock"] {

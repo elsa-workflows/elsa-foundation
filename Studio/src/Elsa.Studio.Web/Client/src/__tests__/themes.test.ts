@@ -34,4 +34,19 @@ describe("theme presets", () => {
     expect(isMaterialTheme("stone")).toBe(true);
     expect(isMaterialTheme("black-glass")).toBe(false);
   });
+
+  it("keeps material theme modes visually distinct", () => {
+    for (const themeId of materialThemeIds) {
+      const theme = getTheme(themeId);
+
+      expect(theme?.light.background, themeId).not.toBe(theme?.dark.background);
+      expect(theme?.light.card, themeId).not.toBe(theme?.dark.card);
+      expect(theme?.light.foreground, themeId).not.toBe(theme?.dark.foreground);
+    }
+
+    const blackGlass = getTheme("black-glass");
+
+    expect(blackGlass?.light.background).not.toBe(blackGlass?.dark.background);
+    expect(blackGlass?.light.foreground).not.toBe(blackGlass?.dark.foreground);
+  });
 });

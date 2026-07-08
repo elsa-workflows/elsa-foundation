@@ -546,6 +546,7 @@ html[data-theme-material] .agent-launcher,
 html[data-theme-material] .agent-panel {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg-strong);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow-strong);
 }
 
@@ -569,6 +570,7 @@ html[data-theme-material] .agent-proposal footer button,
 html[data-theme-material] .agent-workflow-batch footer button {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-control-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-inset-low);
 }
 
@@ -576,5 +578,6 @@ html[data-theme-material] .agent-proposal,
 html[data-theme-material] .agent-workflow-batch {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
 }

@@ -3829,6 +3829,19 @@ html[data-theme="black-glass"] .wf-code-view-editor .studio-code-editor-input {
   background-size: auto, 32px 32px, 32px 32px, auto;
 }
 
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-canvas-shell,
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-canvas,
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-properties-view,
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-code-view-editor .studio-code-editor-input {
+  background:
+    radial-gradient(circle at 64% 22%, color-mix(in srgb, var(--studio-accent) 14%, transparent), transparent 24rem),
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 7%, transparent) 1px, transparent 1px),
+    var(--studio-glass-texture),
+    linear-gradient(135deg, #e8f4f8, #f7fcff 58%, #d7e9f0);
+  background-size: auto, 32px 32px, 32px 32px, var(--studio-glass-texture-size), auto;
+}
+
 html[data-theme="black-glass"] .wf-node {
   border-color: var(--studio-glass-edge);
   background:
@@ -3916,7 +3929,7 @@ html[data-theme-material] .wf-editor {
 
 html[data-theme-material] .wf-editor {
   background: var(--studio-material-body-bg);
-  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+  background-size: var(--studio-material-body-bg-size);
 }
 
 html[data-theme-material] .wf-page-header,
@@ -3931,6 +3944,7 @@ html[data-theme-material] .wf-code-view-toolbar,
 html[data-theme-material] .wf-properties-section {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-inset-low);
 }
 
@@ -3939,12 +3953,13 @@ html[data-theme-material] .wf-canvas,
 html[data-theme-material] .wf-properties-view,
 html[data-theme-material] .wf-code-view-editor .studio-code-editor-input {
   background: var(--studio-material-canvas-bg);
-  background-size: var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+  background-size: var(--studio-material-canvas-bg-size);
 }
 
 html[data-theme-material] .wf-node {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-node-bg);
+  background-size: var(--studio-material-node-bg-size);
   box-shadow: var(--wf-shadow-node);
 }
 
@@ -3989,6 +4004,7 @@ html[data-theme-material] .wf-grid-row,
 html[data-theme-material] .wf-grid-head {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
 }
 

@@ -165,14 +165,42 @@ const blackGlassDark: ThemeColors = {
 };
 
 const blackGlassLight: ThemeColors = {
-  ...blackGlassDark,
-  background: oklchToVar(0.16, 0.016, 245),
-  card: oklchToVar(0.21, 0.018, 245),
-  muted: oklchToVar(0.28, 0.02, 245),
-  border: oklchToVar(0.48, 0.06, 235),
-  input: oklchToVar(0.22, 0.018, 245),
-  sidebar: oklchToVar(0.13, 0.016, 245),
-  sidebarActive: oklchToVar(0.28, 0.06, 235),
+  primary: oklchToVar(0.58, 0.14, 232),
+  primaryForeground: oklchToVar(0.98, 0.006, 225),
+  secondary: oklchToVar(0.88, 0.018, 232),
+  secondaryForeground: oklchToVar(0.2, 0.024, 235),
+  accent: oklchToVar(0.86, 0.036, 225),
+  accentForeground: oklchToVar(0.2, 0.024, 235),
+
+  success: oklchToVar(0.55, 0.13, 156),
+  successForeground: oklchToVar(0.98, 0.006, 156),
+  warning: oklchToVar(0.68, 0.13, 70),
+  warningForeground: oklchToVar(0.17, 0.012, 70),
+  danger: oklchToVar(0.58, 0.18, 18),
+  dangerForeground: oklchToVar(0.98, 0.006, 18),
+
+  background: oklchToVar(0.94, 0.018, 225),
+  foreground: oklchToVar(0.18, 0.022, 235),
+  card: oklchToVar(0.98, 0.01, 225),
+  cardForeground: oklchToVar(0.18, 0.022, 235),
+  muted: oklchToVar(0.88, 0.016, 225),
+  mutedForeground: oklchToVar(0.46, 0.03, 235),
+  border: oklchToVar(0.78, 0.035, 225),
+  input: oklchToVar(0.92, 0.014, 225),
+
+  sidebar: oklchToVar(0.91, 0.022, 225),
+  sidebarForeground: oklchToVar(0.24, 0.026, 235),
+  sidebarActive: oklchToVar(0.84, 0.042, 225),
+  sidebarActiveForeground: oklchToVar(0.18, 0.03, 235),
+
+  ring: oklchToVar(0.58, 0.14, 232),
+  chartColors: [
+    oklchToVar(0.58, 0.14, 232),
+    oklchToVar(0.54, 0.1, 198),
+    oklchToVar(0.55, 0.13, 156),
+    oklchToVar(0.68, 0.13, 70),
+    oklchToVar(0.58, 0.18, 18),
+  ],
 };
 
 type MaterialThemeColorConfig = {
@@ -266,6 +294,27 @@ const stoneTheme = createMaterialThemeColors({
   ],
 });
 
+const stoneLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.47, 0.1, 220),
+  primaryForeground: oklchToVar(0.98, 0.006, 220),
+  secondary: oklchToVar(0.84, 0.012, 210),
+  secondaryForeground: oklchToVar(0.22, 0.018, 220),
+  accent: oklchToVar(0.78, 0.035, 210),
+  accentForeground: oklchToVar(0.22, 0.018, 220),
+  success: oklchToVar(0.55, 0.12, 148),
+  warning: oklchToVar(0.68, 0.12, 72),
+  danger: oklchToVar(0.58, 0.16, 24),
+  background: oklchToVar(0.82, 0.01, 205),
+  foreground: oklchToVar(0.22, 0.012, 220),
+  card: oklchToVar(0.9, 0.008, 205),
+  muted: oklchToVar(0.78, 0.01, 205),
+  mutedForeground: oklchToVar(0.45, 0.018, 215),
+  border: oklchToVar(0.62, 0.018, 205),
+  sidebar: oklchToVar(0.78, 0.01, 205),
+  sidebarForeground: oklchToVar(0.25, 0.012, 220),
+  sidebarActive: oklchToVar(0.72, 0.025, 215),
+});
+
 const paperTheme = createMaterialThemeColors({
   primary: oklchToVar(0.43, 0.13, 258),
   primaryForeground: oklchToVar(0.98, 0.012, 85),
@@ -295,6 +344,26 @@ const paperTheme = createMaterialThemeColors({
   ],
 });
 
+const paperDarkTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.74, 0.12, 250),
+  primaryForeground: oklchToVar(0.13, 0.018, 250),
+  secondary: oklchToVar(0.27, 0.018, 70),
+  accent: oklchToVar(0.34, 0.04, 74),
+  success: oklchToVar(0.72, 0.12, 148),
+  warning: oklchToVar(0.76, 0.13, 70),
+  danger: oklchToVar(0.68, 0.16, 28),
+  background: oklchToVar(0.16, 0.012, 70),
+  foreground: oklchToVar(0.86, 0.024, 82),
+  card: oklchToVar(0.22, 0.014, 70),
+  muted: oklchToVar(0.29, 0.014, 70),
+  mutedForeground: oklchToVar(0.66, 0.026, 82),
+  border: oklchToVar(0.42, 0.02, 74),
+  sidebar: oklchToVar(0.14, 0.012, 70),
+  sidebarForeground: oklchToVar(0.82, 0.024, 82),
+  sidebarActive: oklchToVar(0.29, 0.03, 250),
+  sidebarActiveForeground: oklchToVar(0.88, 0.02, 250),
+});
+
 const blueprintTheme = createMaterialThemeColors({
   primary: oklchToVar(0.78, 0.12, 230),
   primaryForeground: oklchToVar(0.15, 0.04, 245),
@@ -312,6 +381,27 @@ const blueprintTheme = createMaterialThemeColors({
   sidebar: oklchToVar(0.18, 0.05, 245),
   sidebarForeground: oklchToVar(0.88, 0.02, 230),
   sidebarActive: oklchToVar(0.32, 0.07, 240),
+});
+
+const blueprintLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.48, 0.13, 232),
+  primaryForeground: oklchToVar(0.98, 0.006, 230),
+  secondary: oklchToVar(0.88, 0.025, 230),
+  secondaryForeground: oklchToVar(0.2, 0.04, 245),
+  accent: oklchToVar(0.86, 0.035, 230),
+  accentForeground: oklchToVar(0.2, 0.04, 245),
+  success: oklchToVar(0.54, 0.12, 150),
+  warning: oklchToVar(0.68, 0.13, 72),
+  danger: oklchToVar(0.58, 0.16, 28),
+  background: oklchToVar(0.95, 0.012, 230),
+  foreground: oklchToVar(0.2, 0.04, 245),
+  card: oklchToVar(0.98, 0.008, 230),
+  muted: oklchToVar(0.9, 0.018, 230),
+  mutedForeground: oklchToVar(0.45, 0.05, 235),
+  border: oklchToVar(0.72, 0.04, 230),
+  sidebar: oklchToVar(0.91, 0.018, 230),
+  sidebarForeground: oklchToVar(0.23, 0.04, 245),
+  sidebarActive: oklchToVar(0.84, 0.04, 230),
 });
 
 const ceramicTheme = createMaterialThemeColors({
@@ -335,6 +425,25 @@ const ceramicTheme = createMaterialThemeColors({
   sidebarActive: oklchToVar(0.35, 0.006, 110),
 });
 
+const ceramicDarkTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.78, 0.055, 205),
+  primaryForeground: oklchToVar(0.1, 0.008, 205),
+  secondary: oklchToVar(0.24, 0.008, 205),
+  accent: oklchToVar(0.32, 0.02, 205),
+  success: oklchToVar(0.72, 0.1, 150),
+  warning: oklchToVar(0.78, 0.1, 70),
+  danger: oklchToVar(0.7, 0.14, 28),
+  background: oklchToVar(0.1, 0.006, 205),
+  foreground: oklchToVar(0.88, 0.012, 205),
+  card: oklchToVar(0.16, 0.008, 205),
+  muted: oklchToVar(0.23, 0.008, 205),
+  mutedForeground: oklchToVar(0.68, 0.014, 205),
+  border: oklchToVar(0.37, 0.014, 205),
+  sidebar: oklchToVar(0.08, 0.006, 205),
+  sidebarForeground: oklchToVar(0.82, 0.012, 205),
+  sidebarActive: oklchToVar(0.22, 0.014, 205),
+});
+
 const carbonTheme = createMaterialThemeColors({
   primary: oklchToVar(0.72, 0.14, 235),
   primaryForeground: oklchToVar(0.12, 0.02, 235),
@@ -352,6 +461,27 @@ const carbonTheme = createMaterialThemeColors({
   sidebar: oklchToVar(0.11, 0.008, 240),
   sidebarForeground: oklchToVar(0.84, 0.01, 235),
   sidebarActive: oklchToVar(0.24, 0.04, 235),
+});
+
+const carbonLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.5, 0.12, 235),
+  primaryForeground: oklchToVar(0.98, 0.006, 235),
+  secondary: oklchToVar(0.78, 0.012, 235),
+  secondaryForeground: oklchToVar(0.19, 0.012, 235),
+  accent: oklchToVar(0.82, 0.035, 230),
+  accentForeground: oklchToVar(0.19, 0.012, 235),
+  success: oklchToVar(0.53, 0.13, 150),
+  warning: oklchToVar(0.66, 0.14, 76),
+  danger: oklchToVar(0.58, 0.16, 28),
+  background: oklchToVar(0.79, 0.008, 235),
+  foreground: oklchToVar(0.18, 0.012, 235),
+  card: oklchToVar(0.88, 0.008, 235),
+  muted: oklchToVar(0.75, 0.01, 235),
+  mutedForeground: oklchToVar(0.42, 0.018, 235),
+  border: oklchToVar(0.58, 0.018, 235),
+  sidebar: oklchToVar(0.76, 0.008, 235),
+  sidebarForeground: oklchToVar(0.21, 0.012, 235),
+  sidebarActive: oklchToVar(0.7, 0.025, 235),
 });
 
 const brassTheme = createMaterialThemeColors({
@@ -373,6 +503,27 @@ const brassTheme = createMaterialThemeColors({
   sidebarActive: oklchToVar(0.26, 0.045, 78),
 });
 
+const brassLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.44, 0.08, 78),
+  primaryForeground: oklchToVar(0.98, 0.018, 82),
+  secondary: oklchToVar(0.78, 0.06, 82),
+  secondaryForeground: oklchToVar(0.21, 0.026, 82),
+  accent: oklchToVar(0.84, 0.08, 78),
+  accentForeground: oklchToVar(0.21, 0.026, 82),
+  success: oklchToVar(0.5, 0.1, 126),
+  warning: oklchToVar(0.67, 0.13, 78),
+  danger: oklchToVar(0.56, 0.15, 28),
+  background: oklchToVar(0.78, 0.052, 82),
+  foreground: oklchToVar(0.2, 0.024, 82),
+  card: oklchToVar(0.86, 0.046, 82),
+  muted: oklchToVar(0.72, 0.048, 82),
+  mutedForeground: oklchToVar(0.38, 0.04, 82),
+  border: oklchToVar(0.58, 0.062, 78),
+  sidebar: oklchToVar(0.72, 0.048, 82),
+  sidebarForeground: oklchToVar(0.24, 0.03, 82),
+  sidebarActive: oklchToVar(0.66, 0.07, 78),
+});
+
 export const materialThemeIds = ["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument"] as const;
 
 export const isMaterialTheme = (themeId: string): boolean =>
@@ -391,7 +542,7 @@ export const themes: Theme[] = [
     id: 'stone',
     name: 'Stone',
     description: 'Carved slate surfaces with etched workflow lines',
-    light: stoneTheme,
+    light: stoneLightTheme,
     dark: stoneTheme,
   },
   {
@@ -399,13 +550,13 @@ export const themes: Theme[] = [
     name: 'Paper',
     description: 'Layered vellum, inked diagrams, and stamped review notes',
     light: paperTheme,
-    dark: paperTheme,
+    dark: paperDarkTheme,
   },
   {
     id: 'blueprint',
     name: 'Blueprint',
     description: 'Architectural drafting paper with crisp cyan workflow marks',
-    light: blueprintTheme,
+    light: blueprintLightTheme,
     dark: blueprintTheme,
   },
   {
@@ -413,20 +564,20 @@ export const themes: Theme[] = [
     name: 'Ceramic',
     description: 'Matte porcelain surfaces with soft glazed controls',
     light: ceramicTheme,
-    dark: ceramicTheme,
+    dark: ceramicDarkTheme,
   },
   {
     id: 'carbon',
     name: 'Carbon',
     description: 'Carbon-fiber operations console with luminous telemetry',
-    light: carbonTheme,
+    light: carbonLightTheme,
     dark: carbonTheme,
   },
   {
     id: 'brass-instrument',
     name: 'Brass Instrument',
     description: 'Dark enamel panels with machined brass controls',
-    light: brassTheme,
+    light: brassLightTheme,
     dark: brassTheme,
   },
   createTheme('borealis', 'Borealis', 'Green-teal palette with a calm technical feel', oklchToVar(0.72, 0.14, 168), oklchToVar(0.62, 0.14, 168), 168),
