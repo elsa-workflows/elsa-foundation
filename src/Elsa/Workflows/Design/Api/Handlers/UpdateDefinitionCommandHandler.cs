@@ -45,5 +45,5 @@ public sealed class UpdateDefinitionCommandHandler(
             view.Y,
             view.Width,
             view.Height,
-            view.AdditionalProperties?.ToDictionary(item => item.Key, item => item.Value));
+            view.AdditionalProperties); // opaque JsonElement, kept verbatim (ADR 0035 D3)
 }
