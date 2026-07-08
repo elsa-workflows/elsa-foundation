@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Helpers;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Workflows.Primitives.Constants;
@@ -50,6 +51,8 @@ public sealed class MaterializationAccessorsPreProcessor : IScriptPreProcessor
         executionContext.SetValue(name, executionContext.NormalizeValue(container));
     }
 
+    // Lift the value to the canonical JsonNode (ADR 0036) so the getVariable/getInput/getOutput functions
+    // return the same representation as the variables/input/output containers.
     private static object? GetValueOrNull(IReadOnlyDictionary<string, object?> values, string key) =>
-        values.TryGetValue(key, out var value) ? value : null;
+        values.TryGetValue(key, out var value) ? DynamicValueMaterializer.Materialize(value) : null;
 }

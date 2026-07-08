@@ -1,3 +1,4 @@
+using System.Dynamic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -20,11 +21,16 @@ public static class DynamicValueMaterializer
 {
     /// <summary>
     /// Returns <paramref name="value"/> as its canonical dynamic representation: a stored
-    /// <see cref="JsonElement"/> becomes a <see cref="JsonNode"/>; everything else is returned unchanged.
+    /// <see cref="JsonElement"/> (or a legacy <see cref="ExpandoObject"/>) becomes a <see cref="JsonNode"/>;
+    /// everything else is returned unchanged.
     /// </summary>
     public static object? Materialize(object? value) => value switch
     {
         JsonElement element => MaterializeElement(element),
+        // Transitional: the still-present PolymorphicObjectConverter deserializes an untyped JSON object to an
+        // ExpandoObject, which Fluid cannot bind. Lift it to the canonical JsonNode too, so a dynamic value from
+        // that path reads identically across engines. Removed once that converter is deleted (ADR 0035 D5).
+        ExpandoObject expando => JsonSerializer.SerializeToNode(expando),
         _ => value
     };
 

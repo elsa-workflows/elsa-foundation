@@ -1,5 +1,6 @@
 using Elsa.Expressions.JavaScript.Jint;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
+using Elsa.Expressions.JavaScript.Jint.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
@@ -25,4 +26,15 @@ internal static class JintTestHost
 
     public static IJintEngineFactory Factory(this IServiceScope scope)
         => scope.ServiceProvider.GetRequiredService<IJintEngineFactory>();
+
+    /// <summary>
+    /// Builds a <see cref="JintExecutionContext"/> over a fresh engine from the scope — the standard arrange
+    /// for tests that evaluate script against the real execution context.
+    /// </summary>
+    public static async Task<JintExecutionContext> CreateExecutionContextAsync(this IServiceScope scope)
+    {
+        var engine = await scope.Factory().Create(null);
+        var scriptFactory = scope.ServiceProvider.GetRequiredService<IPreparedScriptFactory>();
+        return new(scriptFactory, engine);
+    }
 }
