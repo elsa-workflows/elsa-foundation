@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StudioEndpointContext } from "../sdk";
-import { builtInThemeDefinitions, getTheme, getThemeNames } from "../app/themes/presets";
+import { builtInThemeDefinitions, getTheme, getThemeNames, isMaterialTheme, materialThemeIds } from "../app/themes/presets";
 import { createCustomThemeFrom, findSelectableTheme, normalizeThemeStore, saveTheme, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
 describe("theme presets", () => {
@@ -21,6 +21,25 @@ describe("theme presets", () => {
     ]));
     expect(getTheme("black-glass")?.source).toBe("built-in");
     expect(getTheme("black-glass")?.modes.dark.material?.cssVariables?.["--studio-material-finish"]).toBe("glass");
+    expect(materialThemeIds).toEqual(["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument"]);
+    expect(isMaterialTheme("stone")).toBe(true);
+    expect(isMaterialTheme("black-glass")).toBe(false);
+  });
+
+  it("keeps material theme modes visually distinct", () => {
+    for (const themeId of materialThemeIds) {
+      const theme = getTheme(themeId);
+
+      expect(theme?.light.background, themeId).not.toBe(theme?.dark.background);
+      expect(theme?.light.card, themeId).not.toBe(theme?.dark.card);
+      expect(theme?.light.foreground, themeId).not.toBe(theme?.dark.foreground);
+      expect(theme?.modes.light.material?.textureAssets?.surface, themeId).not.toBe(theme?.modes.dark.material?.textureAssets?.surface);
+    }
+
+    const blackGlass = getTheme("black-glass");
+
+    expect(blackGlass?.light.background).not.toBe(blackGlass?.dark.background);
+    expect(blackGlass?.light.foreground).not.toBe(blackGlass?.dark.foreground);
   });
 
   it("duplicates built-ins into custom draft themes", () => {

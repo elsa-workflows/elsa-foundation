@@ -191,104 +191,481 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
   })) as StudioThemeDefinition;
 }
 
+const blackGlassDark: ThemeColors = {
+  primary: oklchToVar(0.78, 0.16, 235),
+  primaryForeground: oklchToVar(0.12, 0.02, 245),
+  secondary: oklchToVar(0.22, 0.02, 245),
+  secondaryForeground: oklchToVar(0.94, 0.01, 245),
+  accent: oklchToVar(0.34, 0.05, 235),
+  accentForeground: oklchToVar(0.96, 0.01, 235),
+
+  success: oklchToVar(0.78, 0.16, 156),
+  successForeground: oklchToVar(0.12, 0.02, 156),
+  warning: oklchToVar(0.78, 0.14, 70),
+  warningForeground: oklchToVar(0.12, 0.02, 70),
+  danger: oklchToVar(0.72, 0.17, 18),
+  dangerForeground: oklchToVar(0.12, 0.02, 18),
+
+  background: oklchToVar(0.13, 0.014, 245),
+  foreground: oklchToVar(0.93, 0.012, 235),
+  card: oklchToVar(0.18, 0.018, 245),
+  cardForeground: oklchToVar(0.93, 0.012, 235),
+  muted: oklchToVar(0.24, 0.018, 245),
+  mutedForeground: oklchToVar(0.72, 0.025, 235),
+  border: oklchToVar(0.42, 0.055, 235),
+  input: oklchToVar(0.19, 0.018, 245),
+
+  sidebar: oklchToVar(0.11, 0.014, 245),
+  sidebarForeground: oklchToVar(0.86, 0.018, 235),
+  sidebarActive: oklchToVar(0.24, 0.055, 235),
+  sidebarActiveForeground: oklchToVar(0.97, 0.012, 235),
+
+  ring: oklchToVar(0.78, 0.16, 235),
+  chartColors: [
+    oklchToVar(0.78, 0.16, 235),
+    oklchToVar(0.76, 0.14, 198),
+    oklchToVar(0.78, 0.16, 156),
+    oklchToVar(0.78, 0.14, 70),
+    oklchToVar(0.72, 0.17, 18),
+  ],
+};
+
+const blackGlassLight: ThemeColors = {
+  primary: oklchToVar(0.58, 0.14, 232),
+  primaryForeground: oklchToVar(0.98, 0.006, 225),
+  secondary: oklchToVar(0.88, 0.018, 232),
+  secondaryForeground: oklchToVar(0.2, 0.024, 235),
+  accent: oklchToVar(0.86, 0.036, 225),
+  accentForeground: oklchToVar(0.2, 0.024, 235),
+
+  success: oklchToVar(0.55, 0.13, 156),
+  successForeground: oklchToVar(0.98, 0.006, 156),
+  warning: oklchToVar(0.68, 0.13, 70),
+  warningForeground: oklchToVar(0.17, 0.012, 70),
+  danger: oklchToVar(0.58, 0.18, 18),
+  dangerForeground: oklchToVar(0.98, 0.006, 18),
+
+  background: oklchToVar(0.94, 0.018, 225),
+  foreground: oklchToVar(0.18, 0.022, 235),
+  card: oklchToVar(0.98, 0.01, 225),
+  cardForeground: oklchToVar(0.18, 0.022, 235),
+  muted: oklchToVar(0.88, 0.016, 225),
+  mutedForeground: oklchToVar(0.46, 0.03, 235),
+  border: oklchToVar(0.78, 0.035, 225),
+  input: oklchToVar(0.92, 0.014, 225),
+
+  sidebar: oklchToVar(0.91, 0.022, 225),
+  sidebarForeground: oklchToVar(0.24, 0.026, 235),
+  sidebarActive: oklchToVar(0.84, 0.042, 225),
+  sidebarActiveForeground: oklchToVar(0.18, 0.03, 235),
+
+  ring: oklchToVar(0.58, 0.14, 232),
+  chartColors: [
+    oklchToVar(0.58, 0.14, 232),
+    oklchToVar(0.54, 0.1, 198),
+    oklchToVar(0.55, 0.13, 156),
+    oklchToVar(0.68, 0.13, 70),
+    oklchToVar(0.58, 0.18, 18),
+  ],
+};
+
+type MaterialThemeColorConfig = {
+  primary: string;
+  primaryForeground: string;
+  secondary: string;
+  secondaryForeground?: string;
+  accent: string;
+  accentForeground?: string;
+  success?: string;
+  warning?: string;
+  danger?: string;
+  background: string;
+  foreground: string;
+  card: string;
+  cardForeground?: string;
+  muted: string;
+  mutedForeground: string;
+  border: string;
+  input?: string;
+  sidebar: string;
+  sidebarForeground: string;
+  sidebarActive: string;
+  sidebarActiveForeground?: string;
+  ring?: string;
+  chartColors?: string[];
+};
+
+const createMaterialThemeColors = (config: MaterialThemeColorConfig): ThemeColors => ({
+  primary: config.primary,
+  primaryForeground: config.primaryForeground,
+  secondary: config.secondary,
+  secondaryForeground: config.secondaryForeground ?? config.foreground,
+  accent: config.accent,
+  accentForeground: config.accentForeground ?? config.foreground,
+
+  success: config.success ?? oklchToVar(0.68, 0.14, 150),
+  successForeground: oklchToVar(0.98, 0, 0),
+  warning: config.warning ?? oklchToVar(0.72, 0.16, 70),
+  warningForeground: oklchToVar(0.14, 0.01, 70),
+  danger: config.danger ?? oklchToVar(0.62, 0.2, 26),
+  dangerForeground: oklchToVar(0.98, 0, 0),
+
+  background: config.background,
+  foreground: config.foreground,
+  card: config.card,
+  cardForeground: config.cardForeground ?? config.foreground,
+  muted: config.muted,
+  mutedForeground: config.mutedForeground,
+  border: config.border,
+  input: config.input ?? config.border,
+
+  sidebar: config.sidebar,
+  sidebarForeground: config.sidebarForeground,
+  sidebarActive: config.sidebarActive,
+  sidebarActiveForeground: config.sidebarActiveForeground ?? config.foreground,
+
+  ring: config.ring ?? config.primary,
+  chartColors: config.chartColors ?? [
+    config.primary,
+    config.accent,
+    config.success ?? oklchToVar(0.68, 0.14, 150),
+    config.warning ?? oklchToVar(0.72, 0.16, 70),
+    config.danger ?? oklchToVar(0.62, 0.2, 26),
+  ],
+});
+
+const stoneTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.78, 0.13, 230),
+  primaryForeground: oklchToVar(0.12, 0.02, 230),
+  secondary: oklchToVar(0.27, 0.014, 225),
+  accent: oklchToVar(0.62, 0.08, 220),
+  success: oklchToVar(0.76, 0.13, 148),
+  warning: oklchToVar(0.74, 0.13, 72),
+  danger: oklchToVar(0.68, 0.16, 24),
+  background: oklchToVar(0.16, 0.01, 230),
+  foreground: oklchToVar(0.9, 0.012, 220),
+  card: oklchToVar(0.22, 0.012, 230),
+  muted: oklchToVar(0.29, 0.01, 230),
+  mutedForeground: oklchToVar(0.7, 0.018, 220),
+  border: oklchToVar(0.38, 0.02, 225),
+  sidebar: oklchToVar(0.14, 0.01, 230),
+  sidebarForeground: oklchToVar(0.84, 0.012, 220),
+  sidebarActive: oklchToVar(0.28, 0.025, 225),
+  chartColors: [
+    oklchToVar(0.78, 0.13, 230),
+    oklchToVar(0.65, 0.07, 210),
+    oklchToVar(0.76, 0.13, 148),
+    oklchToVar(0.74, 0.13, 72),
+    oklchToVar(0.68, 0.16, 24),
+  ],
+});
+
+const stoneLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.47, 0.1, 220),
+  primaryForeground: oklchToVar(0.98, 0.006, 220),
+  secondary: oklchToVar(0.84, 0.012, 210),
+  secondaryForeground: oklchToVar(0.22, 0.018, 220),
+  accent: oklchToVar(0.78, 0.035, 210),
+  accentForeground: oklchToVar(0.22, 0.018, 220),
+  success: oklchToVar(0.55, 0.12, 148),
+  warning: oklchToVar(0.68, 0.12, 72),
+  danger: oklchToVar(0.58, 0.16, 24),
+  background: oklchToVar(0.82, 0.01, 205),
+  foreground: oklchToVar(0.22, 0.012, 220),
+  card: oklchToVar(0.9, 0.008, 205),
+  muted: oklchToVar(0.78, 0.01, 205),
+  mutedForeground: oklchToVar(0.45, 0.018, 215),
+  border: oklchToVar(0.62, 0.018, 205),
+  sidebar: oklchToVar(0.78, 0.01, 205),
+  sidebarForeground: oklchToVar(0.25, 0.012, 220),
+  sidebarActive: oklchToVar(0.72, 0.025, 215),
+});
+
+const paperTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.43, 0.13, 258),
+  primaryForeground: oklchToVar(0.98, 0.012, 85),
+  secondary: oklchToVar(0.88, 0.032, 82),
+  secondaryForeground: oklchToVar(0.25, 0.018, 75),
+  accent: oklchToVar(0.88, 0.04, 76),
+  accentForeground: oklchToVar(0.25, 0.018, 75),
+  success: oklchToVar(0.53, 0.12, 148),
+  warning: oklchToVar(0.72, 0.13, 70),
+  danger: oklchToVar(0.54, 0.16, 28),
+  background: oklchToVar(0.92, 0.027, 82),
+  foreground: oklchToVar(0.23, 0.018, 75),
+  card: oklchToVar(0.96, 0.018, 82),
+  muted: oklchToVar(0.89, 0.025, 82),
+  mutedForeground: oklchToVar(0.45, 0.028, 74),
+  border: oklchToVar(0.77, 0.03, 78),
+  sidebar: oklchToVar(0.91, 0.029, 82),
+  sidebarForeground: oklchToVar(0.3, 0.02, 75),
+  sidebarActive: oklchToVar(0.86, 0.04, 256),
+  sidebarActiveForeground: oklchToVar(0.28, 0.08, 256),
+  chartColors: [
+    oklchToVar(0.43, 0.13, 258),
+    oklchToVar(0.53, 0.12, 148),
+    oklchToVar(0.72, 0.13, 70),
+    oklchToVar(0.54, 0.16, 28),
+    oklchToVar(0.46, 0.06, 65),
+  ],
+});
+
+const paperDarkTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.74, 0.12, 250),
+  primaryForeground: oklchToVar(0.13, 0.018, 250),
+  secondary: oklchToVar(0.27, 0.018, 70),
+  accent: oklchToVar(0.34, 0.04, 74),
+  success: oklchToVar(0.72, 0.12, 148),
+  warning: oklchToVar(0.76, 0.13, 70),
+  danger: oklchToVar(0.68, 0.16, 28),
+  background: oklchToVar(0.16, 0.012, 70),
+  foreground: oklchToVar(0.86, 0.024, 82),
+  card: oklchToVar(0.22, 0.014, 70),
+  muted: oklchToVar(0.29, 0.014, 70),
+  mutedForeground: oklchToVar(0.66, 0.026, 82),
+  border: oklchToVar(0.42, 0.02, 74),
+  sidebar: oklchToVar(0.14, 0.012, 70),
+  sidebarForeground: oklchToVar(0.82, 0.024, 82),
+  sidebarActive: oklchToVar(0.29, 0.03, 250),
+  sidebarActiveForeground: oklchToVar(0.88, 0.02, 250),
+});
+
+const blueprintTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.78, 0.12, 230),
+  primaryForeground: oklchToVar(0.15, 0.04, 245),
+  secondary: oklchToVar(0.28, 0.06, 245),
+  accent: oklchToVar(0.5, 0.1, 230),
+  success: oklchToVar(0.78, 0.13, 150),
+  warning: oklchToVar(0.78, 0.13, 72),
+  danger: oklchToVar(0.7, 0.17, 28),
+  background: oklchToVar(0.22, 0.06, 245),
+  foreground: oklchToVar(0.93, 0.018, 230),
+  card: oklchToVar(0.27, 0.06, 245),
+  muted: oklchToVar(0.34, 0.055, 245),
+  mutedForeground: oklchToVar(0.75, 0.04, 230),
+  border: oklchToVar(0.63, 0.065, 230),
+  sidebar: oklchToVar(0.18, 0.05, 245),
+  sidebarForeground: oklchToVar(0.88, 0.02, 230),
+  sidebarActive: oklchToVar(0.32, 0.07, 240),
+});
+
+const blueprintLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.48, 0.13, 232),
+  primaryForeground: oklchToVar(0.98, 0.006, 230),
+  secondary: oklchToVar(0.88, 0.025, 230),
+  secondaryForeground: oklchToVar(0.2, 0.04, 245),
+  accent: oklchToVar(0.86, 0.035, 230),
+  accentForeground: oklchToVar(0.2, 0.04, 245),
+  success: oklchToVar(0.54, 0.12, 150),
+  warning: oklchToVar(0.68, 0.13, 72),
+  danger: oklchToVar(0.58, 0.16, 28),
+  background: oklchToVar(0.95, 0.012, 230),
+  foreground: oklchToVar(0.2, 0.04, 245),
+  card: oklchToVar(0.98, 0.008, 230),
+  muted: oklchToVar(0.9, 0.018, 230),
+  mutedForeground: oklchToVar(0.45, 0.05, 235),
+  border: oklchToVar(0.72, 0.04, 230),
+  sidebar: oklchToVar(0.91, 0.018, 230),
+  sidebarForeground: oklchToVar(0.23, 0.04, 245),
+  sidebarActive: oklchToVar(0.84, 0.04, 230),
+});
+
+const ceramicTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.25, 0.006, 110),
+  primaryForeground: oklchToVar(0.96, 0.006, 95),
+  secondary: oklchToVar(0.9, 0.012, 95),
+  secondaryForeground: oklchToVar(0.24, 0.006, 110),
+  accent: oklchToVar(0.84, 0.015, 95),
+  accentForeground: oklchToVar(0.24, 0.006, 110),
+  success: oklchToVar(0.55, 0.09, 150),
+  warning: oklchToVar(0.72, 0.1, 70),
+  danger: oklchToVar(0.58, 0.14, 28),
+  background: oklchToVar(0.95, 0.008, 95),
+  foreground: oklchToVar(0.18, 0.004, 110),
+  card: oklchToVar(0.98, 0.004, 95),
+  muted: oklchToVar(0.9, 0.008, 95),
+  mutedForeground: oklchToVar(0.44, 0.006, 110),
+  border: oklchToVar(0.82, 0.008, 95),
+  sidebar: oklchToVar(0.2, 0.005, 110),
+  sidebarForeground: oklchToVar(0.92, 0.006, 95),
+  sidebarActive: oklchToVar(0.35, 0.006, 110),
+});
+
+const ceramicDarkTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.78, 0.055, 205),
+  primaryForeground: oklchToVar(0.1, 0.008, 205),
+  secondary: oklchToVar(0.24, 0.008, 205),
+  accent: oklchToVar(0.32, 0.02, 205),
+  success: oklchToVar(0.72, 0.1, 150),
+  warning: oklchToVar(0.78, 0.1, 70),
+  danger: oklchToVar(0.7, 0.14, 28),
+  background: oklchToVar(0.1, 0.006, 205),
+  foreground: oklchToVar(0.88, 0.012, 205),
+  card: oklchToVar(0.16, 0.008, 205),
+  muted: oklchToVar(0.23, 0.008, 205),
+  mutedForeground: oklchToVar(0.68, 0.014, 205),
+  border: oklchToVar(0.37, 0.014, 205),
+  sidebar: oklchToVar(0.08, 0.006, 205),
+  sidebarForeground: oklchToVar(0.82, 0.012, 205),
+  sidebarActive: oklchToVar(0.22, 0.014, 205),
+});
+
+const carbonTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.72, 0.14, 235),
+  primaryForeground: oklchToVar(0.12, 0.02, 235),
+  secondary: oklchToVar(0.23, 0.014, 240),
+  accent: oklchToVar(0.34, 0.05, 230),
+  success: oklchToVar(0.7, 0.15, 150),
+  warning: oklchToVar(0.74, 0.15, 76),
+  danger: oklchToVar(0.66, 0.17, 28),
+  background: oklchToVar(0.12, 0.009, 240),
+  foreground: oklchToVar(0.9, 0.01, 235),
+  card: oklchToVar(0.17, 0.012, 240),
+  muted: oklchToVar(0.24, 0.012, 240),
+  mutedForeground: oklchToVar(0.68, 0.018, 235),
+  border: oklchToVar(0.36, 0.025, 235),
+  sidebar: oklchToVar(0.11, 0.008, 240),
+  sidebarForeground: oklchToVar(0.84, 0.01, 235),
+  sidebarActive: oklchToVar(0.24, 0.04, 235),
+});
+
+const carbonLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.5, 0.12, 235),
+  primaryForeground: oklchToVar(0.98, 0.006, 235),
+  secondary: oklchToVar(0.78, 0.012, 235),
+  secondaryForeground: oklchToVar(0.19, 0.012, 235),
+  accent: oklchToVar(0.82, 0.035, 230),
+  accentForeground: oklchToVar(0.19, 0.012, 235),
+  success: oklchToVar(0.53, 0.13, 150),
+  warning: oklchToVar(0.66, 0.14, 76),
+  danger: oklchToVar(0.58, 0.16, 28),
+  background: oklchToVar(0.79, 0.008, 235),
+  foreground: oklchToVar(0.18, 0.012, 235),
+  card: oklchToVar(0.88, 0.008, 235),
+  muted: oklchToVar(0.75, 0.01, 235),
+  mutedForeground: oklchToVar(0.42, 0.018, 235),
+  border: oklchToVar(0.58, 0.018, 235),
+  sidebar: oklchToVar(0.76, 0.008, 235),
+  sidebarForeground: oklchToVar(0.21, 0.012, 235),
+  sidebarActive: oklchToVar(0.7, 0.025, 235),
+});
+
+const brassTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.72, 0.13, 75),
+  primaryForeground: oklchToVar(0.13, 0.015, 80),
+  secondary: oklchToVar(0.24, 0.025, 82),
+  accent: oklchToVar(0.35, 0.06, 78),
+  success: oklchToVar(0.76, 0.12, 126),
+  warning: oklchToVar(0.8, 0.14, 78),
+  danger: oklchToVar(0.68, 0.16, 28),
+  background: oklchToVar(0.15, 0.014, 82),
+  foreground: oklchToVar(0.86, 0.04, 82),
+  card: oklchToVar(0.19, 0.018, 82),
+  muted: oklchToVar(0.27, 0.022, 82),
+  mutedForeground: oklchToVar(0.7, 0.04, 82),
+  border: oklchToVar(0.48, 0.075, 78),
+  sidebar: oklchToVar(0.13, 0.014, 82),
+  sidebarForeground: oklchToVar(0.82, 0.04, 82),
+  sidebarActive: oklchToVar(0.26, 0.045, 78),
+});
+
+const brassLightTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.44, 0.08, 78),
+  primaryForeground: oklchToVar(0.98, 0.018, 82),
+  secondary: oklchToVar(0.78, 0.06, 82),
+  secondaryForeground: oklchToVar(0.21, 0.026, 82),
+  accent: oklchToVar(0.84, 0.08, 78),
+  accentForeground: oklchToVar(0.21, 0.026, 82),
+  success: oklchToVar(0.5, 0.1, 126),
+  warning: oklchToVar(0.67, 0.13, 78),
+  danger: oklchToVar(0.56, 0.15, 28),
+  background: oklchToVar(0.78, 0.052, 82),
+  foreground: oklchToVar(0.2, 0.024, 82),
+  card: oklchToVar(0.86, 0.046, 82),
+  muted: oklchToVar(0.72, 0.048, 82),
+  mutedForeground: oklchToVar(0.38, 0.04, 82),
+  border: oklchToVar(0.58, 0.062, 78),
+  sidebar: oklchToVar(0.72, 0.048, 82),
+  sidebarForeground: oklchToVar(0.24, 0.03, 82),
+  sidebarActive: oklchToVar(0.66, 0.07, 78),
+});
+
+export const materialThemeIds = ["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument"] as const;
+
+export const isMaterialTheme = (themeId: string): boolean =>
+  (materialThemeIds as readonly string[]).includes(themeId);
+
+const materialMode = (
+  finish: string,
+  textureAsset: string,
+  depth: number,
+  textureSize: number
+): ThemeMaterialMode => ({
+  textureAssets: { surface: textureAsset },
+  textureSize,
+  cssVariables: {
+    "--studio-material-finish": finish,
+    "--studio-material-depth": String(depth)
+  }
+});
+
 export const builtInThemeDefinitions: Theme[] = [
   createThemeDefinition(
     "black-glass",
     "Black Glass",
-    "Glossy dark material with frosted light-mode contrast.",
-    createMode(oklchToVar(0.58, 0.08, 245), 245, {
-      background: oklchToVar(0.94, 0.006, 245),
-      card: oklchToVar(0.98, 0.004, 245),
-      material: { cssVariables: { "--studio-material-finish": "frosted", "--studio-material-depth": "0.36" } }
-    }),
-    createMode(oklchToVar(0.7, 0.11, 250), 250, {
-      background: oklchToVar(0.12, 0.014, 250),
-      card: oklchToVar(0.19, 0.018, 250),
-      border: oklchToVar(0.33, 0.02, 250),
-      material: { cssVariables: { "--studio-material-finish": "glass", "--studio-material-depth": "0.72" } }
-    })
+    "Smoked-glass Studio surfaces with cyan blueprint glow.",
+    { ...blackGlassLight, material: materialMode("frosted", "/studio/assets/frosted-glass-tile.png", 0.36, 420) },
+    { ...blackGlassDark, material: materialMode("glass", "/studio/assets/black-glass-tile.png", 0.72, 420) }
   ),
   createThemeDefinition(
     "stone",
     "Stone",
-    "Grounded limestone and basalt variants for long operational sessions.",
-    createMode(oklchToVar(0.55, 0.04, 80), 80, {
-      background: oklchToVar(0.93, 0.015, 85),
-      card: oklchToVar(0.98, 0.009, 85)
-    }),
-    createMode(oklchToVar(0.63, 0.05, 70), 70, {
-      background: oklchToVar(0.18, 0.01, 75),
-      card: oklchToVar(0.25, 0.012, 75)
-    })
+    "Carved slate surfaces with etched workflow lines.",
+    { ...stoneLightTheme, material: materialMode("limestone", "/studio/assets/stone-limestone-tile.png", 0.42, 390) },
+    { ...stoneTheme, material: materialMode("slate", "/studio/assets/stone-slate-tile.png", 0.78, 390) }
   ),
   createThemeDefinition(
     "paper",
     "Paper",
-    "Warm drafting paper in light mode with archival ink in dark mode.",
-    createMode(oklchToVar(0.6, 0.09, 70), 70, {
-      background: oklchToVar(0.97, 0.025, 78),
-      card: oklchToVar(0.995, 0.014, 78)
-    }),
-    createMode(oklchToVar(0.72, 0.09, 78), 78, {
-      background: oklchToVar(0.19, 0.018, 72),
-      card: oklchToVar(0.25, 0.02, 72)
-    })
+    "Layered vellum, inked diagrams, and stamped review notes.",
+    { ...paperTheme, material: materialMode("vellum", "/studio/assets/paper-vellum-tile.png", 0.32, 430) },
+    { ...paperDarkTheme, material: materialMode("charcoal-paper", "/studio/assets/paper-charcoal-tile.png", 0.64, 430) }
   ),
   createThemeDefinition(
     "blueprint",
     "Blueprint",
-    "Classic blueprint and light drafting-board material variants.",
-    createMode(oklchToVar(0.56, 0.12, 235), 235, {
-      background: oklchToVar(0.96, 0.018, 230),
-      card: oklchToVar(0.99, 0.01, 230)
-    }),
-    createMode(oklchToVar(0.68, 0.15, 235), 235, {
-      background: oklchToVar(0.17, 0.045, 245),
-      card: oklchToVar(0.23, 0.05, 245)
-    })
+    "Architectural drafting paper with crisp cyan workflow marks.",
+    { ...blueprintLightTheme, material: materialMode("drafting-paper", "/studio/assets/blueprint-drafting-tile.png", 0.34, 420) },
+    { ...blueprintTheme, material: materialMode("blueprint-paper", "/studio/assets/blueprint-paper-tile.png", 0.7, 420) }
   ),
   createThemeDefinition(
     "ceramic",
     "Ceramic",
-    "White ceramic and dark glazed ceramic with restrained status colors.",
-    createMode(oklchToVar(0.62, 0.07, 190), 190, {
-      background: oklchToVar(0.985, 0.006, 190),
-      card: oklchToVar(1, 0, 0)
-    }),
-    createMode(oklchToVar(0.68, 0.08, 190), 190, {
-      background: oklchToVar(0.16, 0.02, 195),
-      card: oklchToVar(0.22, 0.025, 195)
-    })
+    "Matte porcelain surfaces with soft glazed controls.",
+    { ...ceramicTheme, material: materialMode("porcelain", "/studio/assets/ceramic-glaze-tile.png", 0.3, 420) },
+    { ...ceramicDarkTheme, material: materialMode("obsidian-glaze", "/studio/assets/ceramic-obsidian-tile.png", 0.68, 420) }
   ),
   createThemeDefinition(
     "carbon",
     "Carbon",
     "Technical carbon surface with a precise cyan working accent.",
-    createMode(oklchToVar(0.56, 0.08, 220), 220, {
-      background: oklchToVar(0.95, 0.006, 220),
-      card: oklchToVar(0.99, 0.004, 220)
-    }),
-    createMode(oklchToVar(0.74, 0.11, 220), 220, {
-      background: oklchToVar(0.13, 0.012, 230),
-      card: oklchToVar(0.2, 0.014, 230)
-    })
+    { ...carbonLightTheme, material: materialMode("silver-carbon", "/studio/assets/carbon-silver-tile.png", 0.38, 320) },
+    { ...carbonTheme, material: materialMode("carbon-weave", "/studio/assets/carbon-weave-tile.png", 0.76, 320) }
   ),
   createThemeDefinition(
     "brass-instrument",
     "Brass Instrument",
-    "Instrument-panel brass accents with dark workshop and light bench variants.",
-    createMode(oklchToVar(0.66, 0.12, 78), 78, {
-      background: oklchToVar(0.95, 0.018, 78),
-      card: oklchToVar(0.99, 0.01, 78)
-    }),
-    createMode(oklchToVar(0.73, 0.14, 78), 78, {
-      background: oklchToVar(0.18, 0.018, 62),
-      card: oklchToVar(0.24, 0.02, 62)
-    })
+    "Dark enamel panels with machined brass controls.",
+    { ...brassLightTheme, material: materialMode("champagne-brass", "/studio/assets/brass-champagne-tile.png", 0.42, 380) },
+    { ...brassTheme, material: materialMode("brass-enamel", "/studio/assets/brass-enamel-tile.png", 0.78, 380) }
   ),
   createThemeDefinition("harbor", "Harbor", "Crisp blue for operational dashboards.", createMode(oklchToVar(0.68, 0.16, 235), 235), createMode(oklchToVar(0.6, 0.16, 235), 235, { background: oklchToVar(0.18, 0.02, 250) })),
   createThemeDefinition("borealis", "Borealis", "Green-teal palette with a calm technical feel.", createMode(oklchToVar(0.72, 0.14, 168), 168), createMode(oklchToVar(0.62, 0.14, 168), 168, { background: oklchToVar(0.17, 0.02, 168) })),
-  createThemeDefinition("hot-pink", "Hot Pink", "High-energy pink palette for bold workspaces.", createMode(oklchToVar(0.7, 0.24, 340), 340), createMode(oklchToVar(0.64, 0.22, 340), 340, { background: oklchToVar(0.18, 0.02, 340) }))
+  createThemeDefinition("ember", "Ember", "Warm amber palette for high-contrast highlights.", createMode(oklchToVar(0.74, 0.17, 58), 58), createMode(oklchToVar(0.64, 0.17, 58), 58, { background: oklchToVar(0.18, 0.02, 58) })),
+  createThemeDefinition("orchid", "Orchid", "Refined violet palette for expressive workspaces.", createMode(oklchToVar(0.66, 0.17, 292), 292), createMode(oklchToVar(0.58, 0.16, 292), 292, { background: oklchToVar(0.18, 0.02, 292) })),
+  createThemeDefinition("hot-pink", "Hot Pink", "High-energy pink palette for bold workspaces.", createMode(oklchToVar(0.7, 0.24, 340), 340), createMode(oklchToVar(0.64, 0.22, 340), 340, { background: oklchToVar(0.18, 0.02, 340) })),
+  createThemeDefinition("coral", "Coral", "Soft red-coral palette with readable emphasis.", createMode(oklchToVar(0.68, 0.18, 24), 24), createMode(oklchToVar(0.58, 0.17, 24), 24, { background: oklchToVar(0.18, 0.02, 24) })),
+  createThemeDefinition("graphite", "Graphite", "Restrained neutral palette with a cool accent.", createMode(oklchToVar(0.6, 0.04, 248), 248), createMode(oklchToVar(0.52, 0.04, 248), 248, { background: oklchToVar(0.18, 0.02, 248) }))
 ];
 
 export const themes: Theme[] = builtInThemeDefinitions;

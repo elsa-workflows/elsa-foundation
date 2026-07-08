@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { StudioEndpointContext } from "../../sdk";
 import type { StudioThemeDefinition, Theme, ThemeMode } from "../themes/presets";
-import { builtInThemeDefinitions, toTheme } from "../themes/presets";
+import { builtInThemeDefinitions, isMaterialTheme, toTheme } from "../themes/presets";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
 interface ThemeContextType {
@@ -87,6 +87,11 @@ export function ThemeProvider({
     // Also set the data attribute for CSS selectors
     root.setAttribute("data-theme", currentTheme.id);
     root.setAttribute("data-theme-mode", mode);
+    if (isMaterialTheme(currentTheme.id)) {
+      root.setAttribute("data-theme-material", currentTheme.id);
+    } else {
+      root.removeAttribute("data-theme-material");
+    }
 
     // Persist to localStorage
     if (persistThemeSelection) {
