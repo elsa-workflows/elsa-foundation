@@ -125,8 +125,65 @@ const createTheme = (
   },
 });
 
+const blackGlassDark: ThemeColors = {
+  primary: oklchToVar(0.78, 0.16, 235),
+  primaryForeground: oklchToVar(0.12, 0.02, 245),
+  secondary: oklchToVar(0.22, 0.02, 245),
+  secondaryForeground: oklchToVar(0.94, 0.01, 245),
+  accent: oklchToVar(0.34, 0.05, 235),
+  accentForeground: oklchToVar(0.96, 0.01, 235),
+
+  success: oklchToVar(0.78, 0.16, 156),
+  successForeground: oklchToVar(0.12, 0.02, 156),
+  warning: oklchToVar(0.78, 0.14, 70),
+  warningForeground: oklchToVar(0.12, 0.02, 70),
+  danger: oklchToVar(0.72, 0.17, 18),
+  dangerForeground: oklchToVar(0.12, 0.02, 18),
+
+  background: oklchToVar(0.13, 0.014, 245),
+  foreground: oklchToVar(0.93, 0.012, 235),
+  card: oklchToVar(0.18, 0.018, 245),
+  cardForeground: oklchToVar(0.93, 0.012, 235),
+  muted: oklchToVar(0.24, 0.018, 245),
+  mutedForeground: oklchToVar(0.72, 0.025, 235),
+  border: oklchToVar(0.42, 0.055, 235),
+  input: oklchToVar(0.19, 0.018, 245),
+
+  sidebar: oklchToVar(0.11, 0.014, 245),
+  sidebarForeground: oklchToVar(0.86, 0.018, 235),
+  sidebarActive: oklchToVar(0.24, 0.055, 235),
+  sidebarActiveForeground: oklchToVar(0.97, 0.012, 235),
+
+  ring: oklchToVar(0.78, 0.16, 235),
+  chartColors: [
+    oklchToVar(0.78, 0.16, 235),
+    oklchToVar(0.76, 0.14, 198),
+    oklchToVar(0.78, 0.16, 156),
+    oklchToVar(0.78, 0.14, 70),
+    oklchToVar(0.72, 0.17, 18),
+  ],
+};
+
+const blackGlassLight: ThemeColors = {
+  ...blackGlassDark,
+  background: oklchToVar(0.16, 0.016, 245),
+  card: oklchToVar(0.21, 0.018, 245),
+  muted: oklchToVar(0.28, 0.02, 245),
+  border: oklchToVar(0.48, 0.06, 235),
+  input: oklchToVar(0.22, 0.018, 245),
+  sidebar: oklchToVar(0.13, 0.016, 245),
+  sidebarActive: oklchToVar(0.28, 0.06, 235),
+};
+
 export const themes: Theme[] = [
   createTheme('harbor', 'Harbor', 'Crisp blue for operational dashboards', oklchToVar(0.68, 0.16, 235), oklchToVar(0.6, 0.16, 235), 235),
+  {
+    id: 'black-glass',
+    name: 'Black Glass',
+    description: 'Smoked-glass Studio surfaces with cyan blueprint glow',
+    light: blackGlassLight,
+    dark: blackGlassDark,
+  },
   createTheme('borealis', 'Borealis', 'Green-teal palette with a calm technical feel', oklchToVar(0.72, 0.14, 168), oklchToVar(0.62, 0.14, 168), 168),
   createTheme('ember', 'Ember', 'Warm amber palette for high-contrast highlights', oklchToVar(0.74, 0.17, 58), oklchToVar(0.64, 0.17, 58), 58),
   createTheme('orchid', 'Orchid', 'Refined violet palette for expressive workspaces', oklchToVar(0.66, 0.17, 292), oklchToVar(0.58, 0.16, 292), 292),

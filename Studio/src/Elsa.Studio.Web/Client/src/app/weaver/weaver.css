@@ -250,3 +250,83 @@
   white-space: nowrap;
   border: 0;
 }
+
+html[data-theme="black-glass"] .weaver-surface {
+  border-color: var(--studio-glass-edge-strong);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 7%, transparent), transparent 18%),
+    var(--studio-glass-bg-strong);
+  box-shadow: var(--studio-glass-glow-strong);
+  backdrop-filter: blur(26px) saturate(1.35);
+}
+
+html[data-theme="black-glass"] .weaver-surface[data-variant="dock"] {
+  box-shadow:
+    var(--studio-glass-glow-strong),
+    -12px 0 44px color-mix(in srgb, var(--studio-accent) 8%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-surface-header,
+html[data-theme="black-glass"] .weaver-status,
+html[data-theme="black-glass"] .weaver-composer {
+  border-color: var(--studio-glass-edge);
+  background: color-mix(in srgb, var(--studio-glass-bg) 82%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-surface-title span {
+  color: var(--studio-accent);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--studio-accent) 36%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-status[data-tone="success"] {
+  color: var(--studio-success-fg);
+}
+
+html[data-theme="black-glass"] .weaver-status[data-tone="warning"] {
+  color: var(--studio-warning-fg);
+}
+
+html[data-theme="black-glass"] .weaver-auto-apply select,
+html[data-theme="black-glass"] .weaver-surface select,
+html[data-theme="black-glass"] .weaver-close,
+html[data-theme="black-glass"] .weaver-message-avatar,
+html[data-theme="black-glass"] .weaver-markdown pre,
+html[data-theme="black-glass"] .weaver-code-collapse > summary,
+html[data-theme="black-glass"] .weaver-plan,
+html[data-theme="black-glass"] .weaver-followup-chip,
+html[data-theme="black-glass"] .weaver-composer-input textarea {
+  border-color: var(--studio-glass-edge);
+  background: var(--studio-glass-bg-soft);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-message-body,
+html[data-theme="black-glass"] .agent-proposal,
+html[data-theme="black-glass"] .agent-workflow-batch {
+  border-color: var(--studio-glass-edge);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 6%, transparent), transparent 28%),
+    var(--studio-glass-bg);
+  box-shadow: 0 14px 34px color-mix(in srgb, black 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-message[data-role="user"] .weaver-message-body {
+  border-color: color-mix(in srgb, var(--studio-accent) 44%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 13%, var(--studio-glass-bg));
+}
+
+html[data-theme="black-glass"] .weaver-send {
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 68%, transparent);
+  background: linear-gradient(180deg, #8fe8ff, #2eb6ff);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--studio-accent) 28%, transparent);
+  color: #041520;
+  font-weight: 800;
+}
+
+html[data-theme="black-glass"] .weaver-scroll {
+  background:
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 4%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+}

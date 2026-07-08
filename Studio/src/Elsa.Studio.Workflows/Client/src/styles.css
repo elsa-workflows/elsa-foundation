@@ -3765,3 +3765,124 @@
 .wf-validation-repair:hover {
   background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
 }
+
+html[data-theme="black-glass"] .wf-page,
+html[data-theme="black-glass"] .wf-editor {
+  --wf-panel: var(--studio-glass-bg-strong);
+  --wf-panel-muted: var(--studio-glass-bg-soft);
+  --wf-canvas: #050a11;
+  --wf-surface: var(--studio-glass-bg);
+  --wf-bg: var(--studio-bg);
+  --wf-border: var(--studio-glass-edge);
+  --wf-border-strong: var(--studio-glass-edge-strong);
+  --wf-text: var(--studio-text);
+  --wf-muted-text: var(--studio-text-muted);
+  --wf-accent: var(--studio-accent);
+  --wf-accent-soft: var(--studio-accent-soft);
+  --wf-shadow-node: 0 18px 42px color-mix(in srgb, black 42%, transparent),
+    0 0 24px color-mix(in srgb, var(--studio-accent) 10%, transparent);
+  --wf-shadow-menu: var(--studio-glass-glow);
+  --wf-shadow-overlay: var(--studio-glass-glow-strong);
+  --xy-background-pattern-color: color-mix(in srgb, var(--studio-accent) 16%, transparent);
+  --xy-controls-button-background-color: var(--studio-glass-bg-strong);
+  --xy-controls-button-background-color-hover: color-mix(in srgb, var(--studio-accent) 15%, var(--studio-glass-bg));
+  --xy-controls-button-color: var(--studio-text);
+  --xy-controls-button-color-hover: var(--studio-accent);
+  --xy-controls-button-border-color: var(--studio-glass-edge);
+  --xy-controls-box-shadow: var(--studio-glass-glow);
+  --xy-minimap-background-color: var(--studio-glass-bg-strong);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--wf-canvas) 46%, transparent);
+}
+
+html[data-theme="black-glass"] .wf-editor {
+  background:
+    radial-gradient(circle at 72% 18%, color-mix(in srgb, var(--studio-accent) 12%, transparent), transparent 28rem),
+    var(--studio-blueprint-bg);
+  background-size: auto, var(--studio-blueprint-bg-size);
+}
+
+html[data-theme="black-glass"] .wf-page-header,
+html[data-theme="black-glass"] .wf-toolbar,
+html[data-theme="black-glass"] .wf-editor-top,
+html[data-theme="black-glass"] .wf-breadcrumb,
+html[data-theme="black-glass"] .wf-validation,
+html[data-theme="black-glass"] .wf-palette,
+html[data-theme="black-glass"] .wf-inspector,
+html[data-theme="black-glass"] .wf-canvas-tabs,
+html[data-theme="black-glass"] .wf-code-view-toolbar,
+html[data-theme="black-glass"] .wf-properties-section {
+  border-color: var(--studio-glass-edge);
+  background: var(--studio-glass-bg);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+html[data-theme="black-glass"] .wf-canvas-shell,
+html[data-theme="black-glass"] .wf-canvas,
+html[data-theme="black-glass"] .wf-properties-view,
+html[data-theme="black-glass"] .wf-code-view-editor .studio-code-editor-input {
+  background:
+    radial-gradient(circle at 64% 22%, color-mix(in srgb, var(--studio-accent) 13%, transparent), transparent 24rem),
+    linear-gradient(color-mix(in srgb, var(--studio-accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #06101a, #03070c 62%, #081521);
+  background-size: auto, 32px 32px, 32px 32px, auto;
+}
+
+html[data-theme="black-glass"] .wf-node {
+  border-color: var(--studio-glass-edge);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 8%, transparent), transparent 34%),
+    var(--studio-glass-bg-strong);
+  box-shadow: var(--wf-shadow-node),
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--studio-accent) 18%, transparent);
+  backdrop-filter: blur(16px) saturate(1.25);
+}
+
+html[data-theme="black-glass"] .wf-node:hover:not(.selected),
+html[data-theme="black-glass"] .wf-node.selected {
+  border-color: var(--studio-glass-edge-strong);
+  box-shadow: var(--studio-glass-glow-strong),
+    inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+html[data-theme="black-glass"] .wf-node-icon,
+html[data-theme="black-glass"] .wf-activity-icon,
+html[data-theme="black-glass"] .wf-node-slot-badge,
+html[data-theme="black-glass"] .wf-node-port-label,
+html[data-theme="black-glass"] .wf-chip,
+html[data-theme="black-glass"] .wf-status {
+  border-color: color-mix(in srgb, var(--wf-accent) 44%, transparent);
+  background: color-mix(in srgb, var(--wf-accent) 15%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    0 0 16px color-mix(in srgb, var(--wf-accent) 12%, transparent);
+}
+
+html[data-theme="black-glass"] .wf-node .react-flow__handle {
+  border-color: #04101a;
+  background: #75dcff;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--wf-accent) 55%, transparent);
+}
+
+html[data-theme="black-glass"] .react-flow__edge-path {
+  stroke: #56cfff;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--wf-accent) 56%, transparent));
+}
+
+html[data-theme="black-glass"] .react-flow__edge.selected .react-flow__edge-path,
+html[data-theme="black-glass"] .react-flow__edge:focus .react-flow__edge-path {
+  stroke: #a4eeff;
+}
+
+html[data-theme="black-glass"] .react-flow__controls,
+html[data-theme="black-glass"] .react-flow__minimap,
+html[data-theme="black-glass"] .wf-canvas-tools,
+html[data-theme="black-glass"] .wf-grid,
+html[data-theme="black-glass"] .wf-grid-row,
+html[data-theme="black-glass"] .wf-grid-head {
+  border-color: var(--studio-glass-edge);
+  background: var(--studio-glass-bg);
+  box-shadow: var(--studio-glass-glow);
+  backdrop-filter: blur(18px) saturate(1.2);
+}

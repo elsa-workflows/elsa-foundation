@@ -81,3 +81,39 @@ html[data-theme-mode="dark"] {
   --studio-warning-fg: oklch(0.86 0.12 60);
   --studio-danger-fg: oklch(0.78 0.15 27);
 }
+
+html[data-theme="black-glass"] {
+  --studio-bg: #05080d;
+  --studio-surface: color-mix(in srgb, #111a25 74%, transparent);
+  --studio-surface-muted: color-mix(in srgb, #1a2634 68%, transparent);
+  --studio-surface-raised: color-mix(in srgb, #203144 72%, transparent);
+  --studio-text: #eef7ff;
+  --studio-text-muted: #9bb3ca;
+  --studio-border: color-mix(in srgb, #75d7ff 28%, transparent);
+  --studio-accent: #65d8ff;
+  --studio-accent-text: #03131c;
+  --studio-accent-soft: color-mix(in srgb, #65d8ff 16%, transparent);
+  --studio-focus: color-mix(in srgb, #65d8ff 36%, transparent);
+
+  --studio-glass-bg: color-mix(in srgb, #0b1119 76%, transparent);
+  --studio-glass-bg-strong: color-mix(in srgb, #111b28 86%, transparent);
+  --studio-glass-bg-soft: color-mix(in srgb, #152234 58%, transparent);
+  --studio-glass-edge: color-mix(in srgb, #8ee4ff 46%, transparent);
+  --studio-glass-edge-strong: color-mix(in srgb, #a9ecff 68%, transparent);
+  --studio-glass-grid: color-mix(in srgb, #70cfff 13%, transparent);
+  --studio-glass-glow: 0 0 0 1px color-mix(in srgb, #78ddff 22%, transparent),
+    0 18px 46px color-mix(in srgb, #02131f 74%, transparent),
+    0 0 34px color-mix(in srgb, #49bfff 10%, transparent);
+  --studio-glass-glow-strong: 0 0 0 1px color-mix(in srgb, #9debff 38%, transparent),
+    0 24px 58px color-mix(in srgb, #02131f 82%, transparent),
+    0 0 42px color-mix(in srgb, #4cc8ff 18%, transparent);
+  --studio-blueprint-bg:
+    radial-gradient(circle at 72% 18%, color-mix(in srgb, #1b79ff 13%, transparent), transparent 28rem),
+    linear-gradient(color-mix(in srgb, #7bdcff 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #7bdcff 7%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #07111b 0%, #03070c 58%, #091521 100%);
+  --studio-blueprint-bg-size: auto, 42px 42px, 42px 42px, auto;
+  --studio-success-fg: #8ff0bd;
+  --studio-warning-fg: #ffd38a;
+  --studio-danger-fg: #ff9cab;
+}
