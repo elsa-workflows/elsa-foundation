@@ -1,4 +1,3 @@
-using System.Dynamic;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Models;
@@ -43,7 +42,7 @@ public sealed class MaterializationAccessorsPreProcessor : IScriptPreProcessor
 
     private static void SetContainer(IJavaScriptExecutionContext executionContext, string name, IReadOnlyDictionary<string, object?> values)
     {
-        var container = (IDictionary<string, object?>)new ExpandoObject();
+        var container = new Dictionary<string, object?>();
 
         foreach (var (key, value) in values)
             container[key] = executionContext.NormalizeValue(value);

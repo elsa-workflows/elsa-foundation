@@ -1,4 +1,5 @@
-﻿using Elsa.Expressions.JavaScript.Core.Contracts;
+﻿using Elsa.Expressions.Core.Helpers;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Primitives.Extensions;
 using Jint;
@@ -7,7 +8,6 @@ using Jint.Native.Object;
 using Jint.Runtime.Descriptors;
 using Jint.Runtime.Interop;
 using System.Collections;
-using System.Dynamic;
 
 namespace Elsa.Expressions.JavaScript.Jint.Services;
 
@@ -49,10 +49,18 @@ public sealed class JintExecutionContext(IPreparedScriptFactory preparedScriptFa
         if (value == null)
             return null;
 
-        if (value is not ExpandoObject expandoObject)
-            return value;
+        // A dynamic (Any) value stored as opaque JSON returns from the durable store as a JsonElement;
+        // lift it to the canonical mutable JsonNode (ADR 0036), which Jint binds natively.
+        value = DynamicValueMaterializer.Materialize(value);
 
-        return ConvertToJsObject(expandoObject);
+        // The synthetic variable/input/output/args containers are string-keyed object dictionaries; build
+        // them into a real JS object so heterogeneous values (including generic-only collections, #407) are
+        // converted. A JsonNode is not an IDictionary<string, object?> and passes through to Jint's native
+        // JsonNode interop instead.
+        if (value is IDictionary<string, object?> dictionary)
+            return ConvertToJsObject(dictionary);
+
+        return value;
     }
 
     public void RegisterFunction(IJavaScriptFunction function)

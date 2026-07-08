@@ -1,5 +1,5 @@
 ﻿using Elsa.Expressions.JavaScript.Core.Models;
-using System.Dynamic;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Expressions.JavaScript.Constants;
 
@@ -16,7 +16,7 @@ internal static class DefaultTypeDescriptors
             typeof(Guid),
             typeof(Random),
             typeof(object),
-            typeof(ExpandoObject),
+            typeof(JsonNode),
             typeof(string),
             typeof(bool),
             typeof(short),

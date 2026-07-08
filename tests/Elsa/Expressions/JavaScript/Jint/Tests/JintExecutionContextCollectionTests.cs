@@ -1,7 +1,6 @@
 using Elsa.Expressions.JavaScript.Jint.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Services;
 using Microsoft.Extensions.DependencyInjection;
-using System.Dynamic;
 using Xunit;
 
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
@@ -25,16 +24,15 @@ public sealed class JintExecutionContextCollectionTests
     }
 
     [Fact]
-    public async Task NormalizeValue_ExpandoWithGenericOnlyCollection_ConvertsToJsArray()
+    public async Task NormalizeValue_ContainerWithGenericOnlyCollection_ConvertsToJsArray()
     {
         await using var provider = BuildProvider();
         using var scope = provider.CreateScope();
         var context = await CreateContextAsync(scope);
 
-        IDictionary<string, object?> expando = new ExpandoObject();
-        expando["tags"] = new HashSet<string> { "alpha", "beta" };
+        var container = new Dictionary<string, object?> { ["tags"] = new HashSet<string> { "alpha", "beta" } };
 
-        var normalized = context.NormalizeValue(expando);
+        var normalized = context.NormalizeValue(container);
         context.SetValue("ctx", normalized);
 
         Assert.Equal(2d, context.Evaluate("ctx.tags.length"));
@@ -42,16 +40,15 @@ public sealed class JintExecutionContextCollectionTests
     }
 
     [Fact]
-    public async Task NormalizeValue_ExpandoWithList_StillConvertsToJsArray()
+    public async Task NormalizeValue_ContainerWithList_StillConvertsToJsArray()
     {
         await using var provider = BuildProvider();
         using var scope = provider.CreateScope();
         var context = await CreateContextAsync(scope);
 
-        IDictionary<string, object?> expando = new ExpandoObject();
-        expando["numbers"] = new List<int> { 3, 1, 2 };
+        var container = new Dictionary<string, object?> { ["numbers"] = new List<int> { 3, 1, 2 } };
 
-        var normalized = context.NormalizeValue(expando);
+        var normalized = context.NormalizeValue(container);
         context.SetValue("ctx", normalized);
 
         // Order must be preserved for ordered collections.

@@ -1,7 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Primitives.Extensions;
-using System.Dynamic;
 
 namespace Elsa.Expressions.JavaScript.PreProcessors;
 
@@ -18,7 +17,7 @@ public sealed class ArgsObjectPreProcessor : IScriptPreProcessor
 
     private static IDictionary<string, object?> GetArgsFromOptions(IExpressionEvaluatorOptions? options)
     {
-        var args = new ExpandoObject() as IDictionary<string, object?>;
+        var args = new Dictionary<string, object?>();
 
         if (options is null)
         {
