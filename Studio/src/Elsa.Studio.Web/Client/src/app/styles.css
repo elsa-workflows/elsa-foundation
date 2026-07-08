@@ -145,35 +145,78 @@ textarea:focus {
 }
 
 .studio-shell.studio-auth-signing-in {
+  position: relative;
+  isolation: isolate;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   place-items: center;
   padding: var(--spacing-xl);
+  color: oklch(0.96 0.018 240);
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--background) 36%, transparent) 0%,
-      color-mix(in srgb, var(--background) 14%, transparent) 48%,
-      color-mix(in srgb, var(--background) 30%, transparent) 100%
-    ),
+    radial-gradient(circle at 52% 46%, rgb(16 25 33 / 0.08), rgb(2 6 10 / 0.5) 62%, rgb(1 4 8 / 0.84) 100%),
+    linear-gradient(90deg, rgb(2 6 11 / 0.22), rgb(4 11 17 / 0.04) 42%, rgb(2 6 11 / 0.28)),
     url("../assets/images/auth-background.jpg") center / cover no-repeat,
-    var(--background);
+    #02060a;
+}
+
+.studio-shell.studio-auth-signing-in::before,
+.studio-shell.studio-auth-signing-in::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.studio-shell.studio-auth-signing-in::before {
+  z-index: -1;
+  background:
+    linear-gradient(rgb(111 197 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(111 197 255 / 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at 50% 50%, black 0%, black 38%, transparent 78%);
+}
+
+.studio-shell.studio-auth-signing-in::after {
+  z-index: 0;
+  background:
+    radial-gradient(circle at 22% 86%, rgb(57 180 255 / 0.2), transparent 18rem),
+    radial-gradient(circle at 82% 22%, rgb(66 180 255 / 0.22), transparent 22rem),
+    linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 16%, transparent 78%, rgb(0 0 0 / 0.42));
+  mix-blend-mode: screen;
+  opacity: 0.72;
 }
 
 .studio-auth-card {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 18px;
   align-items: center;
   gap: var(--spacing-md);
   width: min(360px, 100%);
   min-height: 68px;
-  border: 1px solid var(--border);
+  border: 1px solid rgb(125 201 255 / 0.22);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--card) 94%, transparent);
-  color: var(--foreground);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(10px);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.13), rgb(255 255 255 / 0.035) 38%, rgb(4 10 15 / 0.42)),
+    rgb(9 15 20 / 0.72);
+  color: oklch(0.97 0.015 240);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 -1px 0 rgb(0 0 0 / 0.42),
+    0 24px 54px rgb(0 0 0 / 0.46),
+    0 0 32px rgb(73 183 255 / 0.14);
+  backdrop-filter: blur(18px) saturate(1.18);
   padding: 14px 16px;
+}
+
+.studio-auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgb(255 255 255 / 0.055);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
 }
 
 .studio-auth-brand-mark {
@@ -182,7 +225,13 @@ textarea:focus {
   width: 36px;
   height: 36px;
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+  border: 1px solid rgb(101 191 255 / 0.28);
+  background:
+    radial-gradient(circle at 50% 42%, rgb(70 183 255 / 0.3), transparent 62%),
+    linear-gradient(145deg, rgb(255 255 255 / 0.12), rgb(8 18 26 / 0.82));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 0 18px rgb(58 178 255 / 0.18);
   overflow: hidden;
 }
 
@@ -191,6 +240,7 @@ textarea:focus {
   width: 30px;
   height: 30px;
   object-fit: contain;
+  filter: drop-shadow(0 0 10px rgb(79 186 255 / 0.45));
 }
 
 .studio-auth-copy {
@@ -213,7 +263,7 @@ textarea:focus {
 }
 
 .studio-auth-copy span {
-  color: var(--muted-foreground);
+  color: oklch(0.76 0.033 236);
   font-size: 12px;
   font-weight: 600;
 }
@@ -221,9 +271,10 @@ textarea:focus {
 .studio-auth-spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid color-mix(in srgb, var(--primary) 18%, var(--border));
-  border-top-color: var(--primary);
+  border: 2px solid rgb(112 196 255 / 0.2);
+  border-top-color: rgb(112 196 255 / 0.95);
   border-radius: 50%;
+  box-shadow: 0 0 12px rgb(70 180 255 / 0.22);
   animation: studio-auth-spin 0.8s linear infinite;
 }
 
