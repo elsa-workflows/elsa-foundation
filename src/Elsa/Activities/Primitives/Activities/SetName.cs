@@ -16,20 +16,20 @@ namespace Elsa.Activities.Primitives.Activities;
 /// workflow instance — exactly as <see cref="Correlate"/> does for the correlation id.
 /// </summary>
 /// <remarks>
-/// A null or blank <see cref="Name"/> clears the instance name. Like the other control leaves
+/// A null or blank <see cref="InstanceName"/> clears the instance name. Like the other control leaves
 /// (<see cref="Correlate"/>), <c>SetName</c> requires the Elsa runtime activity execution context.
 /// </remarks>
 public sealed class SetName : CodeActivity
 {
     /// <summary>The name to assign to the workflow instance.</summary>
-    public InputArgument<string>? Name { get; set; }
+    public InputArgument<string>? InstanceName { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        var name = context.Get(Name);
+        var instanceName = context.Get(InstanceName);
 
-        runtimeContext.SetInstanceName(name);
+        runtimeContext.SetInstanceName(instanceName);
     }
 
     private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)

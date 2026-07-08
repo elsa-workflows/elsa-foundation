@@ -16,5 +16,10 @@ public sealed class NewtonsoftJsonIslandTypeHandler : IJsonIslandTypeHandler
         return token;
     }
 
-    public string Write(object value) => value.ToString();
+    public string Write(object value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value.ToString() ?? throw new InvalidOperationException("Newtonsoft JSON island values must serialize to a non-null string.");
+    }
 }
