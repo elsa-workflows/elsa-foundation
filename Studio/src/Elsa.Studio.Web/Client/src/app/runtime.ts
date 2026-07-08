@@ -1,7 +1,10 @@
+import type { StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sdk";
+
 export interface StudioRuntimeConfig {
   backendBaseUrl?: string;
   backendModuleManagementApiKey?: string;
   auth?: StudioAuthRuntimeConfig;
+  workflows?: StudioWorkflowRuntimeSettings;
 }
 
 /**
@@ -37,4 +40,10 @@ declare global {
 
 export function getStudioRuntimeConfig(): StudioRuntimeConfig {
   return window.__ELSA_STUDIO_RUNTIME__ ?? {};
+}
+
+export function getStudioRuntimeSettings(config: StudioRuntimeConfig): StudioRuntimeSettings {
+  return {
+    workflows: config.workflows
+  };
 }

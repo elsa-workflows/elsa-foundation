@@ -46,6 +46,7 @@ export function WorkflowEditor({
   propertyEditors,
   expressionEditors,
   workflowDesignerPanels,
+  autosaveEnabledByDefault,
   onBack
 }: {
   context: StudioEndpointContext;
@@ -54,6 +55,7 @@ export function WorkflowEditor({
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
+  autosaveEnabledByDefault?: boolean;
   onBack(): void;
 }) {
   // The interdependent draft/scope/selection/test-run/artifact cluster now lives in an explicit reducer,
@@ -103,7 +105,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, autosaveEnabled, setAutosaveEnabled, markSaved } = useWorkflowPersistence({ context, draft, editDraft, setStatus, setError });
+  const { saveDraft, autosaveEnabled, setAutosaveEnabled, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
   const {
     details,
     setDetails,

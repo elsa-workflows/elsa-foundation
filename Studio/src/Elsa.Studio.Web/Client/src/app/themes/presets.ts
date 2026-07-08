@@ -1,5 +1,6 @@
 export type StudioThemeSource = "built-in" | "custom";
 export type ThemeMode = "light" | "dark";
+export const allThemeModes: readonly ThemeMode[] = ["light", "dark"] as const;
 
 export interface ThemeColors {
   primary: string;
@@ -48,6 +49,7 @@ export interface StudioThemeDefinition {
   version: number;
   enabled: boolean;
   published: boolean;
+  supportedModes?: ThemeMode[];
   modes: {
     light: ThemeModeDefinition;
     dark: ThemeModeDefinition;
@@ -150,7 +152,8 @@ function createThemeDefinition(
   name: string,
   description: string,
   light: ThemeModeDefinition,
-  dark: ThemeModeDefinition
+  dark: ThemeModeDefinition,
+  supportedModes: readonly ThemeMode[] = allThemeModes
 ): Theme {
   const definition: StudioThemeDefinition = {
     id,
@@ -160,6 +163,7 @@ function createThemeDefinition(
     version: 1,
     enabled: true,
     published: true,
+    supportedModes: [...supportedModes],
     modes: { light, dark }
   };
 
@@ -172,9 +176,30 @@ export function toTheme(definition: StudioThemeDefinition): Theme {
     description: definition.description ?? "",
     enabled: definition.enabled ?? true,
     published: definition.published ?? true,
+    supportedModes: getSupportedThemeModes(definition),
     light: definition.modes.light,
     dark: definition.modes.dark
   };
+}
+
+export function getSupportedThemeModes(theme: Pick<StudioThemeDefinition, "supportedModes">): ThemeMode[] {
+  const supportedModes = Array.isArray(theme.supportedModes)
+    ? theme.supportedModes.filter(isThemeMode)
+    : [...allThemeModes];
+  const uniqueModes = Array.from(new Set(supportedModes));
+  return uniqueModes.length > 0 ? uniqueModes : [...allThemeModes];
+}
+
+export function supportsThemeMode(theme: Pick<StudioThemeDefinition, "supportedModes">, mode: ThemeMode): boolean {
+  return getSupportedThemeModes(theme).includes(mode);
+}
+
+export function resolveThemeMode(theme: Pick<StudioThemeDefinition, "supportedModes">, preferredMode: ThemeMode): ThemeMode {
+  return supportsThemeMode(theme, preferredMode) ? preferredMode : getSupportedThemeModes(theme)[0] ?? "light";
+}
+
+function isThemeMode(value: string): value is ThemeMode {
+  return value === "light" || value === "dark";
 }
 
 export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeDefinition {
@@ -186,6 +211,7 @@ export function cloneThemeDefinition(theme: StudioThemeDefinition): StudioThemeD
     version: theme.version,
     enabled: theme.enabled,
     published: theme.published,
+    supportedModes: getSupportedThemeModes(theme),
     modes: theme.modes,
     material: theme.material
   })) as StudioThemeDefinition;
@@ -629,13 +655,14 @@ export const builtInThemeDefinitions: Theme[] = [
     "Paper",
     "Layered vellum, inked diagrams, and stamped review notes.",
     { ...paperTheme, material: materialMode("vellum", "/studio/assets/paper-vellum-tile.png", 0.32, 430) },
-    { ...paperDarkTheme, material: materialMode("charcoal-paper", "/studio/assets/paper-charcoal-tile.png", 0.64, 430) }
+    { ...paperDarkTheme, material: materialMode("charcoal-paper", "/studio/assets/paper-charcoal-tile.png", 0.64, 430) },
+    ["light"]
   ),
   createThemeDefinition(
     "blueprint",
     "Blueprint",
     "Architectural drafting paper with crisp cyan workflow marks.",
-    { ...blueprintLightTheme, material: materialMode("drafting-paper", "/studio/assets/blueprint-drafting-tile.png", 0.34, 420) },
+    { ...blueprintLightTheme, material: materialMode("drafting-paper", "/studio/assets/blueprint-drafting-tile.png", 0.16, 720) },
     { ...blueprintTheme, material: materialMode("blueprint-paper", "/studio/assets/blueprint-paper-tile.png", 0.7, 420) }
   ),
   createThemeDefinition(
@@ -643,21 +670,22 @@ export const builtInThemeDefinitions: Theme[] = [
     "Ceramic",
     "Matte porcelain surfaces with soft glazed controls.",
     { ...ceramicTheme, material: materialMode("porcelain", "/studio/assets/ceramic-glaze-tile.png", 0.3, 420) },
-    { ...ceramicDarkTheme, material: materialMode("obsidian-glaze", "/studio/assets/ceramic-obsidian-tile.png", 0.68, 420) }
+    { ...ceramicDarkTheme, material: materialMode("obsidian-glaze", "/studio/assets/ceramic-obsidian-tile.png", 0.28, 780) }
   ),
   createThemeDefinition(
     "carbon",
     "Carbon",
     "Technical carbon surface with a precise cyan working accent.",
-    { ...carbonLightTheme, material: materialMode("silver-carbon", "/studio/assets/carbon-silver-tile.png", 0.38, 320) },
-    { ...carbonTheme, material: materialMode("carbon-weave", "/studio/assets/carbon-weave-tile.png", 0.76, 320) }
+    { ...carbonLightTheme, material: materialMode("silver-carbon", "/studio/assets/carbon-silver-tile.png", 0.08, 720) },
+    { ...carbonTheme, material: materialMode("carbon-weave", "/studio/assets/carbon-weave-tile.png", 0.08, 720) }
   ),
   createThemeDefinition(
     "brass-instrument",
     "Brass Instrument",
     "Dark enamel panels with machined brass controls.",
     { ...brassLightTheme, material: materialMode("champagne-brass", "/studio/assets/brass-champagne-tile.png", 0.42, 380) },
-    { ...brassTheme, material: materialMode("brass-enamel", "/studio/assets/brass-enamel-tile.png", 0.78, 380) }
+    { ...brassTheme, material: materialMode("brass-enamel", "/studio/assets/brass-enamel-tile.png", 0.78, 380) },
+    ["dark"]
   ),
   createThemeDefinition("harbor", "Harbor", "Crisp blue for operational dashboards.", createMode(oklchToVar(0.68, 0.16, 235), 235), createMode(oklchToVar(0.6, 0.16, 235), 235, { background: oklchToVar(0.18, 0.02, 250) })),
   createThemeDefinition("borealis", "Borealis", "Green-teal palette with a calm technical feel.", createMode(oklchToVar(0.72, 0.14, 168), 168), createMode(oklchToVar(0.62, 0.14, 168), 168, { background: oklchToVar(0.17, 0.02, 168) })),

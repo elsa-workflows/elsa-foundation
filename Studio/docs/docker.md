@@ -107,6 +107,7 @@ double-underscore (`__`) separator.
 | --- | --- | --- |
 | `Studio__BackendBaseUrl` | `https://localhost:7243` | Base URL of the Elsa Server backend. Surfaced to the browser via `/studio-runtime.js`. |
 | `Studio__BackendModuleManagementApiKey` | `local-dev-module-management-key` | API key the Studio uses for backend module-management calls. **Override in any real deployment.** |
+| `Studio__Workflows__AutosaveEnabledByDefault` | `true` | Whether the workflow editor opens with Autosave enabled. Users can still toggle it per editing session. |
 | `ASPNETCORE_URLS` | `http://+:8080` | Kestrel bind address/port. Change the port here if you don't want 8080. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Standard ASP.NET Core environment name. |
 | `Logging__LogLevel__Default` | `Information` | Default log level. e.g. set to `Warning` to quieten logs. |

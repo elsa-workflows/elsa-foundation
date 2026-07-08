@@ -9,6 +9,7 @@ import type { WorkflowDraftRecipe } from "./workflowDocument";
 interface WorkflowPersistenceParams {
   context: StudioEndpointContext;
   draft: WorkflowDraft | null;
+  autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
   setStatus(value: string): void;
   setError(value: string): void;
@@ -18,8 +19,8 @@ interface WorkflowPersistenceParams {
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
-  const [autosaveEnabled, setAutosaveEnabled] = useState(false);
+export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
+  const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());

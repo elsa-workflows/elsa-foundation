@@ -13,6 +13,7 @@ import {
   type StudioDiagnosticsWidgetContribution,
   type StudioModuleDiagnostic,
   type StudioNavigationContribution,
+  type StudioRuntimeSettings,
   type StudioRouteContribution
 } from "../sdk";
 import { dialogController } from "./dialogs";
@@ -22,6 +23,7 @@ export interface CreateStudioRegistryOptions {
   backendHeaders?: HeadersInit;
   hostHttp?: StudioEndpointContext["http"];
   backendHttp?: StudioEndpointContext["http"];
+  runtime?: StudioRuntimeSettings;
 }
 
 export function createStudioRegistry(
@@ -41,6 +43,7 @@ export function createStudioRegistry(
   return {
     host: hostContext,
     backend,
+    runtime: options.runtime ?? {},
     featureAreas,
     navigation,
     routes,

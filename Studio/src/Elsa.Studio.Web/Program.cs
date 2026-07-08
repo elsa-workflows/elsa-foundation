@@ -92,7 +92,8 @@ app.MapGet("/studio-runtime.js", () =>
         // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry)
         // against the backend identity endpoints. Omitted endpoints fall back to the SDK defaults
         // (`/_elsa/identity/token`); when Enabled is false the shell keeps booting anonymously.
-        ["auth"] = BuildAuthRuntimeConfig(configuration)
+        ["auth"] = BuildAuthRuntimeConfig(configuration),
+        ["workflows"] = BuildWorkflowsRuntimeConfig(configuration)
     };
 
     return Results.Content(
@@ -116,6 +117,14 @@ static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configu
         auth["refreshEndpoint"] = refreshEndpoint;
 
     return auth;
+}
+
+static Dictionary<string, object?> BuildWorkflowsRuntimeConfig(IConfiguration configuration)
+{
+    return new Dictionary<string, object?>
+    {
+        ["autosaveEnabledByDefault"] = configuration.GetValue("Studio:Workflows:AutosaveEnabledByDefault", defaultValue: true)
+    };
 }
 
 app.UseStaticFiles();

@@ -507,12 +507,15 @@
 .wf-instance-detail-workbench {
   display: grid;
   min-height: min(760px, calc(100vh - 230px));
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
-  gap: 14px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    10px
+    var(--wf-inspector-width, 320px);
   margin: 14px 18px;
 }
 
 .wf-instance-canvas-shell {
+  grid-column: 1;
   display: flex;
   min-width: 0;
   min-height: 560px;
@@ -521,6 +524,38 @@
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius-md);
   background: var(--wf-canvas);
+}
+
+.wf-instance-detail-workbench > .wf-side-resize-handle.right,
+.wf-instance-detail-workbench > .wf-side-resize-spacer {
+  grid-column: 2;
+}
+
+.wf-instance-detail-workbench.inspector-maximized {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wf-instance-detail-workbench.inspector-maximized .wf-instance-inspector {
+  grid-column: 1;
+}
+
+.wf-instance-detail-workbench.inspector-maximized .wf-instance-canvas-shell,
+.wf-instance-detail-workbench.inspector-maximized .wf-side-resize-handle,
+.wf-instance-detail-workbench.inspector-maximized .wf-side-resize-spacer {
+  display: none;
+}
+
+.wf-instance-detail-workbench.inspector-collapsed .wf-instance-inspector {
+  overflow: hidden;
+}
+
+.wf-instance-detail-workbench.inspector-collapsed .wf-instance-inspector .wf-panel-title {
+  justify-content: center;
+  padding: 0;
+}
+
+.wf-instance-detail-workbench.inspector-collapsed .wf-instance-inspector .wf-panel-tab-list {
+  display: none;
 }
 
 .wf-instance-canvas-shell header {
@@ -561,6 +596,7 @@
 }
 
 .wf-instance-inspector {
+  grid-column: 3;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -3941,7 +3977,15 @@ html[data-theme-material] .wf-palette,
 html[data-theme-material] .wf-inspector,
 html[data-theme-material] .wf-canvas-tabs,
 html[data-theme-material] .wf-code-view-toolbar,
-html[data-theme-material] .wf-properties-section {
+html[data-theme-material] .wf-properties-section,
+html[data-theme-material] .wf-instance-canvas-shell,
+html[data-theme-material] .wf-instance-canvas-shell header,
+html[data-theme-material] .wf-instance-inspector,
+html[data-theme-material] .wf-instance-inspector header,
+html[data-theme-material] .wf-instance-tabs,
+html[data-theme-material] .wf-instance-activity,
+html[data-theme-material] .wf-instance-incident,
+html[data-theme-material] .wf-instance-unmatched {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
@@ -3950,10 +3994,40 @@ html[data-theme-material] .wf-properties-section {
 
 html[data-theme-material] .wf-canvas-shell,
 html[data-theme-material] .wf-canvas,
+html[data-theme-material] .wf-instance-canvas,
 html[data-theme-material] .wf-properties-view,
 html[data-theme-material] .wf-code-view-editor .studio-code-editor-input {
   background: var(--studio-material-canvas-bg);
   background-size: var(--studio-material-canvas-bg-size);
+}
+
+html[data-theme-material] .wf-instance-tab-content {
+  background: var(--studio-material-panel-bg-soft);
+  background-size: var(--studio-material-panel-bg-size);
+}
+
+html[data-theme-material] .wf-timeline-entry:hover,
+html[data-theme-material] .wf-timeline-entry:focus-visible,
+html[data-theme-material] .wf-instance-activity:hover,
+html[data-theme-material] .wf-instance-incident:hover {
+  background: var(--studio-material-hover-bg);
+}
+
+html[data-theme-material] .wf-timeline-entry[data-selected="true"],
+html[data-theme-material] .wf-instance-activity[data-selected="true"],
+html[data-theme-material] .wf-instance-incident[data-selected="true"] {
+  background: var(--studio-material-active-bg);
+}
+
+html[data-theme-material] .wf-instance-incident[data-severity="warning"] {
+  border-color: color-mix(in srgb, var(--wf-warning) 45%, var(--studio-material-edge));
+}
+
+html[data-theme-material] .wf-instance-incident[data-severity="error"],
+html[data-theme-material] .wf-instance-incident[data-severity="critical"] {
+  border-color: color-mix(in srgb, var(--wf-danger) 50%, var(--studio-material-edge));
+  background: color-mix(in srgb, var(--wf-danger) 12%, var(--studio-material-panel-bg));
+  background-size: var(--studio-material-panel-bg-size);
 }
 
 html[data-theme-material] .wf-node {

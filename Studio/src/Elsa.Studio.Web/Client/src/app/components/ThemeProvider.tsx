@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { StudioEndpointContext } from "../../sdk";
 import type { StudioThemeDefinition, Theme, ThemeMode } from "../themes/presets";
-import { builtInThemeDefinitions, isMaterialTheme, toTheme } from "../themes/presets";
+import { builtInThemeDefinitions, getSupportedThemeModes, isMaterialTheme, resolveThemeMode, toTheme } from "../themes/presets";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
 interface ThemeContextType {
@@ -9,6 +9,8 @@ interface ThemeContextType {
   mode: ThemeMode;
   setTheme: (themeId: string) => void;
   setMode: (mode: ThemeMode) => void;
+  supportedModes: ThemeMode[];
+  canToggleMode: boolean;
   previewTheme: (theme: StudioThemeDefinition) => void;
   availableThemes: Theme[];
   store: ThemeStoreResponse;
@@ -26,18 +28,22 @@ export function ThemeProvider({
 }) {
   const [store, setStore] = useState<ThemeStoreResponse>(() => normalizeThemeStore());
   const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
-  const [mode, setMode] = useState<ThemeMode>("light");
+  const [mode, setModeState] = useState<ThemeMode>("light");
   const [mounted, setMounted] = useState(false);
   const [persistThemeSelection, setPersistThemeSelection] = useState(true);
+  const supportedModes = getSupportedThemeModes(currentTheme);
+  const activeMode = resolveThemeMode(currentTheme, mode);
+  const canToggleMode = supportedModes.length > 1;
 
   // Initialize from localStorage on mount, falling back to the OS `prefers-color-scheme` when the
   // user has never chosen a mode. Once persisted, the stored preference always wins.
   useEffect(() => {
     const savedThemeId = getStoredPreference("elsa-studio-theme");
     const savedMode = getStoredPreference("elsa-studio-theme-mode") as ThemeMode | null;
+    const nextTheme = findSelectableTheme(store, savedThemeId);
 
-    setMode(savedMode ?? getPreferredColorScheme());
-    setCurrentTheme(findSelectableTheme(store, savedThemeId));
+    setModeState(resolveThemeMode(nextTheme, savedMode ?? getPreferredColorScheme()));
+    setCurrentTheme(nextTheme);
     setPersistThemeSelection(true);
     setMounted(true);
   }, [store]);
@@ -49,7 +55,11 @@ export function ThemeProvider({
       const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
       if (!disposed) {
         setStore(nextStore);
-        setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
+        setCurrentTheme(current => {
+          const nextTheme = findSelectableTheme(nextStore, current.id);
+          setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
+          return nextTheme;
+        });
       }
     }
 
@@ -65,7 +75,7 @@ export function ThemeProvider({
   useEffect(() => {
     if (!mounted) return;
 
-    const colors = mode === "light" ? currentTheme.light : currentTheme.dark;
+    const colors = activeMode === "light" ? currentTheme.light : currentTheme.dark;
     const root = document.documentElement;
 
     clearMaterialVariables(root);
@@ -86,7 +96,7 @@ export function ThemeProvider({
 
     // Also set the data attribute for CSS selectors
     root.setAttribute("data-theme", currentTheme.id);
-    root.setAttribute("data-theme-mode", mode);
+    root.setAttribute("data-theme-mode", activeMode);
     if (isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
@@ -97,32 +107,52 @@ export function ThemeProvider({
     if (persistThemeSelection) {
       setStoredPreference("elsa-studio-theme", currentTheme.id);
     }
-    setStoredPreference("elsa-studio-theme-mode", mode);
-  }, [currentTheme, mode, mounted, persistThemeSelection]);
+    setStoredPreference("elsa-studio-theme-mode", activeMode);
+  }, [currentTheme, activeMode, mounted, persistThemeSelection]);
+
+  useEffect(() => {
+    if (mode !== activeMode) {
+      setModeState(activeMode);
+    }
+  }, [activeMode, mode]);
 
   const handleSetTheme = (themeId: string) => {
     setPersistThemeSelection(true);
-    setCurrentTheme(findSelectableTheme(store, themeId));
+    const nextTheme = findSelectableTheme(store, themeId);
+    setCurrentTheme(nextTheme);
+    setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
+  };
+
+  const handleSetMode = (nextMode: ThemeMode) => {
+    setModeState(resolveThemeMode(currentTheme, nextMode));
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
+    const nextTheme = toTheme(theme);
     setPersistThemeSelection(false);
-    setCurrentTheme(toTheme(theme));
+    setCurrentTheme(nextTheme);
+    setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
   };
 
   const refreshThemes = async () => {
     const nextStore = storeContext ? await getThemeStore(storeContext) : normalizeThemeStore();
     setStore(nextStore);
-    setCurrentTheme(current => findSelectableTheme(nextStore, current.id));
+    setCurrentTheme(current => {
+      const nextTheme = findSelectableTheme(nextStore, current.id);
+      setModeState(currentMode => resolveThemeMode(nextTheme, currentMode));
+      return nextTheme;
+    });
   };
 
   return (
     <ThemeContext.Provider
       value={{
         currentTheme,
-        mode,
+        mode: activeMode,
         setTheme: handleSetTheme,
-        setMode,
+        setMode: handleSetMode,
+        supportedModes,
+        canToggleMode,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
         store,

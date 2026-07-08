@@ -8,8 +8,10 @@ import {
 } from "./api/workflows";
 import {
   createAvailabilityDraft,
-  getActivityDisplayName,
+  getAvailabilityActivityDescription,
   getAvailabilityActivityEntries,
+  getAvailabilityActivityName,
+  getAvailabilityActivityTypeLabel,
   getAvailabilityModePayload,
   getAvailabilityStateClass,
   getAvailabilityStateLabel,
@@ -46,9 +48,13 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
   const filteredEntries = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return activityEntries;
-    return activityEntries.filter(entry =>
-      getActivityDisplayName(entry).toLowerCase().includes(term) || (entry.activityTypeKey ?? "").toLowerCase().includes(term)
-    );
+    return activityEntries.filter(entry => [
+      getAvailabilityActivityName(entry),
+      getAvailabilityActivityTypeLabel(entry),
+      getAvailabilityActivityDescription(entry),
+      entry.activityTypeKey,
+      entry.category
+    ].some(value => (value ?? "").toLowerCase().includes(term)));
   }, [activityEntries, search]);
 
   const selectedActivityTypes = new Set(draft.activityTypes);
@@ -144,6 +150,9 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
               const state = getAvailabilityStateName(entry.state);
               const hostBlocked = state === "BlockedByHostBaseline";
               const key = entry.activityTypeKey ?? entry.activityDefinitionId ?? "";
+              const activityName = getAvailabilityActivityName(entry);
+              const activityTypeLabel = getAvailabilityActivityTypeLabel(entry);
+              const activityDescription = getAvailabilityActivityDescription(entry);
               return (
                 <label className={`availability-activity-option ${hostBlocked ? "disabled" : ""}`} key={key}>
                   <input
@@ -153,8 +162,16 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
                     onChange={() => toggleActivityType(key)}
                   />
                   <span className="availability-activity-main">
-                    <strong>{getActivityDisplayName(entry)}</strong>
-                    <code>{entry.activityTypeKey}</code>
+                    <span className="availability-activity-title-line">
+                      <strong>{activityName}</strong>
+                      {entry.category && <span className="availability-activity-category">{entry.category}</span>}
+                    </span>
+                    {activityDescription && <span className="availability-activity-description">{activityDescription}</span>}
+                    {activityTypeLabel && (
+                      <span className="availability-activity-meta" title={entry.activityTypeKey ?? undefined}>
+                        <code>{activityTypeLabel}</code>
+                      </span>
+                    )}
                   </span>
                   <em className={`availability-state ${getAvailabilityStateClass(entry.state)}`}>{getAvailabilityStateLabel(entry.state)}</em>
                 </label>

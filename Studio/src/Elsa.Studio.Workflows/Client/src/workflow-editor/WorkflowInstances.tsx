@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ListTree, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
@@ -30,6 +30,8 @@ import {
   formatWorkflowVersionLoadError,
   getVisibleWorkflowGraphNodeIds
 } from "./editorHelpers";
+import { useSidePanelLayout } from "./useSidePanelLayout";
+import { maxInspectorWidth, minInspectorWidth } from "./constants";
 
 export function WorkflowInstances({ context }: { context: StudioEndpointContext }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -154,6 +156,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
   const [error, setError] = useState("");
   const [data, setData] = useState<WorkflowInstanceInspectionData | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const {
+    inspectorWidth,
+    inspectorCollapsed,
+    maximizedSidePanel,
+    inspectorExpanded,
+    editorBodyStyle,
+    toggleSidePanelCollapsed,
+    toggleSidePanelMaximized,
+    startSidePanelResize,
+    handleSidePanelResizeKeyDown
+  } = useSidePanelLayout();
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
   const load = useCallback(async () => {
@@ -205,6 +218,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
     window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
+  const detailWorkbenchClassName = [
+    "wf-instance-detail-workbench",
+    inspectorCollapsed ? "inspector-collapsed" : "",
+    maximizedSidePanel === "inspector" ? "inspector-maximized" : ""
+  ].filter(Boolean).join(" ");
 
   return (
     <>
@@ -223,7 +241,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data ? (
-        <div className="wf-instance-detail-workbench">
+        <div className={detailWorkbenchClassName} style={editorBodyStyle}>
           <WorkflowInstanceCanvas
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
@@ -232,6 +250,20 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
           />
+          {inspectorExpanded && !maximizedSidePanel ? (
+            <div
+              className="wf-side-resize-handle right"
+              role="separator"
+              aria-label="Resize run details panel"
+              aria-orientation="vertical"
+              aria-valuemin={minInspectorWidth}
+              aria-valuemax={maxInspectorWidth}
+              aria-valuenow={inspectorWidth}
+              tabIndex={0}
+              onPointerDown={event => startSidePanelResize("inspector", event)}
+              onKeyDown={event => handleSidePanelResizeKeyDown("inspector", event)}
+            />
+          ) : <div className="wf-side-resize-spacer" />}
           <WorkflowInstanceInspector
             ai={ai}
             action={instanceAction ?? undefined}
@@ -243,6 +275,11 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             onSelectEvidence={setSelectedEvidenceId}
             activityCatalog={data.activityCatalog}
             graphNodeIds={data.definitionVersion ? getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
+            collapsed={inspectorCollapsed}
+            expanded={inspectorExpanded}
+            maximized={maximizedSidePanel === "inspector"}
+            onToggleCollapsed={() => toggleSidePanelCollapsed("inspector")}
+            onToggleMaximized={() => toggleSidePanelMaximized("inspector")}
           />
         </div>
       ) : null}
@@ -333,7 +370,23 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
   );
 }
 
-function WorkflowInstanceInspector({ ai, action, summary, details, state, error, selectedEvidenceId = null, onSelectEvidence, graphNodeIds, activityCatalog = [] }: {
+function WorkflowInstanceInspector({
+  ai,
+  action,
+  summary,
+  details,
+  state,
+  error,
+  selectedEvidenceId = null,
+  onSelectEvidence,
+  graphNodeIds,
+  activityCatalog = [],
+  collapsed = false,
+  expanded = true,
+  maximized = false,
+  onToggleCollapsed,
+  onToggleMaximized
+}: {
   ai: StudioAiContributionApi;
   action: StudioAiPromptActionContribution | undefined;
   summary: WorkflowInstanceSummary | null;
@@ -344,6 +397,11 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   onSelectEvidence?(evidenceId: string): void;
   graphNodeIds?: Set<string>;
   activityCatalog?: ActivityCatalogItem[];
+  collapsed?: boolean;
+  expanded?: boolean;
+  maximized?: boolean;
+  onToggleCollapsed?(): void;
+  onToggleMaximized?(): void;
 }) {
   const [activeTab, setActiveTab] = useState<InstanceInspectorTab>("timeline");
 
@@ -365,8 +423,35 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
   ];
 
   return (
-    <aside className="wf-instance-inspector" aria-label="Workflow run details">
-      <header>
+    <aside className="wf-instance-inspector" aria-label="Run details panel">
+      <div className="wf-panel-title wf-instance-panel-title">
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
+        <span className="wf-panel-actions">
+          <button
+            type="button"
+            className="wf-panel-action-button"
+            aria-label={collapsed ? "Expand run details panel" : "Collapse run details panel"}
+            title={collapsed ? "Expand" : "Collapse"}
+            onClick={onToggleCollapsed}
+          >
+            {collapsed ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+          </button>
+          {!collapsed ? (
+            <button
+              type="button"
+              className="wf-panel-action-button"
+              aria-label={maximized ? "Restore run details panel" : "Maximize run details panel"}
+              title={maximized ? "Restore" : "Maximize"}
+              onClick={onToggleMaximized}
+            >
+              {maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {expanded ? (
+        <>
+        <header>
         <div>
           <span>Workflow Instance ID</span>
           <h3>{summary.workflowExecutionId}</h3>
@@ -377,9 +462,6 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
           </button>
         ) : null}
       </header>
-      <div className="wf-instance-tabs">
-        <PanelTabList label="Workflow run tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
-      </div>
       {state === "loading" ? <div className="wf-empty">Loading run details...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && details ? (
@@ -420,6 +502,8 @@ function WorkflowInstanceInspector({ ai, action, summary, details, state, error,
           )}
         </div>
       ) : null}
+      </>
+      ) : null}
     </aside>
   );
 }
@@ -451,6 +535,8 @@ function WorkflowActivityExecutionDetails({ activity, activityCatalog }: {
 
   const catalogItem = activityCatalog.find(item => item.activityTypeKey === activity.activityType);
   const activityLabel = catalogItem?.displayName || shortTypeName(activity.activityType) || activity.activityType;
+  const bookmarkCount = activity.bookmarkIds?.length ?? 0;
+  const incidentCount = activity.incidentIds?.length ?? 0;
 
   return (
     <section className="wf-instance-section">
@@ -473,9 +559,9 @@ function WorkflowActivityExecutionDetails({ activity, activityCatalog }: {
         <dt>Duration</dt>
         <dd>{formatDuration(activity.startedAt, activity.completedAt) || "Unknown"}</dd>
         <dt>Bookmarks</dt>
-        <dd>{activity.bookmarkIds.length}</dd>
+        <dd>{bookmarkCount}</dd>
         <dt>Incidents</dt>
-        <dd>{activity.incidentIds.length}</dd>
+        <dd>{incidentCount}</dd>
       </dl>
     </section>
   );

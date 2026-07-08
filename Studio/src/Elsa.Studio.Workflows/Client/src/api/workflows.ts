@@ -27,6 +27,7 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
   WorkflowExecutableRunResponse,
+  WorkflowExecutablesResponse,
   WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
   WorkflowDefinitionVersionDetails,
@@ -300,7 +301,30 @@ export async function runExecutable(context: StudioEndpointContext, artifactId: 
 }
 
 export async function listExecutables(context: StudioEndpointContext) {
-  return context.http.getJson<WorkflowExecutableSummary[]>("/_demo/workflows/executables");
+  const paths = [`${basePath}/executables`, "/_demo/workflows/executables"];
+  const errors: unknown[] = [];
+
+  for (const path of paths) {
+    try {
+      const response = await context.http.getJson<WorkflowExecutablesResponse | WorkflowExecutableSummary[]>(path);
+      return normalizeWorkflowExecutables(response);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length > 0 && errors.every(isNotFoundError)) return [];
+  throw errors.find(error => !isNotFoundError(error)) ?? errors[errors.length - 1] ?? new Error("Workflow executables could not be loaded.");
+}
+
+function normalizeWorkflowExecutables(response: WorkflowExecutablesResponse | WorkflowExecutableSummary[]): WorkflowExecutableSummary[] {
+  return Array.isArray(response) ? response : response.executables ?? [];
+}
+
+function isNotFoundError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return /\b404\b/.test(message) || message.includes("not found");
 }
 
 export interface ListWorkflowInstancesRequest {

@@ -2,6 +2,7 @@ import type { StudioEndpointContext } from "../../sdk";
 import {
   builtInThemeDefinitions,
   cloneThemeDefinition,
+  getSupportedThemeModes,
   themeTokenNames,
   toTheme,
   type StudioThemeDefinition,
@@ -110,6 +111,18 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
     issues.push(error("source", "Theme source must be built-in or custom."));
   }
 
+  if (theme.supportedModes !== undefined) {
+    if (!Array.isArray(theme.supportedModes) || theme.supportedModes.length === 0) {
+      issues.push(error("supportedModes", "Theme supported modes must include at least one mode."));
+    } else {
+      for (const mode of theme.supportedModes) {
+        if (mode !== "light" && mode !== "dark") {
+          issues.push(error("supportedModes", "Theme supported modes must be light or dark."));
+        }
+      }
+    }
+  }
+
   validateMode(theme.modes?.light, "modes.light", issues);
   validateMode(theme.modes?.dark, "modes.dark", issues);
 
@@ -208,6 +221,7 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
     version: theme.version ?? 1,
     enabled: theme.enabled ?? true,
     published: theme.published ?? true,
+    supportedModes: getSupportedThemeModes(theme),
     modes: {
       light: theme.modes.light,
       dark: theme.modes.dark

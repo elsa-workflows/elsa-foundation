@@ -152,6 +152,7 @@ export interface ActivityAvailabilityDiagnosticEntry {
   activityDefinitionId?: string | null;
   activityTypeKey?: string | null;
   displayName?: string | null;
+  description?: string | null;
   category?: string | null;
   state: ActivityAvailabilityDiagnosticState | number;
   layer: ActivityAvailabilityPolicyLayer | number;
