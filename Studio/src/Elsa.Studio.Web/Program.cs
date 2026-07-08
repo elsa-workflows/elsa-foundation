@@ -55,7 +55,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(FeatureManagementStudioFeature).Assembly,
             typeof(WeaverWorkflowsStudioFeature).Assembly,
             typeof(WorkflowsStudioFeature).Assembly,
-            typeof(DashboardStudioFeature).Assembly)
+            typeof(DashboardStudioFeature).Assembly,
+            typeof(ThemeStoreCoreStudioFeature).Assembly)
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
         {

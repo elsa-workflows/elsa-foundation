@@ -14,3 +14,7 @@ coverage/
 
 # Local dev-only visual harness for the studio client
 src/Elsa.Studio.Web/Client/harness/
+
+# Local Studio host Theme Store data
+src/Elsa.Studio.Web/studio-theme-store.json
+src/Elsa.Studio.Web/theme-assets/
