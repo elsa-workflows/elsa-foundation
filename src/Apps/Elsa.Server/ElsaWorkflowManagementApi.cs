@@ -19,6 +19,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -524,12 +526,16 @@ internal static class ElsaWorkflowManagementApi
 
     /// <summary>
     /// Resolves the designer graph for a draft test run. The pinned version id is synthetic
-    /// (<c>draft:{draftId}-{stateHash}</c>) and has no row in the version store, so the authored
-    /// state is read back from the originating draft and projected into the same details view the
-    /// version endpoint returns.
+    /// (<c>draft:{snapshotId}</c>) and has no row in the version store. For unsaved test runs, the
+    /// authored state is read from the transient test-run snapshot; when that has expired or is
+    /// unavailable, the originating persisted draft is used as a compatibility fallback.
     /// </summary>
     private static async Task<IResult> LoadDraftVersionResultAsync(IServiceProvider services, string versionId, string draftId, CancellationToken cancellationToken)
     {
+        var snapshotDetails = await TryLoadDraftSnapshotVersionDetailsAsync(services, versionId, draftId, cancellationToken);
+        if (snapshotDetails is not null)
+            return Results.Ok(snapshotDetails);
+
         var draftStore = services.GetRequiredService<IWorkflowDefinitionDraftStore>();
         var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
 
@@ -552,10 +558,52 @@ internal static class ElsaWorkflowManagementApi
         return Results.Ok(details);
     }
 
+    private static async Task<WorkflowDefinitionVersionDetailsView?> TryLoadDraftSnapshotVersionDetailsAsync(
+        IServiceProvider services,
+        string versionId,
+        string draftId,
+        CancellationToken cancellationToken)
+    {
+        var testRunStore = services.GetService<IWorkflowTestRunStore>();
+        if (testRunStore is null)
+            return null;
+
+        var snapshot = await testRunStore.FindDraftSnapshotAsync(versionId, cancellationToken);
+        if (snapshot is null)
+            return null;
+
+        var definitionStore = services.GetRequiredService<IWorkflowDefinitionStore>();
+        var definition = await definitionStore.FindByIdAsync(snapshot.DefinitionId, cancellationToken)
+            ?? new WorkflowDefinition { Id = snapshot.DefinitionId, Name = snapshot.DefinitionId };
+        var layout = await TryLoadDraftSnapshotLayoutAsync(services, draftId, cancellationToken);
+
+        return new WorkflowDefinitionVersionDetailsView(
+            snapshot.DefinitionVersionId,
+            snapshot.ArtifactVersion,
+            definition.ToView(),
+            snapshot.State.ToStateView(),
+            layout.Select(WorkflowDefinitionLayoutRecordView.From).ToArray());
+    }
+
+    private static async Task<IReadOnlyCollection<DesignMetadataRecord>> TryLoadDraftSnapshotLayoutAsync(
+        IServiceProvider services,
+        string draftId,
+        CancellationToken cancellationToken)
+    {
+        var draftStore = services.GetService<IWorkflowDefinitionDraftStore>();
+        if (draftStore is null || string.IsNullOrWhiteSpace(draftId))
+            return [];
+
+        var draft = await draftStore.FindByIdAsync(draftId, cancellationToken);
+        return draft is null
+            ? []
+            : await draftStore.FindLayoutByDraftIdAsync(draftId, cancellationToken);
+    }
+
     /// <summary>
     /// Extracts the originating draft id from a synthetic draft-test-run version id of the form
-    /// <c>draft:{draftId}-{stateHash}</c>. The draft id is a hyphen-free ULID, so the trailing
-    /// <c>-{stateHash}</c> segment is stripped to recover it.
+    /// <c>draft:{snapshotId}</c>. When the snapshot id embeds a draft id plus a trailing state hash,
+    /// the draft id is recovered by stripping the final hyphen segment.
     /// </summary>
     private static bool TryGetDraftIdFromSyntheticVersionId(string? versionId, out string draftId)
     {
@@ -699,7 +747,11 @@ internal static class ElsaWorkflowManagementApi
             true,
             null,
             "Literal",
-            input.UISpecifications ?? GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
+            // Author-provided UI metadata is opaque JSON (a verbatim JsonElement, ADR 0035 D3); when absent we
+            // synthesize the descriptor's options from the declared type. Both serialize to the same response JSON.
+            input.UISpecifications.HasValue
+                ? input.UISpecifications.Value
+                : GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
             input.IsRequired);
 
     private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
@@ -764,7 +816,7 @@ internal static class ElsaWorkflowManagementApi
     // every referenceable element type (primitives + activity I/O types) back to its real CLR type — so an
     // enum-typed input can again expose its option list. We resolve only the element type (collection-ness is
     // irrelevant to whether the element is an enum) via IWellKnownTypeRegistry; unknown aliases yield no options.
-    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
+    private static object? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
     {
         if (!wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var elementType) || !elementType.IsEnum)
             return null;
@@ -953,7 +1005,7 @@ internal sealed record InputDescriptorResponse(
     bool IsWrapped,
     object? DefaultValue,
     string DefaultSyntax,
-    IDictionary<string, object>? UiSpecifications,
+    object? UiSpecifications,
     bool IsRequired);
 
 internal sealed record OutputDescriptorResponse(

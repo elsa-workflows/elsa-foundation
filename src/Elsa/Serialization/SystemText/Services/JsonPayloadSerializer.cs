@@ -1,6 +1,9 @@
 using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText.JsonConverters;
+using Elsa.Serialization.SystemText.Resolvers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Elsa.Serialization.SystemText.Services;
 
@@ -25,11 +28,10 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
     public string Serialize(object payload)
     {
         var options = GetOptions();
-        // Pass payload.GetType() so the input type is the runtime type, not 'object'.
-        // Without this, generic inference picks TValue = object and the
-        // PolymorphicObjectConverterFactory claims the call, wrapping collections in
-        // {_items: [...], _type: "..."}. With the runtime type, STJ uses built-in
-        // handling and produces plain JSON for ordinary classes/collections.
+        // Pass payload.GetType() so the input type is the runtime type, not 'object'. Without it, generic
+        // inference picks TValue = object and STJ serializes against the declared 'object' type, losing the
+        // payload's members. With the runtime type, STJ uses built-in handling and produces plain JSON for
+        // ordinary classes/collections.
         return JsonSerializer.Serialize(payload, payload.GetType(), options);
     }
 
@@ -105,7 +107,25 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+
+            // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
+            // byte-identical JSON so the output can be content-hashed. SortObjectMembers fixes object member
+            // order; DeterministicDictionaryConverterFactory sorts every string-keyed dictionary shape,
+            // including object-valued ones (formerly the retired polymorphic converter's job — ADR 0035 D2).
+            // These target the real cross-process nondeterminism — per-process string-hash-seeded dictionary
+            // enumeration and unfixed reflection member order.
+            // Embedded opaque JSON (a JsonElement such as ActivityNode.Structure.Payload) is deliberately NOT
+            // rewritten: it re-emits verbatim in parse order with no hashing, so it is already byte-stable
+            // across processes, and reordering an opaque blob would assert a semantic equality Elsa does not
+            // own (ADR 0035 D3 — opaque JSON stays verbatim). Baked into the per-revision options GetOptions
+            // caches — no per-call cost.
+            TypeInfoResolver = new DefaultJsonTypeInfoResolver
+            {
+                Modifiers = { DeterministicOrderTypeInfoModifier.SortObjectMembers },
+            },
         };
+
+        options.Converters.Add(new DeterministicDictionaryConverterFactory());
 
         // Sync access to the registry populated at startup. No DI enumeration here —
         // the registry is the seam between the async contribution pipeline and the

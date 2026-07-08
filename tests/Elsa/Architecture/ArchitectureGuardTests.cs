@@ -22,9 +22,13 @@ public sealed class ArchitectureGuardTests
     // recorded at the declaration site (csproj comment) and here. Additions require architect review.
     private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
     [
-        // Elsa.Server's ExtensionBuilder subsystem is a host-private surface of ~80 interlocking
-        // internal types; publicizing it to satisfy §2.23.3 would promote host-only contracts into
-        // public API. Tracked as the sole allowed exception (MD-3, Elsa 4 architecture review 2026-07).
+        // The ExtensionBuilder subsystem is a host-private surface of ~80 interlocking internal types;
+        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It now
+        // lives in its own module (Elsa.Modularity.ExtensionBuilder) which exposes those internals to
+        // the shared modularity test project (MD-3, Elsa 4 architecture review 2026-07).
+        ("Elsa.Modularity.ExtensionBuilder", "Elsa.Modularity.Tests"),
+        // Elsa.Server keeps a narrow exception for the host-only module-management registry builder
+        // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
         ("Elsa.Server", "Elsa.Modularity.Tests")
     ];
 

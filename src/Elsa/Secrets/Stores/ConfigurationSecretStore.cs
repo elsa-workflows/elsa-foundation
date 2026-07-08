@@ -4,18 +4,21 @@ using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Secrets.Stores;
 
-public sealed class ConfigurationSecretStore(IConfiguration configuration) : ISecretStore
+public sealed class ConfigurationSecretStore(IConfiguration configuration) : SecretStoreBase
 {
     public const string ConfigurationKeyMetadataName = "configurationKey";
 
-    public SecretStoreDescriptor Descriptor { get; } = new(
+    protected override string TestFailureCode => "not-found";
+    protected override string TestFailureMessage => "Configured secret value could not be found.";
+
+    public override SecretStoreDescriptor Descriptor { get; } = new(
         SecretStoreNames.Configuration,
         "Configuration",
         "Resolves secret values from host configuration.",
         SecretStoreCapabilities.Read | SecretStoreCapabilities.Test,
         true);
 
-    public ValueTask<SecretPayload> WriteAsync(SecretWriteContext context, CancellationToken cancellationToken = default)
+    public override ValueTask<SecretPayload> WriteAsync(SecretWriteContext context, CancellationToken cancellationToken = default)
     {
         if (!context.Payload.Metadata.TryGetValue(ConfigurationKeyMetadataName, out var configurationKey) || string.IsNullOrWhiteSpace(configurationKey))
             throw new InvalidOperationException("Configuration secrets require a configuration key.");
@@ -26,7 +29,7 @@ public sealed class ConfigurationSecretStore(IConfiguration configuration) : ISe
         });
     }
 
-    public ValueTask<SecretPayload?> ReadAsync(SecretReadContext context, CancellationToken cancellationToken = default)
+    public override ValueTask<SecretPayload?> ReadAsync(SecretReadContext context, CancellationToken cancellationToken = default)
     {
         if (!context.Version.Payload.Metadata.TryGetValue(ConfigurationKeyMetadataName, out var configurationKey) || string.IsNullOrWhiteSpace(configurationKey))
             return new((SecretPayload?)null);
@@ -40,15 +43,5 @@ public sealed class ConfigurationSecretStore(IConfiguration configuration) : ISe
                 Value = value,
                 Metadata = new Dictionary<string, string>(context.Version.Payload.Metadata, StringComparer.OrdinalIgnoreCase)
             });
-    }
-
-    public ValueTask DeleteAsync(SecretDeleteContext context, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-    public async ValueTask<SecretTestResult> TestAsync(SecretTestContext context, CancellationToken cancellationToken = default)
-    {
-        var payload = await ReadAsync(new SecretReadContext(context.Secret, context.Version), cancellationToken);
-        return payload?.Value is null
-            ? SecretTestResult.Failure("not-found", "Configured secret value could not be found.")
-            : SecretTestResult.Success();
     }
 }

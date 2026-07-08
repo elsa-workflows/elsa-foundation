@@ -1,7 +1,7 @@
 ﻿using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Serialization.Core;
-using System.Dynamic;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Http.Services;
 
@@ -30,11 +30,12 @@ internal sealed class JsonHttpContentParser(IObjectConverter objectConverter, IP
         if (returnType == null || returnType.IsPrimitive)
             return objectConverter.ConvertTo(json, returnType ?? typeof(string))!;
 
-        if (returnType != typeof(ExpandoObject) && returnType != typeof(object))
+        if (returnType != typeof(object) && !typeof(JsonNode).IsAssignableFrom(returnType))
         {
             return payloadSerializer.Deserialize(json, returnType);
         }
 
-        return payloadSerializer.Deserialize<object>(json)!;
+        // Dynamic (Any) payload: the canonical runtime representation is a mutable JsonNode (ADR 0036).
+        return JsonNode.Parse(json)!;
     }
 }

@@ -245,7 +245,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Kind:** Replacement (one generator owns runtime command-dispatch IDs for a runtime composition).
 - **Signature:** `NewWorkflowExecutionId()`, `NewWorkflowExecutionCommandId()`, `NewWorkflowExecutionCommandEnvelopeId()`, `NewActivityExecutionId()`.
 - **Usage:** provides runtime-owned identifiers for workflow execution start dispatch and concrete activity executions without leaking API, persistence, or provider-specific identity generation into command construction.
-- **Default implementation:** `GuidRuntimeExecutionIdGenerator`.
+- **Default implementation:** `ShortRuntimeExecutionIdGenerator`.
 
 ### `IWorkflowStartDispatcher` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one dispatcher owns conversion from executable artifact start requests into workflow execution agent commands).

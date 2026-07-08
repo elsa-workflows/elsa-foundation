@@ -8,6 +8,7 @@ using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 
@@ -33,6 +34,9 @@ public sealed class ClrAssemblyScanner(
     private static readonly string InputArgumentFullName = typeof(InputArgument).FullName!;
     private static readonly string OutputArgumentFullName = typeof(OutputArgument).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
+    private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
+    private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     public IReadOnlyList<ActivityVersionReconciliationModel> Scan(string folderPath)
     {
@@ -143,7 +147,87 @@ public sealed class ClrAssemblyScanner(
             Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,
-            DesignFacets: []);
+            DesignFacets: BuildDesignFacets(type));
+    }
+
+    private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(Type type)
+    {
+        var attributes = type.GetCustomAttributesData();
+        var structureAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == ActivityStructureAttributeFullName);
+        if (structureAttribute is null)
+            return [];
+
+        var kind = ReadRequiredStringConstructorArgument(structureAttribute, 0);
+        var schemaVersion = ReadRequiredStringConstructorArgument(structureAttribute, 1);
+        var mode = ReadNamedStringArgument(structureAttribute, nameof(ActivityStructureAttribute.Mode)) ?? "generic";
+        var supportsScopedVariables = ReadNamedBoolArgument(structureAttribute, nameof(ActivityStructureAttribute.SupportsScopedVariables));
+        var slots = attributes
+            .Where(attribute => attribute.AttributeType.FullName == ActivityChildSlotAttributeFullName)
+            .Select(ToSlotDescriptor)
+            .ToArray();
+        var payload = new ActivityStructureDesignFacetPayload(
+            mode,
+            supportsScopedVariables,
+            slots,
+            BuildInitialPayload(mode, slots));
+
+        return [new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions))];
+    }
+
+    private static ActivityChildSlotDesignDescriptor ToSlotDescriptor(CustomAttributeData attribute) =>
+        new(
+            ReadRequiredStringConstructorArgument(attribute, 0),
+            ReadRequiredStringConstructorArgument(attribute, 1),
+            ReadRequiredStringConstructorArgument(attribute, 2),
+            ReadRequiredStringConstructorArgument(attribute, 3),
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.CollectionProperty)),
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ChildProperty)),
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.LabelProperty)),
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.SlotNameTemplate)));
+
+    private static IReadOnlyDictionary<string, object?> BuildInitialPayload(
+        string mode,
+        IReadOnlyCollection<ActivityChildSlotDesignDescriptor> slots)
+    {
+        var payload = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        foreach (var slot in slots)
+        {
+            var property = slot.CollectionProperty ?? slot.Property;
+            if (payload.ContainsKey(property))
+                continue;
+
+            payload[property] = slot.CollectionProperty is not null || slot.Cardinality == ActivityChildSlotCardinalities.Many
+                ? Array.Empty<object>()
+                : null;
+        }
+
+        if (mode == "flowchart")
+        {
+            payload.TryAdd("connections", Array.Empty<object>());
+            payload.TryAdd("startNodeId", null);
+            payload.TryAdd("nodeMetadata", new Dictionary<string, object>(StringComparer.Ordinal));
+            payload.TryAdd("connectionMetadata", new Dictionary<string, object>(StringComparer.Ordinal));
+        }
+
+        return payload;
+    }
+
+    private static string ReadRequiredStringConstructorArgument(CustomAttributeData attribute, int index)
+    {
+        if (attribute.ConstructorArguments.Count <= index || attribute.ConstructorArguments[index].Value is not string value || string.IsNullOrWhiteSpace(value))
+            throw new InvalidOperationException($"Attribute '{attribute.AttributeType.FullName}' is missing required string constructor argument {index}.");
+
+        return value;
+    }
+
+    private static string? ReadNamedStringArgument(CustomAttributeData attribute, string name) =>
+        attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value as string;
+
+    private static bool ReadNamedBoolArgument(CustomAttributeData attribute, string name)
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
+        return value is bool boolValue && boolValue;
     }
 
     private static bool IsActivityType(Type type) =>
@@ -202,9 +286,13 @@ public sealed class ClrAssemblyScanner(
     private Dictionary<string, string>.ValueCollection BuildResolverPaths(IEnumerable<string> folderDlls)
     {
         var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
 
         void Add(string path)
         {
+            if (!seenPaths.Add(path))
+                return;
+
             var name = Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrEmpty(name))
                 return;

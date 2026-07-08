@@ -157,12 +157,27 @@ public sealed class DraftStateDiffEngine(IActivityStructureService activityStruc
 
         foreach (var record in desired)
         {
-            if (storedByNode.TryGetValue(record.NodeId, out var old) && Equals(old, record))
+            if (storedByNode.TryGetValue(record.NodeId, out var old) && LayoutRecordsEqual(old, record))
                 continue;
 
             events.Add(new OnActivityMovedInDraft(draftId, record.NodeId, record.X, record.Y, record.Width, record.Height));
         }
     }
+
+    /// <summary>
+    /// Structural equality for a matched (same <c>NodeId</c>) layout record across a persistence
+    /// round-trip. The stored side's opaque <see cref="DesignMetadataRecord.AdditionalProperties"/> bag is
+    /// rehydrated as a <see cref="JsonElement"/> whose value equality is reference-based over its backing
+    /// document, so record equality would report two byte-identical bags as different and emit a phantom
+    /// <see cref="OnActivityMovedInDraft"/>. Comparing the position/size fields by value and the bag by its
+    /// canonical JSON projection normalises both sides (mirrors <see cref="ArgumentStatesEqual"/>).
+    /// </summary>
+    private static bool LayoutRecordsEqual(DesignMetadataRecord stored, DesignMetadataRecord desired) =>
+        stored.X == desired.X &&
+        stored.Y == desired.Y &&
+        stored.Width == desired.Width &&
+        stored.Height == desired.Height &&
+        StringComparer.Ordinal.Equals(CanonicalJson(stored.AdditionalProperties), CanonicalJson(desired.AdditionalProperties));
 
     /// <summary>
     /// Structural equality for a matched (same <c>ReferenceKey</c>) activity argument across a

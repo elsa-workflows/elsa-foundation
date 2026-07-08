@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Workflows.Design.Api.Models;
@@ -8,7 +9,7 @@ public sealed record WorkflowDefinitionLayoutRecordView(
     double Y,
     double? Width,
     double? Height,
-    IReadOnlyDictionary<string, object?>? AdditionalProperties
+    JsonElement? AdditionalProperties
 )
 {
     public static WorkflowDefinitionLayoutRecordView From(IDesignMetadataRecord record) =>

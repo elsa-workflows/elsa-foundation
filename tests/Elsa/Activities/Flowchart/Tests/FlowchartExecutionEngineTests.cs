@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Elsa.Activities.Flowchart.Contracts;
 using Elsa.Activities.Flowchart.Exceptions;
+using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -59,6 +61,47 @@ public sealed class FlowchartExecutionEngineTests
 
         var state = await fixture.GetFlowchartStateAsync();
         Assert.Contains(state.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
+    }
+
+    [Fact]
+    public async Task Start_FirstFlowchartStateCommitCarriesInitialScheduledState()
+    {
+        // Tight guard on Start's OWN persist (not a later terminal re-save). The FIRST flowchart-state
+        // commit must be the one Start writes right after scheduling the start node: start node scheduled
+        // as an active child on the still-Active root path, and no terminal Completed diagnostic yet.
+        // If StartAsync's persist is removed, the first flowchart-state commit becomes the child-completion
+        // persist, which already carries the Completed diagnostic and an empty ActiveChildren set — so these
+        // assertions flip and the test goes red (the independent bite proof).
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a");
+
+        await fixture.ExecuteAsync(executable);
+
+        var writer = Assert.IsType<InMemoryRuntimeCheckpointCommitStore>(fixture.Provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
+        var firstFlowchartStateCommit = writer.ListCommits()
+            .First(write => write.Commit.Checkpoint.Name == RuntimeCheckpointNames.ActivityInspectionCaptured &&
+                            write.Commit.Checkpoint.CheckpointId.Contains("flowchart-state", StringComparison.Ordinal));
+        var activityStateChange = Assert.Single(firstFlowchartStateCommit.Commit.StateChanges.ActivityExecutions);
+        var serialized = activityStateChange.State.Metadata[FlowchartExecutionEngine.StateMetadataKey];
+        var initialState = JsonSerializer.Deserialize<FlowchartExecutionState>(serialized, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                           ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");
+
+        // Start scheduled node-a as an active child on the root path/scope...
+        var activeChild = Assert.Single(initialState.ActiveChildren);
+        Assert.Equal("node-a", activeChild.NodeId);
+        Assert.Equal("path:root", activeChild.ExecutionPathId);
+        Assert.Equal("scope:root", activeChild.ExecutionScopeId);
+        Assert.Equal("start", activeChild.SchedulingCause);
+        // ...the root path is still Active (not yet Completed by any child completion)...
+        var rootPath = Assert.Single(initialState.ExecutionPaths, path => path.ExecutionPathId == "path:root");
+        Assert.Equal(ExecutionPathStatus.Active, rootPath.Status);
+        Assert.Contains(initialState.Scopes, scope => scope.ExecutionScopeId == "scope:root");
+        // ...and no terminal Completed diagnostic has been recorded yet (that only appears on the
+        // child-completion/quiescence persist, which is a LATER commit).
+        Assert.DoesNotContain(initialState.Diagnostics, diagnostic => diagnostic.Kind == FlowchartDiagnosticKind.Completed);
     }
 
     [Fact]

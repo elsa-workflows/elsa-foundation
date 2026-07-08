@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Identity;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -39,7 +40,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
-        var testRunId = $"testrun-{Guid.NewGuid():N}";
+        var testRunId = ShortIdentityGenerator.Generate(now);
 
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
@@ -56,6 +57,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             now,
             expiresAt,
             ToInputValues(request.Inputs),
+            draftSnapshot: null,
             cancellationToken);
     }
 
@@ -63,7 +65,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     {
         var now = timeProvider.GetUtcNow();
         var expiresAt = now.Add(DefaultRetention);
-        var testRunId = $"testrun-{Guid.NewGuid():N}";
+        var testRunId = ShortIdentityGenerator.Generate(now);
         var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
         var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
 
@@ -90,6 +92,13 @@ public sealed class StartWorkflowTestRunRequestHandler(
             now,
             expiresAt,
             ToInputValues(request.Inputs),
+            new WorkflowTestRunDraftSnapshot(
+                DefinitionId: request.DefinitionId,
+                DefinitionVersionId: sourceDefinitionVersionId,
+                ArtifactVersion: artifactVersion,
+                State: request.State,
+                RequestedAt: now,
+                ExpiresAt: expiresAt),
             cancellationToken);
     }
 
@@ -101,6 +110,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         DateTimeOffset now,
         DateTimeOffset expiresAt,
         IReadOnlyDictionary<string, object?> inputs,
+        WorkflowTestRunDraftSnapshot? draftSnapshot,
         CancellationToken cancellationToken)
     {
         WorkflowExecutable executable;
@@ -146,6 +156,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
         }
 
         await transientExecutableStore.SaveAsync(executable, cancellationToken);
+        if (draftSnapshot is not null)
+            await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);
 
         // Seed authored workflow variable defaults from the compiled executable's root structure so a test
         // run resolves `variables.*` input expressions to their declared values (Seam C, #254), matching the

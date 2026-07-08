@@ -89,3 +89,12 @@ public sealed class ComplexInputFixtureActivity : ActivityBase
 
     public InputArgument<string> Label { get; set; } = null!;
 }
+
+/// <summary>
+/// A composite fixture whose child-structure attributes must be projected into design facets by the
+/// reflection-only scanner.
+/// </summary>
+[ActivityStructure("fixture.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
+[ActivityChildSlot("Fixture.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
+[ActivityChildSlot("Fixture.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
+public sealed class StructuredFixtureActivity : ActivityBase;

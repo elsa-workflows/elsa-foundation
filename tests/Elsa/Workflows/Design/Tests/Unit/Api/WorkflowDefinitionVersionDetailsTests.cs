@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Design.Api.Handlers;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
@@ -39,10 +40,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
                     240,
                     180,
                     96,
-                    new Dictionary<string, object?>
-                    {
-                        ["label"] = "Start"
-                    })
+                    JsonSerializer.Deserialize<JsonElement>("""{"label":"Start"}"""))
             ]
         };
         var handler = NewHandler(layout);
@@ -55,7 +53,7 @@ public sealed class WorkflowDefinitionVersionDetailsTests
         Assert.Equal(240, record.Y);
         Assert.Equal(180, record.Width);
         Assert.Equal(96, record.Height);
-        Assert.Equal("Start", record.AdditionalProperties?["label"]);
+        Assert.Equal("Start", record.AdditionalProperties?.GetProperty("label").GetString());
     }
 
     [Fact]

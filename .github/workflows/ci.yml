@@ -1,0 +1,74 @@
+name: CI
+
+# PR-time gate for pull requests targeting main.
+#
+# Neither existing workflow guards PRs:
+#   - docker.yml   runs on push to main only.
+#   - packages.yml runs on push to feat/*|fix/*|bug/*|... (not pull_request, not
+#     claude/*) and deliberately packs/compiles only the src/ libraries -- it does
+#     NOT build test projects or run tests.
+# Net result: PRs could merge to main with compile errors or failing tests undetected.
+# This bit in PR #543: a semantic merge conflict between #539 and #541 that compiled
+# on each branch but not when combined (HashMismatchTests.cs referenced
+# ActivityVersionHashMismatchException.Version, removed by #539).
+#
+# This workflow builds the FULL solution -- including test projects, which is what
+# catches semantic-merge compile breaks -- then runs the fast unit tests only.
+# The Testcontainers-based integration tests (which need Docker) are intentionally
+# excluded here so no containers start; a full integration/nightly gate is a separate
+# follow-up. See issue #544.
+#
+# NOTE FOR MAINTAINERS: making "Build & test" a REQUIRED status check on main is a
+# branch-protection repo setting and cannot be enforced from this workflow file alone.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Generate container-free test solution filter
+        # Run the fast unit tests only. Any test project that references
+        # Testcontainers spins up Docker containers, so exclude those by reference --
+        # this is self-maintaining (new Testcontainers projects are auto-excluded) and
+        # provably starts no containers. Today that excludes exactly the two Groundwork
+        # PostgreSql projects; every other test project is kept.
+        run: |
+          keep=()
+          while IFS= read -r p; do
+            grep -q "Testcontainers" "$p" || keep+=("$p")
+          done < <(find tests -name '*.csproj' | sort)
+          projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
+          printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.test.slnf
+          echo "Kept ${#keep[@]} test project(s) in the container-free filter."
+
+      - name: Restore
+        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+
+      - name: Build (full solution, including test projects)
+        # Building the whole solution -- test projects included -- is what catches
+        # semantic-merge compile breaks like #543.
+        run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Test (fast unit tests, no containers)
+        run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603

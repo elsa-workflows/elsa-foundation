@@ -11,7 +11,9 @@
   <Folder Name="/src/Apps/">
     <Project Path="src/Apps/Elsa.Server/Elsa.Server.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/" />
+  <Folder Name="/src/Elsa/">
+    <Project Path="src/Elsa/Git/Elsa.Git.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Activities/">
     <Project Path="src/Elsa/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="src/Elsa/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
@@ -136,6 +138,7 @@
   <Folder Name="/src/Elsa/Modularity/">
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
+    <Project Path="src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj" />
     <Project Path="src/Elsa/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Persistence/">

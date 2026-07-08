@@ -1,0 +1,78 @@
+name: Integration (nightly)
+
+# Deferred integration/nightly gate -- the follow-up scoped out of issue #544 and
+# PR #545, which added the PR-time gate (ci.yml) that deliberately runs only the
+# fast, container-free unit tests.
+#
+# This workflow is the INVERSE of ci.yml's filter: it runs ONLY the test projects
+# that reference Testcontainers -- today exactly the two Groundwork PostgreSql
+# projects, which spin up a throwaway PostgreSQL container via PostgresContainerFixture
+# (Docker required). The generate-filter step mirrors ci.yml's but KEEPS the container
+# projects instead of dropping them, so it is self-maintaining: any new Testcontainers
+# test project is picked up here automatically (and excluded from the PR gate).
+#
+# Why not on pull_request: containers are too slow/flaky to run on every PR -- that is
+# the explicit reason #544 excluded them from ci.yml. This runs nightly against main
+# plus on-demand via workflow_dispatch.
+#
+# GitHub-hosted ubuntu-latest runners ship with a working Docker daemon, so
+# Testcontainers works with no extra setup. The fixture pins postgres:16-alpine for
+# determinism.
+#
+# This is informational/nightly, NOT a required PR check -- it is intentionally not
+# wired into branch protection. A failed run is visible in the Actions tab and via the
+# usual scheduled-workflow failure notifications.
+
+on:
+  schedule:
+    # 03:17 UTC daily. Odd minute to avoid the top-of-hour scheduler surge.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    name: Integration tests (Testcontainers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Generate Testcontainers-only test solution filter
+        # Inverse of ci.yml: keep ONLY test projects that reference Testcontainers.
+        # Self-maintaining -- new Testcontainers projects are picked up automatically.
+        # Fail loudly if the set is empty: that means the filter logic broke (a silent
+        # empty test run would pass green while testing nothing).
+        run: |
+          keep=()
+          while IFS= read -r p; do
+            grep -q "Testcontainers" "$p" && keep+=("$p")
+          done < <(find tests -name '*.csproj' | sort)
+          if [ ${#keep[@]} -eq 0 ]; then
+            echo "::error::No Testcontainers test projects found -- filter logic is broken."
+            exit 1
+          fi
+          projects=$(printf '"%s",' "${keep[@]}" | sed 's/,$//')
+          printf '{"solution":{"path":"Elsa.Server.slnx","projects":[%s]}}' "$projects" > Elsa.Server.integration.slnf
+          echo "Kept ${#keep[@]} Testcontainers test project(s) in the integration filter."
+
+      - name: Restore
+        run: dotnet restore Elsa.Server.slnx -p:WarningsNotAsErrors=NU1603
+
+      - name: Build (full solution, including test projects)
+        run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Test (Testcontainers integration tests)
+        run: dotnet test Elsa.Server.integration.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603

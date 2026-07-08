@@ -22,9 +22,11 @@ public sealed class ShortIdentityGenerator(ISystemClock systemClock) : IIdentity
     private const int TimestampBits = 64 - RandomBits; // 42
     private const long MaxMilliseconds = (1L << TimestampBits) - 1;
 
-    public string Generate()
+    public string Generate() => Generate(systemClock.UtcNow);
+
+    public static string Generate(DateTimeOffset utcNow)
     {
-        var elapsedMs = systemClock.UtcNow.ToUnixTimeMilliseconds() - EpochMs;
+        var elapsedMs = utcNow.ToUnixTimeMilliseconds() - EpochMs;
         if (elapsedMs is < 0 or > MaxMilliseconds)
             throw new InvalidOperationException(
                 $"Timestamp {elapsedMs} ms is outside the representable {TimestampBits}-bit range [0, {MaxMilliseconds}] relative to the 2020-01-01Z epoch; cannot generate a short id.");

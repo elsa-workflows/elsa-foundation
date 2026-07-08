@@ -382,6 +382,38 @@ Wave-A-first ordering (outgoing control room's recommendation). Kickoff decision
     items 3/6 (cross-provider N+1 + async-Start contract), #417 item 1 (reconciler N+1 cross-backend),
     #412 item 8 (`ActivityFactory` ctor-contract), #415 item 5 (checkpoint store), UpsertCommandGenerator
     non-Sqlite dialect golden hardening.
+- **Wave C — W33 #514 residual backlog CLOSED 2026-07-07** (the last deferred items; each design-gated
+  one-at-a-time with Sipke, control-room-QA'd on the COMBINED tree — full affected test PROJECTS +
+  arch guard 49/49 + independent bite — before merge; [#514](https://github.com/elsa-workflows/elsa-foundation/issues/514) closed):
+  - **UpsertCommandGenerator dialect goldens (#524):** added `Microsoft.EntityFrameworkCore.SqlServer` +
+    `Npgsql.EntityFrameworkCore.PostgreSQL` (test-only) and byte-exact goldens for the SqlServer (varbinary-NULL
+    CAST) and Postgres (json/jsonb CAST) dialects. MySql log-skipped (Pomelo pins EF9, conflicts with the EF10
+    tree); Oracle log-skipped (heavyweight driver for a cosmetic alias) — documented in-test.
+  - **#417 item 1 reconciler N+1 (#526):** batched the 3 per-version reads — collection-phase `ListAsync(Ids)`
+    prefetch, reconcile-phase union of `Ids`/`ActivityTypeKeys` `IN` reads (new plural filter field, no OR-mode),
+    and one new cross-provider `IActivityDefinitionVersionStore.ListByDefinitionIdsAsync`. An in-loop mutable
+    Definition/Version index (updated on every create/append) makes it byte-identical to the per-read behavior,
+    incl. the same-new-definition-twice-in-one-pass ordering trap (new single-pass result-equivalence tests).
+  - **#413 item 3 CountBranches N+1 (#528):** added additive `IActivityExecutionStateStore.ListByParentAsync`
+    (InMemory + Groundwork + Coalescing + 2 doubles) backed by a new Groundwork keyword index
+    `by-parent-activity-execution` over the ALREADY-persisted dot-path `state.parentActivityExecutionId` — **no
+    document-shape change, no version bump** (Sipke-ratified §E6; Condition-7 backfill triggers on the index-set
+    change). Groundwork queries the parent index then defensively post-filters by `workflowExecutionId`.
+    `Parallel.CountBranchesAsync` reads only the composite's children instead of the whole workflow. **QA gate
+    caught a regression:** the worker's initial `ElsaRuntimeStorageManifest.SchemaVersion` bump `1.0.0→1.1.0`
+    broke `ElsaRuntimeDocumentVersions.Parse` for every kind (that constant is the frozen legacy stamp, not a
+    migration knob) — surfaced only by the FULL Groundwork test project, reverted before merge.
+  - **#413 item 6 Flowchart async Start (#531):** removed the last sync-over-async holdout — deleted the blocking
+    `FlowchartStatePersister.SaveState` wrapper; engine `Start`→`StartAsync`; `Flowchart.Execute`→`ExecuteAsync`
+    (picks the existing `ActivityBase` virtual, no base-contract change). The prescribed bite exposed that the
+    legacy `Start_*` tests didn't isolate Start's initial persist (a later child-completion persist masked it);
+    a new tight guard (`Start_FirstFlowchartStateCommitCarriesInitialScheduledState`) now bites, alongside the
+    CT1–CT3 determinism suite. §E6-clean (byte-identical golden confirms).
+  - **Ruled WON'T-FIX (Sipke, 2026-07-07):** #412 item 8 (`ActivityFactory` ctor `AddAll` — negligible-value
+    per-scope churn, removing it is a public-ctor change breaking 2 characterization tests + it's a deliberate
+    self-sufficiency safety net) and #415 item 5 (checkpoint-store `_writeGate` test seam has no production race;
+    the 8 `Validate*`/`Apply*` per-lane pairs are documented intentional defense-in-depth — collapsing is an
+    over-abstraction trap over subtly-different per-lane whitelists).
 - **Peer-session Validations work landed through the control-room gate** (Sipke ruled 2026-07-06 that
   peer PRs route through the gate — see the handoff §3): #485 (draft-validation persistence, user-merged),
   #496 (FR-033 unknown-activity-version validator, self-merged before the policy; its post-merge review

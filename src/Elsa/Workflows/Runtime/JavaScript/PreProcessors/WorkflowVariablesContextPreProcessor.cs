@@ -2,7 +2,6 @@ using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Extensions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Workflows.Primitives.Constants;
-using System.Dynamic;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Workflows.Runtime.JavaScript.PreProcessors;
@@ -18,7 +17,7 @@ public sealed partial class WorkflowVariablesContextPreProcessor : IScriptPrePro
     private static void CopyVariablesIntoEngine(IJavaScriptExecutionContext javascriptExecutionContext, IExpressionExecutionContext expressionExecutionContext, string expression)
     {
         var variableNames = GetUsedVariableNames(expressionExecutionContext, expression).ToList();
-        var variablesContainer = (IDictionary<string, object?>)new ExpandoObject();
+        var variablesContainer = new Dictionary<string, object?>();
 
         foreach (var variableName in variableNames)
         {

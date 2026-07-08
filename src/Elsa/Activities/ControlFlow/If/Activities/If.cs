@@ -1,6 +1,7 @@
 using Elsa.Activities.If.Exceptions;
 using Elsa.Activities.If.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -20,6 +21,9 @@ namespace Elsa.Activities.If.Activities;
 /// An unbound <see cref="Condition"/> resolves to <c>false</c> (the default of <c>bool</c>), so an
 /// <c>If</c> with no condition wired up runs the <c>Else</c> branch and emits <see cref="ActivityOutcomes.False"/>.
 /// </remarks>
+[ActivityStructure("elsa.if.structure", "1.0.0")]
+[ActivityChildSlot("If.Then", "then", "Then", ActivityChildSlotCardinalities.Single)]
+[ActivityChildSlot("If.Else", "else", "Else", ActivityChildSlotCardinalities.Single)]
 public sealed class If : ActivityBase, IActivityChildCompletionHandler
 {
     public const string ThenSlotName = "If.Then";

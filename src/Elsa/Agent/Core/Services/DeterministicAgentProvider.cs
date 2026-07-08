@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using static Elsa.Agent.Core.Services.AgentProviderPrimitives;
 
 namespace Elsa.Agent.Core.Services;
 
@@ -94,5 +95,4 @@ public sealed class DeterministicAgentProvider : IAgentProvider
 
     private static bool Contains(string content, string value) => content.Contains(value, StringComparison.OrdinalIgnoreCase);
 
-    private static string NewId() => Guid.NewGuid().ToString("N");
 }

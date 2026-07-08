@@ -875,7 +875,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             services.AddSingleton<IRuntimePostCommitIntentDispatcher, NoopRuntimePostCommitIntentDispatcher>();
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
-        services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         if (includeInspection)
         {
             services.AddSingleton<IActivityExecutionInspectionStore>(_ => _inspectionStore);
@@ -1129,6 +1129,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
         public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.ListAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default) =>
+            inner.ListByParentAsync(workflowExecutionId, parentActivityExecutionId, cancellationToken);
     }
 
     private class RecordingActivity : ActivityBase

@@ -3,6 +3,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Testing;
+using Elsa.Expressions.Core.Constants;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -38,6 +39,25 @@ public sealed class CodeIoLeafRuntimeTests
             inputBindings: new Dictionary<string, RuntimeInputBinding>
             {
                 ["Lines"] = LiteralBinding("Lines", new[] { "a", "b" }, "System.Collections.Generic.ICollection`1[[System.String]]")
+            });
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
+
+        run.AssertOutcomes("node-writelines", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
+    public async Task WriteLines_ObjectExpressionLines_RunsToCompletion()
+    {
+        await using var harness = NewHarness("actexec-1");
+
+        var node = NewClrLeafNode(
+            "node-writelines",
+            typeof(WriteLines),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["Lines"] = ObjectExpressionBinding("Lines", new[] { "a", "b" }, "System.Collections.Generic.ICollection`1[[System.String]]")
             });
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(node));
@@ -129,6 +149,13 @@ public sealed class CodeIoLeafRuntimeTests
             inputName: inputName,
             source: RuntimeInputBindingSource.Literal,
             literalValue: JsonSerializer.SerializeToElement(value),
+            metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
+
+    private static RuntimeInputBinding ObjectExpressionBinding(string inputName, object value, string typeName) =>
+        new(
+            inputName: inputName,
+            source: RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(WellKnownExpressionDescriptorTypes.Object, JsonSerializer.Serialize(value)),
             metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
 
     private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());

@@ -72,7 +72,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
         await WaitForResponseAsync(responseBody, ": keep-alive\n\n", cts.Token);
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
         Assert.Contains(": keep-alive\n\n", responseBody.Text);
         Assert.True(stream.Disposed);
     }
@@ -90,7 +90,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
 
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask);
         Assert.True(stream.MoveNextCompleted);
         Assert.True(stream.Disposed);
     }
@@ -112,7 +112,7 @@ public sealed class OpenTelemetrySseStreamWriterTests
 
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => streamTask.WaitAsync(TimeSpan.FromSeconds(1)));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => streamTask.WaitAsync(TimeSpan.FromSeconds(1)));
         Assert.False(stream.MoveNextCompleted);
         Assert.True(stream.DisposeAttempted);
         Assert.False(stream.Disposed);

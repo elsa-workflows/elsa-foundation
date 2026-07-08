@@ -179,7 +179,7 @@ public sealed class RuntimeParentCompletionExecutionCarrierTests
         services.AddSingleton<IDurableValueStateStore>(_durableValueStateStore);
         services.AddSingleton<IWorkflowExecutionStateStore>(_workflowStateStore);
         services.AddSingleton<IIncidentStateStore>(_incidentStateStore);
-        services.AddSingleton<IRuntimeExecutionIdGenerator, GuidRuntimeExecutionIdGenerator>();
+        services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.AddSingleton<IActivityExecutionInspectionStore>(_inspectionStore);
         services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(_checkpointWriter);

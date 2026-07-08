@@ -61,6 +61,11 @@ public sealed class GroundworkActivityDefinitionVersionStore : IActivityDefiniti
             Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.Equal, definitionId),
             cancellationToken);
 
+    public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default)
+        => await _reads.QueryAsync(
+            Query<ActivityDefinitionVersion>.Where(x => x.DefinitionId, QueryOp.In, definitionIds),
+            cancellationToken);
+
     public async Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default)
         => await _reads.QueryAsync(Query<ActivityDefinitionVersion>.All(), cancellationToken);
 

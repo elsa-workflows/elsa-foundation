@@ -1,113 +1,113 @@
-# Feature Specification: Layout Metadata Designer Bag Becomes Opaque JsonElement (ADR 0035 D3 extension)
+# Feature Specification: Layout Metadata Bag Becomes Opaque JsonElement
 
-**Feature Branch**: `TBD` (own branch — small, contained design-model change)
+**Feature Branch**: `feat/088-layout-metadata-opaque-jsonelement` (own branch — cross-cutting serialization shape)
 
 **Created**: 2026-07-08
 
 **Status**: Draft
 
-**Input**: Finish retiring open-object polymorphism from design content by making the layout
-designer bag `DesignMetadataRecord.AdditionalProperties` an **opaque `JsonElement?`** (kept verbatim),
-mirroring what ADR 0035 D3 / #570 already did for `StateSource`'s `PropertyInfo`/`UISpecifications`.
+**Input**: Convert the designer **layout** document's opaque Studio bag
+(`DesignMetadataRecord.AdditionalProperties`) from `Dictionary<string, object?>?` to a verbatim
+`JsonElement?`, kept opaque end-to-end. Completes
+[ADR 0035](../../docs/adr/0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md)
+D3 by extending it beyond `StateSource` to the last open-object-polymorphism holdout in serialized design
+content.
 
-**Program goal**: `none/free-flow`. Consistency follow-up to ADR 0035 D3.
+**Program goal**: `none/free-flow`. Follows #570 (converter removal + StateSource bags → `JsonElement`).
 
 ## Context
 
-ADR 0035 D3 (landed in #570, `bd92b408`) converted the opaque Studio-authored UI bags in `StateSource`
-— `InputDefinition`/`OutputDefinition.PropertyInfo` and `UISpecifications` — from
-`IDictionary<string, object>?` to `JsonElement?`, so open-object polymorphism is gone from
-`StateSource` and those bags are stored **verbatim** (D3 rider: *"opaque JSON is stored as
-`JsonElement` and never rewritten… never round-tripped through a `Dictionary<string, object>`"*).
+ADR 0035 **D3** made the canonical `StateSource` designer bags
+(`InputDefinition`/`OutputDefinition.PropertyInfo`, `UISpecifications`) opaque `JsonElement?`, and #570
+(commit `bd92b408`) shipped it. D3 scoped itself to `StateSource`. The designer **layout** is a *separate*
+document (`WorkflowDefinitionVersionLayout` / `WorkflowDefinitionDraftLayout`, carrying
+`DesignMetadataRecord` rows keyed by `NodeId`), so its per-node opaque bag —
+`DesignMetadataRecord.AdditionalProperties` (`src/Elsa/Workflows/Design/Persistence/Core/Entities/DesignMetadataRecord.cs:17`) —
+survived as `Dictionary<string, object?>?`. It is the last open-object-polymorphism holdout in serialized
+design content.
 
-D3 scoped itself explicitly to `StateSource`. **Layout is a separate document**
-(`WorkflowDefinitionVersionLayout` / `WorkflowDefinitionDraftLayout`), so
-`DesignMetadataRecord.AdditionalProperties` — the catch-all bag of Studio-authored per-node layout
-metadata (extra props beyond `X/Y/Width/Height`) — survived as `Dictionary<string, object?>?`. It is
-**the last open-object-polymorphism holdout in serialized design content**, and it is the *same class*
-of opaque Studio bag D3 targets.
+The bag is opaque, Studio-authored per-node layout metadata; the backend never indexes it. As a CLR
+dictionary it is subject to key-sorting/canonicalization if it ever routes through the deterministic
+serializer, which mutates the author's opaque bytes — against D3's principle (opaque JSON is stored as
+`JsonElement` and **never** round-tripped through a `Dictionary<string, object>`). Not a determinism bug
+today, but it becomes load-bearing the moment layout is hashed or diffed (e.g. ADR 0034 git export).
 
-It is **deterministic today** (spec 086 / #570's `DeterministicDictionaryConverterFactory` now claims
-`Dictionary<string, object?>` and sorts its keys, and its `object?` values deserialize to verbatim
-`JsonElement`), so this is **not a hash-correctness bug**. But an *opaque* bag is being **canonicalized
-(key-sorted)** rather than kept verbatim — exactly the treatment D3 argues opaque author data must not
-get (*"mutating the author's bytes… asserting a semantic equality Elsa does not own"*). Benign while
-layout is not content-hashed (ADR 0034 hashes only `versions/*.json` state, not layout), but it becomes
-load-bearing the moment anything hashes or diffs layout.
+This unit mirrors #570's `StateSource` change on the layout document: `AdditionalProperties` becomes a
+verbatim `JsonElement?` held opaque from the API view, through the read contract, to the persisted record.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 — Layout designer metadata is preserved verbatim (Priority: P1)
+### User Story 1 — An author's layout bag is stored exactly as sent (Priority: P1)
 
-Studio authors per-node layout metadata (arbitrary keys under `AdditionalProperties`); it round-trips
-through the backend byte-for-byte, without key reordering or value canonicalization.
+Studio sends a per-node layout bag with keys in a specific (non-alphabetical) order; the backend stores and
+returns it byte-for-byte, never reordered.
 
-**Independent Test**: Persist a layout record whose `AdditionalProperties` JSON has keys in a specific
-order; reload and re-serialize; assert the bag is byte-identical to what Studio sent (order preserved).
+**Independent Test**: Serialize a `DesignMetadataRecord` whose `AdditionalProperties` has keys in `z, a, m`
+order through the deterministic payload serializer; assert the emitted JSON preserves that order (NOT sorted
+to `a, m, z`) and that a full serialize → deserialize cycle reproduces the raw bytes.
 
 **Acceptance Scenarios**:
 
-1. **Given** a layout record with `AdditionalProperties` = `{"z":5,"color":"red"}` (author order),
-   **When** it is persisted and reloaded, **Then** the stored/re-emitted bytes preserve `{"z":5,"color":"red"}`
-   verbatim (not reordered to `{"color":"red","z":5}`).
-2. **Given** the same logical metadata sent twice, **Then** serialization is deterministic (unchanged
-   from today).
+1. **Given** a layout bag with keys in author order, **When** the record is serialized, **Then** the bag
+   re-emits verbatim in the author's key order (no canonicalization).
+2. **Given** the same bag, **When** serialized twice, **Then** the output is byte-identical (deterministic).
+3. **Given** an equivalent *CLR dictionary*, **When** serialized through the same serializer, **Then** it IS
+   key-sorted — documenting why the opaque bag must be a `JsonElement`.
+
+### User Story 2 — Studio wire compatibility is preserved (Priority: P1)
+
+Studio (separate repo) sends the same JSON layout object it always has; the backend deserializes it to a
+`JsonElement` instead of a `Dictionary` with no Studio change.
+
+**Independent Test**: The `PUT design/workflows/definitions/{id}` layout round-trips through
+`UpdateDefinitionCommandHandler` and `GetVersion`, preserving the bag.
 
 ### Edge Cases
 
-- `AdditionalProperties` is null/absent — unchanged (`JsonElement?` null).
-- Nested objects/arrays inside the bag — preserved verbatim (they are opaque).
-- A consumer that previously indexed the dictionary (`AdditionalProperties["key"]`) — must read via
-  `JsonElement` API instead (see FR-002).
+- Absent bag (`null`) round-trips as absent (nullable `JsonElement?`, omitted on write via
+  `WhenWritingNull`).
+- Nested objects inside the bag are preserved verbatim, including their own inner key order.
 
 ## Requirements *(mandatory)*
 
-### Functional Requirements
-
-- **FR-001**: `DesignMetadataRecord.AdditionalProperties` MUST change from `Dictionary<string, object?>?`
-  to `JsonElement?`, and the interface/view mirrors MUST follow:
-  `IDesignMetadataRecord.AdditionalProperties`, `IWorkflowDefinitionLayout.AdditionalProperties`
-  (`src/Elsa/Workflows/Design/Core/Contracts/IWorkflowDefinitionLayout.cs:27`), and
-  `WorkflowDefinitionLayoutRecordView.AdditionalProperties`
-  (`src/Elsa/Workflows/Design/Api/Models/WorkflowDefinitionLayoutRecordView.cs`).
-- **FR-002**: Update the mapping/consumer sites — at minimum
-  `UpdateDefinitionCommandHandler.cs:48` (`view.AdditionalProperties?.ToDictionary(...)` → assign the
-  `JsonElement?` verbatim) — and any code that reads `AdditionalProperties` as a dictionary must move to
-  the `JsonElement` API. (Grep confirms the surface is small: the 4 declarations above + this one
-  mapping site.)
-- **FR-003**: The bag MUST be kept as `JsonElement` **end-to-end** and never round-tripped through a
-  `Dictionary<string, object>` (ADR 0035 D3 rider) — Studio's authored bytes preserved verbatim.
-- **FR-004**: No migration / backward-compat is required (unreleased software).
-- **FR-005**: Wire-compatible with Studio (separate repo): Studio still sends the same JSON object;
-  the backend deserializes it into a `JsonElement` instead of a `Dictionary`. Verify the
-  Studio↔backend layout wire contract still round-trips; **no Studio change should be required**.
-- **FR-006**: Record the scope extension: add a one-line note to ADR 0035 D3 that layout
-  `AdditionalProperties` is now also opaque `JsonElement` (D3 extended beyond `StateSource` to the
-  layout document), so open-object polymorphism is fully retired from design content.
-- **FR-007**: Tests MUST assert verbatim round-trip (FR-003) and that a layout with `AdditionalProperties`
-  serializes deterministically without reordering the bag's contents.
+- **FR-001**: `DesignMetadataRecord.AdditionalProperties` MUST be `JsonElement?` (was
+  `Dictionary<string, object?>?`), and the `IDesignMetadataRecord` read contract, the
+  `WorkflowDefinitionLayoutRecordView` API view, and the `UpdateDefinition` write path MUST all carry it as
+  `JsonElement?`.
+- **FR-002**: The bag MUST be kept as `JsonElement` **end-to-end** and MUST NOT be round-tripped through a
+  `Dictionary<string, object>` at any layer (ADR 0035 D3 rider) — the `UpdateDefinitionCommandHandler`
+  `ToRecord` mapping assigns the view's `JsonElement` verbatim (no `ToDictionary`).
+- **FR-003**: The bag MUST serialize verbatim — kept in the author's key order, never key-sorted or otherwise
+  canonicalized — and round-trip byte-identically.
+- **FR-004**: Wire compatibility MUST hold: Studio sends the same JSON object; the backend deserializes to a
+  `JsonElement`. No Studio change is required.
+- **FR-005**: Tests MUST cover verbatim key-order preservation (asserting NOT reordered), byte-identical
+  round-trip, and deterministic serialization.
+- **FR-006**: Unreleased software — NO migration or back-compat shim for previously stored dictionary-shaped
+  bags.
 
 ### Key Entities
 
-- **`DesignMetadataRecord`** — layout record (`NodeId, X, Y, Width, Height, AdditionalProperties`);
-  `AdditionalProperties` becomes `JsonElement?`.
-- **`IDesignMetadataRecord` / `IWorkflowDefinitionLayout` / `WorkflowDefinitionLayoutRecordView`** —
-  mirror the type change.
+- **`DesignMetadataRecord`** — the layout record whose `AdditionalProperties` becomes `JsonElement?`; the
+  redundant explicit `IDesignMetadataRecord.AdditionalProperties` implementation is dropped (the positional
+  property now satisfies the contract directly).
+- **`IWorkflowDefinitionLayout` / `IDesignMetadataRecord`** — the Tier-1 read contract, updated to
+  `JsonElement?`.
+- **`WorkflowDefinitionLayoutRecordView`** — API view, updated to `JsonElement?`.
+- **`UpdateDefinitionCommandHandler`** — write path, assigns the bag verbatim.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: No `Dictionary<string, object>` / `IReadOnlyDictionary<string, object>` remains as an
-  opaque designer bag in serialized design content (StateSource *or* layout) — the open-object holdout
-  is removed (verifiable by grep + the arch/serialization tests).
-- **SC-002**: A layout `AdditionalProperties` bag round-trips byte-identically (author order preserved).
-- **SC-003**: Existing Design/serialization test suites pass; the Studio↔backend layout wire round-trips
-  unchanged.
+- **SC-001**: A layout bag with a specific key order is stored and returned byte-for-byte, never reordered.
+- **SC-002**: No layer round-trips the bag through a CLR dictionary; the type is `JsonElement?` from view to
+  persisted record.
+- **SC-003**: Existing layout, handler, and Groundwork persistence tests pass; new tests cover FR-005.
 
 ## Out of Scope / Non-Goals
 
-- `StateSource` fields (`PropertyInfo`, `UISpecifications`) — already converted in #570.
-- Any behavior change to layout semantics beyond the bag's storage type.
-- Content-hashing layout (ADR 0034 hashes only version state; unchanged here).
+- Any change to `StateSource` bags (already opaque via #570 / ADR 0035 D3).
+- Layout hashing / git export itself (ADR 0034) — this unit only makes the bytes safe to hash.
+- Any Studio-side change (wire is unchanged).
 
-Consistency follow-up to [ADR 0035](../../docs/adr/0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md)
-D3; reference implementation is #570 (`bd92b408`) on the `StateSource` bags.
+Extends [ADR 0035](../../docs/adr/0035-serialization-unifies-on-the-alias-registry-and-retires-open-object-polymorphism.md)
+D3 beyond `StateSource`.

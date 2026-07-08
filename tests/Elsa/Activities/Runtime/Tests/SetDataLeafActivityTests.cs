@@ -23,8 +23,8 @@ public sealed class SetDataLeafActivityTests : IDisposable
     [Fact]
     public async Task SetName_RequestsInstanceName_FromBoundInput()
     {
-        var nameInput = new InputArgument<string>(new Variable("Name", "order-flow"));
-        var setName = new SetName { Name = nameInput };
+        var nameInput = new InputArgument<string>(new Variable("InstanceName", "order-flow"));
+        var setName = new SetName { InstanceName = nameInput };
         var context = NewContext(setName);
         context.Set(nameInput.MemoryBlockReference(), "order-flow");
 

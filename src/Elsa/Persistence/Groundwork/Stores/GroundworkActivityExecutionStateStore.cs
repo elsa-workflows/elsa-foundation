@@ -46,5 +46,22 @@ public sealed class GroundworkActivityExecutionStateStore(IDocumentStore store, 
             ElsaRuntimeStorageManifest.ByWorkflowExecutionIndex, workflowExecutionId, document => document.State, cancellationToken);
     }
 
+    public async ValueTask<IReadOnlyCollection<ActivityExecutionState>> ListByParentAsync(string workflowExecutionId, string parentActivityExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentActivityExecutionId);
+
+        // Query the single-field parent index (equality on the persisted state.parentActivityExecutionId), then apply a
+        // defensive in-memory workflow-execution filter so the full (wf, parent) semantics hold identically across providers
+        // without relying on parent activity-execution ids being globally unique. The parent-scoped set is branch-bounded,
+        // so the post-filter is over a tiny list.
+        var byParent = await QueryDocumentsAsync<ActivityExecutionStateDocument, ActivityExecutionState>(
+            ElsaRuntimeStorageManifest.ByParentActivityExecutionIndex, parentActivityExecutionId, document => document.State, cancellationToken);
+
+        return byParent
+            .Where(state => StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId))
+            .ToArray();
+    }
+
     private sealed record ActivityExecutionStateDocument(string WorkflowExecutionId, ActivityExecutionState State);
 }

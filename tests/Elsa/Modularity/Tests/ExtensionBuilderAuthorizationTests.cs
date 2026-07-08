@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using Elsa.Server;
-using Elsa.Server.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Configuration;

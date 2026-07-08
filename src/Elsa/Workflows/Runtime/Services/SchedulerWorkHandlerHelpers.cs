@@ -102,4 +102,25 @@ public static class SchedulerWorkHandlerHelpers
             idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
             payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
             metadata: sourceWorkItem.CommandMetadata);
+
+    /// <summary>
+    /// Normalizes activity completion outcome names: snapshots the sequence, applies the empty-set
+    /// default (<see cref="ActivityOutcomes.Done"/> when <paramref name="defaultToDone"/>, otherwise
+    /// empty), and rejects blank or duplicate values. Extracted verbatim from the Invoke / Complete /
+    /// Resume handlers, which each carried a byte-identical copy (#412).
+    /// </summary>
+    public static IReadOnlyCollection<string> NormalizeOutcomeNames(IEnumerable<string> outcomeNames, bool defaultToDone)
+    {
+        var snapshot = outcomeNames.ToArray();
+        if (snapshot.Length == 0)
+            return defaultToDone ? [ActivityOutcomes.Done] : [];
+
+        if (snapshot.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException("Activity completion outcome names cannot contain blank values.");
+
+        if (snapshot.Distinct(StringComparer.Ordinal).Count() != snapshot.Length)
+            throw new InvalidOperationException("Activity completion outcome names cannot contain duplicates.");
+
+        return snapshot;
+    }
 }

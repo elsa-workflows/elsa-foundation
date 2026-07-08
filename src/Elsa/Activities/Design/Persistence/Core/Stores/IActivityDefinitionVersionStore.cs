@@ -26,6 +26,13 @@ public interface IActivityDefinitionVersionStore
     /// <summary>Lists every version of the given definition.</summary>
     Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lists every version whose owning definition id is in <paramref name="definitionIds"/> (a single
+    /// <c>IN</c> read). The batch counterpart of <see cref="ListByDefinitionAsync"/>, used to prefetch the
+    /// versions of many definitions in one round-trip instead of one read per definition.
+    /// </summary>
+    Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default);
+
     /// <summary>Lists every persisted version across all definitions.</summary>
     Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default);
 }

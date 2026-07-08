@@ -1,6 +1,7 @@
 using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -20,16 +21,18 @@ namespace Elsa.Activities.Flowchart.Activities;
 /// (surfacing a composite incident), mirroring the <c>Parallel</c> composite's default-threshold behavior where
 /// a single faulted branch faults the join. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
+[ActivityStructure("elsa.flowchart.structure", "1.0.0", Mode = "flowchart", SupportsScopedVariables = true)]
+[ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 public sealed class Flowchart : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string ActivitiesSlotName = "Flowchart.Activities";
     public const string StructureKind = "elsa.flowchart.structure";
     public const string StructureSchemaVersion = "1.0.0";
 
-    protected override void Execute(IActivityExecutionContext context)
+    protected override async ValueTask ExecuteAsync(IActivityExecutionContext context)
     {
         var runtimeContext = RequireRuntimeContext(context);
-        runtimeContext.GetRequiredService<FlowchartExecutionEngine>().Start(runtimeContext);
+        await runtimeContext.GetRequiredService<FlowchartExecutionEngine>().StartAsync(runtimeContext);
     }
 
     public ValueTask OnChildCompletedAsync(ActivityChildCompletedContext context)

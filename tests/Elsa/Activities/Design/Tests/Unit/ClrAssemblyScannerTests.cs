@@ -1,9 +1,11 @@
 using System.Reflection;
+using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -78,6 +80,37 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void StructureAttributes_MapToDesignFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(StructuredFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets);
+
+        Assert.Equal("fixture.structure", facet.Kind);
+        Assert.Equal("1.0.0", facet.SchemaVersion);
+
+        var payload = facet.Payload;
+        Assert.Equal("sequence", payload.GetProperty("mode").GetString());
+        Assert.True(payload.GetProperty("supportsScopedVariables").GetBoolean());
+
+        var slots = payload.GetProperty("slots").EnumerateArray().ToArray();
+        Assert.Equal(2, slots.Length);
+        Assert.Contains(slots, slot =>
+            slot.GetProperty("name").GetString() == "Fixture.Activities" &&
+            slot.GetProperty("property").GetString() == "activities" &&
+            slot.GetProperty("cardinality").GetString() == ActivityChildSlotCardinalities.Many);
+        Assert.Contains(slots, slot =>
+            slot.GetProperty("name").GetString() == "Fixture.Body" &&
+            slot.GetProperty("property").GetString() == "body" &&
+            slot.GetProperty("cardinality").GetString() == ActivityChildSlotCardinalities.Single);
+
+        var initialPayload = payload.GetProperty("initialPayload");
+        Assert.Equal(JsonValueKind.Array, initialPayload.GetProperty("activities").ValueKind);
+        Assert.Equal(JsonValueKind.Null, initialPayload.GetProperty("body").ValueKind);
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
@@ -115,13 +148,26 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void DuplicateResolverPath_IsIgnoredWithoutWarning()
+    {
+        var logger = new CapturingLogger();
+        var scanner = CreateScanner(logger);
+        var path = typeof(ClrActivityDescriptor).Assembly.Location;
+
+        var paths = InvokeBuildResolverPaths(scanner, [path, path]);
+
+        Assert.Equal(1, paths.Count(candidate => candidate == path));
+        Assert.Empty(logger.Warnings);
+    }
+
+    [Fact]
     public void UnreadableDll_IsLoggedAndSkipped_ScanStillCompletes()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         File.WriteAllText(Path.Combine(folder.Path, "garbage.dll"), "this is not a portable executable");
 
-        // The junk DLL is skipped; the valid fixture assembly still yields its five concrete activities.
-        Assert.Equal(5, CreateScanner().Scan(folder.Path).Count);
+        // The junk DLL is skipped; the valid fixture assembly still yields its six concrete activities.
+        Assert.Equal(6, CreateScanner().Scan(folder.Path).Count);
     }
 
     [Fact]
@@ -171,6 +217,13 @@ public sealed class ClrAssemblyScannerTests
         var missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
         Assert.Empty(CreateScanner().Scan(missing));
+    }
+
+    private static IReadOnlyCollection<string> InvokeBuildResolverPaths(ClrAssemblyScanner scanner, IEnumerable<string> folderDlls)
+    {
+        var method = typeof(ClrAssemblyScanner).GetMethod("BuildResolverPaths", BindingFlags.Instance | BindingFlags.NonPublic);
+        var result = method?.Invoke(scanner, [folderDlls]);
+        return Assert.IsAssignableFrom<IReadOnlyCollection<string>>(result);
     }
 
     /// <summary>

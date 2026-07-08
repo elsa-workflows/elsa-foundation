@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Elsa.Agent.Core.Services.AgentIds;
@@ -540,5 +541,5 @@ public sealed class DefaultAgentProviderRegistry : IAgentProviderRegistry
 
 internal static class AgentIds
 {
-    public static string NewId() => Guid.NewGuid().ToString("N");
+    public static string NewId() => ShortIdentityGenerator.Generate(DateTimeOffset.UtcNow);
 }

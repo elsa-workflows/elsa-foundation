@@ -18,23 +18,33 @@ public sealed class ActivityVersionHashMismatchException : Exception
     public ActivityVersionHashMismatchException(
         string definitionId,
         string activityTypeKey,
-        string version,
+        string persistedVersion,
+        string incomingVersion,
         string? persistedHash,
         string incomingHash)
         : base(
-            $"Activity definition '{activityTypeKey}' (id = '{definitionId}') already has version {version} persisted with hash '{persistedHash}', but the reconciliation source contributed the same (id, version) with hash '{incomingHash}'. " +
-            "Same logical identity must imply same content. The source is broken — either fix the source-side projection or bump the Version number.")
+            $"Activity definition '{activityTypeKey}' (id = '{definitionId}') already has version {persistedVersion} persisted with hash '{persistedHash}', but the reconciliation source contributed the same logical version ({incomingVersion}) with hash '{incomingHash}'. " +
+            "Same logical identity must imply same content (build metadata is ignored when matching versions). The source is broken — either fix the source-side projection or bump the Version number.")
     {
         DefinitionId = definitionId;
         ActivityTypeKey = activityTypeKey;
-        Version = version;
+        PersistedVersion = persistedVersion;
+        IncomingVersion = incomingVersion;
         PersistedHash = persistedHash;
         IncomingHash = incomingHash;
     }
 
     public string DefinitionId { get; }
     public string ActivityTypeKey { get; }
-    public string Version { get; }
+
+    /// <summary>The full version string of the already-persisted row, including its build metadata.</summary>
+    public string PersistedVersion { get; }
+
+    /// <summary>The full version string the source contributed, including its build metadata. Shares
+    /// the same SemVer core as <see cref="PersistedVersion"/> — that core-equality is what makes the
+    /// two the same logical version — but the build metadata may differ.</summary>
+    public string IncomingVersion { get; }
+
     public string? PersistedHash { get; }
     public string IncomingHash { get; }
 }

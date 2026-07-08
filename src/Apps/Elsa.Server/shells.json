@@ -17,7 +17,6 @@
               "FolderPath": ""
             }
           },
-          "DiagnosticsConsoleLogStreaming": {},
           "DiagnosticsOpenTelemetry": {},
           "DiagnosticsOpenTelemetryPersistenceEFCoreSqlite": {},
           "DiagnosticsStructuredLogs": {},
@@ -84,7 +83,7 @@
                 "TypeFullName": "System.Object"
               },
               {
-                "TypeFullName": "System.Dynamic.ExpandoObject"
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
               },
               {
                 "TypeFullName": "System.String"

@@ -54,9 +54,10 @@ using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
-using Elsa.Server.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder;
+using Elsa.Modularity.ExtensionBuilder.Extensions;
 
-ConsoleLogStreamingFeature.InstallConsoleStreamHookIfEnabled(args);
+ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
@@ -67,19 +68,19 @@ builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange:
 builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
 var configuration = builder.Configuration;
 
-// Console log streaming is a process-global, host-level diagnostic: capture is a static tee on Console.Out and the
-// live stream is a long-lived SignalR connection. It is therefore composed once on the application root rather than
-// per-shell — a shell-hosted hub captures the shell container's IServiceScopeFactory and throws
-// ObjectDisposedException on disconnect when that shell is recycled on feature enable. The shell feature is only the
-// enable/discover surface (see ConsoleLogStreamingFeature); the host owns the console hook, capture options, the
-// recent/sources HTTP endpoints, and the hub. Because this is composed once at startup, enabling the feature at
-// runtime takes effect only after a restart. The enabled check + hook install are done once here and reused.
-var consoleLogStreamingEnabled = ConsoleLogStreamingFeature.IsFeatureEnabled(configuration);
+// Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
+// Console.Out and the live stream is a long-lived SignalR connection, so it is composed once on the application root
+// rather than per-shell — a shell-hosted hub captures the shell container's IServiceScopeFactory and throws
+// ObjectDisposedException on disconnect when that shell is recycled. The host owns the whole stack (console hook,
+// capture options, recent/sources HTTP endpoints, hub), gated by the Elsa:Diagnostics:ConsoleLogStreaming:Enabled
+// config switch (defaults to off). Because this is composed once at startup, toggling it takes effect only after a
+// restart. The enabled check + hook install are done once here and reused.
+var consoleLogStreamingEnabled = ConsoleLogStreamingSetup.IsEnabled(configuration);
 if (consoleLogStreamingEnabled)
 {
-    ConsoleLogStreamingFeature.InstallConsoleStreamHook();
-    builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingFeature.ConfigureHost);
-    builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingFeature.ConfigureEndpoints);
+    ConsoleLogStreamingSetup.InstallConsoleStreamHook();
+    builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingSetup.ConfigureHost);
+    builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingSetup.ConfigureEndpoints);
 }
 var nuplaneConfiguration = configuration.GetSection("Nuplane");
 
@@ -107,16 +108,17 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddNuplaneAdmin();
 builder.Services.Configure<ActivityAvailabilityOptions>(configuration.GetSection(ActivityAvailabilityOptions.SectionName));
-builder.Services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
-builder.Services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
-builder.Services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
-builder.Services.AddSingleton<ExtensionBuilderBackgroundBuildQueue>();
-builder.Services.AddSingleton<IExtensionBuilderBuildQueue>(sp => sp.GetRequiredService<ExtensionBuilderBackgroundBuildQueue>());
-builder.Services.AddHostedService<ExtensionBuilderBuildWorker>();
-builder.Services.AddScoped<IExtensionBuilderBuildRunner, ExtensionBuilderBuildRunner>();
-builder.Services.AddScoped<IExtensionBuilderBuildExecutor, ExtensionBuilderBuildExecutor>();
-builder.Services.AddScoped<IExtensionBuilderPromotionService, ExtensionBuilderPromotionService>();
-builder.Services.AddScoped<IExtensionBuilderService, ExtensionBuilderService>();
+
+// ExtensionBuilder is a root-hosted subsystem (root singletons + a background build worker + management
+// endpoints mapped on the root route builder below), not a shell feature — its process-global state and
+// hosted worker cannot live in a shell container. It lives in the Elsa.Modularity.ExtensionBuilder module
+// and is composed here at the application root, gated by a plain host config switch (defaults to on;
+// endpoints are additionally gated by the management API key). Both the root composition and the endpoint
+// mapping (see MapElsaExtensionBuilderApi below) honor the switch, so setting it to false genuinely stops
+// the subsystem — effective on the next startup.
+var extensionBuilderEnabled = !bool.TryParse(configuration["Elsa:ExtensionBuilder:Enabled"], out var ebEnabled) || ebEnabled;
+if (extensionBuilderEnabled)
+    builder.Services.AddElsaExtensionBuilder(configuration);
 
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
@@ -228,7 +230,6 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ApiSecurityFeature).Assembly,
 
             typeof(ModularityApiFeature).Assembly,
-            typeof(ConsoleLogStreamingFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly
@@ -254,7 +255,8 @@ app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
 app.MapElsaModuleManagementApi();
-app.MapElsaExtensionBuilderApi();
+if (extensionBuilderEnabled)
+    app.MapElsaExtensionBuilderApi();
 app.MapElsaWorkflowManagementApi();
 app.MapShells();
 
@@ -268,7 +270,14 @@ app.UseAuthorization();
 app.MapShellManagementApi("/_admin/shells");
 
 // Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
-// note above). Mapped after UseCors so the Studio cross-origin policy applies.
+// note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
+// the captured console output is not readable anonymously — these are root-mapped endpoints that bypass the
+// per-shell ApiSecurity, so they must carry their own authorization. The empty-prefix group keeps the absolute
+// routes and applies the convention to every endpoint the mapper adds, including the hub.
 if (consoleLogStreamingEnabled)
-    app.MapConsoleLogStreaming();
+{
+    var consoleLogEndpoints = app.MapGroup("");
+    consoleLogEndpoints.RequireAuthorization();
+    consoleLogEndpoints.MapConsoleLogStreaming();
+}
 app.Run();

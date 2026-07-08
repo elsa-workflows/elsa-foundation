@@ -35,7 +35,7 @@ public sealed class SetDataLeafExecutionTests
             .WithConstructor<SetNameConstructor>()
             .Build("actexec-set-name");
 
-        var run = await harness.RunAsync(NewLeafExecutable("node-set-name", typeof(SetName), "Name", "order-flow"));
+        var run = await harness.RunAsync(NewLeafExecutable("node-set-name", typeof(SetName), "InstanceName", "order-flow"));
 
         run.AssertCompleted("node-set-name");
         run.AssertWorkflowCompleted();
@@ -223,8 +223,8 @@ public sealed class SetDataLeafExecutionTests
         public ValueTask<IActivity> Construct(TestDescriptor descriptor, IDictionary<string, InputArgument>? inputs, IDictionary<string, OutputArgument>? outputs, CancellationToken cancellationToken)
         {
             var activity = new SetName();
-            if (inputs is not null && inputs.TryGetValue("Name", out var nameInput))
-                activity.Name = (InputArgument<string>)nameInput;
+            if (inputs is not null && inputs.TryGetValue("InstanceName", out var nameInput))
+                activity.InstanceName = (InputArgument<string>)nameInput;
             return new(activity);
         }
     }

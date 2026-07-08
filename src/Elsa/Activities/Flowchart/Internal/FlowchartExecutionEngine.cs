@@ -12,7 +12,7 @@ using static Elsa.Activities.Flowchart.Internal.FlowchartStateMutator;
 namespace Elsa.Activities.Flowchart.Internal;
 
 /// <summary>
-/// Orchestrates Flowchart composite execution across its three entry points (<see cref="Start"/>,
+/// Orchestrates Flowchart composite execution across its three entry points (<see cref="StartAsync"/>,
 /// <see cref="OnChildCompletedAsync"/>, <see cref="OnChildFaultedAsync"/>). It owns only the dispatch
 /// decisions — resolving the completing child's path/scope, routing to the policy applier or implicit-join
 /// path, break/race/fault handling, and composite completion — and delegates the mechanics to focused
@@ -37,7 +37,11 @@ public sealed class FlowchartExecutionEngine(
     public const string SchedulingCauseMetadataKey = "flowchart.schedulingCause";
     public const string TargetNodeIdMetadataKey = "flowchart.targetNodeId";
 
-    public void Start(IRuntimeActivityExecutionContext context)
+    // First-execution entry. Async so the mandatory checkpoint commit is awaited on the natural
+    // async path — the former sync `Start` reached the async persister via a blocking
+    // GetAwaiter().GetResult() wrapper (sync-over-async), the last such holdout among the engine's
+    // persistence call sites; #413 item 6 removed it.
+    public async ValueTask StartAsync(IRuntimeActivityExecutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -55,7 +59,7 @@ public sealed class FlowchartExecutionEngine(
         var rootPath = state.ExecutionPaths.SingleOrDefault(path => path.ExecutionPathId == "path:root")
             ?? throw new InvalidOperationException($"Root execution path 'path:root' not found. ActivityExecutionId='{context.ActivityExecutionState.Execution.ActivityExecutionId}'.");
         state = ScheduleNode(context, state, startNode.ExecutableNodeId, rootPath.ExecutionPathId, rootPath.ExecutionScopeId, rootPath.IterationKey, context.ActivityExecutionState.Execution.ActivityExecutionId, "start");
-        persister.SaveState(context, state);
+        await persister.SaveStateAsync(context, state);
     }
 
     public async ValueTask OnChildCompletedAsync(IRuntimeActivityExecutionContext context, ActivityChildCompletedContext completionContext)

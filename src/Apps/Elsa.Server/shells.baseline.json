@@ -32,7 +32,6 @@
             }
           },
           "ActivitiesCompositionDesign": {},
-          "DiagnosticsConsoleLogStreaming": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
           "WorkflowsRuntimeTriggers": {},

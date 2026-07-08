@@ -1,6 +1,7 @@
 using Elsa.Activities.Parallel.Exceptions;
 using Elsa.Activities.Parallel.Internal;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -55,6 +56,16 @@ namespace Elsa.Activities.Parallel.Activities;
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
 /// </para>
 /// </remarks>
+[ActivityStructure("elsa.parallel.structure", "1.0.0")]
+[ActivityChildSlot(
+    "Parallel.Branch",
+    "branches",
+    "Branches",
+    ActivityChildSlotCardinalities.Single,
+    CollectionProperty = "branches",
+    ChildProperty = "activity",
+    LabelProperty = "name",
+    SlotNameTemplate = "Parallel.Branch[{name}]")]
 public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IActivityChildFaultHandler
 {
     public const string BranchSlotPrefix = "Parallel.Branch[";
@@ -187,12 +198,15 @@ public sealed class Parallel : ActivityBase, IActivityChildCompletionHandler, IA
         string compositeExecutionId)
     {
         var store = runtimeContext.GetRequiredService<IActivityExecutionStateStore>();
-        var states = await store.ListAsync(runtimeContext.WorkflowExecutionId, runtimeContext.CancellationToken);
+
+        // Read only this composite's direct children rather than every activity-execution state in the workflow: the join
+        // fires once per branch-completion/fault event, so a whole-workflow list here made the join O(branches × workflow
+        // states) — effectively quadratic on wide/large workflows (#514/#413 item 3). The parent-scoped read returns exactly
+        // the ParentActivityExecutionId == compositeExecutionId subset; the branch/grouping filters stay here.
+        var states = await store.ListByParentAsync(runtimeContext.WorkflowExecutionId, compositeExecutionId, runtimeContext.CancellationToken);
 
         var branchGroups = states
-            .Where(state =>
-                StringComparer.Ordinal.Equals(state.ParentActivityExecutionId, compositeExecutionId) &&
-                navigator.IsBranch(state.Execution.ExecutableNodeId))
+            .Where(state => navigator.IsBranch(state.Execution.ExecutableNodeId))
             .GroupBy(state => state.Execution.ExecutableNodeId, StringComparer.Ordinal);
 
         var completed = 0;
