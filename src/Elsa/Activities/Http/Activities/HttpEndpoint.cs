@@ -1,7 +1,10 @@
+using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
 
@@ -18,15 +21,15 @@ namespace Elsa.Activities.Http.Activities;
 /// <b>Response model.</b> This is the <c>async/202</c> baseline: the endpoint replies <c>202 Accepted</c> the
 /// moment it starts the workflow, so no request is waiting when the run executes. A workflow that wants to
 /// record an intended response uses <see cref="WriteHttpResponse"/>, which writes a durable, observable
-/// artifact. Synchronous request/response correlation (a caller that blocks for the workflow's response) is a
-/// deliberately separate subsystem — the named "HTTP synchronous response correlation" follow-up.
+/// artifact. Synchronous request/response correlation is spec 089 sub-unit E (request-affine execution).
 /// </para>
 /// <para>
-/// <b>Start-input delivery is pending.</b> The runtime start path does not yet thread a stimulus's input into
-/// the started instance (only the resume path does), so the surfaced <see cref="Result"/> currently reflects
-/// the <em>authored</em> route rather than the live request body/headers/query. This is the named "HTTP
-/// endpoint start-input delivery" follow-up; when it lands, the live <see cref="HttpRequestModel"/> the
-/// middleware already serializes as the stimulus input becomes available with no wire change.
+/// <b>Result resolution.</b> The middleware serializes the live request as the stimulus input, and the router's
+/// start path seeds it as the workflow input named
+/// <see cref="WellKnownStimulusInputs.StimulusInput"/> (spec 089 FR-001/FR-002); this activity surfaces that
+/// live <see cref="HttpRequestModel"/> as its <see cref="CodeActivity{T}.Result"/>. When the workflow was not
+/// started by an HTTP stimulus (e.g. a direct run through the execute API), the Result falls back to a model
+/// projected from the authored route.
 /// </para>
 /// </remarks>
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
@@ -46,19 +49,49 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 
     protected override void Execute(IActivityExecutionContext context)
     {
+        var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
+        context.Set(Result, model);
+    }
+
+    /// <summary>
+    /// Resolves the live request model the router seeded as the <see cref="WellKnownStimulusInputs.StimulusInput"/>
+    /// workflow input. Returns null when the input is absent (non-HTTP start) or not a request-model payload.
+    /// </summary>
+    private static HttpRequestModel? ResolveStimulusRequest(IActivityExecutionContext context)
+    {
+        if (context.ExpressionExecutionContext is not IExecutionExpressionState state)
+            return null;
+
+        if (!state.WorkflowInputs.TryGetValue(WellKnownStimulusInputs.StimulusInput, out var value))
+            return null;
+
+        try
+        {
+            return value switch
+            {
+                HttpRequestModel model => model,
+                JsonElement { ValueKind: JsonValueKind.Object } json => json.Deserialize<HttpRequestModel>(),
+                _ => null
+            };
+        }
+        catch (JsonException)
+        {
+            // A foreign stimulus payload under the well-known key is not ours to interpret.
+            return null;
+        }
+    }
+
+    private HttpRequestModel BuildAuthoredRouteModel(IActivityExecutionContext context)
+    {
         var path = context.Get(Path) ?? string.Empty;
         var methods = context.Get(SupportedMethods);
         var method = methods is { Count: > 0 } ? methods.First() : "*";
 
-        // Authored-route projection until start-input delivery lands (see remarks): the live request body/
-        // headers/query are not threaded through the runtime start path yet.
-        var model = new HttpRequestModel(
+        return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizePath(path),
             Method: method,
             Headers: new Dictionary<string, string[]>(),
             Query: new Dictionary<string, string[]>(),
             Body: null);
-
-        context.Set(Result, model);
     }
 }

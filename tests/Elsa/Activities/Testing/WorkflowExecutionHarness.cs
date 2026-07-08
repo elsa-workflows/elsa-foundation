@@ -58,6 +58,13 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false);
 
     /// <summary>
+    /// Runs with workflow inputs seeded on the start command (name → JSON value), mirroring how the start
+    /// dispatcher carries caller/stimulus inputs into the workflow-started checkpoint (spec 089 FR-001).
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, IReadOnlyDictionary<string, JsonElement> inputs) =>
+        RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, inputs: inputs);
+
+    /// <summary>
     /// Saves the executable, starts the in-process agent, and drains the scheduler.
     /// </summary>
     /// <param name="allowPendingWorkOnTerminalCompletion">
@@ -66,7 +73,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// status — the #293 contract: a <c>Finish</c> inside a parallel fork terminates the run and the drainer
     /// intentionally abandons the already-queued sibling work rather than dispatching post-completion state.
     /// </param>
-    public async Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, bool allowPendingWorkOnTerminalCompletion)
+    public async Task<WorkflowExecutionRun> RunAsync(
+        WorkflowExecutable executable,
+        bool allowPendingWorkOnTerminalCompletion,
+        IReadOnlyDictionary<string, JsonElement>? inputs = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -84,7 +94,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
@@ -168,9 +178,11 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             requestedBy: "activity-execution-test",
             requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox);
 
-    private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
+    private static WorkflowExecutionCommandEnvelope NewStartEnvelope(
+        WorkflowExecutableIdentity pinnedExecutable,
+        IReadOnlyDictionary<string, JsonElement>? inputs = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: WorkflowExecutionId,

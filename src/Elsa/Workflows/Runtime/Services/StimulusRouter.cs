@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -136,11 +137,18 @@ public sealed class StimulusRouter : IStimulusRouter
                 }
             }
 
+            // Spec 089 FR-001: the stimulus payload reaches started instances through the ordinary seed-input
+            // channel (the resume path already delivers it via BookmarkResumeDispatchRequest.Input).
+            var startInputs = request.Input is { } stimulusInput
+                ? new Dictionary<string, object?> { [WellKnownStimulusInputs.StimulusInput] = stimulusInput }
+                : null;
+
             var startRequest = new WorkflowExecutionStartDispatchRequest(
                 artifactId: binding.ArtifactId,
                 requestedBy: request.RequestedBy,
                 idempotencyKey: startIdempotencyKey,
-                metadata: dispatchMetadata);
+                metadata: dispatchMetadata,
+                inputs: startInputs);
 
             var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));

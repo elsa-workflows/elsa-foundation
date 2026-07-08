@@ -25,14 +25,15 @@ namespace Elsa.Activities.Http.Middleware;
 /// artifact) is the separate "HTTP synchronous response correlation" follow-up.
 /// </para>
 /// <para>
-/// <b>Forward-compatible input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body)
-/// is serialized as the stimulus input even though the current runtime start path does not thread stimulus
-/// input into started instances — so when start-input delivery lands the live request is available with no wire
-/// change. See <see cref="HttpRequestModel"/>.
+/// <b>Live input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body) is serialized
+/// as the stimulus input; the router's start path seeds it into the started instance as the
+/// <c>WellKnownStimulusInputs.StimulusInput</c> workflow input (spec 089 sub-unit A), where
+/// <see cref="HttpEndpoint"/> surfaces it as its Result. See <see cref="HttpRequestModel"/>.
 /// </para>
 /// <para>
 /// Registered as an <see cref="IMiddleware"/> (resolved from DI per request) so it can take the scoped
-/// <see cref="IStimulusRouter"/>; a host adds it with <c>app.UseMiddleware&lt;HttpEndpointMiddleware&gt;()</c>.
+/// <see cref="IStimulusRouter"/>; <see cref="ActivitiesHttpFeature"/> mounts it into the shell pipeline through
+/// the CShells middleware seam.
 /// </para>
 /// </remarks>
 public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<HttpEndpointOptions> options) : IMiddleware
