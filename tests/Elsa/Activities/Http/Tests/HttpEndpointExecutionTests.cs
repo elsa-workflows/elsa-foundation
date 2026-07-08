@@ -7,7 +7,6 @@ using Elsa.Activities.Testing;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -18,10 +17,9 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// In-process execution coverage for <see cref="HttpEndpoint"/> Result resolution (spec 089 sub-unit A,
-/// FR-002) through the real workflow agent on the shared <see cref="WorkflowExecutionHarness"/>. When the start
-/// command seeds the <see cref="WellKnownStimulusInputs.StimulusInput"/> workflow input — as the stimulus
-/// router's start path now does — the activity surfaces the live <see cref="HttpRequestModel"/>; without it
-/// (direct run), it falls back to the authored-route projection.
+/// FR-002) through the real workflow agent on the shared <see cref="WorkflowExecutionHarness"/>. The live
+/// request travels on the dedicated stimulus-input channel; the workflow-inputs bag can neither supply nor
+/// forge it. Without a valid stimulus payload the Result falls back to the authored-route projection.
 /// </summary>
 public sealed class HttpEndpointExecutionTests
 {
@@ -38,12 +36,8 @@ public sealed class HttpEndpointExecutionTests
             Headers: new Dictionary<string, string[]> { ["x-test"] = ["abc"] },
             Query: new Dictionary<string, string[]> { ["q"] = ["1"] },
             Body: """{"id":7}""");
-        var inputs = new Dictionary<string, JsonElement>
-        {
-            [WellKnownStimulusInputs.StimulusInput] = JsonSerializer.SerializeToElement(liveRequest)
-        };
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), inputs);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -69,15 +63,37 @@ public sealed class HttpEndpointExecutionTests
         Assert.Equal(JsonValueKind.Null, result.GetProperty(nameof(HttpRequestModel.Body)).ValueKind);
     }
 
-    [Fact]
-    public async Task FallsBackToAuthoredRoute_WhenStimulusInputIsForeign()
+    [Theory]
+    [InlineData("\"not-a-request-model\"")] // JSON string — not an object
+    [InlineData("""{"foo":1}""")] // foreign JSON object — deserializes but has no Path/Method
+    [InlineData("""{"Path":"x"}""")] // half-shaped object — Method missing
+    public async Task FallsBackToAuthoredRoute_WhenStimulusInputIsForeignOrMalformed(string foreignPayload)
     {
-        // A non-HTTP stimulus payload under the well-known key is not ours to interpret (e.g. another trigger
-        // module started this artifact); the activity must not fault on it.
+        // A foreign stimulus payload (another trigger module started this artifact) must never surface as a
+        // half-populated request model — identifying members (Path, Method) are validated after deserialize.
         await using var harness = NewHarness();
+        using var document = JsonDocument.Parse(foreignPayload);
+
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), document.RootElement.Clone());
+
+        run.AssertWorkflowCompleted();
+
+        var result = await ResultAsync(harness);
+        Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
+    }
+
+    [Fact]
+    public async Task WorkflowInputsBag_CannotForgeTheStimulusInput()
+    {
+        // Regression pin for the spec-089 review: a caller-supplied workflow input (the execute API's inputs
+        // bag) named like the old well-known key must NOT surface as the endpoint's Result — the stimulus
+        // travels on its own channel, so the activity falls back to the authored route.
+        await using var harness = NewHarness();
+        var forged = new HttpRequestModel("evil", "DELETE", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), "forged");
         var inputs = new Dictionary<string, JsonElement>
         {
-            [WellKnownStimulusInputs.StimulusInput] = JsonSerializer.SerializeToElement("not-a-request-model")
+            ["stimulusInput"] = JsonSerializer.SerializeToElement(forged)
         };
 
         var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), inputs);
@@ -86,6 +102,7 @@ public sealed class HttpEndpointExecutionTests
 
         var result = await ResultAsync(harness);
         Assert.Equal("orders/webhook", result.GetProperty(nameof(HttpRequestModel.Path)).GetString());
+        Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
     }
 
     private static async Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness)

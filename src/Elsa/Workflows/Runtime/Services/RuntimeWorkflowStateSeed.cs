@@ -31,6 +31,12 @@ public static class RuntimeWorkflowStateSeed
     public const string OutputValueIdPrefix = "output:";
     private const string DurableValueIdPrefix = "durable-";
 
+    // Reserved durable-value-id namespace for the start stimulus payload (spec 089 A). A single reserved slot:
+    // the stimulus is a per-execution singleton, not a named bag, and it deliberately does NOT share the
+    // input:* namespace so it can never collide with (or be spoofed through) author-declared workflow inputs.
+    public const string StimulusValueIdPrefix = "stimulus:";
+    public const string StimulusInputSlotName = "input";
+
     // Reserved durable-value-id namespace for the workflow-identity projection (correlation id / instance name).
     // The identity slot name is the suffix (e.g. "identity:correlationId"); it doubles as the IdentityName tag
     // value the read-side projection filters on. Kept distinct from the variable/input/output namespaces above.
@@ -47,7 +53,8 @@ public static class RuntimeWorkflowStateSeed
         string workflowExecutionId,
         IReadOnlyDictionary<string, object?>? variables,
         IReadOnlyDictionary<string, object?>? inputs,
-        DateTimeOffset capturedAt)
+        DateTimeOffset capturedAt,
+        JsonElement? stimulusInput = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -58,6 +65,10 @@ public static class RuntimeWorkflowStateSeed
 
         foreach (var (name, value) in inputs ?? EmptyValues)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.InputName, InputValueIdPrefix, name, value, capturedAt));
+
+        // The start stimulus payload rides its own reserved channel (spec 089 A): never the input:* namespace.
+        if (stimulusInput is { } stimulus)
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.StimulusInputName, StimulusValueIdPrefix, StimulusInputSlotName, stimulus, capturedAt));
 
         return changes;
     }

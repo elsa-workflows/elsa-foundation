@@ -4,8 +4,10 @@ Changes to module-internal contracts; each is catalogued in the owning module's 
 
 ## A — start-input + host wiring
 
-- `IStimulusRouter` (behavioral): start path now forwards `StimulusDispatchRequest.Input` into `WorkflowExecutionStartDispatchRequest.Inputs[WellKnownStimulusInputs.StimulusInput]`. Signature unchanged; non-input stimuli unaffected.
-- `HttpEndpointMiddlewareShellFeature : IMiddlewareShellFeature` (new, `Elsa.Activities.Http`): mounts `HttpEndpointMiddleware`; `Order` after authentication contributions.
+- `IStimulusRouter` (behavioral): start path forwards `StimulusDispatchRequest.Input` on the first-class `WorkflowExecutionStartDispatchRequest.StimulusInput` field → `WorkflowExecutionStartCommandPayload.StimulusInput` → `RuntimeCheckpointCommandPayload.SeedStimulusInput` → reserved durable channel (`RuntimeMetadataKeys.StimulusInputName`) → `IExecutionExpressionState.StimulusInput`. Never the workflow-inputs bag (collision/spoof-proof by construction; revised from the original seed-input-key design during the spec-089 code review).
+- `ActivitiesHttpFeature : IMiddlewareShellFeature` (implemented on the existing feature, not a separate class): mounts `HttpEndpointMiddleware`. **Ordering caveat (review V8):** `IMiddlewareShellFeature` exposes no `Order` member and CShells applies middleware features in discovery order — there is no declarative ordering knob. Sub-unit C (Authorize enforcement) MUST either verify activation order places this middleware after authentication or add an ordering hook to CShells first; do not assume ordering.
+- Transport guard: `HttpEndpointOptions.MaxRequestBodyBytes` (default 1 MiB, streaming-enforced, 413) bounds the body because the stimulus payload becomes durable state on the started instance; per-endpoint authored limits remain sub-unit C. Empty/root `BasePath` disables the middleware (never a host-wide catch-all); base-path matching is segment-bounded.
+- Known platform limitation (review V16): CShells applies `UseMiddleware` to the `IApplicationBuilder` captured at `MapShells()` time — a shell activated dynamically after startup gets no middleware (endpoints have a dynamic source; middleware does not). Tracked as a CShells enhancement.
 
 ## B — routing
 

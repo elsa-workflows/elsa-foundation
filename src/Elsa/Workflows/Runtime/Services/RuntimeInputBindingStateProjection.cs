@@ -36,6 +36,15 @@ public static class RuntimeInputBindingStateProjection
         ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
     /// <summary>
+    /// Projects the start stimulus payload (spec 089 A) from its reserved single-slot channel
+    /// (<see cref="RuntimeMetadataKeys.StimulusInputName"/>). Null when the execution was not started by a
+    /// stimulus carrying a payload. Deliberately not part of the workflow-input namespace.
+    /// </summary>
+    public static object? ProjectStimulusInput(IEnumerable<DurableValueState> durableValues) =>
+        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.StimulusInputName)
+            .GetValueOrDefault(RuntimeWorkflowStateSeed.StimulusInputSlotName);
+
+    /// <summary>
     /// Projects the workflow identity (correlation id / instance name), workflow-input, workflow-variable, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
@@ -53,7 +62,8 @@ public static class RuntimeInputBindingStateProjection
             WorkflowVariables: ProjectWorkflowVariables(materialized),
             ActivityOutputValues: ProjectActivityOutputValues(materialized),
             CorrelationId: identity.CorrelationId,
-            InstanceName: identity.InstanceName);
+            InstanceName: identity.InstanceName,
+            StimulusInput: ProjectStimulusInput(materialized));
     }
 
     /// <summary>
@@ -89,7 +99,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
     IReadOnlyDictionary<string, object?> WorkflowVariables,
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
     string? CorrelationId,
-    string? InstanceName);
+    string? InstanceName,
+    object? StimulusInput);
 
 /// <summary>
 /// Projects the workflow identity (correlation id / instance name) out of the durable values captured for a workflow

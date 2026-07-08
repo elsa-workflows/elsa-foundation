@@ -59,10 +59,17 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
     /// <summary>
     /// Runs with workflow inputs seeded on the start command (name → JSON value), mirroring how the start
-    /// dispatcher carries caller/stimulus inputs into the workflow-started checkpoint (spec 089 FR-001).
+    /// dispatcher carries caller inputs into the workflow-started checkpoint.
     /// </summary>
     public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, IReadOnlyDictionary<string, JsonElement> inputs) =>
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, inputs: inputs);
+
+    /// <summary>
+    /// Runs with a stimulus payload on the start command's dedicated stimulus-input channel (spec 089 A),
+    /// mirroring how the stimulus router's start path delivers a trigger's payload.
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, JsonElement stimulusInput) =>
+        RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, stimulusInput: stimulusInput);
 
     /// <summary>
     /// Saves the executable, starts the in-process agent, and drains the scheduler.
@@ -76,7 +83,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     public async Task<WorkflowExecutionRun> RunAsync(
         WorkflowExecutable executable,
         bool allowPendingWorkOnTerminalCompletion,
-        IReadOnlyDictionary<string, JsonElement>? inputs = null)
+        IReadOnlyDictionary<string, JsonElement>? inputs = null,
+        JsonElement? stimulusInput = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -94,7 +102,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
@@ -180,9 +188,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(
         WorkflowExecutableIdentity pinnedExecutable,
-        IReadOnlyDictionary<string, JsonElement>? inputs = null)
+        IReadOnlyDictionary<string, JsonElement>? inputs = null,
+        JsonElement? stimulusInput = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs);
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: WorkflowExecutionId,

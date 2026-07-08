@@ -109,10 +109,11 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
-    public async Task Route_StartOnly_ForwardsStimulusInputAsSeedInput()
+    public async Task Route_StartOnly_ForwardsStimulusInputOnTheDedicatedChannel()
     {
-        // Spec 089 FR-001: the start path delivers the stimulus payload through the seed-input channel under
-        // the well-known key, so a started instance observes the live payload via the input.* projection.
+        // Spec 089 FR-001: the start path delivers the stimulus payload on the first-class StimulusInput field
+        // (the start-side counterpart of the resume path's Input) — never through the workflow-inputs bag, so
+        // it can neither collide with author-declared inputs nor be forged via caller-facing input maps.
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
         await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
         var startDispatcher = new RecordingStartDispatcher();
@@ -122,13 +123,13 @@ public sealed class StimulusRouterTests
         await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, input: input));
 
         var dispatched = Assert.Single(startDispatcher.Requests);
-        var seeded = Assert.Contains(Elsa.Workflows.Runtime.Core.Constants.WellKnownStimulusInputs.StimulusInput, dispatched.Inputs);
-        var seededElement = Assert.IsType<JsonElement>(seeded);
-        Assert.Equal(7, seededElement.GetProperty("id").GetInt32());
+        Assert.NotNull(dispatched.StimulusInput);
+        Assert.Equal(7, dispatched.StimulusInput!.Value.GetProperty("id").GetInt32());
+        Assert.Empty(dispatched.Inputs);
     }
 
     [Fact]
-    public async Task Route_StartOnly_WithoutInput_CarriesNoSeedInputs()
+    public async Task Route_StartOnly_WithoutInput_CarriesNoStimulusInput()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
         await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
@@ -137,7 +138,9 @@ public sealed class StimulusRouterTests
 
         await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
 
-        Assert.Empty(Assert.Single(startDispatcher.Requests).Inputs);
+        var dispatched = Assert.Single(startDispatcher.Requests);
+        Assert.Null(dispatched.StimulusInput);
+        Assert.Empty(dispatched.Inputs);
     }
 
     [Fact]

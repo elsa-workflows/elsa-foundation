@@ -80,6 +80,15 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string InputName = "runtime.inputName";
     /// <summary>
+    /// Metadata key on the durable value carrying the start stimulus payload (spec 089 A). Its value is the
+    /// reserved slot name <c>RuntimeWorkflowStateSeed.StimulusInputSlotName</c>. This is a dedicated channel,
+    /// deliberately distinct from <see cref="InputName"/>: the stimulus payload never shares the workflow-input
+    /// namespace, so it cannot collide with an author-declared input and cannot be injected through the
+    /// caller-facing inputs bag of the execute API. Read by
+    /// <c>RuntimeInputBindingStateProjection.ProjectStimulusInput</c> (engine package).
+    /// </summary>
+    public const string StimulusInputName = "runtime.stimulusInputName";
+    /// <summary>
     /// Metadata key marking a durable value's payload as sensitive (<c>"true"</c>). Read by the workflow-output
     /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked

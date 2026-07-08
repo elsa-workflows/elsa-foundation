@@ -163,14 +163,15 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         RuntimeCheckpointCommandPayload payload,
         DateTimeOffset occurredAt)
     {
-        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0)
+        if (payload.SeedVariables.Count == 0 && payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null)
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
             workItem.WorkflowExecutionId,
             payload.SeedVariables.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
             payload.SeedInputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal),
-            occurredAt);
+            occurredAt,
+            stimulusInput: payload.SeedStimulusInput);
     }
 
     private static void ValidateTerminalCheckpointStatus(

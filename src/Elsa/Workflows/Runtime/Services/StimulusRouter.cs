@@ -137,18 +137,15 @@ public sealed class StimulusRouter : IStimulusRouter
                 }
             }
 
-            // Spec 089 FR-001: the stimulus payload reaches started instances through the ordinary seed-input
-            // channel (the resume path already delivers it via BookmarkResumeDispatchRequest.Input).
-            var startInputs = request.Input is { } stimulusInput
-                ? new Dictionary<string, object?> { [WellKnownStimulusInputs.StimulusInput] = stimulusInput }
-                : null;
-
+            // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
+            // stimulus-input channel — the start-side counterpart of the resume path's
+            // BookmarkResumeDispatchRequest.Input. Never the workflow-inputs bag (collision/spoof-proof).
             var startRequest = new WorkflowExecutionStartDispatchRequest(
                 artifactId: binding.ArtifactId,
                 requestedBy: request.RequestedBy,
                 idempotencyKey: startIdempotencyKey,
                 metadata: dispatchMetadata,
-                inputs: startInputs);
+                stimulusInput: request.Input);
 
             var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));

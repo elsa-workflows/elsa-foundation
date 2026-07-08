@@ -3,7 +3,6 @@ using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
@@ -25,11 +24,11 @@ namespace Elsa.Activities.Http.Activities;
 /// </para>
 /// <para>
 /// <b>Result resolution.</b> The middleware serializes the live request as the stimulus input, and the router's
-/// start path seeds it as the workflow input named
-/// <see cref="WellKnownStimulusInputs.StimulusInput"/> (spec 089 FR-001/FR-002); this activity surfaces that
-/// live <see cref="HttpRequestModel"/> as its <see cref="CodeActivity{T}.Result"/>. When the workflow was not
-/// started by an HTTP stimulus (e.g. a direct run through the execute API), the Result falls back to a model
-/// projected from the authored route.
+/// start path carries it on the dedicated stimulus-input channel (spec 089 FR-001/FR-002) — surfaced here via
+/// <see cref="IExecutionExpressionState.StimulusInput"/>. That channel is separate from workflow inputs by
+/// construction, so an author input cannot collide with it and the execute API's inputs bag cannot forge it.
+/// When the execution was not started by an HTTP stimulus (direct run, or a foreign/malformed stimulus
+/// payload), the Result falls back to a model projected from the authored route.
 /// </para>
 /// </remarks>
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
@@ -54,29 +53,34 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     }
 
     /// <summary>
-    /// Resolves the live request model the router seeded as the <see cref="WellKnownStimulusInputs.StimulusInput"/>
-    /// workflow input. Returns null when the input is absent (non-HTTP start) or not a request-model payload.
+    /// Resolves the live request model from the dedicated stimulus-input channel. Returns null when the input
+    /// is absent (non-HTTP start) or is not a valid request-model payload (a foreign stimulus started this
+    /// artifact, or the payload is malformed) — the caller then uses the authored-route fallback. Validation is
+    /// strict on the identifying members: a JSON object that deserializes without <c>Path</c> and <c>Method</c>
+    /// is not a request model, never a half-populated Result.
     /// </summary>
     private static HttpRequestModel? ResolveStimulusRequest(IActivityExecutionContext context)
     {
-        if (context.ExpressionExecutionContext is not IExecutionExpressionState state)
-            return null;
-
-        if (!state.WorkflowInputs.TryGetValue(WellKnownStimulusInputs.StimulusInput, out var value))
+        if (context.ExpressionExecutionContext is not IExecutionExpressionState { StimulusInput: JsonElement { ValueKind: JsonValueKind.Object } json })
             return null;
 
         try
         {
-            return value switch
+            var model = json.Deserialize<HttpRequestModel>();
+            if (model is not { Path: not null, Method: not null })
+                return null;
+
+            // Tolerate payloads missing the collection members rather than surfacing null dictionaries.
+            return model with
             {
-                HttpRequestModel model => model,
-                JsonElement { ValueKind: JsonValueKind.Object } json => json.Deserialize<HttpRequestModel>(),
-                _ => null
+                Headers = model.Headers ?? new Dictionary<string, string[]>(),
+                Query = model.Query ?? new Dictionary<string, string[]>()
             };
         }
         catch (JsonException)
         {
-            // A foreign stimulus payload under the well-known key is not ours to interpret.
+            // Malformed payload on the stimulus channel: fall back rather than fault. The durable stimulus
+            // value remains inspectable on the instance for diagnosis.
             return null;
         }
     }
