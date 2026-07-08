@@ -104,9 +104,10 @@ git-sourced version is already a file → export skips it; a locally-authored ve
 ### D5 — Split the on-disk model along the mutability seam
 
 A `WorkflowDefinition` has *mutable* `Name`/`Description`/soft-delete that change without minting a
-version, but the import reconciler today builds a definition from the first version entry's name and
-**never updates it** (`WorkflowsVersionReconciler.cs:53`) — so rename/soft-delete silently fail to
-propagate. Split the layout:
+version. A metadata-update path has since landed (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`,
+PR #546), but it applies metadata from *every* version entry rather than from a single mutable source —
+so rename/soft-delete propagate order-dependently (see the carried-over defect below). Split the layout
+so a single mutable file, not per-version content, drives definition metadata:
 
 ```
 {WorkflowsPath}/                       # default: "workflows"
@@ -121,9 +122,9 @@ propagate. Split the layout:
 - **`versions/{semver}.json`** = pure versioned canonical content (D3), immutable, content-authoritative.
 - **`definition.json`** = mutable definition-level metadata (name, description, `deleted`), latest-wins,
   re-committed on change, **not** part of any version's content identity.
-- The import reconciler **gains a definition-metadata update path** (apply `definition.json` on every
-  pass). Soft-delete propagates as a **flag**, never a file deletion (consistent with retention
-  authority).
+- The import reconciler's definition-metadata update path (already landed, PR #546) MUST be **narrowed
+  to `definition.json`** (applied every pass) instead of per-version content. Soft-delete propagates as
+  a **flag**, never a file deletion (consistent with retention authority).
 
 > **Carried-over defect (spec 087 → fix in spec 085, FR-008a).** The generic prerequisite landed
 > (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546) applies name/description from *every*
