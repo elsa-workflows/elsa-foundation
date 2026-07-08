@@ -156,6 +156,42 @@ _Avoid_: Save semantics when the mutation is not a save
 The Studio-managed resource a Weaver Tool, Tool Result, or Proposal refers to, such as a workflow draft, workflow definition, agent definition, extension, feature, package feed, diagnostic setting, or module-owned resource.
 _Avoid_: Workflow when the target can be any Studio-managed resource
 
+**Theme Store**:
+The Studio-managed collection of theme definitions, material texture assets, default-theme metadata, and publication state used to control Studio presentation.
+_Avoid_: Workflow theme state, runtime theme policy
+
+**Theme Definition**:
+A named Studio theme record that describes light and dark presentation variants, material references, publication state, and availability for selection in Studio.
+_Avoid_: CSS file, theme preset, user preference
+
+**Built-in Theme**:
+A read-only Theme Definition supplied by Studio as a seed option. Users customize a Built-in Theme by duplicating it into a Custom Theme.
+_Avoid_: Editable preset, default theme
+
+**Custom Theme**:
+A user-managed Theme Definition that can be edited, validated, published, disabled, deleted, imported, or exported through the Theme Store.
+_Avoid_: User preference, arbitrary CSS
+
+**Material Texture Asset**:
+A reusable Theme Store asset referenced by Theme Definitions to provide tiled material texture for Studio surfaces.
+_Avoid_: Embedded CSS, data URI token, workflow asset
+
+**Published Theme**:
+A Theme Definition that is ready for general Studio use. A Published Theme is available for selection by Studio users only when it is also enabled.
+_Avoid_: Saved theme, default theme
+
+**Draft Theme**:
+A saved Theme Definition that can be edited and previewed but is not yet available for normal user selection.
+_Avoid_: Disabled theme, unpublished CSS
+
+**Disabled Theme**:
+A Theme Definition that remains in the Theme Store but is unavailable for normal user selection.
+_Avoid_: Draft theme, deleted theme
+
+**Theme Selection Preference**:
+A user's local choice of active Theme Definition and light or dark mode for their Studio session.
+_Avoid_: Theme Store state, default theme, host policy
+
 **Extension Resource**:
 A Resource Target owned by Extension Builder, such as an extension project, build, generated module, manifest, or package.
 _Avoid_: Workflow resource
