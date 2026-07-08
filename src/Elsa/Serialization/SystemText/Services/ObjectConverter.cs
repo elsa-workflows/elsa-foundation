@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Dynamic;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -132,7 +131,6 @@ public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectC
                     { } t when t.IsNumericType() && valueKind == JsonValueKind.Number => ConvertTo(jsonNode.ToString(), t),
                     { } t when t == typeof(string) && valueKind == JsonValueKind.String => jsonNode.ToString(),
                     { } t when t == typeof(string) => jsonNode.ToString(),
-                    { } t when t == typeof(ExpandoObject) && jsonNode.GetValueKind() == JsonValueKind.Object => JsonSerializer.Deserialize<ExpandoObject>(jsonNode.ToJsonString()),
                     { } t when t != typeof(object) || converterOptions?.DeserializeJsonObjectToObject == true => jsonNode.Deserialize(targetType, serializerOptions),
                     _ => jsonNode
                 };
@@ -189,12 +187,6 @@ public sealed class ObjectConverter(IServiceProvider serviceProvider) : IObjectC
 
         if (typeof(IDictionary<string, object>).IsAssignableFrom(underlyingSourceType) && (underlyingTargetType.IsClass || underlyingTargetType.IsInterface))
         {
-            if (typeof(ExpandoObject) == underlyingTargetType)
-            {
-                var expandoJson = JsonSerializer.Serialize(value, internalSerializerOptions);
-                return ConvertTo(expandoJson, underlyingTargetType, converterOptions);
-            }
-
             if (typeof(IDictionary<string, object>).IsAssignableFrom(underlyingTargetType))
                 return new Dictionary<string, object>((IDictionary<string, object>)value);
 

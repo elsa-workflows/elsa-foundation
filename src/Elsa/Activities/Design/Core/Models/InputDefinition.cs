@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Primitives.Models;
 
 namespace Elsa.Activities.Design.Core.Models;
@@ -7,6 +8,12 @@ namespace Elsa.Activities.Design.Core.Models;
 /// — duplicates the structural shape of <see cref="ArgumentDefinition"/> rather than inheriting,
 /// keeping the input signature clear and decoupled.
 /// </summary>
+/// <remarks>
+/// <see cref="PropertyInfo"/> and <see cref="UISpecifications"/> are opaque, Studio-authored UI metadata
+/// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph. Keeping them opaque
+/// removes the last open-object-polymorphism dependency from the canonical StateSource (ADR 0035 D3, amends
+/// constitution §E2.9).
+/// </remarks>
 public sealed record InputDefinition(
     string ReferenceKey,
     string Name,
@@ -19,6 +26,6 @@ public sealed record InputDefinition(
     string? Description = null,
     float Order = 0,
     string? UiHint = null,
-    IDictionary<string, object>? PropertyInfo = null,
-    IDictionary<string, object>? UISpecifications = null,
+    JsonElement? PropertyInfo = null,
+    JsonElement? UISpecifications = null,
     bool IsRequired = false);
