@@ -1,15 +1,34 @@
+/* Private chrome alias block — maps the frozen neutral palette that was
+   copy-pasted here (#152024 / #d8e0e4 / #607078 / #f4f7f8 / #ffffff) onto the
+   shared --studio-* tokens so panels, toolbars, borders and muted text follow
+   the active theme. The old hex values remain as the final fallback. See the
+   Diagnostics.OpenTelemetry styles.css for the same pattern. */
+.console-stream-panel,
+.console-stream-page {
+  --cs-surface: var(--studio-surface, var(--card, #ffffff));
+  --cs-surface-muted: var(--studio-surface-muted, var(--muted, #f4f7f8));
+  --cs-input: var(--studio-surface, var(--input, #f8fafb));
+  --cs-border: var(--studio-border, var(--border, #d8e0e4));
+  --cs-text: var(--studio-text, var(--foreground, #152024));
+  --cs-text-muted: var(--studio-text-muted, var(--muted-foreground, #607078));
+  --cs-accent: var(--studio-accent, var(--primary, #0f8a83));
+  --cs-accent-soft: var(--studio-accent-soft, color-mix(in srgb, var(--cs-accent) 10%, transparent));
+  --cs-success: var(--studio-success, var(--success, #1b9a63));
+  --cs-danger: var(--studio-danger, var(--danger, #c13e3a));
+}
+
 .console-stream-panel,
 .console-stream-page {
   height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: var(--muted, #f4f7f8);
-  color: var(--foreground, #152024);
+  background: var(--cs-surface-muted);
+  color: var(--cs-text);
 }
 
 .console-stream-page {
-  border: 1px solid var(--border, #d8e0e4);
+  border: 1px solid var(--cs-border);
   border-radius: var(--radius, 6px);
   overflow: hidden;
 }
@@ -20,13 +39,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid var(--border, #d8e0e4);
+  border-bottom: 1px solid var(--cs-border);
   padding: 8px 16px;
 }
 
 .console-stream-header h2 {
   margin: 0;
-  color: var(--foreground, #152024);
+  color: var(--cs-text);
   font-size: 13px;
   font-weight: 760;
   line-height: 1.2;
@@ -34,7 +53,7 @@
 
 .console-stream-header p {
   margin: 2px 0 0;
-  color: var(--muted-foreground, #607078);
+  color: var(--cs-text-muted);
   font-size: 11px;
   line-height: 1.25;
 }
@@ -45,7 +64,7 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
-  color: var(--muted-foreground, #607078);
+  color: var(--cs-text-muted);
   font-size: 11px;
   font-weight: 720;
 }
@@ -53,7 +72,7 @@
 .console-stream-hosts {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border, #d8e0e4);
+  border: 1px solid var(--cs-border);
   border-radius: var(--radius-sm, 4px);
   overflow: hidden;
 }
@@ -64,37 +83,37 @@
 }
 
 .console-stream-hosts button + button {
-  border-left: 1px solid var(--border, #d8e0e4);
+  border-left: 1px solid var(--cs-border);
 }
 
 .console-stream-tools > span:not(.console-stream-status) {
   padding: 3px 7px;
-  border: 1px solid var(--border, #d8e0e4);
+  border: 1px solid var(--cs-border);
   border-radius: var(--radius-sm, 4px);
-  background: var(--card, #ffffff);
+  background: var(--cs-surface);
 }
 
 .console-stream-status {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--muted-foreground, #607078);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--muted-foreground, #607078) 14%, transparent);
+  background: var(--cs-text-muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-text-muted) 14%, transparent);
 }
 
 .console-stream-status.online {
-  background: var(--success, #1b9a63);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success, #1b9a63) 18%, transparent);
+  background: var(--cs-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-success) 18%, transparent);
 }
 
 .console-stream-tools button {
   height: 28px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border, #d8e0e4);
+  border: 1px solid var(--cs-border);
   border-radius: var(--radius-sm, 4px);
-  background: var(--card, #ffffff);
-  color: var(--foreground, #152024);
+  background: var(--cs-surface);
+  color: var(--cs-text);
   font-size: 11px;
   font-weight: 720;
   padding: 0 8px;
@@ -103,10 +122,10 @@
 .console-stream-tools select {
   height: 28px;
   max-width: min(260px, 32vw);
-  border: 1px solid var(--border, #d8e0e4);
+  border: 1px solid var(--cs-border);
   border-radius: var(--radius-sm, 4px);
-  background: var(--input, #f8fafb);
-  color: var(--foreground, #152024);
+  background: var(--cs-input);
+  color: var(--cs-text);
   font-size: 11px;
   font-weight: 720;
   padding: 0 28px 0 8px;
@@ -114,9 +133,9 @@
 
 .console-stream-tools button:hover,
 .console-stream-tools button.active {
-  border-color: var(--primary, #0f8a83);
-  background: color-mix(in srgb, var(--primary, #0f8a83) 10%, transparent);
-  color: var(--primary, #0f8a83);
+  border-color: var(--cs-accent);
+  background: var(--cs-accent-soft);
+  color: var(--cs-accent);
 }
 
 .console-stream-lines {
@@ -136,29 +155,29 @@
 }
 
 .console-stream-line > span {
-  color: var(--muted-foreground, #607078);
+  color: var(--cs-text-muted);
 }
 
 .console-stream-line small {
   min-width: 0;
   overflow: hidden;
-  color: var(--muted-foreground, #607078);
+  color: var(--cs-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .console-stream-line code {
   overflow-wrap: anywhere;
-  color: var(--foreground, #152024);
+  color: var(--cs-text);
   white-space: pre-wrap;
 }
 
 .console-stream-line.stderr code {
-  color: var(--danger, #c13e3a);
+  color: var(--cs-danger);
 }
 
 .console-stream-line.stdout code {
-  color: var(--success, #1b9a63);
+  color: var(--cs-success);
 }
 
 .console-stream-ansi-bold {
@@ -169,8 +188,14 @@
   opacity: 0.72;
 }
 
+/* ANSI terminal color palette — intentionally hardcoded and exempt from
+   tokenization. These are the literal SGR color slots a program emits (red,
+   green, cyan, …); they must render as those specific terminal colors, not as
+   theme chrome, so they are not aliased onto --studio-*. Legibility is handled
+   instead by the light-mode/dark-mode split below. */
+
 /* ANSI foreground palette — light mode (default): darker, saturated variants
-   that stay legible on the soft --muted surface. */
+   that stay legible on the soft surface. */
 .console-stream-ansi-fg-black,
 .console-stream-ansi-fg-bright-black {
   color: #5a6b71;
@@ -202,7 +227,7 @@
 
 .console-stream-ansi-fg-white,
 .console-stream-ansi-fg-bright-white {
-  color: var(--foreground, #152024);
+  color: var(--cs-text);
 }
 
 .console-stream-ansi-fg-bright-red {

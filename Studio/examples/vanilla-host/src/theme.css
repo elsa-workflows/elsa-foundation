@@ -11,6 +11,10 @@
  * NOTE: the published `tokens.css` will be self-contained for the semantic layer, but it
  * intentionally still aliases onto these host-provided primitives — a host must define
  * them. This file demonstrates the consumer's half of that contract.
+ *
+ * The full layer-1 primitive set a host must supply, the `--studio-*` semantic tokens the
+ * widgets style against, and the theming rules are documented in the token contract:
+ * `docs/design-tokens.md` (see "What a host must supply") — this file is that set, minimal.
  */
 :root {
   --font-sans: "Inter", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;

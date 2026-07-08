@@ -266,10 +266,57 @@ function validateMaterial(material: ThemeModeDefinition["material"], path: strin
     if (!/^--studio-material-[a-z0-9-]+$/.test(name)) {
       issues.push(error(`${path}.material.cssVariables.${name}`, "Material variables must use the --studio-material-* allowlist."));
     }
-    if (!/^[a-z0-9 .,%#()/+-]+$/i.test(value)) {
-      issues.push(error(`${path}.material.cssVariables.${name}`, "Material variable values must be simple tokens."));
+    if (!isAllowedMaterialValue(value)) {
+      issues.push(error(`${path}.material.cssVariables.${name}`, "Material variable value contains disallowed CSS."));
     }
   }
+}
+
+/**
+ * Deliberate grammar for the `--studio-material-*` escape hatch. Unlike the core color
+ * tokens (which are color-only), material variables legitimately carry finishes/depths,
+ * `<length>` pairs (`390px 390px`), color/gradient function stacks, and same-origin
+ * texture `url(...)`s. We admit exactly those shapes rather than an accidental character
+ * set, and reject anything that could break out of the declaration or fetch off-origin.
+ *
+ * Structural guards (checked before the character allowlist):
+ *   - declaration/selector breakouts: `;`, `{`, `}`, `@`, `<`, `>`, and CSS `\` escapes.
+ *   - unbalanced parentheses.
+ *   - `url(...)` targets: only same-origin absolute (`/path`) or bundler-relative
+ *     (`./`, `../`) paths — never `http:`/`https:`, protocol-relative `//`, `data:`, or
+ *     any other scheme (blocks remote fetches / data-URI injection).
+ *
+ * The residual character allowlist then permits identifiers, numbers with units/signs,
+ * function syntax, hex colors, quotes (for quoted url()s), and the separators gradients
+ * and length pairs need.
+ */
+function isAllowedMaterialValue(value: string): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 1024) return false;
+
+  // No declaration/rule breakouts or CSS escape sequences.
+  if (/[;{}@<>\\]/.test(trimmed)) return false;
+
+  // Balanced parentheses (cheap depth check; forbids stray `(`/`)`).
+  let depth = 0;
+  for (const char of trimmed) {
+    if (char === "(") depth++;
+    else if (char === ")" && --depth < 0) return false;
+  }
+  if (depth !== 0) return false;
+
+  // Every url() must resolve same-origin: absolute (`/…`) or bundler-relative (`./`, `../`).
+  const urlRe = /url\(\s*(['"]?)([^)'"]*)\1\s*\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = urlRe.exec(trimmed)) !== null) {
+    const target = match[2].trim();
+    if (!/^(?:\/(?!\/)|\.\.?\/)/.test(target)) return false;
+  }
+
+  // Residual character allowlist: identifiers, numbers/units, function + color syntax,
+  // quotes for quoted url()s, and gradient/length separators.
+  return /^[a-z0-9\s.,%#()/*+_'"=:-]+$/i.test(trimmed);
 }
 
 function validateContrastPair(background: string, foreground: string, path: string, issues: ThemeValidationIssue[]) {

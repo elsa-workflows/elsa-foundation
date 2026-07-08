@@ -98,6 +98,12 @@ html[data-theme="black-glass"] {
   --studio-glass-bg: color-mix(in srgb, #0b1119 76%, transparent);
   --studio-glass-bg-strong: color-mix(in srgb, #111b28 86%, transparent);
   --studio-glass-bg-soft: color-mix(in srgb, #152234 58%, transparent);
+  /* Dense-row + recessed-well tiers in the glass idiom (black-glass is not a
+     [data-theme-material] theme, so it maps its own --wf-row/--wf-well). */
+  --studio-glass-row-bg: color-mix(in srgb, #0e1622 52%, transparent);
+  --studio-glass-well-bg: color-mix(in srgb, #050a12 66%, transparent);
+  --studio-glass-well-shadow: inset 0 2px 6px color-mix(in srgb, #02070d 60%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #78ddff 14%, transparent);
   --studio-glass-edge: color-mix(in srgb, #8ee4ff 46%, transparent);
   --studio-glass-edge-strong: color-mix(in srgb, #a9ecff 68%, transparent);
   --studio-glass-grid: color-mix(in srgb, #70cfff 13%, transparent);
@@ -139,6 +145,27 @@ html[data-theme-material] {
   --studio-material-inset-low: inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, color-mix(in srgb, white 18%, var(--studio-accent)), var(--studio-accent));
   --studio-material-send-text: var(--studio-accent-text);
+
+  /*
+   * Dense-row + recessed-well tiers (Package 1+2).
+   *
+   * Dense resource lists (grids, availability options, slot lists) must render as ONE
+   * container slab with FLAT hairline rows — not a slab per row. Painting the raised
+   * `panel-bg-strong` recipe onto every row tiles its top white bevel + shadow into a
+   * ridged "corduroy" texture. `--studio-material-row-bg` is the flat fill for those
+   * rows: grain texture + base tone with the bevel highlight and drop shadow removed, so
+   * the grain tiles cleanly at row scale. Rows separate with a hairline `--wf-border`.
+   * `--studio-material-well-bg` / `-well-shadow` are the recessed (inset, darker) tier for
+   * search/filter text inputs, which should read as sunken wells, not raised panels.
+   *
+   * Each material theme defines its own row/well recipe below; these are neutral fallbacks
+   * so any theme that forgets one still resolves to something sane.
+   */
+  --studio-material-row-bg: var(--studio-material-panel-bg-soft);
+  --studio-material-row-bg-size: var(--studio-material-panel-bg-size);
+  --studio-material-well-bg: var(--studio-material-panel-bg-soft);
+  --studio-material-well-bg-size: var(--studio-material-panel-bg-size);
+  --studio-material-well-shadow: inset 0 1px 3px color-mix(in srgb, black 24%, transparent);
 }
 
 html[data-theme="stone"] {
@@ -183,6 +210,20 @@ html[data-theme="stone"] {
     var(--studio-material-texture),
     linear-gradient(160deg, #242e34, #12191c 70%);
   --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Flat dense-row fill: grain grid + texture + slate base, bevel + shadow dropped. */
+  --studio-material-row-bg:
+    linear-gradient(color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, white 3%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
+    linear-gradient(160deg, #1c242a, #141b1f 72%);
+  --studio-material-row-bg-size: 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Recessed well: darker sunken slate for search/filter inputs. */
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(160deg, #0e1316, #0a0e10 72%);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 46%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
   --studio-material-body-bg:
     radial-gradient(circle at 70% 16%, color-mix(in srgb, #79d8ff 8%, transparent), transparent 28rem),
     linear-gradient(135deg, color-mix(in srgb, white 5%, transparent) 0 1px, transparent 1px 10px),
@@ -197,8 +238,8 @@ html[data-theme="stone"] {
     linear-gradient(160deg, #10161a, #050708 70%);
   --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
   --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
     var(--studio-material-texture),
     linear-gradient(160deg, #12191d, #050809 72%);
   --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
@@ -232,6 +273,11 @@ html[data-theme="stone"] {
     0 20px 34px color-mix(in srgb, black 52%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 15%, transparent),
     inset 0 -1px 0 color-mix(in srgb, black 55%, transparent);
+  /* Steel-blue raised send button, mirroring paper/ceramic/brass. */
+  --studio-material-send-bg: linear-gradient(180deg, #3d7ba6, #245f88);
+  --studio-material-send-text: #f2f8fb;
+  /* Selected sidebar items read as a clearly lighter raised slab. */
+  --studio-material-active-bg: color-mix(in srgb, var(--studio-accent) 20%, #2c363c);
 }
 
 html[data-theme="paper"] {
@@ -301,6 +347,17 @@ html[data-theme="paper"] {
     0 2px 0 color-mix(in srgb, #8e7d60 12%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #376fb4, #215798);
   --studio-material-send-text: #fffaf0;
+  /* Flat dense-row fill: vellum grain over paper base, bevel + shadow dropped. */
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #f6eede, #ece2ce);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #e6dcc6, #f0e7d5);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #5f5036 20%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #5f5036 12%, transparent);
 }
 
 html[data-theme="blueprint"] {
@@ -370,6 +427,19 @@ html[data-theme="blueprint"] {
   --studio-material-node-shadow: 0 0 0 1px color-mix(in srgb, white 22%, transparent),
     0 12px 26px color-mix(in srgb, #00121f 36%, transparent);
   --studio-material-inset: inset 0 0 0 1px color-mix(in srgb, white 12%, transparent);
+  /* Flat dense-row fill: drafting grid + texture + navy base, shadow dropped. */
+  --studio-material-row-bg:
+    linear-gradient(color-mix(in srgb, white 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
+    color-mix(in srgb, #083452 84%, transparent);
+  --studio-material-row-bg-size: 24px 24px, 24px 24px, var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    color-mix(in srgb, #042138 88%, transparent);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, #00121f 50%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
 }
 
 html[data-theme="ceramic"] {
@@ -437,6 +507,17 @@ html[data-theme="ceramic"] {
     inset 0 1px 0 color-mix(in srgb, white 84%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #323432, #1b1d1b);
   --studio-material-send-text: #fbf9f4;
+  /* Flat dense-row fill: glaze texture over ceramic base, bevel + shadow dropped. */
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #f8f5ef, #ece8e0);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #e7e3db, #f2eee6);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4b4d46 16%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #4b4d46 10%, transparent);
 }
 
 html[data-theme="carbon"] {
@@ -491,6 +572,18 @@ html[data-theme="carbon"] {
     0 0 0 1px color-mix(in srgb, #21b9ff 32%, transparent);
   --studio-material-node-shadow: 0 16px 30px color-mix(in srgb, black 52%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  /* Flat dense-row fill: carbon weave over base, shadow dropped. */
+  --studio-material-row-bg:
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
+    var(--studio-material-texture),
+    linear-gradient(180deg, #14191d, #0c0f11);
+  --studio-material-row-bg-size: 22px 22px, var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #070a0c, #0e1215);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 56%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, black 30%, transparent);
 }
 
 html[data-theme="brass-instrument"] {
@@ -558,6 +651,17 @@ html[data-theme="brass-instrument"] {
     inset 0 1px 0 color-mix(in srgb, #f1d992 15%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #f0c46a, #b77f22);
   --studio-material-send-text: #17120a;
+  /* Flat dense-row fill: enamel grain over base, bevel + shadow dropped. */
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #201f17, #131310);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #0d0d0a, #171611);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 50%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #f1d992 10%, transparent);
 }
 
 html[data-theme="black-glass"][data-theme-mode="light"] {
@@ -576,6 +680,10 @@ html[data-theme="black-glass"][data-theme-mode="light"] {
   --studio-glass-bg: color-mix(in srgb, #f7fcff 72%, transparent);
   --studio-glass-bg-strong: color-mix(in srgb, #ffffff 84%, transparent);
   --studio-glass-bg-soft: color-mix(in srgb, #d9edf6 66%, transparent);
+  --studio-glass-row-bg: color-mix(in srgb, #eef7fb 50%, transparent);
+  --studio-glass-well-bg: color-mix(in srgb, #d3e8f1 66%, transparent);
+  --studio-glass-well-shadow: inset 0 2px 5px color-mix(in srgb, #5c8498 26%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #117fb8 16%, transparent);
   --studio-glass-edge: color-mix(in srgb, #2588b8 32%, #c5dce7);
   --studio-glass-edge-strong: color-mix(in srgb, #0e75ad 50%, #b6d5e3);
   --studio-glass-grid: color-mix(in srgb, #1688c4 14%, transparent);
@@ -634,6 +742,23 @@ html[data-theme="stone"][data-theme-mode="light"] {
     var(--studio-material-texture),
     linear-gradient(160deg, #d3d2c8, #bbb9ae 70%);
   --studio-material-panel-bg-size: auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Flat dense-row fill: etched grid + texture + limestone base, bevel + shadow dropped. */
+  --studio-material-row-bg:
+    linear-gradient(color-mix(in srgb, #286d9a 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #286d9a 3%, transparent) 1px, transparent 1px),
+    var(--studio-material-texture),
+    linear-gradient(160deg, #d9d8cf, #c6c5bb 72%);
+  --studio-material-row-bg-size: 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Recessed well: darker sunken limestone for search/filter inputs. */
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(160deg, #b8b7ac, #c9c8be 72%);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4e5658 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #4e5658 14%, transparent);
+  --studio-material-send-bg: linear-gradient(180deg, #3689ba, #286d9a);
+  --studio-material-send-text: #f8faf8;
+  --studio-material-active-bg: color-mix(in srgb, var(--studio-accent) 22%, #f2f1e8);
   --studio-material-body-bg:
     radial-gradient(circle at 70% 16%, color-mix(in srgb, #2c8fc2 10%, transparent), transparent 28rem),
     linear-gradient(135deg, color-mix(in srgb, white 12%, transparent) 0 1px, transparent 1px 10px),
@@ -729,6 +854,16 @@ html[data-theme="paper"][data-theme-mode="dark"] {
     0 2px 0 color-mix(in srgb, #d0c19d 10%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #b5c8ff, #82a1f5);
   --studio-material-send-text: #12141d;
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #2a2820, #1c1a15);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #16150f, #1f1d16);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 44%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, black 24%, transparent);
 }
 
 html[data-theme="blueprint"][data-theme-mode="light"] {
@@ -786,6 +921,16 @@ html[data-theme="blueprint"][data-theme-mode="light"] {
   --studio-material-node-shadow: 0 0 0 1px color-mix(in srgb, #126fa9 14%, transparent),
     0 10px 22px color-mix(in srgb, #6f8fa1 12%, transparent);
   --studio-material-inset: inset 0 0 0 1px color-mix(in srgb, #126fa9 8%, transparent);
+  --studio-material-row-bg:
+    linear-gradient(color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    #f4f9fb;
+  --studio-material-row-bg-size: 32px 32px, 32px 32px, auto;
+  --studio-material-well-bg:
+    linear-gradient(180deg, #dbe9ef, #edf6f8);
+  --studio-material-well-bg-size: auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #6f8fa1 20%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #126fa9 12%, transparent);
 }
 
 html[data-theme="ceramic"][data-theme-mode="dark"] {
@@ -843,6 +988,16 @@ html[data-theme="ceramic"][data-theme-mode="dark"] {
     inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #cfedf4, #89cbdc);
   --studio-material-send-text: #081112;
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #191e20, #101315);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #0b0e0f, #14181a);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 52%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
 }
 
 html[data-theme="carbon"][data-theme-mode="light"] {
@@ -893,6 +1048,14 @@ html[data-theme="carbon"][data-theme-mode="light"] {
     0 0 0 1px color-mix(in srgb, #086895 18%, transparent);
   --studio-material-node-shadow: 0 14px 26px color-mix(in srgb, #4e5b61 20%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 52%, transparent);
+  --studio-material-row-bg:
+    linear-gradient(180deg, #d5dadc, #c0c8cb);
+  --studio-material-row-bg-size: auto;
+  --studio-material-well-bg:
+    linear-gradient(180deg, #b6bec1, #c9d0d2);
+  --studio-material-well-bg-size: auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4e5b61 26%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #4e5b61 16%, transparent);
 }
 
 html[data-theme="brass-instrument"][data-theme-mode="light"] {
@@ -956,4 +1119,14 @@ html[data-theme="brass-instrument"][data-theme-mode="light"] {
     inset 0 1px 0 color-mix(in srgb, #fff1ad 28%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #6d4b17, #4c3513);
   --studio-material-send-text: #fff4cf;
+  --studio-material-row-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #cdb26f, #bb9a58);
+  --studio-material-row-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg:
+    var(--studio-material-texture),
+    linear-gradient(180deg, #ac8f4f, #c1a15f);
+  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #5b421b 30%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #5b421b 18%, transparent);
 }

@@ -32,3 +32,11 @@ Use the default triage label vocabulary: `needs-triage`, `needs-info`, `ready-fo
 ### Domain docs
 
 Use a single-context domain documentation layout. See `docs/agents/domain.md`.
+
+### Design tokens
+
+Module CSS styles against the `--studio-*` token contract, never raw colour literals or
+another module's private namespace. The versioned contract — the stable tokens, the
+`--studio-material-*` surface-role ladder, the `--studio-glass-*` variant, and the module
+rules — is `docs/design-tokens.md`. It is enforced by `elsa/no-raw-color-literal`
+(`pnpm lint:css`, wired into `pnpm lint`).

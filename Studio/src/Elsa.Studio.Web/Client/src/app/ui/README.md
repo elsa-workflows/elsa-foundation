@@ -11,7 +11,13 @@ Core patterns:
 - Configuration pages use split inspector or grouped settings layouts.
 - Diagnostics pages use dense rows, severity chips, timelines, and bottom panels.
 - Typography and colors come from `tokens.css`; module CSS should use the
-  `--studio-*` variables or compatibility aliases rather than one-off values.
+  `--studio-*` variables or compatibility aliases rather than one-off values. The
+  versioned token contract module authors depend on — every stable token, the
+  `--studio-material-*` surface-role ladder, the `--studio-glass-*` variant, and the
+  rules (no raw literals, no cross-module private namespaces, no `[data-theme]`
+  selectors in module CSS, material treatments gated on `[data-theme-material]`) — is
+  documented in [`docs/design-tokens.md`](../../../../../../docs/design-tokens.md) and
+  enforced by the `elsa/no-raw-color-literal` stylelint rule (`pnpm lint:css`).
 
 Visual rules:
 

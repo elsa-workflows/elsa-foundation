@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { StudioEndpointContext } from "../../sdk";
-import type { StudioThemeDefinition, Theme, ThemeMode } from "../themes/presets";
+import type { StudioThemeDefinition, Theme, ThemeMaterialMode, ThemeMode } from "../themes/presets";
 import { builtInThemeDefinitions, getSupportedThemeModes, isMaterialTheme, resolveThemeMode, toTheme } from "../themes/presets";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
@@ -86,7 +86,7 @@ export function ThemeProvider({
           root.style.setProperty(`--chart-${index + 1}`, color);
         });
       } else if (key === "material") {
-        applyMaterialVariables(root, value as StudioThemeDefinition["material"]);
+        applyMaterialVariables(root, value as ThemeMaterialMode);
       } else {
         // Convert camelCase to kebab-case
         const cssVarName = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}`;
@@ -192,7 +192,7 @@ function setStoredPreference(key: string, value: string) {
   }
 }
 
-function applyMaterialVariables(root: HTMLElement, material: StudioThemeDefinition["material"] | undefined) {
+export function applyMaterialVariables(root: HTMLElement, material: ThemeMaterialMode | undefined) {
   if (!material) return;
 
   for (const [name, value] of Object.entries(material.cssVariables ?? {})) {
@@ -206,12 +206,28 @@ function applyMaterialVariables(root: HTMLElement, material: StudioThemeDefiniti
     const variableName = name.startsWith("--studio-material-")
       ? name
       : `--studio-material-${name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}-texture`;
-    root.style.setProperty(variableName, `url("${value.replace(/"/g, '\\"')}")`);
+    root.style.setProperty(variableName, cssUrl(value));
   }
 
-  if (textures.length > 0) {
-    root.style.setProperty("--studio-material-texture-image", `url("${textures[0][1].replace(/"/g, '\\"')}")`);
+  // The material CSS recipes (tokens.css) read a single `--studio-material-texture` (and
+  // `--studio-material-texture-size`) for every surface layer. Drive them from the theme's
+  // primary texture asset (by convention the `surface` key, else the first asset) so a
+  // preset- or store-supplied texture actually renders instead of only populating the
+  // unread per-name `--studio-material-<name>-texture` aliases above.
+  const primaryTexture = material.textureAssets?.surface ?? textures[0]?.[1];
+  if (primaryTexture) {
+    root.style.setProperty("--studio-material-texture", cssUrl(primaryTexture));
   }
+
+  if (typeof material.textureSize === "number" && Number.isFinite(material.textureSize)) {
+    const size = `${material.textureSize}px`;
+    root.style.setProperty("--studio-material-texture-size", `${size} ${size}`);
+  }
+}
+
+/** Escape a texture asset URL for safe embedding in a CSS `url("…")` token. */
+function cssUrl(value: string): string {
+  return `url("${value.replace(/["\\]/g, "\\$&")}")`;
 }
 
 function clearMaterialVariables(root: HTMLElement) {
