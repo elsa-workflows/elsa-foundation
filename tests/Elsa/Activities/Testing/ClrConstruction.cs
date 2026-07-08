@@ -5,7 +5,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 
-namespace Elsa.Activities.Runtime.Tests;
+namespace Elsa.Activities.Testing;
 
 /// <summary>
 /// Test helper for the CLR activity construction path: builds the stable-alias descriptor
@@ -13,7 +13,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// registry resolves the activity types under test by their canonical alias — the same wiring the real host
 /// gets from <c>RegisterActivityTypesStartupTask</c>.
 /// </summary>
-internal static class ClrConstruction
+public static class ClrConstruction
 {
     /// <summary>The CLR construction descriptor type's registry key.</summary>
     public static readonly string DescriptorType = typeof(ClrActivityDescriptor).FullName!;

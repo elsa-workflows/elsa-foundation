@@ -3,6 +3,7 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
+using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Serialization.Core;

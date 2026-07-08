@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
@@ -22,7 +23,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task MatchingRequest_DispatchesStartOnlyStimulus_AndRepliesAccepted()
     {
-        var router = new FakeStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-42"));
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-42"));
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"id":7}""");
 
@@ -46,7 +47,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task MatchingRequest_WithNoStartedTriggers_RepliesNotFound()
     {
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/http/unknown", "GET");
 
@@ -59,7 +60,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task RequestOutsideBasePath_PassesThroughToNext()
     {
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/api/orders", "GET");
         var nextCalled = false;
@@ -77,7 +78,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task RequestAtBasePathRoot_PassesThroughToNext()
     {
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/http", "GET");
         var nextCalled = false;
@@ -97,7 +98,7 @@ public sealed class HttpEndpointMiddlewareTests
     {
         // Spec 089 review V1: '/workflows/httpstatus' shares the prefix TEXT of '/workflows/http' but is a
         // different path segment — it must never be captured as an endpoint route.
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/httpstatus/foo", "GET");
         var nextCalled = false;
@@ -117,7 +118,7 @@ public sealed class HttpEndpointMiddlewareTests
     {
         // Spec 089 review V2: '/workflows/http/%20' decodes to a whitespace-only route; it must pass through
         // cleanly instead of reaching NormalizePath (which throws on whitespace → 500).
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/http/ ", "GET");
         var nextCalled = false;
@@ -137,7 +138,7 @@ public sealed class HttpEndpointMiddlewareTests
     {
         // Spec 089 review V4: an empty/root base path must never turn the middleware into a host-wide
         // catch-all that 404s unrelated routes.
-        var router = new FakeStimulusRouter();
+        var router = new RecordingStimulusRouter();
         var middleware = new HttpEndpointMiddleware(router, Options(basePath: "/"));
         var context = NewContext("/health", "GET");
         var nextCalled = false;
@@ -157,7 +158,7 @@ public sealed class HttpEndpointMiddlewareTests
     {
         // Spec 089 review V7: the documented contract is an uppercase method; raw clients may send
         // non-standard casing and Kestrel forwards the verb token verbatim.
-        var router = new FakeStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var middleware = new HttpEndpointMiddleware(router, Options());
         var context = NewContext("/workflows/http/orders/webhook", "post");
 
@@ -172,7 +173,7 @@ public sealed class HttpEndpointMiddlewareTests
     {
         // Spec 089 review V9: the stimulus payload becomes durable state on the started instance, so the
         // transport bounds it. Declared Content-Length and actual streamed size are both enforced.
-        var router = new FakeStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var middleware = new HttpEndpointMiddleware(router, Options(maxBodyBytes: 16));
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: new string('x', 64));
 
@@ -205,20 +206,5 @@ public sealed class HttpEndpointMiddlewareTests
         context.Response.Body.Position = 0;
         using var reader = new StreamReader(context.Response.Body, leaveOpen: true);
         return await reader.ReadToEndAsync();
-    }
-
-    private sealed class FakeStimulusRouter : IStimulusRouter
-    {
-        private readonly StimulusStartOutcome[] _starts;
-
-        public FakeStimulusRouter(params StimulusStartOutcome[] starts) => _starts = starts;
-
-        public List<StimulusDispatchRequest> Requests { get; } = new();
-
-        public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
-        {
-            Requests.Add(request);
-            return ValueTask.FromResult(new StimulusRoutingResult(_starts, Array.Empty<StimulusResumeOutcome>()));
-        }
     }
 }

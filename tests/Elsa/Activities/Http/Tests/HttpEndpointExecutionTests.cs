@@ -153,5 +153,5 @@ public sealed class HttpEndpointExecutionTests
     }
 
     private static IPayloadSerializer Serializer =>
-        new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        TestPayloadSerializers.NewPayloadSerializer();
 }

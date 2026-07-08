@@ -2,6 +2,7 @@ using CShells.AspNetCore.Features;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Builder;
@@ -97,17 +98,6 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
                 context.RequestServices = ApplicationServices;
                 return app(context);
             };
-        }
-    }
-
-    private sealed class RecordingStimulusRouter : IStimulusRouter
-    {
-        public bool WasInvoked { get; private set; }
-
-        public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
-        {
-            WasInvoked = true;
-            return ValueTask.FromResult(new StimulusRoutingResult(Array.Empty<StimulusStartOutcome>(), Array.Empty<StimulusResumeOutcome>()));
         }
     }
 }

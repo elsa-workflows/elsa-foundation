@@ -107,5 +107,5 @@ public sealed class WriteHttpResponseExecutionTests
             metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
 
     private static IPayloadSerializer Serializer =>
-        new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        TestPayloadSerializers.NewPayloadSerializer();
 }

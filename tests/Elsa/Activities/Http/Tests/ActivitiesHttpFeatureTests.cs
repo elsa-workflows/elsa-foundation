@@ -3,6 +3,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Builder;
@@ -76,7 +77,7 @@ public sealed class ActivitiesHttpFeatureTests
         var feature = new ActivitiesHttpFeature();
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
-        services.AddScoped<IStimulusRouter, NoMatchStimulusRouter>();
+        services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
         var provider = services.BuildServiceProvider();
         await using var _ = provider;
 
@@ -97,14 +98,6 @@ public sealed class ActivitiesHttpFeatureTests
 
         Assert.False(sentinelReached);
         Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status404NotFound, context.Response.StatusCode);
-    }
-
-    private sealed class NoMatchStimulusRouter : IStimulusRouter
-    {
-        public ValueTask<StimulusRoutingResult> RouteAsync(
-            StimulusDispatchRequest request,
-            CancellationToken cancellationToken = default) =>
-            new(new StimulusRoutingResult([], []));
     }
 
     [Fact]

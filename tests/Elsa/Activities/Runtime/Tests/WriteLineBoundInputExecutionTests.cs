@@ -4,6 +4,7 @@ using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Expressions.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;

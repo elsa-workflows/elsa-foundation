@@ -134,7 +134,7 @@ public sealed class SendHttpRequestExecutionTests
             metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = typeName });
 
     private static Elsa.Serialization.Core.IPayloadSerializer Serializer =>
-        new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        TestPayloadSerializers.NewPayloadSerializer();
 
     private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
