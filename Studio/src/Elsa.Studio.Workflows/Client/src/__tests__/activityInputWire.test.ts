@@ -70,6 +70,25 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
+  it("canonicalizes inputs on a single child-slot activity", () => {
+    const body = writeLine("body", { text: wrapped("Item X", "Literal") });
+    const root: ActivityNode = {
+      nodeId: "foreach",
+      activityVersionId: "foreach-version",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.foreach.structure", schemaVersion: "1.0.0", payload: { body } }
+    };
+
+    const wire = canonicalizeStateForWire(stateOf(root)).rootActivity!;
+    const nested = wire.structure!.payload.body as ActivityNode;
+
+    expect(nested.inputs).toEqual([
+      { referenceKey: "Text", value: { value: "Item X", expressionType: "Literal" } }
+    ]);
+    expect("text" in nested).toBe(false);
+  });
+
   it("does not treat flowchart connections as activities", () => {
     const root: ActivityNode = {
       nodeId: "root",

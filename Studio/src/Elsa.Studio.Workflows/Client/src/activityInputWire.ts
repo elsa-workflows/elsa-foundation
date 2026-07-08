@@ -67,7 +67,10 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
   let changed = false;
   const nextPayload: Record<string, unknown> = { ...structure.payload };
   for (const [key, value] of Object.entries(structure.payload)) {
-    if (Array.isArray(value) && value.length > 0 && value.every(isActivityNode)) {
+    if (isActivityNode(value)) {
+      nextPayload[key] = mapActivityTree(value, transform);
+      changed = true;
+    } else if (Array.isArray(value) && value.length > 0 && value.every(isActivityNode)) {
       nextPayload[key] = value.map(child => mapActivityTree(child, transform));
       changed = true;
     }
