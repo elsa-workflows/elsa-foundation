@@ -52,7 +52,6 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     // Projects the definition to a plain object containing only the content-bearing fields.
     // Provenance (SourceKind/SourceId) is deliberately excluded — it identifies where a row came
     // from, not what it contains; including it would let a re-source defeat duplicate detection.
-    // Id and Version are also out: they identify the version row, not its projected content.
     private static object ProjectDefinition(IActivityDefinition d) => new
     {
         d.ActivityTypeKey,
@@ -61,6 +60,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         d.Description,
     };
 
+    // Version is deliberately excluded here: it identifies the version row, not its projected content.
     private static object ProjectVersion(IActivityDefinitionVersion v) => new
     {
         v.DescriptorType,
