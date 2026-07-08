@@ -1,9 +1,17 @@
 using System.Text.Json;
 using Elsa.Activities.ControlFlow;
 using Elsa.Activities.ForEach;
+using Elsa.Activities.Primitives;
+using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Primitives.Binding;
+using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.SystemText;
+using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -19,6 +27,7 @@ namespace Elsa.Activities.ForEach.Tests;
 /// carries a distinct engine iteration id (ADR 0028), that completion drains, and that an empty/null
 /// collection short-circuits without scheduling the body.
 /// </summary>
+[Collection("ConsoleCapture")]
 public sealed class ForEachRuntimeTests
 {
     private const string ForEachNodeId = "node-foreach";
@@ -41,6 +50,19 @@ public sealed class ForEachRuntimeTests
             iterationIds);
         Assert.Equal(iterationIds.Length, iterationIds.Distinct().Count());
 
+        run.AssertOutcomes(ForEachNodeId, ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
+    [Fact]
+    public async Task BodyWriteLine_PrintsBoundTextForEachIteration()
+    {
+        await using var harness = NewHarnessWithPrimitives("actexec-foreach", "actexec-body-0", "actexec-body-1", "actexec-body-2");
+
+        var (run, output) = await CaptureConsoleAsync(() => harness.RunAsync(NewExecutableWithWriteLineBody(["1", "2", "3"], "Item X")));
+
+        Assert.Equal(new[] { "Item X", "Item X", "Item X" }, ConsoleLines(output));
+        Assert.Equal(3, run.States(BodyNodeId).Count);
         run.AssertOutcomes(ForEachNodeId, ActivityOutcomes.Done);
         run.AssertWorkflowCompleted();
     }
@@ -103,6 +125,14 @@ public sealed class ForEachRuntimeTests
             .WithProbeLeaf()
             .Build(activityExecutionIds);
 
+    private static WorkflowExecutionHarness NewHarnessWithPrimitives(params string[] activityExecutionIds) =>
+        WorkflowExecutionHarness.Create()
+            .WithFeature(services => new SerializationFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesControlFlowFeature().ConfigureServices(services))
+            .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+            .WithConstructor<ForEachActivityConstructor>()
+            .Build(activityExecutionIds);
+
     private static WorkflowExecutable NewExecutable(IReadOnlyCollection<string>? collection, bool breakOnEntry = false)
     {
         // A body that completes with the Break outcome models a Break leaf placed in the loop body (#299);
@@ -133,6 +163,74 @@ public sealed class ForEachRuntimeTests
 
         return WorkflowExecutionHarness.NewExecutable(root);
     }
+
+    private static WorkflowExecutable NewExecutableWithWriteLineBody(IReadOnlyCollection<string>? collection, string text)
+    {
+        var root = new ExecutableNode(
+            executableNodeId: ForEachNodeId,
+            authoredActivityId: "authored-foreach",
+            activityType: typeof(ForEachActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: ForEachActivityConstructor.DescriptorTypeKey,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ForEachDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["Collection"] = new RuntimeInputBinding(
+                    inputName: "Collection",
+                    source: RuntimeInputBindingSource.Literal,
+                    literalValue: JsonSerializer.SerializeToElement(collection),
+                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.Object" })
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(ForEachActivity.BodySlotName, [NewWriteLineNode(BodyNodeId, text)])],
+            structure: new ExecutableActivityStructure(
+                ForEachActivity.StructureKind,
+                ForEachActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { body = BodyNodeId })));
+
+        return WorkflowExecutionHarness.NewExecutable(root);
+    }
+
+    private static ExecutableNode NewWriteLineNode(string nodeId, string text) =>
+        new(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(WriteLine).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(ClrActivityDescriptor).FullName!,
+            descriptorPayload: Serializer.SerializeToElement(new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(WriteLine)))),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                ["Text"] = new RuntimeInputBinding(
+                    inputName: "Text",
+                    source: RuntimeInputBindingSource.Literal,
+                    literalValue: JsonSerializer.SerializeToElement(text),
+                    metadata: new Dictionary<string, string> { [RuntimeActivityInputMaterializer.InputTypeMetadataKey] = "System.String" })
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+
+    private static async Task<(WorkflowExecutionRun Run, string Output)> CaptureConsoleAsync(Func<Task<WorkflowExecutionRun>> action)
+    {
+        var original = Console.Out;
+        await using var writer = new StringWriter();
+        Console.SetOut(writer);
+        try
+        {
+            var run = await action();
+            return (run, writer.ToString());
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+    }
+
+    private static string[] ConsoleLines(string output) =>
+        output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+    private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
 
     private sealed class ForEachActivityConstructor : IActivityConstructor<ForEachDescriptor>
     {
