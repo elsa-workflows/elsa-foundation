@@ -39,6 +39,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Persistence\EFCore\Sqlite\Elsa.Workflows.Design.Persistence.EFCore.Sqlite.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Reconciliation\Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
   </ItemGroup>

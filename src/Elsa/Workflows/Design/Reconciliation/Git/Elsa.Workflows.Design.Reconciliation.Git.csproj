@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Workflows.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Workflows.Design.Reconciliation.Core.csproj" />
+    <ProjectReference Include="..\..\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Git\Elsa.Git.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Platform.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

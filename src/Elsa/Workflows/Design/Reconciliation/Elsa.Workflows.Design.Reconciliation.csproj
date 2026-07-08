@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Locking\Core\Elsa.Locking.Core.csproj" />
     <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
     <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
@@ -26,6 +27,9 @@
     <Compile Remove="Core/**/*" />
     <EmbeddedResource Remove="Core/**/*" />
     <None Remove="Core/**/*" />
+    <Compile Remove="Git/**/*" />
+    <EmbeddedResource Remove="Git/**/*" />
+    <None Remove="Git/**/*" />
   </ItemGroup>
 
 </Project>

@@ -37,18 +37,15 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
             Id = source.Id,
             Name = source.Name,
             Description = source.Description,
+            // DeletedAt is on IWorkflowDefinition (a definition-level lifecycle metadatum), so a
+            // source-driven soft-delete propagates through the reconciler's create path (spec 085 FR-008).
+            DeletedAt = source.DeletedAt,
         };
 
-        // DeletedAt/DeletedReason are persistence-only fields (not on IWorkflowDefinition), so they can
-        // only be carried across when the source is itself a materialised entity. Today's callers pass
-        // read-models (no soft-delete state), so this branch is currently dormant; it is defensive
-        // hardening so that if a future caller ever routes a materialised entity through From, a
-        // soft-deleted definition is preserved rather than silently resurrected as active.
+        // DeletedReason is persistence-only (not on IWorkflowDefinition), so it can only be carried
+        // across when the source is itself a materialised entity.
         if (source is WorkflowDefinition entity)
-        {
-            definition.DeletedAt = entity.DeletedAt;
             definition.DeletedReason = entity.DeletedReason;
-        }
 
         return definition;
     }

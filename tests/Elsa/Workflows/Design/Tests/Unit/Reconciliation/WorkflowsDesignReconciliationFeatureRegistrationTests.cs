@@ -1,7 +1,9 @@
 using Elsa.Events.Core.Contracts;
+using System.Text.Json;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Entities;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -67,6 +69,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         services.AddSingleton<IAddCommand<WorkflowDefinition>, StubAddCommand<WorkflowDefinition>>();
         services.AddSingleton<IAddCommand<WorkflowDefinitionVersion>, StubAddCommand<WorkflowDefinitionVersion>>();
         services.AddSingleton<ISaveWorkflowDefinitionCommand, ThrowingSaveDefinitionCommand>();
+        services.AddSingleton<IPayloadSerializer, StubPayloadSerializer>();
         // Entity factories are registered by the persistence feature in the host; the universal
         // reconciling handler depends on them, so the smoke test supplies the real implementations.
         services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
@@ -87,6 +90,18 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
     private sealed class StubIdentityGenerator : IIdentityGenerator
     {
         public string Generate() => Guid.NewGuid().ToString("N");
+    }
+
+    private sealed class StubPayloadSerializer : IPayloadSerializer
+    {
+        public string Serialize(object payload) => JsonSerializer.Serialize(payload);
+        public JsonElement SerializeToElement(object payload) => throw new NotSupportedException();
+        public object Deserialize(string serializedData) => throw new NotSupportedException();
+        public object Deserialize(string serializedData, Type type) => throw new NotSupportedException();
+        public object Deserialize(JsonElement serializedData) => throw new NotSupportedException();
+        public T Deserialize<T>(string serializedData) => throw new NotSupportedException();
+        public T Deserialize<T>(JsonElement serializedData) => throw new NotSupportedException();
+        public JsonSerializerOptions GetOptions() => throw new NotSupportedException();
     }
 
     private sealed class StubEventPublisher : IInlineEventPublisher
