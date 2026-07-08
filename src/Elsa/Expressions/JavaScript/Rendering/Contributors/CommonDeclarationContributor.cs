@@ -2,7 +2,7 @@ using Elsa.Expressions.JavaScript.Primitives.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Options;
 using Microsoft.Extensions.Options;
-using System.Dynamic;
+using System.Text.Json.Nodes;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Contributors;
 
@@ -40,7 +40,7 @@ public sealed class CommonDeclarationContributor(IOptions<JavaScriptDeclarationO
             (typeof(Guid), null),
             (typeof(Random), null),
             (typeof(object), WellKnownTypeNames.Any),
-            (typeof(ExpandoObject), WellKnownTypeNames.Any),
+            (typeof(JsonNode), WellKnownTypeNames.Any),
             (typeof(string), WellKnownTypeNames.String),
             (typeof(bool), WellKnownTypeNames.Bool),
             (typeof(short), WellKnownTypeNames.Number),
