@@ -541,3 +541,40 @@ html[data-theme="black-glass"] .agent-workflow-batch {
   box-shadow: 0 14px 34px color-mix(in srgb, black 28%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
 }
+
+html[data-theme-material] .agent-launcher,
+html[data-theme-material] .agent-panel {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-strong);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .agent-launcher:hover:not(:disabled),
+html[data-theme-material] .agent-launcher:focus-visible {
+  border-color: var(--studio-material-edge-strong);
+  color: var(--studio-accent);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .agent-context-chip,
+html[data-theme-material] .agent-prompt-starters button,
+html[data-theme-material] .agent-message-body,
+html[data-theme-material] .agent-provider-status,
+html[data-theme-material] .agent-proposal-result,
+html[data-theme-material] .agent-workflow-operation-groups span,
+html[data-theme-material] .agent-composer textarea,
+html[data-theme-material] .agent-panel-header button,
+html[data-theme-material] .agent-composer button,
+html[data-theme-material] .agent-proposal footer button,
+html[data-theme-material] .agent-workflow-batch footer button {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .agent-proposal,
+html[data-theme-material] .agent-workflow-batch {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  box-shadow: var(--studio-material-shadow);
+}

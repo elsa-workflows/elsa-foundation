@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { Theme } from "../themes/presets";
-import { getTheme, themes } from "../themes/presets";
+import { getTheme, isMaterialTheme, themes } from "../themes/presets";
 
 type ThemeMode = "light" | "dark";
 
@@ -56,6 +56,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Also set the data attribute for CSS selectors
     root.setAttribute("data-theme", currentTheme.id);
     root.setAttribute("data-theme-mode", mode);
+    if (isMaterialTheme(currentTheme.id)) {
+      root.setAttribute("data-theme-material", currentTheme.id);
+    } else {
+      root.removeAttribute("data-theme-material");
+    }
 
     // Persist to localStorage
     localStorage.setItem("elsa-studio-theme", currentTheme.id);

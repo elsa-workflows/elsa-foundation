@@ -3886,3 +3886,135 @@ html[data-theme="black-glass"] .wf-grid-head {
   box-shadow: var(--studio-glass-glow);
   backdrop-filter: blur(18px) saturate(1.2);
 }
+
+html[data-theme-material] .wf-page,
+html[data-theme-material] .wf-editor {
+  --wf-panel: var(--studio-material-panel-bg-strong);
+  --wf-panel-muted: var(--studio-material-panel-bg-soft);
+  --wf-canvas: var(--studio-bg);
+  --wf-surface: var(--studio-material-panel-bg);
+  --wf-bg: var(--studio-bg);
+  --wf-border: var(--studio-material-edge);
+  --wf-border-strong: var(--studio-material-edge-strong);
+  --wf-text: var(--studio-text);
+  --wf-muted-text: var(--studio-text-muted);
+  --wf-accent: var(--studio-accent);
+  --wf-accent-soft: var(--studio-accent-soft);
+  --wf-shadow-node: var(--studio-material-node-shadow);
+  --wf-shadow-menu: var(--studio-material-shadow);
+  --wf-shadow-overlay: var(--studio-material-shadow-strong);
+  --xy-background-pattern-color: color-mix(in srgb, var(--studio-accent) 16%, transparent);
+  --xy-controls-button-background-color: var(--studio-material-control-bg);
+  --xy-controls-button-background-color-hover: var(--studio-material-hover-bg);
+  --xy-controls-button-color: var(--studio-text);
+  --xy-controls-button-color-hover: var(--studio-accent);
+  --xy-controls-button-border-color: var(--studio-material-edge);
+  --xy-controls-box-shadow: var(--studio-material-shadow);
+  --xy-minimap-background-color: var(--studio-material-panel-bg-strong);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--studio-bg) 46%, transparent);
+}
+
+html[data-theme-material] .wf-editor {
+  background: var(--studio-material-body-bg);
+  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme-material] .wf-page-header,
+html[data-theme-material] .wf-toolbar,
+html[data-theme-material] .wf-editor-top,
+html[data-theme-material] .wf-breadcrumb,
+html[data-theme-material] .wf-validation,
+html[data-theme-material] .wf-palette,
+html[data-theme-material] .wf-inspector,
+html[data-theme-material] .wf-canvas-tabs,
+html[data-theme-material] .wf-code-view-toolbar,
+html[data-theme-material] .wf-properties-section {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .wf-canvas-shell,
+html[data-theme-material] .wf-canvas,
+html[data-theme-material] .wf-properties-view,
+html[data-theme-material] .wf-code-view-editor .studio-code-editor-input {
+  background: var(--studio-material-canvas-bg);
+  background-size: var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme-material] .wf-node {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-node-bg);
+  box-shadow: var(--wf-shadow-node);
+}
+
+html[data-theme-material] .wf-node:hover:not(.selected),
+html[data-theme-material] .wf-node.selected {
+  border-color: var(--studio-material-edge-strong);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .wf-node-icon,
+html[data-theme-material] .wf-activity-icon,
+html[data-theme-material] .wf-node-slot-badge,
+html[data-theme-material] .wf-node-port-label,
+html[data-theme-material] .wf-chip,
+html[data-theme-material] .wf-status {
+  border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--studio-material-edge));
+  background: color-mix(in srgb, var(--wf-accent) 14%, var(--studio-material-panel-bg-soft));
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .wf-node .react-flow__handle {
+  border-color: var(--studio-bg);
+  background: var(--studio-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--wf-accent) 42%, transparent);
+}
+
+html[data-theme-material] .react-flow__edge-path {
+  stroke: var(--studio-accent);
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--wf-accent) 34%, transparent));
+}
+
+html[data-theme-material] .react-flow__edge.selected .react-flow__edge-path,
+html[data-theme-material] .react-flow__edge:focus .react-flow__edge-path {
+  stroke: color-mix(in srgb, white 36%, var(--studio-accent));
+}
+
+html[data-theme-material] .react-flow__controls,
+html[data-theme-material] .react-flow__minimap,
+html[data-theme-material] .wf-canvas-tools,
+html[data-theme-material] .wf-grid,
+html[data-theme-material] .wf-grid-row,
+html[data-theme-material] .wf-grid-head {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  box-shadow: var(--studio-material-shadow);
+}
+
+html[data-theme="paper"] .react-flow__edge-path,
+html[data-theme="paper"] .wf-node .react-flow__handle {
+  filter: none;
+}
+
+html[data-theme="paper"] .wf-node {
+  transform: rotate(-0.2deg);
+}
+
+html[data-theme="blueprint"] .wf-node,
+html[data-theme="blueprint"] .wf-palette,
+html[data-theme="blueprint"] .wf-inspector,
+html[data-theme="blueprint"] .react-flow__controls,
+html[data-theme="blueprint"] .react-flow__minimap {
+  box-shadow: var(--studio-material-shadow),
+    inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
+}
+
+html[data-theme="brass-instrument"] .wf-page-header,
+html[data-theme="brass-instrument"] .wf-toolbar,
+html[data-theme="brass-instrument"] .wf-node-title,
+html[data-theme="brass-instrument"] .wf-canvas-tabs,
+html[data-theme="brass-instrument"] .wf-chip {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

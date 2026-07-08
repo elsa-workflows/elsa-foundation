@@ -3718,3 +3718,228 @@ html[data-theme="black-glass"] .theme-item.active {
   border-color: var(--studio-glass-edge);
   background: color-mix(in srgb, var(--studio-accent) 13%, var(--studio-glass-bg));
 }
+
+html[data-theme-material] body {
+  background: var(--studio-material-body-bg);
+  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme-material] .studio-shell {
+  background: var(--studio-material-body-bg);
+  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme-material] .content {
+  background: var(--studio-material-content-bg);
+  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme-material] .sidebar,
+html[data-theme-material] .topbar,
+html[data-theme-material] .bottom-panel,
+html[data-theme-material] .bottom-panel-resize-handle,
+html[data-theme-material] .bottom-panel-tabs {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  box-shadow: var(--studio-material-inset), var(--studio-material-shadow);
+}
+
+html[data-theme-material] .sidebar {
+  box-shadow: inset -1px 0 0 var(--studio-material-edge), var(--studio-material-shadow);
+}
+
+html[data-theme-material] .topbar {
+  box-shadow: inset 0 -1px 0 var(--studio-material-edge), var(--studio-material-shadow);
+}
+
+html[data-theme-material] .brand {
+  color: var(--studio-text);
+}
+
+html[data-theme-material] .brand-mark {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-soft);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .brand-mark img {
+  filter: drop-shadow(0 1px 6px color-mix(in srgb, var(--studio-accent) 28%, transparent));
+}
+
+html[data-theme-material] .sidebar-search,
+html[data-theme-material] .host-health-strip,
+html[data-theme-material] .admin-card,
+html[data-theme-material] .studio-card,
+html[data-theme-material] .diagnostic-row,
+html[data-theme-material] .empty-state,
+html[data-theme-material] .error-state,
+html[data-theme-material] .theme-dropdown {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-strong);
+  box-shadow: var(--studio-material-shadow);
+}
+
+html[data-theme-material] .sidebar-search input,
+html[data-theme-material] .theme-dropdown-header {
+  background: transparent;
+}
+
+html[data-theme-material] .nav-icon-tile,
+html[data-theme-material] .host-health-icon {
+  border: 1px solid color-mix(in srgb, var(--nav-icon-color, var(--studio-accent)) 36%, var(--studio-material-edge));
+  background: color-mix(in srgb, var(--nav-icon-color, var(--studio-accent)) 14%, var(--studio-material-panel-bg-soft));
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .nav-section a {
+  color: var(--studio-text-muted);
+}
+
+html[data-theme-material] .nav-section a.active,
+html[data-theme-material] .nav-section a:hover,
+html[data-theme-material] .nav-section a.has-active-child {
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 34%, var(--studio-material-edge));
+  background: var(--studio-material-active-bg);
+  color: var(--studio-text);
+  box-shadow: var(--studio-material-inset), 0 8px 18px color-mix(in srgb, var(--studio-accent) 9%, transparent);
+}
+
+html[data-theme-material] .topbar-actions > a,
+html[data-theme-material] .topbar-actions > button,
+html[data-theme-material] .host-health-refresh,
+html[data-theme-material] .bottom-panel-tab-list button,
+html[data-theme-material] .bottom-panel-action-button,
+html[data-theme-material] .theme-toggle-button,
+html[data-theme-material] .theme-selector-button {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .topbar-actions > a:hover,
+html[data-theme-material] .topbar-actions > button:hover,
+html[data-theme-material] .host-health-refresh:hover:not(:disabled),
+html[data-theme-material] .theme-toggle-button:hover,
+html[data-theme-material] .theme-selector-button:hover {
+  border-color: var(--studio-material-edge-strong);
+  background: var(--studio-material-hover-bg);
+  color: var(--studio-text);
+  box-shadow: var(--studio-material-shadow);
+}
+
+html[data-theme-material] .theme-item:hover,
+html[data-theme-material] .theme-item[data-highlighted],
+html[data-theme-material] .theme-item.active {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-active-bg);
+}
+
+html[data-theme-material] .theme-color-dot {
+  border-color: var(--studio-material-edge);
+}
+
+html[data-theme-material] .bottom-panel-tab-list button.active {
+  color: var(--studio-text);
+  background: var(--studio-material-active-bg);
+}
+
+html[data-theme="paper"] .sidebar,
+html[data-theme="paper"] .topbar,
+html[data-theme="paper"] .bottom-panel,
+html[data-theme="paper"] .studio-card,
+html[data-theme="paper"] .admin-card,
+html[data-theme="paper"] .theme-dropdown {
+  outline: 1px solid color-mix(in srgb, white 54%, transparent);
+}
+
+html[data-theme="paper"] .sidebar {
+  position: relative;
+}
+
+html[data-theme="paper"] .sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 8px;
+  background:
+    linear-gradient(#d2c2a1, #eadcc5),
+    linear-gradient(90deg, color-mix(in srgb, #5a4630 18%, transparent), transparent);
+  border-right: 1px solid color-mix(in srgb, #8b7758 26%, transparent);
+  pointer-events: none;
+}
+
+html[data-theme="paper"] .nav-section a.active,
+html[data-theme="paper"] .nav-section a:hover,
+html[data-theme="paper"] .nav-section a.has-active-child {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #245ca3 22%, transparent);
+}
+
+html[data-theme="blueprint"] .topbar,
+html[data-theme="blueprint"] .sidebar,
+html[data-theme="blueprint"] .bottom-panel,
+html[data-theme="blueprint"] .studio-card,
+html[data-theme="blueprint"] .admin-card,
+html[data-theme="blueprint"] .theme-dropdown {
+  box-shadow: var(--studio-material-shadow),
+    inset 0 0 0 1px color-mix(in srgb, white 12%, transparent);
+}
+
+html[data-theme="blueprint"] .studio-card,
+html[data-theme="blueprint"] .admin-card,
+html[data-theme="blueprint"] .theme-dropdown {
+  background:
+    linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
+    var(--studio-material-panel-bg);
+  background-size: 24px 24px, 24px 24px, auto;
+}
+
+html[data-theme="ceramic"] .sidebar {
+  color: #f4f2ec;
+}
+
+html[data-theme="ceramic"] .sidebar .nav-section a {
+  color: color-mix(in srgb, white 78%, transparent);
+}
+
+html[data-theme="ceramic"] .sidebar .nav-section a.active,
+html[data-theme="ceramic"] .sidebar .nav-section a:hover,
+html[data-theme="ceramic"] .sidebar .nav-section a.has-active-child {
+  background: linear-gradient(180deg, color-mix(in srgb, white 16%, transparent), color-mix(in srgb, black 8%, transparent));
+  color: white;
+}
+
+html[data-theme="carbon"] .sidebar,
+html[data-theme="carbon"] .topbar,
+html[data-theme="carbon"] .bottom-panel,
+html[data-theme="carbon"] .studio-card,
+html[data-theme="carbon"] .admin-card,
+html[data-theme="carbon"] .theme-dropdown {
+  text-shadow: 0 1px 0 color-mix(in srgb, black 55%, transparent);
+}
+
+html[data-theme="carbon"] .nav-section a.active,
+html[data-theme="carbon"] .nav-section a:hover,
+html[data-theme="carbon"] .nav-section a.has-active-child,
+html[data-theme="carbon"] .theme-selector-button:hover,
+html[data-theme="carbon"] .theme-toggle-button:hover {
+  box-shadow: var(--studio-material-shadow), 0 0 18px color-mix(in srgb, var(--studio-accent) 13%, transparent);
+}
+
+html[data-theme="brass-instrument"] .brand,
+html[data-theme="brass-instrument"] .nav-section-header,
+html[data-theme="brass-instrument"] .theme-dropdown-title,
+html[data-theme="brass-instrument"] .bottom-panel-tab-list button.active {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+html[data-theme="brass-instrument"] .sidebar,
+html[data-theme="brass-instrument"] .topbar,
+html[data-theme="brass-instrument"] .bottom-panel,
+html[data-theme="brass-instrument"] .studio-card,
+html[data-theme="brass-instrument"] .admin-card,
+html[data-theme="brass-instrument"] .theme-dropdown {
+  box-shadow: var(--studio-material-shadow),
+    inset 0 0 0 1px color-mix(in srgb, #f1d992 12%, transparent);
+}

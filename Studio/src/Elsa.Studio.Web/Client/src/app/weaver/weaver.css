@@ -330,3 +330,82 @@ html[data-theme="black-glass"] .weaver-scroll {
     linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 4%, transparent) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+
+html[data-theme-material] .weaver-surface {
+  border-color: var(--studio-material-edge-strong);
+  background: var(--studio-material-panel-bg-strong);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .weaver-surface[data-variant="dock"] {
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .weaver-surface-header,
+html[data-theme-material] .weaver-status,
+html[data-theme-material] .weaver-composer {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-soft);
+}
+
+html[data-theme-material] .weaver-surface-title span {
+  color: var(--studio-accent);
+}
+
+html[data-theme-material] .weaver-status[data-tone="success"] {
+  color: var(--studio-success-fg);
+}
+
+html[data-theme-material] .weaver-status[data-tone="warning"] {
+  color: var(--studio-warning-fg);
+}
+
+html[data-theme-material] .weaver-auto-apply select,
+html[data-theme-material] .weaver-surface select,
+html[data-theme-material] .weaver-close,
+html[data-theme-material] .weaver-message-avatar,
+html[data-theme-material] .weaver-markdown pre,
+html[data-theme-material] .weaver-code-collapse > summary,
+html[data-theme-material] .weaver-plan,
+html[data-theme-material] .weaver-followup-chip,
+html[data-theme-material] .weaver-composer-input textarea {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .weaver-message-body,
+html[data-theme-material] .agent-proposal,
+html[data-theme-material] .agent-workflow-batch {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  box-shadow: var(--studio-material-shadow);
+}
+
+html[data-theme-material] .weaver-message[data-role="user"] .weaver-message-body {
+  border-color: color-mix(in srgb, var(--studio-accent) 48%, var(--studio-material-edge));
+  background: var(--studio-material-active-bg);
+}
+
+html[data-theme-material] .weaver-send {
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 62%, var(--studio-material-edge));
+  background: var(--studio-material-send-bg);
+  box-shadow: var(--studio-material-inset-low), 0 8px 18px color-mix(in srgb, var(--studio-accent) 18%, transparent);
+  color: var(--studio-material-send-text);
+  font-weight: 800;
+}
+
+html[data-theme-material] .weaver-scroll {
+  background: var(--studio-material-content-bg);
+  background-size: auto, var(--studio-material-grid-size), var(--studio-material-grid-size), auto;
+}
+
+html[data-theme="paper"] .weaver-surface[data-variant="dock"] {
+  transform: rotate(0.15deg);
+}
+
+html[data-theme="brass-instrument"] .weaver-surface-title,
+html[data-theme="brass-instrument"] .weaver-status {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}

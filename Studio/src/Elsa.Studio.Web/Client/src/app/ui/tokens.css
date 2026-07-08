@@ -117,3 +117,298 @@ html[data-theme="black-glass"] {
   --studio-warning-fg: #ffd38a;
   --studio-danger-fg: #ff9cab;
 }
+
+html[data-theme-material] {
+  --studio-accent-soft: color-mix(in srgb, var(--studio-accent) 16%, transparent);
+  --studio-focus: color-mix(in srgb, var(--studio-accent) 30%, transparent);
+  --studio-material-grid-size: 32px 32px;
+  --studio-material-radius: var(--studio-radius);
+  --studio-material-control-bg: var(--studio-material-panel-bg-soft);
+  --studio-material-hover-bg: color-mix(in srgb, var(--studio-accent) 14%, var(--studio-material-panel-bg-soft));
+  --studio-material-active-bg: color-mix(in srgb, var(--studio-accent) 18%, var(--studio-material-panel-bg-strong));
+  --studio-material-inset: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+  --studio-material-inset-low: inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
+  --studio-material-send-bg: linear-gradient(180deg, color-mix(in srgb, white 18%, var(--studio-accent)), var(--studio-accent));
+  --studio-material-send-text: var(--studio-accent-text);
+}
+
+html[data-theme="stone"] {
+  color-scheme: dark;
+  --radius: 5px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --studio-bg: #0b0f10;
+  --studio-surface: #151a1d;
+  --studio-surface-muted: #1b2226;
+  --studio-surface-raised: #20282d;
+  --studio-text: #edf2ee;
+  --studio-text-muted: #9ea8a4;
+  --studio-border: #354248;
+  --studio-accent: #8bdfff;
+  --studio-accent-text: #071217;
+  --studio-success-fg: #89e6ad;
+  --studio-warning-fg: #f0c16f;
+  --studio-danger-fg: #ff9b8f;
+  --studio-material-edge: color-mix(in srgb, #7c8b92 54%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #b2c1c5 72%, transparent);
+  --studio-material-panel-bg: linear-gradient(160deg, #182025, #111619 72%);
+  --studio-material-panel-bg-strong: linear-gradient(160deg, #20292e, #111719 70%);
+  --studio-material-panel-bg-soft: linear-gradient(160deg, #222b31, #161d21 70%);
+  --studio-material-body-bg:
+    radial-gradient(circle at 70% 16%, color-mix(in srgb, #79d8ff 10%, transparent), transparent 28rem),
+    linear-gradient(135deg, color-mix(in srgb, white 5%, transparent) 0 1px, transparent 1px 10px),
+    linear-gradient(160deg, #111719, #070a0c 62%, #13191c);
+  --studio-material-content-bg:
+    radial-gradient(circle at 28% 22%, color-mix(in srgb, white 7%, transparent), transparent 18rem),
+    linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, #111719, #070a0c 70%);
+  --studio-material-canvas-bg:
+    linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, #151b1f, #090d0f 72%);
+  --studio-material-node-bg: linear-gradient(160deg, #20292e, #121719 74%);
+  --studio-material-shadow: 0 16px 36px color-mix(in srgb, black 38%, transparent),
+    0 0 0 1px color-mix(in srgb, white 7%, transparent);
+  --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 48%, transparent),
+    0 0 0 1px color-mix(in srgb, #8bdfff 20%, transparent);
+  --studio-material-node-shadow: 0 18px 34px color-mix(in srgb, black 42%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+html[data-theme="paper"] {
+  color-scheme: light;
+  --radius: 3px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --studio-bg: #ebe2d0;
+  --studio-surface: #f7f1e5;
+  --studio-surface-muted: #eadfcb;
+  --studio-surface-raised: #fffaf0;
+  --studio-text: #26251f;
+  --studio-text-muted: #6c604f;
+  --studio-border: #cdbf9f;
+  --studio-accent: #245ca3;
+  --studio-accent-text: #fffaf0;
+  --studio-success-fg: #2f7b4d;
+  --studio-warning-fg: #8a6420;
+  --studio-danger-fg: #a34035;
+  --studio-material-edge: #cdbf9f;
+  --studio-material-edge-strong: #a69678;
+  --studio-material-panel-bg: linear-gradient(180deg, #fbf5e8, #eee4d0);
+  --studio-material-panel-bg-strong: linear-gradient(180deg, #fffaf0, #f0e6d3);
+  --studio-material-panel-bg-soft: linear-gradient(180deg, #f6eedf, #e9dec8);
+  --studio-material-body-bg:
+    linear-gradient(color-mix(in srgb, #6d5a3a 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #6d5a3a 4%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #d8ccb5 0%, #f3ead8 36%, #c8b894 100%);
+  --studio-material-content-bg:
+    radial-gradient(circle at 22% 12%, color-mix(in srgb, white 52%, transparent), transparent 18rem),
+    linear-gradient(color-mix(in srgb, #927d57 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #927d57 7%, transparent) 1px, transparent 1px),
+    #f4eddf;
+  --studio-material-canvas-bg:
+    linear-gradient(color-mix(in srgb, #927d57 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #927d57 8%, transparent) 1px, transparent 1px),
+    #f8f0df;
+  --studio-material-node-bg: linear-gradient(180deg, #fffaf0, #eee3cd);
+  --studio-material-shadow: 0 8px 14px color-mix(in srgb, #5f5036 18%, transparent),
+    0 1px 0 color-mix(in srgb, white 70%, transparent);
+  --studio-material-shadow-strong: 0 16px 28px color-mix(in srgb, #4c402d 24%, transparent),
+    0 0 0 1px color-mix(in srgb, #fff 55%, transparent);
+  --studio-material-node-shadow: 0 7px 12px color-mix(in srgb, #5f5036 20%, transparent),
+    0 2px 0 color-mix(in srgb, #8e7d60 16%, transparent);
+  --studio-material-send-bg: linear-gradient(180deg, #376fb4, #215798);
+  --studio-material-send-text: #fffaf0;
+}
+
+html[data-theme="blueprint"] {
+  color-scheme: dark;
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --studio-bg: #06253f;
+  --studio-surface: color-mix(in srgb, #07365e 86%, transparent);
+  --studio-surface-muted: color-mix(in srgb, #0a4778 62%, transparent);
+  --studio-surface-raised: color-mix(in srgb, #0a4b7e 78%, transparent);
+  --studio-text: #eef8ff;
+  --studio-text-muted: #a9cde4;
+  --studio-border: color-mix(in srgb, #c6e7ff 48%, transparent);
+  --studio-accent: #5fd0ff;
+  --studio-accent-text: #06213a;
+  --studio-success-fg: #99efbd;
+  --studio-warning-fg: #ffd37f;
+  --studio-danger-fg: #ff8f8f;
+  --studio-material-edge: color-mix(in srgb, #c9e8ff 58%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #ffffff 78%, transparent);
+  --studio-material-panel-bg: color-mix(in srgb, #07365e 82%, transparent);
+  --studio-material-panel-bg-strong: color-mix(in srgb, #0a436f 88%, transparent);
+  --studio-material-panel-bg-soft: color-mix(in srgb, #0a4778 54%, transparent);
+  --studio-material-body-bg:
+    linear-gradient(color-mix(in srgb, #d5efff 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #d5efff 8%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #05213a, #073a63 56%, #031827);
+  --studio-material-content-bg:
+    linear-gradient(color-mix(in srgb, #d5efff 11%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #d5efff 10%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #062844, #07365e 62%, #04223a);
+  --studio-material-canvas-bg:
+    linear-gradient(color-mix(in srgb, #ffffff 13%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #ffffff 12%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #062945, #07385e 64%);
+  --studio-material-node-bg: color-mix(in srgb, #083d66 82%, transparent);
+  --studio-material-shadow: 0 0 0 1px color-mix(in srgb, white 16%, transparent),
+    0 12px 28px color-mix(in srgb, #00121f 40%, transparent);
+  --studio-material-shadow-strong: 0 0 0 1px color-mix(in srgb, white 30%, transparent),
+    0 18px 38px color-mix(in srgb, #00121f 52%, transparent);
+  --studio-material-node-shadow: 0 0 0 1px color-mix(in srgb, white 22%, transparent),
+    0 12px 26px color-mix(in srgb, #00121f 36%, transparent);
+  --studio-material-inset: inset 0 0 0 1px color-mix(in srgb, white 12%, transparent);
+}
+
+html[data-theme="ceramic"] {
+  color-scheme: light;
+  --radius: 7px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --studio-bg: #efede8;
+  --studio-surface: #f8f6f1;
+  --studio-surface-muted: #ebe8e0;
+  --studio-surface-raised: #fffdf8;
+  --studio-text: #1f211f;
+  --studio-text-muted: #666863;
+  --studio-border: #d1cec5;
+  --studio-accent: #252725;
+  --studio-accent-text: #fbf9f4;
+  --studio-success-fg: #477758;
+  --studio-warning-fg: #7e682e;
+  --studio-danger-fg: #9a443e;
+  --studio-material-edge: #d4d0c7;
+  --studio-material-edge-strong: #a9a59a;
+  --studio-material-panel-bg: linear-gradient(180deg, #fffdf9, #eeeae2);
+  --studio-material-panel-bg-strong: linear-gradient(180deg, #ffffff, #f0ece4);
+  --studio-material-panel-bg-soft: linear-gradient(180deg, #f8f5ef, #e8e4dc);
+  --studio-material-body-bg:
+    radial-gradient(circle at 72% 14%, color-mix(in srgb, white 72%, transparent), transparent 24rem),
+    linear-gradient(135deg, #e5e1d8, #fbfaf6 48%, #dfdbd1);
+  --studio-material-content-bg:
+    linear-gradient(color-mix(in srgb, #76746d 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #76746d 4%, transparent) 1px, transparent 1px),
+    #f8f6f1;
+  --studio-material-canvas-bg:
+    linear-gradient(color-mix(in srgb, #77746d 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #77746d 4%, transparent) 1px, transparent 1px),
+    #faf8f3;
+  --studio-material-node-bg: linear-gradient(180deg, #fffdf9, #eeeae2);
+  --studio-material-shadow: 0 10px 24px color-mix(in srgb, #4b4d46 14%, transparent),
+    0 1px 0 color-mix(in srgb, white 80%, transparent);
+  --studio-material-shadow-strong: 0 18px 38px color-mix(in srgb, #4b4d46 18%, transparent),
+    0 0 0 1px color-mix(in srgb, white 70%, transparent);
+  --studio-material-node-shadow: 0 8px 18px color-mix(in srgb, #4b4d46 15%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 84%, transparent);
+  --studio-material-send-bg: linear-gradient(180deg, #323432, #1b1d1b);
+  --studio-material-send-text: #fbf9f4;
+}
+
+html[data-theme="carbon"] {
+  color-scheme: dark;
+  --radius: 3px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --studio-bg: #050708;
+  --studio-surface: #0d1114;
+  --studio-surface-muted: #151b20;
+  --studio-surface-raised: #1a2228;
+  --studio-text: #e8eff2;
+  --studio-text-muted: #87949c;
+  --studio-border: #2c3941;
+  --studio-accent: #21b9ff;
+  --studio-accent-text: #061017;
+  --studio-success-fg: #55dc8f;
+  --studio-warning-fg: #f1bf52;
+  --studio-danger-fg: #ff7a72;
+  --studio-material-edge: color-mix(in srgb, #5f7783 45%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #21b9ff 58%, transparent);
+  --studio-material-panel-bg:
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, #10161a, #080b0d);
+  --studio-material-panel-bg-strong:
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 5%, transparent) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, #141c21, #090d10);
+  --studio-material-panel-bg-soft:
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, #172027, #0d1115);
+  --studio-material-body-bg:
+    radial-gradient(circle at 70% 16%, color-mix(in srgb, #21b9ff 12%, transparent), transparent 24rem),
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
+    linear-gradient(135deg, #070a0c, #0c1114 54%, #030506);
+  --studio-material-content-bg:
+    linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
+    #090d10;
+  --studio-material-canvas-bg:
+    linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
+    #080c0f;
+  --studio-material-node-bg:
+    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
+    linear-gradient(180deg, #151d23, #0a0f12);
+  --studio-material-shadow: 0 15px 34px color-mix(in srgb, black 48%, transparent),
+    0 0 0 1px color-mix(in srgb, #21b9ff 12%, transparent);
+  --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 58%, transparent),
+    0 0 0 1px color-mix(in srgb, #21b9ff 32%, transparent);
+  --studio-material-node-shadow: 0 16px 30px color-mix(in srgb, black 52%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+}
+
+html[data-theme="brass-instrument"] {
+  color-scheme: dark;
+  --radius: 4px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --studio-bg: #11100b;
+  --studio-surface: #181914;
+  --studio-surface-muted: #232217;
+  --studio-surface-raised: #28271b;
+  --studio-text: #f1d992;
+  --studio-text-muted: #b49f6c;
+  --studio-border: #7a5a25;
+  --studio-accent: #d1a041;
+  --studio-accent-text: #17120a;
+  --studio-success-fg: #b7ee83;
+  --studio-warning-fg: #ffd36a;
+  --studio-danger-fg: #ff9b79;
+  --studio-material-edge: color-mix(in srgb, #d1a041 52%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #f1d992 78%, transparent);
+  --studio-material-panel-bg: linear-gradient(180deg, #1c1d17, #0f100d);
+  --studio-material-panel-bg-strong: linear-gradient(180deg, #242117, #10100d);
+  --studio-material-panel-bg-soft: linear-gradient(180deg, #272417, #15130e);
+  --studio-material-body-bg:
+    radial-gradient(circle at 76% 14%, color-mix(in srgb, #d1a041 15%, transparent), transparent 28rem),
+    linear-gradient(135deg, #15140f, #0b0c09 58%, #1c180f);
+  --studio-material-content-bg:
+    linear-gradient(color-mix(in srgb, #d1a041 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #d1a041 7%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, #171813, #0c0d0a);
+  --studio-material-canvas-bg:
+    radial-gradient(color-mix(in srgb, #d1a041 12%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, #171813, #0d0e0b);
+  --studio-material-grid-size: 18px 18px;
+  --studio-material-node-bg: linear-gradient(180deg, #202018, #0d0e0b);
+  --studio-material-shadow: 0 16px 34px color-mix(in srgb, black 46%, transparent),
+    0 0 0 1px color-mix(in srgb, #d1a041 26%, transparent);
+  --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 56%, transparent),
+    0 0 0 1px color-mix(in srgb, #f1d992 42%, transparent);
+  --studio-material-node-shadow: 0 16px 30px color-mix(in srgb, black 48%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #f1d992 15%, transparent);
+  --studio-material-send-bg: linear-gradient(180deg, #f0c46a, #b77f22);
+  --studio-material-send-text: #17120a;
+}
