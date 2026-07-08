@@ -14,6 +14,19 @@ internal static class ElsaThemeStoreApi
     private static readonly Regex TokenValuePattern = new("^(?:#[0-9a-f]{3,8}|oklch\\(\\s*(?:0?\\.\\d+|1(?:\\.0+)?|0)\\s+\\d*\\.?\\d+\\s+\\d*\\.?\\d+\\s*\\)|rgba?\\([\\d\\s.,%/]+\\)|hsla?\\([\\d\\s.,%/]+\\)|var\\(--[a-z0-9-]+\\))$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex MaterialVariableNamePattern = new("^--studio-material-[a-z0-9-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex MaterialVariableValuePattern = new("^[a-z0-9 .,%#()/+-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "black-glass",
+        "stone",
+        "paper",
+        "blueprint",
+        "ceramic",
+        "carbon",
+        "brass-instrument",
+        "harbor",
+        "borealis",
+        "hot-pink"
+    };
     private static readonly HashSet<string> AllowedAssetContentTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/png",
@@ -190,12 +203,14 @@ internal static class ElsaThemeStoreApi
         {
             if (request is null || string.IsNullOrWhiteSpace(request.ThemeId))
                 return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID is required."));
+            if (!ThemeIdPattern.IsMatch(request.ThemeId))
+                return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID must be kebab-case and between 3 and 64 characters."));
 
             var store = await ReadStoreAsync(environment, httpRequest, cancellationToken);
             var theme = store.Themes.FirstOrDefault(x => StringComparer.OrdinalIgnoreCase.Equals(x.Id, request.ThemeId));
-            if (theme is null)
+            if (theme is null && !BuiltInThemeIds.Contains(request.ThemeId))
                 return Results.NotFound(new ThemeStoreErrorResponse($"Theme '{request.ThemeId}' was not found."));
-            if (!theme.Enabled || !theme.Published)
+            if (theme is not null && (!theme.Enabled || !theme.Published))
                 return Results.BadRequest(new ThemeStoreErrorResponse("Default theme must be published and enabled."));
 
             store = store with { DefaultThemeId = request.ThemeId };

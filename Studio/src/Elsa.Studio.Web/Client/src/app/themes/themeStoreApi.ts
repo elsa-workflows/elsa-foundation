@@ -149,7 +149,7 @@ async function getThemeFeatureCapability(context: StudioEndpointContext, feature
 }
 
 export async function saveTheme(context: StudioEndpointContext, theme: StudioThemeDefinition) {
-  return context.http.putJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(theme.id)}`, theme);
+  return normalizeThemeStore(await context.http.putJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(theme.id)}`, theme));
 }
 
 export async function duplicateTheme(context: StudioEndpointContext, themeId: string, name?: string) {
@@ -157,11 +157,11 @@ export async function duplicateTheme(context: StudioEndpointContext, themeId: st
 }
 
 export async function deleteTheme(context: StudioEndpointContext, themeId: string) {
-  return context.http.deleteJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(themeId)}`);
+  return normalizeThemeStore(await context.http.deleteJson<ThemeStoreResponse>(`/_elsa/theme-store/themes/${encodeURIComponent(themeId)}`));
 }
 
 export async function setDefaultTheme(context: StudioEndpointContext, themeId: string) {
-  return context.http.putJson<ThemeStoreResponse>("/_elsa/theme-store/default", { themeId });
+  return normalizeThemeStore(await context.http.putJson<ThemeStoreResponse>("/_elsa/theme-store/default", { themeId }));
 }
 
 export async function uploadThemeAsset(context: StudioEndpointContext, file: File) {
@@ -171,11 +171,11 @@ export async function uploadThemeAsset(context: StudioEndpointContext, file: Fil
 }
 
 export async function deleteThemeAsset(context: StudioEndpointContext, assetId: string) {
-  return context.http.deleteJson<ThemeStoreResponse>(`/_elsa/theme-store/assets/${encodeURIComponent(assetId)}`);
+  return normalizeThemeStore(await context.http.deleteJson<ThemeStoreResponse>(`/_elsa/theme-store/assets/${encodeURIComponent(assetId)}`));
 }
 
 export async function importThemePack(context: StudioEndpointContext, pack: ThemePack) {
-  return context.http.postJson<ThemeStoreResponse>("/_elsa/theme-store/import", pack);
+  return normalizeThemeStore(await context.http.postJson<ThemeStoreResponse>("/_elsa/theme-store/import", pack));
 }
 
 export async function exportThemePack(context: StudioEndpointContext, themeId?: string) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { StudioEndpointContext } from "../sdk";
 import { builtInThemeDefinitions, getTheme, getThemeNames } from "../app/themes/presets";
-import { createCustomThemeFrom, findSelectableTheme, normalizeThemeStore, validateThemeDefinition } from "../app/themes/themeStoreApi";
+import { createCustomThemeFrom, findSelectableTheme, normalizeThemeStore, saveTheme, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
 describe("theme presets", () => {
   it("includes the hot pink theme", () => {
@@ -47,5 +48,20 @@ describe("theme presets", () => {
 
     expect(validateThemeDefinition(theme).valid).toBe(false);
     expect(validateThemeDefinition(theme).issues.some(issue => issue.message.includes("arbitrary CSS"))).toBe(true);
+  });
+
+  it("normalizes store-shaped mutation responses with built-in themes", async () => {
+    const custom = createCustomThemeFrom(builtInThemeDefinitions[0], "custom-theme", "Custom Theme");
+    const context = {
+      http: {
+        putJson: async () => ({ themes: [custom], defaultThemeId: "black-glass", assets: [] })
+      }
+    };
+
+    const store = await saveTheme(context as unknown as StudioEndpointContext, custom);
+
+    expect(store.themes.some(theme => theme.id === "black-glass")).toBe(true);
+    expect(store.themes.some(theme => theme.id === "custom-theme")).toBe(true);
+    expect(store.defaultThemeId).toBe("black-glass");
   });
 });

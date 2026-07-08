@@ -68,11 +68,15 @@ export function ThemeProvider({
     const colors = mode === "light" ? currentTheme.light : currentTheme.dark;
     const root = document.documentElement;
 
+    clearMaterialVariables(root);
+    applyMaterialVariables(root, currentTheme.material);
     Object.entries(colors).forEach(([key, value]) => {
       if (key === "chartColors") {
         (value as string[]).forEach((color, index) => {
           root.style.setProperty(`--chart-${index + 1}`, color);
         });
+      } else if (key === "material") {
+        applyMaterialVariables(root, value as StudioThemeDefinition["material"]);
       } else {
         // Convert camelCase to kebab-case
         const cssVarName = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}`;
@@ -150,6 +154,36 @@ function setStoredPreference(key: string, value: string) {
     }
   } catch {
     // Local theme selection is a best-effort user preference; storage failures must not block Studio.
+  }
+}
+
+function applyMaterialVariables(root: HTMLElement, material: StudioThemeDefinition["material"] | undefined) {
+  if (!material) return;
+
+  for (const [name, value] of Object.entries(material.cssVariables ?? {})) {
+    if (name.startsWith("--studio-material-")) {
+      root.style.setProperty(name, value);
+    }
+  }
+
+  const textures = Object.entries(material.textureAssets ?? {});
+  for (const [name, value] of textures) {
+    const variableName = name.startsWith("--studio-material-")
+      ? name
+      : `--studio-material-${name.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()}-texture`;
+    root.style.setProperty(variableName, `url("${value.replace(/"/g, '\\"')}")`);
+  }
+
+  if (textures.length > 0) {
+    root.style.setProperty("--studio-material-texture-image", `url("${textures[0][1].replace(/"/g, '\\"')}")`);
+  }
+}
+
+function clearMaterialVariables(root: HTMLElement) {
+  for (const name of Array.from(root.style)) {
+    if (name.startsWith("--studio-material-")) {
+      root.style.removeProperty(name);
+    }
   }
 }
 
