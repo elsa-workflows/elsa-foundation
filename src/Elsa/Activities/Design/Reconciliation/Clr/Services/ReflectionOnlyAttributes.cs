@@ -33,14 +33,22 @@ public static class ReflectionOnlyAttributes
     /// class in its inheritance chain — carries the attribute named <paramref name="attributeFullName"/>.
     /// </summary>
     public static bool HasAttributeUpPropertyChain(PropertyInfo property, string attributeFullName)
+        => FindAttributeUpPropertyChain(property, attributeFullName) is not null;
+
+    /// <summary>
+    /// Finds the first attribute named <paramref name="attributeFullName"/> on <paramref name="property"/>
+    /// or the same-named property declared on a base class.
+    /// </summary>
+    public static CustomAttributeData? FindAttributeUpPropertyChain(PropertyInfo property, string attributeFullName)
     {
         for (var current = (PropertyInfo?)property; current is not null; current = FindBaseProperty(current))
         {
-            if (current.GetCustomAttributesData().Any(a => a.AttributeType.FullName == attributeFullName))
-                return true;
+            var attribute = current.GetCustomAttributesData().FirstOrDefault(a => a.AttributeType.FullName == attributeFullName);
+            if (attribute is not null)
+                return attribute;
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>

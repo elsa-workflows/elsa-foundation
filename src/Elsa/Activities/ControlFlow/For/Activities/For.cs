@@ -57,15 +57,19 @@ public sealed class For : ActivityBase, IActivityChildCompletionHandler
     public const string IndexVariableName = "index";
 
     /// <summary>The first index (inclusive). Defaults to <c>0</c> when unbound.</summary>
+    [ActivityInput(Order = 0)]
     public InputArgument<int> Start { get; set; } = null!;
 
     /// <summary>The end index. Exclusive unless <see cref="EndInclusive"/> is set. Defaults to <c>0</c> when unbound.</summary>
+    [ActivityInput(Order = 10)]
     public InputArgument<int> End { get; set; } = null!;
 
     /// <summary>The amount each pass advances the index by. Defaults to <c>1</c> when unbound; must be non-zero.</summary>
+    [ActivityInput(Order = 20, DefaultValue = "1", DefaultSyntax = "Literal")]
     public InputArgument<int> Step { get; set; } = null!;
 
     /// <summary>When true the range is closed (<c>[Start, End]</c>); otherwise half-open (<c>[Start, End)</c>).</summary>
+    [ActivityInput(Order = 30)]
     public InputArgument<bool> EndInclusive { get; set; } = null!;
 
     protected override void Execute(IActivityExecutionContext context)

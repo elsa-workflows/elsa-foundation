@@ -28,4 +28,6 @@ public sealed record InputDefinition(
     string? UiHint = null,
     JsonElement? PropertyInfo = null,
     JsonElement? UISpecifications = null,
-    bool IsRequired = false);
+    bool IsRequired = false,
+    JsonElement? DefaultValue = null,
+    string? DefaultSyntax = null);
