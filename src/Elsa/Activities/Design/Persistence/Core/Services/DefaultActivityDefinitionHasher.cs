@@ -16,8 +16,8 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 /// This is the sanctioned exception to the "all JSON via IPayloadSerializer" rule: hashing needs a
 /// canonical sorted-key serialisation that the payload serializer does not produce, and the JSON is
 /// consumed only here (it is never persisted or read by another component — only the SHA-256 is).
-/// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance, and
-/// any nested versions on the parent (the version is hashed explicitly as the second argument).
+/// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance,
+/// identity fields such as <c>Id</c> and <c>Version</c>, and any nested versions on the parent.
 /// </remarks>
 public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 {
@@ -52,7 +52,7 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
     // Projects the definition to a plain object containing only the content-bearing fields.
     // Provenance (SourceKind/SourceId) is deliberately excluded — it identifies where a row came
     // from, not what it contains; including it would let a re-source defeat duplicate detection.
-    // Id is also out (random per pass).
+    // Id and Version are also out: they identify the version row, not its projected content.
     private static object ProjectDefinition(IActivityDefinition d) => new
     {
         d.ActivityTypeKey,
@@ -63,7 +63,6 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 
     private static object ProjectVersion(IActivityDefinitionVersion v) => new
     {
-        v.Version,
         v.DescriptorType,
         v.DescriptorPayload,
         v.ExecutionType,

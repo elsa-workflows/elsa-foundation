@@ -42,7 +42,7 @@ public sealed class ActivityDefinitionVersionFactory(
             ExecutionType: executionType,
             Hash: string.Empty);
 
-        // Hash excludes Id/Hash/provenance, so computing it from the (hash-less) model is stable.
+        // Hash excludes Id/Version/Hash/provenance, so computing it from the hash-less model is stable.
         return model with { Hash = hasher.Hash(definition, model) };
     }
 }
