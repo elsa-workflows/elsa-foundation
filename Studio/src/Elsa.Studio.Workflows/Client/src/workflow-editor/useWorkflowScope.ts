@@ -69,7 +69,12 @@ export function useWorkflowScope({
   // Scope-aware variable visibility + shadowing for the selected activity (ADR-0027). Backed by a
   // pending design endpoint; degrades to status "unavailable" until it ships.
   const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNodeId, catalogByVersion);
-  const isFlowchartDesigner = designerSupport === "flowchart" && scope?.slot.mode === "flowchart";
+  // Flowchart editing (free connections, empty-canvas add button) is driven by the RESOLVED slot's mode,
+  // not the owner's primary-slot mode: with the new scope-frame semantics a container's non-primary slot
+  // (e.g. a flowchart-mode branch of a multi-slot activity) can be viewed directly, and it should behave
+  // as a flowchart even when the owner's primary slot is a sequence. The only gate is that the owner isn't
+  // an opaque/unsupported designer (which suppresses the mirrored canvas entirely).
+  const isFlowchartDesigner = !isUnsupportedDesigner && scope?.slot.mode === "flowchart";
   const canAddActivitiesToCanvas = !root || !isUnsupportedDesigner;
 
   return {
