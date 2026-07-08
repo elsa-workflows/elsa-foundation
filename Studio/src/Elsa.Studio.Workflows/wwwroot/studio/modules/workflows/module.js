@@ -367,11 +367,11 @@ function zf(e) {
 function Vf(e, t) {
   return t.payload.slots.flatMap((n) => {
     if (n.collectionProperty && n.childProperty) {
-      const o = e.payload[n.collectionProperty];
-      return Array.isArray(o) ? o.flatMap((i, s) => {
-        if (!tt(i)) return [];
-        const a = n.labelProperty ? Ot(i[n.labelProperty]) : void 0;
-        return [Rs(e.kind, n, i[n.childProperty], t.payload.mode, s, a)];
+      const o = n.childProperty, i = e.payload[n.collectionProperty];
+      return Array.isArray(i) ? i.flatMap((s, a) => {
+        if (!tt(s)) return [];
+        const c = n.labelProperty ? Ot(s[n.labelProperty]) : void 0;
+        return [Rs(e.kind, n, s[o], t.payload.mode, a, c)];
       }) : [];
     }
     return [Rs(e.kind, n, e.payload[n.property], t.payload.mode)];

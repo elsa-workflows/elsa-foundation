@@ -1,9 +1,22 @@
+.js-expression-editor,
+.js-expression-expanded {
+  /* Local aliases resolve to the studio token layer when hosted in the app,
+     and fall back to dark chrome values for independent bundling. */
+  --js-expression-surface: var(--studio-surface, #111820);
+  --js-expression-surface-muted: var(--studio-surface-muted, #16212c);
+  --js-expression-text: var(--studio-text, #d8e2ee);
+  --js-expression-text-muted: var(--studio-text-muted, #8fb7d5);
+  --js-expression-border: var(--studio-border, #2f3946);
+  --js-expression-accent: var(--studio-accent, #38bdf8);
+  --js-expression-focus: var(--studio-focus, rgba(56, 189, 248, 0.35));
+}
+
 .js-expression-editor {
   width: 100%;
-  border: 1px solid var(--wf-border, #2f3946);
+  border: 1px solid var(--js-expression-border);
   border-radius: 6px;
-  background: #111820;
-  color: #d8e2ee;
+  background: var(--js-expression-surface);
+  color: var(--js-expression-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -12,9 +25,9 @@
 }
 
 .js-expression-editor:focus {
-  border-color: #38bdf8;
+  border-color: var(--js-expression-accent);
   outline: none;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 0 1px var(--js-expression-focus);
 }
 
 .js-expression-editor.inline {
@@ -31,11 +44,11 @@
   display: flex;
   align-items: center;
   min-height: 30px;
-  border: 1px solid var(--wf-border, #2f3946);
+  border: 1px solid var(--js-expression-border);
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
-  background: #16212c;
-  color: #8fb7d5;
+  background: var(--js-expression-surface-muted);
+  color: var(--js-expression-text-muted);
   padding: 0 10px;
 }
 
@@ -46,7 +59,7 @@
 
 .js-expression-expanded .studio-code-editor {
   overflow: hidden;
-  border: 1px solid var(--wf-border, #2f3946);
+  border: 1px solid var(--js-expression-border);
   border-radius: 0 0 6px 6px;
 }
 
@@ -56,8 +69,8 @@
 
 .js-expression-expanded .studio-code-editor-input,
 .js-expression-expanded .studio-code-editor .cm-editor {
-  background: #111820;
-  color: #d8e2ee;
+  background: var(--js-expression-surface);
+  color: var(--js-expression-text);
   font-size: 12px;
   letter-spacing: 0;
 }
@@ -78,8 +91,8 @@
 }
 
 .js-expression-expanded .studio-code-editor:focus-within {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+  border-color: var(--js-expression-accent);
+  box-shadow: 0 0 0 1px var(--js-expression-focus);
 }
 
 .js-expression-expanded .studio-code-editor .cm-content {

@@ -166,7 +166,8 @@
   padding: 6px 10px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
-  background: var(--wf-panel);
+  background: var(--wf-row);
+  background-size: var(--wf-row-bg-size);
   color: var(--wf-text);
   font-size: 12px;
   cursor: pointer;
@@ -180,12 +181,16 @@
   border-radius: 999px;
 }
 
+/* One container slab; rows are flat with hairline dividers (mirrors .studio-data-grid). */
 .availability-activity-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   max-height: 460px;
   overflow-y: auto;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-md);
+  background: var(--wf-row);
+  background-size: var(--wf-row-bg-size);
 }
 
 .availability-activity-option {
@@ -195,15 +200,19 @@
   gap: 10px;
   min-height: 44px;
   padding: 8px 10px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  background: var(--wf-panel);
+  border: 0;
+  border-bottom: 1px solid var(--wf-border);
+  background: transparent;
   color: var(--wf-text);
   cursor: pointer;
 }
 
+.availability-activity-option:last-child {
+  border-bottom: 0;
+}
+
 .availability-activity-option:hover {
-  border-color: var(--wf-border-strong);
+  background: var(--wf-accent-soft);
 }
 
 .availability-activity-option.disabled {

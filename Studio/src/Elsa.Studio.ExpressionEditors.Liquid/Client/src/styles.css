@@ -1,4 +1,13 @@
 .liquid-expression-expanded {
+  /* Local aliases resolve to the studio token layer when hosted in the app,
+     and fall back to dark chrome values for independent bundling. */
+  --liquid-expression-surface: var(--studio-surface, #111820);
+  --liquid-expression-surface-muted: var(--studio-surface-muted, #16212c);
+  --liquid-expression-text: var(--studio-text, #d8e2ee);
+  --liquid-expression-text-muted: var(--studio-text-muted, #8fb7d5);
+  --liquid-expression-border: var(--studio-border, #2f3946);
+  --liquid-expression-accent: var(--studio-accent, #38bdf8);
+  --liquid-expression-focus: var(--studio-focus, rgba(56, 189, 248, 0.35));
   display: grid;
   min-height: 0;
 }
@@ -7,11 +16,11 @@
   display: flex;
   align-items: center;
   min-height: 30px;
-  border: 1px solid var(--wf-border, #2f3946);
+  border: 1px solid var(--liquid-expression-border);
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
-  background: #16212c;
-  color: #8fb7d5;
+  background: var(--liquid-expression-surface-muted);
+  color: var(--liquid-expression-text-muted);
   padding: 0 10px;
 }
 
@@ -22,7 +31,7 @@
 
 .liquid-expression-expanded .studio-code-editor {
   overflow: hidden;
-  border: 1px solid var(--wf-border, #2f3946);
+  border: 1px solid var(--liquid-expression-border);
   border-radius: 0 0 6px 6px;
 }
 
@@ -34,14 +43,14 @@
   width: 100%;
   border: 0;
   border-radius: 0 0 6px 6px;
-  background: #111820;
-  color: #d8e2ee;
+  background: var(--liquid-expression-surface);
+  color: var(--liquid-expression-text);
   font-size: 12px;
   letter-spacing: 0;
   padding: 12px;
 }
 
 .liquid-expression-expanded .studio-code-editor:focus-within {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+  border-color: var(--liquid-expression-accent);
+  box-shadow: 0 0 0 1px var(--liquid-expression-focus);
 }
