@@ -1,19 +1,18 @@
 .feature-management-page {
   /*
    * Module-private alias block (see docs/design-tokens.md). The badge-tone palette is
-   * promoted here to overridable module-private aliases so a theme can retint the badges:
-   * each derives from a studio/chart token where one maps sensibly, with the original hex
-   * kept as the fallback anchor. The status tones (enabled/experimental/danger)
-   * reference the layer-2 semantic tokens directly; the categorical tones borrow the
-   * host chart ramp.
+   * promoted here to overridable module-private aliases so a theme can retint the badges.
+   * Status tones map straight onto the layer-2 semantic tokens; the categorical tones
+   * (violet/advanced) are color-mix derivations over those same tokens, keeping the badge
+   * hues distinct without depending on anything outside the --studio-* contract.
    */
-  --fm-tone-info: var(--chart-1, #2563eb);
-  --fm-tone-violet: var(--chart-2, #7c3aed);
-  --fm-tone-enabled: var(--studio-success, #16a34a);
-  --fm-tone-advanced: var(--chart-3, #0891b2);
-  --fm-tone-experimental: var(--studio-warning, #d97706);
+  --fm-tone-info: var(--studio-accent, var(--primary, #2563eb));
+  --fm-tone-violet: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 50%, var(--studio-danger, var(--danger, #dc2626)));
+  --fm-tone-enabled: var(--studio-success, var(--success, #16a34a));
+  --fm-tone-advanced: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 55%, var(--studio-success, var(--success, #16a34a)));
+  --fm-tone-experimental: var(--studio-warning, var(--warning, #d97706));
   --fm-tone-danger: var(--studio-danger, var(--danger, #dc2626));
-  --fm-overlay-strong: rgb(0 0 0 / 38%);
+  --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
   display: flex;
   flex-direction: column;
   gap: 14px;

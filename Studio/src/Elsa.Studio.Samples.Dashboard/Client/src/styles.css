@@ -1,7 +1,6 @@
 .dashboard-sample-card {
-  /* Module-private alias (see docs/design-tokens.md): soft accent-tinted sample border,
-     mapped onto the accent wash token so it re-tints per theme; hex is the fallback anchor. */
-  --dashboard-sample-border: var(--studio-accent-soft, #a7c5ff);
+  /* Module-private alias (see docs/design-tokens.md): accent-washed sample-card border. */
+  --dashboard-sample-border: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 40%, var(--studio-border, var(--border, #d9e2ec)));
   border-color: var(--dashboard-sample-border);
 }
 
