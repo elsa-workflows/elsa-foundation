@@ -1,10 +1,13 @@
 # Feature Specification: Deterministic Payload Serialization
 
-**Feature Branch**: `TBD` (own branch — cross-cutting shared-serializer change)
+**Feature Branch**: shipped via PR #549 (own branch — cross-cutting shared-serializer change)
 
 **Created**: 2026-07-07
 
-**Status**: Draft
+**Status**: Implemented (merged to main, PR #549) — this spec documents the shipped behavior. The
+determinism mechanism as shipped is `DeterministicOrderTypeInfoModifier.SortObjectMembers` (object
+member order) + `DeterministicDictionaryConverterFactory` (dictionary key order), wired in
+`JsonPayloadSerializer.BuildOptions()`.
 
 **Input**: Make the shared `IPayloadSerializer` (System.Text.Json) **deterministic** so equal object
 graphs always produce byte-identical JSON, regardless of dictionary insertion order or reflection
@@ -24,9 +27,11 @@ non-determinism make the same logical state serialize to different bytes across 
 
 1. **Dictionary key order** — System.Text.Json emits `IDictionary` entries in enumeration order.
    Workflow state is dictionary-heavy (variables, inputs, properties).
-2. **Polymorphic discriminator placement / member order** — `PolymorphicObjectConverter` /
-   `PolymorphicObjectConverterFactory` inject a type discriminator and wrap collections; member
-   ordering must be fixed.
+2. **Object member order** — `System.Text.Json` emits reflection-ordered members, which is not
+   guaranteed stable across runs/hosts; member order must be fixed. (The former open-object
+   polymorphism converters — `PolymorphicObjectConverter` / `…Factory` — were retired by ADR 0035
+   D2/D5, PR #570; type identity is now a registry alias and there is no injected discriminator to
+   place.)
 
 ADR 0034 (D3/D8) makes content identity a hash over the canonical serialization and requires
 `StateSource` to *be* that canonical form; without determinism, the git hash tripwire (D7) throws on
@@ -49,8 +54,8 @@ different orders; assert `Serialize(a) == Serialize(b)` byte-for-byte, and that 
 
 1. **Given** two equal graphs with differently-ordered dictionaries, **Then** their serialized bytes
    are identical.
-2. **Given** a polymorphic value, **Then** the discriminator and members serialize in a fixed order
-   every run.
+2. **Given** an object with reflection-ordered members, **Then** the members serialize in a fixed
+   order every run.
 3. **Given** any serialized payload, **Then** it round-trips to an equal object (no semantic loss
    from ordering normalization).
 
@@ -73,8 +78,8 @@ digests.
 
 - **FR-001**: `IPayloadSerializer.Serialize` MUST emit dictionary entries in a **stable key order**
   (ordinal by serialized key) for all `IDictionary`/`IReadOnlyDictionary` shapes in scope.
-- **FR-002**: Object member order MUST be deterministic (declared order or a fixed policy), including
-  through `PolymorphicObjectConverter`; the injected discriminator MUST have a fixed position.
+- **FR-002**: Object member order MUST be deterministic — a fixed policy applied via a `JsonTypeInfo`
+  contract modifier (shipped as `DeterministicOrderTypeInfoModifier.SortObjectMembers`).
 - **FR-003**: Determinism MUST hold **across processes** (independent of reflection order and
   hash-randomized dictionary iteration).
 - **FR-004**: Serialization MUST remain **round-trip lossless** — normalization changes byte order
@@ -89,8 +94,9 @@ digests.
 ### Key Entities
 
 - **Canonical serialization** — the deterministic output; the content-hash preimage (ADR 0034 D3).
-- **Ordering hook** — a `TypeInfoResolver` contract modifier and/or dictionary-normalizing converter
-  applied in `BuildOptions()`.
+- **Ordering hook** — the `JsonTypeInfo` contract modifier (`DeterministicOrderTypeInfoModifier.SortObjectMembers`)
+  plus the dictionary-normalizing converter (`DeterministicDictionaryConverterFactory`), both applied in
+  `JsonPayloadSerializer.BuildOptions()`.
 
 ## Success Criteria *(mandatory)*
 

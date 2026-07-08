@@ -35,15 +35,18 @@ decision log are in ADR 0034; this spec is the implementation skeleton.
 
 ## Dependencies & Sequencing
 
-1. **`Elsa.Git` shared library (prereq, D9/D10)** — ✅ **DONE** (commit `7275e0d8`, "refactor(git):
-   extract shared Elsa.Git library from ExtensionBuilder"; pending merge to main). Public `Elsa.Git`
+1. **`Elsa.Git` shared library (prereq, D9/D10)** — ✅ **DONE & merged** (commit `7275e0d8`, "refactor(git):
+   extract shared Elsa.Git library from ExtensionBuilder"). Public `Elsa.Git`
    at `src/Elsa/Git/` exposes `IGitClient` (`RunAsync`/`RunOrDefault`/`IsGitRepository`) + `GitClient`
    + `GitClientOptions` + `AddGitClient()`; true leaf project (only DI/Logging abstractions). The
    Design feature just adds a `<ProjectReference>` — no extraction work remains.
 2. **Deterministic shared payload serializer (prereq, D3/D8)** — the real weight of "canonical."
-   Own unit: [`specs/086-deterministic-payload-serialization`](../086-deterministic-payload-serialization/spec.md).
-3. **Import-reconciler definition-metadata update path (D5)** — new capability the reconciler lacks.
-   Own unit: [`specs/087-reconciler-definition-metadata-update`](../087-reconciler-definition-metadata-update/spec.md).
+   ✅ **DONE & merged** (PR #549). Own unit: [`specs/086-deterministic-payload-serialization`](../086-deterministic-payload-serialization/spec.md).
+3. **Import-reconciler definition-metadata update path (D5)** — ✅ the capability **already landed**
+   (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546); what remains is a **correction**,
+   folded into this unit as **FR-008a** (gate the apply to the newest version). The standalone
+   [`specs/087-reconciler-definition-metadata-update`](../087-reconciler-definition-metadata-update/spec.md)
+   is superseded by FR-008a — not a separate unit to build.
 4. Then: **inbound source (US2)** → **export reconciler (US3)** → **coherence hardening (US4)** as
    FR-016a lands a persisted content hash.
 
@@ -156,10 +159,12 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
   (`IGitClient` + `GitClient` + `GitClientOptions` + `AddGitClient()`, `GIT_TERMINAL_PROMPT=0`) exists
   as a true leaf project. The Design feature MUST consume it by `<ProjectReference>` (resolving
   `IGitClient` via `AddGitClient()`), and MUST NOT depend on the Server app or the EB module. Residual:
-  add the reference once `7275e0d8` is merged into this branch/main.
-- **FR-002**: The **shared payload serializer** MUST be made **deterministic** (stable dictionary-key
-  ordering; fixed polymorphic-discriminator placement) so `StateSource` is a canonical, stable hash
-  preimage. No migration / backward-compat is required (unreleased software).
+  add the `<ProjectReference>` + `AddGitClient()` wiring when the Design git feature project is created
+  (`Elsa.Git` is already merged to main).
+- **FR-002**: `StateSource` MUST be a canonical, stable hash preimage. The determinism contract this
+  relies on (stable dictionary-key ordering; deterministic object-member order) is owned by
+  **[spec 086](../086-deterministic-payload-serialization/spec.md)** (✅ merged, PR #549) — this unit
+  consumes that contract, it does not re-specify it.
 - **FR-003**: A `GitWorkflowReconciliationSource : IWorkflowReconciliationSource` (`SourceKind =
   "git"`) MUST read version files from a local working clone and emit one
   `WorkflowVersionReconciliationModel` per version file.
@@ -178,16 +183,13 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 - **FR-008**: The import reconciler MUST gain a **definition-metadata update path**: `definition.json`
   is the sole authority for an existing definition's name/description/`deleted`, applied every pass.
   Soft-delete MUST propagate as a flag; version files/rows MUST never be deleted.
-- **FR-008a** *(carried-over defect from spec 087)*: `definition.json` MUST become the **sole** source of
-  definition metadata; the per-version metadata carrier MUST stop driving it. Spec 087 landed
-  (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546) applying `Name`/`Description` from
-  **every** incoming version entry, **unconditionally and before the outdated-version skip** — so an
-  older/stale version entry (or non-SemVer-ordered git version files) overwrites current metadata with
-  a prior version's values, order-dependently (violates ADR 0034 D5 "latest-wins"). Latent until a
-  source emits multiple/older version entries per definition — which this git source is the first to do.
-  This unit MUST fix it by making `definition.json` (not any `versions/*.json`) the metadata authority;
-  as a defense-in-depth for any per-version fallback that remains, the reconciler's metadata apply MUST
-  be **gated to the authoritative (newest) version** — moved after the outdated check and run only when
+- **FR-008a** *(carried-over defect from spec 087; rationale in [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md) D5)*:
+  the already-landed apply (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546) currently runs
+  for **every** incoming version entry, unconditionally and *before* the outdated-version skip — so an
+  older/stale entry (or non-SemVer-ordered git version files) can overwrite current metadata with a prior
+  version's values, order-dependently (violates D5 "latest-wins"). Beyond making `definition.json` the
+  metadata authority (FR-008), this unit MUST **gate the per-version apply to the authoritative (newest)
+  version** — moved after the outdated check and run only when
   `latestVersion is null || CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) >= 0`. A test
   MUST assert an **older** incoming entry does **not** change existing definition metadata.
 - **FR-009**: Export MUST be an **export reconciler** (set-diff sweep): for each catalog version,
