@@ -747,7 +747,11 @@ internal static class ElsaWorkflowManagementApi
             true,
             null,
             "Literal",
-            input.UISpecifications ?? GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
+            // Author-provided UI metadata is opaque JSON (a verbatim JsonElement, ADR 0035 D3); when absent we
+            // synthesize the descriptor's options from the declared type. Both serialize to the same response JSON.
+            input.UISpecifications.HasValue
+                ? input.UISpecifications.Value
+                : GetUiSpecifications(input.Type, logger, wellKnownTypeRegistry),
             input.IsRequired);
 
     private static OutputDescriptorResponse ToOutputDescriptorResponse(Elsa.Activities.Design.Core.Models.OutputDefinition output) =>
@@ -812,7 +816,7 @@ internal static class ElsaWorkflowManagementApi
     // every referenceable element type (primitives + activity I/O types) back to its real CLR type — so an
     // enum-typed input can again expose its option list. We resolve only the element type (collection-ness is
     // irrelevant to whether the element is an enum) via IWellKnownTypeRegistry; unknown aliases yield no options.
-    private static IDictionary<string, object>? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
+    private static object? GetUiSpecifications(TypeReference type, ILogger logger, IWellKnownTypeRegistry wellKnownTypeRegistry)
     {
         if (!wellKnownTypeRegistry.TryGetTypeOrDefault(type.Alias, out var elementType) || !elementType.IsEnum)
             return null;
@@ -1001,7 +1005,7 @@ internal sealed record InputDescriptorResponse(
     bool IsWrapped,
     object? DefaultValue,
     string DefaultSyntax,
-    IDictionary<string, object>? UiSpecifications,
+    object? UiSpecifications,
     bool IsRequired);
 
 internal sealed record OutputDescriptorResponse(

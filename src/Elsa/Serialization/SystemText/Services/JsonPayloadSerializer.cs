@@ -28,11 +28,10 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
     public string Serialize(object payload)
     {
         var options = GetOptions();
-        // Pass payload.GetType() so the input type is the runtime type, not 'object'.
-        // Without this, generic inference picks TValue = object and the
-        // PolymorphicObjectConverterFactory claims the call, wrapping collections in
-        // {_items: [...], _type: "..."}. With the runtime type, STJ uses built-in
-        // handling and produces plain JSON for ordinary classes/collections.
+        // Pass payload.GetType() so the input type is the runtime type, not 'object'. Without it, generic
+        // inference picks TValue = object and STJ serializes against the declared 'object' type, losing the
+        // payload's members. With the runtime type, STJ uses built-in handling and produces plain JSON for
+        // ordinary classes/collections.
         return JsonSerializer.Serialize(payload, payload.GetType(), options);
     }
 
@@ -111,9 +110,10 @@ public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converter
 
             // Deterministic serialization (spec 086; ADR 0034 D3/D8): equal graphs must serialize to
             // byte-identical JSON so the output can be content-hashed. SortObjectMembers fixes object member
-            // order; DeterministicDictionaryConverterFactory sorts string-keyed dictionary entries (the
-            // polymorphic converters sort their own paths). These target the real cross-process nondeterminism
-            // — per-process string-hash-seeded dictionary enumeration and unfixed reflection member order.
+            // order; DeterministicDictionaryConverterFactory sorts every string-keyed dictionary shape,
+            // including object-valued ones (formerly the retired polymorphic converter's job — ADR 0035 D2).
+            // These target the real cross-process nondeterminism — per-process string-hash-seeded dictionary
+            // enumeration and unfixed reflection member order.
             // Embedded opaque JSON (a JsonElement such as ActivityNode.Structure.Payload) is deliberately NOT
             // rewritten: it re-emits verbatim in parse order with no hashing, so it is already byte-stable
             // across processes, and reordering an opaque blob would assert a semantic equality Elsa does not

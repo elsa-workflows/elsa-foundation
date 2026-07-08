@@ -22,8 +22,10 @@ public sealed class DeterministicSerializationTests
     /// seeded per process, any residual dependence on dictionary iteration order would change this digest
     /// from one run/host to the next — so its constancy across every CI run <em>is</em> the cross-process
     /// determinism assertion (SC-002 / FR-003). If a deliberate wire-shape change lands, recompute it.
+    /// Re-based when open-object polymorphism was retired (ADR 0035 D2/D5/D7): the fixture's object-valued
+    /// dictionaries now serialize as plain sorted JSON with no <c>_type</c> discriminator.
     /// </summary>
-    private const string CanonicalDigest = "1ea56144563e03c373da7df075bdaf8f8e5b10dc61f69f237847699d1fadcaa2";
+    private const string CanonicalDigest = "84556e6ee376da433f4a1e86a322d0ec0cbd03c6f7fba066ac165035fe8fa383";
 
     private readonly JsonPayloadSerializer _serializer = CreateSerializer();
 
@@ -54,19 +56,44 @@ public sealed class DeterministicSerializationTests
     }
 
     [Fact]
-    public void PolymorphicDiscriminator_IsFixedAndLast()
+    public void ObjectValuedDictionary_EmitsNoTypeDiscriminator_AndIsDeterministic()
     {
-        // A typed value boxed as object is wrapped with a trailing "_type" discriminator; its position must
-        // be deterministic (FR-002). Two equal-but-differently-ordered maps must agree byte-for-byte.
+        // ADR 0035 D2/D5: open-object polymorphism is retired. A typed value boxed as an object value is no
+        // longer wrapped with a "_type" discriminator — it serializes by its runtime type as plain JSON. Two
+        // equal-but-differently-ordered maps still agree byte-for-byte (the deterministic dictionary converter
+        // now owns object-valued dictionaries too — FR-001/FR-002).
         var a = new Dictionary<string, object?> { ["b"] = "2", ["a"] = "1", ["map"] = Reverse(new Dictionary<string, string> { ["y"] = "1", ["x"] = "2" }) };
         var b = new Dictionary<string, object?> { ["a"] = "1", ["map"] = new Dictionary<string, string> { ["x"] = "2", ["y"] = "1" }, ["b"] = "2" };
 
         var json = _serializer.Serialize(a);
 
         Assert.Equal(json, _serializer.Serialize(b));
-        Assert.EndsWith("\"}}", json);                              // the wrapped map ends with its _type
-        Assert.Equal(1, CountOccurrences(json, "\"_type\""));       // exactly one discriminator, fixed placement
+        Assert.DoesNotContain("_type", json);                       // no retired discriminator
+        Assert.Contains("\"map\":{\"x\":\"2\",\"y\":\"1\"}", json);  // nested typed dict, sorted, plain
     }
+
+    [Fact]
+    public void ObjectValuedMembers_AreDeterministic_ForPocoAndNestedObjectDict()
+    {
+        // Object-valued dictionaries now serialize through DeterministicDictionaryConverter instead of the
+        // retired polymorphic converter (ADR 0035 D2). This pins that the two runtime shapes it must keep
+        // deterministic — a POCO value and a nested object-valued dictionary — still get member/key order
+        // normalized when reached via the converter's `Serialize<object>(value)` value path. The content hash
+        // (ADR 0034) depends on this; the CanonicalDigest fixture only exercises scalar + typed-dict members,
+        // so this is the dedicated guard for object-valued POCO/nested-dict members.
+        var graph = new Dictionary<string, object?>
+        {
+            ["poco"] = new SortProbe("z", "a", 5),
+            ["nested"] = new Dictionary<string, object?> { ["y"] = "2", ["x"] = "1" },
+        };
+
+        var json = _serializer.Serialize(graph);
+
+        Assert.Contains("\"poco\":{\"alpha\":\"a\",\"mid\":5,\"zebra\":\"z\"}", json); // POCO members sorted
+        Assert.Contains("\"nested\":{\"x\":\"1\",\"y\":\"2\"}", json);                 // nested object-dict sorted
+    }
+
+    private sealed record SortProbe(string Zebra, string Alpha, int Mid);
 
     [Fact]
     public void TypedDictionary_RoundTripsLosslessly_ThroughTheSortingConverter()
@@ -81,29 +108,33 @@ public sealed class DeterministicSerializationTests
     }
 
     [Fact]
-    public void ObjectGraph_RoundTripsLosslessly()
+    public void ObjectGraph_RoundTripsLosslessly_AsOpaqueJson()
     {
-        IDictionary<string, object?> nestedInput = new System.Dynamic.ExpandoObject();
-        nestedInput["y"] = "2";
-        nestedInput["x"] = "1";
-        IDictionary<string, object?> graph = new Dictionary<string, object?>
+        // ADR 0035 D2: with open-object polymorphism retired, an untyped object graph round-trips as opaque
+        // JSON — reading it back through the shared serializer materializes a JsonElement (not an ExpandoObject
+        // / IDictionary<string,object>), and object-valued dictionaries serialize deterministically (sorted).
+        var nested = new Dictionary<string, object?> { ["y"] = "2", ["x"] = "1" };
+        var graph = new Dictionary<string, object?>
         {
             ["zebra"] = "z",
             ["alpha"] = "a",
             ["count"] = 42,
             ["flag"] = true,
-            ["nested"] = nestedInput,
+            ["nested"] = nested,
         };
 
         var json = _serializer.Serialize(graph);
-        var roundTripped = Assert.IsAssignableFrom<IDictionary<string, object>>(_serializer.Deserialize<object>(json));
+        var roundTripped = Assert.IsType<JsonElement>(_serializer.Deserialize<object>(json));
 
-        Assert.Equal("a", roundTripped["alpha"]);
-        Assert.Equal(42L, roundTripped["count"]);
-        Assert.Equal(true, roundTripped["flag"]);
-        var nested = Assert.IsAssignableFrom<IDictionary<string, object>>(roundTripped["nested"]);
-        Assert.Equal("1", nested["x"]);
-        Assert.Equal("2", nested["y"]);
+        Assert.Equal("a", roundTripped.GetProperty("alpha").GetString());
+        Assert.Equal(42, roundTripped.GetProperty("count").GetInt32());
+        Assert.True(roundTripped.GetProperty("flag").GetBoolean());
+        var nestedElement = roundTripped.GetProperty("nested");
+        Assert.Equal("1", nestedElement.GetProperty("x").GetString());
+        Assert.Equal("2", nestedElement.GetProperty("y").GetString());
+        // Object-valued dictionary members are sorted (deterministic), so "alpha" precedes "zebra".
+        Assert.Contains("\"alpha\":\"a\"", json);
+        Assert.True(json.IndexOf("\"alpha\"", StringComparison.Ordinal) < json.IndexOf("\"zebra\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -154,14 +185,6 @@ public sealed class DeterministicSerializationTests
         return reversed;
     }
 
-    private static int CountOccurrences(string haystack, string needle)
-    {
-        var count = 0;
-        for (var index = haystack.IndexOf(needle, StringComparison.Ordinal); index >= 0; index = haystack.IndexOf(needle, index + needle.Length, StringComparison.Ordinal))
-            count++;
-        return count;
-    }
-
     [Theory]
     [InlineData(typeof(DictionaryHolder))]
     [InlineData(typeof(IDictionaryHolder))]
@@ -204,7 +227,6 @@ public sealed class DeterministicSerializationTests
         registry.RegisterAll(new JsonConverter[]
         {
             new JsonStringEnumConverter(),
-            new PolymorphicObjectConverterFactory(wellKnownTypeRegistry),
             new TypeJsonConverter(wellKnownTypeRegistry),
         });
 

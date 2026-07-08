@@ -7,18 +7,14 @@ namespace Elsa.Serialization.SystemText.Sources;
 
 /// <summary>
 /// Contributes the built-in <see cref="JsonConverter"/> set shipped by the Serialization
-/// feature: enum-as-string, TimeSpan, polymorphic-object factory, Type converter.
+/// feature: enum-as-string, TimeSpan, Type converter (the registry-alias type discriminator).
 /// </summary>
-public sealed class BuiltInJsonConverterSource(
-    PolymorphicObjectConverterFactory polymorphicObjectConverterFactory,
-    TypeJsonConverter typeJsonConverter)
-    : IJsonConverterSource
+public sealed class BuiltInJsonConverterSource(TypeJsonConverter typeJsonConverter) : IJsonConverterSource
 {
     public IEnumerable<JsonConverter> GetConverters()
     {
         yield return new JsonStringEnumConverter();
         yield return JsonMetadataServices.TimeSpanConverter;
-        yield return polymorphicObjectConverterFactory;
         yield return typeJsonConverter;
     }
 }

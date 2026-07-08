@@ -6,7 +6,6 @@ using Elsa.Expressions.Liquid.Notifications;
 using Elsa.Expressions.Liquid.Options;
 using Fluid;
 using Microsoft.Extensions.DependencyInjection;
-using System.Dynamic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
@@ -44,28 +43,6 @@ public sealed class AnyValueReadParityTests
     {
         // A resumed Any value arrives as a read-only JsonElement (the durable store's opaque form).
         await AssertParity(() => JsonSerializer.Deserialize<JsonElement>(PayloadJson), path, expected);
-    }
-
-    [Theory]
-    [MemberData(nameof(Fields))]
-    public async Task ExpandoObjectForm_ReadsIdenticallyFromJsAndLiquid(string path, string expected)
-    {
-        // A legacy dynamic value still produced by the polymorphic converter arrives as an ExpandoObject;
-        // it must read identically across engines (materialized to JsonNode at the seam) until that converter
-        // is deleted (ADR 0035 D5).
-        await AssertParity(BuildExpandoPayload, path, expected);
-    }
-
-    private static object BuildExpandoPayload()
-    {
-        IDictionary<string, object?> customer = new ExpandoObject();
-        customer["name"] = "Alice";
-        customer["age"] = 42;
-
-        IDictionary<string, object?> root = new ExpandoObject();
-        root["customer"] = customer;
-        root["tags"] = new List<object> { "red", "green" };
-        return root;
     }
 
     private static async Task AssertParity(Func<object> valueFactory, string path, string expected)

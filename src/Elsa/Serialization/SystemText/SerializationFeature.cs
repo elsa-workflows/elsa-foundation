@@ -25,12 +25,12 @@ public class SerializationFeature : IShellFeature
         services
             .AddSingleton<IPayloadSerializer, JsonPayloadSerializer>()
             .AddSingleton<IObjectConverter, ObjectConverter>()
-            .AddSingleton<IWellKnownTypeRegistry, WellKnownTypeRegistry>()
-            .AddSingleton<IJsonIslandTypeHandler, SystemTextJsonIslandTypeHandler>();
+            .AddSingleton<IWellKnownTypeRegistry, WellKnownTypeRegistry>();
 
-        // Built-in converters require these as concrete DI registrations so the handler
-        // can request them via constructor injection.
-        services.AddSingleton<PolymorphicObjectConverterFactory>();
+        // The type discriminator converter (the go-forward alias-registry mechanism) needs a concrete DI
+        // registration so BuiltInJsonConverterSource can request it via constructor injection. Open-object
+        // polymorphism (PolymorphicObjectConverterFactory) and the System.Text.Json JSON-island handler are
+        // retired: type identity is a registry alias only, and JsonNode serializes natively (ADR 0035 D2/D5).
         services.AddSingleton<TypeJsonConverter>();
 
         // The converter registry is a singleton populated once at startup; the serializer

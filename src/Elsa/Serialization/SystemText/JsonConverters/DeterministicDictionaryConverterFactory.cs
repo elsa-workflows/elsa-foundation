@@ -12,11 +12,13 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// <remarks>
 /// Scope is deliberately narrow and precise: the exact generic <see cref="Dictionary{TKey,TValue}"/>,
 /// <see cref="IDictionary{TKey,TValue}"/> and <see cref="IReadOnlyDictionary{TKey,TValue}"/> shapes with a
-/// <see cref="string"/> key and a non-<see cref="object"/> value. Object-valued dictionaries stay with
-/// <see cref="PolymorphicObjectConverterFactory"/> / <see cref="PolymorphicDictionaryConverter"/> (which
-/// sort on their own path), so the two factories never contend for the same type. Non-string keys and
-/// bespoke dictionary implementations fall through to the built-in converter — none appear in serialized
-/// workflow state, and claiming them would add key-conversion surface without a canonical-scope payoff.
+/// <see cref="string"/> key — <em>including</em> an <see cref="object"/> value. Object-valued string-keyed
+/// dictionaries used to be sorted by the retired open-object polymorphic converter; now that it is gone
+/// (ADR 0035 D2), this factory owns them too so the determinism guarantee (ADR 0034's content hash) still
+/// holds. An <see cref="object"/> value is written by its runtime type through the full options (no
+/// <c>_type</c> discriminator) and read back as a <see cref="JsonElement"/>. Non-string keys and bespoke
+/// dictionary implementations fall through to the built-in converter — none appear in serialized workflow
+/// state, and claiming them would add key-conversion surface without a canonical-scope payoff.
 /// </remarks>
 /// <remarks>
 /// Because this claims the dictionary shape by <em>type</em> (not by member), a few System.Text.Json member
@@ -68,7 +70,7 @@ public sealed class DeterministicDictionaryConverterFactory : JsonConverterFacto
             return false;
 
         var arguments = type.GetGenericArguments();
-        if (arguments[0] != typeof(string) || arguments[1] == typeof(object))
+        if (arguments[0] != typeof(string))
             return false;
 
         valueType = arguments[1];
