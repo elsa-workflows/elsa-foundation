@@ -1,3 +1,17 @@
 .dashboard-sample-card {
-  border-color: #a7c5ff;
+  /* Module-private alias (see docs/design-tokens.md): soft accent-tinted sample border,
+     mapped onto the accent wash token so it re-tints per theme; hex is the fallback anchor. */
+  --dashboard-sample-border: var(--studio-accent-soft, #a7c5ff);
+  border-color: var(--dashboard-sample-border);
+}
+
+.dashboard-sample-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.dashboard-sample-list {
+  margin-top: 4px;
 }

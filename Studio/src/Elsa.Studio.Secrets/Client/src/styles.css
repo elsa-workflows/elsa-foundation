@@ -1,11 +1,53 @@
+/*
+ * Private alias layer.
+ *
+ * This module bundles independently (module.css), so it maps a small `--secrets-*`
+ * vocabulary onto the host's semantic `--studio-*` contract, with layer-1 primitives /
+ * compatibility aliases as fallbacks in case the module ever loads without the full
+ * token layer. Everything below styles against `--secrets-*` only — no hardcoded colours,
+ * no per-theme rules — so light/dark modes and material themes are inherited through the
+ * tokens these aliases resolve to.
+ */
+.secrets-shell,
+.secrets-modal,
+.secret-picker-editor {
+  --secrets-bg: var(--studio-bg, var(--background, #f8fafc));
+  --secrets-surface: var(--studio-surface, var(--surface, #fff));
+  --secrets-surface-muted: var(--studio-surface-muted, var(--muted, #f1f5f9));
+  --secrets-surface-raised: var(--studio-surface-raised, var(--muted, #e2e8f0));
+  --secrets-text: var(--studio-text, var(--text, #111827));
+  --secrets-text-muted: var(--studio-text-muted, var(--muted, #64748b));
+  --secrets-border: var(--studio-border, #cbd5e1);
+  --secrets-accent: var(--studio-accent, var(--accent, #0f172a));
+  --secrets-accent-text: var(--studio-accent-text, #fff);
+  --secrets-accent-soft: var(--studio-accent-soft, color-mix(in srgb, var(--secrets-accent) 12%, transparent));
+  --secrets-focus: var(--studio-focus, color-mix(in srgb, var(--secrets-accent) 24%, transparent));
+
+  --secrets-success-fg: var(--studio-success-fg, #065f46);
+  --secrets-warning-fg: var(--studio-warning-fg, #92400e);
+  --secrets-danger-fg: var(--studio-danger-fg, #991b1b);
+  --secrets-success: var(--studio-success, #10b981);
+  --secrets-warning: var(--studio-warning, #f59e0b);
+  --secrets-danger: var(--studio-danger, #ef4444);
+
+  --secrets-radius: var(--studio-radius, 6px);
+  --secrets-radius-lg: var(--studio-radius-lg, 8px);
+  --secrets-shadow: var(--studio-shadow-sm, 0 20px 50px rgba(15, 23, 42, .22));
+  /* Modal scrim stays a dark wash in both light and dark modes. */
+  --secrets-scrim: rgba(15, 23, 42, .36);
+
+  --secrets-body-size: var(--studio-body-size, 13px);
+  --secrets-label-size: var(--studio-label-size, 12px);
+}
+
 .secrets-shell {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-height: 100%;
   padding: 18px;
-  color: #111827;
-  background: #f8fafc;
+  color: var(--secrets-text);
+  background: var(--secrets-bg);
 }
 
 .secrets-header,
@@ -31,8 +73,8 @@
 .secrets-detail header p,
 .secrets-field-hint {
   margin: 2px 0 0;
-  color: #64748b;
-  font-size: 12px;
+  color: var(--secrets-text-muted);
+  font-size: var(--secrets-label-size);
 }
 
 .secrets-toolbar {
@@ -45,15 +87,17 @@
   gap: 8px;
   flex: 1 1 240px;
   min-width: 220px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--secrets-border);
+  border-radius: var(--secrets-radius);
+  background: var(--secrets-surface);
   padding: 0 10px;
 }
 
 .secrets-search input {
   border: 0;
   outline: 0;
+  background: transparent;
+  color: inherit;
 }
 
 .secrets-filter {
@@ -61,8 +105,8 @@
   flex-direction: column;
   gap: 3px;
   min-width: 132px;
-  color: #475569;
-  font-size: 12px;
+  color: var(--secrets-text-muted);
+  font-size: var(--secrets-label-size);
 }
 
 .secrets-toolbar input,
@@ -74,13 +118,26 @@
 .secrets-edit-form textarea,
 .secret-picker-editor select {
   width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--secrets-border);
+  border-radius: var(--secrets-radius);
+  background: var(--secrets-surface);
   min-height: 34px;
   padding: 6px 8px;
-  color: #111827;
+  color: var(--secrets-text);
   font: inherit;
+}
+
+.secrets-toolbar input:focus-visible,
+.secrets-toolbar select:focus-visible,
+.secrets-modal input:focus-visible,
+.secrets-modal select:focus-visible,
+.secrets-modal textarea:focus-visible,
+.secrets-edit-form input:focus-visible,
+.secrets-edit-form textarea:focus-visible,
+.secret-picker-editor select:focus-visible,
+.secrets-search:focus-within {
+  outline: 2px solid var(--secrets-focus);
+  outline-offset: 1px;
 }
 
 .secrets-modal textarea,
@@ -98,9 +155,9 @@
 .secrets-table-shell,
 .secrets-detail {
   min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--secrets-border);
+  border-radius: var(--secrets-radius-lg);
+  background: var(--secrets-surface);
 }
 
 .secrets-table-shell {
@@ -111,12 +168,12 @@
   width: 100%;
   min-width: 940px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--secrets-body-size);
 }
 
 .secrets-table th,
 .secrets-table td {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--secrets-border);
   padding: 9px 10px;
   text-align: left;
   vertical-align: middle;
@@ -127,19 +184,23 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--secrets-surface-muted);
+  color: var(--secrets-text-muted);
   font-weight: 600;
 }
 
+.secrets-table tbody tr:hover td {
+  background: var(--secrets-accent-soft);
+}
+
 .secrets-table tr.active td {
-  background: #f1f5f9;
+  background: var(--secrets-accent-soft);
 }
 
 .secrets-row-link {
   border: 0;
   background: transparent;
-  color: #0f172a;
+  color: var(--secrets-text);
   font-weight: 600;
   padding: 0;
   text-align: left;
@@ -161,12 +222,12 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--secrets-border);
+  border-radius: var(--secrets-radius);
+  background: var(--secrets-surface);
   min-height: 34px;
   padding: 0 10px;
-  color: #111827;
+  color: var(--secrets-text);
   font: inherit;
 }
 
@@ -177,14 +238,14 @@
 }
 
 .secrets-primary {
-  background: #0f172a;
-  border-color: #0f172a;
-  color: #fff;
+  background: var(--secrets-accent);
+  border-color: var(--secrets-accent);
+  color: var(--secrets-accent-text);
 }
 
 .secrets-row-actions .danger,
 .secrets-detail-actions .danger {
-  color: #991b1b;
+  color: var(--secrets-danger-fg);
 }
 
 .secrets-row-actions button:disabled,
@@ -223,8 +284,8 @@
 }
 
 .secrets-metadata-grid dt {
-  color: #64748b;
-  font-size: 12px;
+  color: var(--secrets-text-muted);
+  font-size: var(--secrets-label-size);
 }
 
 .secrets-metadata-grid dd {
@@ -244,35 +305,35 @@
   align-items: center;
   border-radius: 999px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: var(--secrets-label-size);
   line-height: 18px;
 }
 
 .secrets-tags span {
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--secrets-surface-muted);
+  color: var(--secrets-text-muted);
 }
 
 .secrets-badge {
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--secrets-surface-raised);
+  color: var(--secrets-text-muted);
 }
 
 .secrets-badge.active {
-  background: #dcfce7;
-  color: #166534;
+  background: color-mix(in srgb, var(--secrets-success) 16%, transparent);
+  color: var(--secrets-success-fg);
 }
 
 .secrets-badge.expired,
 .secrets-badge.retired {
-  background: #fef3c7;
-  color: #92400e;
+  background: color-mix(in srgb, var(--secrets-warning) 18%, transparent);
+  color: var(--secrets-warning-fg);
 }
 
 .secrets-badge.revoked,
 .secrets-badge.deleted {
-  background: #fee2e2;
-  color: #991b1b;
+  background: color-mix(in srgb, var(--secrets-danger) 16%, transparent);
+  color: var(--secrets-danger-fg);
 }
 
 .secrets-edit-form,
@@ -297,31 +358,31 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border-radius: 6px;
+  border-radius: var(--secrets-radius);
   padding: 10px;
 }
 
 .secrets-redaction,
 .secrets-status {
-  background: #ecfdf5;
-  color: #065f46;
+  background: color-mix(in srgb, var(--secrets-success) 14%, transparent);
+  color: var(--secrets-success-fg);
 }
 
 .secrets-alert,
 .secrets-field-error {
-  background: #fef2f2;
-  color: #991b1b;
+  background: color-mix(in srgb, var(--secrets-danger) 12%, transparent);
+  color: var(--secrets-danger-fg);
 }
 
 .secrets-field-error {
-  border-radius: 6px;
+  border-radius: var(--secrets-radius);
   margin: 0;
   padding: 7px 8px;
-  font-size: 12px;
+  font-size: var(--secrets-label-size);
 }
 
 .secrets-empty {
-  color: #64748b;
+  color: var(--secrets-text-muted);
   padding: 20px;
   text-align: center;
 }
@@ -337,7 +398,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(15, 23, 42, .36);
+  background: var(--secrets-scrim);
   z-index: 20;
 }
 
@@ -348,10 +409,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-radius: 8px;
-  background: #fff;
+  border-radius: var(--secrets-radius-lg);
+  background: var(--secrets-surface);
   padding: 18px;
-  box-shadow: 0 20px 50px rgba(15, 23, 42, .22);
+  box-shadow: var(--secrets-shadow);
 }
 
 .secrets-modal h3 {

@@ -4111,11 +4111,9 @@ html[data-theme-material] .brand-mark img {
   filter: drop-shadow(0 1px 6px color-mix(in srgb, var(--studio-accent) 28%, transparent));
 }
 
-html[data-theme-material] .sidebar-search,
 html[data-theme-material] .host-health-strip,
 html[data-theme-material] .admin-card,
 html[data-theme-material] .studio-card,
-html[data-theme-material] .diagnostic-row,
 html[data-theme-material] .empty-state,
 html[data-theme-material] .error-state,
 html[data-theme-material] .theme-dropdown {
@@ -4123,6 +4121,22 @@ html[data-theme-material] .theme-dropdown {
   background: var(--studio-material-panel-bg-strong);
   background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
+}
+
+/* Search/filter inputs read as recessed wells, not raised panels. */
+html[data-theme-material] .sidebar-search {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-well-bg);
+  background-size: var(--studio-material-well-bg-size);
+  box-shadow: var(--studio-material-well-shadow);
+}
+
+/* Diagnostics are a dense list — flat row tier (grain, no per-row raised slab). */
+html[data-theme-material] .diagnostic-row {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-row-bg);
+  background-size: var(--studio-material-row-bg-size);
+  box-shadow: var(--studio-material-inset-low);
 }
 
 html[data-theme-material] .sidebar-search input,
@@ -4289,4 +4303,289 @@ html[data-theme="brass-instrument"] .admin-card,
 html[data-theme="brass-instrument"] .theme-dropdown {
   box-shadow: var(--studio-material-shadow),
     inset 0 0 0 1px color-mix(in srgb, #f1d992 12%, transparent);
+}
+
+/* ==========================================================================
+   Shared UI kit — Package 5 primitives.
+
+   Button variants/sizes, dense list rows, recessed search well, outlined
+   status pill, and stat/KPI tiles. All styling is token-driven; material
+   treatments are gated on [data-theme-material] so flat themes are untouched,
+   and every material surface reuses an existing per-theme recipe (no new
+   hardcoded per-theme values).
+   ========================================================================== */
+
+/* Button variants (component API: data-variant / data-size on .studio-button).
+   Kept alongside the legacy .studio-button-primary class rules above. */
+.studio-button[data-variant="primary"] {
+  background: var(--studio-accent);
+  border-color: var(--studio-accent);
+  color: var(--studio-accent-text);
+}
+
+.studio-button[data-variant="primary"]:hover:not(:disabled) {
+  filter: brightness(1.08);
+  color: var(--studio-accent-text);
+}
+
+.studio-button[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--studio-text-muted);
+}
+
+.studio-button[data-variant="ghost"]:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-button[data-size="sm"] {
+  min-height: 26px;
+  padding: 0 9px;
+  font-size: var(--studio-label-size);
+}
+
+/* Primary button adopts the per-theme raised "send" recipe under material themes. */
+html[data-theme-material] .studio-button[data-variant="primary"] {
+  background: var(--studio-material-send-bg, var(--studio-accent));
+  color: var(--studio-material-send-text, var(--studio-accent-text));
+  border-color: color-mix(in srgb, var(--studio-accent) 60%, var(--studio-material-edge));
+  box-shadow: var(--studio-material-inset-low);
+}
+
+/* Dense list: one container slab, flat hairline rows (the corduroy fix). */
+.studio-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  overflow: hidden;
+}
+
+.studio-list-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--studio-border);
+  background: transparent;
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  min-height: 46px;
+  padding: 7px 11px;
+  text-align: left;
+}
+
+.studio-list-row:last-child {
+  border-bottom: 0;
+}
+
+.studio-list-row[tabindex]:hover {
+  background: var(--studio-accent-soft);
+  cursor: pointer;
+}
+
+.studio-list-row.selected {
+  background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
+  box-shadow: inset 3px 0 0 var(--studio-accent);
+}
+
+.studio-list-row:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+.studio-list-row-leading,
+.studio-list-row-trailing {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.studio-list-row-trailing {
+  margin-left: auto;
+}
+
+.studio-list-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.studio-list-row-title {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-list-row-subtitle {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Recessed search well. */
+.studio-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  padding: 0 10px;
+  color: var(--studio-text-muted);
+}
+
+.studio-search:focus-within {
+  border-color: var(--studio-accent);
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+.studio-search-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
+.studio-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 0;
+}
+
+.studio-search-input:focus {
+  outline: none;
+}
+
+.studio-search-input::placeholder {
+  color: var(--studio-text-muted);
+}
+
+/* Under material themes the well reads as sunken into the slab (recessed well tier). */
+html[data-theme-material] .studio-search {
+  background: var(--studio-material-well-bg);
+  background-size: var(--studio-material-well-bg-size);
+  border-color: var(--studio-material-edge);
+  box-shadow: var(--studio-material-well-shadow);
+}
+
+/* Outlined status pill — low-emphasis counterpart to the filled StatusChip. */
+.studio-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+
+.studio-status-pill[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--studio-success) 50%, var(--studio-border));
+  color: var(--studio-success-fg);
+}
+
+.studio-status-pill[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 55%, var(--studio-border));
+  color: var(--studio-warning-fg);
+}
+
+.studio-status-pill[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  color: var(--studio-danger-fg);
+}
+
+.studio-status-pill[data-tone="accent"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, var(--studio-border));
+  color: var(--studio-accent);
+}
+
+/* Stat / KPI tiles. Container uses the card surface so material themes slab it. */
+.studio-stat-tile {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label label"
+    "value trend"
+    "delta trend";
+  align-items: end;
+  gap: 2px 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 12px 14px;
+}
+
+.studio-stat-tile-label {
+  grid-area: label;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.studio-stat-tile-value {
+  grid-area: value;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--studio-text);
+}
+
+.studio-stat-tile-delta {
+  grid-area: delta;
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+  margin-top: 3px;
+}
+
+.studio-stat-tile-delta[data-tone="success"] {
+  color: var(--studio-success-fg);
+}
+
+.studio-stat-tile-delta[data-tone="danger"] {
+  color: var(--studio-danger-fg);
+}
+
+.studio-stat-tile-delta[data-tone="neutral"] {
+  color: var(--studio-text-muted);
+}
+
+.studio-stat-tile-trend {
+  grid-area: trend;
+  align-self: center;
+}
+
+.studio-sparkline {
+  display: block;
+  width: 96px;
+  height: 28px;
+}
+
+html[data-theme-material] .studio-stat-tile {
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  border-color: var(--studio-material-edge);
+  box-shadow: var(--studio-material-shadow);
 }

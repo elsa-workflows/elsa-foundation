@@ -289,13 +289,16 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
 function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
+      // Capture the narrowed values into locals so the `string` narrowing survives into the
+      // nested flatMap callback (TS drops property-access narrowing across function boundaries).
+      const childProperty = descriptor.childProperty;
       const collection = structure.payload[descriptor.collectionProperty];
       if (!Array.isArray(collection)) return [];
 
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
         const labelValue = descriptor.labelProperty ? readOptionalString(item[descriptor.labelProperty]) : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[descriptor.childProperty], facet.payload.mode, index, labelValue)];
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, labelValue)];
       });
     }
 

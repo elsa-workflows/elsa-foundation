@@ -7,6 +7,14 @@
      Inputs blend the two into a subtly recessed "well" that stays distinct from the panel in both themes. */
   --wf-surface: var(--card, #ffffff);
   --wf-bg: var(--background, #ffffff);
+  /* Dense-row + recessed-well tiers. On flat themes rows sit flush on the panel and wells
+     are the recessed input tone; material themes remap these to grain/well recipes so dense
+     lists render as one container slab + flat hairline rows (not a raised slab per row). */
+  --wf-row: var(--wf-panel);
+  --wf-row-bg-size: auto;
+  --wf-well: var(--muted, #f8fafc);
+  --wf-well-bg-size: auto;
+  --wf-well-shadow: none;
   --wf-border: color-mix(in srgb, var(--border, #d9e2ec) 88%, transparent);
   --wf-border-strong: color-mix(in srgb, var(--border, #d9e2ec) 70%, var(--foreground, #0f172a));
   --wf-text: var(--foreground, #0f172a);
@@ -42,6 +50,14 @@
   --wf-shadow-menu: var(--shadow-lg, 0 12px 24px rgba(15, 23, 42, 0.12));
   --wf-shadow-overlay: var(--shadow-xl, 0 24px 60px rgba(15, 23, 42, 0.20));
 
+  /* Focus/selection ambient drop shadow tint (slate scrim) and the modal backdrop scrim. */
+  --wf-drop-tint: rgba(15, 23, 42, 0.14);
+  --wf-drop-tint-strong: rgba(15, 23, 42, 0.16);
+  --wf-modal-scrim: rgba(2, 6, 23, 0.58);
+
+  /* Runtime-reason text — amber warning tone. */
+  --wf-runtime-reason-text: #92400e;
+
   /* Bounded type scale (mirrors the host typography tokens). */
   --wf-text-2xs: 10px;
   --wf-text-xs: 11px;
@@ -56,11 +72,12 @@
   --wf-label-transform: uppercase;
   --wf-label-tracking: 0.04em;
 
-  /* Activity icon accents — themeable instead of hardcoded hex. */
-  --wf-activity-terminal: #10b981;
-  --wf-activity-composite: #0284c7;
-  --wf-activity-runtime: #d97706;
-  --wf-activity-trigger: #db2777;
+  /* Activity icon accents — themeable instead of hardcoded hex. The hex values are defaults;
+     a host may override the layer-2 --studio-wf-activity-* aliases to re-tint per brand. */
+  --wf-activity-terminal: var(--studio-wf-activity-terminal, #10b981);
+  --wf-activity-composite: var(--studio-wf-activity-composite, #0284c7);
+  --wf-activity-runtime: var(--studio-wf-activity-runtime, #d97706);
+  --wf-activity-trigger: var(--studio-wf-activity-trigger, #db2777);
 
   /* Disabled foreground — explicit colour rather than opacity-only (a11y contrast). */
   --wf-disabled-text: var(--wf-muted-text);
@@ -471,7 +488,8 @@
 }
 
 .wf-grid-row {
-  background: var(--wf-panel);
+  background: var(--wf-row);
+  background-size: var(--wf-row-bg-size);
   color: var(--wf-text);
   cursor: pointer;
   font: inherit;
@@ -873,7 +891,7 @@
   border-color: color-mix(in srgb, var(--wf-danger) 56%, var(--wf-border));
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--wf-danger) 18%, transparent),
-    0 14px 30px rgba(15, 23, 42, 0.14);
+    0 14px 30px var(--wf-drop-tint);
 }
 
 .wf-node-runtime-strip {
@@ -1167,7 +1185,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(2, 6, 23, .58);
+  background: var(--wf-modal-scrim);
   padding: 20px;
 }
 
@@ -1757,7 +1775,8 @@
 .wf-slot-list button {
   display: block;
   border-color: var(--wf-border);
-  background: var(--wf-panel);
+  background: var(--wf-row);
+  background-size: var(--wf-row-bg-size);
   padding: 8px 9px;
 }
 
@@ -2141,7 +2160,7 @@
   border-color: var(--wf-accent);
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--wf-accent) 22%, transparent),
-    0 14px 30px rgba(15, 23, 42, 0.16),
+    0 14px 30px var(--wf-drop-tint-strong),
     inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
 }
 
@@ -2637,7 +2656,7 @@
 .wf-runtime-reason {
   display: flex;
   gap: 6px;
-  color: #92400e;
+  color: var(--wf-runtime-reason-text);
 }
 
 .wf-runtime-meta {
@@ -3069,7 +3088,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(2, 6, 23, 0.58);
+  background: var(--wf-modal-scrim);
   padding: 28px;
 }
 
@@ -3330,7 +3349,8 @@
   height: 28px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius-sm);
-  background: var(--wf-panel);
+  background: var(--wf-row);
+  background-size: var(--wf-row-bg-size);
   color: var(--wf-muted-text);
   cursor: pointer;
 }
@@ -3845,6 +3865,9 @@ html[data-theme="black-glass"] .wf-editor {
   --wf-canvas: #050a11;
   --wf-surface: var(--studio-glass-bg);
   --wf-bg: var(--studio-bg);
+  --wf-row: var(--studio-glass-row-bg);
+  --wf-well: var(--studio-glass-well-bg);
+  --wf-well-shadow: var(--studio-glass-well-shadow);
   --wf-border: var(--studio-glass-edge);
   --wf-border-strong: var(--studio-glass-edge-strong);
   --wf-text: var(--studio-text);
@@ -3864,6 +3887,20 @@ html[data-theme="black-glass"] .wf-editor {
   --xy-controls-box-shadow: var(--studio-glass-glow);
   --xy-minimap-background-color: var(--studio-glass-bg-strong);
   --xy-minimap-mask-background-color: color-mix(in srgb, var(--wf-canvas) 46%, transparent);
+
+  /* Glass-idiom canvas endpoints (dark default; light override below). These are the deep
+     base fills the accent grid/glow layer over, plus the neon handle/edge strokes. */
+  --wf-glass-canvas-base: linear-gradient(135deg, #06101a, #03070c 62%, #081521);
+  --wf-glass-handle-border: #04101a;
+  --wf-glass-handle-bg: #75dcff;
+  --wf-glass-edge-stroke: #56cfff;
+  --wf-glass-edge-stroke-active: #a4eeff;
+}
+
+/* Light-mode glass canvas base — pale endpoints instead of the deep dark fill. */
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-page,
+html[data-theme="black-glass"][data-theme-mode="light"] .wf-editor {
+  --wf-glass-canvas-base: linear-gradient(135deg, #e8f4f8, #f7fcff 58%, #d7e9f0);
 }
 
 html[data-theme="black-glass"] .wf-editor {
@@ -3897,7 +3934,7 @@ html[data-theme="black-glass"] .wf-code-view-editor .studio-code-editor-input {
     radial-gradient(circle at 64% 22%, color-mix(in srgb, var(--studio-accent) 13%, transparent), transparent 24rem),
     linear-gradient(color-mix(in srgb, var(--studio-accent) 8%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 7%, transparent) 1px, transparent 1px),
-    linear-gradient(135deg, #06101a, #03070c 62%, #081521);
+    var(--wf-glass-canvas-base);
   background-size: auto, 32px 32px, 32px 32px, auto;
 }
 
@@ -3910,7 +3947,7 @@ html[data-theme="black-glass"][data-theme-mode="light"] .wf-code-view-editor .st
     linear-gradient(color-mix(in srgb, var(--studio-accent) 8%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--studio-accent) 7%, transparent) 1px, transparent 1px),
     var(--studio-glass-texture),
-    linear-gradient(135deg, #e8f4f8, #f7fcff 58%, #d7e9f0);
+    var(--wf-glass-canvas-base);
   background-size: auto, 32px 32px, 32px 32px, var(--studio-glass-texture-size), auto;
 }
 
@@ -3945,31 +3982,35 @@ html[data-theme="black-glass"] .wf-status {
 }
 
 html[data-theme="black-glass"] .wf-node .react-flow__handle {
-  border-color: #04101a;
-  background: #75dcff;
+  border-color: var(--wf-glass-handle-border);
+  background: var(--wf-glass-handle-bg);
   box-shadow: 0 0 14px color-mix(in srgb, var(--wf-accent) 55%, transparent);
 }
 
 html[data-theme="black-glass"] .react-flow__edge-path {
-  stroke: #56cfff;
+  stroke: var(--wf-glass-edge-stroke);
   filter: drop-shadow(0 0 6px color-mix(in srgb, var(--wf-accent) 56%, transparent));
 }
 
 html[data-theme="black-glass"] .react-flow__edge.selected .react-flow__edge-path,
 html[data-theme="black-glass"] .react-flow__edge:focus .react-flow__edge-path {
-  stroke: #a4eeff;
+  stroke: var(--wf-glass-edge-stroke-active);
 }
 
 html[data-theme="black-glass"] .react-flow__controls,
 html[data-theme="black-glass"] .react-flow__minimap,
 html[data-theme="black-glass"] .wf-canvas-tools,
-html[data-theme="black-glass"] .wf-grid,
-html[data-theme="black-glass"] .wf-grid-row,
-html[data-theme="black-glass"] .wf-grid-head {
+html[data-theme="black-glass"] .wf-grid {
   border-color: var(--studio-glass-edge);
   background: var(--studio-glass-bg);
   box-shadow: var(--studio-glass-glow);
   backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/* One glass container slab; header banded, data rows flat (--wf-row) with hairline dividers. */
+html[data-theme="black-glass"] .wf-grid-head {
+  border-color: var(--studio-glass-edge);
+  background: var(--studio-glass-bg-soft);
 }
 
 html[data-theme-material] .wf-page,
@@ -3979,6 +4020,12 @@ html[data-theme-material] .wf-editor {
   --wf-canvas: var(--studio-bg);
   --wf-surface: var(--studio-material-panel-bg);
   --wf-bg: var(--studio-bg);
+  /* Dense rows use the flat row tier (grain, no bevel/shadow); inputs use the recessed well. */
+  --wf-row: var(--studio-material-row-bg);
+  --wf-row-bg-size: var(--studio-material-row-bg-size);
+  --wf-well: var(--studio-material-well-bg);
+  --wf-well-bg-size: var(--studio-material-well-bg-size);
+  --wf-well-shadow: var(--studio-material-well-shadow);
   --wf-border: var(--studio-material-edge);
   --wf-border-strong: var(--studio-material-edge-strong);
   --wf-text: var(--studio-text);
@@ -4071,13 +4118,51 @@ html[data-theme-material] .react-flow__edge:focus .react-flow__edge-path {
 html[data-theme-material] .react-flow__controls,
 html[data-theme-material] .react-flow__minimap,
 html[data-theme-material] .wf-canvas-tools,
-html[data-theme-material] .wf-grid,
-html[data-theme-material] .wf-grid-row,
-html[data-theme-material] .wf-grid-head {
+html[data-theme-material] .wf-grid {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-shadow);
+}
+
+/* Grid header is the one banded row atop the container slab; the data rows below stay flat
+   (--wf-row) with hairline separators so the list reads as one slab, not corduroy ridges. */
+html[data-theme-material] .wf-grid-head {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-soft);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+/* Checkboxes inside dense rows sit on grain — give them a solid surface + edge so they
+   stay legible instead of drowning in the texture. */
+html[data-theme-material] .wf-row-select input,
+html[data-theme-material] .availability-activity-option input[type="checkbox"] {
+  border-radius: 3px;
+  background-color: var(--studio-surface);
+  box-shadow: 0 0 0 1px var(--studio-material-edge);
+}
+
+/* Search/filter fields read as recessed wells, not raised soft panels. These consume the
+   --wf-well* aliases (base flat → glass → material, mirroring how --wf-row is wired) so both
+   the material and black-glass search wells resolve through the same recipe. */
+html[data-theme-material] .wf-search,
+html[data-theme-material] .wf-palette-search,
+html[data-theme-material] .availability-search .wf-search {
+  border-color: var(--studio-material-edge);
+  background: var(--wf-well);
+  background-size: var(--wf-well-bg-size);
+  box-shadow: var(--wf-well-shadow);
+}
+
+/* Black-glass mirrors the material well so glass search inputs read as recessed wells too. */
+html[data-theme="black-glass"] .wf-search,
+html[data-theme="black-glass"] .wf-palette-search,
+html[data-theme="black-glass"] .availability-search .wf-search {
+  border-color: var(--wf-border);
+  background: var(--wf-well);
+  background-size: var(--wf-well-bg-size);
+  box-shadow: var(--wf-well-shadow);
 }
 
 html[data-theme="paper"] .react-flow__edge-path,

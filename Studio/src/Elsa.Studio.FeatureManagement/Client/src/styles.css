@@ -1,4 +1,19 @@
 .feature-management-page {
+  /*
+   * Module-private alias block (see docs/design-tokens.md). The badge-tone palette is
+   * promoted here to overridable module-private aliases so a theme can retint the badges:
+   * each derives from a studio/chart token where one maps sensibly, with the original hex
+   * kept as the fallback anchor. The status tones (enabled/experimental/danger)
+   * reference the layer-2 semantic tokens directly; the categorical tones borrow the
+   * host chart ramp.
+   */
+  --fm-tone-info: var(--chart-1, #2563eb);
+  --fm-tone-violet: var(--chart-2, #7c3aed);
+  --fm-tone-enabled: var(--studio-success, #16a34a);
+  --fm-tone-advanced: var(--chart-3, #0891b2);
+  --fm-tone-experimental: var(--studio-warning, #d97706);
+  --fm-tone-danger: var(--studio-danger, var(--danger, #dc2626));
+  --fm-overlay-strong: rgb(0 0 0 / 38%);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -415,39 +430,39 @@
 }
 
 .feature-management-badge.tone-info {
-  color: #2563eb;
-  border-color: color-mix(in srgb, #2563eb 45%, var(--border));
-  background: color-mix(in srgb, #2563eb 10%, transparent);
+  color: var(--fm-tone-info);
+  border-color: color-mix(in srgb, var(--fm-tone-info) 45%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-info) 10%, transparent);
 }
 
 .feature-management-badge.tone-violet {
-  color: #7c3aed;
-  border-color: color-mix(in srgb, #7c3aed 45%, var(--border));
-  background: color-mix(in srgb, #7c3aed 10%, transparent);
+  color: var(--fm-tone-violet);
+  border-color: color-mix(in srgb, var(--fm-tone-violet) 45%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-violet) 10%, transparent);
 }
 
 .feature-management-badge.tone-enabled {
-  color: #16a34a;
-  border-color: color-mix(in srgb, #16a34a 45%, var(--border));
-  background: color-mix(in srgb, #16a34a 12%, transparent);
+  color: var(--fm-tone-enabled);
+  border-color: color-mix(in srgb, var(--fm-tone-enabled) 45%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-enabled) 12%, transparent);
 }
 
 .feature-management-badge.tone-advanced {
-  color: #0891b2;
-  border-color: color-mix(in srgb, #0891b2 45%, var(--border));
-  background: color-mix(in srgb, #0891b2 10%, transparent);
+  color: var(--fm-tone-advanced);
+  border-color: color-mix(in srgb, var(--fm-tone-advanced) 45%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-advanced) 10%, transparent);
 }
 
 .feature-management-badge.tone-experimental {
-  color: #d97706;
-  border-color: color-mix(in srgb, #d97706 50%, var(--border));
-  background: color-mix(in srgb, #d97706 12%, transparent);
+  color: var(--fm-tone-experimental);
+  border-color: color-mix(in srgb, var(--fm-tone-experimental) 50%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-experimental) 12%, transparent);
 }
 
 .feature-management-badge.tone-danger {
-  color: var(--danger, #dc2626);
-  border-color: color-mix(in srgb, var(--danger, #dc2626) 50%, var(--border));
-  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  color: var(--fm-tone-danger);
+  border-color: color-mix(in srgb, var(--fm-tone-danger) 50%, var(--border));
+  background: color-mix(in srgb, var(--fm-tone-danger) 10%, transparent);
 }
 
 .feature-management-chips {
@@ -837,7 +852,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--studio-surface, var(--card));
-  box-shadow: 0 24px 70px rgb(0 0 0 / 38%);
+  box-shadow: 0 24px 70px var(--fm-overlay-strong);
   overflow: hidden;
 }
 
