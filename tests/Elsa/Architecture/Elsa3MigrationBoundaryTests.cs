@@ -214,8 +214,8 @@ public sealed class Elsa3MigrationBoundaryTests
 
     private sealed class StubWorkflowDefinitionFactory : IWorkflowDefinitionFactory
     {
-        public IWorkflowDefinition Create(string name, string? description = null, string? id = null) =>
-            new WorkflowDefinitionModel(id ?? "definition-1", name, description);
+        public IWorkflowDefinition Create(string name, string? description = null, string? id = null, bool deleted = false) =>
+            new WorkflowDefinitionModel(id ?? "definition-1", name, description, DeletedAt: deleted ? DateTimeOffset.UtcNow : null);
     }
 
     private sealed class ThrowingWorkflowDefinitionVersionFactory : IWorkflowDefinitionVersionFactory

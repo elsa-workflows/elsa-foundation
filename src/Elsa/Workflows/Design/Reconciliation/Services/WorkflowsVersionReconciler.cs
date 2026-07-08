@@ -2,6 +2,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Persistence.Core;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Versioning;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -16,10 +17,11 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// <summary>
 /// Workflow-side reconciler. Each pass publishes <see cref="OnWorkflowVersionsReconciling"/>
 /// to gather candidate versions from source modules, then upserts the catalog. Mirrors the
-/// Activities-side reconciler pattern but without the content-hash check — workflow-version
-/// provenance fields (<c>SourceKind</c> / <c>SourceId</c> / hash) are Unit D's allocation per
-/// FR-016a; until they land, duplicate detection falls back to the configured
-/// <see cref="DuplicateHandling"/> mode.
+/// Activities-side reconciler pattern. Full Model X hash enforcement waits on FR-016a's persisted
+/// provenance/hash fields (Unit D's allocation); until they land, duplicate detection falls back to
+/// the configured <see cref="DuplicateHandling"/> mode, and a same-<c>(id, version)</c>-different-content
+/// case is <em>surfaced</em> by recomputing and comparing the canonical serialization of the incoming
+/// and stored state (logged now; a dedicated hash-mismatch throw arrives with the persisted hash).
 /// </summary>
 public sealed class WorkflowsVersionReconciler(
     ILogger<WorkflowsVersionReconciler> logger,
@@ -29,7 +31,8 @@ public sealed class WorkflowsVersionReconciler(
     IWorkflowDefinitionVersionStore versionStore,
     IAddCommand<WorkflowDefinition> addDefinitionCommand,
     IAddCommand<WorkflowDefinitionVersion> addVersionCommand,
-    ISaveWorkflowDefinitionCommand saveDefinitionCommand
+    ISaveWorkflowDefinitionCommand saveDefinitionCommand,
+    IPayloadSerializer payloadSerializer
 )
     : IWorkflowVersionReconciler
 {
@@ -49,25 +52,24 @@ public sealed class WorkflowsVersionReconciler(
     private async Task ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
     {
         var definitionId = version.DefinitionId;
-
-        var definition = await FindDefinition(definitionId, cancellationToken);
-        if (definition is null)
-        {
-            await addDefinitionCommand.Add(WorkflowDefinition.From(version.Definition), cancellationToken);
-        }
-        else
-        {
-            await UpdateDefinitionMetadata(definition, version.Definition, cancellationToken);
-        }
-
         var candidateSortKey = SemVer.ToSortKey(version.Version);
 
+        // FR-008a: gate every catalog mutation — including the definition-metadata apply — behind the
+        // outdated-version skip. Passing this check guarantees `latest is null || candidate >= latest`,
+        // which IS the "apply metadata only from the newest version" gate (ADR 0034 D5 latest-wins). A
+        // stale/older git entry therefore reaches nothing below and cannot overwrite current metadata.
         var latestVersion = await versionStore.FindLatestVersionAsync(definitionId, cancellationToken);
         if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
         {
             LogSkipOutdated(definitionId, version.Version);
             return;
         }
+
+        var definition = await FindDefinition(definitionId, cancellationToken);
+        if (definition is null)
+            await addDefinitionCommand.Add(WorkflowDefinition.From(version.Definition), cancellationToken);
+        else
+            await UpdateDefinitionMetadata(definition, version.Definition, cancellationToken);
 
         var versionExists = await VersionExists(definitionId, candidateSortKey, cancellationToken);
         if (!versionExists)
@@ -76,29 +78,55 @@ public sealed class WorkflowsVersionReconciler(
             return;
         }
 
+        await SurfaceContentMismatch(definitionId, candidateSortKey, version, cancellationToken);
         HandleDuplicate(definitionId, version.Version);
     }
 
     /// <summary>
-    /// Applies the incoming source model's mutable definition-level metadata (name, description) to an
-    /// already-persisted definition. Idempotent — writes only when a value actually changed — and never
+    /// Applies the incoming source's mutable definition-level metadata (name, description, soft-delete) to
+    /// an already-persisted definition. Idempotent — writes only when a value actually changed — and never
     /// touches any <see cref="WorkflowDefinitionVersion"/>: versions are immutable and
-    /// retention-authoritative, whereas name/description are latest-wins per ADR 0034 (D5). Runs for
-    /// every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git.
-    ///
-    /// This is the seam <c>specs/085</c> extends: it applies whatever metadata the incoming model
-    /// carries, so soft-delete (<c>deleted</c>) propagation can be added by widening the diff here once
-    /// the reconciliation model grows a delete flag — no second refactor of the reconciler required.
+    /// retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per ADR 0034 (D5).
+    /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
+    /// authoritative (newest) version thanks to the caller's outdated-version gate (FR-008a).
     /// </summary>
     private async Task UpdateDefinitionMetadata(WorkflowDefinition persisted, IWorkflowDefinition incoming, CancellationToken cancellationToken)
     {
-        if (persisted.Name == incoming.Name && persisted.Description == incoming.Description)
+        // Reconcile soft-delete as a latest-wins flag: set when the source marks it deleted and it is
+        // currently live; clear (un-delete) when the source reports it live and it is currently deleted.
+        // A version row is never deleted (retention authority) — only this definition-level flag moves.
+        var incomingDeleted = incoming.DeletedAt is not null;
+        var persistedDeleted = persisted.DeletedAt is not null;
+        var deletedChanged = incomingDeleted != persistedDeleted;
+
+        if (persisted.Name == incoming.Name && persisted.Description == incoming.Description && !deletedChanged)
             return;
 
         persisted.Name = incoming.Name;
         persisted.Description = incoming.Description;
+        if (deletedChanged)
+            persisted.DeletedAt = incomingDeleted ? incoming.DeletedAt ?? DateTimeOffset.UtcNow : null;
+
         await saveDefinitionCommand.Execute(persisted, cancellationToken);
         LogMetadataUpdated(persisted.Id);
+    }
+
+    /// <summary>
+    /// Model X safety net (ADR 0034 D7 tripwire, spec 085 FR-006): a same-<c>(id, version)</c> whose
+    /// incoming canonical state differs from the stored one is a broken source. Until FR-016a persists a
+    /// content hash to compare against, this recomputes the canonical serialization of both the incoming
+    /// and stored state and <em>logs</em> a warning on divergence (a throw arrives with the persisted
+    /// hash). Best-effort: a stored version whose state can't be loaded is skipped silently.
+    /// </summary>
+    private async Task SurfaceContentMismatch(string definitionId, string candidateSortKey, IWorkflowDefinitionVersion incoming, CancellationToken cancellationToken)
+    {
+        var stored = (await versionStore.ListByDefinitionAsync(definitionId, cancellationToken))
+            .FirstOrDefault(v => v.SemVerSortKey == candidateSortKey);
+        if (stored?.State is null || incoming.State is null)
+            return;
+
+        if (payloadSerializer.Serialize(incoming.State) != payloadSerializer.Serialize(stored.State))
+            LogContentMismatch(definitionId, incoming.Version);
     }
 
     private void HandleDuplicate(string definitionId, string version)
@@ -133,6 +161,14 @@ public sealed class WorkflowsVersionReconciler(
     {
         if (logger.IsEnabled(LogLevel.Information))
             logger.LogInformation("Updated metadata for workflow definition '{def}'", definitionId);
+    }
+
+    private void LogContentMismatch(string definitionId, string version)
+    {
+        // Warning, not throw: FR-016a has not yet given the version a persisted hash to enforce against.
+        logger.LogWarning(
+            "Workflow definition '{def}' v{v} exists with different content than the incoming source entry — a broken source (same logical identity, different content). Reconciliation left the stored version unchanged.",
+            definitionId, version);
     }
 
     private async Task<bool> VersionExists(string definitionId, string sortKey, CancellationToken cancellationToken)

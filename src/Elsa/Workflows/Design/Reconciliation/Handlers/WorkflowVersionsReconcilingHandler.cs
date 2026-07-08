@@ -26,7 +26,7 @@ public sealed class WorkflowVersionsReconcilingHandler(
 
             foreach (var entry in entries)
             {
-                var definition = definitionFactory.Create(entry.Name, entry.Description, entry.DefinitionId);
+                var definition = definitionFactory.Create(entry.Name, entry.Description, entry.DefinitionId, entry.Deleted);
                 var version = versionFactory.Create(definition, entry.Version, entry.State, entry.SourceCreatedAt);
                 domainEvent.Versions.Add(version);
             }

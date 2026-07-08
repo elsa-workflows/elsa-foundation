@@ -8,7 +8,8 @@ public sealed record WorkflowDefinitionModel(
     string Name,
     string? Description,
     DateTimeOffset CreatedAt = default,
-    DateTimeOffset LastModifiedAt = default
+    DateTimeOffset LastModifiedAt = default,
+    DateTimeOffset? DeletedAt = null
 ) : IWorkflowDefinition
 {
     public IWorkflowDefinition ShallowClone() => this with { };

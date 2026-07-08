@@ -1,5 +1,6 @@
 using CShells.Features;
 using Elsa.Events.Core.Extensions;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Core;
 using Elsa.Workflows.Design.Reconciliation.Options;
@@ -34,6 +35,12 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(StartupTaskOptions));
 
         services.AddScoped<IWorkflowVersionReconciler, WorkflowsVersionReconciler>();
+
+        // Arm the reconcile lifecycle: the startup task IS the trigger for a pass, so it belongs with
+        // the reconciler registration. Registering it here (rather than per source-variant feature)
+        // means enabling ANY concrete reconciliation feature activates the previously-dormant lifecycle
+        // (spec 085 R3 / ADR 0034 Consequence 4).
+        services.AddScoped<IStartupTask, WorkflowsVersionReconcilerStartupTask>();
 
         services.AddEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);
     }

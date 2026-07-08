@@ -7,11 +7,12 @@ namespace Elsa.Workflows.Design.Persistence.Core.Services;
 /// <summary>Default <see cref="IWorkflowDefinitionFactory"/> — generates the id, returns a read-model.</summary>
 public sealed class WorkflowDefinitionFactory(IIdentityGenerator identityGenerator) : IWorkflowDefinitionFactory
 {
-    public IWorkflowDefinition Create(string name, string? description = null, string? id = null) =>
+    public IWorkflowDefinition Create(string name, string? description = null, string? id = null, bool deleted = false) =>
         new WorkflowDefinitionModel(
             Id: string.IsNullOrWhiteSpace(id) ? identityGenerator.Generate() : id,
             Name: name,
-            Description: description);
+            Description: description,
+            DeletedAt: deleted ? DateTimeOffset.UtcNow : null);
 }
 
 /// <summary>Default <see cref="IWorkflowDefinitionVersionFactory"/> — generates the id, returns a read-model.</summary>
