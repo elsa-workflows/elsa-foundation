@@ -82,6 +82,20 @@ public sealed class HasherTests
         Assert.Equal(hasher.Hash(def, verA), hasher.Hash(def, verB));
     }
 
+    [Fact]
+    public void Hash_IsStable_AcrossVersionDifferences()
+    {
+        // Version is row identity, not projected content. The reconciler uses it to find the row;
+        // the hash then answers whether the same row identity points at different content.
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (def, _) = MakeFixture();
+
+        var verA = NewVersion(def, version: "1.0.0+oldbuild");
+        var verB = NewVersion(def, version: "1.0.1+newbuild");
+
+        Assert.Equal(hasher.Hash(def, verA), hasher.Hash(def, verB));
+    }
+
     private static (IActivityDefinition def, IActivityDefinitionVersion ver) MakeFixture(
         string displayName = "Display")
     {
@@ -100,12 +114,13 @@ public sealed class HasherTests
     private static IActivityDefinitionVersion NewVersion(
         IActivityDefinition def,
         string id = "ver-id",
+        string version = "1.0.0",
         string sourceKind = "Json",
         string sourceId = "Acme.Pkg",
         IEnumerable<ActivityDesignFacet>? designFacets = null) =>
         new FakeVersion(
             Id: id,
-            Version: "1.0.0",
+            Version: version,
             DefinitionId: def.Id,
             ActivityTypeKey: def.ActivityTypeKey,
             DescriptorType: typeof(ClrActivityDescriptor).FullName!,
