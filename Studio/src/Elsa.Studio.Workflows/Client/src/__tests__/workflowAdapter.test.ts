@@ -4,6 +4,7 @@ import {
   buildUnsupportedActivityCanvas,
   buildCanvas,
   createActivityNode,
+  findNodeScopePath,
   flowchartStructureKind,
   getActivityDesignerSupport,
   getActivityDisplay,
@@ -11,12 +12,14 @@ import {
   normalizeActivityStructures,
   readStructureDesignFacet,
   replaceSlotActivities,
+  resolveScope,
   sequenceStructureKind,
   spliceWorkflowEdge,
   syncCanvasToScope,
   updateScopeActivities,
   withFlowchartConnections,
-  type CanvasScope
+  type CanvasScope,
+  type ScopeFrame
 } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
 
@@ -325,11 +328,8 @@ describe("workflow adapter", () => {
     const root = sequenceRoot([childSequence]);
     const replacement = [node("nested")];
 
-    const updated = updateScopeActivities(root, [{
-      ownerNodeId: "sequence-child",
-      slotId: `${sequenceStructureKind}:activities`,
-      label: "Sequence / Activities"
-    }], replacement);
+    // enterSlot(childSequence, "<its own primary slot>") — the frame's slotId is a slot of ownerNodeId.
+    const updated = updateScopeActivities(root, [enterSlotFrame("sequence-child", `${sequenceStructureKind}:activities`)], replacement);
 
     const sequence = getChildSlots(updated)[0].activities[0];
     expect(getChildSlots(sequence)[0].activities.map(activity => activity.nodeId)).toEqual(["nested"]);
@@ -431,10 +431,131 @@ describe("workflow adapter", () => {
   });
 });
 
+// A two-slot generic container: a facet declaring `primary` and `secondary` single-cardinality slots.
+// Used to prove non-primary slots are addressable through a scope frame.
+const twoSlotActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "activity-two-slot-v1",
+  activityTypeKey: "Acme.Activities.TwoSlot",
+  displayName: "Two Slot",
+  designFacets: [{
+    kind: "acme.two-slot.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "sequence",
+      supportsScopedVariables: false,
+      slots: [
+        { name: "Primary", property: "primary", displayName: "Primary", cardinality: "single" },
+        { name: "Secondary", property: "secondary", displayName: "Secondary", cardinality: "single" }
+      ],
+      initialPayload: { primary: null, secondary: null }
+    }
+  }]
+};
+
+describe("scope frames (target semantics)", () => {
+  it("resolves a ForEach body slot nested inside a Flowchart root", () => {
+    const forEach = createActivityNode(forEachActivity, "foreach");
+    const root = flowchartRoot([forEach]);
+    const catalog = [flowchartActivity, forEachActivity];
+    const frame = enterSlotFrame("foreach", "elsa.foreach.structure:body");
+
+    const scope = resolveScope(root, [frame], catalog);
+
+    expect(scope?.owner.nodeId).toBe("foreach");
+    expect(scope?.slot).toMatchObject({ id: "elsa.foreach.structure:body", property: "body", cardinality: "single" });
+  });
+
+  it("writes a ForEach body as a single object and round-trips through resolveScope", () => {
+    const forEach = createActivityNode(forEachActivity, "foreach");
+    const root = flowchartRoot([forEach]);
+    const catalog = [flowchartActivity, forEachActivity];
+    const frame = enterSlotFrame("foreach", "elsa.foreach.structure:body");
+
+    const updated = updateScopeActivities(root, [frame], [node("body-child")], catalog);
+
+    const updatedForEach = getChildSlots(updated, catalog)[0].activities[0];
+    // Single-cardinality slots store one object, never an array.
+    expect(updatedForEach.structure?.payload.body).toMatchObject({ nodeId: "body-child" });
+    expect(Array.isArray(updatedForEach.structure?.payload.body)).toBe(false);
+
+    const scope = resolveScope(updated, [frame], catalog);
+    expect(scope?.slot.activities.map(activity => activity.nodeId)).toEqual(["body-child"]);
+  });
+
+  it("still resolves same-kind nesting (Flowchart-in-Flowchart, Sequence-in-Sequence)", () => {
+    const flowchartChild = createActivityNode(flowchartActivity, "flow-child");
+    const flowchartTree = flowchartRoot([flowchartChild]);
+    const flowchartScope = resolveScope(
+      flowchartTree,
+      [enterSlotFrame("flow-child", `${flowchartStructureKind}:activities`)],
+      [flowchartActivity]
+    );
+    expect(flowchartScope?.owner.nodeId).toBe("flow-child");
+    expect(flowchartScope?.slot.id).toBe(`${flowchartStructureKind}:activities`);
+
+    const sequenceChild = createActivityNode(sequenceActivity, "seq-child");
+    const sequenceTree = sequenceRoot([sequenceChild]);
+    const sequenceScope = resolveScope(
+      sequenceTree,
+      [enterSlotFrame("seq-child", `${sequenceStructureKind}:activities`)],
+      [sequenceActivity]
+    );
+    expect(sequenceScope?.owner.nodeId).toBe("seq-child");
+    expect(sequenceScope?.slot.id).toBe(`${sequenceStructureKind}:activities`);
+  });
+
+  it("addresses the second slot of a multi-slot container", () => {
+    const twoSlot = createActivityNode(twoSlotActivity, "two-slot");
+    const root = flowchartRoot([twoSlot]);
+    const catalog = [flowchartActivity, twoSlotActivity];
+    const secondFrame = enterSlotFrame("two-slot", "acme.two-slot.structure:secondary");
+
+    const scope = resolveScope(root, [secondFrame], catalog);
+    expect(scope?.slot).toMatchObject({ id: "acme.two-slot.structure:secondary", property: "secondary" });
+
+    const updated = updateScopeActivities(root, [secondFrame], [node("into-secondary")], catalog);
+    const updatedTwoSlot = getChildSlots(updated, catalog)[0].activities[0];
+    expect(updatedTwoSlot.structure?.payload.secondary).toMatchObject({ nodeId: "into-secondary" });
+    // The primary slot is untouched by writing to the secondary one.
+    expect(updatedTwoSlot.structure?.payload.primary).toBeNull();
+  });
+
+  it("returns null when a frame's owner or named slot no longer resolves", () => {
+    const forEach = createActivityNode(forEachActivity, "foreach");
+    const root = flowchartRoot([forEach]);
+    const catalog = [flowchartActivity, forEachActivity];
+
+    expect(resolveScope(root, [enterSlotFrame("ghost", "elsa.foreach.structure:body")], catalog)).toBeNull();
+    expect(resolveScope(root, [enterSlotFrame("foreach", "elsa.foreach.structure:missing")], catalog)).toBeNull();
+  });
+
+  it("finds a scope path for a node nested inside a ForEach body two levels deep and surfaces it", () => {
+    const deepLeaf = node("deep");
+    const innerSequence = sequenceNode("inner", [deepLeaf]);
+    const forEach = createActivityNode(forEachActivity, "foreach");
+    forEach.structure = { ...forEach.structure!, payload: { body: innerSequence } };
+    const root = flowchartRoot([forEach]);
+    const catalog = [flowchartActivity, forEachActivity];
+
+    const path = findNodeScopePath(root, "deep", activity => activity.nodeId, catalog);
+
+    expect(path).not.toBeNull();
+    // The last frame names the container that directly holds the node and the slot holding it.
+    expect(path?.at(-1)).toMatchObject({ ownerNodeId: "inner", slotId: `${sequenceStructureKind}:activities` });
+    const scope = resolveScope(root, path!, catalog);
+    expect(scope?.slot.activities.map(activity => activity.nodeId)).toContain("deep");
+  });
+});
+
 function sequenceRoot(activities: ActivityNode[]): ActivityNode {
+  return sequenceNode("root", activities, "sequence-root");
+}
+
+function sequenceNode(nodeId: string, activities: ActivityNode[], activityVersionId = sequenceActivity.activityVersionId): ActivityNode {
   return {
-    nodeId: "root",
-    activityVersionId: "sequence-root",
+    nodeId,
+    activityVersionId,
     inputs: [],
     outputs: [],
     structure: {
@@ -443,6 +564,25 @@ function sequenceRoot(activities: ActivityNode[]): ActivityNode {
       payload: { activities }
     }
   };
+}
+
+function flowchartRoot(activities: ActivityNode[]): ActivityNode {
+  return {
+    nodeId: "root",
+    activityVersionId: flowchartActivity.activityVersionId,
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: flowchartStructureKind,
+      schemaVersion: "1.0.0",
+      payload: { activities, connections: [] }
+    }
+  };
+}
+
+// Builds the frame workflowDocument.enterSlot emits: descend into `ownerNodeId`, view its own `slotId`.
+function enterSlotFrame(ownerNodeId: string, slotId: string): ScopeFrame {
+  return { ownerNodeId, slotId, label: `${ownerNodeId} / ${slotId}` };
 }
 
 function firstScope(owner: ActivityNode): CanvasScope {

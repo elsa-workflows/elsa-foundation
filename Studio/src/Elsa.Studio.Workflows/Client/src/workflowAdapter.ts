@@ -85,6 +85,12 @@ export interface CanvasScope {
   slot: ChildSlot;
 }
 
+// A ScopeFrame {ownerNodeId, slotId, label} means: descend into the container activity `ownerNodeId`
+// (which must live in *some* slot of the CURRENT owner), then view THAT container's slot with id
+// `slotId`. Intermediate frames only descend; the *last* frame's `slotId` names the slot the canvas
+// renders. This makes non-primary slots (e.g. a ForEach body or a Switch case) addressable, and
+// matches what workflowDocument.enterSlot / InspectorPanel emit: enterSlot(owner, slotId) records
+// {ownerNodeId: owner.nodeId, slotId: <owner's own slot id>}.
 export interface ScopeFrame {
   ownerNodeId: string;
   slotId: string;
@@ -93,14 +99,15 @@ export interface ScopeFrame {
 
 export type WorkflowDesignerSupport = "flowchart" | "sequence" | "unsupported";
 
+// Descends through the frame chain to the container the last frame names. Each frame's `ownerNodeId`
+// must be found among ANY slot of the current owner; we descend into it and continue. Returns null the
+// moment a hop can't be resolved (stale/broken frame), so callers can fall back to the root scope.
 export function resolveScopeOwner(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ActivityNode | null {
   if (!root) return null;
 
   let owner = root;
   for (const frame of frames) {
-    const slot = getChildSlots(owner, catalog).find(candidate => candidate.id === frame.slotId);
-    if (!slot) return null;
-    const nextOwner = slot.activities.find(activity => activity.nodeId === frame.ownerNodeId);
+    const nextOwner = findChildInAnySlot(owner, frame.ownerNodeId, catalog);
     if (!nextOwner) return null;
     owner = nextOwner;
   }
@@ -108,10 +115,12 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   return owner;
 }
 
-// Finds the scope frames that bring `nodeId` into view (i.e. into the resolved scope's primary slot),
-// so a diagnostic can navigate the designer to a node anywhere in the tree. `labelFor` supplies the
-// breadcrumb label for each descended container. Returns null when the node is not reachable through
-// primary slots (matching how the canvas surfaces nodes via resolveScope).
+// Finds the scope frames that bring `nodeId` into view, so a diagnostic can navigate the designer to a
+// node anywhere in the tree. `labelFor` supplies the breadcrumb label for each descended container.
+// With the target ScopeFrame semantics a node in ANY slot is landable: the returned path's last frame
+// names the slot that directly contains `nodeId`. Contract: resolveScope(root, path).slot.activities
+// contains `nodeId` (an empty path lands `nodeId` in the root owner's primary slot). Returns null when
+// the node is not present in the tree at all.
 export function findNodeScopePath(
   root: ActivityNode | null | undefined,
   nodeId: string,
@@ -122,15 +131,36 @@ export function findNodeScopePath(
   // The root scope itself is reached with no frames.
   if (root.nodeId === nodeId) return [];
 
+  // Returns the frames that, appended after `frames`, reach `nodeId` from container `owner` — or null
+  // if `owner` doesn't contain it. `frames` are the descent frames already accumulated for the
+  // containers above `owner` (each frame names a container and the slot on it we descended through /
+  // will view). `owner` itself is the container the LAST accumulated frame points at (or the root when
+  // `frames` is empty), so when `owner` directly holds the target we only need to fix up that last
+  // frame's slotId to the slot that holds it — no new frame is added.
   const visit = (owner: ActivityNode, frames: ScopeFrame[]): ScopeFrame[] | null => {
     const slots = getChildSlots(owner, catalog);
-    // A node is "landable" only when it sits in its parent's primary slot (matching how resolveScope
-    // surfaces nodes on the canvas); descent still walks every slot to reach deeper primary slots.
-    if (slots[0]?.activities.some(activity => activity.nodeId === nodeId)) return frames;
 
     for (const slot of slots) {
-      for (const activity of slot.activities) {
-        const found = visit(activity, [...frames, { ownerNodeId: activity.nodeId, slotId: slot.id, label: labelFor(activity) }]);
+      if (!slot.activities.some(activity => activity.nodeId === nodeId)) continue;
+      const lastFrame = frames.at(-1);
+      // No accumulated frames means `owner` is the root. Every frame descends INTO a child (the root
+      // is the implicit starting owner and never appears as a frame's ownerNodeId), so only the root's
+      // primary slot is reachable — the empty path lands it via resolveScope's slots[0] fallback. A
+      // node in the root's non-primary slot has no navigable path; treat it as not found.
+      if (!lastFrame) return slot.id === slots[0]?.id ? frames : null;
+      // Retarget the last descent frame's slotId to the slot that actually holds the node.
+      return [...frames.slice(0, -1), { ...lastFrame, slotId: slot.id }];
+    }
+
+    for (const slot of slots) {
+      for (const child of slot.activities) {
+        // Descend into `child`; the frame names `child` and (provisionally) its own primary slot — the
+        // slot the canvas would show if we stopped here. If the deeper recursion lands directly in
+        // `child` it rewrites this frame's slotId to the child slot holding the target; if it descends
+        // further, this frame stays a pure descent hop (its slotId is ignored by resolveScopeOwner).
+        const childSlots = getChildSlots(child, catalog);
+        const provisionalSlotId = childSlots[0]?.id ?? slot.id;
+        const found = visit(child, [...frames, { ownerNodeId: child.nodeId, slotId: provisionalSlotId, label: labelFor(child) }]);
         if (found) return found;
       }
     }
@@ -141,14 +171,37 @@ export function findNodeScopePath(
   return visit(root, []);
 }
 
+// Picks the slot the last frame named on `owner`; falls back to the primary slot when there are no
+// frames (root scope). Returns null when the named slot no longer exists (stale frame after an edit).
+function resolveScopeSlot(owner: ActivityNode, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ChildSlot | null {
+  const slots = getChildSlots(owner, catalog);
+  const lastFrame = frames.at(-1);
+  if (!lastFrame) return slots[0] ?? null;
+  return slots.find(slot => slot.id === lastFrame.slotId) ?? null;
+}
+
 export function resolveScope(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): CanvasScope | null {
   const owner = resolveScopeOwner(root, frames, catalog);
   if (!owner) return null;
 
-  const slot = getChildSlots(owner, catalog)[0];
+  const slot = resolveScopeSlot(owner, frames, catalog);
   if (!slot) return null;
 
   return { owner, slot };
+}
+
+// Finds the child node `nodeId` in whichever of `owner`'s slots contains it, along with that slot (so a
+// caller can rewrite it). Returns null when no slot holds the child.
+function locateChildSlot(owner: ActivityNode, nodeId: string, catalog?: ActivityCatalogLookup): { slot: ChildSlot; child: ActivityNode } | null {
+  for (const slot of getChildSlots(owner, catalog)) {
+    const child = slot.activities.find(activity => activity.nodeId === nodeId);
+    if (child) return { slot, child };
+  }
+  return null;
+}
+
+function findChildInAnySlot(owner: ActivityNode, nodeId: string, catalog?: ActivityCatalogLookup): ActivityNode | null {
+  return locateChildSlot(owner, nodeId, catalog)?.child ?? null;
 }
 
 export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogLookup): ChildSlot[] {
@@ -399,33 +452,46 @@ export function getActivityDesignerSupport(activity: ActivityNode | null | undef
   return "unsupported";
 }
 
+// Writes `activities` into the slot the frame chain resolves to. frames=[] targets the root owner's
+// primary slot (used by the wrap-root recipe). Otherwise the LAST frame names the slot on the resolved
+// owner; intermediate frames only locate the child in whichever slot holds it (matching
+// resolveScopeOwner), so the write lands in the same slot resolveScope surfaces.
 export function updateScopeActivities(root: ActivityNode, frames: ScopeFrame[], activities: ActivityNode[], catalog?: ActivityCatalogLookup): ActivityNode {
-  if (frames.length === 0) {
-    const slot = getChildSlots(root, catalog)[0];
-    return slot ? replaceSlotActivities(root, slot, activities) : root;
-  }
-
-  const [frame, ...rest] = frames;
-  const slot = getChildSlots(root, catalog).find(candidate => candidate.id === frame.slotId);
-  if (!slot) return root;
-
-  const updatedActivities = slot.activities.map(activity =>
-    activity.nodeId === frame.ownerNodeId ? updateScopeActivities(activity, rest, activities, catalog) : activity);
-
-  return replaceSlotActivities(root, slot, updatedActivities);
+  return updateScopeAtFrames(root, frames, catalog, owner => {
+    const slot = resolveScopeSlot(owner, frames, catalog);
+    return slot ? replaceSlotActivities(owner, slot, activities) : owner;
+  });
 }
 
+// Replaces the resolved owner node itself with `owner`. frames=[] replaces the root. Intermediate hops
+// locate the child in whichever slot contains it; the leaf hop swaps that child for `owner`.
 export function updateScopeOwner(root: ActivityNode, frames: ScopeFrame[], owner: ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {
   if (frames.length === 0) return owner;
+  return updateScopeAtFrames(root, frames, catalog, () => owner);
+}
+
+// Shared recursive walk for the update helpers: descends through the frames (finding each frame's
+// ownerNodeId in whichever slot holds it) and applies `apply` to the container the chain lands on,
+// rebuilding the ancestors immutably. Returns `root` unchanged when any hop can't be resolved.
+function updateScopeAtFrames(
+  root: ActivityNode,
+  frames: ScopeFrame[],
+  catalog: ActivityCatalogLookup,
+  apply: (owner: ActivityNode) => ActivityNode
+): ActivityNode {
+  if (frames.length === 0) return apply(root);
 
   const [frame, ...rest] = frames;
-  const slot = getChildSlots(root, catalog).find(candidate => candidate.id === frame.slotId);
-  if (!slot) return root;
+  const located = locateChildSlot(root, frame.ownerNodeId, catalog);
+  if (!located) return root;
 
-  const updatedActivities = slot.activities.map(activity =>
-    activity.nodeId === frame.ownerNodeId ? updateScopeOwner(activity, rest, owner, catalog) : activity);
+  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply);
+  if (updatedChild === located.child) return root;
 
-  return replaceSlotActivities(root, slot, updatedActivities);
+  const updatedActivities = located.slot.activities.map(activity =>
+    activity.nodeId === frame.ownerNodeId ? updatedChild : activity);
+
+  return replaceSlotActivities(root, located.slot, updatedActivities);
 }
 
 export function updateActivity(root: ActivityNode, nodeId: string, update: (activity: ActivityNode) => ActivityNode, catalog?: ActivityCatalogLookup): ActivityNode {

@@ -48,6 +48,8 @@ import {
 import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge } from "./editorTypes";
 import type { WorkflowEdgeActions } from "./contexts";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
+import { planActivityDrop } from "./addActivityRouting";
+import type { ScopeFrame } from "../workflowAdapter";
 
 interface WorkflowCanvasParams {
   // Editor document reads. Scope/owner are resolved by the caller (they feed the inspector too), so the
@@ -55,6 +57,10 @@ interface WorkflowCanvasParams {
   draft: WorkflowDraft | null;
   scope: CanvasScope | null;
   scopeOwner: ActivityNode | null;
+  // Live scope breadcrumb. A non-empty path means the user is *inside* a slot, so drop routing must never
+  // fall back to mutating the workflow root — it either writes into the resolved slot or resets on a stale
+  // frame. The canvas reads it (rather than only `scope`) to make that guard explicit.
+  frames: ScopeFrame[];
   catalog: ActivityCatalogItem[];
   catalogByVersion: Map<string, ActivityCatalogItem>;
   isUnsupportedDesigner: boolean;
@@ -65,6 +71,8 @@ interface WorkflowCanvasParams {
   editDraft(recipe: WorkflowDraftRecipe): void;
   editDraftAndSelect(recipe: WorkflowDraftRecipe, selectedNodeId: string | null): void;
   select(selectedNodeId: string | null): void;
+  // Recover from a stale/broken frame path by returning to the workflow root.
+  resetToRoot(): void;
   // Transient status/error messaging owned by WorkflowEditor.
   setStatus(value: string): void;
   setError(value: string): void;
@@ -78,6 +86,7 @@ export function useWorkflowCanvas({
   draft,
   scope,
   scopeOwner,
+  frames,
   catalog,
   catalogByVersion,
   isUnsupportedDesigner,
@@ -87,6 +96,7 @@ export function useWorkflowCanvas({
   editDraft,
   editDraftAndSelect,
   select,
+  resetToRoot,
   setStatus,
   setError
 }: WorkflowCanvasParams) {
@@ -122,13 +132,27 @@ export function useWorkflowCanvas({
     setEdges(canvas.edges as WorkflowEdge[]);
   }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner]);
 
+  // Pins a node's canvas position into the layout records (removing any prior record for that node so a
+  // moved node doesn't accumulate duplicates). No-ops when the drop had no cursor position (palette click).
+  const pinLayout = useCallback((layout: WorkflowDraft["layout"], nodeId: string, position?: XYPosition) =>
+    position
+      ? [
+          ...layout.filter(record => record.nodeId !== nodeId),
+          { nodeId, x: Math.round(position.x), y: Math.round(position.y) }
+        ]
+      : layout, []);
+
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition) => {
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
       return;
     }
 
     const next = createActivityNode(activity, createNodeId(activity));
-    if (!draft?.state.rootActivity) {
+    // Route the drop against the LIVE frame path. Being inside a slot (frames.length > 0) makes wrapping
+    // or leaf-erroring the root impossible: a failed resolve there is a stale frame, not a bare root.
+    const plan = planActivityDrop(draft?.state.rootActivity, frames, next, activity, catalogByVersion);
+
+    if (plan.kind === "becomeRoot") {
       editDraftAndSelect(
         ({ draft: current }) => current ? { ...current, state: { ...current.state, rootActivity: next } } : null,
         next.nodeId
@@ -136,44 +160,36 @@ export function useWorkflowCanvas({
       return;
     }
 
-    if (!scope) {
-      const childSlot = getChildSlots(next, activity)[0];
-      if (!childSlot) {
-        setStatus("");
-        setError("The current root activity does not accept child activities. Drop Flowchart or Sequence to wrap it in a composite root.");
-        return;
-      }
+    if (plan.kind === "leafError") {
+      setStatus("");
+      setError("The current root activity does not accept child activities. Drop Flowchart or Sequence to wrap it in a composite root.");
+      return;
+    }
 
+    if (plan.kind === "staleFrames") {
+      setStatus("");
+      setError("This slot could not be resolved — returning to the workflow root.");
+      resetToRoot();
+      return;
+    }
+
+    if (plan.kind === "wrapRoot") {
+      // Keep the original root (now nested inside the new wrapper) selected — same as before the refactor.
       editDraftAndSelect(({ draft: current }) => {
-        if (!current?.state.rootActivity) return null;
-
-        const existingRoot = current.state.rootActivity;
-        const wrappedRoot = updateScopeActivities(next, [], [existingRoot], activity);
-        const layout = position
-          ? [
-              ...current.layout.filter(record => record.nodeId !== existingRoot.nodeId),
-              {
-                nodeId: existingRoot.nodeId,
-                x: Math.round(position.x),
-                y: Math.round(position.y)
-              }
-            ]
-          : current.layout;
-
+        const existingRoot = current?.state.rootActivity;
+        if (!existingRoot) return null;
         return {
           ...current,
-          layout,
-          state: {
-            ...current.state,
-            rootActivity: wrappedRoot
-          }
+          layout: pinLayout(current.layout, existingRoot.nodeId, position),
+          state: { ...current.state, rootActivity: updateScopeActivities(next, [], [existingRoot], activity) }
         };
-      }, draft.state.rootActivity.nodeId);
+      }, draft?.state.rootActivity?.nodeId ?? null);
       setError("");
       setStatus(`Wrapped root in ${getActivityDisplay(activity)}`);
       return;
     }
 
+    // plan.kind === "addToSlot": append (many) or set (single) the dropped activity into the resolved slot.
     editDraftAndSelect(({ draft: current, frames: currentFrames }) => {
       if (!current?.state.rootActivity) return null;
 
@@ -184,27 +200,21 @@ export function useWorkflowCanvas({
         ? [next]
         : [...currentScope.slot.activities, next];
       const updatedRoot = updateScopeActivities(current.state.rootActivity, currentFrames, nextActivities, catalogByVersion);
-      const layout = position
-        ? [
-            ...current.layout.filter(record => record.nodeId !== next.nodeId),
-            {
-              nodeId: next.nodeId,
-              x: Math.round(position.x),
-              y: Math.round(position.y)
-            }
-          ]
-        : current.layout;
 
       return {
         ...current,
-        layout,
-        state: {
-          ...current.state,
-          rootActivity: updatedRoot
-        }
+        layout: pinLayout(current.layout, next.nodeId, position),
+        state: { ...current.state, rootActivity: updatedRoot }
       };
     }, next.nodeId);
-  }, [catalogByVersion, draft?.state.rootActivity, isUnsupportedDesigner, scope, editDraftAndSelect, setError, setStatus]);
+
+    // A single-cardinality slot that already held a different node just had its content overwritten;
+    // surface it so the loss is visible (undo history covers recovery).
+    if (plan.replacedActivity) {
+      setError("");
+      setStatus(`Replaced ${plan.slot.label} content`);
+    }
+  }, [catalogByVersion, draft?.state.rootActivity, frames, isUnsupportedDesigner, editDraftAndSelect, resetToRoot, pinLayout, setError, setStatus]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {
     const activityNode = createActivityNode(activity, createNodeId(activity));
@@ -445,8 +455,18 @@ export function useWorkflowCanvas({
     tryAddActivityAtClientPoint(activity, event.clientX, event.clientY);
   };
 
-  const openEmptyConnectMenu = () => {
-    if (!isFlowchartDesigner) return;
+  // Opens the "pick any activity" menu for an empty canvas. Works on slot levels too (sequence bodies,
+  // ForEach body, Switch cases): `onConnectMenuPick`'s `fromEmpty` branch commits through `commitCanvas`
+  // which writes into whatever slot the current scope resolves to — no flowchart-only assumption. An
+  // optional anchor lets the empty-slot picker open the menu next to its "Browse all activities…" button
+  // instead of the canvas centre.
+  const openEmptyConnectMenu = (anchor?: { clientX: number; clientY: number }) => {
+    if (!canAddActivitiesToCanvas) return;
+
+    if (anchor) {
+      setConnectMenu({ kind: "fromEmpty", clientX: anchor.clientX, clientY: anchor.clientY });
+      return;
+    }
 
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -644,6 +664,7 @@ export function useWorkflowCanvas({
     onCanvasDrop,
     openEmptyConnectMenu,
     onConnectMenuPick,
+    addActivity,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
