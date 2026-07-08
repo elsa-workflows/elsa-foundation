@@ -178,6 +178,18 @@ are no-ops for that version. Simulate a second writer; assert a rejected push or
 - **FR-008**: The import reconciler MUST gain a **definition-metadata update path**: `definition.json`
   is the sole authority for an existing definition's name/description/`deleted`, applied every pass.
   Soft-delete MUST propagate as a flag; version files/rows MUST never be deleted.
+- **FR-008a** *(carried-over defect from spec 087)*: `definition.json` MUST become the **sole** source of
+  definition metadata; the per-version metadata carrier MUST stop driving it. Spec 087 landed
+  (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546) applying `Name`/`Description` from
+  **every** incoming version entry, **unconditionally and before the outdated-version skip** — so an
+  older/stale version entry (or non-SemVer-ordered git version files) overwrites current metadata with
+  a prior version's values, order-dependently (violates ADR 0034 D5 "latest-wins"). Latent until a
+  source emits multiple/older version entries per definition — which this git source is the first to do.
+  This unit MUST fix it by making `definition.json` (not any `versions/*.json`) the metadata authority;
+  as a defense-in-depth for any per-version fallback that remains, the reconciler's metadata apply MUST
+  be **gated to the authoritative (newest) version** — moved after the outdated check and run only when
+  `latestVersion is null || CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) >= 0`. A test
+  MUST assert an **older** incoming entry does **not** change existing definition metadata.
 - **FR-009**: Export MUST be an **export reconciler** (set-diff sweep): for each catalog version,
   ensure `versions/{semver}.json` exists (write + commit if absent; skip if present). There MUST be
   **no** promotion domain event and **no** export commit trailer. Loop-avoidance MUST be structural.

@@ -125,6 +125,13 @@ propagate. Split the layout:
   pass). Soft-delete propagates as a **flag**, never a file deletion (consistent with retention
   authority).
 
+> **Carried-over defect (spec 087 → fix in spec 085, FR-008a).** The generic prerequisite landed
+> (`WorkflowsVersionReconciler.UpdateDefinitionMetadata`, PR #546) applies name/description from *every*
+> incoming version entry, unconditionally and *before* the outdated-version skip — so a stale/older
+> entry can overwrite current metadata, order-dependently (breaks "latest-wins"). The proper fix is this
+> decision: `definition.json` is the **sole** metadata authority (not per-version), with a latest-only
+> gate as defense-in-depth for any per-version fallback.
+
 ### D6 — Drafts stay out of reconciliation
 
 A draft is mutable, has no stable content identity, is discarded routinely, and is
