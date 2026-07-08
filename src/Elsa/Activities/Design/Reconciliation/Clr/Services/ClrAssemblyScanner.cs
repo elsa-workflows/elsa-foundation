@@ -6,6 +6,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -34,6 +35,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string InputArgumentFullName = typeof(InputArgument).FullName!;
     private static readonly string OutputArgumentFullName = typeof(OutputArgument).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
+    private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -116,14 +118,21 @@ public sealed class ClrAssemblyScanner(
         foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (DerivesFrom(property.PropertyType, InputArgumentFullName))
+            {
+                var valueType = GetArgumentValueType(property.PropertyType);
+                var metadata = ReadActivityInputMetadata(property, valueType);
                 inputs.Add(new InputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
-                    Type: ToTypeReference(GetArgumentValueType(property.PropertyType)),
+                    Type: ToTypeReference(valueType),
                     StorageDriverType: null,
                     DisplayName: property.Name,
                     Category: null,
-                    IsRequired: HasRequired(property)));
+                    Order: metadata.Order,
+                    IsRequired: HasRequired(property),
+                    DefaultValue: metadata.DefaultValue,
+                    DefaultSyntax: metadata.DefaultSyntax));
+            }
 
             else if (DerivesFrom(property.PropertyType, OutputArgumentFullName))
                 outputs.Add(new OutputDefinition(
@@ -242,6 +251,67 @@ public sealed class ClrAssemblyScanner(
     // read (issue #417 item 3).
     private static bool HasRequired(PropertyInfo property) =>
         ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName);
+
+    private static ActivityInputMetadata ReadActivityInputMetadata(PropertyInfo property, Type? valueType)
+    {
+        var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName);
+        if (attribute is null)
+            return new ActivityInputMetadata(0, null, null);
+
+        var order = ReadNamedSingleArgument(attribute, nameof(ActivityInputAttribute.Order)) ?? 0;
+        var defaultValue = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultValue));
+        var defaultSyntax = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
+
+        return new ActivityInputMetadata(
+            order,
+            string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
+            defaultSyntax);
+    }
+
+    private static float? ReadNamedSingleArgument(CustomAttributeData attribute, string name)
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
+        return value switch
+        {
+            float single => single,
+            double number => (float)number,
+            _ => null
+        };
+    }
+
+    private static JsonElement ParseDefaultValue(string value, Type? valueType)
+    {
+        var typeName = valueType?.FullName;
+
+        if (typeName == typeof(bool).FullName && bool.TryParse(value, out var boolValue))
+            return JsonSerializer.SerializeToElement(boolValue);
+        if (typeName == typeof(byte).FullName && byte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var byteValue))
+            return JsonSerializer.SerializeToElement(byteValue);
+        if (typeName == typeof(sbyte).FullName && sbyte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var sbyteValue))
+            return JsonSerializer.SerializeToElement(sbyteValue);
+        if (typeName == typeof(short).FullName && short.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shortValue))
+            return JsonSerializer.SerializeToElement(shortValue);
+        if (typeName == typeof(ushort).FullName && ushort.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ushortValue))
+            return JsonSerializer.SerializeToElement(ushortValue);
+        if (typeName == typeof(int).FullName && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
+            return JsonSerializer.SerializeToElement(intValue);
+        if (typeName == typeof(uint).FullName && uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var uintValue))
+            return JsonSerializer.SerializeToElement(uintValue);
+        if (typeName == typeof(long).FullName && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+            return JsonSerializer.SerializeToElement(longValue);
+        if (typeName == typeof(ulong).FullName && ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ulongValue))
+            return JsonSerializer.SerializeToElement(ulongValue);
+        if (typeName == typeof(float).FullName && float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatValue))
+            return JsonSerializer.SerializeToElement(floatValue);
+        if (typeName == typeof(double).FullName && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
+            return JsonSerializer.SerializeToElement(doubleValue);
+        if (typeName == typeof(decimal).FullName && decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
+            return JsonSerializer.SerializeToElement(decimalValue);
+
+        return JsonSerializer.SerializeToElement(value);
+    }
+
+    private sealed record ActivityInputMetadata(float Order, JsonElement? DefaultValue, string? DefaultSyntax);
 
     private static bool DerivesFrom(Type? type, string fullName)
     {

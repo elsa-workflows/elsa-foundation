@@ -65,6 +65,50 @@ public sealed class ClrAssemblyScannerTests
         Assert.NotEmpty(inputs);
     }
 
+    [Fact]
+    public void ActivityInputAttribute_MapsOrderAndDefaultMetadata()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(ComplexInputFixtureActivity).FullName);
+        var inputs = model.Inputs.ToDictionary(i => i.Name, StringComparer.Ordinal);
+
+        Assert.Equal(10, inputs[nameof(ComplexInputFixtureActivity.Mode)].Order);
+        Assert.Equal("Auto", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultValue?.GetString());
+        Assert.Equal("Literal", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultSyntax);
+        Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
+        Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
+    }
+
+    [Fact]
+    public void ActivityInputAttribute_ParsesIntegerDefaultAsNumber()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var input = InputFor<ComplexInputFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(ComplexInputFixtureActivity.Count));
+
+        Assert.Equal(40, input.Order);
+        Assert.Equal(JsonValueKind.Number, input.DefaultValue?.ValueKind);
+        Assert.Equal(1, input.DefaultValue?.GetInt32());
+        Assert.Equal("Literal", input.DefaultSyntax);
+    }
+
+    [Fact]
+    public void InheritedActivityInputAttribute_MapsMetadata()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var inputs = InputsFor<InheritsRequiredFixtureActivity>(CreateScanner().Scan(folder.Path), nameof(RequiredInputBaseActivity.InheritedRequired));
+
+        Assert.All(inputs, input =>
+        {
+            Assert.Equal(42, input.Order);
+            Assert.Equal("inherited-default", input.DefaultValue?.GetString());
+            Assert.Equal("Literal", input.DefaultSyntax);
+        });
+        Assert.NotEmpty(inputs);
+    }
+
     private static InputDefinition InputFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
         models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Single(i => i.Name == inputName);
 

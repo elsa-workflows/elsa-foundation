@@ -745,8 +745,8 @@ internal static class ElsaWorkflowManagementApi
             input.IsBrowsable,
             input.UiHint ?? InferUiHint(input.Type),
             true,
-            null,
-            "Literal",
+            input.DefaultValue,
+            input.DefaultSyntax ?? "Literal",
             // Author-provided UI metadata is opaque JSON (a verbatim JsonElement, ADR 0035 D3); when absent we
             // synthesize the descriptor's options from the declared type. Both serialize to the same response JSON.
             input.UISpecifications.HasValue
