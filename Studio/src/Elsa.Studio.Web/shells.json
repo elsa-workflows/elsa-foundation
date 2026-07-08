@@ -14,6 +14,9 @@
           "SecretsStudio": {},
           "StructuredLogsStudio": {},
           "StudioApi": {},
+          "ThemeStoreCore": {},
+          "ThemePicker": {},
+          "ThemeManagement": {},
           "WeatherForecastSample": {},
           "WeaverWorkflowsStudio": {},
           "WorkflowsStudio": {}

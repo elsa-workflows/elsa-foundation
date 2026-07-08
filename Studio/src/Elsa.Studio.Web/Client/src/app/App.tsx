@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Maximize2,
   Minimize2,
+  Paintbrush,
   PackagePlus,
   PackageSearch,
   RefreshCw,
@@ -34,6 +35,7 @@ import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContex
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import {
@@ -48,6 +50,7 @@ import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
 import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ExtensionBuilderPage } from "./modules/ExtensionBuilderPage";
+import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
@@ -78,6 +81,7 @@ const navIconColors = {
   diagnostics: "#10b981",
   modules: "#8b5cf6",
   feeds: "#f59e0b",
+  themes: "#0f766e",
   extensionBuilder: "#ec4899"
 } as const;
 
@@ -88,6 +92,14 @@ const builtInNavigation: StudioNavigationContribution[] = [
   { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: navIconColors.diagnostics }
 ];
+
+const themeBuilderNavigation: StudioNavigationContribution = {
+  id: "theme-builder",
+  label: "Theme Builder",
+  path: "/theme-builder",
+  order: 85,
+  iconColor: navIconColors.themes
+};
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
 const bottomPanelHeightStorageKey = "elsa-studio-bottom-panel-height";
@@ -105,6 +117,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
   const [path, setPath] = useState(normalizePath(window.location.pathname));
   const [moduleRegistryRevision, setModuleRegistryRevision] = useState(0);
+  const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
   const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string; requestId?: string } | null>(null);
@@ -144,6 +157,24 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   // the manifest request carries auth + management-key headers; the effect below turns manifest data
   // into a loaded registry (module loading + contribution registration are side effects, not cacheable data).
   const manifestQuery = useStudioManifest(shellContext.http);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadThemeCapabilities() {
+      const capabilities = await getThemeStoreCapabilities(shellContext);
+      if (!disposed) {
+        setThemeCapabilities(capabilities);
+      }
+    }
+
+    void loadThemeCapabilities();
+    window.addEventListener(ModulesChangedEventName, loadThemeCapabilities);
+    return () => {
+      disposed = true;
+      window.removeEventListener(ModulesChangedEventName, loadThemeCapabilities);
+    };
+  }, [shellContext]);
 
   // A modules-changed event re-fetches the manifest and bumps the revision so the loader effect re-runs
   // even when the refetched manifest is structurally identical (a package may have been reconciled
@@ -228,8 +259,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
-    () => getStudioNavigation(api?.navigation.list() ?? []),
-    [api, state]
+    () => getStudioNavigation(api?.navigation.list() ?? [], { includeThemeBuilder: themeCapabilities.managementEnabled }),
+    [api, state, themeCapabilities.managementEnabled]
   );
   const panels = useMemo(
     () => (api?.panels.list() ?? []).sort((a, b) => (a.order ?? 500) - (b.order ?? 500)),
@@ -242,28 +273,33 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
 
   if (state === "loading") {
     return (
-      <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
-        <div className="empty-state">Loading Studio modules...</div>
-      </ShellFrame>
+      <ThemeProvider storeContext={shellContext}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+          <div className="empty-state">Loading Studio modules...</div>
+        </ShellFrame>
+      </ThemeProvider>
     );
   }
 
   if (state === "failed") {
     return (
-      <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
-        <div className="error-state">{error}</div>
-      </ShellFrame>
+      <ThemeProvider storeContext={shellContext}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+          <div className="error-state">{error}</div>
+        </ShellFrame>
+      </ThemeProvider>
     );
   }
 
   const dashboardPath = isDashboardPath(path);
+  const themeBuilderPath = themeCapabilities.managementEnabled && path === "/theme-builder";
   const activeRoute = dashboardPath ? undefined : findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const pageTitle = dashboardPath ? "Dashboard" : navigation.find(item => isNavigationItemActive(item, path))?.label ?? activeRoute?.label ?? owningFeatureArea?.title ?? "Studio";
 
   return (
-    <>
+    <ThemeProvider storeContext={shellContext}>
       <ShellFrame
         navigation={navigation}
         panels={panels}
@@ -272,15 +308,17 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
         assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
+        themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
       >
         {dashboardPath ? <Dashboard api={api!} /> : null}
         {path === "/extension-builder" ? <ExtensionBuilderPage api={api!} /> : null}
         {path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
+        {themeBuilderPath ? <ThemeBuilderPage api={api!} /> : null}
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {ActiveComponent ? <ActiveComponent /> : null}
-        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -291,7 +329,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       {assistantOpen ? (
         <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} />
       ) : null}
-    </>
+    </ThemeProvider>
   );
 }
 
@@ -320,6 +358,7 @@ export function ShellFrame({
   title,
   backendBaseUrl,
   assistantAction,
+  themeAction,
   onNavigate,
   children
 }: {
@@ -329,6 +368,7 @@ export function ShellFrame({
   title: string;
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
+  themeAction?: React.ReactNode;
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
@@ -466,7 +506,7 @@ export function ShellFrame({
             <a href="https://github.com/elsa-workflows/elsa-foundation-designer" aria-label="Designer source">
               <ExternalLink size={18} />
             </a>
-            <ThemeSwitcher />
+            {themeAction}
           </div>
         </header>
         <main className="content">{children}</main>
@@ -972,6 +1012,10 @@ function NavIcon({ id }: { id: string }) {
     return <Hammer size={18} />;
   }
 
+  if (id.includes("theme")) {
+    return <Paintbrush size={18} />;
+  }
+
   if (id.includes("modules")) {
     return <PackageSearch size={18} />;
   }
@@ -1000,6 +1044,7 @@ function getDefaultNavIconColor(id: string) {
   if (id.includes("weather")) return navIconColors.weather;
   if (id.includes("diagnostics")) return navIconColors.diagnostics;
   if (id.includes("modules")) return navIconColors.modules;
+  if (id.includes("theme")) return navIconColors.themes;
   if (id.includes("feeds")) return navIconColors.feeds;
   if (id.includes("extension-builder")) return navIconColors.extensionBuilder;
   return "var(--primary)";
@@ -1016,15 +1061,16 @@ export function isDashboardPath(path: string) {
   return path === "/" || path === "/dashboard" || path === "/overview";
 }
 
-export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[]) {
-  return [...builtInNavigation, ...moduleNavigation.filter(item => !isDashboardPath(item.path))]
+export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[], options: { includeThemeBuilder?: boolean } = {}) {
+  const hostNavigation = options.includeThemeBuilder ? [...builtInNavigation, themeBuilderNavigation] : builtInNavigation;
+  return [...hostNavigation, ...moduleNavigation.filter(item => !isDashboardPath(item.path))]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
     .sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path">): NavigationSection {
-  const settingsPaths = new Set(["/modules", "/package-feeds", "/features", "/extension-builder"]);
-  if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "package-feeds" || item.id === "feature-management") {
+  const settingsPaths = new Set(["/modules", "/theme-builder", "/package-feeds", "/features", "/extension-builder"]);
+  if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "theme-builder" || item.id === "package-feeds" || item.id === "feature-management") {
     return "settings";
   }
 
@@ -1121,12 +1167,10 @@ export function App() {
   // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
   return (
     <StudioAuthBoundary manager={authManager}>
-      <ThemeProvider>
-        <QueryProvider>
-          <AppContent authManager={authManager} />
-          <DialogHost />
-        </QueryProvider>
-      </ThemeProvider>
+      <QueryProvider>
+        <AppContent authManager={authManager} />
+        <DialogHost />
+      </QueryProvider>
     </StudioAuthBoundary>
   );
 }
