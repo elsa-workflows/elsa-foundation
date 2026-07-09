@@ -78,6 +78,8 @@ public sealed class ActivitiesHttpFeatureTests
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
         services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
+        // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
+        services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
         var provider = services.BuildServiceProvider();
         await using var _ = provider;
 

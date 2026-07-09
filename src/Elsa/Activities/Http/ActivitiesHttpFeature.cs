@@ -56,17 +56,18 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, HttpEndpointTriggerStimulusProvider>());
 
         // The inbound request middleware is resolved from DI per request (IMiddleware) so it can take the scoped
-        // stimulus router; mounted into the shell pipeline by UseMiddleware below. IMiddleware resolution goes
-        // through IMiddlewareFactory on HttpContext.RequestServices — the SHELL container, which does not carry
-        // the root host's ASP.NET default services — so the feature registers the factory itself (TryAdd: a
-        // host/root registration wins).
-        services.TryAddTransient<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
+        // stimulus router; mounted into the shell pipeline by UseMiddleware below. CShells guarantees an
+        // IMiddlewareFactory in the shell container, so only the middleware itself needs registering.
         services.AddScoped<HttpEndpointMiddleware>();
     }
 
     /// <summary>
-    /// Mounts the endpoint middleware in the shell's pipeline (after CShells' shell-resolution middleware, so
-    /// <c>HttpContext.RequestServices</c> is already the shell scope). Non-endpoint requests pass through.
+    /// Mounts the endpoint middleware in the shell's pipeline. CShells composes this per shell and runs it only
+    /// for requests resolved to this shell, right after shell resolution — so <c>HttpContext.RequestServices</c>
+    /// is already the shell scope — including shells activated dynamically at runtime. Non-endpoint requests pass
+    /// through. <see cref="IMiddlewareShellFeature.Order"/> is left at its default (0): this is the only shell
+    /// middleware the platform mounts today; give it an explicit order if middleware that must run earlier
+    /// (e.g. authentication) joins the shell pipeline.
     /// </summary>
     public void UseMiddleware(IApplicationBuilder app, Microsoft.Extensions.Hosting.IHostEnvironment? environment)
     {
