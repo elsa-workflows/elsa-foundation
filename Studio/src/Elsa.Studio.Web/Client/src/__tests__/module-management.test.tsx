@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
+import { createEndpointContext, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
@@ -388,8 +388,8 @@ describe("module management page", () => {
   });
 
   it("renders host-scoped package feeds on a dedicated page", async () => {
-    const backendGetJson = vi.fn(async () => serverRegistry());
-    const { container, unmount } = await renderPackageFeedsPage(stubApi({ backendGetJson }));
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(serverRegistry()));
+    const { container, unmount } = await renderPackageFeedsPage(stubApi({ bridgeRegistryGetJson }));
 
     expect(container.textContent).toContain("Package feeds");
     expect(container.textContent).not.toContain("Studio host");
@@ -450,8 +450,10 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(backendGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
-    expect(container.textContent).not.toContain("Server host");
+    expect(bridgeRegistryGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/registry");
+    // The Server tab reads its feeds through the bridge (read-only) and shows the mutations-unavailable note; its feeds
+    // still render (#248).
+    expect(container.textContent).toContain("Server host management is read-only in Studio");
     expect(container.textContent).toContain("local-packages");
 
     await unmount();
@@ -501,9 +503,10 @@ describe("module management page", () => {
     await unmount();
   });
 
-  it("loads Server registry from the backend context when the Server tab is selected", async () => {
-    const backendGetJson = vi.fn(async () => serverRegistry());
-    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+  it("loads Server registry through the Studio management bridge when the Server tab is selected", async () => {
+    // The Server-tab registry read routes through the bridge on api.host (#246); the backend context is never probed.
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(serverRegistry()));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ bridgeRegistryGetJson }));
 
     const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
     expect(serverTab).toBeTruthy();
@@ -513,10 +516,85 @@ describe("module management page", () => {
     });
     await flushPromises();
 
-    expect(backendGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
+    expect(bridgeRegistryGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/registry");
     expect(container.textContent).toContain("Server");
     expect(activeGridPanel(container)?.textContent).toContain("Workflows Runtime API");
     expect(container.textContent).toContain("local-packages");
+
+    await unmount();
+  });
+
+  it("renders an explicit unavailable state on the Server tab when the bridge reports the backend is unreachable", async () => {
+    // The bridge answers with an explicit unavailable status; the Server tab names the state instead of blanking.
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(null, "unreachable"));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ bridgeRegistryGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Server module registry is unavailable");
+    expect(container.textContent).toContain("Unreachable");
+    // The workbench is not rendered for an unavailable backend.
+    expect(activeGridPanel(container)).toBeNull();
+
+    await unmount();
+  });
+
+  it("keeps the Studio tab working when the backend management bridge is down", async () => {
+    // The bridge throws (Studio-origin failure). The Studio tab still renders its own registry read.
+    const { container, unmount } = await renderModuleManagementPage(stubApi({
+      bridgeRegistryGetJson: async () => { throw new Error("bridge offline"); }
+    }));
+
+    // Studio tab (default) renders normally.
+    expect(activeGridPanel(container)?.textContent).toContain("Feature management");
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    // Server tab surfaces the bridge failure explicitly ("unknown"), not a blank page.
+    expect(container.textContent).toContain("Server module registry is unavailable");
+
+    // Switching back to Studio still works.
+    const studioTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Studio");
+    flushSync(() => {
+      studioTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+    expect(activeGridPanel(container)?.textContent).toContain("Feature management");
+
+    await unmount();
+  });
+
+  it("renders a distinct permission-denied state (not backend-unavailable) when the bridge registry read is forbidden", async () => {
+    // A 403 on the Server-tab bridge registry read is a Studio authorization failure — the signed-in user lacks
+    // module-management.read (#249). It must render "Permission required" / "do not have permission", NOT the
+    // backend-unavailable/unreachable state and NOT a login prompt.
+    const { container, unmount } = await renderModuleManagementPage(stubApi({
+      bridgeRegistryGetJson: async () => { throw new StudioHttpError(403, "Forbidden"); }
+    }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Permission required");
+    expect(container.textContent).toContain("do not have permission");
+    expect(container.textContent).toContain("module-management.read");
+    // Not conflated with a backend-unavailable/reachability state.
+    expect(container.textContent).not.toContain("Unreachable");
+    expect(container.textContent).not.toContain("could not be reached");
+    expect(container.textContent).not.toContain("check the backend management configuration");
+    // The workbench is not rendered.
+    expect(activeGridPanel(container)).toBeNull();
 
     await unmount();
   });
@@ -564,33 +642,60 @@ describe("module management page", () => {
     await unmount();
   });
 
-  it("includes endpoint context headers in module management operations", async () => {
+  it("sends no management-key header on module management operations (#248)", async () => {
+    // ADR 0037 / #248: the app builds its endpoint contexts with no management-key header, so module-management
+    // requests carry none. The SPA holds no host management key at all.
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const context = createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Module-Management-Key": "secret" } });
+    const context = createEndpointContext("https://foundation.example/");
     await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBeNull();
   });
 });
+
+// Wraps a Server registry payload in the Studio management bridge's available envelope (#246, ADR 0037), so the host
+// stub can serve the Server tab's registry read through the bridge path the way the real bridge does.
+function bridgeRegistryEnvelope(registry: unknown, status = "available") {
+  return { status, detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString(), registry: status === "available" ? registry : null };
+}
 
 function stubApi(options?: {
   hostGetJson?: (url: string) => Promise<unknown>;
   backendGetJson?: (url: string) => Promise<unknown>;
+  // Overrides the Server-tab bridge registry read directly (e.g. to assert routing or to return an unavailable
+  // envelope). Takes precedence over deriving the envelope from `backendGetJson`.
+  bridgeRegistryGetJson?: (url: string) => Promise<unknown>;
   confirm?: (options: { message: string }) => Promise<boolean>;
 }): ElsaStudioModuleApi {
+  const studioRegistryRead = options?.hostGetJson ?? (async () => studioRegistry());
+  const backendRegistryRead = options?.backendGetJson ?? (async () => serverRegistry());
+  // The Server tab reads the backend registry through the Studio management bridge on api.host (#246), so both host
+  // registries resolve on api.host. Dispatch the bridge path to a Server envelope (built from `backendGetJson` unless
+  // `bridgeRegistryGetJson` overrides it); every other host read serves the Studio registry.
+  const hostGetJson = async (url: string) => {
+    if (url === "/_elsa/studio/backend-management/registry") {
+      return options?.bridgeRegistryGetJson
+        ? options.bridgeRegistryGetJson(url)
+        : bridgeRegistryEnvelope(await backendRegistryRead(url));
+    }
+    return studioRegistryRead(url);
+  };
+
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: stubHttp("https://studio.example/", options?.hostGetJson ?? (async () => studioRegistry()))
+      http: stubHttp("https://studio.example/", hostGetJson)
     },
     backend: {
       baseUrl: "https://foundation.example/",
-      http: stubHttp("https://foundation.example/", options?.backendGetJson ?? (async () => serverRegistry()))
+      // Kept for the read-only slice's out-of-scope mutations (upload/reconcile/prune/feed/retention), which still use
+      // the backend context directly. Registry READS no longer touch it — a read here would be a regression.
+      http: stubHttp("https://foundation.example/", async () => { throw new Error("backend context must not be probed for registry reads"); })
     },
     diagnostics: {
       add() {},

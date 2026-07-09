@@ -95,14 +95,18 @@ describe("module management query hooks", () => {
 });
 
 describe("host health query hook", () => {
-  it("polls all three hosts through the query and renders their status", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 200 })));
-    const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { container, unmount } = renderDashboard(stubHealthApi(backendGetJson));
+  it("reads Studio host registry and backend bridge status through the query", async () => {
+    const hostGetJson = vi.fn(async (url: string) =>
+      url === "/_elsa/studio/backend-management/status"
+        ? { status: "available", detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString() }
+        : healthyRegistry());
+    const { container, unmount } = renderDashboard(stubHealthApi(hostGetJson));
     await flushPromises();
 
-    expect(backendGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
+    expect(hostGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
+    expect(hostGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
     expect(container.textContent).toContain("Studio host");
+    expect(container.textContent).toContain("Backend management");
     expect(container.textContent).toContain("No host issues reported.");
 
     await unmount();
@@ -110,12 +114,21 @@ describe("host health query hook", () => {
 });
 
 function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): ElsaStudioModuleApi {
+  const hostRegistryRead = options.hostGetJson ?? (async () => studioRegistry());
+  // The Server tab now reads the backend registry through the Studio management bridge on api.host (#246), so both the
+  // Studio and Server registry queries land on api.host. Route the bridge path to a Server envelope here so the caller's
+  // `hostGetJson` spy still counts only the Studio registry reads it asserts on.
+  const hostGetJson = async (url: string) =>
+    url === "/_elsa/studio/backend-management/registry"
+      ? { status: "available", detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString(), registry: studioRegistry() }
+      : hostRegistryRead(url);
+
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: stubHttp("https://studio.example/", options.hostGetJson ?? (async () => studioRegistry()))
+      http: stubHttp("https://studio.example/", hostGetJson)
     },
     backend: {
       baseUrl: "https://foundation.example/",
@@ -128,17 +141,18 @@ function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): 
   } as ElsaStudioModuleApi;
 }
 
-function stubHealthApi(backendGetJson: (url: string) => Promise<unknown>): ElsaStudioModuleApi {
+function stubHealthApi(hostGetJson: (url: string) => Promise<unknown>): ElsaStudioModuleApi {
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: { getJson: async () => healthyRegistry(), postJson: async () => ({}) }
+      http: { getJson: hostGetJson, postJson: async () => ({}) }
     },
     backend: {
       baseUrl: "https://foundation.example/",
-      http: { getJson: backendGetJson, postJson: async () => ({}) }
+      // Host-health no longer probes the backend context; a call here would be a regression.
+      http: { getJson: async () => { throw new Error("backend context must not be probed by host-health"); }, postJson: async () => ({}) }
     },
     dashboardWidgets: { add() {}, list: () => [] },
     diagnosticsWidgets: { add() {}, list: () => [] },

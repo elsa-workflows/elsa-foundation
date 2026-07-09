@@ -15,7 +15,8 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementStudioManifest
 } from "./moduleManagementApi";
-import { useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
+import { BackendRegistryUnavailable, HostMutationsUnavailable } from "./BackendRegistryUnavailable";
+import { readActiveRegistry, useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 type InspectorTab = "overview" | "contributions" | "package" | "manifest" | "diagnostics";
 type ModuleOrigin = "built-in" | "nuplane";
@@ -68,7 +69,9 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeView = viewByHost[activeHost.id];
   const activeQuery = byHost(activeHost.id);
-  const registry = activeQuery.data ?? null;
+  // The registry is present only when the host's read resolved to a ready result; a Server tab whose backend management
+  // is unconfigured/unreachable/unauthorized/degraded resolves to an explicit `unavailable` state instead (#246).
+  const { registry, unavailable } = readActiveRegistry(activeQuery.data);
   const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun, reportError } = useHostOperations(activeHost, activeQuery.error, followUpRefreshDelaysMs);
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
@@ -166,7 +169,9 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
         <SummaryItem label="Attention" value={summary.attention} />
       </div>
 
-      {isReady && rows.length === 0 && (registry?.dropFolderPackages.length ?? 0) === 0 ? (
+      {unavailable ? (
+        <BackendRegistryUnavailable host={activeHost} status={unavailable.status} detail={unavailable.detail} />
+      ) : isReady && rows.length === 0 && (registry?.dropFolderPackages.length ?? 0) === 0 ? (
         <EmptyState icon={<Boxes size={22} />}>No modules or packages are reported for {activeHost.label}.</EmptyState>
       ) : (
         <div className="modules-workbench">
@@ -191,16 +196,20 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
               </div>
             </div>
             {activeView.sourceView === "nuplane" && registry ? (
-              <InlinePackageUploads
-                host={activeHost}
-                registry={registry}
-                busy={isPending}
-                dragActive={uploadDragActive}
-                uploadInputRef={uploadInputRef}
-                onUploadFiles={uploadSelectedFiles}
-                onDragActiveChange={setUploadDragActive}
-                onDeleteDropFolderPackage={fileName => confirmAndDeleteDropFolderPackage(fileName)}
-              />
+              activeHost.mutationsAvailable ? (
+                <InlinePackageUploads
+                  host={activeHost}
+                  registry={registry}
+                  busy={isPending}
+                  dragActive={uploadDragActive}
+                  uploadInputRef={uploadInputRef}
+                  onUploadFiles={uploadSelectedFiles}
+                  onDragActiveChange={setUploadDragActive}
+                  onDeleteDropFolderPackage={fileName => confirmAndDeleteDropFolderPackage(fileName)}
+                />
+              ) : (
+                <HostMutationsUnavailable host={activeHost} />
+              )
             ) : null}
             {visibleRows.length === 0 ? (
               <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeView.sourceView, nuplaneRows.length, effectivePackageSourceFilter)}</p>

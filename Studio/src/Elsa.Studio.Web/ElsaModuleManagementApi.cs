@@ -20,20 +20,33 @@ internal static class ElsaModuleManagementApi
 
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/_elsa/module-management")
-            .RequireAuthorization(ModuleManagementAuth.PolicyName);
+        // Studio's OWN host module-management surface (ADR 0037). Host-control permission gating (#249): the registry
+        // READ requires `module-management.read`; every MUTATION (upload, delete, reconcile, prune, feed CRUD,
+        // retention) requires `module-management.manage` — a mere authenticated session is not enough for a host-control
+        // write. `manage` implies `read`, expanded locally in the read policy. When Studio auth is disabled every policy
+        // allows anonymously (demo shell). The browser carries no Elsa host management key.
+        var group = endpoints.MapGroup("/_elsa/module-management");
 
-        group.MapGet("/registry", GetRegistryAsync);
+        group.MapGet("/registry", GetRegistryAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
         group.MapPost("/packages/upload", UploadPackageAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName)
             .Accepts<IFormFile>("multipart/form-data")
             .DisableAntiforgery();
-        group.MapDelete("/packages/drop-folder/{fileName}", DeleteDropFolderPackageAsync);
-        group.MapPost("/reconcile", TriggerReconcileAsync);
-        group.MapPost("/prune", PrunePackagesAsync);
-        group.MapPost("/feeds", AddFeedAsync);
-        group.MapPut("/feeds/{name}", UpdateFeedAsync);
-        group.MapDelete("/feeds/{name}", DeleteFeedAsync);
-        group.MapPut("/retention-policy", UpdateRetentionPolicyAsync);
+        group.MapDelete("/packages/drop-folder/{fileName}", DeleteDropFolderPackageAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapPost("/reconcile", TriggerReconcileAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapPost("/prune", PrunePackagesAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapPost("/feeds", AddFeedAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapPut("/feeds/{name}", UpdateFeedAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapDelete("/feeds/{name}", DeleteFeedAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+        group.MapPut("/retention-policy", UpdateRetentionPolicyAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
 
         return endpoints;
     }

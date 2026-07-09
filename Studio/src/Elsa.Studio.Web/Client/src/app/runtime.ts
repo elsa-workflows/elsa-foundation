@@ -2,7 +2,9 @@ import type { StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sd
 
 export interface StudioRuntimeConfig {
   backendBaseUrl?: string;
-  backendModuleManagementApiKey?: string;
+  // The backend host management key is deliberately NOT part of the browser runtime config (ADR 0037 / #248): it is a
+  // server-side-only Studio setting the management bridge attaches on Studio→backend calls. Browser code must never
+  // carry a host management key, so there is no field for it here — new frontend code cannot depend on one.
   auth?: StudioAuthRuntimeConfig;
   workflows?: StudioWorkflowRuntimeSettings;
 }

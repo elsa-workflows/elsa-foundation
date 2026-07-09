@@ -69,6 +69,78 @@ export interface StudioModuleContributionSummary {
 
 export type StudioValidationErrors = Record<string, string[]>;
 
+/**
+ * Backend management availability as reported by the Studio management bridge (ADR 0037). The browser reads this from
+ * the Studio origin (`api.host`) instead of probing backend host-control endpoints directly, so the backend host
+ * management key never reaches the browser and the SPA never issues doomed, 401-noisy backend requests.
+ */
+export type StudioBackendManagementStatusKind =
+  | "available"
+  | "unconfigured"
+  | "unreachable"
+  | "unauthorized"
+  | "degraded";
+
+export interface StudioBackendManagementStatus {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+}
+
+/** The Studio-owned bridge route the browser reads backend management status from (served by the Studio host). */
+export const studioBackendManagementStatusPath = "/_elsa/studio/backend-management/status";
+
+/**
+ * Backend Extension Builder capability flags as reported by the Studio management bridge (ADR 0037). Mirrors the
+ * backend's capability contract but is a Studio-owned DTO ("host capabilities"). Server enforcement on the backend
+ * remains authoritative regardless of what the browser is shown.
+ */
+export interface StudioExtensionBuilderCapabilities {
+  canCreateWorkspace: boolean;
+  canEditFiles: boolean;
+  canBuild: boolean;
+  canPromote: boolean;
+  canRollback: boolean;
+}
+
+/**
+ * The Studio management bridge's answer for the backend Extension Builder capabilities read. `status` carries the same
+ * explicit envelope as {@link StudioBackendManagementStatus} so the frontend branches on state, not on an HTTP failure;
+ * `capabilities` is present only when `status` is `"available"`. The browser reads this from the Studio origin
+ * (`api.host`) instead of probing the backend Extension Builder capabilities endpoint directly, so the backend host
+ * management key never reaches the browser and the SPA never issues doomed backend requests.
+ */
+export interface StudioExtensionBuilderCapabilitiesResult {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  capabilities?: StudioExtensionBuilderCapabilities | null;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+}
+
+/** The Studio-owned bridge route the browser reads backend Extension Builder capabilities from (served by the Studio host). */
+export const studioExtensionBuilderCapabilitiesPath = "/_elsa/studio/backend-management/extension-builder/capabilities";
+
+/**
+ * The backend host registry as surfaced by the Studio management bridge (#246, ADR 0037). The browser reads this from
+ * the Studio origin (`api.host`) with only its normal credentials; Studio attaches the server-side management key on
+ * the Studio→backend call. The envelope carries the same explicit backend-management `status` as the status endpoint,
+ * so the frontend branches on it directly (rendering unconfigured/unreachable/unauthorized/degraded states) instead of
+ * inferring an outage from a failed fetch. `registry` is the raw backend registry payload, present only when
+ * `status === "available"`, and `null` otherwise.
+ */
+export interface StudioBackendManagementRegistryEnvelope<TRegistry = unknown> {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+  registry?: TRegistry | null;
+}
+
+/** The Studio-owned bridge route the browser reads the backend host registry from (served by the Studio host). */
+export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-management/registry";
+
 export interface StudioHttpClient {
   requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;

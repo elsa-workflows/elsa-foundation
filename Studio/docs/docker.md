@@ -61,7 +61,7 @@ Four environment variables wire the two containers together:
 | Setting | On | Value | Why |
 |---|---|---|---|
 | `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* a Docker-internal service name. |
-| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | Authenticates Studio's module-management calls to the server. **Must match** the server key. |
+| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | **Server-side-only** Studio secret. Studio's management bridge attaches it on Studio→server host-control calls; it is **never sent to the browser** (ADR 0037). **Must match** the server key. |
 | `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The key the server accepts. |
 | `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
 
@@ -106,7 +106,7 @@ double-underscore (`__`) separator.
 | Environment variable | Default (in image) | Purpose |
 | --- | --- | --- |
 | `Studio__BackendBaseUrl` | `https://localhost:7243` | Base URL of the Elsa Server backend. Surfaced to the browser via `/studio-runtime.js`. |
-| `Studio__BackendModuleManagementApiKey` | `local-dev-module-management-key` | API key the Studio uses for backend module-management calls. **Override in any real deployment.** |
+| `Studio__BackendModuleManagementApiKey` | `local-dev-module-management-key` | **Server-side-only** key the Studio management bridge uses for Studio→backend host-control calls. It is **never emitted to the browser** (ADR 0037); the SPA carries no host management key. **Override in any real deployment.** |
 | `Studio__Workflows__AutosaveEnabledByDefault` | `true` | Whether the workflow editor opens with Autosave enabled. Users can still toggle it per editing session. |
 | `ASPNETCORE_URLS` | `http://+:8080` | Kestrel bind address/port. Change the port here if you don't want 8080. |
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Standard ASP.NET Core environment name. |

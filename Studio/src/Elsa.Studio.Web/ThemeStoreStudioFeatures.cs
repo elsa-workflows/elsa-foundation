@@ -26,7 +26,7 @@ public sealed class ThemeStoreCoreStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemeStoreCoreApi(ModuleManagementAuth.PolicyName);
+        endpoints.MapElsaThemeStoreCoreApi(StudioBridgeAuth.PolicyName);
     }
 }
 
@@ -44,7 +44,7 @@ public sealed class ThemePickerStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemePickerApi(ModuleManagementAuth.PolicyName);
+        endpoints.MapElsaThemePickerApi(StudioBridgeAuth.PolicyName);
     }
 }
 
@@ -62,6 +62,6 @@ public sealed class ThemeManagementStudioFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
     {
-        endpoints.MapElsaThemeManagementApi(ModuleManagementAuth.PolicyName);
+        endpoints.MapElsaThemeManagementApi(StudioBridgeAuth.PolicyName);
     }
 }

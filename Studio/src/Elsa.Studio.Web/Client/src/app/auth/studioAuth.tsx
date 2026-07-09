@@ -56,25 +56,21 @@ export function StudioAuthBoundary({
 /**
  * Builds an endpoint context whose HTTP client attaches bearer tokens (and refresh-retries on 401) when a
  * user session exists. When `manager` is null it falls back to the plain SDK client, preserving the
- * anonymous path. `headers` (e.g. the #183 management-key header) is composed into every request either
- * way, so endpoint-auth keeps working alongside user auth.
+ * anonymous path. `headers` is composed into every request either way, so endpoint-auth keeps working
+ * alongside user auth.
  *
- * `managementKey` decides the hub credential (`accessTokenFactory`) and applies ONLY to the host
- * management surface. Precedence: the management key wins over the user-JWT factory. The host's built-in
- * gate validates the API key alone, so the JWT is never the right credential for it; deployments that
- * rebind that policy to real identity do not hand a management key to the SPA, so key-absent falls through
- * to the existing manager-based factory (unchanged behavior). This only steers non-HTTP transports
- * (SignalR hubs) — host REST calls keep attaching the user JWT via the authenticated HTTP client, which
- * reads the token from the manager independently of `accessTokenFactory`. The backend context must NOT
- * receive a management key here: it would leak the shell secret cross-origin (#215 finding 2).
+ * The SignalR hub credential (`accessTokenFactory`) is the manager-JWT factory when a provider is configured,
+ * else none. After ADR 0037 / #248 the browser no longer holds a host management key, so there is no
+ * management-key hub credential to prefer: Studio's own host-control surface (including the console-stream
+ * hub) is gated by the Studio bridge user-session gate, which accepts the same backend-issued bearer the
+ * JWT factory yields (or allows anonymously in demo mode).
  */
 export function createStudioEndpointContext(
   baseUrl: string,
   manager: AuthProviderManager | null,
-  headers?: HeadersInit,
-  managementKey?: string
+  headers?: HeadersInit
 ): StudioEndpointContext {
-  const accessTokenFactory = createHubCredentialFactory(manager, managementKey);
+  const accessTokenFactory = manager ? createSignalRAccessTokenFactory(manager) : undefined;
 
   if (!manager) {
     return { ...createEndpointContext(baseUrl, { headers }), accessTokenFactory };
@@ -86,21 +82,6 @@ export function createStudioEndpointContext(
     http: createAuthenticatedHttpClient(baseUrl, manager, { defaultHeaders: headers }),
     accessTokenFactory
   };
-}
-
-/**
- * Resolves the SignalR hub credential per the precedence documented on {@link createStudioEndpointContext}:
- * management key first, then the manager-JWT factory, else none.
- */
-function createHubCredentialFactory(
-  manager: AuthProviderManager | null,
-  managementKey?: string
-): (() => Promise<string>) | undefined {
-  if (managementKey) {
-    return () => Promise.resolve(managementKey);
-  }
-
-  return manager ? createSignalRAccessTokenFactory(manager) : undefined;
 }
 
 function StudioSigningIn() {

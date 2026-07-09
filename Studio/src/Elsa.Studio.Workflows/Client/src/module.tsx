@@ -2,6 +2,7 @@ import "@xyflow/react/dist/style.css";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
+import { RuntimeDiagnosticsSettingsPage } from "./RuntimeDiagnosticsSettingsPage";
 import {
   WorkflowExecutablesPage,
   WorkflowInstanceDetailsPage,
@@ -34,6 +35,7 @@ export function register(api: ElsaStudioModuleApi) {
         { title: "Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
         { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
         { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" },
+        { title: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9" },
         { title: "Activity Availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9" }
       ]
     },
@@ -67,6 +69,12 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/activity-availability",
         label: "Activity availability",
         component: () => <ActivityAvailabilityPage context={api.backend} />
+      },
+      {
+        id: "workflows-runtime-diagnostics",
+        path: "/workflows/runtime-diagnostics",
+        label: "Runtime diagnostics",
+        component: () => <RuntimeDiagnosticsSettingsPage context={api.backend} />
       }
     ]
   });

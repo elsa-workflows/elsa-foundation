@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { derivePackageId, ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
 import type { ExtensionRepositorySummary, ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
-import type { ElsaStudioModuleApi } from "../sdk";
+import { StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
   afterEach(() => {
@@ -14,8 +14,12 @@ describe("extension builder page", () => {
   });
 
   it("gates interactive builder surfaces with ExtensionBuilderCapabilities", async () => {
+    // Bridge reports "available" but with all-false capability flags (an authenticated-but-untrusted caller): the UI
+    // renders the not-trusted gate rather than the backend-management-unavailable surface.
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
-      getJson: async url => url.endsWith("/capabilities") ? deniedCapabilities() : []
+      hostGetJson: async url => url.endsWith(CAPABILITIES_BRIDGE_PATH)
+        ? availableCapabilitiesBridgeResult(deniedCapabilities())
+        : {}
     }));
 
     await flushPromises();
@@ -24,6 +28,80 @@ describe("extension builder page", () => {
     expect(container.textContent).toContain("GetCapabilities");
     expect(container.textContent).not.toContain("Create workspace");
     expect(container.textContent).not.toContain("Attach server-local");
+
+    await unmount();
+  });
+
+  it("reads capabilities through the Studio management bridge on the host context, not the backend context", async () => {
+    const hostGetJson = vi.fn(defaultHostGetJson);
+    const backendGetJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson: backendGetJson, hostGetJson }));
+
+    await waitForText(container, "Team Extensions");
+
+    // The capability read hits the Studio-owned bridge path on api.host…
+    expect(hostGetJson).toHaveBeenCalledWith(CAPABILITIES_BRIDGE_PATH);
+    // …and the browser never probes the direct backend Extension Builder capabilities endpoint.
+    expect(backendGetJson).not.toHaveBeenCalledWith(expect.stringContaining("/extension-builder/capabilities"));
+    expect(backendGetJson.mock.calls.every(([url]) => !url.endsWith("/capabilities"))).toBe(true);
+
+    await unmount();
+  });
+
+  it.each([
+    ["unconfigured", "not configured"],
+    ["unreachable", "could not be reached"],
+    ["unauthorized", "rejected the Studio management credential"],
+    ["degraded", "degraded"]
+  ] as const)("renders an explicit unavailable state and gates actions when the bridge reports %s", async (status, expected) => {
+    const backendGetJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: backendGetJson,
+      hostGetJson: async url => url.endsWith(CAPABILITIES_BRIDGE_PATH)
+        ? bridgeStatusResult(status, defaultBridgeDetail(status))
+        : {}
+    }));
+
+    await waitForText(container, "Backend management is unavailable");
+
+    // The explicit reason is named and actions are gated: no create/attach affordances, no doomed backend calls.
+    expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
+    expect(container.textContent).not.toContain("Create workspace");
+    expect(container.textContent).not.toContain("Attach server-local");
+    expect(container.querySelector(".extension-builder-solution-card")).toBeNull();
+    // Only the bridge capability read happened; no direct backend Extension Builder request was issued.
+    expect(backendGetJson).not.toHaveBeenCalled();
+
+    // Retry re-runs the bridge read.
+    await clickButton(container, "Retry");
+    await flushPromises();
+    expect(container.textContent).toContain("Backend management is unavailable");
+
+    await unmount();
+  });
+
+  it("renders a distinct permission-denied state (not backend-unavailable) when the capabilities read is forbidden", async () => {
+    // A 403 on the bridge capabilities read is a Studio authorization failure — the signed-in user lacks
+    // extension-builder.read (#249). It must render "do not have permission" / name the permission, NOT the
+    // backend-unavailable/retry surface, and NOT a login prompt.
+    const backendGetJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: backendGetJson,
+      hostGetJson: async url => {
+        if (url.endsWith(CAPABILITIES_BRIDGE_PATH)) throw new StudioHttpError(403, "Forbidden");
+        return {};
+      }
+    }));
+
+    await waitForText(container, "do not have permission");
+
+    expect(container.textContent).toContain("extension-builder.read");
+    // Not conflated with the backend-management-unavailable surface or its retry affordance.
+    expect(container.textContent).not.toContain("Backend management is unavailable");
+    expect(container.textContent).not.toContain("Retry");
+    expect(container.textContent).not.toContain("Create workspace");
+    // No direct backend Extension Builder request was issued.
+    expect(backendGetJson).not.toHaveBeenCalled();
 
     await unmount();
   });
@@ -1122,11 +1200,28 @@ function runningBuild() {
   };
 }
 
+// The Studio-owned bridge route the capability read is routed through (ADR 0037). Mirrors
+// `studioExtensionBuilderCapabilitiesPath` in the SDK.
+const CAPABILITIES_BRIDGE_PATH = "/_elsa/studio/backend-management/extension-builder/capabilities";
+
 function stubApi(options?: {
   getJson?: (url: string) => Promise<unknown>;
   postJson?: (url: string, body: unknown) => Promise<unknown>;
+  hostGetJson?: (url: string) => Promise<unknown>;
 }): ElsaStudioModuleApi {
+  // The capability read now goes through the Studio management bridge on the Studio origin (api.host); every other
+  // Extension Builder call stays on api.backend. Default the host to an "available" bridge result carrying trusted
+  // capabilities so the existing suite (which exercises the full workbench) still boots.
+  const hostGetJson = options?.hostGetJson ?? defaultHostGetJson;
   return {
+    host: {
+      baseUrl: "https://studio.example/",
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      http: {
+        getJson: hostGetJson
+      }
+    },
     backend: {
       baseUrl: "https://foundation.example/",
       http: {
@@ -1139,7 +1234,36 @@ function stubApi(options?: {
       prompt: vi.fn(async () => null),
       alert: vi.fn(async () => {})
     }
-  } as ElsaStudioModuleApi;
+  } as unknown as ElsaStudioModuleApi;
+}
+
+async function defaultHostGetJson(url: string): Promise<unknown> {
+  if (url.endsWith(CAPABILITIES_BRIDGE_PATH)) return availableCapabilitiesBridgeResult(trustedCapabilities());
+  return {};
+}
+
+function availableCapabilitiesBridgeResult(capabilities: ReturnType<typeof trustedCapabilities>) {
+  return {
+    status: "available",
+    detail: "The backend Extension Builder capabilities are reachable.",
+    capabilities,
+    backendBaseUrl: "https://foundation.example",
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function bridgeStatusResult(status: string, detail: string) {
+  return { status, detail, capabilities: null, backendBaseUrl: null, checkedAt: new Date().toISOString() };
+}
+
+function defaultBridgeDetail(status: string) {
+  switch (status) {
+    case "unconfigured": return "Backend management is not configured on the Studio host.";
+    case "unreachable": return "The backend management surface could not be reached.";
+    case "unauthorized": return "The backend rejected the Studio management credential.";
+    case "degraded": return "The backend management surface is degraded.";
+    default: return "Backend management status is unknown.";
+  }
 }
 
 async function defaultGetJson(url: string): Promise<unknown> {

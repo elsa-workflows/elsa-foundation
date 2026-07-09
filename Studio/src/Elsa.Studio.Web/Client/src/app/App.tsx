@@ -30,7 +30,7 @@ import type {
 } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
-import { getStudioRuntimeConfig, getStudioRuntimeSettings, type StudioRuntimeConfig } from "./runtime";
+import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
@@ -41,6 +41,7 @@ import { useStudioManifest } from "./hooks/useStudioManifest";
 import {
   checkingHostHealth,
   getHealthErrorMessage,
+  labelForBackendHealth,
   labelForHostStatus,
   useHostHealth,
   type HostHealthStatus
@@ -124,18 +125,13 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
   const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
-  // Memoize so the boot effect isn't re-run every render by a fresh header object identity.
-  const backendHeaders = useMemo(() => createBackendHeaders(runtimeConfig), [runtimeConfig.backendModuleManagementApiKey]);
-  // The management key steers the HOST hub credential (createStudioEndpointContext). Host-only: the backend
-  // context must never receive it (#215 finding 2 — it would leak the shell secret cross-origin).
-  const managementKey = runtimeConfig.backendModuleManagementApiKey?.trim() || undefined;
   // The shell endpoint context (host origin) routed through the authenticated HTTP client: the manifest
   // query fetches `/_elsa/studio/modules` through this, so the boot document carries the bearer token
-  // (when a user provider is configured) and the #183 management-key header (always). Anonymous boot —
-  // no provider — falls back to the plain SDK client via createStudioEndpointContext.
+  // (when a user provider is configured). Anonymous boot — no provider — falls back to the plain SDK client.
+  // No management-key header rides any request: after ADR 0037 / #248 the browser holds no host management key.
   const shellContext = useMemo(
-    () => createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders, managementKey),
-    [authManager, shellBaseUrl, backendHeaders, managementKey]
+    () => createStudioEndpointContext(shellBaseUrl, authManager),
+    [authManager, shellBaseUrl]
   );
 
   useEffect(() => {
@@ -210,21 +206,20 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         setState("loading");
         // Route both endpoint contexts through the authenticated HTTP client when a user provider is
         // configured, so backend/host requests attach a bearer token and refresh-retry on 401. When no
-        // provider is configured this yields the plain SDK client (anonymous path). The #183
-        // management-key header is composed into every request either way, not dropped. The manifest
-        // document itself was already fetched (through the same authenticated shell context) by
-        // useStudioManifest; here we only turn it into a loaded registry.
-        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager, backendHeaders);
+        // provider is configured this yields the plain SDK client (anonymous path). No management-key
+        // header rides any request (ADR 0037 / #248). The manifest document itself was already fetched
+        // (through the same authenticated shell context) by useStudioManifest; here we only turn it into
+        // a loaded registry.
+        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager);
         const registry = createStudioRegistry({
           hostVersion: manifest.hostVersion,
           sdkVersion: manifest.sdkVersion,
-          // The Studio host serves the gated management surface (module management, feature management,
-          // console-stream), so the management-key header must ride the host context too, not only the
-          // backend — and the management key steers this host's hub credential (see createStudioEndpointContext).
-          ...createStudioEndpointContext(shellBaseUrl, authManager, backendHeaders, managementKey)
+          // The Studio host serves its own gated management surface (module management, feature management,
+          // console-stream); those requests carry the user bearer via the authenticated host context. The
+          // hub credential is the user-JWT factory (see createStudioEndpointContext).
+          ...createStudioEndpointContext(shellBaseUrl, authManager)
         }, {
           backendBaseUrl,
-          backendHeaders,
           backendHttp: backendContext.http,
           runtime: getStudioRuntimeSettings(runtimeConfig)
         });
@@ -256,7 +251,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     return () => {
       disposed = true;
     };
-  }, [authManager, backendBaseUrl, backendHeaders, managementKey, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
+    // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
+    // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authManager, backendBaseUrl, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
   const navigation = useMemo(
@@ -345,11 +343,6 @@ function routeMatchesPath(routePath: string, path: string) {
 
   return routeSegments.every((segment, index) =>
     segment.startsWith(":") || segment === pathSegments[index]);
-}
-
-function createBackendHeaders(runtimeConfig: StudioRuntimeConfig): HeadersInit | undefined {
-  const moduleManagementApiKey = runtimeConfig.backendModuleManagementApiKey?.trim();
-  return moduleManagementApiKey ? { "X-Elsa-Module-Management-Key": moduleManagementApiKey } : undefined;
 }
 
 export function ShellFrame({
@@ -783,8 +776,12 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
   // refetch-on-return, and modules-changed re-check that the strip previously hand-rolled.
   const { data, isFetching, dataUpdatedAt, refetch } = useHostHealth(api);
   const studio = data?.studio ?? checkingHostHealth("Checking Studio host.");
-  const server = data?.server ?? checkingHostHealth("Checking Server host.");
-  const backend = data?.backend ?? checkingHostHealth("Checking backend API.");
+  // Backend management availability now comes from the Studio management bridge (ADR 0037) — no direct browser probe
+  // of backend host-control endpoints. The tile names the explicit state (not configured / unauthorized / unreachable /
+  // degraded) instead of inferring it from a failed fetch.
+  const backend = data?.backend;
+  const backendEntry = backend ?? checkingHostHealth("Checking backend management.");
+  const backendLabel = backend ? labelForBackendHealth(backend.kind) : "Checking";
   const lastChecked = data && dataUpdatedAt ? new Date(dataUpdatedAt) : null;
   const refreshing = isFetching;
 
@@ -794,9 +791,9 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
     return () => clearInterval(id);
   }, []);
 
-  const unavailableHosts = [studio, server].filter(host => host.status === "unavailable").length;
-  const attention = studio.attention + server.attention + unavailableHosts;
-  const attentionStatus: HostHealthStatus = studio.status === "checking" || server.status === "checking"
+  const unavailableHosts = [studio, backendEntry].filter(host => host.status === "unavailable").length;
+  const attention = studio.attention + backendEntry.attention + unavailableHosts;
+  const attentionStatus: HostHealthStatus = studio.status === "checking" || backendEntry.status === "checking"
     ? "checking"
     : attention === 0
       ? "ok"
@@ -806,8 +803,7 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
     <div className="host-health">
       <div className="host-health-strip" aria-label="Host health">
         <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
-        <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
-        <HostHealthTile title="Backend API" value={backend.status === "ok" ? "Connected" : labelForHostStatus(backend.status)} detail={backend.detail} status={backend.status} icon={<Activity size={18} />} />
+        <HostHealthTile title="Backend management" value={backendLabel} detail={backendEntry.detail} status={backendEntry.status} icon={<Activity size={18} />} />
         <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
       </div>
       <div className="host-health-meta">

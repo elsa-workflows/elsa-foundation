@@ -22,6 +22,8 @@ import type {
   VariableTypeDescriptorsResponse,
   PromoteDraftResponse,
   PublishedWorkflowResponse,
+  RuntimeDiagnosticsSettingsView,
+  SaveRuntimeDiagnosticsSettingsRequest,
   SaveActivityAvailabilitySettingsRequest,
   StartWorkflowDraftTestRunRequest,
   WorkflowDefinitionState,
@@ -53,7 +55,8 @@ export const workflowKeys = {
   activityDescriptors: ["workflows", "activity-descriptors"] as const,
   expressionDescriptors: ["workflows", "expression-descriptors"] as const,
   activityAvailabilitySettings: ["workflows", "activity-availability", "settings"] as const,
-  activityAvailabilityDiagnostics: ["workflows", "activity-availability", "diagnostics"] as const
+  activityAvailabilityDiagnostics: ["workflows", "activity-availability", "diagnostics"] as const,
+  runtimeDiagnosticsSettings: ["workflows", "runtime-diagnostics", "settings"] as const
 };
 
 export function useWorkflowDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
@@ -117,6 +120,23 @@ export function useSaveActivityAvailabilitySettings(context: StudioEndpointConte
       queryClient.setQueryData(workflowKeys.activityAvailabilitySettings, saved);
       void queryClient.invalidateQueries({ queryKey: workflowKeys.activityAvailabilityDiagnostics });
       void queryClient.invalidateQueries({ queryKey: workflowKeys.activities });
+    }
+  });
+}
+
+export function useRuntimeDiagnosticsSettings(context: StudioEndpointContext) {
+  return useQuery({
+    queryKey: workflowKeys.runtimeDiagnosticsSettings,
+    queryFn: () => getRuntimeDiagnosticsSettings(context)
+  });
+}
+
+export function useSaveRuntimeDiagnosticsSettings(context: StudioEndpointContext) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: SaveRuntimeDiagnosticsSettingsRequest) => saveRuntimeDiagnosticsSettings(context, request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: workflowKeys.runtimeDiagnosticsSettings });
     }
   });
 }
@@ -374,6 +394,14 @@ export async function saveActivityAvailabilitySettings(context: StudioEndpointCo
 
 export async function listActivityAvailabilityDiagnostics(context: StudioEndpointContext) {
   return context.http.getJson<ActivityAvailabilityDiagnostics>(`${basePath}/activities/availability/diagnostics`);
+}
+
+export async function getRuntimeDiagnosticsSettings(context: StudioEndpointContext) {
+  return context.http.getJson<RuntimeDiagnosticsSettingsView>(`${basePath}/runtime-diagnostics/settings`);
+}
+
+export async function saveRuntimeDiagnosticsSettings(context: StudioEndpointContext, request: SaveRuntimeDiagnosticsSettingsRequest) {
+  return context.http.putJson<RuntimeDiagnosticsSettingsView>(`${basePath}/runtime-diagnostics/settings`, request);
 }
 
 export async function listActivityDescriptors(context: StudioEndpointContext): Promise<ActivityDescriptor[]> {

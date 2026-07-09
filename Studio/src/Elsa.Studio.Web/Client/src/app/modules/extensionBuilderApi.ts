@@ -1,6 +1,24 @@
-import { withDefaultHeaders, type StudioEndpointContext } from "../../sdk";
+import {
+  studioExtensionBuilderCapabilitiesPath,
+  withDefaultHeaders,
+  type StudioBackendManagementStatusKind,
+  type StudioEndpointContext,
+  type StudioExtensionBuilderCapabilitiesResult
+} from "../../sdk";
+import { isPermissionDenied } from "../hostControlPermissions";
 
 const root = "/_elsa/extension-builder";
+
+// The Studio management bridge's answer for the backend Extension Builder capabilities read (ADR 0037), normalized for
+// the UI: when `status` is not "available" the capabilities are absent and the UI renders an explicit
+// backend-management-unavailable state instead of issuing doomed backend requests.
+export interface BackendManagementCapabilities {
+  // "forbidden" is a Studio authorization failure (403 — the user lacks extension-builder.read), surfaced alongside the
+  // bridge's backend-management states so the UI can render "you lack permission" distinctly (#249, ADR 0037).
+  status: StudioBackendManagementStatusKind | "forbidden";
+  detail: string;
+  capabilities: ExtensionBuilderCapabilities | null;
+}
 
 export type BuildStatus = "Pending" | "Running" | "Succeeded" | "Failed" | "queued" | "running" | "succeeded" | "failed" | string;
 export type RuntimeState = "Loaded" | "PendingRestart" | "FailedReconciliation" | string;
@@ -300,8 +318,34 @@ export interface WriteProjectFileRequest {
   content: string;
 }
 
-export async function getCapabilities(context: StudioEndpointContext) {
-  return normalizeCapabilities(await context.http.getJson<Partial<ExtensionBuilderCapabilities>>(`${root}/capabilities`));
+/**
+ * Reads backend Extension Builder capabilities through the Studio management bridge (ADR 0037). The `hostContext` must
+ * be the Studio-origin context (`api.host`): the bridge attaches the server-side management key on the Studio→backend
+ * call, so the browser never carries a host management key. The bridge answers with an explicit envelope, so a failure
+ * to reach the backend surfaces as a status (unconfigured/unreachable/unauthorized/degraded) rather than a thrown HTTP
+ * error, letting the UI render a "backend management unavailable" state and gate actions instead of retrying.
+ */
+export async function getBackendManagementCapabilities(hostContext: StudioEndpointContext): Promise<BackendManagementCapabilities> {
+  try {
+    const result = await hostContext.http.getJson<StudioExtensionBuilderCapabilitiesResult>(studioExtensionBuilderCapabilitiesPath);
+    return {
+      status: result.status,
+      detail: result.detail,
+      capabilities: result.status === "available" && result.capabilities ? normalizeCapabilities(result.capabilities) : null
+    };
+  } catch (error) {
+    // A 403 is a Studio authorization failure (the user lacks extension-builder.read). Map it to the explicit
+    // "forbidden" state so the Extension Builder page renders a permission surface rather than a raw failure. Any other
+    // throw is a Studio-origin failure; rethrow so the caller's failed-state handling applies.
+    if (isPermissionDenied(error)) {
+      return {
+        status: "forbidden",
+        detail: "You do not have permission to use Extension Builder. This requires the extension-builder.read permission.",
+        capabilities: null
+      };
+    }
+    throw error;
+  }
 }
 
 export async function listWorkspaces(context: StudioEndpointContext) {

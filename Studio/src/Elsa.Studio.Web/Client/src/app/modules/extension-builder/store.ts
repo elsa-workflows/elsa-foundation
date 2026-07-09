@@ -15,6 +15,7 @@ import type {
   SourceControlDiff,
   SourceControlStatus
 } from "../extensionBuilderApi";
+import type { BackendManagementUnavailable } from "./contextValue";
 import type { OperationTracker } from "./useOperationTracker";
 import type { BuilderState, EditorTab, InspectorTab, ProjectDraft, TemplateApplicationDraft } from "./types";
 
@@ -26,6 +27,9 @@ type Setter<T> = Dispatch<SetStateAction<T>>;
 export interface BuilderCore {
   api: ElsaStudioModuleApi;
   context: ElsaStudioModuleApi["backend"];
+  // The Studio-origin context. Only the Extension Builder capability read is routed through it (via the management
+  // bridge); every other Extension Builder call stays on `context` (api.backend). See ADR 0037.
+  hostContext: ElsaStudioModuleApi["host"];
   tracker: OperationTracker;
 
   // Session-scoped identifiers.
@@ -34,6 +38,7 @@ export interface BuilderCore {
 
   // Raw state + setters.
   setState: Setter<BuilderState>;
+  setManagementUnavailable: Setter<BackendManagementUnavailable | null>;
   capabilities: ExtensionBuilderCapabilities | null;
   setCapabilities: Setter<ExtensionBuilderCapabilities | null>;
   repositories: ExtensionRepositorySummary[];

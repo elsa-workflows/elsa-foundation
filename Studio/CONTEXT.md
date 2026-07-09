@@ -220,6 +220,26 @@ _Avoid_: Published run, apply
 Execution information produced by a dispatched workflow, such as status, instance identity, activity count, incident count, logs, traces, artifact references, timing, and expiration.
 _Avoid_: Artifact inventory
 
+**Runtime Payload Capture Policy**:
+The runtime rule that decides how much evidence may be persisted for a runtime value. Host Policy caps the maximum capture level allowed by the deployment.
+_Avoid_: Studio setting, logging level
+
+**Diagnostic Snapshot**:
+A bounded, policy-sanitized representation of a runtime value intended for troubleshooting. A Diagnostic Snapshot is not the original payload and must not be treated as replayable data.
+_Avoid_: Payload, raw value, serialized object
+
+**Runtime Payload Reference**:
+A protected pointer to payload material that is not stored inline in Runtime Evidence, such as a secret value, blob, artifact, or large runtime value. A Runtime Payload Reference can appear as a leaf inside a Diagnostic Snapshot, but resolving it requires separate authorization and audit.
+_Avoid_: Diagnostic snapshot, inline payload, attachment
+
+**Workflow Runtime Diagnostics Setting**:
+A Studio-managed Workflows setting that requests a runtime payload capture level for workflow diagnostics, subject to Host Policy.
+_Avoid_: Host Policy, runtime payload capture policy
+
+**Runtime Value Evidence Level**:
+The user-facing level of runtime value evidence requested or allowed for workflow diagnostics: Off, Metadata only, Diagnostic snapshots, or Full payloads.
+_Avoid_: Capture mode, log level
+
 **Run Kind**:
 The category of workflow run shown in runtime views, such as Test Run, Published Run, Background Weaver Run, or Unknown.
 _Avoid_: Status

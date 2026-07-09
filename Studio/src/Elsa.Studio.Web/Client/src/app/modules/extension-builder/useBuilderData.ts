@@ -1,5 +1,5 @@
 import {
-  getCapabilities,
+  getBackendManagementCapabilities,
   getProject,
   getRepositoryTree,
   getRuntimeStatus,
@@ -35,9 +35,23 @@ export function useBuilderData(core: BuilderCore): BuilderData {
 
   async function bootstrap() {
     core.setState("loading");
+    core.setManagementUnavailable(null);
     setError(null);
     try {
-      const loadedCapabilities = await getCapabilities(context);
+      // ADR 0037: the capability read is routed through the Studio management bridge on the Studio origin
+      // (api.host), so the browser never carries the backend host management key. The bridge answers with an
+      // explicit envelope; when backend management is not usable we render a dedicated unavailable surface and gate
+      // actions instead of issuing doomed backend requests. Every OTHER Extension Builder call below stays on the
+      // direct backend context.
+      const management = await getBackendManagementCapabilities(core.hostContext);
+      if (management.status !== "available" || !management.capabilities) {
+        core.setCapabilities(null);
+        core.setManagementUnavailable({ kind: management.status, detail: management.detail });
+        core.setState("unavailable");
+        return;
+      }
+
+      const loadedCapabilities = management.capabilities;
       core.setCapabilities(loadedCapabilities);
       if (!isTrusted(loadedCapabilities)) {
         core.setState("ready");

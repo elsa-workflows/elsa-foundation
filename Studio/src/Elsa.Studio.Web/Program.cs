@@ -15,7 +15,6 @@ using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Sources.Directory.Configuration;
-using System.Text.Json;
 
 // Install the console stream capture hook before the host is created so that, when the ConsoleStream
 // feature is enabled in shells.json, all process stdout is captured from startup instead of only from
@@ -71,67 +70,33 @@ builder.Services.AddCShellsAspNetCore(shells =>
 // lifetime matches the connection's. Gated by the same feature-enablement check as the capture hook above.
 builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 
-// Gate the Studio management surface (module management, feature management, console-stream) behind an
-// authentication/authorization policy. The built-in scheme validates Studio:BackendModuleManagementApiKey; a host
-// can register its own authentication and reuse ModuleManagementAuth.PolicyName as the seam. The console-stream
-// hub path is allowed to carry the key as an access_token query parameter (browsers cannot set headers on the
-// WebSocket/SSE handshake); every other endpoint takes the key by header only, keeping it out of access logs.
-builder.Services.AddModuleManagementAuth(configuration, builder.Environment, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
+// Studio management bridge (ADR 0037): a Studio-owned server-side surface that reports backend management availability
+// so the browser stops probing backend host-control endpoints directly. The bridge — and every other browser-facing
+// Studio host-control endpoint (module management, feature management, theme management, console-stream) — is gated by
+// a single coarse user-session gate (StudioBridgeAuth). The browser never carries an Elsa host management key; Studio
+// attaches the server-side management key only on its own backend calls (StudioBackendManagementClient). The
+// console-stream hub path is allowed to carry the browser bearer as an access_token query parameter (browsers cannot
+// set headers on the WebSocket/SSE handshake); every other endpoint takes the bearer by header only, keeping it out of
+// access logs. When Studio auth is disabled the gate allows anonymously so the demo shell keeps working.
+builder.Services.AddStudioBridgeAuth(configuration, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
+builder.Services.AddStudioBackendManagementBridge(configuration);
 
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Browser runtime config (window.__ELSA_STUDIO_RUNTIME__). The body is built by StudioRuntimeScript, which
+// deliberately omits the backend host management key so no server-side secret reaches the browser (ADR 0037).
 app.MapGet("/studio-runtime.js", () =>
-{
-    var runtimeConfig = new Dictionary<string, object?>
-    {
-        ["backendBaseUrl"] = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
-        ["backendModuleManagementApiKey"] = configuration["Studio:BackendModuleManagementApiKey"] ?? string.Empty,
-        // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry)
-        // against the backend identity endpoints. Omitted endpoints fall back to the SDK defaults
-        // (`/_elsa/identity/token`); when Enabled is false the shell keeps booting anonymously.
-        ["auth"] = BuildAuthRuntimeConfig(configuration),
-        ["workflows"] = BuildWorkflowsRuntimeConfig(configuration)
-    };
-
-    return Results.Content(
-        $"window.__ELSA_STUDIO_RUNTIME__ = {JsonSerializer.Serialize(runtimeConfig)};",
-        "application/javascript");
-});
-
-static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration)
-{
-    var auth = new Dictionary<string, object?>
-    {
-        ["enabled"] = configuration.GetValue("Studio:Auth:Enabled", defaultValue: false)
-    };
-
-    var tokenEndpoint = configuration["Studio:Auth:TokenEndpoint"];
-    if (!string.IsNullOrWhiteSpace(tokenEndpoint))
-        auth["tokenEndpoint"] = tokenEndpoint;
-
-    var refreshEndpoint = configuration["Studio:Auth:RefreshEndpoint"];
-    if (!string.IsNullOrWhiteSpace(refreshEndpoint))
-        auth["refreshEndpoint"] = refreshEndpoint;
-
-    return auth;
-}
-
-static Dictionary<string, object?> BuildWorkflowsRuntimeConfig(IConfiguration configuration)
-{
-    return new Dictionary<string, object?>
-    {
-        ["autosaveEnabledByDefault"] = configuration.GetValue("Studio:Workflows:AutosaveEnabledByDefault", defaultValue: true)
-    };
-}
+    Results.Content(StudioRuntimeScript.Render(configuration), "application/javascript"));
 
 app.UseStaticFiles();
 
 app.MapElsaModuleManagementApi();
+app.MapStudioBackendManagementBridge();
 app.MapElsaFeatureManagementApi();
-app.MapConsoleStreamStudioIfEnabled(configuration, ModuleManagementAuth.PolicyName);
+app.MapConsoleStreamStudioIfEnabled(configuration, StudioBridgeAuth.PolicyName);
 app.MapShells();
 app.MapActiveShellStudioApi();
 app.MapNuplaneStaticWebAssets();
