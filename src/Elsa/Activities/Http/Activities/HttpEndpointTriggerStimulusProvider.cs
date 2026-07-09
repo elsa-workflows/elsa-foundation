@@ -48,8 +48,24 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (literal is not { } value || value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return null;
 
-        var text = value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+        var text = RequireJsonString(value, node, inputName);
         return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
+    /// <summary>
+    /// Extracts the string value of a literal JSON element that is expected to be a string. A non-string kind is a
+    /// publish failure — coercing a number/bool/object into a route path or HTTP method via <c>ToString()</c> would
+    /// persist a garbage stimulus — so it throws the same <see cref="ArgumentException"/> as the non-literal case,
+    /// naming the input and the offending JSON kind.
+    /// </summary>
+    private static string? RequireJsonString(JsonElement value, ExecutableNode node, string inputName)
+    {
+        if (value.ValueKind != JsonValueKind.String)
+            throw new ArgumentException(
+                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' element of kind " +
+                $"'{value.ValueKind}' that is not a JSON string. Routing-significant literals must be authored as strings.");
+
+        return value.GetString();
     }
 
     /// <summary>
@@ -76,7 +92,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a JSON array of methods.");
 
         var methods = literal.EnumerateArray()
-            .Select(element => element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString())
+            .Select(element => RequireJsonString(element, node, inputName))
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!)
             .ToArray();

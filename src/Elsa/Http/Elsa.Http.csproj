@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Expose the internal RouteTable to its unit tests so the atomic-swap semantics can be asserted directly. -->
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authorization" />
     <PackageReference Include="Microsoft.AspNetCore.Authorization.Policy" />
     <PackageReference Include="Microsoft.AspNetCore.Http" />

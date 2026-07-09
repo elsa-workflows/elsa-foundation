@@ -30,16 +30,13 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
     public string BasePath { get; set; } = string.Empty;
 
     [ManifestSetting(DisplayName = "Fault handler type", Description = "CLR type name of the HTTP endpoint fault handler implementation.", Category = "Services", Advanced = true)]
-
-    public string FaultHandlerType { get; set; } = typeof(HttpEndpointFaultHandler).FullName!;
+    public string FaultHandlerType { get; set; } = typeof(HttpEndpointFaultHandler).GetSimpleAssemblyQualifiedName();
 
     [ManifestSetting(DisplayName = "Authorization handler type", Description = "CLR type name of the HTTP endpoint authorization handler implementation.", Category = "Services", Advanced = true)]
-
-    public string AuthorizationHandlerType { get; set; } = typeof(AuthenticationBasedHttpEndpointAuthorizationHandler).FullName!;
+    public string AuthorizationHandlerType { get; set; } = typeof(AuthenticationBasedHttpEndpointAuthorizationHandler).GetSimpleAssemblyQualifiedName();
 
     [ManifestSetting(DisplayName = "Route resolver type", Description = "CLR type name of the HTTP endpoint route resolver implementation.", Category = "Services", Advanced = true)]
-
-    public string RouteResolverType { get; set; } = typeof(HttpEndpointRoutesResolver).FullName!;
+    public string RouteResolverType { get; set; } = typeof(HttpEndpointRoutesResolver).GetSimpleAssemblyQualifiedName();
 
     public void ConfigureServices(IServiceCollection services)
     {

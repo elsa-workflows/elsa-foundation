@@ -92,6 +92,45 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
     }
 
+    [Fact]
+    public void Describe_Throws_WhenSupportedMethodsContainsNonStringElements()
+    {
+        // [5, true] — a literal JSON array whose elements are not strings must fail the publish rather than coerce
+        // each element to garbage via ToString().
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), "[5, true]")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenSupportedMethodsMixesStringAndNonString()
+    {
+        // ["GET", {}] — a single non-string element is enough to fail the publish.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), """["GET", {}]""")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenPathLiteralIsNotAString()
+    {
+        // A non-string Path literal (a number here) is routing-significant and must throw, not ToString()-coerce.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = RawLiteralBinding(nameof(HttpEndpoint.Path), "42")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
     private static ExecutableNode EndpointNode(string? path, IReadOnlyCollection<string>? methods = null, string activityType = "Elsa.HttpEndpoint")
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
@@ -127,6 +166,12 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values)
     {
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(values));
+        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+    }
+
+    private static RuntimeInputBinding RawLiteralBinding(string name, string rawJson)
+    {
+        using var document = JsonDocument.Parse(rawJson);
         return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
     }
 
