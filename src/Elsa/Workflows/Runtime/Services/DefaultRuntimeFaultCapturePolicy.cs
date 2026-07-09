@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Core.Services;
 
@@ -12,16 +13,14 @@ public sealed class DefaultRuntimeFaultCapturePolicy : IRuntimeFaultCapturePolic
 {
     private readonly RuntimeFaultCaptureOptions _options;
 
-    public DefaultRuntimeFaultCapturePolicy()
-        : this(RuntimeFaultCaptureOptions.Default)
-    {
-    }
-
-    public DefaultRuntimeFaultCapturePolicy(RuntimeFaultCaptureOptions options)
+    public DefaultRuntimeFaultCapturePolicy(IOptions<RuntimeFaultCaptureOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        _options = options;
+        _options = options.Value;
     }
+
+    /// <summary>Creates a policy with default options, for fallback construction outside DI.</summary>
+    public static DefaultRuntimeFaultCapturePolicy CreateDefault() => new(Options.Create(new RuntimeFaultCaptureOptions()));
 
     public RuntimeFaultInfo Capture(Exception exception)
     {

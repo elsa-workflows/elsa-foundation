@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -174,7 +175,7 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             pauseGate: null,
             workflowExecutionStateStore: null,
             pipelineDispatcher: null,
-            faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(),
+            faultCapturePolicy: new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions())),
             poisonStore: poisonStore,
             retryPolicy: retryPolicy);
 
