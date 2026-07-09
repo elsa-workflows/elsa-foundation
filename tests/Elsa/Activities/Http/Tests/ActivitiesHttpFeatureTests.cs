@@ -3,7 +3,10 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -62,6 +65,41 @@ public sealed class ActivitiesHttpFeatureTests
         new ActivitiesHttpFeature().ConfigureServices(services);
 
         Assert.Contains(services, d => d.ServiceType == typeof(HttpEndpointMiddleware));
+    }
+
+    [Fact]
+    public async Task MountsTheEndpointMiddleware_ThroughTheCShellsMiddlewareSeam()
+    {
+        // Spec 089 FR-003: enabling the feature is all a host needs — the feature itself is the
+        // IMiddlewareShellFeature that mounts HttpEndpointMiddleware into the shell pipeline. Proven
+        // behaviorally: a request under the endpoints base path is answered by the mounted middleware
+        // (404: no matching trigger) instead of reaching the terminal sentinel.
+        var feature = new ActivitiesHttpFeature();
+        var services = new ServiceCollection();
+        feature.ConfigureServices(services);
+        services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
+        // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
+        services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
+        var provider = services.BuildServiceProvider();
+        await using var _ = provider;
+
+        var app = new Microsoft.AspNetCore.Builder.ApplicationBuilder(provider);
+        ((CShells.AspNetCore.Features.IMiddlewareShellFeature)feature).UseMiddleware(app, environment: null);
+        var sentinelReached = false;
+        app.Run(_ =>
+        {
+            sentinelReached = true;
+            return Task.CompletedTask;
+        });
+        var pipeline = app.Build();
+
+        await using var scope = provider.CreateAsyncScope();
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.Path = "/workflows/http/orders/webhook";
+        await pipeline(context);
+
+        Assert.False(sentinelReached);
+        Assert.Equal(Microsoft.AspNetCore.Http.StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
 
     [Fact]

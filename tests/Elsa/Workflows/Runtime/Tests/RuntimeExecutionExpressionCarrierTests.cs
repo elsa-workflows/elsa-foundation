@@ -59,7 +59,7 @@ public sealed class RuntimeExecutionExpressionCarrierTests
     }
 
     private static RuntimeInputBindingStateProjectionSet Projections(string? correlationId = null, string? instanceName = null) =>
-        new(WorkflowInputs: Empty, WorkflowVariables: Empty, ActivityOutputValues: Empty, CorrelationId: correlationId, InstanceName: instanceName);
+        new(WorkflowInputs: Empty, WorkflowVariables: Empty, ActivityOutputValues: Empty, CorrelationId: correlationId, InstanceName: instanceName, StimulusInput: null);
 
     private static WorkflowExecutableIdentity NewIdentity(string artifactVersion) =>
         new("artifact-1", "definition-1", "version-7", artifactVersion, "sha256:test");

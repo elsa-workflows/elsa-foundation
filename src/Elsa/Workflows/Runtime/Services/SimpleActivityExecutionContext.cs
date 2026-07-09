@@ -273,6 +273,7 @@ public sealed class SimpleActivityExecutionContext(
     public string WorkflowDefinitionVersionId => pinnedExecutable?.DefinitionVersionId ?? string.Empty;
     public int WorkflowDefinitionVersion => _executionCarrier?.WorkflowDefinitionVersion ?? 0;
     public IReadOnlyDictionary<string, object?> WorkflowInputs => _executionCarrier?.WorkflowInputs ?? EmptyExpressionState;
+    public object? StimulusInput => _executionCarrier?.StimulusInput;
     public IReadOnlyDictionary<string, object?> WorkflowVariables => _executionCarrier?.WorkflowVariables ?? EmptyExpressionState;
     public IReadOnlyDictionary<string, object?> ActivityOutputValues => _executionCarrier?.ActivityOutputValues ?? EmptyExpressionState;
 

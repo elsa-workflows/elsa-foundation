@@ -109,6 +109,58 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_StartOnly_ForwardsStimulusInputOnTheDedicatedChannel()
+    {
+        // Spec 089 FR-001: the start path delivers the stimulus payload on the first-class StimulusInput field
+        // (the start-side counterpart of the resume path's Input) — never through the workflow-inputs bag, so
+        // it can neither collide with author-declared inputs nor be forged via caller-facing input maps.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+        var input = JsonSerializer.SerializeToElement(new { id = 7 });
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, input: input));
+
+        var dispatched = Assert.Single(startDispatcher.Requests);
+        Assert.NotNull(dispatched.StimulusInput);
+        Assert.Equal(7, dispatched.StimulusInput!.Value.GetProperty("id").GetInt32());
+        Assert.Empty(dispatched.Inputs);
+    }
+
+    [Fact]
+    public async Task Route_StartOnly_WithoutInput_CarriesNoStimulusInput()
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        var dispatched = Assert.Single(startDispatcher.Requests);
+        Assert.Null(dispatched.StimulusInput);
+        Assert.Empty(dispatched.Inputs);
+    }
+
+    [Fact]
+    public async Task Route_ResumeOnly_StillForwardsStimulusInputToResumeDispatch()
+    {
+        // Regression pin: the resume path's input delivery predates spec 089 and must stay unchanged.
+        var bookmarkStore = new InMemoryBookmarkStateStore();
+        await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));
+        var resumeDispatcher = new RecordingResumeDispatcher();
+        var router = Router(new InMemoryWorkflowTriggerBindingStore(), bookmarkStore, new RecordingStartDispatcher(), resumeDispatcher);
+        var input = JsonSerializer.SerializeToElement(new { id = 9 });
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.ResumeOnly, input: input));
+
+        var resumed = Assert.Single(resumeDispatcher.Requests);
+        Assert.NotNull(resumed.Input);
+        Assert.Equal(9, resumed.Input!.Value.GetProperty("id").GetInt32());
+    }
+
+    [Fact]
     public async Task Route_ResumeFanIn_IsScopedByCorrelation()
     {
         var bookmarkStore = new InMemoryBookmarkStateStore();
@@ -145,8 +197,9 @@ public sealed class StimulusRouterTests
     private static StimulusDispatchRequest Request(
         StimulusRoutingMode mode = StimulusRoutingMode.StartAndResume,
         string? correlationId = null,
-        string? idempotencyKey = null) =>
-        new(StimulusType, StimulusHash, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey);
+        string? idempotencyKey = null,
+        JsonElement? input = null) =>
+        new(StimulusType, StimulusHash, input: input, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey);
 
     private WorkflowTriggerBinding Binding(string artifactId, string nodeId) =>
         new(

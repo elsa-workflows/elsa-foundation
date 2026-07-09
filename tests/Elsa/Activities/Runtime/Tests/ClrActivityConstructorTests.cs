@@ -2,6 +2,7 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Expressions.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;

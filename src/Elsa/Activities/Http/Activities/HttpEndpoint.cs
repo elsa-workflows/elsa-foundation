@@ -1,7 +1,9 @@
+using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
 
@@ -18,15 +20,15 @@ namespace Elsa.Activities.Http.Activities;
 /// <b>Response model.</b> This is the <c>async/202</c> baseline: the endpoint replies <c>202 Accepted</c> the
 /// moment it starts the workflow, so no request is waiting when the run executes. A workflow that wants to
 /// record an intended response uses <see cref="WriteHttpResponse"/>, which writes a durable, observable
-/// artifact. Synchronous request/response correlation (a caller that blocks for the workflow's response) is a
-/// deliberately separate subsystem — the named "HTTP synchronous response correlation" follow-up.
+/// artifact. Synchronous request/response correlation is spec 089 sub-unit E (request-affine execution).
 /// </para>
 /// <para>
-/// <b>Start-input delivery is pending.</b> The runtime start path does not yet thread a stimulus's input into
-/// the started instance (only the resume path does), so the surfaced <see cref="Result"/> currently reflects
-/// the <em>authored</em> route rather than the live request body/headers/query. This is the named "HTTP
-/// endpoint start-input delivery" follow-up; when it lands, the live <see cref="HttpRequestModel"/> the
-/// middleware already serializes as the stimulus input becomes available with no wire change.
+/// <b>Result resolution.</b> The middleware serializes the live request as the stimulus input, and the router's
+/// start path carries it on the dedicated stimulus-input channel (spec 089 FR-001/FR-002) — surfaced here via
+/// <see cref="IExecutionExpressionState.StimulusInput"/>. That channel is separate from workflow inputs by
+/// construction, so an author input cannot collide with it and the execute API's inputs bag cannot forge it.
+/// When the execution was not started by an HTTP stimulus (direct run, or a foreign/malformed stimulus
+/// payload), the Result falls back to a model projected from the authored route.
 /// </para>
 /// </remarks>
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
@@ -46,19 +48,54 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 
     protected override void Execute(IActivityExecutionContext context)
     {
+        var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
+        context.Set(Result, model);
+    }
+
+    /// <summary>
+    /// Resolves the live request model from the dedicated stimulus-input channel. Returns null when the input
+    /// is absent (non-HTTP start) or is not a valid request-model payload (a foreign stimulus started this
+    /// artifact, or the payload is malformed) — the caller then uses the authored-route fallback. Validation is
+    /// strict on the identifying members: a JSON object that deserializes without <c>Path</c> and <c>Method</c>
+    /// is not a request model, never a half-populated Result.
+    /// </summary>
+    private static HttpRequestModel? ResolveStimulusRequest(IActivityExecutionContext context)
+    {
+        if (context.ExpressionExecutionContext is not IExecutionExpressionState { StimulusInput: JsonElement { ValueKind: JsonValueKind.Object } json })
+            return null;
+
+        try
+        {
+            var model = json.Deserialize<HttpRequestModel>();
+            if (model is not { Path: not null, Method: not null })
+                return null;
+
+            // Tolerate payloads missing the collection members rather than surfacing null dictionaries.
+            return model with
+            {
+                Headers = model.Headers ?? new Dictionary<string, string[]>(),
+                Query = model.Query ?? new Dictionary<string, string[]>()
+            };
+        }
+        catch (JsonException)
+        {
+            // Malformed payload on the stimulus channel: fall back rather than fault. The durable stimulus
+            // value remains inspectable on the instance for diagnosis.
+            return null;
+        }
+    }
+
+    private HttpRequestModel BuildAuthoredRouteModel(IActivityExecutionContext context)
+    {
         var path = context.Get(Path) ?? string.Empty;
         var methods = context.Get(SupportedMethods);
         var method = methods is { Count: > 0 } ? methods.First() : "*";
 
-        // Authored-route projection until start-input delivery lands (see remarks): the live request body/
-        // headers/query are not threaded through the runtime start path yet.
-        var model = new HttpRequestModel(
+        return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizePath(path),
             Method: method,
             Headers: new Dictionary<string, string[]>(),
             Query: new Dictionary<string, string[]>(),
             Body: null);
-
-        context.Set(Result, model);
     }
 }

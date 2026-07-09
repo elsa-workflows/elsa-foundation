@@ -13,14 +13,14 @@ public sealed class ActivityFaultIncidentRecorder
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
 
     public ActivityFaultIncidentRecorder(TimeProvider timeProvider)
-        : this(timeProvider, null, new DefaultRuntimeFaultCapturePolicy())
+        : this(timeProvider, null, DefaultRuntimeFaultCapturePolicy.CreateDefault())
     {
     }
 
     public ActivityFaultIncidentRecorder(
         TimeProvider timeProvider,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator)
-        : this(timeProvider, inspectionAccumulator, new DefaultRuntimeFaultCapturePolicy())
+        : this(timeProvider, inspectionAccumulator, DefaultRuntimeFaultCapturePolicy.CreateDefault())
     {
     }
 

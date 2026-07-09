@@ -39,6 +39,15 @@ public interface IExecutionExpressionState
     /// <summary>Workflow input values keyed by input name.</summary>
     IReadOnlyDictionary<string, object?> WorkflowInputs { get; }
 
+    /// <summary>
+    /// The payload of the stimulus that started this execution, projected from its reserved durable channel
+    /// (spec 089 A); a <see cref="System.Text.Json.JsonElement"/> after the durable round-trip. Null when the
+    /// execution was not started by a stimulus carrying a payload. Deliberately separate from
+    /// <see cref="WorkflowInputs"/>: it cannot collide with author-declared inputs and cannot be supplied
+    /// through the execute API's inputs bag.
+    /// </summary>
+    object? StimulusInput { get; }
+
     /// <summary>Current workflow variable values keyed by variable name.</summary>
     IReadOnlyDictionary<string, object?> WorkflowVariables { get; }
 

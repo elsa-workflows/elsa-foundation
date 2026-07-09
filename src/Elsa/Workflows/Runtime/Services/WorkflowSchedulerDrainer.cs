@@ -51,7 +51,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         _pauseGate = pauseGate;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _pipelineDispatcher = pipelineDispatcher;
-        _faultCapturePolicy = faultCapturePolicy ?? new DefaultRuntimeFaultCapturePolicy();
+        _faultCapturePolicy = faultCapturePolicy ?? DefaultRuntimeFaultCapturePolicy.CreateDefault();
         _poisonStore = poisonStore;
         _retryPolicy = retryPolicy;
         _tracer = tracer ?? NullWorkflowEngineTracer.Instance;
