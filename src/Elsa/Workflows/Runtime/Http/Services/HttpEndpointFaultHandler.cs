@@ -8,7 +8,12 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <summary>
 /// A default fault handler that writes information about the fault to the <see cref="HttpResponse"/>.
 /// </summary>
-internal sealed class HttpEndpointFaultHandler : IHttpEndpointFaultHandler
+/// <remarks>
+/// Public (like the shipped <c>IHttpEndpointAuthorizationHandler</c> implementations, spec 089 C T008) so the
+/// integration fixture can register it explicitly — the fixture composes services directly rather than via the
+/// reflective feature loader, and this assembly exposes no <c>InternalsVisibleTo</c> to the test project.
+/// </remarks>
+public sealed class HttpEndpointFaultHandler : IHttpEndpointFaultHandler
 {
     /// <inheritdoc />
     public ValueTask HandleAsync(HttpEndpointFaultContext context)

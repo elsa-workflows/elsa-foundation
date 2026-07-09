@@ -86,11 +86,18 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// </summary>
     public OutputArgument<IDictionary<string, string>>? RouteData { get; set; }
 
+    /// <summary>
+    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011); null when the
+    /// body was empty, the content type unrecognized, or the run was not started by an HTTP stimulus.
+    /// </summary>
+    public OutputArgument<object?>? ParsedContent { get; set; }
+
     protected override void Execute(IActivityExecutionContext context)
     {
         var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
         context.Set(Result, model);
         context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+        context.Set(ParsedContent, (object?)model.ParsedContent);
     }
 
     /// <summary>

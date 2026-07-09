@@ -14,11 +14,11 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 | Matched, async mode (and A baseline) | 202 Accepted | `{ "started": [executionIds] }` (resumes reported analogously from D) |
 | No matching trigger/bookmark | 404 Not Found | — |
 | Ambiguous match (>1 distinct workflow per (template, method)) [B — live] | 409 Conflict | `{ "error": "ambiguous-endpoint", ... }`; no instance started |
-| Authorize failed [C] | 401 Unauthorized | — |
-| Body exceeds RequestSizeLimit [C] | 413 Content Too Large | — |
-| Workflow timeout in sync processing [C/E] | 408 Request Timeout | via fault handler |
-| Bad-request classified fault [C] | 400 Bad Request | via fault handler |
-| Other fault surfaced to the exchange [C/E] | 500 Internal Server Error | via fault handler |
+| Authorize failed (or handler absent — fail closed) [C — live] | 401 Unauthorized | — (evaluated before the body is read) |
+| Body exceeds the per-endpoint RequestSizeLimit (or global MaxRequestBodyBytes) [C — live] | 413 Content Too Large | — |
+| Dispatch exceeded the per-endpoint RequestTimeout [C — live; E extends to sync runs] | 408 Request Timeout | via fault handler (inline fallback when absent) |
+| Bad-request classified fault (HttpBadRequestException) [C — live] | 400 Bad Request | via fault handler (inline fallback) |
+| Other dispatch fault [C — live; E extends to sync runs] | 500 Internal Server Error | via fault handler (inline fallback) |
 | Sync mode, workflow wrote response [E] | workflow-authored | workflow-authored status/headers/body |
 | Sync mode, suspended before response / non-local execution [E] | 202 Accepted | `{ "started": [...] }` degrade |
 
@@ -28,11 +28,11 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 |---|---|---|---|
 | Path | input (literal, required) | exists | route template from B (`orders/{id}`) |
 | SupportedMethods | input | exists | routing-significant from B; N bindings for N methods |
-| Authorize / Policy | inputs | C | non-identity options |
-| RequestTimeout / RequestSizeLimit | inputs | C | non-identity options |
+| Authorize / Policy | inputs | C — live | non-identity binding metadata; literal-at-publish; fail-closed enforcement |
+| RequestTimeout / RequestSizeLimit | inputs | C — live | non-identity binding metadata; timeout bounds dispatch (408), size limit overrides the global cap (413) |
+| ParsedContent | output | C — live | content-type-parsed body as wire-safe JSON; null for empty/unknown/non-HTTP starts |
 | ResponseMode | input (Sync/Async) | E | default Async (preserves baseline) |
-| Result: HttpRequestModel | output | A | live request from stimulus input |
-| RouteData | output | B | extracted template parameters |
-| ParsedContent | output | C | content-type-parsed body |
+| Result: HttpRequestModel | output | A — live | live request from stimulus input |
+| RouteData | output | B — live | extracted template parameters |
 
 All new members must reconcile into the activity catalog (§E2.8) via the CLR reconciliation source.

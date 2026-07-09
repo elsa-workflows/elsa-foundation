@@ -22,10 +22,13 @@ Changes to module-internal contracts; each is catalogued in the owning module's 
 - BREAKING (pre-release): unauthored `SupportedMethods` defaults to `GET`; non-literal `SupportedMethods` fails the publish like a non-literal `Path`.
 - Strict string-only literals (review B12): both `Path` and every `SupportedMethods` array element must be authored as JSON **strings**. A non-string literal (number/bool/object) fails the publish with the same `ArgumentException` as a non-literal binding — it is no longer silently `ToString()`-coerced into a garbage route path or HTTP method. (Extraction shares one `RequireJsonString` helper — DRY finding V15.)
 
-## C — parsing/auth/faults
+## C — parsing/auth/faults (as-built)
 
-- New request-body parse entry point in `Elsa.Http` reusing the prioritized `IHttpContentParser` set (response-side contract untouched).
-- `IHttpEndpointAuthorizationHandler`, `IHttpEndpointFaultHandler` (existing, unwired): become load-bearing from the middleware; contexts unchanged.
+- Policy contracts moved DOWN to `Elsa.Http.Core` (`IHttpEndpointAuthorizationHandler`, `IHttpEndpointFaultHandler`, contexts, `HttpBadRequestException`) so the middleware consumes them without a cross-module edge; implementations stay in `Elsa.Workflows.Runtime.Http`. `AuthorizeHttpEndpointContext` slimmed to `(HttpContext, Policy)` — authorization runs before any instance exists, so the Runtime `Workflow` resource member is gone.
+- `IHttpRequestBodyParser` (contract `Elsa.Http.Core`, impl `Elsa.Http`, TryAdd): content-type dispatch to wire-safe `JsonElement?` (json/+json parsed, text/* string element, unknown/invalid/empty → null, never throws). The response-side `IHttpContentParser` set was deliberately NOT force-fit (HttpResponseMessage/ReturnType/converter shape) and is regression-pinned untouched.
+- Endpoint options are NON-IDENTITY claimant-binding metadata written by the provider (`http:authorize` omit-when-false, `http:policy` raw, `http:requestTimeout` invariant `"c"`, `http:requestSizeLimit` invariant long) and parsed by the middleware from the (single-definition) claimants the B ambiguity guard already fetched.
+- Middleware enforcement order: authorize (fail closed — 401 when the handler is missing/denies, before the body is read) → per-endpoint size-limited body read (413) → parse (`ParsedContent` on the wire model + activity output) → dispatch under a linked-CTS per-endpoint timeout with faults mapped via `IHttpEndpointFaultHandler` (timeout→408, `HttpBadRequestException`→400, other→500; inline fallback mapping when the policy feature is absent).
+- `AuthenticationBasedHttpEndpointAuthorizationHandler` hardened: prefers an authenticated `User`, else `AuthenticateAsync` against the shell-scoped default scheme, fails closed on any failure/throw. Investigation result: root `UseAuthentication` runs after `MapShells`' scope swap and resolves per-shell schemes, so `User` IS populated in the shell branch; `IMiddlewareShellFeature.Order` stays default (auth is not a shell middleware feature — nothing in-branch to order against).
 
 ## D — mid-flow resume
 
