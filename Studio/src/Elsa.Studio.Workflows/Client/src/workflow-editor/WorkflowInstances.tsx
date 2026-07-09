@@ -785,7 +785,16 @@ export function formatSnapshotPayload(payload: unknown) {
   }
 }
 
-function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
+const incidentStackTraceMetadataKeys = [
+  "runtime.faultStackTrace",
+  "runtime.exceptionStackTrace",
+  "runtime.stackTrace",
+  "faultStackTrace",
+  "exceptionStackTrace",
+  "stackTrace"
+];
+
+export function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
   incidents: IncidentStateSummary[];
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
@@ -797,7 +806,7 @@ function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEv
       <h4>Incidents</h4>
       {incidents.length === 0 ? <p>No incidents recorded.</p> : null}
       {incidents.map(incident => (
-        <div
+        <article
           className="wf-instance-incident"
           data-severity={incident.severity.toLowerCase()}
           data-selected={incident.incidentId === selectedEvidenceId}
@@ -820,11 +829,46 @@ function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEv
             onCopied={label => setCopyStatus(`Copied ${label}`)}
             onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
           />
-        </div>
+          <IncidentStackTrace incident={incident} />
+        </article>
       ))}
       {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
     </section>
   );
+}
+
+function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
+  const stackTrace = getIncidentStackTrace(incident);
+  if (!stackTrace) return null;
+
+  return (
+    <details className="wf-incident-stacktrace">
+      <summary>{previewStackTrace(stackTrace)}</summary>
+      <pre>{stackTrace}</pre>
+    </details>
+  );
+}
+
+export function getIncidentStackTrace(incident: IncidentStateSummary) {
+  const directStackTrace = firstNonBlank(incident.stackTrace, incident.exceptionStackTrace);
+  if (directStackTrace) return directStackTrace;
+
+  for (const key of incidentStackTraceMetadataKeys) {
+    const value = incident.metadata?.[key];
+    if (value && value.trim()) return value;
+  }
+
+  return null;
+}
+
+function firstNonBlank(...values: Array<string | null | undefined>) {
+  return values.find(value => value?.trim()) ?? null;
+}
+
+function previewStackTrace(stackTrace: string) {
+  const firstMeaningfulLine = stackTrace.split("\n").find(line => line.trim()) ?? stackTrace;
+  const preview = firstMeaningfulLine.trim();
+  return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
 }
 
 function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId }: { details: WorkflowInstanceDetails; graphNodeIds?: Set<string>; rootNodeId?: string | null }) {
