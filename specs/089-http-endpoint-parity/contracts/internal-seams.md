@@ -9,11 +9,15 @@ Changes to module-internal contracts; each is catalogued in the owning module's 
 - Transport guard: `HttpEndpointOptions.MaxRequestBodyBytes` (default 1 MiB, streaming-enforced, 413) bounds the body because the stimulus payload becomes durable state on the started instance; per-endpoint authored limits remain sub-unit C. Empty/root `BasePath` disables the middleware (never a host-wide catch-all); base-path matching is segment-bounded.
 - Known platform limitation (review V16): CShells applies `UseMiddleware` to the `IApplicationBuilder` captured at `MapShells()` time — a shell activated dynamically after startup gets no middleware (endpoints have a dynamic source; middleware does not). Tracked as a CShells enhancement.
 
-## B — routing
+## B — routing (as-built)
 
-- `TriggerStimulusDescriptor` +`Metadata: IReadOnlyDictionary<string,string>` (optional; providers may omit). `WorkflowTriggerBindingExtractor` copies it verbatim into `WorkflowTriggerBinding.Metadata`.
-- `IActivityTriggerStimulusProvider` (behavioral): a provider MAY return multiple descriptors per node (one per (template, method)); extractor accepts one-or-many.
-- `IHttpEndpointRoutesResolver` (`Elsa.Workflows.Runtime.Http`): reimplemented over the binding store; feeds the revived `UpdateRouteTableStartupTask` + binding-change handler that maintain the per-shell `IRouteTable`.
+- `TriggerStimulusDescriptor` +`Metadata: IReadOnlyDictionary<string,string>` (optional, ordinal snapshot). `WorkflowTriggerBindingExtractor` copies it verbatim into `WorkflowTriggerBinding.Metadata`; `WorkflowTriggerBinding.BuildId` now keys on (artifactId, nodeId, **stimulusHash**) so sibling descriptors on one node get distinct deterministic ids.
+- `IActivityTriggerStimulusProvider.Describe` returns **zero-or-more** descriptors (`IReadOnlyCollection`; empty = not mine). HTTP emits one per (template, method); Timer/Cron/Event return single-element collections.
+- Shared vocabulary `Elsa.Http.Core.HttpEndpointRouting` (StimulusType `HttpEndpoint`, metadata keys `http:template`/`http:method`) sits below both `Elsa.Activities.Http` (writer) and `Elsa.Workflows.Runtime.Http` (reader) — no cross-module edge.
+- `IHttpEndpointRoutesResolver` reshaped to `ResolveRoutesAsync()` over `IWorkflowTriggerBindingStore.ListByStimulusTypeAsync` (new store member; no new index, no schema bump). Templates are stored **endpoint-relative, unprefixed** — the base path is exclusively `HttpEndpointMiddleware`'s concern, so the resolver takes no options dependency and the two BasePath settings cannot diverge.
+- Freshness: new `IWorkflowTriggerIndexObserver` seam (TryAddEnumerable) invoked by `WorkflowTriggerIndexer.IndexAsync` after delete-and-resave; observer failure fails the publish. `RouteTableTriggerIndexObserver` does a full re-projection refresh; `UpdateRouteTableStartupTask` covers shell start. Both catalogued in the owning EXTENSION_POINTS.md files.
+- Middleware: first deterministic route-table match wins for overlapping templates (elsa-core parity); ambiguity (= same (template, method) hash claimed by >1 `DefinitionId`) → `409` before any dispatch.
+- BREAKING (pre-release): unauthored `SupportedMethods` defaults to `GET`; non-literal `SupportedMethods` fails the publish like a non-literal `Path`.
 
 ## C — parsing/auth/faults
 

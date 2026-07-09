@@ -30,7 +30,8 @@ namespace Elsa.Activities.Http;
 [ShellFeature(
     name: "ActivitiesHttp",
     DisplayName = "Activities HTTP",
-    Description = "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse."
+    Description = "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
+    DependsOn = new object[] { "Http" }
 )]
 public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeature
 {

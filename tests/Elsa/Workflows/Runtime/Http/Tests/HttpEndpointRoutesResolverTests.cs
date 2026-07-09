@@ -1,5 +1,4 @@
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
 using Xunit;
 
@@ -9,8 +8,9 @@ public sealed class HttpEndpointRoutesResolverTests
 {
     private readonly InMemoryWorkflowTriggerBindingStore _store = new();
 
-    private HttpEndpointRoutesResolver Resolver(string basePath = "") =>
-        new(_store, Microsoft.Extensions.Options.Options.Create(new WorkflowsRuntimeHttpFeatureOptions { BasePath = basePath }));
+    // The resolver projects endpoint-relative templates only — the endpoints base path is a middleware concern
+    // (HttpEndpointMiddleware strips it before consulting the route table), so it takes no base-path option.
+    private HttpEndpointRoutesResolver Resolver() => new(_store);
 
     [Fact]
     public async Task ProjectsDistinctTemplates_FromHttpBindingMetadata()
@@ -67,14 +67,16 @@ public sealed class HttpEndpointRoutesResolverTests
     }
 
     [Fact]
-    public async Task PrefixesBasePath_WhenConfigured()
+    public async Task StoresTemplatesEndpointRelative_NeverBasePathPrefixed()
     {
+        // The resolver never prefixes the endpoints base path (that is the middleware's job) — the template is
+        // stored exactly as authored/normalized.
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
 
-        var routes = await Resolver(basePath: "workflows/http").ResolveRoutesAsync();
+        var routes = await Resolver().ResolveRoutesAsync();
 
         var route = Assert.Single(routes);
-        Assert.Equal("workflows/http/orders/{id}", route.Route);
+        Assert.Equal("orders/{id}", route.Route);
     }
 
     [Fact]

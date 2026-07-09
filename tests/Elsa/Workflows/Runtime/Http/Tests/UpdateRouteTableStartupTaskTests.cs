@@ -1,5 +1,4 @@
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
 using Xunit;
@@ -11,11 +10,8 @@ public sealed class UpdateRouteTableStartupTaskTests
     private readonly InMemoryWorkflowTriggerBindingStore _store = new();
     private readonly FakeRouteTable _routeTable = new();
 
-    private UpdateRouteTableStartupTask Task(string basePath = "")
-    {
-        var resolver = new HttpEndpointRoutesResolver(_store, Microsoft.Extensions.Options.Options.Create(new WorkflowsRuntimeHttpFeatureOptions { BasePath = basePath }));
-        return new UpdateRouteTableStartupTask(resolver, _routeTable);
-    }
+    private UpdateRouteTableStartupTask Task() =>
+        new(new HttpEndpointRoutesResolver(_store), _routeTable);
 
     [Fact]
     public async Task PopulatesRouteTable_FromBindings()

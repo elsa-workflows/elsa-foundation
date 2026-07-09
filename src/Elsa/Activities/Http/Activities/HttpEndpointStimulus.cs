@@ -40,12 +40,6 @@ public static class HttpEndpointStimulus
     }
 
     /// <summary>
-    /// Transitional alias for <see cref="NormalizeTemplate"/>, kept so call sites in files owned by parallel
-    /// work (<c>HttpEndpoint</c>, <c>HttpEndpointMiddleware</c>) keep compiling; removed when T010/T011 land.
-    /// </summary>
-    public static string NormalizePath(string path) => NormalizeTemplate(path);
-
-    /// <summary>
     /// Computes the deterministic stimulus hash for an endpoint's <c>(template, method)</c> pair. The hash is a
     /// SHA-256 digest formatted with the engine's <c>sha256:</c> prefix (lowercase hex), taken over
     /// <c>"{normalizedTemplate}\n{lowercasedMethod}"</c>, so it is stable across processes and machines and
@@ -58,13 +52,6 @@ public static class HttpEndpointStimulus
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
         return $"sha256:{Convert.ToHexString(digest).ToLowerInvariant()}";
     }
-
-    /// <summary>
-    /// Transitional single-argument alias kept so the request middleware (owned by parallel work) keeps
-    /// compiling until it resolves the concrete route and method itself; removed when T010 lands. It hashes the
-    /// path against the elsa-core default method (<c>GET</c>) so the value stays deterministic in the meantime.
-    /// </summary>
-    public static string Hash(string path) => Hash(path, "GET");
 
     /// <summary>
     /// Builds one trigger stimulus descriptor per supported method, each carrying the normalized template and

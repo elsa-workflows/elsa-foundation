@@ -13,6 +13,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.AspNetCore.Http" />
+    <!-- TestRouteMatcher drives the real ASP.NET TemplateParser/TemplateMatcher (the same primitives the
+         production RouteMatcher uses) so the middleware's template resolution is exercised, not stubbed. -->
+    <PackageReference Include="Microsoft.AspNetCore.Routing" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />

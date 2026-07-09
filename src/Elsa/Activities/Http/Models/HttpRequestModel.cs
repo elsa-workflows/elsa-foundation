@@ -18,9 +18,11 @@ namespace Elsa.Activities.Http.Models;
 /// <param name="Headers">The request headers, keyed by header name.</param>
 /// <param name="Query">The request query-string values, keyed by parameter name.</param>
 /// <param name="Body">The raw request body as a string, if any.</param>
+/// <param name="RouteData">Route parameters extracted from the matched route template (spec 089 B), e.g. <c>{ id = "42" }</c> for <c>orders/{id}</c>; empty when the template has none. Optional on the wire (older payloads deserialize with null; consumers coalesce to empty).</param>
 public sealed record HttpRequestModel(
     string Path,
     string Method,
     IDictionary<string, string[]> Headers,
     IDictionary<string, string[]> Query,
-    string? Body);
+    string? Body,
+    IDictionary<string, string>? RouteData = null);

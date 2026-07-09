@@ -40,16 +40,29 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     {
     }
 
-    /// <summary>The endpoint-relative path that starts the workflow. Drives the stimulus hash. Required, authored literal.</summary>
+    /// <summary>
+    /// The endpoint-relative route template that starts the workflow (e.g. <c>orders/{id}</c>). Drives the
+    /// stimulus hash together with each supported method. Required, authored literal.
+    /// </summary>
     public InputArgument<string> Path { get; set; } = null!;
 
-    /// <summary>The HTTP methods this endpoint accepts. Informational on the trigger; routing keys on the path only.</summary>
+    /// <summary>
+    /// The HTTP methods this endpoint accepts (spec 089 B: routing-significant — one trigger binding per
+    /// (template, method)). Authored literal; unauthored defaults to <c>GET</c> (elsa-core parity).
+    /// </summary>
     public InputArgument<ICollection<string>>? SupportedMethods { get; set; }
+
+    /// <summary>
+    /// Route parameters extracted from the matched template (e.g. <c>id = "42"</c> for <c>orders/{id}</c>);
+    /// empty for direct runs or templates without parameters.
+    /// </summary>
+    public OutputArgument<IDictionary<string, string>>? RouteData { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
         context.Set(Result, model);
+        context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -74,7 +87,8 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
             return model with
             {
                 Headers = model.Headers ?? new Dictionary<string, string[]>(),
-                Query = model.Query ?? new Dictionary<string, string[]>()
+                Query = model.Query ?? new Dictionary<string, string[]>(),
+                RouteData = model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             };
         }
         catch (JsonException)
@@ -92,10 +106,11 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
         var method = methods is { Count: > 0 } ? methods.First() : "*";
 
         return new HttpRequestModel(
-            Path: HttpEndpointStimulus.NormalizePath(path),
+            Path: HttpEndpointStimulus.NormalizeTemplate(path),
             Method: method,
             Headers: new Dictionary<string, string[]>(),
             Query: new Dictionary<string, string[]>(),
-            Body: null);
+            Body: null,
+            RouteData: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
     }
 }

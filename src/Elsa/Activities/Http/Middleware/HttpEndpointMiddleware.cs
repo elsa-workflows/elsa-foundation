@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
+using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
@@ -12,11 +13,14 @@ namespace Elsa.Activities.Http.Middleware;
 
 /// <summary>
 /// The request middleware that turns an inbound HTTP request into an <see cref="HttpEndpoint"/> start stimulus
-/// (W16, async/202 baseline). A request whose path is under <see cref="HttpEndpointOptions.BasePath"/> (matched
-/// on a whole path segment, never a bare prefix) is mapped to the endpoint route, converted to the opaque
-/// <c>(StimulusType, StimulusHash)</c> routing pair via <see cref="HttpEndpointStimulus"/>, and dispatched
-/// through <see cref="IStimulusRouter"/> in <see cref="StimulusRoutingMode.StartOnly"/> mode. Any other request
-/// passes through to the next middleware.
+/// (async/202 baseline; spec 089 B routing). A request whose path is under
+/// <see cref="HttpEndpointOptions.BasePath"/> (matched on a whole path segment, never a bare prefix) has its
+/// endpoint-relative path resolved against the per-shell <see cref="IRouteTable"/> via <see cref="IRouteMatcher"/>
+/// (ASP.NET route templates, e.g. <c>orders/{id}</c>); the matched template plus the request method form the
+/// stimulus identity (<see cref="HttpEndpointStimulus.Hash(string,string)"/>) dispatched through
+/// <see cref="IStimulusRouter"/> in <see cref="StimulusRoutingMode.StartOnly"/> mode. Unmatched templates or
+/// methods yield 404; a (template, method) claimed by more than one workflow definition yields 409 and starts
+/// nothing. Any other request passes through to the next middleware.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,7 +42,12 @@ namespace Elsa.Activities.Http.Middleware;
 /// the CShells middleware seam.
 /// </para>
 /// </remarks>
-public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<HttpEndpointOptions> options) : IMiddleware
+public sealed class HttpEndpointMiddleware(
+    IStimulusRouter router,
+    IRouteTable routeTable,
+    IRouteMatcher routeMatcher,
+    IWorkflowTriggerBindingStore triggerBindingStore,
+    IOptions<HttpEndpointOptions> options) : IMiddleware
 {
     private const string RequestedBy = "http-endpoint";
     private readonly HttpEndpointOptions _options = options.Value;
@@ -71,7 +80,33 @@ public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<Http
             return;
         }
 
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, _options.MaxRequestBodyBytes);
+        // Resolve the concrete endpoint-relative path to a published route template (spec 089 B). The route
+        // table holds endpoint-relative templates; TemplateMatcher wants rooted paths, so both sides get a
+        // leading slash for the match. First deterministic match wins (overlapping templates — e.g.
+        // orders/{id} vs orders/list — are matched in route-table order, elsa-core parity).
+        var (template, routeValues) = ResolveTemplate(endpointPath);
+        if (template is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        var stimulusHash = HttpEndpointStimulus.Hash(template, context.Request.Method);
+
+        // Ambiguity guard (spec FR-009): a (template, method) claimed by more than one workflow definition is
+        // authoring error, not fan-out — reject before any dispatch so neither workflow starts.
+        var claimants = await triggerBindingStore.ListByStimulusAsync(HttpEndpointStimulus.StimulusType, stimulusHash, context.RequestAborted);
+        if (claimants.Select(binding => binding.DefinitionId).Distinct(StringComparer.Ordinal).Count() > 1)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(new { error = "ambiguous-endpoint", detail = $"More than one workflow claims {context.Request.Method} {template}." }),
+                context.RequestAborted);
+            return;
+        }
+
+        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, _options.MaxRequestBodyBytes);
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -82,7 +117,7 @@ public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<Http
 
         var dispatch = new StimulusDispatchRequest(
             stimulusType: HttpEndpointStimulus.StimulusType,
-            stimulusHash: HttpEndpointStimulus.Hash(endpointPath),
+            stimulusHash: stimulusHash,
             input: input,
             mode: StimulusRoutingMode.StartOnly,
             requestedBy: RequestedBy);
@@ -105,8 +140,43 @@ public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<Http
         await context.Response.WriteAsync(JsonSerializer.Serialize(new { started = startedIds }), context.RequestAborted);
     }
 
+    /// <summary>
+    /// Resolves the endpoint-relative path against the per-shell route table. Returns the matched template
+    /// (endpoint-relative, as stored) plus its extracted route values, or (null, empty) when nothing matches.
+    /// </summary>
+    private (string? Template, IReadOnlyDictionary<string, string> RouteValues) ResolveTemplate(string endpointPath)
+    {
+        var rootedPath = "/" + endpointPath;
+
+        foreach (var routeData in routeTable)
+        {
+            var template = routeData.Route;
+            if (string.IsNullOrWhiteSpace(template))
+                continue;
+
+            var values = routeMatcher.Match("/" + template.TrimStart('/'), rootedPath);
+            if (values is null)
+                continue;
+
+            var routeValues = values.ToDictionary(
+                item => item.Key,
+                item => item.Value?.ToString() ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+            return (template.Trim('/'), routeValues);
+        }
+
+        return (null, EmptyRouteValues);
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyRouteValues =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Builds the request model; null when the body exceeds <paramref name="maxBodyBytes"/>.</summary>
-    private static async Task<HttpRequestModel?> BuildRequestModelAsync(HttpContext context, string endpointPath, long maxBodyBytes)
+    private static async Task<HttpRequestModel?> BuildRequestModelAsync(
+        HttpContext context,
+        string endpointPath,
+        IReadOnlyDictionary<string, string> routeValues,
+        long maxBodyBytes)
     {
         if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
             return null;
@@ -127,11 +197,12 @@ public sealed class HttpEndpointMiddleware(IStimulusRouter router, IOptions<Http
             .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
 
         return new HttpRequestModel(
-            Path: HttpEndpointStimulus.NormalizePath(endpointPath),
+            Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
             Method: context.Request.Method.ToUpperInvariant(),
             Headers: headers,
             Query: query,
-            Body: body);
+            Body: body,
+            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>

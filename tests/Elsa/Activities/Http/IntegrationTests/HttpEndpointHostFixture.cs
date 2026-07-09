@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Activities.Http.IntegrationTests;
@@ -86,6 +87,21 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     new ActivitiesRuntimeFeature().ConfigureServices(services);
                     new ActivitiesPrimitivesFeature().ConfigureServices(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
+
+                    // The real route-table stack (spec 089 B). The REAL resolver, route-table startup task, and
+                    // publish-time index observer from Elsa.Workflows.Runtime.Http are registered directly — the
+                    // same services WorkflowsRuntimeHttpFeature contributes, but registered explicitly because that
+                    // feature (like HttpFeature) resolves its defaults reflectively via Type.GetType(simpleName),
+                    // which cannot resolve types outside this assembly/mscorlib. This keeps the fixture focused
+                    // while leaving the publish→observer→resolver→route-table wiring under test fully real.
+                    //
+                    // The IRouteTable/IRouteMatcher IMPLEMENTATIONS are internal to Elsa.Http; production-equivalent
+                    // doubles (see RouteTableTestDoubles.cs) stand in for just those two services.
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+                    services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
+                    services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
+                    services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
                 });
                 webHost.Configure(app =>
                 {
@@ -112,16 +128,18 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// Publishes a workflow whose single start-trigger node is an <see cref="HttpEndpoint"/> on
-    /// <paramref name="path"/>, indexing its trigger binding the way the publish flow does. The node captures the
-    /// endpoint's <c>Result</c> output into the durable value store under the durable value id
-    /// <paramref name="resultValueId"/> so the live request the run observed can be read back.
+    /// <paramref name="path"/> accepting <paramref name="methods"/> (routing-significant — spec 089 B), indexing
+    /// its trigger binding the way the publish flow does. The node captures the endpoint's <c>Result</c> output
+    /// into the durable value store under the durable value id <paramref name="resultValueId"/> so the live
+    /// request the run observed (including its extracted RouteData) can be read back.
     /// </summary>
-    public async Task PublishHttpEndpointWorkflowAsync(string artifactId, string path, string resultValueId)
+    public async Task PublishHttpEndpointWorkflowAsync(string artifactId, string path, string resultValueId, params string[] methods)
     {
-        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId);
+        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
 
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
-        // stimulus router can match an inbound request to it — the two things the publish flow does.
+        // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
+        // also fires the route-table index observer, so the published template lands in the live route table.
         await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -141,9 +159,20 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         _host.Dispose();
     }
 
-    private WorkflowExecutable NewHttpEndpointExecutable(string artifactId, string path, string resultOutputName)
+    private WorkflowExecutable NewHttpEndpointExecutable(string artifactId, string path, string resultOutputName, string[] methods)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
+
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), path, "System.String")
+        };
+
+        // SupportedMethods is routing-significant (spec 089 B). Authored as a literal string array; unauthored
+        // would default to GET, so a POST endpoint must author ["POST"] or the request 404s under the GET default.
+        if (methods.Length > 0)
+            inputBindings[nameof(HttpEndpoint.SupportedMethods)] =
+                LiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, "System.Collections.Generic.ICollection`1[[System.String]]");
 
         var node = new ExecutableNode(
             executableNodeId: "node-http-endpoint",
@@ -152,10 +181,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityTypeVersion: "1.0.0",
             descriptorType: ClrConstruction.DescriptorType,
             descriptorPayload: ClrConstruction.Payload(serializer, typeof(HttpEndpoint)),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>
-            {
-                [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), path, "System.String")
-            },
+            inputBindings: inputBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>
             {
                 // Promote the endpoint's Result output (the live HttpRequestModel) into a durable, readable value.

@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Testing;
+using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Builder;
@@ -78,6 +79,15 @@ public sealed class ActivitiesHttpFeatureTests
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
         services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
+        // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
+        // features ActivitiesHttpFeature.DependsOn ("Http" provides IRouteTable/IRouteMatcher; "WorkflowsRuntime-
+        // Triggers" provides IWorkflowTriggerBindingStore). This bare container stands in for that platform
+        // guarantee: the endpoint template is seeded so a request under the base path resolves and reaches
+        // dispatch, where the no-start router yields 404 (proving the mounted middleware, not the sentinel,
+        // answered).
+        services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
+        services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
+        services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
         // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
         services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
         var provider = services.BuildServiceProvider();
@@ -96,6 +106,7 @@ public sealed class ActivitiesHttpFeatureTests
         await using var scope = provider.CreateAsyncScope();
         var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider };
         context.Request.Path = "/workflows/http/orders/webhook";
+        context.Request.Method = "GET";
         await pipeline(context);
 
         Assert.False(sentinelReached);
