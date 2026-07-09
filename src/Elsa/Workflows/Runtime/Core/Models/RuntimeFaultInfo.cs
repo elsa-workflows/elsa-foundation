@@ -21,5 +21,8 @@ public sealed record RuntimeFaultInfo(
 /// </summary>
 public sealed class RuntimeFaultCaptureOptions
 {
+    /// <summary>Configuration section hosts bind these options from.</summary>
+    public const string SectionName = "Elsa:Workflows:Runtime:FaultCapture";
+
     public bool CaptureStackTrace { get; set; }
 }

@@ -49,6 +49,7 @@ using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resumption;
 using Nuplane;
 using Nuplane.Admin;
@@ -242,7 +243,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
         })
         .ConfigureAllShells(shell => shell
             .WithFeature<ModularityApiFeature>()
-            .WithFeature<RuntimeFaultStackTraceFeature>());
+            // Binding an absent section is a no-op, so the feature's opt-in default stands unless an
+            // operator sets Elsa:Workflows:Runtime:FaultCapture:CaptureStackTrace.
+            .WithFeature<RuntimeFaultStackTraceFeature>(feature =>
+                configuration.GetSection(RuntimeFaultCaptureOptions.SectionName).Bind(feature)));
 });
 
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
