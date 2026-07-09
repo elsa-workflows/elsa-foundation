@@ -177,6 +177,67 @@ export interface SaveActivityAvailabilitySettingsRequest {
   rules: ActivityAvailabilityRuleSet;
 }
 
+export type RuntimeDiagnosticsEvidenceLevel = "Off" | "Metadata" | "DiagnosticSnapshot" | "Payload";
+
+export type RuntimeDiagnosticsSubject =
+  | "workflowInputs"
+  | "workflowOutputs"
+  | "activityInputs"
+  | "activityOutputs"
+  | "incidents"
+  | "diagnostics"
+  | "containerVariables"
+  | "durableValues";
+
+export type RuntimeDiagnosticsSubjectOverrides = Partial<Record<RuntimeDiagnosticsSubject, RuntimeDiagnosticsEvidenceLevel>>;
+
+export interface RuntimeDiagnosticsSettings {
+  scope?: string | null;
+  defaultLevel: RuntimeDiagnosticsEvidenceLevel;
+  subjectOverrides?: RuntimeDiagnosticsSubjectOverrides | null;
+  updatedAt?: string | null;
+  updatedBy?: string | null;
+}
+
+export interface EffectiveRuntimeDiagnosticsSettings {
+  defaultLevel: RuntimeDiagnosticsEvidenceLevel;
+  subjectOverrides?: RuntimeDiagnosticsSubjectOverrides | null;
+  limitationReasons?: string[] | null;
+}
+
+export interface RuntimeDiagnosticsSnapshotLimits {
+  maxDepth: number;
+  maxObjectProperties: number;
+  maxArrayItems: number;
+  maxStringLength: number;
+  maxTotalBytes: number;
+}
+
+export interface RuntimeDiagnosticsHostPolicy {
+  maximumLevel: RuntimeDiagnosticsEvidenceLevel;
+  subjectMaximums?: RuntimeDiagnosticsSubjectOverrides | null;
+  limitationReasons?: string[] | null;
+  snapshotLimits?: RuntimeDiagnosticsSnapshotLimits | null;
+}
+
+export interface RuntimeDiagnosticsPermissions {
+  canManage: boolean;
+  canEnableFullPayloads: boolean;
+}
+
+export interface RuntimeDiagnosticsSettingsView {
+  requested: RuntimeDiagnosticsSettings;
+  effective: EffectiveRuntimeDiagnosticsSettings;
+  hostPolicy: RuntimeDiagnosticsHostPolicy;
+  permissions: RuntimeDiagnosticsPermissions;
+}
+
+export interface SaveRuntimeDiagnosticsSettingsRequest {
+  scope?: string | null;
+  defaultLevel: RuntimeDiagnosticsEvidenceLevel;
+  subjectOverrides?: RuntimeDiagnosticsSubjectOverrides | null;
+}
+
 export interface ActivityDescriptorsResponse {
   items?: ActivityDescriptor[];
   activities?: ActivityDescriptor[];
@@ -485,12 +546,96 @@ export interface ActivityExecutionInspectionValueSnapshot {
   name: string;
   subject: string;
   captureMode: string;
+  state?: string | null;
   type?: RuntimeValueTypeDescriptor | null;
   capturedAt: string;
   payload?: unknown;
+  snapshot?: DiagnosticSnapshotNode | null;
   captureReason: string;
   isSensitive: boolean;
   metadata: Record<string, string>;
+}
+
+export type DiagnosticSnapshotNode =
+  | DiagnosticSnapshotNullNode
+  | DiagnosticSnapshotScalarNode
+  | DiagnosticSnapshotNumberNode
+  | DiagnosticSnapshotStringNode
+  | DiagnosticSnapshotObjectNode
+  | DiagnosticSnapshotArrayNode
+  | DiagnosticSnapshotMarkerNode
+  | DiagnosticSnapshotPayloadReferenceNode
+  | DiagnosticSnapshotUnknownNode;
+
+export interface DiagnosticSnapshotBaseNode {
+  kind: string;
+  typeName?: string | null;
+  displayName?: string | null;
+  metadata?: Record<string, string> | null;
+}
+
+export interface DiagnosticSnapshotNullNode extends DiagnosticSnapshotBaseNode {
+  kind: "null";
+}
+
+export interface DiagnosticSnapshotScalarNode extends DiagnosticSnapshotBaseNode {
+  kind: "scalar";
+  value?: string | number | boolean | null;
+}
+
+export interface DiagnosticSnapshotNumberNode extends DiagnosticSnapshotBaseNode {
+  kind: "number";
+  value?: number | null;
+}
+
+export interface DiagnosticSnapshotStringNode extends DiagnosticSnapshotBaseNode {
+  kind: "string";
+  preview?: string | null;
+  length?: number | null;
+  truncated?: boolean | null;
+}
+
+export interface DiagnosticSnapshotObjectNode extends DiagnosticSnapshotBaseNode {
+  kind: "object";
+  properties?: DiagnosticSnapshotProperty[] | null;
+  truncated?: boolean | null;
+}
+
+export interface DiagnosticSnapshotArrayNode extends DiagnosticSnapshotBaseNode {
+  kind: "array";
+  items?: DiagnosticSnapshotNode[] | null;
+  itemCount?: number | null;
+  truncated?: boolean | null;
+}
+
+export interface DiagnosticSnapshotMarkerNode extends DiagnosticSnapshotBaseNode {
+  kind: "redacted" | "truncated" | "unsupported" | "error" | "permissionHidden";
+  reason?: string | null;
+  omittedCount?: number | null;
+  message?: string | null;
+  requiredPermission?: string | null;
+}
+
+export interface DiagnosticSnapshotPayloadReferenceNode extends DiagnosticSnapshotBaseNode {
+  kind: "payloadReference";
+  referenceKind?: string | null;
+  referenceId?: string | null;
+  contentType?: string | null;
+  size?: number | null;
+  resolution?: {
+    canResolve: boolean;
+    reason?: string | null;
+  } | null;
+}
+
+export interface DiagnosticSnapshotUnknownNode extends DiagnosticSnapshotBaseNode {
+  kind: string;
+  [key: string]: unknown;
+}
+
+export interface DiagnosticSnapshotProperty {
+  name: string;
+  value: DiagnosticSnapshotNode;
 }
 
 export interface RuntimeValueTypeDescriptor {

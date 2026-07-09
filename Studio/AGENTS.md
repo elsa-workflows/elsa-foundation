@@ -7,16 +7,9 @@
 - **No unnecessary boilerplate.** Inline trivially small helpers rather than wrapping them in extra methods.
 
 <!-- SPECKIT START -->
-For additional context about the current agentic Studio experience
-specification, implementation plan, and design contracts, read:
-
-- `specs/003-agentic-studio-experience/spec.md`
-- `specs/003-agentic-studio-experience/plan.md`
-- `specs/003-agentic-studio-experience/research.md`
-- `specs/003-agentic-studio-experience/data-model.md`
-- `specs/003-agentic-studio-experience/contracts/agent-backend-api.md`
-- `specs/003-agentic-studio-experience/contracts/studio-agent-sdk.md`
-- `specs/003-agentic-studio-experience/contracts/workflow-agent-contract.md`
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at specs/004-runtime-value-evidence/plan.md
 <!-- SPECKIT END -->
 
 ## Agent skills

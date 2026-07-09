@@ -152,27 +152,29 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
-  it("loads and renders captured runtime input payloads for the selected execution", async () => {
+  it("loads and renders diagnostic snapshots for selected execution inputs and outputs", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
       {
         name: "Message",
         subject: "ActivityInput",
-        captureMode: "Payload",
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
         type: { typeName: "System.String" },
         capturedAt: "2026-07-09T10:00:01Z",
-        payload: "Hello at runtime",
-        captureReason: "Policy captured payload.",
+        snapshot: { kind: "string", typeName: "String", preview: "Hello at runtime", length: 16, truncated: false },
+        captureReason: "Diagnostic snapshot captured.",
         isSensitive: false,
         metadata: {}
       },
       {
         name: "Result",
         subject: "ActivityOutput",
-        captureMode: "Payload",
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
         type: { typeName: "System.String" },
         capturedAt: "2026-07-09T10:00:02Z",
-        payload: "ignored output",
-        captureReason: "Policy captured payload.",
+        snapshot: { kind: "object", typeName: "Result", properties: [{ name: "id", value: { kind: "string", preview: "customer-1", length: 10, truncated: false } }], truncated: false },
+        captureReason: "Diagnostic snapshot captured.",
         isSensitive: false,
         metadata: {}
       }
@@ -182,9 +184,12 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     await waitFor(() => expect(container.textContent).toContain("Hello at runtime"));
     expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1");
+    expect(container.textContent).toContain("Inputs");
+    expect(container.textContent).toContain("Outputs");
     expect(container.textContent).toContain("Message");
+    expect(container.textContent).toContain("Result");
+    expect(container.textContent).toContain("customer-1");
     expect(container.textContent).toContain("System.String");
-    expect(container.textContent).not.toContain("ignored output");
   });
 
   it("shows the capture reason when input values were omitted by policy", async () => {
@@ -193,6 +198,7 @@ describe("WorkflowActivityExecutionDetails", () => {
         name: "Message",
         subject: "ActivityInput",
         captureMode: "None",
+        state: "notCaptured",
         type: { typeName: "System.String" },
         capturedAt: "2026-07-09T10:00:01Z",
         payload: null,
@@ -215,6 +221,65 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect(container.textContent).toContain("No runtime input snapshots were recorded for this execution."));
+    expect(container.textContent).toContain("No runtime output snapshots were recorded for this execution.");
+  });
+
+  it("renders redaction, truncation, permission-hidden, and payload reference markers", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([
+      {
+        name: "Secret",
+        subject: "ActivityInput",
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
+        type: { typeName: "System.String" },
+        capturedAt: "2026-07-09T10:00:01Z",
+        snapshot: { kind: "redacted", reason: "sensitive-name", displayName: "Protected value" },
+        captureReason: "Diagnostic snapshot captured.",
+        isSensitive: true,
+        metadata: {}
+      },
+      {
+        name: "Archive",
+        subject: "ActivityOutput",
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
+        type: { typeName: "System.Byte[]" },
+        capturedAt: "2026-07-09T10:00:02Z",
+        snapshot: {
+          kind: "payloadReference",
+          referenceKind: "blob",
+          referenceId: "rpr_1",
+          displayName: "Large file",
+          contentType: "application/zip",
+          size: 128,
+          resolution: { canResolve: false, reason: "Reference resolution is not available in this release." }
+        },
+        captureReason: "Diagnostic snapshot captured.",
+        isSensitive: false,
+        metadata: {}
+      },
+      {
+        name: "Hidden",
+        subject: "ActivityOutput",
+        captureMode: "DiagnosticSnapshot",
+        state: "captured",
+        type: { typeName: "System.String" },
+        capturedAt: "2026-07-09T10:00:03Z",
+        snapshot: { kind: "permissionHidden", reason: "missing-permission", requiredPermission: "workflows.runtimeEvidence.viewSnapshots" },
+        captureReason: "Hidden.",
+        isSensitive: false,
+        metadata: {}
+      }
+    ]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("redacted: sensitive-name"));
+    expect(container.textContent).toContain("Marked sensitive by runtime evidence.");
+    expect(container.textContent).toContain("Large file");
+    expect(container.textContent).toContain("application/zip");
+    expect(container.textContent).toContain("Reference resolution is not available in this release.");
+    expect(container.textContent).toContain("permission Hidden: missing-permission");
   });
 });
 
