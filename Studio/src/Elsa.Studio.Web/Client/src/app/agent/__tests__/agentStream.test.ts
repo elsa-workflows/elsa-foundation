@@ -4,6 +4,30 @@ import { subscribeAgentSessionStream } from "../agentStream";
 import type { AgentStreamEvent } from "../agentTypes";
 
 describe("agent stream", () => {
+  it("attaches endpoint access tokens to stream requests", async () => {
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`
+    ]), { status: 200 }));
+
+    subscribeAgentSessionStream(
+      {
+        ...createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Tenant": "tenant-a" } }),
+        accessTokenFactory: vi.fn(async () => "access-token-1")
+      },
+      "/_elsa/agent/sessions/agt_01/stream",
+      () => {},
+      error => { throw error; },
+      { fetch: fetch as typeof globalThis.fetch });
+    await flushPromises();
+
+    const init = fetch.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get("Accept")).toBe("text/event-stream, application/x-ndjson, application/json");
+    expect(headers.get("Authorization")).toBe("Bearer access-token-1");
+    expect(headers.get("X-Elsa-Tenant")).toBe("tenant-a");
+    expect(init.credentials).toBe("include");
+  });
+
   it("normalizes backend SSE events", async () => {
     const events: AgentStreamEvent[] = [];
     const fetch = vi.fn(async () => new Response(streamFrom([

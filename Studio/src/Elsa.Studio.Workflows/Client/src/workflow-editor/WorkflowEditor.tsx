@@ -635,7 +635,6 @@ export function WorkflowEditor({
                 onPaneClick={() => select(null)}
                 onNodeClick={(_, node) => select(node.id)}
                 onNodeDragStop={isUnsupportedDesigner ? undefined : commitLayout}
-                fitView
                 minZoom={0.2}
                 maxZoom={1.8}
                 nodesConnectable={isFlowchartDesigner}

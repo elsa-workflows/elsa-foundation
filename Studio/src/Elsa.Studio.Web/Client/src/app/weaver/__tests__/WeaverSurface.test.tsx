@@ -106,8 +106,14 @@ describe("WeaverSurface", () => {
     );
     await flushPromises();
 
-    const options = [...container.querySelectorAll(".weaver-auto-apply option")].map(option => (option as HTMLOptionElement).value);
-    expect(options).toEqual(["manual", "auto-read-only"]);
+    flushSync(() => buttonByLabel(container, "Auto-apply mode")?.click());
+
+    const options = [...container.querySelectorAll<HTMLElement>(".weaver-mode-option")]
+      .map(option => option.textContent ?? "");
+    expect(options).toHaveLength(2);
+    expect(options[0]).toContain("Manual review");
+    expect(options[1]).toContain("Auto-apply low-risk");
+    expect(options.join(" ")).not.toContain("Autopilot");
 
     unmount();
   });
@@ -150,12 +156,8 @@ describe("WeaverSurface", () => {
     );
     await flushPromises();
 
-    const select = container.querySelector<HTMLSelectElement>(".weaver-auto-apply select")!;
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")!.set!;
-    flushSync(() => {
-      setter.call(select, "full-auto");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    flushSync(() => buttonByLabel(container, "Auto-apply mode")?.click());
+    flushSync(() => buttonByText(container, "Autopilot")?.click());
 
     typeAndSend(container, "Add an activity");
     await flushPromises();
@@ -174,6 +176,16 @@ function typeAndSend(container: HTMLElement, value: string) {
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   });
   flushSync(() => container.querySelector<HTMLButtonElement>(".weaver-send")?.click());
+}
+
+function buttonByLabel(container: HTMLElement, label: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find(button => button.getAttribute("aria-label") === label) ?? null;
+}
+
+function buttonByText(container: HTMLElement, text: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")]
+    .find(button => button.textContent?.includes(text)) ?? null;
 }
 
 function readyApi() {

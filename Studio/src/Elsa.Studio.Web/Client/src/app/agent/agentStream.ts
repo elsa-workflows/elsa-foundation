@@ -39,7 +39,7 @@ async function readStream(
   defaultMessageId?: string
 ) {
   try {
-    const response = await request(new URL(streamUrl, context.baseUrl).toString(), withDefaultHeaders(context.headers, {
+    const response = await request(new URL(streamUrl, context.baseUrl).toString(), await withStreamHeaders(context, {
       cache: "no-store",
       headers: { Accept: "text/event-stream, application/x-ndjson, application/json" },
       signal
@@ -59,6 +59,16 @@ async function readStream(
       onError(error instanceof Error ? error : new Error(String(error)));
     }
   }
+}
+
+async function withStreamHeaders(context: StudioEndpointContext, init: RequestInit) {
+  const withStaticHeaders = withDefaultHeaders(context.headers, init);
+  const token = await context.accessTokenFactory?.();
+  if (!token) return withStaticHeaders;
+
+  const headers = new Headers(withStaticHeaders.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  return { ...withStaticHeaders, credentials: withStaticHeaders.credentials ?? "include", headers };
 }
 
 async function parseEventStream(

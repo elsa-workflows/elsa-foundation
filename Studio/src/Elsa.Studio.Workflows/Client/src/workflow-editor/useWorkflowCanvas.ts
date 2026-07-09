@@ -13,6 +13,7 @@ import {
   type OnConnectStart,
   type OnReconnect,
   type ReactFlowInstance,
+  type Viewport,
   type XYPosition
 } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
@@ -50,6 +51,17 @@ import type { WorkflowEdgeActions } from "./contexts";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import { planActivityDrop } from "./addActivityRouting";
 import type { ScopeFrame } from "../workflowAdapter";
+
+const rootScopeViewportKey = "root";
+
+function getScopeViewportKey(frames: ScopeFrame[]) {
+  if (frames.length === 0) return rootScopeViewportKey;
+  return frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
+}
+
+function sameNodeIds(nodes: Node<WorkflowNodeData>[], nodeIds: string[]) {
+  return nodes.length === nodeIds.length && nodes.every((node, index) => node.id === nodeIds[index]);
+}
 
 interface WorkflowCanvasParams {
   // Editor document reads. Scope/owner are resolved by the caller (they feed the inspector too), so the
@@ -107,6 +119,10 @@ export function useWorkflowCanvas({
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
+  const viewportSnapshotsRef = useRef(new Map<string, Viewport>());
+  const visitedViewportScopesRef = useRef(new Set<string>());
+  const pendingViewportScopeKeyRef = useRef<string | null>(null);
+  const pendingViewportNodeIdsRef = useRef<string[]>([]);
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
@@ -115,9 +131,20 @@ export function useWorkflowCanvas({
   } | null>(null);
   const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
+  const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
 
   useEffect(() => {
+    return () => {
+      if (!reactFlowInstance) return;
+      viewportSnapshotsRef.current.set(scopeViewportKey, reactFlowInstance.getViewport());
+    };
+  }, [reactFlowInstance, scopeViewportKey]);
+
+  useEffect(() => {
+    pendingViewportScopeKeyRef.current = scopeViewportKey;
+
     if (!scopeOwner) {
+      pendingViewportNodeIdsRef.current = [];
       setNodes([]);
       setEdges([]);
       return;
@@ -128,9 +155,29 @@ export function useWorkflowCanvas({
       : scope
         ? buildCanvas(scope, catalog, draft?.layout ?? [])
         : { nodes: [], edges: [] };
+    pendingViewportNodeIdsRef.current = canvas.nodes.map(node => node.id);
     setNodes(canvas.nodes);
     setEdges(canvas.edges as WorkflowEdge[]);
-  }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner]);
+  }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner, scopeViewportKey]);
+
+  useEffect(() => {
+    if (!reactFlowInstance) return;
+    if (pendingViewportScopeKeyRef.current !== scopeViewportKey) return;
+    if (!sameNodeIds(nodes, pendingViewportNodeIdsRef.current)) return;
+
+    pendingViewportScopeKeyRef.current = null;
+    const savedViewport = viewportSnapshotsRef.current.get(scopeViewportKey);
+    const hasVisitedScope = visitedViewportScopesRef.current.has(scopeViewportKey);
+    visitedViewportScopesRef.current.add(scopeViewportKey);
+
+    window.requestAnimationFrame(() => {
+      if (savedViewport) {
+        reactFlowInstance.setViewport(savedViewport);
+      } else if (!hasVisitedScope && nodes.length > 0) {
+        reactFlowInstance.fitView({ padding: 0.2 });
+      }
+    });
+  }, [nodes, reactFlowInstance, scopeViewportKey]);
 
   // Pins a node's canvas position into the layout records (removing any prior record for that node so a
   // moved node doesn't accumulate duplicates). No-ops when the drop had no cursor position (palette click).
