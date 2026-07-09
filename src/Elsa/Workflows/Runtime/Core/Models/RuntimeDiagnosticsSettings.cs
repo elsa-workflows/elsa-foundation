@@ -198,7 +198,7 @@ public static class RuntimeDiagnosticsSettingsResolver
         return new RuntimeDiagnosticsSettings
         {
             Scope = string.IsNullOrWhiteSpace(settings.Scope) ? RuntimeDiagnosticsSettings.HostDefaultScope : settings.Scope,
-            DefaultLevel = settings.DefaultLevel,
+            DefaultLevel = NormalizeEvidenceLevel(settings.DefaultLevel, nameof(settings.DefaultLevel)),
             SubjectOverrides = NormalizeSubjectOverrides(settings.SubjectOverrides),
             UpdatedAt = settings.UpdatedAt,
             UpdatedBy = settings.UpdatedBy
@@ -226,13 +226,18 @@ public static class RuntimeDiagnosticsSettingsResolver
             if (!RuntimeDiagnosticsSubjects.All.Contains(subject, StringComparer.Ordinal))
                 throw new ArgumentException($"Unknown runtime diagnostics subject '{subject}'.", nameof(subjectOverrides));
 
-            if (!Enum.IsDefined(level))
-                throw new ArgumentException($"Unknown runtime diagnostics evidence level '{level}'.", nameof(subjectOverrides));
-
-            normalized[subject] = level;
+            normalized[subject] = NormalizeEvidenceLevel(level, nameof(subjectOverrides));
         }
 
         return normalized;
+    }
+
+    private static RuntimeDiagnosticsEvidenceLevel NormalizeEvidenceLevel(RuntimeDiagnosticsEvidenceLevel level, string paramName)
+    {
+        if (!Enum.IsDefined(level))
+            throw new ArgumentException($"Unknown runtime diagnostics evidence level '{level}'.", paramName);
+
+        return level;
     }
 
     private static RuntimeDiagnosticsEvidenceLevel Cap(

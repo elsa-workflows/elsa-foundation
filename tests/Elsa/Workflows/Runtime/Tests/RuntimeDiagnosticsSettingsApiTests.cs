@@ -101,6 +101,18 @@ public sealed class RuntimeDiagnosticsSettingsApiTests
                 CancellationToken.None));
     }
 
+    [Fact]
+    public async Task SaveSettings_RejectsUnknownDefaultLevel()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _saveHandler.Handle(
+                new SaveRuntimeDiagnosticsSettings(
+                    Scope: null,
+                    DefaultLevel: (RuntimeDiagnosticsEvidenceLevel)999,
+                    SubjectOverrides: new Dictionary<string, RuntimeDiagnosticsEvidenceLevel>()),
+                CancellationToken.None));
+    }
+
     private static RuntimePayloadCaptureRequest NewCaptureRequest(RuntimePayloadCaptureSubject subject) =>
         new(
             subject: subject,
