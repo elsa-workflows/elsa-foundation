@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
@@ -11,7 +12,7 @@ public sealed class UpdateRouteTableStartupTaskTests
     private readonly FakeRouteTable _routeTable = new();
 
     private UpdateRouteTableStartupTask Task() =>
-        new(new HttpEndpointRoutesResolver(_store), _routeTable);
+        new(new HttpEndpointRoutesResolver(_store, NullLogger<HttpEndpointRoutesResolver>.Instance), _routeTable);
 
     [Fact]
     public async Task PopulatesRouteTable_FromBindings()

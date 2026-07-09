@@ -22,6 +22,7 @@ public sealed class RouteTableTriggerIndexObserverTests
         services.AddSingleton<IWorkflowTriggerBindingStore>(_store);
         services.AddSingleton<IRouteTable>(_routeTable);
         services.Configure<WorkflowsRuntimeHttpFeatureOptions>(_ => { });
+        services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
         _services = services.BuildServiceProvider();
     }

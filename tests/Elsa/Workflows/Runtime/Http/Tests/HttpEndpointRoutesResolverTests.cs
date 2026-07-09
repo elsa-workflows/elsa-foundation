@@ -1,6 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Http.Exceptions;
 using Elsa.Workflows.Runtime.Http.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
@@ -11,7 +11,7 @@ public sealed class HttpEndpointRoutesResolverTests
 
     // The resolver projects endpoint-relative templates only — the endpoints base path is a middleware concern
     // (HttpEndpointMiddleware strips it before consulting the route table), so it takes no base-path option.
-    private HttpEndpointRoutesResolver Resolver() => new(_store);
+    private HttpEndpointRoutesResolver Resolver() => new(_store, NullLogger<HttpEndpointRoutesResolver>.Instance);
 
     [Fact]
     public async Task ProjectsDistinctTemplates_FromHttpBindingMetadata()
@@ -87,28 +87,17 @@ public sealed class HttpEndpointRoutesResolverTests
         Assert.Empty(routes);
     }
 
-    // ---- Issue #592 item 2: publish-time (template, method) uniqueness ----
+    // ---- Issue #592 item 2: conflicts degrade at the resolver (uniqueness is enforced pre-write by the
+    // validator; a poisoned store must not brick startup or unrelated publishes) ----
 
     [Fact]
-    public async Task Throws_WhenTwoDefinitionsClaimTheSameTemplateAndMethod()
+    public async Task CrossDefinitionConflictInTheStore_WarnsButStillResolvesRoutes()
     {
-        // Two DISTINCT definitions claim GET orders/{id}. Bindings.HttpEndpoint derives the stimulus hash from
-        // (template, method), so both carry the same hash — a cross-definition collision that must fail the
-        // publish (the resolver runs through the index observer, whose throw fails the publish).
+        // Two DISTINCT definitions claim GET orders/{id} — a state the pre-write validator normally prevents,
+        // reachable only out-of-band. The resolver must NOT throw (it also runs at shell startup and on every
+        // observed publish); it resolves the routes and leaves the conflict to the request-time 409 backstop.
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
         await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "orders/{id}", "GET", definitionId: "def-b"));
-
-        var exception = await Assert.ThrowsAsync<EndpointRoutingConflictException>(() => Resolver().ResolveRoutesAsync().AsTask());
-        Assert.Equal("GET orders/{id}", exception.Endpoint);
-    }
-
-    [Fact]
-    public async Task DoesNotThrow_WhenTheSameDefinitionOwnsBothBindings()
-    {
-        // Same definition, same (template, method) on two nodes (republish remnants / a duplicate node) — not an
-        // authoring conflict, so it resolves to one route without throwing.
-        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
-        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n2", "orders/{id}", "GET", definitionId: "def-a"));
 
         var routes = await Resolver().ResolveRoutesAsync();
 
@@ -117,14 +106,16 @@ public sealed class HttpEndpointRoutesResolverTests
     }
 
     [Fact]
-    public async Task DoesNotThrow_WhenTwoDefinitionsClaimDifferentMethodsOfTheSameTemplate()
+    public async Task SameDefinitionOwningBothBindings_ResolvesToOneRoute()
     {
-        // GET vs POST orders/{id} are distinct (template, method) pairs — different hashes — so two definitions
-        // may each own one without conflict.
+        // Same definition, same (template, method) on two nodes (republish remnants / a duplicate node) — not an
+        // authoring conflict, resolves to one route.
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
-        await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "orders/{id}", "POST", definitionId: "def-b"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n2", "orders/{id}", "GET", definitionId: "def-a"));
 
-        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        var routes = await Resolver().ResolveRoutesAsync();
+
+        var route = Assert.Single(routes);
         Assert.Equal("orders/{id}", route.Route);
     }
 }

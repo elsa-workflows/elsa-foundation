@@ -50,9 +50,11 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
 
         // The startup task + trigger-index observer are what fill the route table from the durable index; the
         // route resolver is what they read through. ActivitiesHttp depends on this feature precisely so these
-        // populators always compose with the endpoint activity (B2).
+        // populators always compose with the endpoint activity (B2). The index validator is the publish-time
+        // (template, method) uniqueness gate (issue #592 item 2).
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask));
         Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexObserver));
+        Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexValidator));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));
     }
 }

@@ -1,9 +1,9 @@
 using Elsa.Http.Core;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
@@ -21,15 +21,19 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// so prefixing here would both duplicate that concern and couple two independently configurable options.
 /// </para>
 /// <para>
-/// <b>Publish-time (template, method) uniqueness (issue #592 item 2).</b> This resolver runs full-scan on every
-/// publish (through <c>RouteTableTriggerIndexObserver</c>, whose throw fails the publish). A
-/// <c>(template, method)</c> pair claimed by more than one workflow <em>definition</em> is an authoring error;
-/// resolving throws <see cref="EndpointRoutingConflictException"/> here so the <em>second</em> publish of a
-/// conflicting endpoint fails, rather than the collision surfacing only as a request-time 409. The request-time
-/// ambiguity guard in the middleware remains a backstop (e.g. a store populated out-of-band).
+/// <b>Conflicts degrade here, they don't brick (issue #592 item 2).</b> Publish-time
+/// <c>(template, method)</c> uniqueness is enforced pre-write by <c>HttpEndpointRoutingUniquenessValidator</c>
+/// on the indexer's validation seam, so a healthy store never contains a cross-definition collision. If one
+/// nonetheless appears (written out-of-band, or persisted before the validator existed), this resolver only
+/// <em>warns</em> and resolves the routes anyway — it also runs at shell startup
+/// (<c>UpdateRouteTableStartupTask</c>) and on every observed publish, so throwing would turn one poisoned
+/// entry into a host-wide publish outage and a boot failure. The middleware's request-time 409 ambiguity guard
+/// is the serving backstop for the conflicting endpoint itself.
 /// </para>
 /// </remarks>
-public sealed class HttpEndpointRoutesResolver(IWorkflowTriggerBindingStore bindingStore) : IHttpEndpointRoutesResolver
+public sealed class HttpEndpointRoutesResolver(
+    IWorkflowTriggerBindingStore bindingStore,
+    ILogger<HttpEndpointRoutesResolver> logger) : IHttpEndpointRoutesResolver
 {
     public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
     {
@@ -37,8 +41,8 @@ public sealed class HttpEndpointRoutesResolver(IWorkflowTriggerBindingStore bind
 
         // Distinct route templates only: one endpoint publishes one binding per method, all sharing a template.
         // Ordinal dedup keeps the route table one entry per concrete path. Two bindings that share a (template,
-        // method) hash are legitimate ONLY when they belong to the same definition (republish remnants / a
-        // duplicate node); a cross-definition collision fails the publish below.
+        // method) hash are legitimate when they belong to one definition (republish remnants / a duplicate
+        // node); a cross-definition collision is warned about (never thrown — see the class remarks).
         var claimantsByHash = new Dictionary<string, string>(StringComparer.Ordinal);
         var templates = new HashSet<string>(StringComparer.Ordinal);
         var routes = new List<HttpRouteData>();
@@ -48,7 +52,9 @@ public sealed class HttpEndpointRoutesResolver(IWorkflowTriggerBindingStore bind
             if (claimantsByHash.TryGetValue(binding.StimulusHash, out var owner))
             {
                 if (!StringComparer.Ordinal.Equals(owner, binding.DefinitionId))
-                    throw new EndpointRoutingConflictException(DescribeConflict(binding));
+                    logger.LogWarning(
+                        "The HTTP endpoint '{Endpoint}' is claimed by more than one workflow definition. The publish-time uniqueness validator normally prevents this; requests to this endpoint will be rejected with 409 by the ambiguity guard until one claimant is unpublished.",
+                        EndpointRoutingConflictException.DescribeEndpoint(binding));
             }
             else
             {
@@ -65,12 +71,5 @@ public sealed class HttpEndpointRoutesResolver(IWorkflowTriggerBindingStore bind
         }
 
         return routes;
-    }
-
-    private static string DescribeConflict(WorkflowTriggerBinding binding)
-    {
-        var template = binding.Metadata.GetValueOrDefault(HttpEndpointRouting.TemplateMetadataKey, "(unknown template)");
-        var method = binding.Metadata.GetValueOrDefault(HttpEndpointRouting.MethodMetadataKey, "(unknown method)");
-        return $"{method.ToUpperInvariant()} {template}";
     }
 }

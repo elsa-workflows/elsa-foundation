@@ -105,23 +105,25 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_FailsTheSecondPublish()
+    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_FailsTheSecondPublish_PreWrite_AndFirstKeepsServing()
     {
         // Spec US2 + issue #592 item 2: a (template, GET) claimed by two distinct workflow definitions is an
-        // authoring error caught at PUBLISH time — the second publish of the conflicting endpoint fails, rather
-        // than the collision only surfacing as a request-time 409.
+        // authoring error caught at PUBLISH time, on the indexer's PRE-write validation seam — the second
+        // publish fails with the durable index untouched, rather than the collision persisting and only
+        // surfacing as a request-time 409.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-a", "orders/{id}", ResultOutputName, "GET");
 
         await Assert.ThrowsAsync<EndpointRoutingConflictException>(() =>
             _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET"));
 
-        // The route-table refresh threw before swapping, so the live table still holds artifact-a's route. The
-        // request-time ambiguity guard remains a backstop (the test store did not roll back artifact-b's binding),
-        // so the request still 409s rather than starting either — nothing is dispatched.
+        // Pre-write proof: the conflicting artifact left NOTHING in the durable index.
+        Assert.Empty(await _fixture.ListTriggerBindingsAsync("artifact-b"));
+
+        // The store stayed clean, so the endpoint keeps serving normally — the request routes to artifact-a's
+        // workflow (202, one started run), no 409.
         var response = await _fixture.Client.GetAsync("/workflows/http/orders/42");
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        Assert.Equal("ambiguous-endpoint", payload.RootElement.GetProperty("error").GetString());
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Single(await ReadStartedIdsAsync(response));
     }
 
     // ---- Spec 089 sub-unit C (T010): authorization, ParsedContent, per-endpoint size limit end to end ----

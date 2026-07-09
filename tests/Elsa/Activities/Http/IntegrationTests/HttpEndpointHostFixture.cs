@@ -104,6 +104,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
 
+                    // Publish-time (template, method) uniqueness on the indexer's PRE-write seam (issue #592
+                    // item 2) — the same validator WorkflowsRuntimeHttpFeature contributes.
+                    services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutingUniquenessValidator>());
+
                     // Spec 089 sub-unit C (T010). The endpoint-policy seam services the middleware resolves from
                     // RequestServices: the REAL authorization + fault handlers from Elsa.Workflows.Runtime.Http and
                     // the REAL request-body parser from Elsa.Http (again registered explicitly rather than via the
@@ -187,6 +191,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The number of workflow executions the runtime has persisted — 0 proves nothing started (401/413 paths).</summary>
     public async Task<int> CountWorkflowExecutionsAsync() =>
         (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
+
+    /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
+    public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
 
     /// <summary>Reads the single durable value captured under the durable value id <paramref name="valueId"/> for a run.</summary>
     public async Task<JsonElement> ReadCapturedOutputAsync(string workflowExecutionId, string valueId)
