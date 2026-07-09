@@ -32,6 +32,19 @@
   transform: scale(0.95);
 }
 
+.theme-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.theme-toggle-button:disabled:hover {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
 .theme-selector-wrapper {
   position: relative;
 }

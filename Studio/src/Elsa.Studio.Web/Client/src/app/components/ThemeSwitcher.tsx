@@ -2,12 +2,17 @@ import React from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Moon, Sun, Palette, Check } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
+import { getSupportedThemeModes } from "../themes/presets";
 import "./ThemeSwitcher.css";
 
 export function ThemeSwitcher() {
-  const { currentTheme, mode, setTheme, setMode, availableThemes } = useTheme();
+  const { currentTheme, mode, setTheme, setMode, availableThemes, supportedModes, canToggleMode } = useTheme();
+  const modeToggleTitle = canToggleMode
+    ? `${mode === "light" ? "Dark" : "Light"} mode`
+    : `${currentTheme.name} supports ${mode} mode only`;
 
   const toggleMode = () => {
+    if (!canToggleMode) return;
     setMode(mode === "light" ? "dark" : "light");
   };
 
@@ -17,10 +22,11 @@ export function ThemeSwitcher() {
       <button
         className="theme-toggle-button"
         onClick={toggleMode}
-        aria-label={`Switch to ${mode === "light" ? "dark" : "light"} mode`}
-        title={`${mode === "light" ? "Dark" : "Light"} mode`}
+        disabled={!canToggleMode}
+        aria-label={canToggleMode ? `Switch to ${mode === "light" ? "dark" : "light"} mode` : modeToggleTitle}
+        title={modeToggleTitle}
       >
-        {mode === "light" ? <Moon size={18} /> : <Sun size={18} />}
+        {!canToggleMode || mode === "dark" ? <Sun size={18} /> : <Moon size={18} />}
       </button>
 
       {/* Theme Selector Dropdown (Radix: keyboard nav, Esc, focus trap/restore, ARIA menu) */}
@@ -33,14 +39,13 @@ export function ThemeSwitcher() {
           >
             <Palette size={18} />
             <span className="theme-selector-swatch" aria-hidden="true">
-              <span
-                className="theme-selector-swatch-dot"
-                style={{ backgroundColor: currentTheme.light.primary }}
-              />
-              <span
-                className="theme-selector-swatch-dot"
-                style={{ backgroundColor: currentTheme.dark.primary }}
-              />
+              {supportedModes.map((themeMode) => (
+                <span
+                  key={themeMode}
+                  className="theme-selector-swatch-dot"
+                  style={{ backgroundColor: currentTheme[themeMode].primary }}
+                />
+              ))}
             </span>
           </button>
         </DropdownMenu.Trigger>
@@ -64,14 +69,13 @@ export function ThemeSwitcher() {
                   title={theme.description}
                 >
                   <span className="theme-item-preview" aria-hidden="true">
-                    <span
-                      className="theme-color-dot light"
-                      style={{ backgroundColor: theme.light.primary }}
-                    />
-                    <span
-                      className="theme-color-dot dark"
-                      style={{ backgroundColor: theme.dark.primary }}
-                    />
+                    {getSupportedThemeModes(theme).map((themeMode) => (
+                      <span
+                        key={themeMode}
+                        className={`theme-color-dot ${themeMode}`}
+                        style={{ backgroundColor: theme[themeMode].primary }}
+                      />
+                    ))}
                   </span>
                   <span className="theme-item-name">{theme.name}</span>
                   {currentTheme.id === theme.id && (

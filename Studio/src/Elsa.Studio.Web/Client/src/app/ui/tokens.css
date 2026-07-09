@@ -174,39 +174,42 @@ html[data-theme="stone"] {
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  --studio-bg: #0b0f10;
-  --studio-surface: #151a1d;
-  --studio-surface-muted: #1b2226;
-  --studio-surface-raised: #20282d;
+  --studio-bg: #080b0d;
+  --studio-surface: #11171a;
+  --studio-surface-muted: #171f23;
+  --studio-surface-raised: #20292e;
   --studio-text: #edf2ee;
   --studio-text-muted: #9ea8a4;
-  --studio-border: #354248;
+  --studio-border: #3f4d53;
   --studio-accent: #8bdfff;
   --studio-accent-text: #071217;
   --studio-success-fg: #89e6ad;
   --studio-warning-fg: #f0c16f;
   --studio-danger-fg: #ff9b8f;
-  --studio-material-edge: color-mix(in srgb, #7c8b92 54%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #b2c1c5 72%, transparent);
+  --studio-material-edge: color-mix(in srgb, #7f9097 66%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #cad7da 82%, transparent);
   --studio-material-texture: url("../../assets/materials/stone-slate-tile.png");
   --studio-material-texture-size: 390px 390px;
   --studio-material-panel-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 11%, transparent), transparent 42%),
-    linear-gradient(color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, white 16%, transparent), transparent 34%),
+    linear-gradient(0deg, color-mix(in srgb, black 24%, transparent), transparent 46%),
+    linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
     var(--studio-material-texture),
-    linear-gradient(160deg, #182025, #111619 72%);
+    linear-gradient(160deg, #1b2429, #0c1113 72%);
   --studio-material-panel-bg-strong:
-    linear-gradient(180deg, color-mix(in srgb, white 14%, transparent), transparent 38%),
-    linear-gradient(color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, white 20%, transparent), transparent 32%),
+    linear-gradient(0deg, color-mix(in srgb, black 28%, transparent), transparent 48%),
+    linear-gradient(color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 3%, transparent) 1px, transparent 1px),
     var(--studio-material-texture),
-    linear-gradient(160deg, #20292e, #111719 70%);
+    linear-gradient(160deg, #263137, #0e1315 70%);
   --studio-material-panel-bg-soft:
-    linear-gradient(180deg, color-mix(in srgb, white 10%, transparent), transparent 36%),
+    linear-gradient(180deg, color-mix(in srgb, white 15%, transparent), transparent 34%),
+    linear-gradient(0deg, color-mix(in srgb, black 18%, transparent), transparent 48%),
     var(--studio-material-texture),
-    linear-gradient(160deg, #222b31, #161d21 70%);
-  --studio-material-panel-bg-size: auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+    linear-gradient(160deg, #242e34, #12191c 70%);
+  --studio-material-panel-bg-size: auto, auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
   /* Flat dense-row fill: grain grid + texture + slate base, bevel + shadow dropped. */
   --studio-material-row-bg:
     linear-gradient(color-mix(in srgb, white 4%, transparent) 1px, transparent 1px),
@@ -222,35 +225,54 @@ html[data-theme="stone"] {
   --studio-material-well-shadow: inset 0 2px 5px color-mix(in srgb, black 46%, transparent),
     inset 0 0 0 1px color-mix(in srgb, black 26%, transparent);
   --studio-material-body-bg:
-    radial-gradient(circle at 70% 16%, color-mix(in srgb, white 6%, transparent), transparent 28rem),
+    radial-gradient(circle at 70% 16%, color-mix(in srgb, #79d8ff 8%, transparent), transparent 28rem),
     linear-gradient(135deg, color-mix(in srgb, white 5%, transparent) 0 1px, transparent 1px 10px),
     var(--studio-material-texture),
-    linear-gradient(160deg, #111719, #070a0c 62%, #13191c);
+    linear-gradient(160deg, #0f1518, #050708 62%, #11181b);
   --studio-material-body-bg-size: auto, 22px 22px, var(--studio-material-texture-size), auto;
   --studio-material-content-bg:
-    radial-gradient(circle at 28% 22%, color-mix(in srgb, white 7%, transparent), transparent 18rem),
-    linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 28% 22%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
+    linear-gradient(color-mix(in srgb, #8bdfff 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #8bdfff 4%, transparent) 1px, transparent 1px),
     var(--studio-material-texture),
-    linear-gradient(160deg, #111719, #070a0c 70%);
+    linear-gradient(160deg, #10161a, #050708 70%);
   --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
   --studio-material-canvas-bg:
     linear-gradient(color-mix(in srgb, white 6%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, white 5%, transparent) 1px, transparent 1px),
     var(--studio-material-texture),
-    linear-gradient(160deg, #151b1f, #090d0f 72%);
+    linear-gradient(160deg, #12191d, #050809 72%);
   --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
   --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 12%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, white 18%, transparent), transparent 36%),
+    linear-gradient(0deg, color-mix(in srgb, black 22%, transparent), transparent 50%),
     var(--studio-material-texture),
-    linear-gradient(160deg, #20292e, #121719 74%);
-  --studio-material-node-bg-size: auto, 310px 310px, auto;
-  --studio-material-shadow: 0 16px 36px color-mix(in srgb, black 38%, transparent),
-    0 0 0 1px color-mix(in srgb, white 7%, transparent);
-  --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 48%, transparent),
-    0 0 0 1px color-mix(in srgb, #8bdfff 20%, transparent);
-  --studio-material-node-shadow: 0 18px 34px color-mix(in srgb, black 42%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+    linear-gradient(160deg, #263137, #0e1315 74%);
+  --studio-material-node-bg-size: auto, auto, 310px 310px, auto;
+  --studio-material-inset:
+    inset 0 1px 0 color-mix(in srgb, white 18%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 60%, transparent),
+    inset 1px 0 0 color-mix(in srgb, white 5%, transparent),
+    inset -1px 0 0 color-mix(in srgb, black 36%, transparent);
+  --studio-material-inset-low:
+    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 54%, transparent);
+  --studio-material-shadow:
+    0 1px 0 color-mix(in srgb, white 7%, transparent),
+    0 2px 3px color-mix(in srgb, black 52%, transparent),
+    0 18px 36px color-mix(in srgb, black 46%, transparent),
+    0 0 0 1px color-mix(in srgb, white 8%, transparent);
+  --studio-material-shadow-strong:
+    0 1px 0 color-mix(in srgb, white 8%, transparent),
+    0 3px 6px color-mix(in srgb, black 64%, transparent),
+    0 28px 58px color-mix(in srgb, black 58%, transparent),
+    0 0 0 1px color-mix(in srgb, #8bdfff 22%, transparent);
+  --studio-material-node-shadow:
+    0 1px 0 color-mix(in srgb, white 7%, transparent),
+    0 3px 6px color-mix(in srgb, black 58%, transparent),
+    0 20px 34px color-mix(in srgb, black 52%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 15%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, black 55%, transparent);
   /* Steel-blue raised send button, mirroring paper/ceramic/brass. */
   --studio-material-send-bg: linear-gradient(180deg, #3d7ba6, #245f88);
   --studio-material-send-text: #f2f8fb;
@@ -270,14 +292,14 @@ html[data-theme="paper"] {
   --studio-surface-raised: #fffaf0;
   --studio-text: #26251f;
   --studio-text-muted: #6c604f;
-  --studio-border: #cdbf9f;
+  --studio-border: #d8cbae;
   --studio-accent: #245ca3;
   --studio-accent-text: #fffaf0;
   --studio-success-fg: #2f7b4d;
   --studio-warning-fg: #8a6420;
   --studio-danger-fg: #a34035;
-  --studio-material-edge: #cdbf9f;
-  --studio-material-edge-strong: #a69678;
+  --studio-material-edge: color-mix(in srgb, #8c7856 36%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #7f6b4b 54%, transparent);
   --studio-material-texture: url("../../assets/materials/paper-vellum-tile.png");
   --studio-material-texture-size: 430px 430px;
   --studio-material-panel-bg:
@@ -319,10 +341,10 @@ html[data-theme="paper"] {
   --studio-material-node-bg-size: auto, 350px 350px, auto;
   --studio-material-shadow: 0 8px 14px color-mix(in srgb, #5f5036 18%, transparent),
     0 1px 0 color-mix(in srgb, white 70%, transparent);
-  --studio-material-shadow-strong: 0 16px 28px color-mix(in srgb, #4c402d 24%, transparent),
-    0 0 0 1px color-mix(in srgb, #fff 55%, transparent);
-  --studio-material-node-shadow: 0 7px 12px color-mix(in srgb, #5f5036 20%, transparent),
-    0 2px 0 color-mix(in srgb, #8e7d60 16%, transparent);
+  --studio-material-shadow-strong: 0 14px 24px color-mix(in srgb, #4c402d 18%, transparent),
+    0 0 0 1px color-mix(in srgb, #fff 42%, transparent);
+  --studio-material-node-shadow: 0 6px 10px color-mix(in srgb, #5f5036 16%, transparent),
+    0 2px 0 color-mix(in srgb, #8e7d60 12%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #376fb4, #215798);
   --studio-material-send-text: #fffaf0;
   /* Flat dense-row fill: vellum grain over paper base, bevel + shadow dropped. */
@@ -518,46 +540,32 @@ html[data-theme="carbon"] {
   --studio-danger-fg: #ff7a72;
   --studio-material-edge: color-mix(in srgb, #5f7783 45%, transparent);
   --studio-material-edge-strong: color-mix(in srgb, #21b9ff 58%, transparent);
-  --studio-material-texture: url("../../assets/materials/carbon-weave-tile.png");
-  --studio-material-texture-size: 320px 320px;
+  --studio-material-texture: none;
+  --studio-material-texture-size: 1px 1px;
   --studio-material-panel-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #10161a, #080b0d);
   --studio-material-panel-bg-strong:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 5%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #141c21, #090d10);
   --studio-material-panel-bg-soft:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #172027, #0d1115);
-  --studio-material-panel-bg-size: 22px 22px, var(--studio-material-texture-size), auto;
+  --studio-material-panel-bg-size: auto;
   --studio-material-body-bg:
     radial-gradient(circle at 70% 16%, color-mix(in srgb, #21b9ff 12%, transparent), transparent 24rem),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
     linear-gradient(135deg, #070a0c, #0c1114 54%, #030506);
-  --studio-material-body-bg-size: auto, 24px 24px, var(--studio-material-texture-size), auto;
+  --studio-material-body-bg-size: auto, auto;
   --studio-material-content-bg:
     linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
     #090d10;
-  --studio-material-content-bg-size: 32px 32px, 32px 32px, 24px 24px, var(--studio-material-texture-size), auto;
+  --studio-material-content-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-canvas-bg:
     linear-gradient(color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #21b9ff 5%, transparent) 1px, transparent 1px),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 3%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
     #080c0f;
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, 24px 24px, var(--studio-material-texture-size), auto;
+  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-node-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 4%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #151d23, #0a0f12);
-  --studio-material-node-bg-size: 18px 18px, 260px 260px, auto;
+  --studio-material-node-bg-size: auto;
   --studio-material-shadow: 0 15px 34px color-mix(in srgb, black 48%, transparent),
     0 0 0 1px color-mix(in srgb, #21b9ff 12%, transparent);
   --studio-material-shadow-strong: 0 22px 48px color-mix(in srgb, black 58%, transparent),
@@ -860,142 +868,126 @@ html[data-theme="paper"][data-theme-mode="dark"] {
 
 html[data-theme="blueprint"][data-theme-mode="light"] {
   color-scheme: light;
-  --studio-bg: #eef3f1;
-  --studio-surface: color-mix(in srgb, #fbfdfa 88%, transparent);
-  --studio-surface-muted: color-mix(in srgb, #dfecea 70%, transparent);
-  --studio-surface-raised: color-mix(in srgb, #ffffff 88%, transparent);
-  --studio-text: #14304a;
-  --studio-text-muted: #4b6680;
-  --studio-border: color-mix(in srgb, #227aae 40%, #cbdadf);
-  --studio-accent: #1979b9;
+  --studio-bg: #eef5f7;
+  --studio-surface: color-mix(in srgb, #fbfdfe 96%, transparent);
+  --studio-surface-muted: #e1edf2;
+  --studio-surface-raised: #ffffff;
+  --studio-text: #102538;
+  --studio-text-muted: #3d5a70;
+  --studio-border: color-mix(in srgb, #1f78ad 24%, #c8d9e2);
+  --studio-accent: #126fa9;
   --studio-accent-text: #f8fcff;
-  --studio-success-fg: #247c53;
-  --studio-warning-fg: #806420;
-  --studio-danger-fg: #a1443e;
-  --studio-material-edge: color-mix(in srgb, #1979b9 42%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #0d5f96 62%, transparent);
+  --studio-success-fg: #1e714a;
+  --studio-warning-fg: #715818;
+  --studio-danger-fg: #973831;
+  --studio-material-edge: color-mix(in srgb, #126fa9 24%, #d2e1e8);
+  --studio-material-edge-strong: color-mix(in srgb, #0d5f96 42%, #bdd2de);
   --studio-material-texture: url("../../assets/materials/blueprint-drafting-tile.png");
-  --studio-material-texture-size: 420px 420px;
+  --studio-material-texture-size: 720px 720px;
   --studio-material-panel-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 7%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    color-mix(in srgb, #fbfdfa 86%, transparent);
+    linear-gradient(180deg, color-mix(in srgb, white 72%, transparent), color-mix(in srgb, #eaf4f8 94%, transparent)),
+    color-mix(in srgb, #fbfdfe 96%, transparent);
   --studio-material-panel-bg-strong:
-    linear-gradient(color-mix(in srgb, #1979b9 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 8%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    color-mix(in srgb, #ffffff 88%, transparent);
+    linear-gradient(180deg, #ffffff, #edf6f9),
+    #ffffff;
   --studio-material-panel-bg-soft:
-    var(--studio-material-texture),
-    color-mix(in srgb, #dfecea 60%, transparent);
-  --studio-material-panel-bg-size: 24px 24px, 24px 24px, var(--studio-material-texture-size), auto;
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 82%, transparent), color-mix(in srgb, #dcecf2 88%, transparent)),
+    color-mix(in srgb, #e5f1f5 92%, transparent);
+  --studio-material-panel-bg-size: auto, auto;
   --studio-material-body-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 8%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #e7f0ef, #fbfdfa 56%, #dbe9ea);
-  --studio-material-body-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #126fa9 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 3%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, #126fa9 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 6%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #eef5f7, #fbfdfe 58%, #e4eff4);
+  --studio-material-body-bg-size: 32px 32px, 32px 32px, 160px 160px, 160px 160px, auto;
   --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 11%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 10%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #f3f7f5, #fbfdfa 62%, #e5eeee);
-  --studio-material-content-bg-size: 28px 28px, 28px 28px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, #f7fbfc, #ffffff 58%, #edf6f8);
+  --studio-material-content-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 13%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 12%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #f8fbf8;
-  --studio-material-canvas-bg-size: 26px 26px, 26px 26px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #126fa9 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 5%, transparent) 1px, transparent 1px),
+    #fbfdfe;
+  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-node-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 8%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    color-mix(in srgb, #ffffff 84%, transparent);
-  --studio-material-node-bg-size: 18px 18px, 18px 18px, 330px 330px, auto;
-  --studio-material-shadow: 0 0 0 1px color-mix(in srgb, #1979b9 14%, transparent),
-    0 12px 24px color-mix(in srgb, #6f8fa1 18%, transparent);
-  --studio-material-shadow-strong: 0 0 0 1px color-mix(in srgb, #1979b9 28%, transparent),
-    0 18px 34px color-mix(in srgb, #587c90 24%, transparent);
-  --studio-material-node-shadow: 0 0 0 1px color-mix(in srgb, #1979b9 18%, transparent),
-    0 12px 24px color-mix(in srgb, #6f8fa1 16%, transparent);
-  --studio-material-inset: inset 0 0 0 1px color-mix(in srgb, #1979b9 12%, transparent);
+    linear-gradient(180deg, #ffffff, #eef7fa);
+  --studio-material-node-bg-size: auto;
+  --studio-material-shadow: 0 0 0 1px color-mix(in srgb, #126fa9 12%, transparent),
+    0 10px 22px color-mix(in srgb, #6f8fa1 14%, transparent);
+  --studio-material-shadow-strong: 0 0 0 1px color-mix(in srgb, #126fa9 22%, transparent),
+    0 16px 30px color-mix(in srgb, #587c90 20%, transparent);
+  --studio-material-node-shadow: 0 0 0 1px color-mix(in srgb, #126fa9 14%, transparent),
+    0 10px 22px color-mix(in srgb, #6f8fa1 12%, transparent);
+  --studio-material-inset: inset 0 0 0 1px color-mix(in srgb, #126fa9 8%, transparent);
   --studio-material-row-bg:
-    linear-gradient(color-mix(in srgb, #1979b9 7%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1979b9 6%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    color-mix(in srgb, #f4f7f4 86%, transparent);
-  --studio-material-row-bg-size: 24px 24px, 24px 24px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #126fa9 4%, transparent) 1px, transparent 1px),
+    #f4f9fb;
+  --studio-material-row-bg-size: 32px 32px, 32px 32px, auto;
   --studio-material-well-bg:
-    var(--studio-material-texture),
-    color-mix(in srgb, #dbe8e6 72%, transparent);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
-  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #6f8fa1 24%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #1979b9 14%, transparent);
+    linear-gradient(180deg, #dbe9ef, #edf6f8);
+  --studio-material-well-bg-size: auto;
+  --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #6f8fa1 20%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #126fa9 12%, transparent);
 }
 
 html[data-theme="ceramic"][data-theme-mode="dark"] {
   color-scheme: dark;
-  --studio-bg: #07090a;
-  --studio-surface: #111416;
-  --studio-surface-muted: #1b2023;
-  --studio-surface-raised: #20262a;
-  --studio-text: #e6edef;
-  --studio-text-muted: #9ca8ad;
-  --studio-border: #3a474d;
-  --studio-accent: #a3d9e7;
-  --studio-accent-text: #091114;
+  --studio-bg: #0b0e0f;
+  --studio-surface: #15191a;
+  --studio-surface-muted: #202526;
+  --studio-surface-raised: #262c2e;
+  --studio-text: #eef4f3;
+  --studio-text-muted: #a9b3b2;
+  --studio-border: #3e494b;
+  --studio-accent: #9fd8df;
+  --studio-accent-text: #081112;
   --studio-success-fg: #8cdca7;
   --studio-warning-fg: #f0ce77;
   --studio-danger-fg: #ff9d92;
-  --studio-material-edge: #3f4c52;
-  --studio-material-edge-strong: #73848b;
+  --studio-material-edge: #3f4a4c;
+  --studio-material-edge-strong: #718184;
   --studio-material-texture: url("../../assets/materials/ceramic-obsidian-tile.png");
-  --studio-material-texture-size: 420px 420px;
+  --studio-material-texture-size: 780px 780px;
   --studio-material-panel-bg:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 10%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #15191b, #07090a);
-  --studio-material-panel-bg-strong:
-    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 14%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #1b2023, #080a0b);
-  --studio-material-panel-bg-soft:
     radial-gradient(circle at 24% 0%, color-mix(in srgb, white 8%, transparent), transparent 18rem),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #1e2428, #0d1012);
-  --studio-material-panel-bg-size: auto, var(--studio-material-texture-size), auto;
+    linear-gradient(180deg, #171c1d, #101314);
+  --studio-material-panel-bg-strong:
+    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 11%, transparent), transparent 18rem),
+    linear-gradient(180deg, #202628, #121516);
+  --studio-material-panel-bg-soft:
+    radial-gradient(circle at 24% 0%, color-mix(in srgb, white 6%, transparent), transparent 18rem),
+    linear-gradient(180deg, #202526, #151819);
+  --studio-material-panel-bg-size: auto, auto;
   --studio-material-body-bg:
-    radial-gradient(circle at 72% 14%, color-mix(in srgb, #a3d9e7 12%, transparent), transparent 24rem),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #050607, #121618 48%, #030405);
-  --studio-material-body-bg-size: auto, var(--studio-material-texture-size), auto;
+    radial-gradient(circle at 72% 14%, color-mix(in srgb, #9fd8df 9%, transparent), transparent 24rem),
+    radial-gradient(circle at 16% 82%, color-mix(in srgb, white 4%, transparent), transparent 30rem),
+    linear-gradient(135deg, #080b0c, #15191a 50%, #090c0d);
+  --studio-material-body-bg-size: auto, auto, auto;
   --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #a3d9e7 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #a3d9e7 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #111416;
-  --studio-material-content-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
+    #15191a;
+  --studio-material-content-bg-size: 36px 36px, 36px 36px, auto;
   --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #a3d9e7 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #a3d9e7 4%, transparent) 1px, transparent 1px),
-    var(--studio-material-texture),
-    #0e1113;
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #9fd8df 3%, transparent) 1px, transparent 1px),
+    #111516;
+  --studio-material-canvas-bg-size: 36px 36px, 36px 36px, auto;
   --studio-material-node-bg:
-    linear-gradient(180deg, color-mix(in srgb, white 11%, transparent), color-mix(in srgb, #000 18%, transparent)),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #1b2023, #080a0b);
-  --studio-material-node-bg-size: auto, 330px 330px, auto;
-  --studio-material-shadow: 0 12px 28px color-mix(in srgb, black 52%, transparent),
-    0 1px 0 color-mix(in srgb, white 8%, transparent);
-  --studio-material-shadow-strong: 0 20px 44px color-mix(in srgb, black 62%, transparent),
-    0 0 0 1px color-mix(in srgb, #a3d9e7 16%, transparent);
-  --studio-material-node-shadow: 0 12px 24px color-mix(in srgb, black 56%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+    linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), color-mix(in srgb, #000 14%, transparent)),
+    linear-gradient(180deg, #202628, #101314);
+  --studio-material-node-bg-size: auto, auto;
+  --studio-material-shadow: 0 12px 28px color-mix(in srgb, black 44%, transparent),
+    0 1px 0 color-mix(in srgb, white 7%, transparent);
+  --studio-material-shadow-strong: 0 20px 44px color-mix(in srgb, black 54%, transparent),
+    0 0 0 1px color-mix(in srgb, #9fd8df 14%, transparent);
+  --studio-material-node-shadow: 0 12px 24px color-mix(in srgb, black 46%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
   --studio-material-send-bg: linear-gradient(180deg, #cfedf4, #89cbdc);
-  --studio-material-send-text: #091114;
+  --studio-material-send-text: #081112;
   --studio-material-row-bg:
     var(--studio-material-texture),
     linear-gradient(180deg, #191e20, #101315);
@@ -1010,75 +1002,58 @@ html[data-theme="ceramic"][data-theme-mode="dark"] {
 
 html[data-theme="carbon"][data-theme-mode="light"] {
   color-scheme: light;
-  --studio-bg: #b8c0c3;
-  --studio-surface: #d8ddde;
-  --studio-surface-muted: #c3cbce;
-  --studio-surface-raised: #eef1f1;
-  --studio-text: #192226;
-  --studio-text-muted: #536168;
-  --studio-border: #7b898f;
-  --studio-accent: #096fa8;
+  --studio-bg: #cdd4d7;
+  --studio-surface: #e7ebec;
+  --studio-surface-muted: #d4dbde;
+  --studio-surface-raised: #f7f9f9;
+  --studio-text: #11191d;
+  --studio-text-muted: #405058;
+  --studio-border: #89979d;
+  --studio-accent: #086895;
   --studio-accent-text: #f8fcff;
   --studio-success-fg: #217c51;
   --studio-warning-fg: #7d5f1e;
   --studio-danger-fg: #9e433b;
-  --studio-material-edge: color-mix(in srgb, #66757b 52%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #096fa8 58%, transparent);
-  --studio-material-texture: url("../../assets/materials/carbon-silver-tile.png");
-  --studio-material-texture-size: 320px 320px;
+  --studio-material-edge: color-mix(in srgb, #5f6d73 48%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #086895 48%, #9fadb3);
+  --studio-material-texture: none;
+  --studio-material-texture-size: 1px 1px;
   --studio-material-panel-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 14%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #e2e7e8, #bec6c9);
+    linear-gradient(180deg, #f2f5f5, #d9e0e2);
   --studio-material-panel-bg-strong:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 18%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #eef2f2, #c6ced1);
+    linear-gradient(180deg, #fbfcfc, #e0e7e9);
   --studio-material-panel-bg-soft:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 12%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #d1d8da, #adb8bc);
-  --studio-material-panel-bg-size: 22px 22px, var(--studio-material-texture-size), auto;
+    linear-gradient(180deg, #dce3e5, #c4cdd1);
+  --studio-material-panel-bg-size: auto;
   --studio-material-body-bg:
-    radial-gradient(circle at 70% 16%, color-mix(in srgb, #096fa8 10%, transparent), transparent 24rem),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 10%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
-    linear-gradient(135deg, #aeb7bb, #cbd2d4 54%, #9ca7ac);
-  --studio-material-body-bg-size: auto, 24px 24px, var(--studio-material-texture-size), auto;
+    radial-gradient(circle at 70% 16%, color-mix(in srgb, #086895 8%, transparent), transparent 24rem),
+    linear-gradient(135deg, #c4ccd0, #e4e8ea 54%, #b8c2c6);
+  --studio-material-body-bg-size: auto, auto;
   --studio-material-content-bg:
-    linear-gradient(color-mix(in srgb, #096fa8 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #096fa8 5%, transparent) 1px, transparent 1px),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 8%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
-    #d8ddde;
-  --studio-material-content-bg-size: 32px 32px, 32px 32px, 24px 24px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
+    #e7ebec;
+  --studio-material-content-bg-size: 34px 34px, 34px 34px, auto;
   --studio-material-canvas-bg:
-    linear-gradient(color-mix(in srgb, #096fa8 5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #096fa8 5%, transparent) 1px, transparent 1px),
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 8%, transparent) 0 2px, transparent 2px 10px),
-    var(--studio-material-texture),
-    #dce1e2;
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, 24px 24px, var(--studio-material-texture-size), auto;
+    linear-gradient(color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #086895 4%, transparent) 1px, transparent 1px),
+    #edf1f2;
+  --studio-material-canvas-bg-size: 34px 34px, 34px 34px, auto;
   --studio-material-node-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 14%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
-    linear-gradient(180deg, #eef2f2, #c5ced0);
-  --studio-material-node-bg-size: 18px 18px, 260px 260px, auto;
-  --studio-material-shadow: 0 15px 30px color-mix(in srgb, #4e5b61 24%, transparent),
-    0 0 0 1px color-mix(in srgb, white 34%, transparent);
-  --studio-material-shadow-strong: 0 22px 44px color-mix(in srgb, #3f4d54 32%, transparent),
-    0 0 0 1px color-mix(in srgb, #096fa8 24%, transparent);
-  --studio-material-node-shadow: 0 16px 28px color-mix(in srgb, #4e5b61 26%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
+    linear-gradient(180deg, #f8fafb, #d7e0e3);
+  --studio-material-node-bg-size: auto;
+  --studio-material-shadow: 0 14px 28px color-mix(in srgb, #4e5b61 18%, transparent),
+    0 0 0 1px color-mix(in srgb, white 38%, transparent);
+  --studio-material-shadow-strong: 0 20px 38px color-mix(in srgb, #3f4d54 24%, transparent),
+    0 0 0 1px color-mix(in srgb, #086895 18%, transparent);
+  --studio-material-node-shadow: 0 14px 26px color-mix(in srgb, #4e5b61 20%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 52%, transparent);
   --studio-material-row-bg:
-    repeating-linear-gradient(45deg, color-mix(in srgb, white 12%, transparent) 0 2px, transparent 2px 8px),
-    var(--studio-material-texture),
     linear-gradient(180deg, #d5dadc, #c0c8cb);
-  --studio-material-row-bg-size: 22px 22px, var(--studio-material-texture-size), auto;
+  --studio-material-row-bg-size: auto;
   --studio-material-well-bg:
-    var(--studio-material-texture),
     linear-gradient(180deg, #b6bec1, #c9d0d2);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg-size: auto;
   --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #4e5b61 26%, transparent),
     inset 0 0 0 1px color-mix(in srgb, #4e5b61 16%, transparent);
 }

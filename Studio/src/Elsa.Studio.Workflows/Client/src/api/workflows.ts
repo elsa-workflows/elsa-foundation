@@ -8,6 +8,7 @@ import type {
   ActivityAvailabilityDiagnostics,
   ActivityAvailabilitySettings,
   ActivityCatalogResponse,
+  ActivityExecutionInspection,
   ActivityDescriptor,
   ActivityDescriptorsResponse,
   CreateDefinitionRequest,
@@ -27,6 +28,7 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
   WorkflowExecutableRunResponse,
+  WorkflowExecutablesResponse,
   WorkflowExecutableSummary,
   WorkflowDefinitionDetails,
   WorkflowDefinitionVersionDetails,
@@ -46,6 +48,7 @@ export const workflowKeys = {
   executables: (definitionId?: string | null) => ["workflows", "executables", definitionId ?? "all"] as const,
   instances: ["workflows", "instances"] as const,
   instance: (workflowExecutionId: string) => ["workflows", "instances", workflowExecutionId] as const,
+  activityExecution: (workflowExecutionId: string, activityExecutionId: string) => ["workflows", "instances", workflowExecutionId, "activity-executions", activityExecutionId] as const,
   activities: ["workflows", "activities"] as const,
   activityDescriptors: ["workflows", "activity-descriptors"] as const,
   expressionDescriptors: ["workflows", "expression-descriptors"] as const,
@@ -300,7 +303,30 @@ export async function runExecutable(context: StudioEndpointContext, artifactId: 
 }
 
 export async function listExecutables(context: StudioEndpointContext) {
-  return context.http.getJson<WorkflowExecutableSummary[]>("/_demo/workflows/executables");
+  const paths = [`${basePath}/executables`, "/_demo/workflows/executables"];
+  const errors: unknown[] = [];
+
+  for (const path of paths) {
+    try {
+      const response = await context.http.getJson<WorkflowExecutablesResponse | WorkflowExecutableSummary[]>(path);
+      return normalizeWorkflowExecutables(response);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+
+  if (errors.length > 0 && errors.every(isNotFoundError)) return [];
+  throw errors.find(error => !isNotFoundError(error)) ?? errors[errors.length - 1] ?? new Error("Workflow executables could not be loaded.");
+}
+
+function normalizeWorkflowExecutables(response: WorkflowExecutablesResponse | WorkflowExecutableSummary[]): WorkflowExecutableSummary[] {
+  return Array.isArray(response) ? response : response.executables ?? [];
+}
+
+function isNotFoundError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return /\b404\b/.test(message) || message.includes("not found");
 }
 
 export interface ListWorkflowInstancesRequest {
@@ -325,6 +351,12 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
 
 export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
   return context.http.getJson<WorkflowInstanceDetails>(`/runtime/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+}
+
+export async function getActivityExecutionInspection(context: StudioEndpointContext, workflowExecutionId: string, activityExecutionId: string) {
+  return context.http.getJson<ActivityExecutionInspection>(
+    `/runtime/workflows/instances/${encodeURIComponent(workflowExecutionId)}/activity-executions/${encodeURIComponent(activityExecutionId)}`
+  );
 }
 
 export async function listActivities(context: StudioEndpointContext) {

@@ -830,9 +830,18 @@ export interface ElsaStudioHostContext extends StudioEndpointContext {
 export interface ElsaStudioBackendContext extends StudioEndpointContext {
 }
 
+export interface StudioWorkflowRuntimeSettings {
+  autosaveEnabledByDefault?: boolean;
+}
+
+export interface StudioRuntimeSettings {
+  workflows?: StudioWorkflowRuntimeSettings;
+}
+
 export interface ElsaStudioModuleApi {
   readonly host: ElsaStudioHostContext;
   readonly backend: ElsaStudioBackendContext;
+  readonly runtime: StudioRuntimeSettings;
   readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;

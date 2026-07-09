@@ -4023,6 +4023,10 @@ html[data-theme="black-glass"] .host-health-icon {
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
 }
 
+html[data-theme="black-glass"] .nav-section a {
+  border: 1px solid transparent;
+}
+
 html[data-theme="black-glass"] .nav-section a.active,
 html[data-theme="black-glass"] .nav-section a:hover,
 html[data-theme="black-glass"] .nav-section a.has-active-child {
@@ -4152,6 +4156,7 @@ html[data-theme-material] .host-health-icon {
 }
 
 html[data-theme-material] .nav-section a {
+  border: 1px solid transparent;
   color: var(--studio-text-muted);
 }
 
@@ -4204,13 +4209,234 @@ html[data-theme-material] .bottom-panel-tab-list button.active {
   background: var(--studio-material-active-bg);
 }
 
+html[data-theme-material] .wf-page,
+html[data-theme-material] .wf-editor,
+html[data-theme-material] .console-stream-panel,
+html[data-theme-material] .console-stream-page,
+html[data-theme-material] .structured-logs-page,
+html[data-theme-material] .structured-logs-panel,
+html[data-theme-material] .otel-page,
+html[data-theme-material] .otel-panel,
+html[data-theme-material] .feature-management-page {
+  background: var(--studio-material-content-bg);
+  background-size: var(--studio-material-content-bg-size);
+  color: var(--studio-text);
+}
+
+html[data-theme-material] .wf-page-header,
+html[data-theme-material] .wf-toolbar,
+html[data-theme-material] .wf-editor-top,
+html[data-theme-material] .wf-breadcrumb,
+html[data-theme-material] .wf-validation,
+html[data-theme-material] .wf-palette,
+html[data-theme-material] .wf-inspector,
+html[data-theme-material] .wf-side-resize-handle,
+html[data-theme-material] .wf-dialog,
+html[data-theme-material] .wf-instance-canvas-shell,
+html[data-theme-material] .wf-instance-inspector,
+html[data-theme-material] .console-stream-page,
+html[data-theme-material] .structured-logs-header,
+html[data-theme-material] .structured-logs-rows,
+html[data-theme-material] .structured-log-inspector,
+html[data-theme-material] .otel-header,
+html[data-theme-material] .otel-trace-list,
+html[data-theme-material] .otel-trace-detail,
+html[data-theme-material] .otel-overview > section,
+html[data-theme-material] .otel-placeholder,
+html[data-theme-material] .feature-management-categories,
+html[data-theme-material] .feature-management-list-column,
+html[data-theme-material] .feature-management-inspector,
+html[data-theme-material] .feature-management-card,
+html[data-theme-material] .feature-management-settings-dialog {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-strong);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset), var(--studio-material-shadow);
+}
+
+html[data-theme-material] .wf-empty,
+html[data-theme-material] .wf-panel-title,
+html[data-theme-material] .wf-root-card,
+html[data-theme-material] .wf-properties-section,
+html[data-theme-material] .console-stream-header,
+html[data-theme-material] .structured-logs-grid-header,
+html[data-theme-material] .structured-log-row:hover,
+html[data-theme-material] .otel-toolbar,
+html[data-theme-material] .otel-trace-detail-header,
+html[data-theme-material] .otel-signal-card,
+html[data-theme-material] .otel-source-row,
+html[data-theme-material] .feature-management-list-heading,
+html[data-theme-material] .feature-management-settings-panel,
+html[data-theme-material] .feature-management-setting-summary-group,
+html[data-theme-material] .feature-management-setting-group {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-soft);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .wf-toolbar button,
+html[data-theme-material] .wf-toolbar-field select,
+html[data-theme-material] .wf-page-controls button,
+html[data-theme-material] .wf-page-size select,
+html[data-theme-material] .wf-dialog-actions button,
+html[data-theme-material] .wf-panel-tab-list button:hover,
+html[data-theme-material] .wf-panel-tab-list button:focus-visible,
+html[data-theme-material] .wf-panel-tab-list button.active,
+html[data-theme-material] .wf-panel-action-button:hover,
+html[data-theme-material] .wf-panel-action-button:focus-visible,
+html[data-theme-material] .console-stream-tools button,
+html[data-theme-material] .console-stream-tools select,
+html[data-theme-material] .console-stream-tools > span:not(.console-stream-status),
+html[data-theme-material] .console-stream-hosts,
+html[data-theme-material] .structured-logs-tools button,
+html[data-theme-material] .structured-logs-tools input,
+html[data-theme-material] .structured-logs-tools select,
+html[data-theme-material] .structured-logs-tools > span:not(.structured-logs-status),
+html[data-theme-material] .otel-tabs button,
+html[data-theme-material] .otel-toolbar button,
+html[data-theme-material] .otel-toolbar input,
+html[data-theme-material] .otel-toolbar select,
+html[data-theme-material] .otel-trace-detail-header button,
+html[data-theme-material] .otel-header-summary span,
+html[data-theme-material] .otel-status-chip,
+html[data-theme-material] .otel-signal-card > span,
+html[data-theme-material] .feature-management-actions button,
+html[data-theme-material] .feature-management-inspector-heading button,
+html[data-theme-material] .feature-management-section-heading button,
+html[data-theme-material] .feature-management-dialog-heading button,
+html[data-theme-material] .feature-management-dialog-actions button,
+html[data-theme-material] .feature-management-bulk-actions button,
+html[data-theme-material] .feature-management-feature-button,
+html[data-theme-material] .feature-management-filter input,
+html[data-theme-material] .feature-management-chip {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+  color: var(--studio-text);
+}
+
+html[data-theme-material] .wf-canvas-shell,
+html[data-theme-material] .react-flow,
+html[data-theme-material] .console-stream-lines,
+html[data-theme-material] .structured-logs-panel .structured-logs-rows,
+html[data-theme-material] .otel-panel .otel-traces-layout {
+  background: var(--studio-material-canvas-bg);
+  background-size: var(--studio-material-canvas-bg-size);
+}
+
+html[data-theme="stone"] .content {
+  box-shadow:
+    inset 1px 0 0 color-mix(in srgb, white 5%, transparent),
+    inset 0 1px 0 color-mix(in srgb, black 72%, transparent);
+}
+
+html[data-theme="stone"] .sidebar,
+html[data-theme="stone"] .topbar,
+html[data-theme="stone"] .bottom-panel,
+html[data-theme="stone"] .bottom-panel-resize-handle,
+html[data-theme="stone"] .bottom-panel-tabs,
+html[data-theme="stone"] .studio-card,
+html[data-theme="stone"] .admin-card,
+html[data-theme="stone"] .theme-dropdown {
+  outline: 1px solid color-mix(in srgb, black 68%, transparent);
+  outline-offset: -2px;
+  text-shadow: 0 1px 0 color-mix(in srgb, black 62%, transparent);
+}
+
+html[data-theme="stone"] .studio-card,
+html[data-theme="stone"] .admin-card,
+html[data-theme="stone"] .diagnostic-row,
+html[data-theme="stone"] .empty-state,
+html[data-theme="stone"] .error-state,
+html[data-theme="stone"] .theme-dropdown,
+html[data-theme="stone"] .host-health-strip,
+html[data-theme="stone"] .sidebar-search {
+  box-shadow:
+    var(--studio-material-inset),
+    var(--studio-material-shadow),
+    inset 0 0 0 1px color-mix(in srgb, black 42%, transparent);
+}
+
+html[data-theme="stone"] .topbar-actions > a,
+html[data-theme="stone"] .topbar-actions > button,
+html[data-theme="stone"] .host-health-refresh,
+html[data-theme="stone"] .bottom-panel-tab-list button,
+html[data-theme="stone"] .bottom-panel-action-button,
+html[data-theme="stone"] .theme-toggle-button,
+html[data-theme="stone"] .theme-selector-button {
+  box-shadow:
+    var(--studio-material-inset-low),
+    0 1px 2px color-mix(in srgb, black 56%, transparent),
+    0 8px 18px color-mix(in srgb, black 26%, transparent);
+}
+
+html[data-theme="stone"] .nav-section a.active,
+html[data-theme="stone"] .nav-section a:hover,
+html[data-theme="stone"] .nav-section a.has-active-child {
+  box-shadow:
+    var(--studio-material-inset),
+    0 2px 4px color-mix(in srgb, black 42%, transparent),
+    0 10px 20px color-mix(in srgb, var(--studio-accent) 10%, transparent);
+}
+
 html[data-theme="paper"] .sidebar,
 html[data-theme="paper"] .topbar,
 html[data-theme="paper"] .bottom-panel,
 html[data-theme="paper"] .studio-card,
 html[data-theme="paper"] .admin-card,
 html[data-theme="paper"] .theme-dropdown {
-  outline: 1px solid color-mix(in srgb, white 54%, transparent);
+  outline: 1px solid color-mix(in srgb, white 36%, transparent);
+  box-shadow:
+    var(--studio-material-shadow),
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #7c6847 10%, transparent);
+}
+
+html[data-theme="paper"] .topbar,
+html[data-theme="paper"] .bottom-panel-tabs,
+html[data-theme="paper"] .bottom-panel-resize-handle {
+  border-style: dotted;
+}
+
+html[data-theme="paper"] .host-health-strip,
+html[data-theme="paper"] .studio-card,
+html[data-theme="paper"] .admin-card,
+html[data-theme="paper"] .diagnostic-row,
+html[data-theme="paper"] .empty-state,
+html[data-theme="paper"] .error-state,
+html[data-theme="paper"] .theme-dropdown,
+html[data-theme="paper"] .sidebar-search {
+  border-color: color-mix(in srgb, var(--studio-material-edge) 72%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 34%, transparent), transparent 52%),
+    var(--studio-material-texture),
+    color-mix(in srgb, var(--studio-surface) 88%, transparent);
+  background-size: auto, var(--studio-material-texture-size), auto;
+}
+
+html[data-theme="paper"] .studio-card,
+html[data-theme="paper"] .admin-card,
+html[data-theme="paper"] .diagnostic-row,
+html[data-theme="paper"] .empty-state,
+html[data-theme="paper"] .error-state {
+  border-style: dashed;
+}
+
+html[data-theme="paper"] .topbar-actions > a,
+html[data-theme="paper"] .topbar-actions > button,
+html[data-theme="paper"] .host-health-refresh,
+html[data-theme="paper"] .bottom-panel-tab-list button,
+html[data-theme="paper"] .bottom-panel-action-button,
+html[data-theme="paper"] .theme-toggle-button,
+html[data-theme="paper"] .theme-selector-button {
+  border-color: color-mix(in srgb, var(--studio-material-edge) 78%, transparent);
+  background:
+    var(--studio-material-texture),
+    color-mix(in srgb, var(--studio-surface-raised) 78%, transparent);
+  background-size: var(--studio-material-texture-size), auto;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 48%, transparent);
 }
 
 html[data-theme="paper"] .sidebar {
@@ -4255,27 +4481,39 @@ html[data-theme="blueprint"] .theme-dropdown {
   background-size: 24px 24px, 24px 24px, auto;
 }
 
-html[data-theme="ceramic"] .sidebar {
+html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar {
   color: #f4f2ec;
 }
 
-html[data-theme="ceramic"] .sidebar .nav-section a {
+html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a {
   color: color-mix(in srgb, white 78%, transparent);
 }
 
-html[data-theme="ceramic"] .sidebar .nav-section a.active,
-html[data-theme="ceramic"] .sidebar .nav-section a:hover,
-html[data-theme="ceramic"] .sidebar .nav-section a.has-active-child {
+html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a.active,
+html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a:hover,
+html[data-theme="ceramic"][data-theme-mode="dark"] .sidebar .nav-section a.has-active-child {
   background: linear-gradient(180deg, color-mix(in srgb, white 16%, transparent), color-mix(in srgb, black 8%, transparent));
   color: white;
 }
 
-html[data-theme="carbon"] .sidebar,
-html[data-theme="carbon"] .topbar,
-html[data-theme="carbon"] .bottom-panel,
-html[data-theme="carbon"] .studio-card,
-html[data-theme="carbon"] .admin-card,
-html[data-theme="carbon"] .theme-dropdown {
+html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a {
+  color: color-mix(in srgb, #1f211f 74%, transparent);
+}
+
+html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a.active,
+html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a:hover,
+html[data-theme="ceramic"][data-theme-mode="light"] .sidebar .nav-section a.has-active-child {
+  background: linear-gradient(180deg, color-mix(in srgb, white 72%, transparent), color-mix(in srgb, #d9d4c8 54%, transparent));
+  color: #1f211f;
+  text-shadow: none;
+}
+
+html[data-theme="carbon"][data-theme-mode="dark"] .sidebar,
+html[data-theme="carbon"][data-theme-mode="dark"] .topbar,
+html[data-theme="carbon"][data-theme-mode="dark"] .bottom-panel,
+html[data-theme="carbon"][data-theme-mode="dark"] .studio-card,
+html[data-theme="carbon"][data-theme-mode="dark"] .admin-card,
+html[data-theme="carbon"][data-theme-mode="dark"] .theme-dropdown {
   text-shadow: 0 1px 0 color-mix(in srgb, black 55%, transparent);
 }
 

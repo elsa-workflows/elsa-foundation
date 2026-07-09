@@ -1,12 +1,17 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
 import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource } from "../module";
+import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.localStorage.removeItem?.(workflowInspectorCollapsedStorageKey);
+  window.localStorage.removeItem?.(workflowInspectorWidthStorageKey);
+  window.localStorage.removeItem?.(workflowSidePanelMaximizedStorageKey);
 });
 
 describe("workflows module", () => {
@@ -173,6 +178,30 @@ describe("workflows module", () => {
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+
+    await unmount();
+  });
+
+  it("enables workflow editor autosave by default when not configured", async () => {
+    stubWorkflowEditorFetch();
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Autosave");
+    expect(autosaveInput(container)?.checked).toBe(true);
+
+    await unmount();
+  });
+
+  it("uses the configured workflow editor autosave default", async () => {
+    stubWorkflowEditorFetch();
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.runtime.workflows = { autosaveEnabledByDefault: false };
+    });
+
+    await waitForText(container, "Autosave");
+    expect(autosaveInput(container)?.checked).toBe(false);
 
     await unmount();
   });
@@ -346,7 +375,7 @@ describe("workflows module", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/_demo/workflows/executables")) return response([
+      if (url.includes("/_elsa/workflow-management/executables")) return response([
         executable({ artifactId: "artifact-current", definitionId: "definition-1", artifactVersion: "2.0.0" }),
         executable({ artifactId: "artifact-other", definitionId: "definition-2", sourceId: "definition-2" })
       ]);
@@ -951,12 +980,12 @@ describe("workflows module", () => {
           displayName: "Write Line"
         })] });
       }
-      expect(url).toBe("https://server.example/_demo/workflows/executables");
-      return response([executable({
+      expect(url).toBe("https://server.example/_elsa/workflow-management/executables");
+      return response({ executables: [executable({
         rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
         sourceKind: "WorkflowDefinitionVersion",
         sourceId: "version-1"
-      })]);
+      })] });
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
@@ -978,6 +1007,73 @@ describe("workflows module", () => {
       expect.objectContaining({ method: "POST" })
     );
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
+
+    await unmount();
+  });
+
+  it("shows an empty executable state when executable endpoints are unavailable", async () => {
+    const fetchMock = vi.fn(async () => response(null, 404));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "No workflow executables");
+
+    expect(container.textContent).not.toContain("Something went wrong");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://server.example/_elsa/workflow-management/executables",
+      "https://server.example/_demo/workflows/executables"
+    ]);
+
+    await unmount();
+  });
+
+  it("renders activity availability rows with compact types and helpful descriptions", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities/availability/settings")) return response({
+        scope: "host-default",
+        mode: "AllExcept",
+        rules: { activityTypes: [], sets: [] }
+      });
+      if (url.includes("/activities/availability/diagnostics")) return response({
+        items: [{
+          activityDefinitionId: "run-javascript-v1",
+          activityTypeKey: "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity",
+          displayName: "Activity",
+          description: "Runs JavaScript code inside a workflow.",
+          category: "Scripting",
+          state: "Available",
+          layer: "Catalog",
+          referenceKind: "ActivityType",
+          referenceName: "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity",
+          reason: "Catalog activity is available."
+        }, {
+          activityDefinitionId: "send-email-v1",
+          activityTypeKey: "Elsa.Activities.Email.SendEmail",
+          displayName: "Send Email",
+          description: null,
+          category: "Messaging",
+          state: "BlockedByHostBaseline",
+          layer: "HostBaseline",
+          referenceKind: "ActivityType",
+          referenceName: "Elsa.Activities.Email.SendEmail",
+          reason: "Disabled by the host baseline."
+        }],
+        sets: []
+      });
+      return response(null, 404);
+    }));
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Run JavaScript");
+    await waitForText(container, "Disabled by the host baseline.");
+
+    const list = container.querySelector(".availability-activity-list");
+    expect(list?.textContent).toContain("RunJavaScript.Activity");
+    expect(list?.textContent).toContain("Runs JavaScript code inside a workflow.");
+    expect(list?.textContent).not.toContain("Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity");
+    expect(list?.textContent).not.toContain("Catalog activity is available.");
 
     await unmount();
   });
@@ -1287,10 +1383,11 @@ describe("workflows module", () => {
       unobserve() {}
       disconnect() {}
     });
+    const { bookmarkIds: _bookmarkIds, incidentIds: _incidentIds, ...activityWithoutCollectionCounts } = activityExecution();
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
-        return response(workflowInstanceDetails());
+        return response(workflowInstanceDetails({ activities: [activityWithoutCollectionCounts] }));
       }
 
       if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
@@ -1321,10 +1418,23 @@ describe("workflows module", () => {
     // Timeline is the default instance tab and lists executed activities.
     expect(container.textContent).toContain("Timeline");
     expect(container.textContent).toContain("WriteLine");
+    expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
+    expect(buttonByLabel(container, "Maximize run details panel")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Resize run details panel']")).toBeTruthy();
+    await click(buttonByLabel(container, "Collapse run details panel"));
+    expect(buttonByLabel(container, "Expand run details panel")).toBeTruthy();
+    expect(container.textContent).not.toContain("WriteLine");
+    await click(buttonByLabel(container, "Expand run details panel"));
+    expect(container.textContent).toContain("WriteLine");
     await click(container.querySelector(".wf-timeline-entry"));
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
     expect(container.textContent).toContain("Activity Execution ID");
     expect(container.textContent).toContain("activity-execution-1");
+    expect(container.textContent).toContain("Bookmarks0");
+    expect(container.textContent).toContain("Incidents0");
+    await click(buttonByLabel(container, "Maximize run details panel"));
+    expect(buttonByLabel(container, "Restore run details panel")).toBeTruthy();
+    await click(buttonByLabel(container, "Restore run details panel"));
     // Run metadata moved to the Details tab.
     await click(buttonByText(container, "Details"));
     expect(container.textContent).toContain("Published Run");
@@ -1421,6 +1531,7 @@ function testApi(): ElsaStudioModuleApi {
       baseUrl: "https://server.example/",
       http: fetchHttp("https://server.example/")
     },
+    runtime: { workflows: {} },
     featureAreas: featureAreaRegistry(navigation, routes),
     navigation,
     routes,
@@ -1537,9 +1648,15 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false }
+    }
+  });
 
   flushSync(() => {
-    root.render(<Component />);
+    root.render(<QueryClientProvider client={queryClient}><Component /></QueryClientProvider>);
   });
 
   return {
@@ -1547,6 +1664,7 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
     container,
     unmount: async () => {
       flushSync(() => root.unmount());
+      queryClient.clear();
       container.remove();
     }
   };
@@ -1591,6 +1709,21 @@ async function openCreateDialogWithSuggest() {
   };
 
   return { ...rendered, captured, publishSuggestion };
+}
+
+function stubWorkflowEditorFetch() {
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/availability/diagnostics")) return response({ items: [], sets: [] });
+    if (url.includes("/activities")) return response({ activities: [] });
+    if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+    return response(null, 404);
+  }));
 }
 
 function definition(overrides: Partial<Record<string, unknown>> = {}) {
@@ -1672,30 +1805,35 @@ function workflowInstance(overrides: Partial<Record<string, unknown>> = {}) {
 function workflowInstanceDetails(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     instance: workflowInstance(),
-    activities: [{
-      activityExecutionId: "activity-execution-1",
-      workflowExecutionId: "wfexec-1",
-      executableNodeId: "write-line-1",
-      authoredActivityId: "write-line-1",
-      activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
-      activityTypeVersion: "1.0.0",
-      status: "Completed",
-      subStatus: null,
-      scheduledAt: "2026-06-18T01:00:01Z",
-      startedAt: "2026-06-18T01:00:01Z",
-      completedAt: "2026-06-18T01:00:03Z",
-      schedulingActivityExecutionId: null,
-      parentActivityExecutionId: null,
-      branchId: null,
-      iterationId: null,
-      callStackDepth: 0,
-      bookmarkIds: [],
-      incidentIds: [],
-      faultCount: 0,
-      aggregateFaultCount: 0,
-      metadata: {}
-    }],
+    activities: [activityExecution()],
     incidents: [],
+    ...overrides
+  };
+}
+
+function activityExecution(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    activityExecutionId: "activity-execution-1",
+    workflowExecutionId: "wfexec-1",
+    executableNodeId: "write-line-1",
+    authoredActivityId: "write-line-1",
+    activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+    activityTypeVersion: "1.0.0",
+    status: "Completed",
+    subStatus: null,
+    scheduledAt: "2026-06-18T01:00:01Z",
+    startedAt: "2026-06-18T01:00:01Z",
+    completedAt: "2026-06-18T01:00:03Z",
+    schedulingActivityExecutionId: null,
+    parentActivityExecutionId: null,
+    branchId: null,
+    iterationId: null,
+    callStackDepth: 0,
+    bookmarkIds: [],
+    incidentIds: [],
+    faultCount: 0,
+    aggregateFaultCount: 0,
+    metadata: {},
     ...overrides
   };
 }
@@ -1893,6 +2031,10 @@ function inputByLabel(container: HTMLElement, label: string) {
 function textareaByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea"))
     .find(input => input.getAttribute("aria-label") === label) ?? null;
+}
+
+function autosaveInput(container: HTMLElement) {
+  return container.querySelector<HTMLInputElement>(".wf-autosave-switch-input");
 }
 
 function selectByLabel(container: HTMLElement, label: string) {

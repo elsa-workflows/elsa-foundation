@@ -10,13 +10,15 @@ export function WorkflowManagementPage({
   ai,
   propertyEditors,
   expressionEditors,
-  workflowDesignerPanels
+  workflowDesignerPanels,
+  autosaveEnabledByDefault
 }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
+  autosaveEnabledByDefault?: boolean;
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
 
@@ -33,7 +35,7 @@ export function WorkflowManagementPage({
   };
 
   return definitionId
-    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} workflowDesignerPanels={workflowDesignerPanels} onBack={() => openDefinition(null)} />
+    ? <WorkflowEditor context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
     : (
       <WorkflowsPageFrame title="Definitions">
         <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />

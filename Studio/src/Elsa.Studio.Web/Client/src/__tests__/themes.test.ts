@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StudioEndpointContext } from "../sdk";
+import { builtInThemeDefinitions, getSupportedThemeModes, getTheme, getThemeNames, isMaterialTheme, materialThemeIds, resolveThemeMode, supportsThemeMode } from "../app/themes/presets";
 import type { ThemeMaterialMode } from "../app/themes/presets";
-import { builtInThemeDefinitions, getTheme, getThemeNames, isMaterialTheme, materialThemeIds } from "../app/themes/presets";
 import { applyMaterialVariables } from "../app/components/ThemeProvider";
 import { createCustomThemeFrom, findSelectableTheme, normalizeThemeStore, saveTheme, validateThemeDefinition } from "../app/themes/themeStoreApi";
 
@@ -31,6 +31,9 @@ describe("theme presets", () => {
   it("keeps material theme modes visually distinct", () => {
     for (const themeId of materialThemeIds) {
       const theme = getTheme(themeId);
+      if (!theme || !supportsThemeMode(theme, "dark")) {
+        continue;
+      }
 
       expect(theme?.light.background, themeId).not.toBe(theme?.dark.background);
       expect(theme?.light.card, themeId).not.toBe(theme?.dark.card);
@@ -42,6 +45,24 @@ describe("theme presets", () => {
 
     expect(blackGlass?.light.background).not.toBe(blackGlass?.dark.background);
     expect(blackGlass?.light.foreground).not.toBe(blackGlass?.dark.foreground);
+  });
+
+  it("treats Paper as a light-only material theme", () => {
+    const paper = getTheme("paper");
+
+    expect(paper).toBeDefined();
+    expect(getSupportedThemeModes(paper!)).toEqual(["light"]);
+    expect(supportsThemeMode(paper!, "dark")).toBe(false);
+    expect(resolveThemeMode(paper!, "dark")).toBe("light");
+  });
+
+  it("treats Brass Instrument as a dark-only material theme", () => {
+    const brass = getTheme("brass-instrument");
+
+    expect(brass).toBeDefined();
+    expect(getSupportedThemeModes(brass!)).toEqual(["dark"]);
+    expect(supportsThemeMode(brass!, "light")).toBe(false);
+    expect(resolveThemeMode(brass!, "light")).toBe("dark");
   });
 
   it("duplicates built-ins into custom draft themes", () => {

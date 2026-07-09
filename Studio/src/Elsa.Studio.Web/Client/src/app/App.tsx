@@ -30,7 +30,7 @@ import type {
 } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
-import { getStudioRuntimeConfig, type StudioRuntimeConfig } from "./runtime";
+import { getStudioRuntimeConfig, getStudioRuntimeSettings, type StudioRuntimeConfig } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
 import { ThemeProvider } from "./components/ThemeProvider";
@@ -225,7 +225,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHeaders,
-          backendHttp: backendContext.http
+          backendHttp: backendContext.http,
+          runtime: getStudioRuntimeSettings(runtimeConfig)
         });
 
         for (const diagnostic of manifest.diagnostics) {
