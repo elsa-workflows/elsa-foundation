@@ -3980,6 +3980,31 @@ button.wf-node-slot-badge:focus-visible {
   gap: 8px;
 }
 
+.wf-slot-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.wf-slot-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-slot-list button.wf-slot-change {
+  display: inline-flex;
+  width: auto;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--wf-muted-text);
+  padding: 0 9px;
+}
+
+.wf-slot-list button.wf-slot-change:hover,
+.wf-slot-list button.wf-slot-change:focus-visible {
+  color: var(--wf-text);
+}
+
 .wf-ai-action,
 .wf-ai-inline-action {
   display: inline-flex;

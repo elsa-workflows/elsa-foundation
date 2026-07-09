@@ -1,4 +1,5 @@
-import { AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Repeat2 } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
 import type { ScopedVariableAnalysis } from "../api/workflows";
@@ -8,6 +9,18 @@ import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
 import { readContainerVariables, shadowingWarningMap, writeContainerVariables } from "../scopedVariables";
 import { describeSlotContents } from "./editorHelpers";
+import { ConnectMenu } from "./graph";
+
+// The open change-activity picker. Holds only the slot ID (not the ChildSlot descriptor): the menu can
+// stay open across draft edits (autosave merge, Weaver batch), so the pick handler re-resolves the slot
+// from the live selectedSlots and discards the pick if it no longer exists — a snapshot descriptor could
+// silently write to a stale collection index or a removed owner.
+interface SlotPickerState {
+  nodeId: string;
+  slotId: string;
+  clientX: number;
+  clientY: number;
+}
 
 interface InspectorPanelProps {
   context: StudioEndpointContext;
@@ -17,6 +30,7 @@ interface InspectorPanelProps {
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
   selectedSlots: ChildSlot[];
+  catalog: ActivityCatalogItem[];
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   propertyEditors: StudioActivityPropertyEditorContribution[];
@@ -25,7 +39,9 @@ interface InspectorPanelProps {
   descriptorStatus: "loading" | "ready" | "failed";
   scopedVariableAnalysis: ScopedVariableAnalysis;
   onSelectedActivityChange(activity: ActivityNode): void;
-  onEnterSlot(owner: ActivityNode, slotId: string, label: string): void;
+  onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
+  // Assign or replace the activity of a single-cardinality slot with a fresh instance of `activity`.
+  onReplaceSlotActivity(ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem): void;
 }
 
 // The right-hand inspector for the selected activity: identity, availability notice, property editors,
@@ -38,6 +54,7 @@ export function InspectorPanel({
   selectedDescriptor,
   selectedNodeAvailability,
   selectedSlots,
+  catalog,
   catalogByVersion,
   selectedSupportsScopedVariables,
   propertyEditors,
@@ -46,8 +63,17 @@ export function InspectorPanel({
   descriptorStatus,
   scopedVariableAnalysis,
   onSelectedActivityChange,
-  onEnterSlot
+  onEnterSlot,
+  onReplaceSlotActivity
 }: InspectorPanelProps) {
+  const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
+
+  // Adjust-during-render: an open picker belongs to the node it was opened for; drop it the moment the
+  // selection moves, so it neither survives a selection change nor resurrects on reselection.
+  if (slotPicker && slotPicker.nodeId !== selectedNode?.nodeId) {
+    setSlotPicker(null);
+  }
+
   if (!selectedNode) {
     return <p className="wf-muted">Select an activity to inspect properties and embedded slots.</p>;
   }
@@ -96,14 +122,44 @@ export function InspectorPanel({
       {selectedSlots.length > 0 ? (
         <div className="wf-slot-list">
           <span>Embedded slots</span>
-          {selectedSlots.map(slot => (
-            <button type="button" key={slot.id} onClick={() => onEnterSlot(selectedNode, slot.id, `${selectedNodeLabel} / ${slot.label}`)}>
-              {slot.label}
-              <small>{describeSlotContents(slot, catalogByVersion)}</small>
-            </button>
-          ))}
+          {selectedSlots.map(slot => {
+            const label = `${selectedNodeLabel} / ${slot.label}`;
+            return (
+              <div className="wf-slot-row" key={slot.id}>
+                <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
+                  {slot.label}
+                  <small>{describeSlotContents(slot, catalogByVersion)}</small>
+                </button>
+                {slot.cardinality === "single" ? (
+                  <button
+                    type="button"
+                    className="wf-slot-change"
+                    aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
+                    title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
+                    onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, clientX: event.clientX, clientY: event.clientY })}
+                  >
+                    <Repeat2 size={14} />
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : <p className="wf-muted">This activity does not expose embedded child slots.</p>}
+      {slotPicker ? (
+        <ConnectMenu
+          clientX={slotPicker.clientX}
+          clientY={slotPicker.clientY}
+          activities={catalog}
+          onPick={activity => {
+            setSlotPicker(null);
+            const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
+            if (!slot) return;
+            onReplaceSlotActivity(selectedNode.nodeId, slot, `${selectedNodeLabel} / ${slot.label}`, activity);
+          }}
+          onClose={() => setSlotPicker(null)}
+        />
+      ) : null}
     </div>
   );
 }

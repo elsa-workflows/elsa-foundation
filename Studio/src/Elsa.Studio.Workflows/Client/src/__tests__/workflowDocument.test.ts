@@ -130,12 +130,20 @@ describe("workflowDocumentReducer", () => {
     expect(next.selectedNodeId).toBe("node-3");
   });
 
-  it("slotEntered appends a frame and clears selection", () => {
+  it("slotEntered appends a frame and clears selection by default", () => {
     const start = dirtyState();
     const frame = { ownerNodeId: "o3", slotId: "s3", label: "L3" };
-    const next = workflowDocumentReducer(start, { type: "slotEntered", frame });
+    const next = workflowDocumentReducer(start, { type: "slotEntered", frame, selectedNodeId: null });
     expect(next.frames).toEqual([...start.frames, frame]);
     expect(next.selectedNodeId).toBeNull();
+  });
+
+  it("slotEntered can land with a child of the entered slot pre-selected", () => {
+    const start = dirtyState();
+    const frame = { ownerNodeId: "o3", slotId: "s3", label: "L3" };
+    const next = workflowDocumentReducer(start, { type: "slotEntered", frame, selectedNodeId: "child-1" });
+    expect(next.frames).toEqual([...start.frames, frame]);
+    expect(next.selectedNodeId).toBe("child-1");
   });
 
   it("test run transitions set and clear the run", () => {
@@ -162,7 +170,7 @@ describe("workflowDocumentReducer", () => {
     const start = dirtyState();
     const before = JSON.stringify(start);
     workflowDocumentReducer(start, { type: "draftReplacedByBatch", draft: makeDraft("x"), selectedNodeId: "n" });
-    workflowDocumentReducer(start, { type: "slotEntered", frame: { ownerNodeId: "o", slotId: "s", label: "l" } });
+    workflowDocumentReducer(start, { type: "slotEntered", frame: { ownerNodeId: "o", slotId: "s", label: "l" }, selectedNodeId: null });
     expect(JSON.stringify(start)).toBe(before);
   });
 });
