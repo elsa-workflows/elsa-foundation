@@ -22,6 +22,7 @@ public static class RuntimeMetadataKeys
     public const string FaultInnerMessage = "runtime.faultInnerMessage";
     public const string FaultInnerType = "runtime.faultInnerType";
     public const string FaultMessage = "runtime.faultMessage";
+    public const string FaultStackTrace = "runtime.faultStackTrace";
     public const string FaultSubStatus = "runtime.faultSubStatus";
     public const string FaultType = "runtime.faultType";
     public const string FlowchartExecutionScopeId = "flowchart.executionScopeId";
