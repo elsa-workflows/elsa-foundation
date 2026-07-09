@@ -224,8 +224,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Equal([ActivityOutcomes.Done], projection.OutcomeNames);
         var inputSnapshot = Assert.Single(projection.ValueSnapshots);
         Assert.Equal(ActivityExecutionInspectionValueSubject.ActivityInput, inputSnapshot.Subject);
-        Assert.Equal(RuntimePayloadCaptureMode.None, inputSnapshot.CaptureMode);
-        Assert.Null(inputSnapshot.Payload);
+        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, inputSnapshot.CaptureMode);
+        Assert.NotNull(inputSnapshot.Payload);
+        Assert.Equal("string", inputSnapshot.Payload.Value.GetProperty("kind").GetString());
 
         await AssertCompletionWorkAsync();
     }

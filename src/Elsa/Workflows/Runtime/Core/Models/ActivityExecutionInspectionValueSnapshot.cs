@@ -28,7 +28,7 @@ public sealed record ActivityExecutionInspectionValueSnapshot(
             CaptureMode: decision.Mode,
             Type: type,
             CapturedAt: capturedAt,
-            Payload: decision.CapturesPayload ? payload?.Clone() : null,
+            Payload: decision.CapturesEvidence ? payload?.Clone() : null,
             CaptureReason: decision.Reason,
             IsSensitive: isSensitive,
             Metadata: RuntimeModelMetadata.Snapshot(metadata));

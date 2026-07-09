@@ -105,7 +105,7 @@ public sealed class SequenceContainerVariableRuntimeTests
     }
 
     [Fact]
-    public async Task Container_completion_marks_scope_completed_and_redacts_evidence_by_default()
+    public async Task Container_completion_marks_scope_completed_and_captures_diagnostic_evidence_by_default()
     {
         await using var provider = NewProvider(["actexec-sequence", "actexec-assign", "actexec-read"]);
         var executable = NewExecutable(
@@ -123,11 +123,12 @@ public sealed class SequenceContainerVariableRuntimeTests
         var sequenceState = Assert.Single(states, state => state.Execution.ExecutableNodeId == SequenceNodeId);
         Assert.Equal(bool.TrueString, sequenceState.Metadata[RuntimeMetadataKeys.ScopedVariableScopeCompleted]);
 
-        // The completed-scope variable is recorded as inspection evidence, but the default capture
-        // policy omits its payload — completed-scope values are retained only when policy allows.
+        // The completed-scope variable is recorded as bounded diagnostic evidence by default.
         var snapshot = await ContainerVariableSnapshot(provider, "actexec-sequence", "Counter");
-        Assert.Equal(RuntimePayloadCaptureMode.None, snapshot.CaptureMode);
-        Assert.Null(snapshot.Payload);
+        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, snapshot.CaptureMode);
+        var payload = Assert.IsType<JsonElement>(snapshot.Payload);
+        Assert.Equal("string", payload.GetProperty("kind").GetString());
+        Assert.Equal("assigned-value", payload.GetProperty("preview").GetString());
     }
 
     [Fact]

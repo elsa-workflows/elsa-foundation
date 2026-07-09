@@ -531,7 +531,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     decision,
                     type,
                     capturedAt,
-                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value, input.Name, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
@@ -567,7 +567,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                     decision,
                     type,
                     capturedAt,
-                    ActivityOutputPublisher.SerializeCapturedValue(decision, output.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, output.Value, output.OutputName, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })

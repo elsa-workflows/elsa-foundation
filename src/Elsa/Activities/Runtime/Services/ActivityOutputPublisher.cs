@@ -100,8 +100,13 @@ internal static class ActivityOutputPublisher
             ? json.Clone()
             : JsonSerializer.SerializeToElement(value, value?.GetType() ?? typeof(object));
 
-    public static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value) =>
-        decision.CapturesPayload ? SerializeOutputValue(value) : null;
+    public static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value, string? valueName = null, RuntimeValueTypeDescriptor? type = null) =>
+        decision.Mode switch
+        {
+            RuntimePayloadCaptureMode.Payload => SerializeOutputValue(value),
+            RuntimePayloadCaptureMode.DiagnosticSnapshot => DefaultDiagnosticSnapshotFactory.Capture(value, valueName, type),
+            _ => null
+        };
 
     public static IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> BuildInputValueSnapshots(
         IRuntimePayloadCapturePolicy payloadCapturePolicy,
@@ -131,7 +136,7 @@ internal static class ActivityOutputPublisher
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, input.Value),
+                    SerializeCapturedValue(decision, input.Value, input.Name, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
@@ -167,7 +172,7 @@ internal static class ActivityOutputPublisher
                     decision,
                     type,
                     capturedAt,
-                    SerializeCapturedValue(decision, output.Value),
+                    SerializeCapturedValue(decision, output.Value, output.OutputName, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })

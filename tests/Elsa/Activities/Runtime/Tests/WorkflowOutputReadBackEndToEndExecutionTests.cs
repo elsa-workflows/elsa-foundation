@@ -24,8 +24,8 @@ namespace Elsa.Activities.Runtime.Tests;
 /// run started through the real <see cref="ExecuteWorkflowRequestHandler"/> → dispatcher → scheduler-drain
 /// flow must be readable back on the instance details view served by
 /// <see cref="GetWorkflowInstanceRequestHandler"/> (the handler behind <c>GET instances/{id}</c>). Also pins
-/// the redaction contract: a payload the configured <c>IRuntimePayloadCapturePolicy</c> declines to expose
-/// surfaces as an explicit redacted marker — name present, no value — never silently absent.
+/// the default diagnostic snapshot contract: a payload the default <c>IRuntimePayloadCapturePolicy</c> does not
+/// expose raw still surfaces as named diagnostic evidence — never silently absent.
 /// </summary>
 public sealed class WorkflowOutputReadBackEndToEndExecutionTests
 {
@@ -48,18 +48,20 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
     }
 
     [Fact]
-    public async Task ExecuteWorkflow_DefaultPolicy_SurfacesOutputAsRedactedMarker_NotAbsent()
+    public async Task ExecuteWorkflow_DefaultPolicy_SurfacesOutputAsDiagnosticSnapshot_NotAbsent()
     {
-        // Under the default capture policy (workflow-output payloads omitted) the output must still appear —
-        // as a named redacted marker carrying the policy's reason, not silently dropped from the view.
+        // Under the default capture policy the output must still appear as a bounded diagnostic snapshot,
+        // not as raw payload and not silently dropped from the view.
         await using var provider = BuildServiceProvider(payloadCapturePolicy: null);
 
         var details = await RunSetOutputWorkflowAndReadBack(provider, "artifact-out-2");
 
         var output = Assert.Contains(OutputName, details.Outputs);
-        Assert.True(output.IsRedacted);
-        Assert.Null(output.Value);
-        Assert.False(string.IsNullOrWhiteSpace(output.RedactionReason));
+        Assert.False(output.IsRedacted);
+        Assert.Null(output.RedactionReason);
+        var snapshot = Assert.IsType<JsonElement>(output.Value);
+        Assert.Equal("string", snapshot.GetProperty("kind").GetString());
+        Assert.Equal(OutputValue, snapshot.GetProperty("preview").GetString());
     }
 
     [Fact]

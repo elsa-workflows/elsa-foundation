@@ -127,7 +127,10 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
         Assert.NotNull(projection);
         var outputSnapshot = Assert.Single(projection.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
         Assert.Equal("customer", outputSnapshot.Name);
-        Assert.Equal(RuntimePayloadCaptureMode.None, outputSnapshot.CaptureMode);
+        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, outputSnapshot.CaptureMode);
+        var snapshot = Assert.IsType<JsonElement>(outputSnapshot.Payload);
+        Assert.Equal("object", snapshot.GetProperty("kind").GetString());
+        Assert.Equal("customer-123", snapshot.GetProperty("properties")[0].GetProperty("value").GetProperty("preview").GetString());
     }
 
     [Fact]
