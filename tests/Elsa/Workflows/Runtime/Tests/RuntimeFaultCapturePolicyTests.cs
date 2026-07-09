@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -11,10 +12,13 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class RuntimeFaultCapturePolicyTests
 {
+    private static DefaultRuntimeFaultCapturePolicy Policy(bool captureStackTrace = false) =>
+        new(Options.Create(new RuntimeFaultCaptureOptions { CaptureStackTrace = captureStackTrace }));
+
     [Fact]
     public void Capture_CapturesTypeAndMessage_WithoutStackTraceByDefault()
     {
-        var policy = new DefaultRuntimeFaultCapturePolicy();
+        var policy = Policy();
         Exception exception;
         try
         {
@@ -36,7 +40,7 @@ public sealed class RuntimeFaultCapturePolicyTests
     [Fact]
     public void Capture_IncludesStackTrace_WhenEnabled()
     {
-        var policy = new DefaultRuntimeFaultCapturePolicy(new RuntimeFaultCaptureOptions { CaptureStackTrace = true });
+        var policy = Policy(captureStackTrace: true);
         Exception exception;
         try
         {
@@ -55,7 +59,7 @@ public sealed class RuntimeFaultCapturePolicyTests
     [Fact]
     public void Capture_FallsBackToTypeName_WhenMessageIsBlank()
     {
-        var policy = new DefaultRuntimeFaultCapturePolicy();
+        var policy = Policy();
 
         var info = policy.Capture(new BlankMessageException());
 

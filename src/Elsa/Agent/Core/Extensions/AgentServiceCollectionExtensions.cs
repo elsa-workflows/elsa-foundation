@@ -24,7 +24,7 @@ public static class AgentServiceCollectionExtensions
         services.TryAddScoped<IAgentToolRegistry, DefaultAgentToolRegistry>();
         services.TryAddSingleton<IAgentTurnRegistry, AgentTurnRegistry>();
         services.TryAddSingleton<IAgentTurnStateStore, InMemoryAgentTurnStateStore>();
-        services.TryAddSingleton(new AgentTurnOptions());
+        services.AddOptions<AgentTurnOptions>();
         services.TryAddScoped<IAgentToolInvoker, DefaultAgentToolInvoker>();
         services.TryAddScoped<IAgentStreamingService, DefaultAgentTurnOrchestrator>();
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();

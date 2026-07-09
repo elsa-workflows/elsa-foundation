@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -26,7 +27,7 @@ public sealed class ActivityFaultIncidentRecorderTests
     [Fact]
     public async Task CommitAsync_CapturesStackTrace_WhenPolicyEnablesIt()
     {
-        var policy = new DefaultRuntimeFaultCapturePolicy(new RuntimeFaultCaptureOptions { CaptureStackTrace = true });
+        var policy = new DefaultRuntimeFaultCapturePolicy(Options.Create(new RuntimeFaultCaptureOptions { CaptureStackTrace = true }));
         var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System, inspectionAccumulator: null, policy);
 
         await recorder.CommitAsync(NewRequest(CapturedException()));

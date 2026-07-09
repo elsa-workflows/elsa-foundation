@@ -21,7 +21,5 @@ public sealed record RuntimeFaultInfo(
 /// </summary>
 public sealed class RuntimeFaultCaptureOptions
 {
-    public static readonly RuntimeFaultCaptureOptions Default = new();
-
-    public bool CaptureStackTrace { get; init; }
+    public bool CaptureStackTrace { get; set; }
 }

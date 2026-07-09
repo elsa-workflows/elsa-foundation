@@ -169,7 +169,7 @@ public sealed class AgentTurnOrchestratorTests
     {
         var services = new ServiceCollection();
         if (maxSteps is not null)
-            services.AddSingleton(new AgentTurnOptions { MaxSteps = maxSteps.Value });
+            services.Configure<AgentTurnOptions>(o => o.MaxSteps = maxSteps.Value);
         services.AddFoundationAgentAbstractions();
         services.AddSingleton(provider);
         foreach (var tool in tools)
