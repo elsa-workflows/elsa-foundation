@@ -13,7 +13,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         IReadOnlyDictionary<string, string>? metadata = null,
         IReadOnlyDictionary<string, object?>? variables = null,
         IReadOnlyDictionary<string, object?>? inputs = null,
-        JsonElement? stimulusInput = null)
+        JsonElement? stimulusInput = null,
+        string? triggerNodeId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -24,6 +25,9 @@ public sealed class WorkflowExecutionStartDispatchRequest
         if (idempotencyKey is not null && string.IsNullOrWhiteSpace(idempotencyKey))
             throw new ArgumentException("Idempotency key cannot be blank when provided.", nameof(idempotencyKey));
 
+        if (triggerNodeId is not null && string.IsNullOrWhiteSpace(triggerNodeId))
+            throw new ArgumentException("Trigger node ID cannot be blank when provided.", nameof(triggerNodeId));
+
         ArtifactId = artifactId;
         WorkflowExecutionId = workflowExecutionId;
         IdempotencyKey = idempotencyKey;
@@ -32,6 +36,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         Variables = SnapshotValues(variables);
         Inputs = SnapshotValues(inputs);
         StimulusInput = stimulusInput?.Clone();
+        TriggerNodeId = triggerNodeId;
     }
 
     public string ArtifactId { get; }
@@ -61,6 +66,15 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// </summary>
     public JsonElement? StimulusInput { get; }
 
+    /// <summary>
+    /// The executable node id of the matched trigger binding that started this run (spec 089 D), carried on its
+    /// own reserved channel — the start-side counterpart of the resume path's node identity. Lets a mid-flow-capable
+    /// activity (e.g. <c>HttpEndpoint</c>) tell whether it is the node that triggered this run. Deliberately NOT part
+    /// of <see cref="Inputs"/>: it never shares the workflow-input namespace, so it cannot collide with author-declared
+    /// inputs and cannot be forged through caller-facing input bags. Null for direct (non-trigger) starts.
+    /// </summary>
+    public string? TriggerNodeId { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }
@@ -73,7 +87,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         string requestedArtifactId,
         IReadOnlyDictionary<string, JsonElement>? variables = null,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
-        JsonElement? stimulusInput = null)
+        JsonElement? stimulusInput = null,
+        string? triggerNodeId = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -83,6 +98,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         Variables = SnapshotElements(variables);
         Inputs = SnapshotElements(inputs);
         StimulusInput = stimulusInput?.Clone();
+        TriggerNodeId = triggerNodeId;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -105,6 +121,13 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for non-stimulus starts.
     /// </summary>
     public JsonElement? StimulusInput { get; }
+
+    /// <summary>
+    /// The trigger-node identity (spec 089 D) carried from start dispatch so the workflow-started checkpoint can
+    /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for direct (non-trigger)
+    /// starts.
+    /// </summary>
+    public string? TriggerNodeId { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(

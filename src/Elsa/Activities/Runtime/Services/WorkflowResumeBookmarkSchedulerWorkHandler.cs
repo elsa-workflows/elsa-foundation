@@ -201,7 +201,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // Previously the resume context was built with none of these, so a resume callback that evaluated
             // JavaScript/Liquid saw empty getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no
             // scope to write variables into. Populated identically to the invoke path via the shared helper.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable);
+            // Stash the resume dispatch's stimulus input onto the carrier (spec 089 D) so a context-shaped
+            // [ResumeTarget] can read the resuming request's payload via IExecutionExpressionState.ResumeInput while
+            // keeping full Set/output access to the context. It is a live per-invocation value, never durable state,
+            // so the invoke/start/parent-completion paths (which call Create without it) leave it null.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable, resumePayload.Input);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,

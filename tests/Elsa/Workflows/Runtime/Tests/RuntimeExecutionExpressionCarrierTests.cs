@@ -58,8 +58,38 @@ public sealed class RuntimeExecutionExpressionCarrierTests
         Assert.Equal(7, state.WorkflowDefinitionVersion);
     }
 
-    private static RuntimeInputBindingStateProjectionSet Projections(string? correlationId = null, string? instanceName = null) =>
-        new(WorkflowInputs: Empty, WorkflowVariables: Empty, ActivityOutputValues: Empty, CorrelationId: correlationId, InstanceName: instanceName, StimulusInput: null);
+    [Fact]
+    public void TriggerNodeIdFlowsThrough_AndBlankDegradesToNull()
+    {
+        // Spec 089 D (T003): the trigger-node identity rides through the projection set onto the carrier, blank → null.
+        var pinned = NewIdentity(artifactVersion: "7.0.0");
+
+        var assigned = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "node-http"), pinned);
+        Assert.Equal("node-http", assigned.TriggerNodeId);
+
+        var blank = RuntimeExecutionExpressionCarrier.Create(Projections(triggerNodeId: "  "), pinned);
+        Assert.Null(blank.TriggerNodeId);
+
+        var absent = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned);
+        Assert.Null(absent.TriggerNodeId);
+    }
+
+    [Fact]
+    public void ResumeInputIsCarriedOnlyWhenSupplied()
+    {
+        // Spec 089 D (T002): the resume input is a per-invocation carrier value, null unless the caller passes it.
+        var pinned = NewIdentity(artifactVersion: "7.0.0");
+
+        Assert.Null(RuntimeExecutionExpressionCarrier.Create(Projections(), pinned).ResumeInput);
+
+        var resumeInput = System.Text.Json.JsonSerializer.SerializeToElement(new { path = "/cb" });
+        var carried = RuntimeExecutionExpressionCarrier.Create(Projections(), pinned, resumeInput);
+        Assert.NotNull(carried.ResumeInput);
+        Assert.Equal("/cb", carried.ResumeInput!.Value.GetProperty("path").GetString());
+    }
+
+    private static RuntimeInputBindingStateProjectionSet Projections(string? correlationId = null, string? instanceName = null, string? triggerNodeId = null) =>
+        new(WorkflowInputs: Empty, WorkflowVariables: Empty, ActivityOutputValues: Empty, CorrelationId: correlationId, InstanceName: instanceName, StimulusInput: null, TriggerNodeId: triggerNodeId);
 
     private static WorkflowExecutableIdentity NewIdentity(string artifactVersion) =>
         new("artifact-1", "definition-1", "version-7", artifactVersion, "sha256:test");

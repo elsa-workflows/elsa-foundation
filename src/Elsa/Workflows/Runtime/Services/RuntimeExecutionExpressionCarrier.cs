@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -33,7 +34,8 @@ public static class RuntimeExecutionExpressionCarrier
     /// </summary>
     public static RuntimeExecutionExpressionCarrierState Create(
         RuntimeInputBindingStateProjectionSet projections,
-        WorkflowExecutableIdentity pinnedExecutable)
+        WorkflowExecutableIdentity pinnedExecutable,
+        JsonElement? resumeInput = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
 
@@ -44,7 +46,9 @@ public static class RuntimeExecutionExpressionCarrier
             WorkflowInputs: projections.WorkflowInputs,
             WorkflowVariables: projections.WorkflowVariables,
             ActivityOutputValues: projections.ActivityOutputValues,
-            StimulusInput: projections.StimulusInput);
+            StimulusInput: projections.StimulusInput,
+            TriggerNodeId: string.IsNullOrWhiteSpace(projections.TriggerNodeId) ? null : projections.TriggerNodeId,
+            ResumeInput: resumeInput?.Clone());
     }
 
     /// <summary>
@@ -89,4 +93,6 @@ public readonly record struct RuntimeExecutionExpressionCarrierState(
     IReadOnlyDictionary<string, object?> WorkflowInputs,
     IReadOnlyDictionary<string, object?> WorkflowVariables,
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
-    object? StimulusInput);
+    object? StimulusInput,
+    string? TriggerNodeId,
+    JsonElement? ResumeInput);

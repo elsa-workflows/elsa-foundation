@@ -129,6 +129,25 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_StartOnly_ForwardsMatchedBindingNodeIdPerBinding()
+    {
+        // Spec 089 D (T003): each start dispatch carries the matched binding's executable node id on the dedicated
+        // TriggerNodeId channel, so a mid-flow-capable activity can tell whether it is the node that triggered the
+        // run. Two bindings on distinct nodes must each forward their own node id — never the workflow-inputs bag.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        await bindingStore.SaveAsync(Binding("artifact-2", "node-b"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        Assert.Equal(2, startDispatcher.Requests.Count);
+        Assert.Equal("node-a", startDispatcher.Requests.Single(request => request.ArtifactId == "artifact-1").TriggerNodeId);
+        Assert.Equal("node-b", startDispatcher.Requests.Single(request => request.ArtifactId == "artifact-2").TriggerNodeId);
+    }
+
+    [Fact]
     public async Task Route_StartOnly_WithoutInput_CarriesNoStimulusInput()
     {
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();

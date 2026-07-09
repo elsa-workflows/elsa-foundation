@@ -92,6 +92,18 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string StimulusInputName = "runtime.stimulusInputName";
     /// <summary>
+    /// Metadata key on the durable value carrying the executable node id of the trigger that started this
+    /// execution (spec 089 D). Its value is the reserved slot name
+    /// <c>RuntimeWorkflowStateSeed.TriggerNodeIdSlotName</c>. Like <see cref="StimulusInputName"/> this is a
+    /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger-node
+    /// identity never shares the workflow-input namespace, so it cannot collide with an author-declared input
+    /// and cannot be injected through the caller-facing inputs bag of the execute API. A mid-flow HttpEndpoint
+    /// reads it (via <see cref="Elsa.Workflows.Runtime.Core.Contracts.IExecutionExpressionState.TriggerNodeId"/>)
+    /// to tell whether it is the node that triggered this run and so should complete rather than suspend. Read by
+    /// <c>RuntimeInputBindingStateProjection.ProjectTriggerNodeId</c>. Absent for direct (non-stimulus) runs.
+    /// </summary>
+    public const string TriggerNodeId = "runtime.triggerNodeId";
+    /// <summary>
     /// Metadata key marking a durable value's payload as sensitive (<c>"true"</c>). Read by the workflow-output
     /// read projection (#254 Seam R1): <c>RuntimeWorkflowOutputStateProjection</c> (engine package)
     /// threads it as <c>IsSensitive</c> into the <c>IRuntimePayloadCapturePolicy</c> consult, so a sensitive-marked

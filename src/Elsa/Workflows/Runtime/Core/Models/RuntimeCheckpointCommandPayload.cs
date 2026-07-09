@@ -20,7 +20,8 @@ public sealed class RuntimeCheckpointCommandPayload
         IReadOnlyCollection<RuntimePostCommitIntent>? postCommitIntents = null,
         IReadOnlyDictionary<string, JsonElement>? seedVariables = null,
         IReadOnlyDictionary<string, JsonElement>? seedInputs = null,
-        JsonElement? seedStimulusInput = null)
+        JsonElement? seedStimulusInput = null,
+        string? seedTriggerNodeId = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -56,6 +57,7 @@ public sealed class RuntimeCheckpointCommandPayload
         SeedVariables = SnapshotElements(seedVariables);
         SeedInputs = SnapshotElements(seedInputs);
         SeedStimulusInput = seedStimulusInput?.Clone();
+        SeedTriggerNodeId = seedTriggerNodeId;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -81,6 +83,12 @@ public sealed class RuntimeCheckpointCommandPayload
     /// commits. Populated only for the workflow-started checkpoint of a stimulus-triggered start; null otherwise.
     /// </summary>
     public JsonElement? SeedStimulusInput { get; }
+
+    /// <summary>
+    /// The trigger-node identity (spec 089 D) to persist on its reserved durable channel when this checkpoint
+    /// commits. Populated only for the workflow-started checkpoint of a trigger-matched start; null otherwise.
+    /// </summary>
+    public string? SeedTriggerNodeId { get; }
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);

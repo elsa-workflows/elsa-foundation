@@ -140,12 +140,16 @@ public sealed class StimulusRouter : IStimulusRouter
             // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
             // stimulus-input channel — the start-side counterpart of the resume path's
             // BookmarkResumeDispatchRequest.Input. Never the workflow-inputs bag (collision/spoof-proof).
+            // Spec 089 D: the matched binding's executable node id rides its own reserved channel so a
+            // mid-flow-capable activity (e.g. HttpEndpoint) can tell whether it is the node that triggered
+            // this run — again never the workflow-inputs bag.
             var startRequest = new WorkflowExecutionStartDispatchRequest(
                 artifactId: binding.ArtifactId,
                 requestedBy: request.RequestedBy,
                 idempotencyKey: startIdempotencyKey,
                 metadata: dispatchMetadata,
-                stimulusInput: request.Input);
+                stimulusInput: request.Input,
+                triggerNodeId: binding.ExecutableNodeId);
 
             var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));

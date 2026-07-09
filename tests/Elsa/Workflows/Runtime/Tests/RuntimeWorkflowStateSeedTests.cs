@@ -49,6 +49,36 @@ public sealed class RuntimeWorkflowStateSeedTests
     }
 
     [Fact]
+    public void BuildSeedChanges_SeedsTriggerNodeIdOnItsOwnReservedChannel_AndProjectsBack()
+    {
+        // Spec 089 D (T003): the trigger-node identity rides a reserved channel (trigger:*), never the input:*
+        // namespace, and the projection unwraps the inline JSON string back to the node id.
+        var changes = RuntimeWorkflowStateSeed.BuildSeedChanges(
+            "wfexec-1",
+            variables: null,
+            inputs: new Dictionary<string, object?> { ["name"] = "Ada" },
+            capturedAt: _now,
+            triggerNodeId: "node-http");
+
+        var trigger = Assert.Single(changes, change => change.State!.Metadata.ContainsKey(RuntimeMetadataKeys.TriggerNodeId));
+        Assert.Equal(RuntimeWorkflowStateSeed.TriggerNodeIdSlotName, trigger.State!.Metadata[RuntimeMetadataKeys.TriggerNodeId]);
+        Assert.Equal($"{RuntimeWorkflowStateSeed.TriggerNodeValueIdPrefix}{RuntimeWorkflowStateSeed.TriggerNodeIdSlotName}", trigger.State.ValueId);
+        // It never lands in the input:* namespace, so it cannot collide with author-declared inputs.
+        Assert.DoesNotContain(changes, change => change.State!.Metadata.ContainsKey(RuntimeMetadataKeys.InputName) && change.State.ValueId.Contains("node-http"));
+
+        Assert.Equal("node-http", RuntimeInputBindingStateProjection.ProjectTriggerNodeId(changes.Select(change => change.State!)));
+    }
+
+    [Fact]
+    public void ProjectTriggerNodeId_IsNullWhenNotSeeded()
+    {
+        // A direct (non-trigger) run seeds no trigger-node channel, so the projection is null.
+        var changes = RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1", variables: null, inputs: new Dictionary<string, object?> { ["name"] = "Ada" }, capturedAt: _now);
+
+        Assert.Null(RuntimeInputBindingStateProjection.ProjectTriggerNodeId(changes.Select(change => change.State!)));
+    }
+
+    [Fact]
     public void BuildVariableWriteBackChanges_ReusesTheSeedValueIdAndTagsAsVariableWithALaterCapture()
     {
         // A mid-run write-back (#286) re-emits a variable under the same reserved value id the seed used, so it
