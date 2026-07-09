@@ -199,7 +199,40 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.False(handler.CanHandle(NewCreateBookmarkWorkItem(commandKind: WorkflowExecutionCommandKind.Checkpoint)));
     }
 
-    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler() =>
+    [Fact]
+    public async Task HandleAsync_NotifiesLifecycleObservers_AfterTheDurableCommit()
+    {
+        // Spec 089 D (T005): a bookmark-lifecycle observer is invoked with the committed bookmark AFTER the commit.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var observer = new RecordingBookmarkLifecycleObserver();
+        var handler = NewHandler(new BookmarkLifecycleNotifier([observer]));
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        var created = Assert.Single(observer.Created);
+        Assert.Equal("bookmark-1", created.BookmarkId);
+        Assert.Equal("delivery-status", created.StimulusType);
+        Assert.Empty(observer.Consumed);
+        // The bookmark was durably committed before the observer saw it.
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ThrowingObserver_DoesNotFaultTheRun()
+    {
+        // The observer fires on the run path: a throw is caught and logged, the run still succeeds.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var handler = NewHandler(new BookmarkLifecycleNotifier([new ThrowingBookmarkLifecycleObserver()]));
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Equal(ActivityExecutionStatus.Suspended, (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.Status);
+    }
+
+    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler(BookmarkLifecycleNotifier? notifier = null) =>
         new(
             _executableStore,
             _activityStateStore,
@@ -207,7 +240,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 _checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now));
+            new FixedTimeProvider(_now),
+            notifier);
 
     private RuntimeSchedulerWorkItem NewCreateBookmarkWorkItem(
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.CreateBookmark,

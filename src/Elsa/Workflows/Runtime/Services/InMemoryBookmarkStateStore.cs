@@ -82,5 +82,20 @@ public sealed class InMemoryBookmarkStateStore : IBookmarkStateStore, IBookmarkS
         }
     }
 
+    public ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var states = _states.Values
+                .Where(state => StringComparer.Ordinal.Equals(state.StimulusType, stimulusType))
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<BookmarkState>>(states);
+        }
+    }
+
     private readonly record struct BookmarkStateKey(string WorkflowExecutionId, string BookmarkId);
 }

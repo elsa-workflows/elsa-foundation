@@ -66,6 +66,53 @@ public sealed class GlobalBookmarkStimulusLookupTests
         Assert.Equal(["wfexec-1", "wfexec-2"], result.WorkflowExecutionIds.OrderBy(id => id, StringComparer.Ordinal));
     }
 
+    [Fact]
+    public async Task FindWaitingByType_ReturnsSnapshotsWithMetadata_AcrossHashesAndExecutions()
+    {
+        // Spec 089 D (T004b): the type-scoped lookup returns waiting-bookmark SNAPSHOTS (incl. Metadata) for a
+        // stimulus type regardless of hash — the mid-flow HttpEndpoint route-table resolver / middleware read the
+        // durable route template + endpoint options off the returned Metadata.
+        var store = new InMemoryBookmarkStateStore();
+        var lookup = new GlobalBookmarkStimulusLookup(store);
+        await store.SaveAsync(Bookmark("bk-a", executionId: "wfexec-1", stimulusType: "HttpEndpoint", stimulusHash: "sha256:http:/a:GET", createdAt: _now.AddMinutes(-2), metadata: new() { ["http:template"] = "/a" }));
+        await store.SaveAsync(Bookmark("bk-b", executionId: "wfexec-2", stimulusType: "HttpEndpoint", stimulusHash: "sha256:http:/b:POST", createdAt: _now.AddMinutes(-1), metadata: new() { ["http:template"] = "/b" }));
+        await store.SaveAsync(Bookmark("bk-other", executionId: "wfexec-3", stimulusType: "Event"));
+
+        var result = await lookup.FindWaitingByTypeAsync(new GlobalBookmarkStimulusTypeLookupRequest("HttpEndpoint", _now));
+
+        Assert.Equal(["bk-a", "bk-b"], result.Matches.Select(match => match.BookmarkId));
+        Assert.Equal(["/a", "/b"], result.Matches.Select(match => match.Metadata["http:template"]));
+    }
+
+    [Fact]
+    public async Task FindWaitingByType_ExcludesExpiredBookmarks()
+    {
+        // Expiry pin: filtering stays in the lookup layer (the raw index scan is unfiltered).
+        var store = new InMemoryBookmarkStateStore();
+        var lookup = new GlobalBookmarkStimulusLookup(store);
+        await store.SaveAsync(Bookmark("bk-expired", executionId: "wfexec-1", stimulusType: "HttpEndpoint", expiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(Bookmark("bk-live", executionId: "wfexec-2", stimulusType: "HttpEndpoint", expiresAt: _now.AddMinutes(5)));
+
+        var result = await lookup.FindWaitingByTypeAsync(new GlobalBookmarkStimulusTypeLookupRequest("HttpEndpoint", _now));
+
+        Assert.Equal(["bk-live"], result.Matches.Select(match => match.BookmarkId));
+    }
+
+    [Fact]
+    public async Task InMemoryStore_ListByStimulusType_ReturnsEveryTypeMatch_RegardlessOfHash_AndIsUnfilteredByExpiry()
+    {
+        // Spec 089 D (T004a): the raw index type-scan returns every bookmark of the type across hashes/executions,
+        // WITHOUT expiry filtering (the documented raw-read contract — expiry lives in the lookup layer).
+        var store = new InMemoryBookmarkStateStore();
+        await store.SaveAsync(Bookmark("bk-a", executionId: "wfexec-1", stimulusType: "HttpEndpoint", stimulusHash: "h1"));
+        await store.SaveAsync(Bookmark("bk-expired", executionId: "wfexec-2", stimulusType: "HttpEndpoint", stimulusHash: "h2", expiresAt: _now.AddSeconds(-1)));
+        await store.SaveAsync(Bookmark("bk-other", executionId: "wfexec-3", stimulusType: "Event", stimulusHash: "h3"));
+
+        var matches = await store.ListByStimulusTypeAsync("HttpEndpoint");
+
+        Assert.Equal(["bk-a", "bk-expired"], matches.Select(match => match.BookmarkId).OrderBy(id => id, StringComparer.Ordinal));
+    }
+
     private GlobalBookmarkStimulusLookupRequest Request(string? correlationId = null) =>
         new("Event", "sha256:event:hello", _now, correlationId);
 
@@ -76,9 +123,10 @@ public sealed class GlobalBookmarkStimulusLookupTests
         string stimulusHash = "sha256:event:hello",
         string? correlationId = null,
         DateTimeOffset? createdAt = null,
-        DateTimeOffset? expiresAt = null)
+        DateTimeOffset? expiresAt = null,
+        Dictionary<string, string>? metadata = null)
     {
-        var metadata = new Dictionary<string, string>();
+        metadata ??= new Dictionary<string, string>();
         if (correlationId is not null)
             metadata[RuntimeMetadataKeys.CorrelationId] = correlationId;
 

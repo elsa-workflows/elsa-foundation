@@ -19,4 +19,15 @@ public interface IBookmarkStimulusIndex
         string stimulusType,
         string stimulusHash,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every bookmark of a given stimulus type across all workflow executions, regardless of hash
+    /// (spec 089 D). Unlike <see cref="ListByStimulusAsync"/> this is a type-scoped scan — it lets a consumer
+    /// enumerate all bookmarks waiting on a family of stimuli (e.g. every waiting <c>HttpEndpoint</c> bookmark)
+    /// to union their route templates. Like the hash-scoped scan it applies no expiry or correlation filtering;
+    /// that stays in <see cref="IGlobalBookmarkStimulusLookup"/> per the index's documented raw-read contract.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusTypeAsync(
+        string stimulusType,
+        CancellationToken cancellationToken = default);
 }
