@@ -75,7 +75,7 @@ Four environment variables wire the two containers together (double-underscore =
 | Setting | On | Value | Why |
 |---|---|---|---|
 | `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* the compose service name `http://elsa-server:8080`, which only resolves inside the Docker network. |
-| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | The Elsa host management key Studio's server-side management bridge attaches when calling the server's module-management API. Stays server-side — never sent to the browser. **Must match** the server key below. |
+| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | The Elsa host management key the Studio management bridge attaches server-side when calling the server's module-management API. Never sent to the browser. **Must match** the server key below. |
 | `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The Elsa host management key the server accepts. |
 | `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
 
@@ -164,8 +164,8 @@ http://localhost:14000
 
 Sign in with the demo credentials from step 4. Studio is a Blazor WebAssembly app: the browser
 downloads the client and calls the backend's workflow APIs directly at `http://localhost:13000`
-with the user's authorization. Host-control operations (module management) are the exception:
-those go through Studio's server-side management bridge, which holds the Elsa host management key
+with the user's authorization. Host-control operations such as module management are the exception:
+those go through the server-side Studio management bridge, which holds the Elsa host management key
 (see the API key note below).
 
 ---
@@ -185,7 +185,7 @@ those go through Studio's server-side management bridge, which holds the Elsa ho
 | Postgres user / password / database | `elsa` / `elsa` / `elsa` |
 | Elsa host management key | `elsa-docker-demo-key` |
 
-The Elsa host management key wires Studio's server-side management bridge to the server: the
+The Elsa host management key wires the server-side Studio management bridge to the server: the
 server's `Elsa__ModuleManagement__ApiKey` **must match** Studio's
 `Studio__BackendModuleManagementApiKey`. Both default to `elsa-docker-demo-key`. The key never
 leaves the two containers — the browser neither sees nor sends it.

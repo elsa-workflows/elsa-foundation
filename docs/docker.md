@@ -165,9 +165,9 @@ Studio wiring (see `docker-compose.yml`):
   service name like `http://elsa-server:8080` is not resolvable from the browser.
 - **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
   This is the Elsa host management key, and it stays server-side in the Studio container — it is
-  never published to the browser. Browser-facing host-control reads (module management) go through
-  the Studio management bridge (`/_elsa/studio/backend-management/*`), which attaches the key when
-  calling the backend (see ADR 0037).
+  never published to the browser. Browser-facing host-control reads (module management, Extension
+  Builder) go through the Studio management bridge, which attaches the key when calling the
+  backend (see ADR 0037).
 - The server's CORS policy must allow the Studio published origin (`Cors__AllowedOrigins__0`).
 
 ---
