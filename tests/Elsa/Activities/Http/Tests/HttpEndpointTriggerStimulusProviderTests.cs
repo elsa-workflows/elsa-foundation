@@ -123,6 +123,38 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
     }
 
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("-00:00:01")]
+    public void Describe_Throws_WhenRequestTimeoutNonPositive(string timeout)
+    {
+        // Review C2: a non-positive timeout would arm CancelAfter with an invalid value at request time —
+        // the authoring error fails the publish instead.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.RequestTimeout)] = LiteralBinding(nameof(HttpEndpoint.RequestTimeout), timeout)
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Contains("non-positive", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public void Describe_Throws_WhenRequestSizeLimitNonPositive(string sizeLimit)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.RequestSizeLimit)] = LiteralJsonBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit)
+        };
+
+        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Contains("non-positive", exception.Message);
+    }
+
     [Fact]
     public void Describe_ReturnsEmpty_ForNonHttpEndpointActivityType()
     {

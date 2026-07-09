@@ -111,24 +111,40 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         ReadLiteralOption(node, inputName, literal =>
         {
             var text = literal.ValueKind == JsonValueKind.String ? literal.GetString() : literal.ToString();
-            if (TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var parsed))
-                return parsed;
+            if (!TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var parsed))
+                throw new ArgumentException(
+                    $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a TimeSpan.");
 
-            throw new ArgumentException(
-                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a TimeSpan.");
+            // Review C2: a non-positive timeout would arm CancelAfter with an invalid value at request time
+            // (or cancel every request instantly) — an authoring error, so the publish fails here.
+            if (parsed <= TimeSpan.Zero)
+                throw new ArgumentException(
+                    $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-positive '{inputName}' ({parsed:c}); the request timeout must be greater than zero.");
+
+            return parsed;
         });
 
     private static long? ReadLiteralLong(ExecutableNode node, string inputName) =>
         ReadLiteralOption(node, inputName, literal =>
         {
-            if (literal.ValueKind == JsonValueKind.Number && literal.TryGetInt64(out var number))
-                return number;
+            long? value = literal.ValueKind switch
+            {
+                JsonValueKind.Number when literal.TryGetInt64(out var number) => number,
+                JsonValueKind.String when long.TryParse(literal.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
+                _ => null
+            };
 
-            if (literal.ValueKind == JsonValueKind.String && long.TryParse(literal.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
-                return parsed;
+            if (value is null)
+                throw new ArgumentException(
+                    $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not an integer.");
 
-            throw new ArgumentException(
-                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not an integer.");
+            // Review C2 (companion): a non-positive size limit is meaningless and would otherwise be silently
+            // dropped by the read side's strict parse — fail the publish where the authoring error is made.
+            if (value <= 0)
+                throw new ArgumentException(
+                    $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a non-positive '{inputName}' ({value}); the request size limit must be greater than zero.");
+
+            return value.Value;
         });
 
     private static string? ReadLiteralString(ExecutableNode node, string inputName)

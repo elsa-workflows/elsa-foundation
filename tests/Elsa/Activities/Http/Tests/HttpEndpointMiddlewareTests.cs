@@ -412,6 +412,23 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
+    public async Task HandSeededNegativeTimeoutMetadata_IsIgnored_NotAServerError()
+    {
+        // Review C2 defense in depth: the provider rejects non-positive timeouts at publish, but metadata can
+        // be hand-seeded; a negative value must not reach CancelAfter (which throws) — it is treated as
+        // no-timeout and the request completes normally.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "negative", "POST", requestTimeout: TimeSpan.FromSeconds(-1)));
+        var middleware = Middleware(router, store, "negative");
+        var context = NewContext("/workflows/http/negative", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
     public async Task DispatchThrowsHttpBadRequestException_Replies400_ViaInlineFallback()
     {
         var router = BehaviourStimulusRouter.Throwing(new HttpBadRequestException("bad", new InvalidOperationException()));
