@@ -1,9 +1,12 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Primitives.Models;
 
 /// <summary>
 /// The collection shape applied to an authored argument's element type. A missing/unset value is
 /// treated as <see cref="Single"/> (FR-002).
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CollectionKind>))]
 public enum CollectionKind
 {
     /// <summary>A scalar value; closes to <c>T</c>.</summary>
