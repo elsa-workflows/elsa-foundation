@@ -3,6 +3,7 @@ using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
@@ -87,8 +88,17 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     public OutputArgument<IDictionary<string, string>>? RouteData { get; set; }
 
     /// <summary>
-    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011); null when the
-    /// body was empty, the content type unrecognized, or the run was not started by an HTTP stimulus.
+    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011), <em>derived</em>
+    /// here from <see cref="HttpRequestModel.Body"/> and the request <c>Content-Type</c> header via the
+    /// deterministic <c>IHttpRequestBodyParser</c> seam — it is not persisted on the stimulus payload (spec 089
+    /// efficiency #9, no body double-persistence). Null/JSON-null semantics (spec 089 #16):
+    /// <list type="bullet">
+    /// <item><description><b>CLR <c>null</c></b> when there is no content to parse — an empty body, an
+    /// unrecognized/absent content type, malformed JSON, or a non-HTTP start (whose model carries a null body).</description></item>
+    /// <item><description>An explicit JSON <c>null</c> body surfaces as a <see cref="JsonElement"/> of
+    /// <see cref="JsonValueKind.Null"/> (a present, well-defined value), so an <c>object?</c> consumer can tell
+    /// "no content" (CLR null) from "the caller sent literal null" (JsonElement Null).</description></item>
+    /// </list>
     /// </summary>
     public OutputArgument<object?>? ParsedContent { get; set; }
 
@@ -97,7 +107,43 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
         var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
         context.Set(Result, model);
         context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
-        context.Set(ParsedContent, (object?)model.ParsedContent);
+        context.Set(ParsedContent, DeriveParsedContent(context, model));
+    }
+
+    /// <summary>
+    /// Derives the parsed body from the raw <see cref="HttpRequestModel.Body"/> and the request
+    /// <c>Content-Type</c> header (spec 089 #9). Returns CLR <c>null</c> for no content — an empty body, an
+    /// absent/unrecognized content type, or malformed JSON — and boxes the parser's <see cref="JsonElement"/>
+    /// otherwise, so an explicit JSON <c>null</c> stays distinguishable as a <see cref="JsonValueKind.Null"/>
+    /// element rather than collapsing to CLR null (spec 089 #16).
+    /// </summary>
+    private static object? DeriveParsedContent(IActivityExecutionContext context, HttpRequestModel model)
+    {
+        if (string.IsNullOrEmpty(model.Body))
+            return null;
+
+        // A body only reaches here on a genuine HTTP-stimulus start (the authored/direct-run fallback carries a
+        // null Body), and that path composes the Http feature — which registers the parser — by construction
+        // (ActivitiesHttp → WorkflowsRuntimeHttp → Http). So the seam is guaranteed present whenever there is
+        // content to parse.
+        var parser = context.GetRequiredService<IHttpRequestBodyParser>();
+        var parsed = parser.Parse(GetContentType(model.Headers), model.Body);
+        return parsed is { } element ? element : null;
+    }
+
+    /// <summary>Reads the (case-insensitive) <c>Content-Type</c> request header from the model, if present.</summary>
+    private static string? GetContentType(IDictionary<string, string[]>? headers)
+    {
+        if (headers is null)
+            return null;
+
+        foreach (var (key, values) in headers)
+        {
+            if (string.Equals(key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                return values is { Length: > 0 } ? values[0] : null;
+        }
+
+        return null;
     }
 
     /// <summary>

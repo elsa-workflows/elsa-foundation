@@ -58,6 +58,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
 
+    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpoint.ParsedContent"/> output under.</summary>
+    public const string ParsedContentOutputName = "EndpointParsedContent";
+
     private readonly IHost _host;
 
     private HttpEndpointHostFixture(IHost host) => _host = host;
@@ -261,6 +264,15 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 [nameof(HttpEndpoint.Result)] = new RuntimeOutputCapture(
                     outputName: nameof(HttpEndpoint.Result),
                     valueId: resultOutputName,
+                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
+                    lifecycle: DurableValueLifecycle.Instance,
+                    storage: DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true),
+                // Also promote the ParsedContent output — since spec 089 efficiency #9 the parsed body is derived at
+                // the activity from Body (not persisted on the wire model), so tests read it from this output.
+                [nameof(HttpEndpoint.ParsedContent)] = new RuntimeOutputCapture(
+                    outputName: nameof(HttpEndpoint.ParsedContent),
+                    valueId: ParsedContentOutputName,
                     type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,

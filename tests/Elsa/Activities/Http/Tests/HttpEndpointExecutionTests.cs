@@ -4,6 +4,8 @@ using Elsa.Activities.Http.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Http.Core.Contracts;
+using Elsa.Http.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Serialization.SystemText.Services;
@@ -25,6 +27,7 @@ public sealed class HttpEndpointExecutionTests
 {
     private const string NodeId = "node-http-endpoint";
     private const string ResultValueId = "http-endpoint-result";
+    private const string ParsedContentValueId = "http-endpoint-parsed-content";
 
     [Fact]
     public async Task SurfacesLiveRequest_WhenStimulusInputIsSeeded()
@@ -47,6 +50,71 @@ public sealed class HttpEndpointExecutionTests
         Assert.Equal("""{"id":7}""", result.GetProperty(nameof(HttpRequestModel.Body)).GetString());
         Assert.Equal("abc", result.GetProperty(nameof(HttpRequestModel.Headers)).GetProperty("x-test")[0].GetString());
         Assert.Equal("1", result.GetProperty(nameof(HttpRequestModel.Query)).GetProperty("q")[0].GetString());
+    }
+
+    [Fact]
+    public async Task DerivesParsedContentOutput_FromJsonBody_ViaTheParserSeam()
+    {
+        // Spec 089 efficiency #9: ParsedContent is derived at the activity from Body + the Content-Type header,
+        // not carried on the wire model. A JSON body surfaces as the parsed object on the ParsedContent output.
+        await using var harness = NewHarness();
+        var liveRequest = new HttpRequestModel(
+            Path: "orders/webhook",
+            Method: "POST",
+            Headers: new Dictionary<string, string[]> { ["Content-Type"] = ["application/json"] },
+            Query: new Dictionary<string, string[]>(),
+            Body: """{"orderId":7}""");
+
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        run.AssertWorkflowCompleted();
+
+        var parsed = await ParsedContentAsync(harness);
+        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
+        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
+    }
+
+    [Fact]
+    public async Task DerivesParsedContent_ExplicitJsonNull_AsJsonNullElement_NotNoContent()
+    {
+        // Spec 089 #16: an explicit JSON `null` body is present content — it surfaces as a JsonElement of kind
+        // Null, deliberately distinct from the CLR-null "no content" case (empty body) below.
+        await using var harness = NewHarness();
+        var liveRequest = new HttpRequestModel(
+            Path: "orders/webhook",
+            Method: "POST",
+            Headers: new Dictionary<string, string[]> { ["Content-Type"] = ["application/json"] },
+            Query: new Dictionary<string, string[]>(),
+            Body: "null");
+
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        run.AssertWorkflowCompleted();
+
+        var parsed = await ParsedContentAsync(harness);
+        Assert.Equal(JsonValueKind.Null, parsed.ValueKind);
+    }
+
+    [Fact]
+    public async Task DerivesParsedContent_EmptyBody_AsNoContent()
+    {
+        // Spec 089 #16: an empty body is "no content" → the activity sets CLR null on the ParsedContent output.
+        await using var harness = NewHarness();
+        var liveRequest = new HttpRequestModel(
+            Path: "orders/webhook",
+            Method: "POST",
+            Headers: new Dictionary<string, string[]> { ["Content-Type"] = ["application/json"] },
+            Query: new Dictionary<string, string[]>(),
+            Body: null);
+
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        run.AssertWorkflowCompleted();
+
+        // CLR null captured inline: the durable value is either absent or a JSON null token — the distinguishing
+        // fact (proven at HttpRequestBodyParserTests) is that this "no content" path never yields a JsonElement,
+        // whereas the explicit-JSON-null path above does.
+        var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{ParsedContentValueId}");
+        if (value?.InlineValue is { } inline)
+            Assert.Equal(JsonValueKind.Null, inline.ValueKind);
     }
 
     [Fact]
@@ -105,10 +173,14 @@ public sealed class HttpEndpointExecutionTests
         Assert.Equal("*", result.GetProperty(nameof(HttpRequestModel.Method)).GetString());
     }
 
-    private static async Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness)
+    private static Task<JsonElement> ResultAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ResultValueId);
+
+    private static Task<JsonElement> ParsedContentAsync(WorkflowExecutionHarness harness) => CapturedAsync(harness, ParsedContentValueId);
+
+    private static async Task<JsonElement> CapturedAsync(WorkflowExecutionHarness harness, string valueId)
     {
         var value = await harness.Services.GetRequiredService<IDurableValueStateStore>()
-            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{ResultValueId}");
+            .FindAsync(WorkflowExecutionHarness.WorkflowExecutionId, $"durable-{valueId}");
         Assert.NotNull(value);
         return value!.InlineValue!.Value;
     }
@@ -118,6 +190,10 @@ public sealed class HttpEndpointExecutionTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
+            // The HttpEndpoint activity derives ParsedContent from the raw body via IHttpRequestBodyParser (spec
+            // 089 efficiency #9). Full CShells composition registers it through ActivitiesHttp's DependsOn "Http";
+            // this manual harness composes only the named feature, so register the seam it consumes directly.
+            .WithFeature(services => services.AddSingleton<IHttpRequestBodyParser, HttpRequestBodyParser>())
             .Build("actexec-http-endpoint");
 
     private static WorkflowExecutable NewEndpointExecutable(string path)
@@ -142,6 +218,13 @@ public sealed class HttpEndpointExecutionTests
                 ["Result"] = new(
                     outputName: "Result",
                     valueId: ResultValueId,
+                    type: new RuntimeValueTypeDescriptor("clr", "System.Object", null),
+                    lifecycle: DurableValueLifecycle.Instance,
+                    storage: DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true),
+                ["ParsedContent"] = new(
+                    outputName: "ParsedContent",
+                    valueId: ParsedContentValueId,
                     type: new RuntimeValueTypeDescriptor("clr", "System.Object", null),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,

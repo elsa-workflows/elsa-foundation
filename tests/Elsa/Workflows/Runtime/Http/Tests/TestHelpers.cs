@@ -32,6 +32,9 @@ internal sealed class FakeRouteTable : IRouteTable
 
     public IReadOnlyList<string> RouteTemplates => _routes.Select(r => r.Route).ToArray();
 
+    /// <summary>How many times <see cref="Refresh(IEnumerable{HttpRouteData})"/>/<see cref="Refresh(IEnumerable{string})"/> ran — proves the observer's HTTP-affecting gate.</summary>
+    public int RefreshCount { get; private set; }
+
     public ValueTask Add(string route) => Add(new HttpRouteData(route));
 
     public ValueTask Add(HttpRouteData httpRouteData)
@@ -54,12 +57,14 @@ internal sealed class FakeRouteTable : IRouteTable
 
     public ValueTask Refresh(IEnumerable<string> routes)
     {
+        RefreshCount++;
         _routes.Clear();
         return AddRange(routes);
     }
 
     public ValueTask Refresh(IEnumerable<HttpRouteData> routes)
     {
+        RefreshCount++;
         _routes.Clear();
         _routes.AddRange(routes);
         return ValueTask.CompletedTask;

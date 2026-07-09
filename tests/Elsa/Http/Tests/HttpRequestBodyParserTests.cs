@@ -125,6 +125,19 @@ public class HttpRequestBodyParserTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public void Parse_ExplicitJsonNull_ReturnsNullKindElement_NotClrNull()
+    {
+        // Spec 089 #16: an explicit JSON `null` body is present content and must surface as a JsonElement of kind
+        // Null — a well-defined value distinct from the CLR null an empty/unparseable body yields. This is the
+        // origin of the "no content" vs "explicit null" distinction the HttpEndpoint activity's ParsedContent
+        // output preserves.
+        var result = parser.Parse("application/json", "null");
+
+        Assert.NotNull(result);
+        Assert.Equal(JsonValueKind.Null, result!.Value.ValueKind);
+    }
+
     /// <summary>
     /// Regression pin: the request-side parser is a separate seam and must not disturb the response-side
     /// <see cref="IHttpContentParser"/> path used by SendHttpRequest. This pins that the response-side
