@@ -31,7 +31,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm clean baseline on `089d-midflow-endpoint` (off main incl. PR #589): rebase onto latest `origin/main`, `dotnet build Elsa.Server.slnx` (SDK 10 at /usr/local/share/dotnet) green. (Control room: baseline build 0W/0E verified 2026-07-10 pre-branch.)
+- [X] T001 Confirm clean baseline on `089d-midflow-endpoint` (off main incl. PR #589): rebase onto latest `origin/main`, `dotnet build Elsa.Server.slnx` (SDK 10 at /usr/local/share/dotnet) green. (Control room: baseline build 0W/0E verified 2026-07-10 pre-branch; branch cut from `32d9f1e3`; only subsequent main movement is the docs-only #597 squash — re-rebase at T014.)
 
 ## Phase 2: Foundational — runtime-core touches (SEQUENTIAL, one worker; these are the coordinated runtime-internals changes flagged in research D5)
 
