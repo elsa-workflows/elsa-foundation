@@ -75,8 +75,8 @@ Four environment variables wire the two containers together (double-underscore =
 | Setting | On | Value | Why |
 |---|---|---|---|
 | `Studio__BackendBaseUrl` | Studio | `http://localhost:13000` | Backend URL the Studio client calls. It runs **in the browser**, so this must be the server's **host-reachable** URL — *not* the compose service name `http://elsa-server:8080`, which only resolves inside the Docker network. |
-| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | Authenticates Studio's module-management calls to the server. **Must match** the server key below. |
-| `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The key the server accepts. |
+| `Studio__BackendModuleManagementApiKey` | Studio | `elsa-docker-demo-key` | The Elsa host management key Studio's server-side management bridge attaches when calling the server's module-management API. Stays server-side — never sent to the browser. **Must match** the server key below. |
+| `Elsa__ModuleManagement__ApiKey` | Server | `elsa-docker-demo-key` | The Elsa host management key the server accepts. |
 | `Cors__AllowedOrigins__0` | Server | `http://localhost:14000` | Lets the browser (served from Studio's origin) call the server cross-origin. |
 
 To pin a version instead of `latest`, use a version tag, e.g. `elsaworkflows/elsa-server:4` or
@@ -163,8 +163,10 @@ http://localhost:14000
 ```
 
 Sign in with the demo credentials from step 4. Studio is a Blazor WebAssembly app: the browser
-downloads the client and calls the backend directly at `http://localhost:13000` (see the API key
-note below).
+downloads the client and calls the backend's workflow APIs directly at `http://localhost:13000`
+with the user's authorization. Host-control operations (module management) are the exception:
+those go through Studio's server-side management bridge, which holds the Elsa host management key
+(see the API key note below).
 
 ---
 
@@ -181,10 +183,12 @@ note below).
 | What | Value |
 |---|---|
 | Postgres user / password / database | `elsa` / `elsa` / `elsa` |
-| Module-management API key | `elsa-docker-demo-key` |
+| Elsa host management key | `elsa-docker-demo-key` |
 
-The API key wires Studio to the server: the server's `Elsa__ModuleManagement__ApiKey` **must match**
-Studio's `Studio__BackendModuleManagementApiKey`. Both default to `elsa-docker-demo-key`.
+The Elsa host management key wires Studio's server-side management bridge to the server: the
+server's `Elsa__ModuleManagement__ApiKey` **must match** Studio's
+`Studio__BackendModuleManagementApiKey`. Both default to `elsa-docker-demo-key`. The key never
+leaves the two containers — the browser neither sees nor sends it.
 
 > ⚠️ **These are demo-only values.** Change every credential and key — and lock down the exposed
 > Postgres port — before using this for anything beyond local experimentation.
@@ -248,7 +252,7 @@ var on the `elsa-server` service (there is a commented-out example in `docker-co
 CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString=Host=postgres;Port=5432;Database=elsa;Username=elsa;Password=elsa
 ```
 
-**Override the API key** — change it on **both** services so they still match:
+**Override the Elsa host management key** — change it on **both** services so they still match:
 
 ```
 # elsa-server
