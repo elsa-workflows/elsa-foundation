@@ -388,25 +388,34 @@ const stoneTheme = createMaterialThemeColors({
   ],
 });
 
+// Warm-paper retune: classic medium blue accent over a warm ivory neutral ladder
+// (hue ~88 = warm paper, not cool slate). Mirrors the stone-light token block in tokens.css.
 const stoneLightTheme = createMaterialThemeColors({
-  primary: oklchToVar(0.47, 0.1, 220),
-  primaryForeground: oklchToVar(0.98, 0.006, 220),
-  secondary: oklchToVar(0.84, 0.012, 210),
-  secondaryForeground: oklchToVar(0.22, 0.018, 220),
-  accent: oklchToVar(0.78, 0.035, 210),
-  accentForeground: oklchToVar(0.22, 0.018, 220),
+  primary: oklchToVar(0.51, 0.135, 257),
+  primaryForeground: oklchToVar(0.98, 0.005, 90),
+  secondary: oklchToVar(0.94, 0.007, 88),
+  secondaryForeground: oklchToVar(0.28, 0.008, 82),
+  accent: oklchToVar(0.94, 0.018, 88),
+  accentForeground: oklchToVar(0.28, 0.008, 82),
   success: oklchToVar(0.55, 0.12, 148),
   warning: oklchToVar(0.68, 0.12, 72),
   danger: oklchToVar(0.58, 0.16, 24),
-  background: oklchToVar(0.82, 0.01, 205),
-  foreground: oklchToVar(0.22, 0.012, 220),
-  card: oklchToVar(0.9, 0.008, 205),
-  muted: oklchToVar(0.78, 0.01, 205),
-  mutedForeground: oklchToVar(0.45, 0.018, 215),
-  border: oklchToVar(0.62, 0.018, 205),
-  sidebar: oklchToVar(0.78, 0.01, 205),
-  sidebarForeground: oklchToVar(0.25, 0.012, 220),
-  sidebarActive: oklchToVar(0.72, 0.025, 215),
+  background: oklchToVar(0.915, 0.008, 86),
+  foreground: oklchToVar(0.28, 0.008, 82),
+  card: oklchToVar(0.965, 0.006, 90),
+  muted: oklchToVar(0.94, 0.007, 88),
+  mutedForeground: oklchToVar(0.51, 0.012, 84),
+  border: oklchToVar(0.86, 0.012, 88),
+  sidebar: oklchToVar(0.925, 0.008, 86),
+  sidebarForeground: oklchToVar(0.3, 0.008, 82),
+  sidebarActive: oklchToVar(0.965, 0.01, 88),
+  chartColors: [
+    oklchToVar(0.51, 0.135, 257),
+    oklchToVar(0.62, 0.05, 250),
+    oklchToVar(0.55, 0.12, 148),
+    oklchToVar(0.68, 0.12, 72),
+    oklchToVar(0.58, 0.16, 24),
+  ],
 });
 
 const paperTheme = createMaterialThemeColors({
