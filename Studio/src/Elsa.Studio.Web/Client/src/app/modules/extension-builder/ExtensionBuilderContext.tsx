@@ -34,7 +34,7 @@ import { useBuilderData } from "./useBuilderData";
 import { useBuilderOperations } from "./useBuilderOperations";
 import { useFileEditing } from "./useFileEditing";
 import { useOperationTracker } from "./useOperationTracker";
-import type { ExtensionBuilderContextValue } from "./contextValue";
+import type { BackendManagementUnavailable, ExtensionBuilderContextValue } from "./contextValue";
 import type { BuilderCore } from "./store";
 import type { ProjectDraft, TemplateApplicationDraft } from "./types";
 
@@ -48,9 +48,11 @@ export function useExtensionBuilder(): ExtensionBuilderContextValue {
 
 export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioModuleApi; children: ReactNode }) {
   const context = api.backend;
+  const hostContext = api.host;
   const tracker = useOperationTracker();
 
   const [state, setState] = useState<BuilderState>("loading");
+  const [managementUnavailable, setManagementUnavailable] = useState<BackendManagementUnavailable | null>(null);
   const [capabilities, setCapabilities] = useState<ExtensionBuilderCapabilities | null>(null);
   const [repositories, setRepositories] = useState<ExtensionRepositorySummary[]>([]);
   const [workspaces, setWorkspaces] = useState<ExtensionWorkspace[]>([]);
@@ -142,8 +144,8 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   }
 
   const core: BuilderCore = {
-    api, context, tracker, sessionId, defaultWorkingBranchName,
-    setState, capabilities, setCapabilities, repositories, setRepositories, workspaces, setWorkspaces,
+    api, context, hostContext, tracker, sessionId, defaultWorkingBranchName,
+    setState, setManagementUnavailable, capabilities, setCapabilities, repositories, setRepositories, workspaces, setWorkspaces,
     templates, setTemplates, projectTemplates, selectedWorkspaceId, setSelectedWorkspaceId, selectedProjectId, setSelectedProjectId,
     setFiles, setSolutions, selectedSolutionPath, setSelectedSolutionPath, editorTabs, setEditorTabs,
     activeFilePath, setActiveFilePath, editorText, setEditorText, savedEditorText, setSavedEditorText, setLineHint,
@@ -295,7 +297,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   }, [selectedWorkspace?.id, selectedProject?.id, activeBuild]);
 
   const value: ExtensionBuilderContextValue = {
-    api, state, capabilities, repositories, workspaces, templates, projectTemplates, solutions, selectedSolutionPath,
+    api, state, managementUnavailable, capabilities, repositories, workspaces, templates, projectTemplates, solutions, selectedSolutionPath,
     fileRows, editorTabs, activeFilePath, editorText, editorDirty, lineHint, autoSave, autoSaving, advanced,
     activeBuild, buildHistory, buildLog, buildCommand, buildTargetPath, runtimeStatus, promotionResult,
     sourceControlStatus, sourceControlDiff, commitMessage, activeInspectorTab, dockOpen, extensionName,

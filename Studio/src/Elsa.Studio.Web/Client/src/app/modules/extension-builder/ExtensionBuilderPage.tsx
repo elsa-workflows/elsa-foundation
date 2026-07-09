@@ -2,6 +2,7 @@ import { Hammer } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../../sdk";
 import { EmptyState, StudioAlert } from "../../ui";
 import { isTrusted } from "../extensionBuilderApi";
+import type { BackendManagementUnavailable } from "./contextValue";
 import { ExtensionBuilderProvider, useExtensionBuilder } from "./ExtensionBuilderContext";
 import { ExtensionBuilderWorkspace } from "./ExtensionBuilderWorkspace";
 import { HomeView, type HomeStat } from "./HomeView";
@@ -20,10 +21,29 @@ export function ExtensionBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
 function ExtensionBuilderView() {
   const builder = useExtensionBuilder();
-  const { state, capabilities, error, status, advanced, inWorkspace } = builder;
+  const { state, capabilities, managementUnavailable, error, status, advanced, inWorkspace } = builder;
 
   if (state === "loading") {
     return <EmptyState icon={<Hammer size={22} />}>Loading Extension Builder capabilities.</EmptyState>;
+  }
+
+  if (state === "unavailable") {
+    // ADR 0037: the Studio management bridge reported backend management is not usable. Render an explicit surface
+    // that names the real reason and offers a retry, rather than issuing doomed backend requests. No actions render.
+    return (
+      <section className="extension-builder-page">
+        <div className="section-header modules-header">
+          <div>
+            <h2>Extension Builder</h2>
+            <p>Trusted-team project workspaces, builds, promotion, and runtime recovery.</p>
+          </div>
+          <button type="button" className="studio-button" onClick={builder.bootstrap}>Retry</button>
+        </div>
+        <StudioAlert tone="warning">
+          {`Backend management is unavailable, so Extension Builder actions are disabled. ${backendManagementUnavailableMessage(managementUnavailable)}`}
+        </StudioAlert>
+      </section>
+    );
   }
 
   if (state === "failed") {
@@ -88,6 +108,19 @@ function ExtensionBuilderView() {
       )}
     </section>
   );
+}
+
+// Names the real backend-management reason from the bridge so the unavailable surface explains what to fix, rather
+// than showing a generic "unavailable". Falls back to the bridge-provided detail when present.
+function backendManagementUnavailableMessage(unavailable: BackendManagementUnavailable | null): string {
+  if (unavailable?.detail) return unavailable.detail;
+  switch (unavailable?.kind) {
+    case "unconfigured": return "Backend management is not configured on the Studio host.";
+    case "unauthorized": return "The backend rejected the Studio management credential.";
+    case "unreachable": return "The backend management surface could not be reached.";
+    case "degraded": return "The backend management surface is degraded.";
+    default: return "Backend management status is unknown.";
+  }
 }
 
 function buildHomeStats(builder: ReturnType<typeof useExtensionBuilder>): HomeStat[] {

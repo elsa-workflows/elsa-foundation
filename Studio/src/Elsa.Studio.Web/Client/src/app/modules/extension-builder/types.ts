@@ -1,4 +1,11 @@
-export type BuilderState = "loading" | "ready" | "failed";
+// "unavailable" is distinct from "failed": it means the Studio management bridge reported that backend management is
+// not usable (unconfigured/unreachable/unauthorized/degraded), so the UI shows an explicit backend-management-unavailable
+// surface and gates actions instead of surfacing a raw fetch error.
+export type BuilderState = "loading" | "ready" | "failed" | "unavailable";
+
+// The backend-management availability kinds the bridge reports (mirrors StudioBackendManagementStatusKind). Threaded to
+// the view so the unavailable surface can name the real reason rather than a generic message.
+export type BackendManagementUnavailableKind = "unconfigured" | "unreachable" | "unauthorized" | "degraded";
 export type InspectorTab = "build" | "source" | "promote" | "runtime";
 
 export interface ProjectDraft {

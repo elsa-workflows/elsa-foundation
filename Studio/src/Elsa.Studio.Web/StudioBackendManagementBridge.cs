@@ -20,6 +20,7 @@ internal static class StudioBackendManagementBridge
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
 
         group.MapGet("/status", GetStatusAsync);
+        group.MapGet("/extension-builder/capabilities", GetExtensionBuilderCapabilitiesAsync);
 
         return endpoints;
     }
@@ -31,7 +32,51 @@ internal static class StudioBackendManagementBridge
         var status = await client.GetManagementStatusAsync(cancellationToken);
         return Results.Ok(status);
     }
+
+    private static async Task<IResult> GetExtensionBuilderCapabilitiesAsync(
+        StudioBackendManagementClient client,
+        CancellationToken cancellationToken)
+    {
+        var capabilities = await client.GetExtensionBuilderCapabilitiesAsync(cancellationToken);
+        return Results.Ok(capabilities);
+    }
 }
+
+/// <summary>
+/// Backend Extension Builder capabilities as seen by Studio (ADR 0037): a Studio concept ("host capabilities") the
+/// browser reads from the Studio origin instead of probing the backend host-control endpoint directly. The
+/// <see cref="Status"/> field carries the same explicit envelope as <see cref="StudioBackendManagementStatus"/> so the
+/// frontend branches on state, not on an HTTP failure. <see cref="Capabilities"/> is populated only when
+/// <see cref="Status"/> is <c>available</c>; for every other state the frontend renders an explicit
+/// "backend management unavailable" surface and gates actions rather than issuing doomed backend requests.
+/// </summary>
+internal sealed record StudioExtensionBuilderCapabilitiesResult(
+    string Status,
+    string Detail,
+    StudioExtensionBuilderCapabilities? Capabilities,
+    string? BackendBaseUrl,
+    DateTimeOffset CheckedAt)
+{
+    // Same envelope vocabulary as StudioBackendManagementStatus, re-declared here so the capabilities DTO is a
+    // self-contained Studio concept rather than reaching into the status DTO's constants.
+    public const string Available = StudioBackendManagementStatus.Available;
+    public const string Unconfigured = StudioBackendManagementStatus.Unconfigured;
+    public const string Unauthorized = StudioBackendManagementStatus.Unauthorized;
+    public const string Unreachable = StudioBackendManagementStatus.Unreachable;
+    public const string Degraded = StudioBackendManagementStatus.Degraded;
+}
+
+/// <summary>
+/// The Studio-owned view of the backend Extension Builder capability flags. Mirrors the backend's capability contract
+/// but is a Studio DTO: the frontend derives which Extension Builder actions to enable from these flags. Server
+/// enforcement on the backend remains authoritative regardless of what the browser is shown.
+/// </summary>
+internal sealed record StudioExtensionBuilderCapabilities(
+    bool CanCreateWorkspace,
+    bool CanEditFiles,
+    bool CanBuild,
+    bool CanPromote,
+    bool CanRollback);
 
 /// <summary>
 /// The status of the backend host's management surface as seen by Studio.
@@ -73,9 +118,12 @@ internal sealed class StudioBackendManagementClient(
     StudioBackendManagementOptions options,
     ILogger<StudioBackendManagementClient> logger)
 {
-    // The backend read-only host-control endpoint the bridge probes. This path is a Studio→backend implementation
-    // detail; it is never surfaced to the browser.
+    // The backend read-only host-control endpoints the bridge probes. These paths are Studio→backend implementation
+    // details; they are never surfaced to the browser.
     private const string BackendRegistryPath = "/_elsa/module-management/registry";
+    private const string BackendExtensionBuilderCapabilitiesPath = "/_elsa/extension-builder/capabilities";
+
+    private static readonly JsonSerializerOptions BackendJsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<StudioBackendManagementStatus> GetManagementStatusAsync(CancellationToken cancellationToken)
     {
@@ -114,6 +162,112 @@ internal sealed class StudioBackendManagementClient(
                 "The backend management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
                 NormalizeBaseUrl(options.BackendBaseUrl),
                 checkedAt);
+        }
+    }
+
+    public async Task<StudioExtensionBuilderCapabilitiesResult> GetExtensionBuilderCapabilitiesAsync(CancellationToken cancellationToken)
+    {
+        var checkedAt = DateTimeOffset.UtcNow;
+        var backendBaseUrl = NormalizeBaseUrl(options.BackendBaseUrl);
+
+        // Fail closed: same zero-outbound-call guarantee as the status read (ADR 0037).
+        if (string.IsNullOrWhiteSpace(options.BackendBaseUrl) || string.IsNullOrWhiteSpace(options.ManagementApiKey))
+        {
+            return new(
+                StudioExtensionBuilderCapabilitiesResult.Unconfigured,
+                "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
+                Capabilities: null,
+                backendBaseUrl,
+                checkedAt);
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, BackendExtensionBuilderCapabilitiesPath);
+            request.Headers.TryAddWithoutValidation(ModuleManagementAuth.ApiKeyHeaderName, options.ManagementApiKey);
+            request.Headers.TryAddWithoutValidation("Accept", "application/json");
+
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            return await MapCapabilitiesResponseAsync(response, backendBaseUrl, checkedAt, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                throw;
+
+            logger.LogWarning(ex, "Studio could not reach the backend Extension Builder capabilities surface at {BackendBaseUrl}.", options.BackendBaseUrl);
+            return new(
+                StudioExtensionBuilderCapabilitiesResult.Unreachable,
+                "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+                Capabilities: null,
+                backendBaseUrl,
+                checkedAt);
+        }
+    }
+
+    private async Task<StudioExtensionBuilderCapabilitiesResult> MapCapabilitiesResponseAsync(
+        HttpResponseMessage response,
+        string? backendBaseUrl,
+        DateTimeOffset checkedAt,
+        CancellationToken cancellationToken)
+    {
+        // 401/403/404 collapse to unauthorized, identical to the status read's remediation ("fix the management key").
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+        {
+            return new(
+                StudioExtensionBuilderCapabilitiesResult.Unauthorized,
+                "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
+                Capabilities: null,
+                backendBaseUrl,
+                checkedAt);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            var capabilities = await TryReadCapabilitiesAsync(response, cancellationToken);
+            if (capabilities is not null)
+            {
+                return new(
+                    StudioExtensionBuilderCapabilitiesResult.Available,
+                    "The backend Extension Builder capabilities are reachable.",
+                    capabilities,
+                    backendBaseUrl,
+                    checkedAt);
+            }
+
+            // A 200 that isn't a recognizable capabilities payload (e.g. an SPA fallback page) is degraded, not available.
+            return new(
+                StudioExtensionBuilderCapabilitiesResult.Degraded,
+                "The backend responded but did not return recognizable Extension Builder capabilities.",
+                Capabilities: null,
+                backendBaseUrl,
+                checkedAt);
+        }
+
+        logger.LogWarning("Backend Extension Builder capabilities surface at {BackendBaseUrl} responded with {StatusCode}.", options.BackendBaseUrl, (int)response.StatusCode);
+        return new(
+            StudioExtensionBuilderCapabilitiesResult.Degraded,
+            $"The backend Extension Builder capabilities surface responded with an unexpected status ({(int)response.StatusCode}).",
+            Capabilities: null,
+            backendBaseUrl,
+            checkedAt);
+    }
+
+    private static async Task<StudioExtensionBuilderCapabilities?> TryReadCapabilitiesAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (mediaType is null || !mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonSerializer.DeserializeAsync<StudioExtensionBuilderCapabilities>(stream, BackendJsonOptions, cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

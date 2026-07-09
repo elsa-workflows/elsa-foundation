@@ -91,6 +91,37 @@ export interface StudioBackendManagementStatus {
 /** The Studio-owned bridge route the browser reads backend management status from (served by the Studio host). */
 export const studioBackendManagementStatusPath = "/_elsa/studio/backend-management/status";
 
+/**
+ * Backend Extension Builder capability flags as reported by the Studio management bridge (ADR 0037). Mirrors the
+ * backend's capability contract but is a Studio-owned DTO ("host capabilities"). Server enforcement on the backend
+ * remains authoritative regardless of what the browser is shown.
+ */
+export interface StudioExtensionBuilderCapabilities {
+  canCreateWorkspace: boolean;
+  canEditFiles: boolean;
+  canBuild: boolean;
+  canPromote: boolean;
+  canRollback: boolean;
+}
+
+/**
+ * The Studio management bridge's answer for the backend Extension Builder capabilities read. `status` carries the same
+ * explicit envelope as {@link StudioBackendManagementStatus} so the frontend branches on state, not on an HTTP failure;
+ * `capabilities` is present only when `status` is `"available"`. The browser reads this from the Studio origin
+ * (`api.host`) instead of probing the backend Extension Builder capabilities endpoint directly, so the backend host
+ * management key never reaches the browser and the SPA never issues doomed backend requests.
+ */
+export interface StudioExtensionBuilderCapabilitiesResult {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  capabilities?: StudioExtensionBuilderCapabilities | null;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+}
+
+/** The Studio-owned bridge route the browser reads backend Extension Builder capabilities from (served by the Studio host). */
+export const studioExtensionBuilderCapabilitiesPath = "/_elsa/studio/backend-management/extension-builder/capabilities";
+
 export interface StudioHttpClient {
   requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;

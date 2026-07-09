@@ -19,8 +19,11 @@ namespace Elsa.Studio.Tests;
 public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 {
     private const string StatusRoute = "/_elsa/studio/backend-management/status";
+    private const string CapabilitiesRoute = "/_elsa/studio/backend-management/extension-builder/capabilities";
+    private const string BackendCapabilitiesPath = "/_elsa/extension-builder/capabilities";
     private const string BackendBaseUrl = "https://backend.example";
     private const string ManagementKey = "s3cr3t-management-key";
+    private const string TrustedCapabilitiesJson = """{ "canCreateWorkspace": true, "canEditFiles": true, "canBuild": true, "canPromote": false, "canRollback": false }""";
 
     private WebApplication? _app;
 
@@ -167,6 +170,111 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ReturnsCapabilitiesWhenBackendAcceptsTheManagementKey()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Available, result.Status);
+        Assert.NotNull(result.Capabilities);
+        Assert.True(result.Capabilities!.CanCreateWorkspace);
+        Assert.True(result.Capabilities.CanEditFiles);
+        Assert.True(result.Capabilities.CanBuild);
+        Assert.False(result.Capabilities.CanPromote);
+        Assert.False(result.Capabilities.CanRollback);
+        // The management key rides only on the Studio->backend call, against the Extension Builder capabilities path.
+        Assert.Single(backend.Requests);
+        Assert.Equal(BackendCapabilitiesPath, backend.Requests[0].Path);
+        Assert.Equal(ManagementKey, backend.Requests[0].ManagementKey);
+    }
+
+    [Fact]
+    public async Task ReturnsUnconfiguredCapabilitiesWithZeroOutboundCallsWhenNoManagementKey()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: null);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Unconfigured, result.Status);
+        Assert.Null(result.Capabilities);
+        // Fail closed: no outbound backend request may be issued.
+        Assert.Empty(backend.Requests);
+    }
+
+    [Fact]
+    public async Task ReturnsUnconfiguredCapabilitiesWithZeroOutboundCallsWhenNoBackendBaseUrl()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: null, managementKey: ManagementKey);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Unconfigured, result.Status);
+        Assert.Empty(backend.Requests);
+    }
+
+    [Fact]
+    public async Task ReturnsUnauthorizedCapabilitiesWhenBackendRejectsTheManagementKey()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: "wrong-key");
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Unauthorized, result.Status);
+        Assert.Null(result.Capabilities);
+    }
+
+    [Fact]
+    public async Task ReturnsUnauthorizedCapabilitiesWhenBackendSurfaceIsDisabled()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Unauthorized, result.Status);
+    }
+
+    [Fact]
+    public async Task ReturnsUnreachableCapabilitiesWhenBackendTransportFails()
+    {
+        var backend = RecordingBackend.Throwing(new HttpRequestException("connection refused"));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Unreachable, result.Status);
+    }
+
+    [Fact]
+    public async Task ReturnsDegradedCapabilitiesWhenBackendRespondsWithServerError()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Degraded, result.Status);
+    }
+
+    [Fact]
+    public async Task RejectsUnauthenticatedBrowserCapabilitiesRequestWhenStudioAuthEnabled()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
+
+        var response = await client.GetAsync(CapabilitiesRoute);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Fail closed on the browser side too: no backend management call is issued for an unauthenticated caller.
+        Assert.Empty(backend.ManagementRequests);
+    }
+
     private static async Task<StudioBackendManagementStatus> GetStatusAsync(HttpClient client)
     {
         var response = await client.GetAsync(StatusRoute);
@@ -174,6 +282,15 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         var status = await response.Content.ReadFromJsonAsync<StudioBackendManagementStatus>();
         Assert.NotNull(status);
         return status!;
+    }
+
+    private static async Task<StudioExtensionBuilderCapabilitiesResult> GetCapabilitiesAsync(HttpClient client)
+    {
+        var response = await client.GetAsync(CapabilitiesRoute);
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<StudioExtensionBuilderCapabilitiesResult>();
+        Assert.NotNull(result);
+        return result!;
     }
 
     private static HttpResponseMessage JsonOk(string json) =>

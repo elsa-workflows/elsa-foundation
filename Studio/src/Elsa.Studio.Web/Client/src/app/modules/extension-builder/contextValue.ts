@@ -17,7 +17,15 @@ import type {
   SourceControlStatus
 } from "../extensionBuilderApi";
 import type { OperationScope } from "./useOperationTracker";
-import type { BuilderState, EditorTab, InspectorTab, ProjectDraft, TemplateApplicationDraft } from "./types";
+import type { BackendManagementUnavailableKind, BuilderState, EditorTab, InspectorTab, ProjectDraft, TemplateApplicationDraft } from "./types";
+
+// The explicit "backend management unavailable" state derived from the Studio management bridge capabilities read.
+// When set, the Extension Builder UI renders a dedicated surface (naming the real reason) and gates actions instead of
+// issuing doomed backend requests.
+export interface BackendManagementUnavailable {
+  kind: BackendManagementUnavailableKind;
+  detail: string;
+}
 
 // The value exposed to every panel via `useExtensionBuilder()`. It is the union of raw state the
 // panels render, the derived selections/flags they gate on, and the action handlers they invoke.
@@ -25,6 +33,8 @@ import type { BuilderState, EditorTab, InspectorTab, ProjectDraft, TemplateAppli
 export interface ExtensionBuilderContextValue {
   api: ElsaStudioModuleApi;
   state: BuilderState;
+  // Set when `state` is "unavailable": the Studio management bridge reported backend management is not usable.
+  managementUnavailable: BackendManagementUnavailable | null;
   capabilities: ExtensionBuilderCapabilities | null;
   repositories: ExtensionRepositorySummary[];
   workspaces: ExtensionWorkspace[];
