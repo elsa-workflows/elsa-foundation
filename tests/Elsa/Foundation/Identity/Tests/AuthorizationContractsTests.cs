@@ -54,6 +54,81 @@ public sealed class AuthorizationContractsTests
     }
 
     [Fact]
+    public void CompositePermissionCatalogPreservesDefaultIdentityPermissions()
+    {
+        var composite = BuildCompositeCatalog();
+        var defaults = new DefaultIdentityPermissionCatalog().List();
+
+        Assert.All(defaults, permission =>
+        {
+            var found = composite.Find(permission.Key);
+            Assert.NotNull(found);
+            Assert.Equal(permission, found);
+        });
+    }
+
+    [Fact]
+    public void CompositePermissionCatalogLayersContributedPermissions()
+    {
+        var composite = BuildCompositeCatalog(new HostControlContributor());
+
+        var read = composite.Find(HostControlContributor.ReadKey);
+        var manage = composite.Find(HostControlContributor.ManageKey);
+
+        Assert.NotNull(read);
+        Assert.NotNull(manage);
+        Assert.Contains(HostControlContributor.ReadKey, manage!.Implies!);
+        // Existing identity permissions remain listed alongside the contributions.
+        Assert.NotNull(composite.Find(DefaultIdentityPermissionKeys.IdentityUsersRead));
+    }
+
+    [Fact]
+    public async Task PermissionEvaluatorHonorsContributedImpliedPermissions()
+    {
+        var evaluator = new ClaimsPermissionEvaluator(BuildCompositeCatalog(new HostControlContributor()));
+        var principal = PrincipalWithPermissions(HostControlContributor.ManageKey);
+
+        var result = await evaluator.EvaluateAsync(new(principal, HostControlContributor.ReadKey));
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void CompositePermissionCatalogRejectsContributionsShadowingIdentityPermissions()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            BuildCompositeCatalog(new ShadowingContributor()));
+
+        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, exception.Message);
+        Assert.Contains("reserved identity permission", exception.Message);
+    }
+
+    [Fact]
+    public void CompositePermissionCatalogRejectsDuplicateContributedKeys()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            BuildCompositeCatalog(new HostControlContributor(), new HostControlContributor()));
+
+        Assert.Contains(HostControlContributor.ReadKey, exception.Message);
+        Assert.Contains("duplicate", exception.Message);
+    }
+
+    [Fact]
+    public void AddPermissionContributorRegistersContributionIntoResolvedCatalog()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions();
+        services.AddPermissionContributor<HostControlContributor>();
+        using var provider = services.BuildServiceProvider();
+
+        var catalog = provider.GetRequiredService<IPermissionCatalog>();
+
+        Assert.IsType<CompositePermissionCatalog>(catalog);
+        Assert.NotNull(catalog.Find(HostControlContributor.ManageKey));
+        Assert.NotNull(catalog.Find(DefaultIdentityPermissionKeys.IdentityUsersRead));
+    }
+
+    [Fact]
     public async Task PermissionEvaluatorExpandsGrantedPermissionsTransitively()
     {
         var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
@@ -130,6 +205,32 @@ public sealed class AuthorizationContractsTests
 
         Assert.NotNull(policy);
         Assert.Contains(policy.Requirements, x => x is TestRequirement);
+    }
+
+    private static CompositePermissionCatalog BuildCompositeCatalog(params IPermissionContributor[] contributors) =>
+        new([new DefaultIdentityPermissionCatalog(), .. contributors]);
+
+    private static ClaimsPrincipal PrincipalWithPermissions(params string[] permissions) =>
+        new(new ClaimsIdentity(permissions.Select(x => new Claim(IdentityClaimTypes.Permission, x))));
+
+    private sealed class HostControlContributor : IPermissionContributor
+    {
+        public const string ReadKey = "test-feature.read";
+        public const string ManageKey = "test-feature.manage";
+
+        public IEnumerable<Permission> Contribute()
+        {
+            yield return new(ReadKey, "Read test feature", "Test feature", "Read.");
+            yield return new(ManageKey, "Manage test feature", "Test feature", "Manage.", new HashSet<string> { ReadKey });
+        }
+    }
+
+    private sealed class ShadowingContributor : IPermissionContributor
+    {
+        public IEnumerable<Permission> Contribute()
+        {
+            yield return new(DefaultIdentityPermissionKeys.IdentityUsersRead, "Shadow", "Test feature", "Attempts to shadow an identity permission.");
+        }
     }
 
     private sealed class TestPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog

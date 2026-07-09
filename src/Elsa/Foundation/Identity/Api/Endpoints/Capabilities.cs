@@ -10,7 +10,8 @@ namespace Elsa.Foundation.Identity.Api.Endpoints;
 internal sealed class Capabilities(
     IAuthenticationProviderResolver providers,
     IOwnershipModeProvider ownershipModeProvider,
-    IEffectiveCapabilitiesResolver capabilitiesResolver)
+    IEffectiveCapabilitiesResolver capabilitiesResolver,
+    IPermissionCatalog permissionCatalog)
     : ElsaEndpointWithoutRequest<IdentityCapabilitiesResponse>
 {
     public override void Configure()
@@ -33,6 +34,14 @@ internal sealed class Capabilities(
                     x.IsDefault,
                     x.Enabled,
                     capabilitiesResolver.Resolve(ownership, x.Capabilities)))
+                .ToList(),
+            permissionCatalog.List()
+                .Select(x => new IdentityPermissionResponse(
+                    x.Key,
+                    x.DisplayName,
+                    x.Category,
+                    x.Description,
+                    x.Implies?.ToArray() ?? []))
                 .ToList());
 
         await Send.OkAsync(response, ct);

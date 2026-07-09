@@ -12,6 +12,17 @@ public interface IPermissionCatalog
     Permission? Find(string key);
 }
 
+/// <summary>
+/// Additive contribution seam for the permission catalog. A feature that owns a host-control (or any
+/// other) surface contributes its permissions through this interface instead of hard-coding them into
+/// the identity domain (per ADR 0037). Contributors are aggregated by <see cref="CompositePermissionCatalog"/>.
+/// Register with <c>services.TryAddEnumerable(ServiceDescriptor.Singleton&lt;IPermissionContributor, MyContributor&gt;())</c>.
+/// </summary>
+public interface IPermissionContributor
+{
+    IEnumerable<Permission> Contribute();
+}
+
 public interface IPermissionEvaluator
 {
     ValueTask<PermissionEvaluationResult> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default);
@@ -104,7 +115,7 @@ public static class DefaultIdentityPermissionKeys
     public const string IdentityCredentialsManage = "identity.credentials.manage";
 }
 
-public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog
+public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog, IPermissionContributor
 {
     private static readonly IReadOnlyCollection<Permission> Permissions =
     [
@@ -123,6 +134,58 @@ public sealed class DefaultIdentityPermissionCatalog : IPermissionCatalog
     public IReadOnlyCollection<Permission> List() => Permissions;
 
     public Permission? Find(string key) => Permissions.FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.OrdinalIgnoreCase));
+
+    IEnumerable<Permission> IPermissionContributor.Contribute() => Permissions;
+}
+
+/// <summary>
+/// Aggregates every registered <see cref="IPermissionContributor"/> into a single permission catalog.
+/// The default identity permissions are contributed by <see cref="DefaultIdentityPermissionCatalog"/>
+/// and are protected: a later contributor whose key collides (case-insensitively) with an identity
+/// permission is rejected at construction so feature contributions can never silently shadow or redefine
+/// identity permissions. Duplicate keys between any two contributions are also rejected, so no
+/// contribution can silently override another. Both conditions fail fast at construction (startup)
+/// rather than producing an ambiguous catalog at request time.
+/// </summary>
+public sealed class CompositePermissionCatalog : IPermissionCatalog
+{
+    private readonly IReadOnlyDictionary<string, Permission> _byKey;
+    private readonly IReadOnlyCollection<Permission> _permissions;
+
+    public CompositePermissionCatalog(IEnumerable<IPermissionContributor> contributors)
+    {
+        var identityKeys = new DefaultIdentityPermissionCatalog()
+            .List()
+            .Select(x => x.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var byKey = new Dictionary<string, Permission>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var contributor in contributors)
+        {
+            var isIdentity = contributor is DefaultIdentityPermissionCatalog;
+
+            foreach (var permission in contributor.Contribute())
+            {
+                if (!isIdentity && identityKeys.Contains(permission.Key))
+                    throw new InvalidOperationException(
+                        $"Permission contributor '{contributor.GetType().FullName}' attempted to contribute permission '{permission.Key}', which is a reserved identity permission and cannot be shadowed.");
+
+                if (byKey.TryGetValue(permission.Key, out var existing))
+                    throw new InvalidOperationException(
+                        $"Permission contributor '{contributor.GetType().FullName}' contributed duplicate permission key '{permission.Key}' (already contributed as '{existing.DisplayName}').");
+
+                byKey.Add(permission.Key, permission);
+            }
+        }
+
+        _byKey = byKey;
+        _permissions = byKey.Values.ToArray();
+    }
+
+    public IReadOnlyCollection<Permission> List() => _permissions;
+
+    public Permission? Find(string key) => _byKey.GetValueOrDefault(key);
 }
 
 public sealed class ClaimsPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator

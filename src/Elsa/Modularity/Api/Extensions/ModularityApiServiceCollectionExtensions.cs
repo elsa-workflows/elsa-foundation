@@ -1,3 +1,5 @@
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Modularity.Api.Authorization;
 using Elsa.Modularity.Api.Options;
 using Elsa.Modularity.Api.Services;
 using Elsa.Modularity.Core.Contracts;
@@ -14,6 +16,7 @@ public static class ModularityApiServiceCollectionExtensions
         if (configure is not null)
             services.Configure(configure);
 
+        services.AddPermissionContributor<ModuleManagementPermissionContributor>();
         services.AddNuplaneFeatureCatalog();
         services.RemoveAll<IShellFeatureConfigurationStore>();
         services.RemoveAll<IShellReloader>();

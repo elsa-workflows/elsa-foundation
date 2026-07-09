@@ -17,7 +17,8 @@ public sealed record IdentityProviderResponse(
 
 public sealed record IdentityCapabilitiesResponse(
     OwnershipMode OwnershipMode,
-    IReadOnlyCollection<IdentityProviderCapabilitiesResponse> Providers);
+    IReadOnlyCollection<IdentityProviderCapabilitiesResponse> Providers,
+    IReadOnlyCollection<IdentityPermissionResponse> Permissions);
 
 public sealed record IdentityProviderCapabilitiesResponse(
     string Id,
@@ -26,6 +27,18 @@ public sealed record IdentityProviderCapabilitiesResponse(
     bool IsDefault,
     bool Enabled,
     EffectiveProviderCapabilities Capabilities);
+
+/// <summary>
+/// A single catalogued permission projected for clients, including feature-contributed host-control
+/// permissions. <see cref="Implies"/> lets clients (such as the Studio management bridge) reason about
+/// coarse grants like <c>manage</c> implying <c>read</c>.
+/// </summary>
+public sealed record IdentityPermissionResponse(
+    string Key,
+    string DisplayName,
+    string Category,
+    string Description,
+    IReadOnlyCollection<string> Implies);
 
 public sealed record RefreshTokenRequest(string RefreshToken);
 
