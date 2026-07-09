@@ -317,10 +317,11 @@ html[data-theme="black-glass"] .weaver-message[data-role="user"] .weaver-message
 }
 
 html[data-theme="black-glass"] .weaver-send {
-  border: 1px solid color-mix(in srgb, var(--studio-accent) 68%, transparent);
-  background: linear-gradient(180deg, #8fe8ff, #2eb6ff);
-  box-shadow: 0 0 22px color-mix(in srgb, var(--studio-accent) 28%, transparent);
-  color: #041520;
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 72%, white);
+  background: linear-gradient(180deg, color-mix(in srgb, white 24%, var(--studio-accent)), var(--studio-accent));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 34%, transparent),
+    0 0 24px color-mix(in srgb, var(--studio-accent) 40%, transparent);
+  color: var(--studio-accent-text);
   font-weight: 800;
 }
 
