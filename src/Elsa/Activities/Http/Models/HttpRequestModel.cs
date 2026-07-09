@@ -19,10 +19,12 @@ namespace Elsa.Activities.Http.Models;
 /// <param name="Query">The request query-string values, keyed by parameter name.</param>
 /// <param name="Body">The raw request body as a string, if any.</param>
 /// <param name="RouteData">Route parameters extracted from the matched route template (spec 089 B), e.g. <c>{ id = "42" }</c> for <c>orders/{id}</c>; empty when the template has none. Optional on the wire (older payloads deserialize with null; consumers coalesce to empty).</param>
+/// <param name="ParsedContent">The request body parsed by content type into a wire-safe JSON value (spec 089 C, via <c>IHttpRequestBodyParser</c>); null when the body is empty, the content type is unrecognized, or parsing was unavailable. Optional on the wire.</param>
 public sealed record HttpRequestModel(
     string Path,
     string Method,
     IDictionary<string, string[]> Headers,
     IDictionary<string, string[]> Query,
     string? Body,
-    IDictionary<string, string>? RouteData = null);
+    IDictionary<string, string>? RouteData = null,
+    System.Text.Json.JsonElement? ParsedContent = null);

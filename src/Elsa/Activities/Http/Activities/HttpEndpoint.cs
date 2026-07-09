@@ -53,16 +53,51 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     public InputArgument<ICollection<string>>? SupportedMethods { get; set; }
 
     /// <summary>
+    /// When true, the endpoint requires an authorized caller (spec 089 C: the middleware resolves an
+    /// <c>IHttpEndpointAuthorizationHandler</c> and 401s an unauthorized request before dispatch). Authored
+    /// literal, resolved at publish time like <see cref="Path"/>; a non-literal fails the publish. Defaults to
+    /// false (unauthored → omitted from binding metadata).
+    /// </summary>
+    public InputArgument<bool>? Authorize { get; set; }
+
+    /// <summary>
+    /// The authorization policy name evaluated for this endpoint when <see cref="Authorize"/> is true. Authored
+    /// literal, resolved at publish time; a non-literal fails the publish. Null/absent applies no named policy.
+    /// </summary>
+    public InputArgument<string>? Policy { get; set; }
+
+    /// <summary>
+    /// The per-request timeout applied around the dispatch (spec 089 C: a linked CTS whose elapse maps to 408).
+    /// Authored literal, resolved at publish time; a non-literal fails the publish. Null/absent applies no
+    /// per-endpoint timeout.
+    /// </summary>
+    public InputArgument<TimeSpan>? RequestTimeout { get; set; }
+
+    /// <summary>
+    /// The per-request body size limit in bytes, overriding the global bound for this endpoint (spec 089 C:
+    /// an oversized body 413s). Authored literal, resolved at publish time; a non-literal fails the publish.
+    /// Null/absent applies the global limit.
+    /// </summary>
+    public InputArgument<long>? RequestSizeLimit { get; set; }
+
+    /// <summary>
     /// Route parameters extracted from the matched template (e.g. <c>id = "42"</c> for <c>orders/{id}</c>);
     /// empty for direct runs or templates without parameters.
     /// </summary>
     public OutputArgument<IDictionary<string, string>>? RouteData { get; set; }
+
+    /// <summary>
+    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011); null when the
+    /// body was empty, the content type unrecognized, or the run was not started by an HTTP stimulus.
+    /// </summary>
+    public OutputArgument<object?>? ParsedContent { get; set; }
 
     protected override void Execute(IActivityExecutionContext context)
     {
         var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
         context.Set(Result, model);
         context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+        context.Set(ParsedContent, (object?)model.ParsedContent);
     }
 
     /// <summary>

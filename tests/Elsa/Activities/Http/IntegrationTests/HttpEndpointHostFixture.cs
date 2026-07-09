@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -102,9 +103,32 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
+
+                    // Spec 089 sub-unit C (T010). The endpoint-policy seam services the middleware resolves from
+                    // RequestServices: the REAL authorization + fault handlers from Elsa.Workflows.Runtime.Http and
+                    // the REAL request-body parser from Elsa.Http (again registered explicitly rather than via the
+                    // reflective feature loader, which can't resolve out-of-assembly types).
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IHttpEndpointAuthorizationHandler,
+                        Elsa.Workflows.Runtime.Http.Services.AuthenticationBasedHttpEndpointAuthorizationHandler>();
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IHttpEndpointFaultHandler,
+                        Elsa.Workflows.Runtime.Http.Services.HttpEndpointFaultHandler>();
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IHttpRequestBodyParser,
+                        Elsa.Http.Services.HttpRequestBodyParser>();
+
+                    // A test authentication scheme honoring "Authorization: Test <name>" (the standard test-handler
+                    // pattern), plus authorization services the auth handler evaluates policies against. The auth
+                    // handler resolves the authenticated principal via this scheme.
+                    services.AddAuthentication(TestAuthHandler.SchemeName)
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+                    services.AddAuthorization();
                 });
                 webHost.Configure(app =>
                 {
+                    // Authentication runs before the endpoint middleware, mirroring the prod root-pipeline order
+                    // (Program.cs runs UseAuthentication ahead of the shell branch), so HttpContext.User is
+                    // populated by the time the endpoint's authorization handler evaluates the request.
+                    app.UseAuthentication();
+
                     // Mount the inbound endpoint middleware exactly as ActivitiesHttpFeature.UseMiddleware does.
                     app.UseMiddleware<Elsa.Activities.Http.Middleware.HttpEndpointMiddleware>();
 
@@ -133,9 +157,25 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// into the durable value store under the durable value id <paramref name="resultValueId"/> so the live
     /// request the run observed (including its extracted RouteData) can be read back.
     /// </summary>
-    public async Task PublishHttpEndpointWorkflowAsync(string artifactId, string path, string resultValueId, params string[] methods)
+    public async Task PublishHttpEndpointWorkflowAsync(string artifactId, string path, string resultValueId, params string[] methods) =>
+        await PublishHttpEndpointWorkflowAsync(artifactId, path, resultValueId, methods, authorize: null, policy: null, requestSizeLimit: null);
+
+    /// <summary>
+    /// As <see cref="PublishHttpEndpointWorkflowAsync(string,string,string,string[])"/>, additionally authoring the
+    /// spec 089 C endpoint-option literals — <see cref="HttpEndpoint.Authorize"/>, <see cref="HttpEndpoint.Policy"/>,
+    /// <see cref="HttpEndpoint.RequestSizeLimit"/> — so their values ride the trigger-binding metadata the middleware
+    /// enforces. Null inputs are omitted (the option defaults apply).
+    /// </summary>
+    public async Task PublishHttpEndpointWorkflowAsync(
+        string artifactId,
+        string path,
+        string resultValueId,
+        string[] methods,
+        bool? authorize,
+        string? policy,
+        long? requestSizeLimit)
     {
-        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
+        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods, authorize, policy, requestSizeLimit);
 
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
         // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
@@ -143,6 +183,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
+
+    /// <summary>The number of workflow executions the runtime has persisted — 0 proves nothing started (401/413 paths).</summary>
+    public async Task<int> CountWorkflowExecutionsAsync() =>
+        (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
 
     /// <summary>Reads the single durable value captured under the durable value id <paramref name="valueId"/> for a run.</summary>
     public async Task<JsonElement> ReadCapturedOutputAsync(string workflowExecutionId, string valueId)
@@ -159,7 +203,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         _host.Dispose();
     }
 
-    private WorkflowExecutable NewHttpEndpointExecutable(string artifactId, string path, string resultOutputName, string[] methods)
+    private WorkflowExecutable NewHttpEndpointExecutable(
+        string artifactId,
+        string path,
+        string resultOutputName,
+        string[] methods,
+        bool? authorize = null,
+        string? policy = null,
+        long? requestSizeLimit = null)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
 
@@ -173,6 +224,18 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         if (methods.Length > 0)
             inputBindings[nameof(HttpEndpoint.SupportedMethods)] =
                 LiteralBinding(nameof(HttpEndpoint.SupportedMethods), methods, "System.Collections.Generic.ICollection`1[[System.String]]");
+
+        // Spec 089 C endpoint-option literals (mirrors how SupportedMethods is authored). The trigger provider
+        // reads these at publish time and stamps them on the binding metadata the middleware enforces.
+        if (authorize is { } authorizeValue)
+            inputBindings[nameof(HttpEndpoint.Authorize)] =
+                LiteralBinding(nameof(HttpEndpoint.Authorize), authorizeValue, "System.Boolean");
+        if (policy is not null)
+            inputBindings[nameof(HttpEndpoint.Policy)] =
+                LiteralBinding(nameof(HttpEndpoint.Policy), policy, "System.String");
+        if (requestSizeLimit is { } sizeLimit)
+            inputBindings[nameof(HttpEndpoint.RequestSizeLimit)] =
+                LiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit, "System.Int64");
 
         var node = new ExecutableNode(
             executableNodeId: "node-http-endpoint",
@@ -225,5 +288,39 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         using var scope = provider.CreateScope();
         foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
             task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
+    }
+}
+
+/// <summary>
+/// A minimal test authentication scheme (the standard ASP.NET test-handler pattern) honoring an
+/// <c>Authorization: Test &lt;name&gt;</c> header: any such header authenticates a caller named <c>&lt;name&gt;</c>;
+/// its absence yields no result (anonymous). It stands in for the shell's authentication stack so the real
+/// <c>AuthenticationBasedHttpEndpointAuthorizationHandler</c> can resolve a principal (spec 089 C, T010).
+/// </summary>
+public sealed class TestAuthHandler(
+    Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
+    Microsoft.Extensions.Logging.ILoggerFactory logger,
+    System.Text.Encodings.Web.UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string SchemeName = "Test";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if (!Request.Headers.TryGetValue("Authorization", out var header))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
+        var value = header.ToString();
+        const string prefix = "Test ";
+        if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length <= prefix.Length)
+            return Task.FromResult(AuthenticateResult.Fail("Malformed test authorization header."));
+
+        var name = value[prefix.Length..].Trim();
+        var identity = new System.Security.Claims.ClaimsIdentity(
+            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, name)],
+            SchemeName);
+        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, SchemeName);
+        return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 }

@@ -17,4 +17,26 @@ public static class HttpEndpointRouting
 
     /// <summary>Trigger-binding metadata key carrying the lowercased HTTP method of this binding (one binding per method).</summary>
     public const string MethodMetadataKey = "http:method";
+
+    /// <summary>
+    /// Trigger-binding metadata key carrying the endpoint's authorization flag (value <c>"true"</c>). NON-IDENTITY:
+    /// options ride the binding metadata but do not participate in <c>HttpEndpointStimulus.Hash</c>. Omitted from
+    /// metadata when the endpoint does not require authorization (default false), keeping bindings lean.
+    /// </summary>
+    public const string AuthorizeMetadataKey = "http:authorize";
+
+    /// <summary>Trigger-binding metadata key carrying the endpoint's authorization policy name (raw string). NON-IDENTITY.</summary>
+    public const string PolicyMetadataKey = "http:policy";
+
+    /// <summary>
+    /// Trigger-binding metadata key carrying the endpoint's per-request timeout as an invariant <c>TimeSpan</c>
+    /// (<c>"c"</c> format, e.g. <c>00:00:30</c>). NON-IDENTITY.
+    /// </summary>
+    public const string RequestTimeoutMetadataKey = "http:requestTimeout";
+
+    /// <summary>
+    /// Trigger-binding metadata key carrying the endpoint's per-request body size limit in bytes as an invariant
+    /// <c>long</c> (e.g. <c>1048576</c>). NON-IDENTITY.
+    /// </summary>
+    public const string RequestSizeLimitMetadataKey = "http:requestSizeLimit";
 }

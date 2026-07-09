@@ -1,5 +1,6 @@
 ﻿using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Http.Core.Contracts;
 using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;

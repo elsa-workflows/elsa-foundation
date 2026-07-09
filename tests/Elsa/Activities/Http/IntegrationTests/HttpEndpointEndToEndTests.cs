@@ -118,6 +118,75 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal("ambiguous-endpoint", payload.RootElement.GetProperty("error").GetString());
     }
 
+    // ---- Spec 089 sub-unit C (T010): authorization, ParsedContent, per-endpoint size limit end to end ----
+
+    [Fact]
+    public async Task AuthorizedEndpoint_AnonymousRequest_Replies401_AndStartsNoInstance()
+    {
+        await _fixture.PublishHttpEndpointWorkflowAsync(
+            "artifact-secure", "secure/orders", ResultOutputName, ["POST"], authorize: true, policy: null, requestSizeLimit: null);
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/secure/orders",
+            new StringContent("""{"id":1}""", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Fail closed before dispatch: the runtime persisted no execution.
+        Assert.Equal(0, await _fixture.CountWorkflowExecutionsAsync());
+    }
+
+    [Fact]
+    public async Task AuthorizedEndpoint_WithTestAuthHeader_Replies202()
+    {
+        await _fixture.PublishHttpEndpointWorkflowAsync(
+            "artifact-secure-ok", "secure/ok", ResultOutputName, ["POST"], authorize: true, policy: null, requestSizeLimit: null);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/workflows/http/secure/ok")
+        {
+            Content = new StringContent("""{"id":1}""", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Authorization", "Test alice");
+
+        var response = await _fixture.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Single(await ReadStartedIdsAsync(response));
+    }
+
+    [Fact]
+    public async Task JsonBody_SurfacesParsedContentOnTheRunsDurableResult()
+    {
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse", "parse/orders", ResultOutputName, "POST");
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/parse/orders",
+            new StringContent("""{"orderId":7,"customer":"acme"}""", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
+
+        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
+        var model = captured.Deserialize<HttpRequestModel>()!;
+
+        // The real HttpRequestBodyParser (T005) turned the JSON body into the wire-safe ParsedContent element.
+        Assert.NotNull(model.ParsedContent);
+        var parsed = model.ParsedContent!.Value;
+        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
+        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
+        Assert.Equal("acme", parsed.GetProperty("customer").GetString());
+    }
+
+    [Fact]
+    public async Task EndpointWithSmallRequestSizeLimit_OversizedBody_Replies413_AndStartsNoInstance()
+    {
+        await _fixture.PublishHttpEndpointWorkflowAsync(
+            "artifact-sized", "sized/orders", ResultOutputName, ["POST"], authorize: null, policy: null, requestSizeLimit: 16);
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/sized/orders",
+            new StringContent(new string('x', 64), Encoding.UTF8, "text/plain"));
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Equal(0, await _fixture.CountWorkflowExecutionsAsync());
+    }
+
     private static async Task<IReadOnlyList<string>> ReadStartedIdsAsync(HttpResponseMessage response)
     {
         await using var stream = await response.Content.ReadAsStreamAsync();

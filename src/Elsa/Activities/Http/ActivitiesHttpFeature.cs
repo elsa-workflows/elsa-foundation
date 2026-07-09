@@ -74,9 +74,20 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     /// Mounts the endpoint middleware in the shell's pipeline. CShells composes this per shell and runs it only
     /// for requests resolved to this shell, right after shell resolution — so <c>HttpContext.RequestServices</c>
     /// is already the shell scope — including shells activated dynamically at runtime. Non-endpoint requests pass
-    /// through. <see cref="IMiddlewareShellFeature.Order"/> is left at its default (0): this is the only shell
-    /// middleware the platform mounts today; give it an explicit order if middleware that must run earlier
-    /// (e.g. authentication) joins the shell pipeline.
+    /// through.
+    /// <para>
+    /// <see cref="IMiddlewareShellFeature.Order"/> is left at its default (0). <c>Order</c> only sequences shell
+    /// <em>middleware features</em> relative to one another within the shell branch (CShells sorts them by
+    /// <c>Order</c> before mounting); it does not order this middleware against the root pipeline's
+    /// authentication/authorization middleware. Authentication does not run as a shell middleware feature — in the
+    /// default composition it is mounted on the root pipeline (the host's <c>UseAuthentication</c>, placed after
+    /// <c>MapShells</c> so it authenticates against the shell's schemes) and therefore populates
+    /// <c>HttpContext.User</c> before this shell branch executes. Because there is no shell-pipeline auth
+    /// middleware to order against, an explicit <c>Order</c> would buy nothing here; the authorization handler
+    /// (<c>AuthenticationBasedHttpEndpointAuthorizationHandler</c>) additionally authenticates explicitly rather
+    /// than assuming that ordering (spec 089 sub-unit C, T008). Give this feature an explicit order only if a
+    /// second shell <em>middleware feature</em> is added that must run before or after the endpoint middleware.
+    /// </para>
     /// </summary>
     public void UseMiddleware(IApplicationBuilder app, Microsoft.Extensions.Hosting.IHostEnvironment? environment)
     {

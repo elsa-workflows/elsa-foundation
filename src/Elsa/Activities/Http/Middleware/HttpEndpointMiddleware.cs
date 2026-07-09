@@ -4,6 +4,8 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Exceptions;
+using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
@@ -106,7 +108,26 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, _options.MaxRequestBodyBytes);
+        // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). The
+        // ambiguity guard above proved all claimants share one definition, so any binding's metadata will do.
+        var endpointOptions = EndpointOptions.FromMetadata(claimants.FirstOrDefault()?.Metadata);
+
+        // Authorization runs before the body is read or anything is dispatched (FR-012). Fail closed: an
+        // Authorize endpoint with no handler composed (WorkflowsRuntimeHttp feature absent) denies.
+        if (endpointOptions.Authorize)
+        {
+            var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
+            var authorized = authorizationHandler is not null
+                && await authorizationHandler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, endpointOptions.Policy));
+            if (!authorized)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+        }
+
+        var maxBodyBytes = endpointOptions.RequestSizeLimit ?? _options.MaxRequestBodyBytes;
+        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes, RequestServicesBodyParser(context));
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -122,7 +143,24 @@ public sealed class HttpEndpointMiddleware(
             mode: StimulusRoutingMode.StartOnly,
             requestedBy: RequestedBy);
 
-        var result = await router.RouteAsync(dispatch, context.RequestAborted);
+        // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
+        // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).
+        // Non-positive values are rejected at publish (review C2); the > Zero guard here is defense in depth
+        // against hand-seeded binding metadata — CancelAfter would throw on a negative TimeSpan.
+        StimulusRoutingResult result;
+        using var timeoutSource = endpointOptions.RequestTimeout is { } timeout && timeout > TimeSpan.Zero
+            ? CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
+            : null;
+        timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
+        try
+        {
+            result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
+        }
+        catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
+            return;
+        }
 
         if (result.StartedCount == 0)
         {
@@ -139,6 +177,57 @@ public sealed class HttpEndpointMiddleware(
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync(JsonSerializer.Serialize(new { started = startedIds }), context.RequestAborted);
     }
+
+    /// <summary>
+    /// The per-endpoint options parsed from claimant-binding metadata (values written by
+    /// <see cref="HttpEndpointTriggerStimulusProvider"/>; formats per data-model.md). Absent keys mean defaults.
+    /// </summary>
+    private sealed record EndpointOptions(bool Authorize, string? Policy, TimeSpan? RequestTimeout, long? RequestSizeLimit)
+    {
+        public static EndpointOptions FromMetadata(IReadOnlyDictionary<string, string>? metadata)
+        {
+            if (metadata is null)
+                return new EndpointOptions(false, null, null, null);
+
+            return new EndpointOptions(
+                Authorize: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey, out var authorize)
+                    && bool.TryParse(authorize, out var parsedAuthorize) && parsedAuthorize,
+                Policy: metadata.GetValueOrDefault(Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey),
+                RequestTimeout: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.RequestTimeoutMetadataKey, out var timeout)
+                    && TimeSpan.TryParseExact(timeout, "c", System.Globalization.CultureInfo.InvariantCulture, out var parsedTimeout)
+                        ? parsedTimeout
+                        : null,
+                RequestSizeLimit: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey, out var sizeLimit)
+                    && long.TryParse(sizeLimit, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsedSizeLimit)
+                        ? parsedSizeLimit
+                        : null);
+        }
+    }
+
+    /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback when the policy feature is absent.</summary>
+    private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
+    {
+        var faultException = timedOut && exception is OperationCanceledException
+            ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
+            : exception;
+
+        if (context.RequestServices?.GetService(typeof(IHttpEndpointFaultHandler)) is IHttpEndpointFaultHandler faultHandler)
+        {
+            await faultHandler.HandleAsync(new HttpEndpointFaultContext(context, [faultException], context.RequestAborted));
+            return;
+        }
+
+        // No handler composed: apply the same default mapping the policy module's handler uses.
+        context.Response.StatusCode = faultException switch
+        {
+            TimeoutException or OperationCanceledException => StatusCodes.Status408RequestTimeout,
+            HttpBadRequestException => StatusCodes.Status400BadRequest,
+            _ => StatusCodes.Status500InternalServerError
+        };
+    }
+
+    private static IHttpRequestBodyParser? RequestServicesBodyParser(HttpContext context) =>
+        context.RequestServices?.GetService(typeof(IHttpRequestBodyParser)) as IHttpRequestBodyParser;
 
     /// <summary>
     /// Resolves the endpoint-relative path against the per-shell route table. Returns the matched template
@@ -176,7 +265,8 @@ public sealed class HttpEndpointMiddleware(
         HttpContext context,
         string endpointPath,
         IReadOnlyDictionary<string, string> routeValues,
-        long maxBodyBytes)
+        long maxBodyBytes,
+        IHttpRequestBodyParser? bodyParser)
     {
         if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
             return null;
@@ -196,13 +286,20 @@ public sealed class HttpEndpointMiddleware(
         var query = context.Request.Query
             .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
 
+        // Parsed content (spec 089 C, FR-011): content-type-dispatched, wire-safe JsonElement; null when the
+        // parser seam is absent (Http feature not composed), the type is unrecognized, or the body is empty.
+        JsonElement? parsedContent = body is not null && bodyParser is not null
+            ? bodyParser.Parse(context.Request.ContentType, body)
+            : null;
+
         return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
             Method: context.Request.Method.ToUpperInvariant(),
             Headers: headers,
             Query: query,
             Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
+            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase),
+            ParsedContent: parsedContent);
     }
 
     /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>

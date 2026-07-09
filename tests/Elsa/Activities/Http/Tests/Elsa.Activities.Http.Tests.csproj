@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
+    <!-- The real HttpRequestBodyParser (spec 089 C, T005) is exercised by the middleware ParsedContent tests. -->
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
