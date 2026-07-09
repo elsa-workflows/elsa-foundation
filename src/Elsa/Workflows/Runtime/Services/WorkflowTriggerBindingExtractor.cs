@@ -43,41 +43,45 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
             if (!IsTrigger(node))
                 continue;
 
-            var descriptor = Describe(node, identity.ArtifactId)
-                ?? throw new WorkflowTriggerExtractionException(
+            var descriptors = Describe(node);
+            if (descriptors.Count == 0)
+                throw new WorkflowTriggerExtractionException(
                     identity.ArtifactId,
                     node.ExecutableNodeId,
                     $"Node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}') is marked as a start-trigger, " +
                     "but no registered trigger stimulus provider could describe its stimulus. A published trigger that " +
                     "cannot be indexed is refused so it never silently fails to fire.");
 
-            bindings.Add(new WorkflowTriggerBinding(
-                TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId),
-                ArtifactId: identity.ArtifactId,
-                DefinitionId: identity.DefinitionId,
-                ArtifactVersion: identity.ArtifactVersion,
-                ArtifactHash: identity.ArtifactHash,
-                ExecutableNodeId: node.ExecutableNodeId,
-                StimulusType: descriptor.StimulusType,
-                StimulusHash: descriptor.StimulusHash,
-                CorrelationScope: descriptor.CorrelationScope,
-                Metadata: new Dictionary<string, string>(),
-                CreatedAt: now));
+            foreach (var descriptor in descriptors)
+            {
+                bindings.Add(new WorkflowTriggerBinding(
+                    TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId, descriptor.StimulusHash),
+                    ArtifactId: identity.ArtifactId,
+                    DefinitionId: identity.DefinitionId,
+                    ArtifactVersion: identity.ArtifactVersion,
+                    ArtifactHash: identity.ArtifactHash,
+                    ExecutableNodeId: node.ExecutableNodeId,
+                    StimulusType: descriptor.StimulusType,
+                    StimulusHash: descriptor.StimulusHash,
+                    CorrelationScope: descriptor.CorrelationScope,
+                    Metadata: descriptor.Metadata,
+                    CreatedAt: now));
+            }
         }
 
         return bindings;
     }
 
-    private TriggerStimulusDescriptor? Describe(ExecutableNode node, string artifactId)
+    private IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
     {
         foreach (var provider in _providers)
         {
-            var descriptor = provider.Describe(node);
-            if (descriptor is not null)
-                return descriptor;
+            var descriptors = provider.Describe(node);
+            if (descriptors.Count > 0)
+                return descriptors;
         }
 
-        return null;
+        return [];
     }
 
     private static bool IsTrigger(ExecutableNode node) =>

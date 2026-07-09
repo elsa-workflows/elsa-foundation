@@ -66,7 +66,7 @@ public sealed class WorkflowTriggerIndexerTests
 
     private static WorkflowTriggerBinding StaleBinding(string artifactId, string nodeId) =>
         new(
-            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId),
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, "sha256:old"),
             ArtifactId: artifactId,
             DefinitionId: "definition-1",
             ArtifactVersion: "1.0.0",
@@ -95,9 +95,9 @@ public sealed class WorkflowTriggerIndexerTests
 
     private sealed class FakeProvider(string activityType, string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {
-        public TriggerStimulusDescriptor? Describe(ExecutableNode node) =>
+        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? new TriggerStimulusDescriptor(stimulusType, stimulusHash)
-                : null;
+                ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash)]
+                : [];
     }
 }

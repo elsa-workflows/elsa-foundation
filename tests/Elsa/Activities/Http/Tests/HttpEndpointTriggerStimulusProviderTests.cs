@@ -20,10 +20,9 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     {
         var node = EndpointNode(path: "orders/webhook");
 
-        var descriptor = _provider.Describe(node);
+        var descriptor = Assert.Single(_provider.Describe(node));
 
-        Assert.NotNull(descriptor);
-        Assert.Equal("HttpEndpoint", descriptor!.StimulusType);
+        Assert.Equal("HttpEndpoint", descriptor.StimulusType);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook"), descriptor.StimulusHash);
     }
 
@@ -32,7 +31,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     {
         var node = EndpointNode(path: "orders/webhook", activityType: "Elsa.WriteLine");
 
-        Assert.Null(_provider.Describe(node));
+        Assert.Empty(_provider.Describe(node));
     }
 
     [Fact]

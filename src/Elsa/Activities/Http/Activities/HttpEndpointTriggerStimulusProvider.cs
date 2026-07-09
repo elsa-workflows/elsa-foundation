@@ -19,19 +19,19 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
 {
     private const string PathInput = nameof(HttpEndpoint.Path);
 
-    public TriggerStimulusDescriptor? Describe(ExecutableNode node)
+    public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, HttpEndpoint.ActivityType))
-            return null;
+            return [];
 
         var path = ReadLiteralString(node, PathInput)
             ?? throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has no literal '{PathInput}'. A start " +
                 "trigger's path must be an authored literal so its stimulus is fixed at publish time.");
 
-        return HttpEndpointStimulus.Describe(path);
+        return [HttpEndpointStimulus.Describe(path)];
     }
 
     private static string? ReadLiteralString(ExecutableNode node, string inputName)

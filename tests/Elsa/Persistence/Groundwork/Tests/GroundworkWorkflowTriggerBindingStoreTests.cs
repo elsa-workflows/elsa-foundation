@@ -59,7 +59,7 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
 
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
         new(
-            WorkflowTriggerBinding.BuildId(artifactId, nodeId),
+            WorkflowTriggerBinding.BuildId(artifactId, nodeId, stimulusHash),
             artifactId,
             $"definition-{artifactId}",
             "1.0.0",

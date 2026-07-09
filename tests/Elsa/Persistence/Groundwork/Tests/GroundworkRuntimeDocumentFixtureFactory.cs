@@ -224,7 +224,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private const string CommitId = "commit-1";
 
     private static WorkflowTriggerBinding TriggerBinding() => new(
-        TriggerBindingId: WorkflowTriggerBinding.BuildId("artifact-1", "node-trigger"),
+        TriggerBindingId: WorkflowTriggerBinding.BuildId("artifact-1", "node-trigger", "hash-order-approved"),
         ArtifactId: "artifact-1",
         DefinitionId: "definition-1",
         ArtifactVersion: "1",

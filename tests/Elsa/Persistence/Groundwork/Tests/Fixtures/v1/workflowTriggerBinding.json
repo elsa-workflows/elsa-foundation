@@ -11,5 +11,5 @@
   },
   "stimulusHash": "hash-order-approved",
   "stimulusType": "Event",
-  "triggerBindingId": "artifact-1:node-trigger"
+  "triggerBindingId": "artifact-1:node-trigger:hash-order-approved"
 }
