@@ -1,17 +1,22 @@
 using System.Security.Claims;
 using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
 /// The default <see cref="IHttpEndpointAuthorizationHandler"/>: an inbound request is authorized when the caller
 /// is authenticated (and, when the endpoint declares a <see cref="AuthorizeHttpEndpointContext.Policy"/>, when
-/// that policy succeeds against the authenticated principal). Fails closed on any inability to authenticate or
-/// evaluate.
+/// that policy succeeds against the authenticated principal). An anonymous or policy-failing caller is denied
+/// (returns false → 401); a host misconfiguration that prevents evaluation is surfaced distinctly as an
+/// <see cref="HttpEndpointAuthorizationConfigurationException"/> (→ 500), not silently swallowed into a 401
+/// (#592 item 11).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,63 +32,85 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// authenticate that does not yield an authenticated principal denies the request.
 /// </para>
 /// <para>
+/// The handler does not mutate <see cref="HttpContext.User"/> (#592 item 11): evaluating the authorize predicate
+/// must not rewrite the request principal seen by downstream middleware and activities. A freshly authenticated
+/// principal is used locally for the policy check only.
+/// </para>
+/// <para>
 /// The middleware authorizes an inbound request before any workflow instance exists, so there is no protected
 /// workflow resource to hand the policy (see <see cref="AuthorizeHttpEndpointContext"/> remarks); the policy is
 /// evaluated against the authenticated user alone via <see cref="IAuthorizationService"/>.
 /// </para>
 /// </remarks>
-public sealed class AuthenticationBasedHttpEndpointAuthorizationHandler(IAuthorizationService authorizationService) : IHttpEndpointAuthorizationHandler
+public sealed class AuthenticationBasedHttpEndpointAuthorizationHandler(
+    IAuthorizationService authorizationService,
+    ILogger<AuthenticationBasedHttpEndpointAuthorizationHandler>? logger = null) : IHttpEndpointAuthorizationHandler
 {
+    private readonly ILogger _logger = logger ?? NullLogger<AuthenticationBasedHttpEndpointAuthorizationHandler>.Instance;
+
     /// <inheritdoc />
     public async ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context)
     {
-        var httpContext = context.HttpContext;
+        var user = await ResolveAuthenticatedUserAsync(context.HttpContext);
 
+        // Not authenticated (upstream middleware left an anonymous principal and explicit
+        // authentication produced none): fail closed with a plain denial (→ 401).
+        if (user is null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(context.Policy))
+            return true;
+
+        AuthorizationResult authorizationResult;
         try
         {
-            var user = await ResolveAuthenticatedUserAsync(httpContext);
-
-            // Not authenticated (upstream middleware left an anonymous principal and explicit
-            // authentication produced none): fail closed.
-            if (user is null)
-                return false;
-
-            if (string.IsNullOrWhiteSpace(context.Policy))
-                return true;
-
-            var authorizationResult = await authorizationService.AuthorizeAsync(user, context.Policy!);
-
-            return authorizationResult.Succeeded;
+            authorizationResult = await authorizationService.AuthorizeAsync(user, context.Policy!);
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Any inability to authenticate or evaluate the policy (missing scheme, handler throwing, …) is
-            // treated as a denial: the endpoint stays protected.
-            return false;
+            // A missing/misconfigured policy (e.g. the named policy is not registered) is an operator error,
+            // not an unauthorized caller: surface it distinctly so the middleware returns 500, not 401.
+            _logger.LogError(exception, "Authorization policy {Policy} could not be evaluated for an HTTP endpoint request", context.Policy);
+            throw new HttpEndpointAuthorizationConfigurationException(
+                $"The authorization policy '{context.Policy}' could not be evaluated. Verify the policy is registered for the shell.",
+                exception);
         }
+
+        return authorizationResult.Succeeded;
     }
 
     /// <summary>
     /// Returns the authenticated principal for the request, or <c>null</c> when the caller is anonymous. Prefers
     /// the principal already on <see cref="HttpContext.User"/> (populated when authentication middleware ran
     /// ahead of this handler); otherwise authenticates explicitly against the shell's default scheme so the
-    /// handler does not depend on middleware ordering.
+    /// handler does not depend on middleware ordering. Does not write the result back to
+    /// <see cref="HttpContext.User"/> (#592 item 11).
     /// </summary>
-    private static async ValueTask<ClaimsPrincipal?> ResolveAuthenticatedUserAsync(HttpContext httpContext)
+    private async ValueTask<ClaimsPrincipal?> ResolveAuthenticatedUserAsync(HttpContext httpContext)
     {
         var user = httpContext.User;
 
         if (user.Identity?.IsAuthenticated == true)
             return user;
 
-        var result = await httpContext.AuthenticateAsync();
+        AuthenticateResult result;
+        try
+        {
+            result = await httpContext.AuthenticateAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // No default authentication scheme registered for the shell (or the scheme threw): an operator
+            // configuration error, distinct from an anonymous caller. Surface it as 500 rather than 401.
+            _logger.LogError(exception, "Authentication could not be evaluated for an HTTP endpoint request (no scheme or scheme faulted)");
+            throw new HttpEndpointAuthorizationConfigurationException(
+                "Authentication could not be evaluated. Verify an authentication scheme is registered for the shell.",
+                exception);
+        }
 
         if (!result.Succeeded || result.Principal?.Identity?.IsAuthenticated != true)
             return null;
 
-        // Make the freshly authenticated principal visible to the policy evaluation below and to the rest of the
-        // pipeline (downstream middleware / activities read HttpContext.User).
-        httpContext.User = result.Principal;
         return result.Principal;
     }
 }

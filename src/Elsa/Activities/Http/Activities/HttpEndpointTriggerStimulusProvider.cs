@@ -73,9 +73,17 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (ReadRequiredLiteralOption(node, inputName) is not { } literal)
             return null;
 
-        var text = literal.ValueKind == JsonValueKind.String ? literal.GetString() : literal.ToString();
+        var text = LiteralText(literal);
         return string.IsNullOrWhiteSpace(text) ? null : text;
     }
+
+    /// <summary>
+    /// The scalar text of a literal JSON element: the raw string for a JSON string, else its <c>ToString()</c>
+    /// form (numbers, booleans authored as bare literals). Shared by the string-shaped option readers so the
+    /// coercion idiom lives in one place (#592 item 19).
+    /// </summary>
+    private static string? LiteralText(JsonElement literal) =>
+        literal.ValueKind == JsonValueKind.String ? literal.GetString() : literal.ToString();
 
     /// <summary>
     /// Resolves an optional option input to its literal <see cref="JsonElement"/>, or null when the input is
@@ -110,7 +118,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
     private static TimeSpan? ReadLiteralTimeSpan(ExecutableNode node, string inputName) =>
         ReadLiteralOption(node, inputName, literal =>
         {
-            var text = literal.ValueKind == JsonValueKind.String ? literal.GetString() : literal.ToString();
+            var text = LiteralText(literal);
             if (!TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var parsed))
                 throw new ArgumentException(
                     $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a TimeSpan.");

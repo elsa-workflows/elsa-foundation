@@ -44,12 +44,23 @@ internal sealed class BehaviourStimulusRouter : IStimulusRouter
 }
 
 /// <summary>
-/// A fake <see cref="IHttpEndpointAuthorizationHandler"/> that returns a configured result and records the
-/// <see cref="AuthorizeHttpEndpointContext"/> it was handed (so tests can assert the policy string flowed from
-/// binding metadata).
+/// A fake <see cref="IHttpEndpointAuthorizationHandler"/> that returns a configured result — or throws a
+/// configured exception (e.g. an <c>HttpEndpointAuthorizationConfigurationException</c> to exercise the 500 path,
+/// #592 item 11) — and records the <see cref="AuthorizeHttpEndpointContext"/> it was handed (so tests can assert
+/// the policy string flowed from binding metadata).
 /// </summary>
-internal sealed class FakeAuthorizationHandler(bool authorize) : IHttpEndpointAuthorizationHandler
+internal sealed class FakeAuthorizationHandler : IHttpEndpointAuthorizationHandler
 {
+    private readonly bool _authorize;
+    private readonly Exception? _throws;
+
+    public FakeAuthorizationHandler(bool authorize) => _authorize = authorize;
+
+    private FakeAuthorizationHandler(Exception throws) => _throws = throws;
+
+    /// <summary>A handler that throws <paramref name="exception"/> instead of returning a decision.</summary>
+    public static FakeAuthorizationHandler Throwing(Exception exception) => new(exception);
+
     public AuthorizeHttpEndpointContext? LastContext { get; private set; }
 
     public bool WasInvoked => LastContext is not null;
@@ -57,7 +68,9 @@ internal sealed class FakeAuthorizationHandler(bool authorize) : IHttpEndpointAu
     public ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context)
     {
         LastContext = context;
-        return ValueTask.FromResult(authorize);
+        if (_throws is not null)
+            throw _throws;
+        return ValueTask.FromResult(_authorize);
     }
 }
 

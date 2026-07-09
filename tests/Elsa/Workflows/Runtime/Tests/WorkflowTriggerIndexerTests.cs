@@ -56,7 +56,7 @@ public sealed class WorkflowTriggerIndexerTests
     }
 
     [Fact]
-    public async Task Index_NotifiesObservers_AfterSave_WithNewBindings()
+    public async Task Index_NotifiesObservers_AfterSave_ForTheArtifact()
     {
         var store = new InMemoryWorkflowTriggerBindingStore();
         var observer = new RecordingObserver();
@@ -69,10 +69,10 @@ public sealed class WorkflowTriggerIndexerTests
 
         var snapshot = Assert.Single(observer.Snapshots);
         Assert.Equal("artifact-1", snapshot.ArtifactId);
-        var binding = Assert.Single(snapshot.Bindings);
+        // Observer runs after the write: the artifact's binding is already durable in the store (the snapshot
+        // carries only the artifact identity; observers re-project from the durable index — #592 item 17).
+        var binding = Assert.Single(await store.ListByArtifactAsync("artifact-1"));
         Assert.Equal("node-event", binding.ExecutableNodeId);
-        // Observer runs after the write: the binding it was handed is already durable in the store.
-        Assert.Single(await store.ListByArtifactAsync("artifact-1"));
     }
 
     [Fact]
