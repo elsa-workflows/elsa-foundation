@@ -25,7 +25,8 @@ services:
     image: elsaworkflows/elsa-server:latest
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # Module-management API key. MUST match Studio's Studio__BackendModuleManagementApiKey.
+      # Elsa host management key accepted on the server's module-management API.
+      # Server-side only. MUST match Studio's Studio__BackendModuleManagementApiKey.
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
       # CORS: allow the browser origin Studio is served from (its host-published port).
       Cors__AllowedOrigins__0: "http://localhost:14000"
@@ -47,6 +48,8 @@ services:
       # host-reachable URL — NOT the compose service name (http://elsa-server:8080),
       # which only resolves inside the Docker network.
       Studio__BackendBaseUrl: "http://localhost:13000"
+      # Elsa host management key used server-side by the Studio management bridge
+      # when calling elsa-server. Never sent to the browser.
       # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
       Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
     ports:

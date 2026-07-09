@@ -52,7 +52,8 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # Module-management API key. MUST match Studio's Studio__BackendModuleManagementApiKey.
+      # Elsa host management key accepted on the server's module-management API.
+      # Server-side only. MUST match Studio's Studio__BackendModuleManagementApiKey.
       Elsa__ModuleManagement__ApiKey: elsa-docker-demo-key
       # CORS: allow the browser origin the Studio app is served from (host-published port).
       Cors__AllowedOrigins__0: "http://localhost:14000"
@@ -99,6 +100,8 @@ services:
       # (surfaced via /studio-runtime.js), so it must be reachable from the host,
       # NOT the compose service name. Use the server's published host port.
       Studio__BackendBaseUrl: "http://localhost:13000"
+      # Elsa host management key used server-side by the Studio management bridge
+      # when calling elsa-server. Never sent to the browser.
       # MUST match elsa-server's Elsa__ModuleManagement__ApiKey.
       Studio__BackendModuleManagementApiKey: elsa-docker-demo-key
     ports:
