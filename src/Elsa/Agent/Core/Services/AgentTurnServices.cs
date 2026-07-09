@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
+using Microsoft.Extensions.Options;
 using static Elsa.Agent.Core.Services.AgentIds;
 
 namespace Elsa.Agent.Core.Services;
@@ -166,8 +167,10 @@ public sealed class DefaultAgentTurnOrchestrator(
     IAgentTurnRegistry turnRegistry,
     IAgentTurnStateStore stateStore,
     IAgentProposalService proposals,
-    AgentTurnOptions options) : IAgentStreamingService
+    IOptions<AgentTurnOptions> options) : IAgentStreamingService
 {
+    private readonly AgentTurnOptions _options = options.Value;
+
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var session = await sessions.FindAsync(sessionId, cancellationToken);
@@ -195,7 +198,7 @@ public sealed class DefaultAgentTurnOrchestrator(
         var turnToken = turnRegistry.Register(turnId);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turnToken);
         var token = linked.Token;
-        var maxSteps = options.MaxSteps;
+        var maxSteps = _options.MaxSteps;
 
         try
         {

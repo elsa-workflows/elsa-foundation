@@ -22,7 +22,7 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         IRuntimePostCommitOutboxStore outboxStore,
         IRuntimePostCommitIntentDispatcher intentDispatcher,
         TimeProvider timeProvider)
-        : this(outboxStore, intentDispatcher, timeProvider, new DefaultRuntimeFaultCapturePolicy())
+        : this(outboxStore, intentDispatcher, timeProvider, DefaultRuntimeFaultCapturePolicy.CreateDefault())
     {
     }
 
