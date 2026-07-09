@@ -1,7 +1,8 @@
 # Studio Management Bridge Keeps Host Management Keys Server-Side
 
-Status: proposed (2026-07-09; free-flow design. Sharpened through a grilling pass after diagnosing
-browser calls from `Elsa.Studio.Web` to `Elsa.Server` host-control endpoints.)
+Status: accepted (2026-07-09; ratified after maintainer review of PRD #584 and slice breakdown.
+Free-flow design, sharpened through a grilling pass after diagnosing browser calls from
+`Elsa.Studio.Web` to `Elsa.Server` host-control endpoints.)
 
 Browser clients must not carry an [Elsa host management key](../glossary/elsa.md). Host-control
 operations such as module management and Extension Builder remain management-key-protected between
