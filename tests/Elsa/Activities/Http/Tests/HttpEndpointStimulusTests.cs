@@ -99,6 +99,29 @@ public sealed class HttpEndpointStimulusTests
         Assert.Throws<ArgumentException>(() => HttpEndpointStimulus.NormalizeTemplate("   "));
     }
 
+    // ---- Issue #592 item 3: normalize literals + parameter names, preserve constraint/default bodies ----
+
+    [Theory]
+    [InlineData("Orders/List", "orders/list")]                          // pure literal lowercases wholesale
+    [InlineData("Orders/{Id}", "orders/{id}")]                          // literal + parameter name lowercase
+    [InlineData("{*Rest}", "{*rest}")]                                  // catch-all parameter name lowercases
+    [InlineData("Codes/{Code=ABC}", "codes/{code=ABC}")]               // default value preserved verbatim
+    [InlineData("Codes/{Code:regex(^[A-Z]+$)}", "codes/{code:regex(^[A-Z]+$)}")] // constraint body preserved
+    [InlineData("Users/{Id?}", "users/{id?}")]                          // optional marker preserved
+    public void NormalizeTemplate_LowercasesCaseInsensitiveFacetsOnly(string input, string expected)
+    {
+        Assert.Equal(expected, HttpEndpointStimulus.NormalizeTemplate(input));
+    }
+
+    [Fact]
+    public void NormalizeTemplate_DoesNotCorrupt_UppercaseConstraintOrDefault()
+    {
+        // The corruption under test: lowercasing the whole template would turn {Code=ABC} into {code=abc} and
+        // {Code:regex(^[A-Z]+$)} into an all-lowercase regex that no longer matches uppercase codes.
+        Assert.Equal("codes/{code=ABC}", HttpEndpointStimulus.NormalizeTemplate("Codes/{Code=ABC}"));
+        Assert.Contains("^[A-Z]+$", HttpEndpointStimulus.NormalizeTemplate("Codes/{Code:regex(^[A-Z]+$)}"));
+    }
+
     [Fact]
     public void Describe_StampsOptions_OnEveryMethodDescriptor()
     {

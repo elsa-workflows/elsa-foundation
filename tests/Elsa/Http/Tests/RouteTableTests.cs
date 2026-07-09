@@ -1,23 +1,27 @@
 using Elsa.Http.Core.Models;
+using Elsa.Http.Options;
 using Elsa.Http.Services;
+using Microsoft.AspNetCore.Routing.Template;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Http.Tests;
 
 /// <summary>
-/// Unit coverage for the internal <see cref="RouteTable"/>. The regression under test (B6): <c>Refresh</c> used to
-/// <c>Clear()</c> the live dictionary then re-<c>Add</c> item by item, so any reader that enumerated during a
-/// publish could observe an empty or partial table — a transient 404. The fix builds a complete new table off to
-/// the side and publishes it in a single cache swap, so a reader observes either the old table or the fully-built
-/// new one, never the empty intermediate.
+/// Unit coverage for the internal <see cref="RouteTable"/>. Covers the B6 atomic-swap regression (a reader must
+/// never observe an empty/partial table during a publish) plus the issue #592 follow-ups: specificity-ordered
+/// enumeration (item 1), precompiled matchers at refresh (item 6), and a shell-namespaced cache key (item 5).
 /// </summary>
 public sealed class RouteTableTests
 {
     private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
 
     private RouteTable CreateTable() => new(_cache, NullLogger<RouteTable>.Instance);
+
+    private RouteTable CreateTable(string shellDiscriminator) =>
+        new(_cache, NullLogger<RouteTable>.Instance, Microsoft.Extensions.Options.Options.Create(new RouteTableOptions { ShellDiscriminator = shellDiscriminator }));
 
     [Fact]
     public async Task Refresh_ReplacesTheWholeTable()
@@ -92,6 +96,66 @@ public sealed class RouteTableTests
         await reader;
 
         Assert.False(observedEmpty, "Refresh must swap the route table atomically; a reader observed an empty table mid-publish.");
+    }
+
+    // ---- Issue #592 item 1: specificity-ordered enumeration ----
+
+    [Theory]
+    [InlineData("orders/list", "orders/{id}")] // literal segment before parameter segment
+    [InlineData("orders/{id}", "{*catchall}")] // parameter segment before catch-all
+    public async Task Enumerates_MoreSpecific_First_RegardlessOfInsertionOrder(string moreSpecific, string lessSpecific)
+    {
+        // Whichever order they are refreshed in, the more specific template must enumerate first so the
+        // middleware's "first match wins" is deterministic.
+        var forward = CreateTable();
+        await forward.Refresh(new[] { moreSpecific, lessSpecific });
+
+        var reverse = new RouteTable(new MemoryCache(new MemoryCacheOptions()), NullLogger<RouteTable>.Instance);
+        await reverse.Refresh(new[] { lessSpecific, moreSpecific });
+
+        Assert.Equal(moreSpecific, forward.First().Route.Trim('/'));
+        Assert.Equal(moreSpecific, reverse.First().Route.Trim('/'));
+    }
+
+    [Fact]
+    public async Task Add_KeepsTheTable_SpecificityOrdered()
+    {
+        var table = CreateTable();
+        await table.Refresh(new[] { "orders/{id}" });
+
+        // Adding the more-specific literal after the parameter route must still place it first.
+        await table.Add("orders/list");
+
+        Assert.Equal("orders/list", table.First().Route.Trim('/'));
+    }
+
+    // ---- Issue #592 item 6: precompiled matchers ----
+
+    [Fact]
+    public async Task Refresh_PrecompilesATemplateMatcher_PerRoute()
+    {
+        var table = CreateTable();
+        await table.Refresh(new[] { "orders/{id}" });
+
+        var route = Assert.Single(table);
+        Assert.IsType<TemplateMatcher>(route.CompiledMatcher);
+    }
+
+    // ---- Issue #592 item 5: shell-namespaced cache key ----
+
+    [Fact]
+    public async Task DifferentShellDiscriminators_DoNotAlias_OnASharedCache()
+    {
+        // Both tables share ONE cache (the future root-promoted scenario). A distinct discriminator per shell must
+        // keep their route sets separate rather than clobbering one entry.
+        var shellA = CreateTable("shell-a");
+        var shellB = CreateTable("shell-b");
+
+        await shellA.Refresh(new[] { "a/route" });
+        await shellB.Refresh(new[] { "b/route" });
+
+        Assert.Equal(new[] { "a/route" }, shellA.Select(r => r.Route).ToArray());
+        Assert.Equal(new[] { "b/route" }, shellB.Select(r => r.Route).ToArray());
     }
 
     private static IEnumerable<string> Sorted(IEnumerable<HttpRouteData> routes) => Sorted(routes.Select(r => r.Route));

@@ -21,6 +21,13 @@ namespace Elsa.Http;
 )]
 public class HttpFeature : IShellFeature
 {
+    private readonly ShellFeatureContext _context;
+
+    public HttpFeature(ShellFeatureContext context)
+    {
+        _context = context;
+    }
+
     [ManifestSetting(DisplayName = "Content type provider type", Description = "CLR type name of the content type provider implementation.", Category = "Services", Advanced = true)]
     public string ContentTypeProviderType { get; set; } = typeof(FileExtensionContentTypeProvider).FullName!;
 
@@ -57,6 +64,11 @@ public class HttpFeature : IShellFeature
             o.TimeToLive = CacheTtl;
             o.LocalCacheDirectory = LocalCacheDirectory;
         });
+
+        // Namespace the per-shell route table's cache key with the shell settings id (issue #592 item 5) so its
+        // isolation survives a future root-promoted, shell-shared IMemoryCache.
+        var shellDiscriminator = _context.Settings.Id.ToString();
+        services.Configure<RouteTableOptions>(o => o.ShellDiscriminator = shellDiscriminator);
 
         services
             .AddHttpContextAccessor()

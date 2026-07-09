@@ -88,6 +88,45 @@ public sealed class WorkflowTriggerIndexerTests
             indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event"))).AsTask());
     }
 
+    [Fact]
+    public async Task Index_RunsValidators_BeforeAnyWrite_WithTheExtractedBindings()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var validator = new RecordingValidator(store);
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")]),
+            store,
+            validators: [validator]);
+
+        await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
+
+        var snapshot = Assert.Single(validator.Snapshots);
+        Assert.Equal("artifact-1", snapshot.ArtifactId);
+        Assert.Single(snapshot.Bindings);
+        // Pre-write proof: when the validator ran, the store held nothing for the artifact yet.
+        Assert.Empty(validator.BindingsInStoreAtValidation);
+    }
+
+    [Fact]
+    public async Task Index_ValidatorFailure_FailsThePublish_WithTheStoreUntouched()
+    {
+        // The seam's load-bearing property (issue #592 item 2): a validator throw fails the publish BEFORE the
+        // delete/save, so the artifact's prior bindings survive intact — no poisoned index, no rollback needed.
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(StaleBinding("artifact-1", "node-old"));
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:new")]),
+            store,
+            validators: [new ThrowingValidator()]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-event", "Elsa.Event"))).AsTask());
+
+        // The prior generation is still durable, not deleted; the new binding was never written.
+        var binding = Assert.Single(await store.ListByArtifactAsync("artifact-1"));
+        Assert.Equal("node-old", binding.ExecutableNodeId);
+    }
+
     private static WorkflowExecutable Executable(string artifactId, string hash, ExecutableNode root) =>
         new(
             identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", hash),
@@ -149,5 +188,24 @@ public sealed class WorkflowTriggerIndexerTests
     {
         public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("observer boom");
+    }
+
+    /// <summary>Records the snapshot it was handed plus what the store held for the artifact at validation time.</summary>
+    private sealed class RecordingValidator(IWorkflowTriggerBindingStore store) : IWorkflowTriggerIndexValidator
+    {
+        public List<WorkflowTriggerIndexSnapshot> Snapshots { get; } = new();
+        public IReadOnlyCollection<WorkflowTriggerBinding> BindingsInStoreAtValidation { get; private set; } = [];
+
+        public async ValueTask ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            Snapshots.Add(snapshot);
+            BindingsInStoreAtValidation = await store.ListByArtifactAsync(snapshot.ArtifactId, cancellationToken);
+        }
+    }
+
+    private sealed class ThrowingValidator : IWorkflowTriggerIndexValidator
+    {
+        public ValueTask ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("validator boom");
     }
 }

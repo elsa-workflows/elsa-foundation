@@ -1,3 +1,4 @@
+using CShells;
 using CShells.Features;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
@@ -153,7 +154,7 @@ public sealed class ActivitiesHttpFeatureTests
 
         new ActivitiesHttpFeature().ConfigureServices(services);
         new WorkflowsRuntimeHttpFeature().ConfigureServices(services); // default settings: the C1 path
-        new HttpFeature().ConfigureServices(services);
+        new HttpFeature(new ShellFeatureContext(new ShellSettings { Id = new ShellId("test-shell") }, [])).ConfigureServices(services);
 
         // Platform-provided dependencies the closure reads at resolve time.
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
