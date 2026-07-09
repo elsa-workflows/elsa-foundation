@@ -1,4 +1,10 @@
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "../../sdk";
+import {
+  studioBackendManagementRegistryPath,
+  type ElsaStudioModuleApi,
+  type StudioBackendManagementRegistryEnvelope,
+  type StudioBackendManagementStatusKind,
+  type StudioEndpointContext
+} from "../../sdk";
 
 export type HostId = "studio" | "server";
 export type RegistryState = "loading" | "ready" | "failed";
@@ -8,7 +14,22 @@ export interface HostModel {
   label: string;
   runtime: string;
   context: StudioEndpointContext;
+  // Reads this host's module registry. Studio reads its own registry directly; the Server host reads the backend
+  // registry through the Studio management bridge (#246, ADR 0037) so the browser never calls backend host-control
+  // endpoints and never carries the management key. Either read resolves to a discriminated result so callers render
+  // the explicit backend-management state instead of inferring an outage from a thrown fetch.
+  readRegistry(): Promise<HostRegistryResult>;
 }
+
+// A host registry read outcome. `ready` carries a normalized registry; `unavailable` carries the explicit bridge state
+// (unconfigured / unreachable / unauthorized / degraded, or "unknown" when the bridge itself could not be reached) so
+// the Server tab can render the real reason and keep the Studio tab working when the backend is down.
+export type HostRegistryResult =
+  | { kind: "ready"; registry: ModuleManagementRegistryResponse }
+  | { kind: "unavailable"; status: BackendRegistryUnavailableKind; detail: string };
+
+// The bridge's non-available statuses, plus "unknown" for a Studio-origin failure reaching the bridge itself.
+export type BackendRegistryUnavailableKind = Exclude<StudioBackendManagementStatusKind, "available"> | "unknown";
 
 export interface ModuleManagementRegistryResponse {
   host: ModuleManagementHost;
@@ -137,11 +158,88 @@ export const moduleManagementKeys = {
   feeds: (hostId: HostId) => [...moduleManagementKeys.all, hostId, "feeds"] as const
 };
 
+const backendRegistryPath = "/_elsa/module-management/registry";
+
 export function createModuleManagementHosts(api: ElsaStudioModuleApi): HostModel[] {
   return [
-    { id: "studio", label: "Studio", runtime: "Elsa.Studio.Web", context: api.host },
-    { id: "server", label: "Server", runtime: "Elsa.Server", context: api.backend }
+    {
+      id: "studio",
+      label: "Studio",
+      runtime: "Elsa.Studio.Web",
+      context: api.host,
+      // Studio reads its own registry directly from the Studio origin. This path never touches the backend, so the
+      // Studio tab keeps working when the backend host is down.
+      readRegistry: () => readStudioRegistry(api.host)
+    },
+    {
+      id: "server",
+      label: "Server",
+      runtime: "Elsa.Server",
+      // The Server tab still keeps the backend context for the read-only slice's out-of-scope mutations (upload,
+      // reconcile, prune, feed edits, retention) which stay on their current direct paths. Registry READS, however,
+      // now route through the Studio management bridge via api.host — the browser no longer calls the backend registry.
+      context: api.backend,
+      readRegistry: () => readServerRegistryViaBridge(api.host)
+    }
   ];
+}
+
+// Studio host registry read: direct, from the Studio origin. A thrown fetch (Studio origin unreachable) surfaces as an
+// "unknown" unavailable result so the page renders an explicit state rather than a blank surface.
+async function readStudioRegistry(host: StudioEndpointContext): Promise<HostRegistryResult> {
+  try {
+    const registry = await host.http.getJson<Partial<ModuleManagementRegistryResponse>>(backendRegistryPath);
+    return { kind: "ready", registry: normalizeModuleManagementRegistry(registry) };
+  } catch (error) {
+    return { kind: "unavailable", status: "unknown", detail: bridgeErrorDetail(error) };
+  }
+}
+
+// Server (backend) host registry read: through the Studio management bridge (#246, ADR 0037). The bridge answers with a
+// status-bearing envelope, so a non-available backend surfaces its explicit reason (unconfigured / unreachable /
+// unauthorized / degraded) instead of a thrown fetch. A failure to reach the bridge itself (a Studio-origin problem)
+// surfaces as "unknown".
+async function readServerRegistryViaBridge(host: StudioEndpointContext): Promise<HostRegistryResult> {
+  try {
+    const envelope = await host.http.getJson<StudioBackendManagementRegistryEnvelope<Partial<ModuleManagementRegistryResponse>>>(studioBackendManagementRegistryPath);
+    if (envelope.status === "available" && envelope.registry) {
+      return { kind: "ready", registry: normalizeModuleManagementRegistry(envelope.registry) };
+    }
+
+    return {
+      kind: "unavailable",
+      status: envelope.status === "available" ? "degraded" : envelope.status,
+      detail: envelope.detail?.trim() || defaultBackendRegistryDetail(envelope.status === "available" ? "degraded" : envelope.status)
+    };
+  } catch (error) {
+    return { kind: "unavailable", status: "unknown", detail: bridgeErrorDetail(error) };
+  }
+}
+
+function bridgeErrorDetail(error: unknown) {
+  return `The registry could not be read: ${getErrorMessage(error)}`;
+}
+
+// A human label for the backend-management state a Server-tab registry read landed in. Mirrors the host-health strip's
+// vocabulary so the Server tab names the real state instead of a generic "Unavailable".
+export function labelForBackendRegistryStatus(status: BackendRegistryUnavailableKind): string {
+  switch (status) {
+    case "unconfigured": return "Not configured";
+    case "unauthorized": return "Unauthorized";
+    case "unreachable": return "Unreachable";
+    case "degraded": return "Degraded";
+    default: return "Unavailable";
+  }
+}
+
+function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): string {
+  switch (status) {
+    case "unconfigured": return "Backend management is not configured on the Studio host.";
+    case "unauthorized": return "The backend rejected the Studio management credential.";
+    case "unreachable": return "The backend management surface could not be reached.";
+    case "degraded": return "The backend management surface is degraded.";
+    default: return "Backend management status is unknown.";
+  }
 }
 
 export function defaultRetentionPolicy(): ModuleManagementRetentionPolicy {

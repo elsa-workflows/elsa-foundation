@@ -19,6 +19,7 @@ namespace Elsa.Studio.Tests;
 public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 {
     private const string StatusRoute = "/_elsa/studio/backend-management/status";
+    private const string RegistryRoute = "/_elsa/studio/backend-management/registry";
     private const string CapabilitiesRoute = "/_elsa/studio/backend-management/extension-builder/capabilities";
     private const string BackendCapabilitiesPath = "/_elsa/extension-builder/capabilities";
     private const string BackendBaseUrl = "https://backend.example";
@@ -275,6 +276,133 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         Assert.Empty(backend.ManagementRequests);
     }
 
+    // ---- Registry read (#246) ----
+
+    [Fact]
+    public async Task RegistryReturnsPayloadWhenBackendAcceptsTheManagementKey()
+    {
+        const string registryJson = """{ "host": { "id": "backend" }, "modules": [ { "id": "m1" } ] }""";
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk(registryJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Available, envelope.Status);
+        Assert.NotNull(envelope.Registry);
+        // The backend registry payload is passed through under the Studio-owned envelope.
+        Assert.Equal("backend", envelope.Registry!.Value.GetProperty("host").GetProperty("id").GetString());
+        Assert.Equal("m1", envelope.Registry!.Value.GetProperty("modules")[0].GetProperty("id").GetString());
+        // The management key rode only on the single Studio->backend call.
+        Assert.Single(backend.Requests);
+        Assert.Equal(ManagementKey, backend.Requests[0].ManagementKey);
+        // It hit the backend host-control registry path, not the Studio-owned browser route.
+        Assert.Equal("/_elsa/module-management/registry", backend.Requests[0].Path);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsUnconfiguredWithZeroOutboundCallsWhenNoManagementKey()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk("{}"));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: null);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Unconfigured, envelope.Status);
+        Assert.Null(envelope.Registry);
+        // Fail closed: no outbound backend request may be issued.
+        Assert.Empty(backend.Requests);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsUnconfiguredWithZeroOutboundCallsWhenNoBackendBaseUrl()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk("{}"));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: null, managementKey: ManagementKey);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Unconfigured, envelope.Status);
+        Assert.Null(envelope.Registry);
+        Assert.Empty(backend.Requests);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsUnauthorizedWithNullPayloadWhenBackendRejectsTheManagementKey()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: "wrong-key");
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Unauthorized, envelope.Status);
+        Assert.Null(envelope.Registry);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsUnauthorizedWhenBackendSurfaceIsDisabled()
+    {
+        // The backend hides its management surface (404) when it has no key configured; from Studio's side that maps to
+        // unauthorized — the operator must reconcile the key on one side.
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.NotFound));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Unauthorized, envelope.Status);
+        Assert.Null(envelope.Registry);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsUnreachableWhenBackendTransportFails()
+    {
+        var backend = RecordingBackend.Throwing(new HttpRequestException("connection refused"));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Unreachable, envelope.Status);
+        Assert.Null(envelope.Registry);
+    }
+
+    [Fact]
+    public async Task RegistryReturnsDegradedWhenBackendRespondsWithServerError()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        var envelope = await GetRegistryAsync(client);
+
+        Assert.Equal(StudioBackendManagementStatus.Degraded, envelope.Status);
+        Assert.Null(envelope.Registry);
+    }
+
+    [Fact]
+    public async Task RegistryNeverEchoesTheManagementKeyOrRequiresItFromTheBrowser()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk("""{ "modules": [] }"""));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey);
+
+        // The browser sends no management key; the bridge still answers (auth disabled) and never leaks the key.
+        var response = await client.GetAsync(RegistryRoute);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(ManagementKey, body);
+    }
+
+    [Fact]
+    public async Task RegistryRejectsUnauthenticatedBrowserRequestWhenStudioAuthEnabled()
+    {
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk("{}"));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
+
+        var response = await client.GetAsync(RegistryRoute);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Fail closed on the browser side too: no backend management call is issued for an unauthenticated caller.
+        Assert.Empty(backend.ManagementRequests);
+    }
+
     private static async Task<StudioBackendManagementStatus> GetStatusAsync(HttpClient client)
     {
         var response = await client.GetAsync(StatusRoute);
@@ -291,6 +419,15 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         var result = await response.Content.ReadFromJsonAsync<StudioExtensionBuilderCapabilitiesResult>();
         Assert.NotNull(result);
         return result!;
+    }
+
+    private static async Task<StudioBackendManagementRegistryEnvelope> GetRegistryAsync(HttpClient client)
+    {
+        var response = await client.GetAsync(RegistryRoute);
+        response.EnsureSuccessStatusCode();
+        var envelope = await response.Content.ReadFromJsonAsync<StudioBackendManagementRegistryEnvelope>();
+        Assert.NotNull(envelope);
+        return envelope!;
     }
 
     private static HttpResponseMessage JsonOk(string json) =>

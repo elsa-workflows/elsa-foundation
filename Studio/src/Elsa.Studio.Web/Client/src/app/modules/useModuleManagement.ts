@@ -4,30 +4,29 @@ import {
   createModuleManagementHosts,
   getErrorMessage,
   moduleManagementKeys,
-  normalizeModuleManagementRegistry,
   type HostId,
   type HostModel,
+  type HostRegistryResult,
   type ModuleManagementRegistryResponse
 } from "./moduleManagementApi";
 import type { ElsaStudioModuleApi } from "../../sdk";
 
 export interface ModuleManagementRegistries {
   hosts: HostModel[];
-  studio: UseQueryResult<ModuleManagementRegistryResponse>;
-  server: UseQueryResult<ModuleManagementRegistryResponse>;
-  byHost(hostId: HostId): UseQueryResult<ModuleManagementRegistryResponse>;
+  studio: UseQueryResult<HostRegistryResult>;
+  server: UseQueryResult<HostRegistryResult>;
+  byHost(hostId: HostId): UseQueryResult<HostRegistryResult>;
 }
 
 // Registry read for a single host, keyed on the host id so the Studio and Server tabs cache
-// independently. Always returns a normalized registry so callers never re-normalize. Mirrors the
-// Workflows module's `useQuery` reads (Elsa.Studio.Workflows/Client/src/api/workflows.ts).
+// independently. Delegates to the host's own reader: Studio reads its registry directly; the Server host reads the
+// backend registry through the Studio management bridge (#246). The reader resolves to a discriminated result (never
+// throws for a backend-management outage) so an unavailable backend surfaces its explicit state rather than a query
+// error. Mirrors the Workflows module's `useQuery` reads (Elsa.Studio.Workflows/Client/src/api/workflows.ts).
 function useModuleManagementRegistry(host: HostModel) {
   return useQuery({
     queryKey: moduleManagementKeys.registry(host.id),
-    queryFn: async () => {
-      const registry = await host.context.http.getJson<Partial<ModuleManagementRegistryResponse>>("/_elsa/module-management/registry");
-      return normalizeModuleManagementRegistry(registry);
-    }
+    queryFn: () => host.readRegistry()
   });
 }
 
@@ -167,4 +166,19 @@ export function useHostOperations(
 
 function errorMessageFor(error: unknown): string | null {
   return error === undefined || error === null ? null : getErrorMessage(error);
+}
+
+export interface ActiveRegistryView {
+  registry: ModuleManagementRegistryResponse | null;
+  unavailable: Extract<HostRegistryResult, { kind: "unavailable" }> | null;
+}
+
+// Unwraps the active host's query result into the registry (when ready) or the explicit unavailable state. Shared by
+// both module-management pages so the "ready vs. explicit backend-management state" branch lives in one place.
+export function readActiveRegistry(result: HostRegistryResult | undefined): ActiveRegistryView {
+  if (result?.kind === "ready") {
+    return { registry: result.registry, unavailable: null };
+  }
+
+  return { registry: null, unavailable: result?.kind === "unavailable" ? result : null };
 }

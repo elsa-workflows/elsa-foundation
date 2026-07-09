@@ -122,6 +122,25 @@ export interface StudioExtensionBuilderCapabilitiesResult {
 /** The Studio-owned bridge route the browser reads backend Extension Builder capabilities from (served by the Studio host). */
 export const studioExtensionBuilderCapabilitiesPath = "/_elsa/studio/backend-management/extension-builder/capabilities";
 
+/**
+ * The backend host registry as surfaced by the Studio management bridge (#246, ADR 0037). The browser reads this from
+ * the Studio origin (`api.host`) with only its normal credentials; Studio attaches the server-side management key on
+ * the Studio→backend call. The envelope carries the same explicit backend-management `status` as the status endpoint,
+ * so the frontend branches on it directly (rendering unconfigured/unreachable/unauthorized/degraded states) instead of
+ * inferring an outage from a failed fetch. `registry` is the raw backend registry payload, present only when
+ * `status === "available"`, and `null` otherwise.
+ */
+export interface StudioBackendManagementRegistryEnvelope<TRegistry = unknown> {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+  registry?: TRegistry | null;
+}
+
+/** The Studio-owned bridge route the browser reads the backend host registry from (served by the Studio host). */
+export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-management/registry";
+
 export interface StudioHttpClient {
   requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;

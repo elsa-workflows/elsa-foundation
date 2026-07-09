@@ -17,7 +17,8 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementRetentionPolicy
 } from "./moduleManagementApi";
-import { useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
+import { BackendRegistryUnavailable } from "./BackendRegistryUnavailable";
+import { readActiveRegistry, useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 interface FeedDraft {
   name: string;
@@ -32,7 +33,9 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
   const [activeHostId, setActiveHostId] = useState<HostId>("studio");
   const activeHost = hosts.find(host => host.id === activeHostId) ?? hosts[0];
   const activeQuery = byHost(activeHost.id);
-  const registry = activeQuery.data ?? null;
+  // Present only when the host's registry read resolved to a ready result; an unavailable Server backend surfaces its
+  // explicit bridge state (#246) instead.
+  const { registry, unavailable } = readActiveRegistry(activeQuery.data);
   const { isPending, activeError, activeStatus, runHostOperation, confirmAndRun } = useHostOperations(activeHost, activeQuery.error);
   const isLoading = activeQuery.isPending || activeQuery.isFetching;
 
@@ -83,6 +86,8 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
           onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
           onPrune={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/prune", { dryRun: false }), `Pruned eligible package versions for ${activeHost.label}.`)}
         />
+      ) : unavailable ? (
+        <BackendRegistryUnavailable host={activeHost} status={unavailable.status} detail={unavailable.detail} />
       ) : (
         <EmptyState icon={<Boxes size={22} />}>Loading {activeHost.label} package feeds.</EmptyState>
       )}

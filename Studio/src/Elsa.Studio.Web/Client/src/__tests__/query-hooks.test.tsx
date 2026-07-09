@@ -114,12 +114,21 @@ describe("host health query hook", () => {
 });
 
 function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): ElsaStudioModuleApi {
+  const hostRegistryRead = options.hostGetJson ?? (async () => studioRegistry());
+  // The Server tab now reads the backend registry through the Studio management bridge on api.host (#246), so both the
+  // Studio and Server registry queries land on api.host. Route the bridge path to a Server envelope here so the caller's
+  // `hostGetJson` spy still counts only the Studio registry reads it asserts on.
+  const hostGetJson = async (url: string) =>
+    url === "/_elsa/studio/backend-management/registry"
+      ? { status: "available", detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString(), registry: studioRegistry() }
+      : hostRegistryRead(url);
+
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
-      http: stubHttp("https://studio.example/", options.hostGetJson ?? (async () => studioRegistry()))
+      http: stubHttp("https://studio.example/", hostGetJson)
     },
     backend: {
       baseUrl: "https://foundation.example/",

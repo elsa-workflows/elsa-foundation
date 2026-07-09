@@ -20,6 +20,7 @@ internal static class StudioBackendManagementBridge
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
 
         group.MapGet("/status", GetStatusAsync);
+        group.MapGet("/registry", GetRegistryAsync);
         group.MapGet("/extension-builder/capabilities", GetExtensionBuilderCapabilitiesAsync);
 
         return endpoints;
@@ -33,6 +34,18 @@ internal static class StudioBackendManagementBridge
         return Results.Ok(status);
     }
 
+    // The Studio-owned backend host-registry read (#246, ADR 0037). The browser calls this with only its normal
+    // credentials; Studio attaches the server-side management key on the Studio->backend call. The result is a
+    // status-bearing envelope so the SPA branches on an explicit backend-management state (available / unconfigured /
+    // unreachable / unauthorized / degraded) instead of inferring it from an opaque HTTP failure.
+    private static async Task<IResult> GetRegistryAsync(
+        StudioBackendManagementClient client,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await client.GetRegistryAsync(cancellationToken);
+        return Results.Ok(envelope);
+    }
+
     private static async Task<IResult> GetExtensionBuilderCapabilitiesAsync(
         StudioBackendManagementClient client,
         CancellationToken cancellationToken)
@@ -40,6 +53,25 @@ internal static class StudioBackendManagementBridge
         var capabilities = await client.GetExtensionBuilderCapabilitiesAsync(cancellationToken);
         return Results.Ok(capabilities);
     }
+}
+
+/// <summary>
+/// The backend host registry as surfaced by the Studio management bridge (#246, ADR 0037). This is the Studio-owned
+/// browser-facing shape: it wraps the raw backend registry payload (<see cref="Registry"/>, present only when
+/// <see cref="Status"/> is <c>available</c>) in the same explicit backend-management <see cref="Status"/> the bridge
+/// reports for the status endpoint, so the frontend renders the real unconfigured / unreachable / unauthorized /
+/// degraded state instead of inferring it from a failed fetch. On any non-available status the bridge issues zero (when
+/// unconfigured) or fail-closed outbound calls and returns a <c>null</c> registry. The management key is never echoed.
+/// </summary>
+internal sealed record StudioBackendManagementRegistryEnvelope(
+    string Status,
+    string Detail,
+    string? BackendBaseUrl,
+    DateTimeOffset CheckedAt,
+    JsonElement? Registry)
+{
+    public static StudioBackendManagementRegistryEnvelope FromStatus(StudioBackendManagementStatus status, JsonElement? registry = null) =>
+        new(status.Status, status.Detail, status.BackendBaseUrl, status.CheckedAt, registry);
 }
 
 /// <summary>
@@ -125,30 +157,111 @@ internal sealed class StudioBackendManagementClient(
 
     private static readonly JsonSerializerOptions BackendJsonOptions = new(JsonSerializerDefaults.Web);
 
+    // The two backend surfaces the bridge reads. Each carries its path plus the surface-specific detail strings, so
+    // every read shares ONE probe/mapping pipeline (fail-closed gate, key attachment, status mapping) while keeping the
+    // operator-facing wording each surface shipped with.
+    private static readonly BackendReadSurface ManagementRegistrySurface = new(
+        Path: BackendRegistryPath,
+        Description: "backend management surface",
+        UnconfiguredDetail: "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable it.",
+        AvailableDetail: "The backend management surface is reachable.",
+        UnauthorizedDetail: "The backend rejected the Studio management key (or the backend management surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
+        UnreachableDetail: "The backend management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+        UnrecognizedPayloadDetail: "The backend responded but did not return a recognizable management registry.");
+
+    private static readonly BackendReadSurface ExtensionBuilderCapabilitiesSurface = new(
+        Path: BackendExtensionBuilderCapabilitiesPath,
+        Description: "backend Extension Builder capabilities surface",
+        UnconfiguredDetail: "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
+        AvailableDetail: "The backend Extension Builder capabilities are reachable.",
+        UnauthorizedDetail: "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
+        UnreachableDetail: "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+        UnrecognizedPayloadDetail: "The backend responded but did not return recognizable Extension Builder capabilities.");
+
     public async Task<StudioBackendManagementStatus> GetManagementStatusAsync(CancellationToken cancellationToken)
     {
+        // The status probe only needs the status half of the mapped response; it discards the parsed registry payload.
+        var (status, _) = await ProbeBackendAsync(ManagementRegistrySurface, cancellationToken);
+        return status;
+    }
+
+    // The Studio-owned registry read (#246): the same fail-closed / send / map pipeline as the status probe, but it
+    // returns the parsed backend registry payload alongside the status so the browser gets the host registry without
+    // ever calling backend host-control endpoints or seeing the management key.
+    public async Task<StudioBackendManagementRegistryEnvelope> GetRegistryAsync(CancellationToken cancellationToken)
+    {
+        var (status, registry) = await ProbeBackendAsync(ManagementRegistrySurface, cancellationToken);
+        return StudioBackendManagementRegistryEnvelope.FromStatus(status, registry);
+    }
+
+    // The Studio-owned Extension Builder capabilities read (#247): the shared probe against the capabilities surface,
+    // with the JSON payload projected into the Studio capability flags.
+    public async Task<StudioExtensionBuilderCapabilitiesResult> GetExtensionBuilderCapabilitiesAsync(CancellationToken cancellationToken)
+    {
+        var (status, payload) = await ProbeBackendAsync(ExtensionBuilderCapabilitiesSurface, cancellationToken);
+        var capabilities = TryDeserializeCapabilities(payload);
+
+        // A JSON-object 200 whose members don't bind to the capability flags is degraded, not available — the same
+        // "unrecognizable payload" mapping the probe applies to non-object bodies.
+        if (status.Status == StudioBackendManagementStatus.Available && capabilities is null)
+        {
+            return new(
+                StudioExtensionBuilderCapabilitiesResult.Degraded,
+                ExtensionBuilderCapabilitiesSurface.UnrecognizedPayloadDetail,
+                Capabilities: null,
+                status.BackendBaseUrl,
+                status.CheckedAt);
+        }
+
+        return new(status.Status, status.Detail, capabilities, status.BackendBaseUrl, status.CheckedAt);
+    }
+
+    private static StudioExtensionBuilderCapabilities? TryDeserializeCapabilities(JsonElement? payload)
+    {
+        if (payload is null)
+            return null;
+
+        try
+        {
+            return payload.Value.Deserialize<StudioExtensionBuilderCapabilities>(BackendJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // Shared probe for every bridge read: fails closed with zero outbound calls when unconfigured, sends the single
+    // management-keyed Studio->backend request for the given surface, and maps the response to a (status, payload)
+    // pair. Status, registry, and capabilities all project from this so the fail-closed guarantee and the
+    // unauthorized/unreachable/degraded mapping live in exactly one place.
+    private async Task<(StudioBackendManagementStatus Status, JsonElement? Payload)> ProbeBackendAsync(
+        BackendReadSurface surface,
+        CancellationToken cancellationToken)
+    {
         var checkedAt = DateTimeOffset.UtcNow;
+        var backendBaseUrl = NormalizeBaseUrl(options.BackendBaseUrl);
 
         // Fail closed: without a backend base URL or a management key we make ZERO outbound calls (ADR 0037: possession
         // of no credential must never reach the bridge's backend call path).
         if (string.IsNullOrWhiteSpace(options.BackendBaseUrl) || string.IsNullOrWhiteSpace(options.ManagementApiKey))
         {
-            return new(
+            return (new(
                 StudioBackendManagementStatus.Unconfigured,
-                "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable it.",
-                NormalizeBaseUrl(options.BackendBaseUrl),
-                checkedAt);
+                surface.UnconfiguredDetail,
+                backendBaseUrl,
+                checkedAt), null);
         }
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, BackendRegistryPath);
+            using var request = new HttpRequestMessage(HttpMethod.Get, surface.Path);
             request.Headers.TryAddWithoutValidation(ModuleManagementAuth.ApiKeyHeaderName, options.ManagementApiKey);
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
-            return await MapResponseAsync(response, checkedAt, cancellationToken);
+            return await MapResponseAsync(surface, response, backendBaseUrl, checkedAt, cancellationToken);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
         {
@@ -156,185 +269,100 @@ internal sealed class StudioBackendManagementClient(
             if (cancellationToken.IsCancellationRequested)
                 throw;
 
-            logger.LogWarning(ex, "Studio could not reach the backend management surface at {BackendBaseUrl}.", options.BackendBaseUrl);
-            return new(
+            logger.LogWarning(ex, "Studio could not reach the {BackendSurface} at {BackendBaseUrl}.", surface.Description, options.BackendBaseUrl);
+            return (new(
                 StudioBackendManagementStatus.Unreachable,
-                "The backend management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
-                NormalizeBaseUrl(options.BackendBaseUrl),
-                checkedAt);
+                surface.UnreachableDetail,
+                backendBaseUrl,
+                checkedAt), null);
         }
     }
 
-    public async Task<StudioExtensionBuilderCapabilitiesResult> GetExtensionBuilderCapabilitiesAsync(CancellationToken cancellationToken)
-    {
-        var checkedAt = DateTimeOffset.UtcNow;
-        var backendBaseUrl = NormalizeBaseUrl(options.BackendBaseUrl);
-
-        // Fail closed: same zero-outbound-call guarantee as the status read (ADR 0037).
-        if (string.IsNullOrWhiteSpace(options.BackendBaseUrl) || string.IsNullOrWhiteSpace(options.ManagementApiKey))
-        {
-            return new(
-                StudioExtensionBuilderCapabilitiesResult.Unconfigured,
-                "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
-                Capabilities: null,
-                backendBaseUrl,
-                checkedAt);
-        }
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get, BackendExtensionBuilderCapabilitiesPath);
-            request.Headers.TryAddWithoutValidation(ModuleManagementAuth.ApiKeyHeaderName, options.ManagementApiKey);
-            request.Headers.TryAddWithoutValidation("Accept", "application/json");
-
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
-            return await MapCapabilitiesResponseAsync(response, backendBaseUrl, checkedAt, cancellationToken);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
-        {
-            if (cancellationToken.IsCancellationRequested)
-                throw;
-
-            logger.LogWarning(ex, "Studio could not reach the backend Extension Builder capabilities surface at {BackendBaseUrl}.", options.BackendBaseUrl);
-            return new(
-                StudioExtensionBuilderCapabilitiesResult.Unreachable,
-                "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
-                Capabilities: null,
-                backendBaseUrl,
-                checkedAt);
-        }
-    }
-
-    private async Task<StudioExtensionBuilderCapabilitiesResult> MapCapabilitiesResponseAsync(
+    private async Task<(StudioBackendManagementStatus Status, JsonElement? Payload)> MapResponseAsync(
+        BackendReadSurface surface,
         HttpResponseMessage response,
         string? backendBaseUrl,
         DateTimeOffset checkedAt,
         CancellationToken cancellationToken)
     {
-        // 401/403/404 collapse to unauthorized, identical to the status read's remediation ("fix the management key").
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
-        {
-            return new(
-                StudioExtensionBuilderCapabilitiesResult.Unauthorized,
-                "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
-                Capabilities: null,
-                backendBaseUrl,
-                checkedAt);
-        }
-
-        if (response.IsSuccessStatusCode)
-        {
-            var capabilities = await TryReadCapabilitiesAsync(response, cancellationToken);
-            if (capabilities is not null)
-            {
-                return new(
-                    StudioExtensionBuilderCapabilitiesResult.Available,
-                    "The backend Extension Builder capabilities are reachable.",
-                    capabilities,
-                    backendBaseUrl,
-                    checkedAt);
-            }
-
-            // A 200 that isn't a recognizable capabilities payload (e.g. an SPA fallback page) is degraded, not available.
-            return new(
-                StudioExtensionBuilderCapabilitiesResult.Degraded,
-                "The backend responded but did not return recognizable Extension Builder capabilities.",
-                Capabilities: null,
-                backendBaseUrl,
-                checkedAt);
-        }
-
-        logger.LogWarning("Backend Extension Builder capabilities surface at {BackendBaseUrl} responded with {StatusCode}.", options.BackendBaseUrl, (int)response.StatusCode);
-        return new(
-            StudioExtensionBuilderCapabilitiesResult.Degraded,
-            $"The backend Extension Builder capabilities surface responded with an unexpected status ({(int)response.StatusCode}).",
-            Capabilities: null,
-            backendBaseUrl,
-            checkedAt);
-    }
-
-    private static async Task<StudioExtensionBuilderCapabilities?> TryReadCapabilitiesAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        var mediaType = response.Content.Headers.ContentType?.MediaType;
-        if (mediaType is null || !mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        try
-        {
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            return await JsonSerializer.DeserializeAsync<StudioExtensionBuilderCapabilities>(stream, BackendJsonOptions, cancellationToken);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private async Task<StudioBackendManagementStatus> MapResponseAsync(
-        HttpResponseMessage response,
-        DateTimeOffset checkedAt,
-        CancellationToken cancellationToken)
-    {
-        var backendBaseUrl = NormalizeBaseUrl(options.BackendBaseUrl);
-
         // 401: our management key was rejected. 404: the backend has no key configured, so it hides the surface — from
         // Studio's side that is the same remediation ("fix the management key wiring"), so collapse both to `unauthorized`.
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
         {
-            return new(
+            return (new(
                 StudioBackendManagementStatus.Unauthorized,
-                "The backend rejected the Studio management key (or the backend management surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
+                surface.UnauthorizedDetail,
                 backendBaseUrl,
-                checkedAt);
+                checkedAt), null);
         }
 
         if (response.IsSuccessStatusCode)
         {
-            // Guard against a 200 that isn't actually the registry (e.g. an SPA fallback page): a sane payload must be
-            // JSON. A non-JSON 200 means we hit something other than the management surface, so treat it as degraded.
-            if (await IsJsonPayloadAsync(response, cancellationToken))
+            // Guard against a 200 that isn't actually the surface's payload (e.g. an SPA fallback page): a sane payload
+            // must be a JSON object. Anything else means we hit something other than the surface, so treat it as degraded.
+            var payload = await ReadJsonObjectAsync(response, cancellationToken);
+            if (payload is not null)
             {
-                return new(
+                return (new(
                     StudioBackendManagementStatus.Available,
-                    "The backend management surface is reachable.",
+                    surface.AvailableDetail,
                     backendBaseUrl,
-                    checkedAt);
+                    checkedAt), payload);
             }
 
-            return new(
+            return (new(
                 StudioBackendManagementStatus.Degraded,
-                "The backend responded but did not return a recognizable management registry.",
+                surface.UnrecognizedPayloadDetail,
                 backendBaseUrl,
-                checkedAt);
+                checkedAt), null);
         }
 
         // 5xx (and any other unexpected non-success): the surface exists but is unhealthy.
-        logger.LogWarning("Backend management surface at {BackendBaseUrl} responded with {StatusCode}.", options.BackendBaseUrl, (int)response.StatusCode);
-        return new(
+        logger.LogWarning("The {BackendSurface} at {BackendBaseUrl} responded with {StatusCode}.", surface.Description, options.BackendBaseUrl, (int)response.StatusCode);
+        return (new(
             StudioBackendManagementStatus.Degraded,
-            $"The backend management surface responded with an unexpected status ({(int)response.StatusCode}).",
+            $"The {surface.Description} responded with an unexpected status ({(int)response.StatusCode}).",
             backendBaseUrl,
-            checkedAt);
+            checkedAt), null);
     }
 
-    private static async Task<bool> IsJsonPayloadAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    // Reads the response body when it is a JSON object, returning a detached clone (the response stream is disposed by
+    // the caller, so the JsonElement must own its buffer). Returns null when the body is missing, not JSON, or not a
+    // JSON object — those cases map to `degraded`, never `available`.
+    private static async Task<JsonElement?> ReadJsonObjectAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var mediaType = response.Content.Headers.ContentType?.MediaType;
         if (mediaType is null || !mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
-            return false;
+            return null;
 
         try
         {
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return document.RootElement.ValueKind == JsonValueKind.Object;
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+
+            // Clone so the element survives the `using document` disposal below.
+            return document.RootElement.Clone();
         }
         catch (JsonException)
         {
-            return false;
+            return null;
         }
     }
+
+    /// <summary>
+    /// A backend read surface the bridge probes: its Studio→backend path plus the surface-specific operator-facing
+    /// detail strings. <see cref="Description"/> feeds logs and the degraded unexpected-status detail.
+    /// </summary>
+    private sealed record BackendReadSurface(
+        string Path,
+        string Description,
+        string UnconfiguredDetail,
+        string AvailableDetail,
+        string UnauthorizedDetail,
+        string UnreachableDetail,
+        string UnrecognizedPayloadDetail);
 
     private static string? NormalizeBaseUrl(string? baseUrl) =>
         string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl.TrimEnd('/');
