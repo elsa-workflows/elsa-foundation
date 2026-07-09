@@ -2,20 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
 import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
+  createActivityNode,
   findNodeScopePath,
   getActivityDisplay,
   normalizeActivityStructures,
-  updateActivity
+  replaceSlotActivities,
+  updateActivity,
+  type ChildSlot
 } from "../workflowAdapter";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { maxInspectorWidth, maxPaletteWidth, minInspectorWidth, minPaletteWidth } from "./constants";
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorOperation, WorkflowEditorPanelTab } from "./editorTypes";
-import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
+import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext, WorkflowSlotNavigationContext, type WorkflowSlotNavigation } from "./contexts";
 import {
+  createNodeId,
   dispatchAiAction,
   findAiAction,
   getDraftSignature,
@@ -309,6 +313,42 @@ export function WorkflowEditor({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canvasView, undo, redo]);
 
+  // Enter a slot from the inspector list or a canvas slot badge. A filled single-cardinality slot lands
+  // with its assigned activity selected, so the inspector immediately shows that activity's properties.
+  const enterSlotScope = useCallback((ownerNodeId: string, slot: ChildSlot, label: string) => {
+    const assigned = slot.cardinality === "single" ? slot.activities[0]?.nodeId ?? null : null;
+    enterSlot(ownerNodeId, slot.id, label, assigned);
+  }, [enterSlot]);
+
+  // Assign or replace the activity of a single-cardinality slot, then land inside the slot with the new
+  // activity selected — the same place the initial pick-from-empty-slot flow ends up.
+  const replaceSlotActivity = useCallback((ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem) => {
+    const replaced = slot.activities.length > 0;
+    const next = createActivityNode(activity, createNodeId(activity));
+    editDraft(({ draft: current }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => replaceSlotActivities(owner, slot, [next]), catalogByVersion)
+        }
+      };
+    });
+    enterSlot(ownerNodeId, slot.id, label, next.nodeId);
+    setError("");
+    setStatus(replaced ? `Replaced ${slot.label} content` : `Assigned ${getActivityDisplay(activity)} to ${slot.label}`);
+  }, [catalogByVersion, editDraft, enterSlot]);
+
+  // Canvas slot badges navigate into their slot (matching the run viewer), wired through a context so
+  // node data identity stays stable across drag re-renders. Null (static badges) for the
+  // unsupported-designer placeholder, whose node IS the scope owner and has no navigable frame.
+  const slotNavigation = useMemo<WorkflowSlotNavigation | null>(() => {
+    if (isUnsupportedDesigner) return null;
+    return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, `${ownerLabel} / ${slot.label}`);
+  }, [enterSlotScope, isUnsupportedDesigner]);
+
   const updateSelectedActivity = useCallback((activity: ActivityNode) => {
     editDraft(({ draft: current }) => {
       const rootActivity = current?.state.rootActivity;
@@ -422,6 +462,7 @@ export function WorkflowEditor({
           selectedDescriptor={selectedDescriptor}
           selectedNodeAvailability={selectedNodeAvailability}
           selectedSlots={selectedSlots}
+          catalog={catalog}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={selectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
@@ -430,7 +471,8 @@ export function WorkflowEditor({
           descriptorStatus={descriptorStatus}
           scopedVariableAnalysis={scopedVariableAnalysis}
           onSelectedActivityChange={updateSelectedActivity}
-          onEnterSlot={enterSlot}
+          onEnterSlot={enterSlotScope}
+          onReplaceSlotActivity={replaceSlotActivity}
         />
       )
     },
@@ -614,6 +656,7 @@ export function WorkflowEditor({
           <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
             <WorkflowEdgeActionsContext.Provider value={edgeActions}>
               <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>
+              <WorkflowSlotNavigationContext.Provider value={slotNavigation}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -649,6 +692,7 @@ export function WorkflowEditor({
                 <Controls />
                 <MiniMap pannable zoomable />
               </ReactFlow>
+              </WorkflowSlotNavigationContext.Provider>
               </WorkflowNodeAvailabilityContext.Provider>
             </WorkflowEdgeActionsContext.Provider>
             {insideEmptySlot ? (
