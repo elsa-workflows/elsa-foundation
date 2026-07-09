@@ -35,4 +35,13 @@ public interface IWorkflowTriggerBindingStore
 
     /// <summary>Returns every binding owned by the given artifact.</summary>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns every binding of the given stimulus type across all artifacts. Used to rebuild a per-shell
+    /// projection over one stimulus family (e.g. the HTTP route table, which enumerates every HTTP-endpoint
+    /// binding's route template). Unlike <see cref="ListByStimulusAsync"/> this is not keyed by a stimulus
+    /// hash — it is a type-scoped full scan, so callers should treat it as a startup/refresh operation rather
+    /// than a per-request lookup.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default);
 }

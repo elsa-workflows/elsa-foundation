@@ -1,14 +1,14 @@
 # Extension points — Workflows.Runtime.Http domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Http` — a provider/feature project that ships default implementations of the HTTP endpoint behaviour contracts. All three contracts are feature contracts (defined here, not in a `.Core`). No contributor interfaces or published events.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Http` — a provider/feature project that ships default implementations of the HTTP endpoint behaviour contracts. The three behaviour contracts are feature contracts (defined here, not in a `.Core`). This feature also contributes one implementation of the `Elsa.Workflows.Runtime.Core` `IWorkflowTriggerIndexObserver` seam and registers a route-table startup task. `DependsOn`: `Http` (for the `IRouteTable` implementation it refreshes) and `WorkflowsRuntimeTriggers` (for the trigger-binding store the resolver reads and the indexer the observer hooks).
 
 ---
 
 ## Overridable contracts
 
 ### `IHttpEndpointRoutesResolver` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*
-- **Signature:** `Task<IEnumerable<HttpRouteData>> GetRoutes(string path, CancellationToken ct)`
-- **Default impl:** `HttpEndpointRoutesResolver` (this feature) — resolves HTTP endpoint routes registered in the workflow catalog.
+- **Signature:** `ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken ct = default)` — reshaped from the A-era `GetRoutes(string path)` echo (pre-release, no shim; this contract's only consumer is this feature's startup task and index observer).
+- **Default impl:** `HttpEndpointRoutesResolver` (this feature) — lists every `HttpEndpoint` trigger binding from `IWorkflowTriggerBindingStore`, reads each binding's `http:template` metadata, and projects the distinct templates (base-path-prefixed) into `HttpRouteData`.
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IHttpEndpointRoutesResolver, MyResolver>())` — e.g. to load routes from a custom store, add caching, or filter routes.
 
 ### `IHttpEndpointAuthorizationHandler` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*
@@ -20,6 +20,18 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Signature:** `ValueTask HandleAsync(HttpEndpointFaultContext context, CancellationToken ct)`
 - **Default impl:** `HttpEndpointFaultHandler` (this feature) — writes a problem-details response.
 - **Override:** swap via the feature's `FaultHandlerType` property — or `services.Replace(...)` for custom fault handling (custom error shapes, logging, alerting).
+
+---
+
+## Contributed implementations (not overridable here)
+
+### `RouteTableTriggerIndexObserver` → `IWorkflowTriggerIndexObserver` *(seam owned by `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contribution into the Core index-observer seam (`TryAddEnumerable`, Singleton).
+- **Usage:** on every publish, after the trigger indexer rewrites an artifact's bindings, this observer rebuilds the whole route table from `IHttpEndpointRoutesResolver` (full re-projection, not an incremental diff — republish is delete-and-resave, and the durable index is the source of truth). Runs in a fresh DI scope (the indexer is a shell singleton; the resolver and `IRouteTable` are scoped, and the route table's state lives in the shared memory cache). An exception fails the publish, per the seam's failure policy.
+
+### `UpdateRouteTableStartupTask` → `IStartupTask` *(Core — `Elsa.Tasks.Core`)*
+- **Kind:** Registered startup task (Scoped).
+- **Usage:** populates the per-shell `IRouteTable` from the durable trigger index at startup via `IHttpEndpointRoutesResolver` + `IRouteTable.Refresh`, so a fresh host or a restart has every published HTTP endpoint's route before the endpoint middleware runs. The index observer keeps it fresh thereafter.
 
 ---
 

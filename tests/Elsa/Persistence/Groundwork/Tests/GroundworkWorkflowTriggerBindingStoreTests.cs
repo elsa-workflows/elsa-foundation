@@ -57,6 +57,26 @@ public sealed class GroundworkWorkflowTriggerBindingStoreTests
         Assert.Equal("artifact-2", Assert.Single(remaining).ArtifactId);
     }
 
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListByStimulusType_ReturnsEveryBindingOfType_AcrossArtifacts(string provider)
+    {
+        await using var fixture = GroundworkDocumentStoreFixture.Create(provider);
+        IWorkflowTriggerBindingStore store = new GroundworkWorkflowTriggerBindingStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+
+        // Two HTTP bindings on different artifacts + hashes, plus one of another type.
+        await store.SaveAsync(Binding("artifact-1", "node-a", "HttpEndpoint", "hash-1"));
+        await store.SaveAsync(Binding("artifact-2", "node-b", "HttpEndpoint", "hash-2"));
+        await store.SaveAsync(Binding("artifact-3", "node-c", "Event", "hash-3"));
+
+        // A type-scoped full scan (no hash) returns both HTTP bindings and narrows out the Event one.
+        var http = await store.ListByStimulusTypeAsync("HttpEndpoint");
+        Assert.Equal(new[] { "artifact-1", "artifact-2" }, http.Select(b => b.ArtifactId).OrderBy(x => x));
+
+        Assert.Empty(await store.ListByStimulusTypeAsync("Signal"));
+    }
+
     private static WorkflowTriggerBinding Binding(string artifactId, string nodeId, string stimulusType, string stimulusHash) =>
         new(
             WorkflowTriggerBinding.BuildId(artifactId, nodeId, stimulusHash),

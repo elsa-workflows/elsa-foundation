@@ -1,10 +1,14 @@
 ﻿using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Primitives.Extensions;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
+using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Runtime.Http;
 
@@ -15,7 +19,10 @@ namespace Elsa.Workflows.Runtime.Http;
 [ShellFeature(
     name: "WorkflowsRuntimeHttp",
     DisplayName = "Workflows Runtime HTTP",
-    Description = "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints."
+    Description = "Provides HTTP endpoint routing, authorization, and fault handling for workflow runtime endpoints.",
+    // Http contributes the IRouteTable implementation this feature refreshes; WorkflowsRuntimeTriggers contributes
+    // the IWorkflowTriggerBindingStore the resolver reads and the IWorkflowTriggerIndexer the observer hooks.
+    DependsOn = new object[] { "Http", "WorkflowsRuntimeTriggers" }
 )]
 public class WorkflowsRuntimeHttpFeature : IShellFeature
 {
@@ -36,10 +43,6 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        // Startup tasks.
-        //.AddStartupTask<UpdateRouteTableStartupTask>()
-        // Very important we will make sure the Route Table is filled at start up, unless we come up with a better way to read endpoint routes!
-
         services.Configure<WorkflowsRuntimeHttpFeatureOptions>(o =>
         {
             o.BasePath = BasePath;
@@ -48,6 +51,14 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         RegisterFaultHandler(services);
         RegisterAuthorizationHandler(services);
         RegisterRouteResolver(services);
+
+        // Rebuild the route table from the durable trigger index at startup, so a fresh host (or a restart)
+        // has every published HTTP endpoint's route before the middleware runs.
+        services.AddScoped<IStartupTask, UpdateRouteTableStartupTask>();
+
+        // Keep the route table fresh on every publish: the trigger indexer notifies this observer after it
+        // rewrites an artifact's bindings. Contribution seam (fan-in), so TryAddEnumerable.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
     }
 
     private void RegisterFaultHandler(IServiceCollection services)

@@ -385,6 +385,9 @@
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Http/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />
   </Folder>

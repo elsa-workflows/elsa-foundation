@@ -55,6 +55,39 @@ public sealed class WorkflowTriggerIndexerTests
         Assert.Single(await store.ListByArtifactAsync("artifact-2"));
     }
 
+    [Fact]
+    public async Task Index_NotifiesObservers_AfterSave_WithNewBindings()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var observer = new RecordingObserver();
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")]),
+            store,
+            [observer]);
+
+        await indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event")));
+
+        var snapshot = Assert.Single(observer.Snapshots);
+        Assert.Equal("artifact-1", snapshot.ArtifactId);
+        var binding = Assert.Single(snapshot.Bindings);
+        Assert.Equal("node-event", binding.ExecutableNodeId);
+        // Observer runs after the write: the binding it was handed is already durable in the store.
+        Assert.Single(await store.ListByArtifactAsync("artifact-1"));
+    }
+
+    [Fact]
+    public async Task Index_ObserverFailure_PropagatesAndFailsPublish()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:v1")]),
+            store,
+            [new ThrowingObserver()]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            indexer.IndexAsync(Executable("artifact-1", "sha256:v1", TriggerNode("node-event", "Elsa.Event"))).AsTask());
+    }
+
     private static WorkflowExecutable Executable(string artifactId, string hash, ExecutableNode root) =>
         new(
             identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", hash),
@@ -99,5 +132,22 @@ public sealed class WorkflowTriggerIndexerTests
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
                 ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash)]
                 : [];
+    }
+
+    private sealed class RecordingObserver : IWorkflowTriggerIndexObserver
+    {
+        public List<WorkflowTriggerIndexSnapshot> Snapshots { get; } = new();
+
+        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            Snapshots.Add(snapshot);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingObserver : IWorkflowTriggerIndexObserver
+    {
+        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("observer boom");
     }
 }

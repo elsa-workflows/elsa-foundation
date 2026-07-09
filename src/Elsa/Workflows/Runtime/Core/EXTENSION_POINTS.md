@@ -134,8 +134,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ### `IWorkflowTriggerBindingStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns the durable trigger-binding index for a runtime composition).
-- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(stimulusType, stimulusHash, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
-- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulus` is the cross-artifact fan-out the router uses to start every workflow waiting on a stimulus; `by-artifact` scoping supports republish replacement.
+- **Signature:** `SaveAsync(...)`, `ListByStimulusAsync(stimulusType, stimulusHash, ...)`, `ListByStimulusTypeAsync(stimulusType, ...)`, `ListByArtifactAsync(artifactId, ...)`, `DeleteByArtifactAsync(artifactId, ...)`.
+- **Usage:** stores `WorkflowTriggerBinding` documents mapping a stimulus identity to a start-trigger inside a published artifact. `ListByStimulus` is the cross-artifact fan-out the router uses to start every workflow waiting on a stimulus; `ListByStimulusType` is a type-scoped full scan (no hash) used to rebuild a per-shell projection over one stimulus family (e.g. the HTTP route table); `by-artifact` scoping supports republish replacement.
 - **Default implementation:** `InMemoryWorkflowTriggerBindingStore` *(single-node in-memory default; `GroundworkWorkflowTriggerBindingStore` replaces it for durable storage over the `workflowTriggerBinding` document kind)*.
 
 ### `IWorkflowTriggerBindingExtractor` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -147,8 +147,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 ### `IWorkflowTriggerIndexer` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one indexer writes the trigger index for a published artifact).
 - **Signature:** `IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)`.
-- **Usage:** invoked inside the publish flow; extracts bindings (an unroutable trigger throws before any write) then replaces the artifact's prior bindings with the current set (delete-by-artifact then write) so a republished version's triggers fully supersede the previous version's. Any failure propagates and **fails the publish** — no silently unindexed trigger.
+- **Usage:** invoked inside the publish flow; extracts bindings (an unroutable trigger throws before any write) then replaces the artifact's prior bindings with the current set (delete-by-artifact then write) so a republished version's triggers fully supersede the previous version's. After the write succeeds — before returning — it notifies every `IWorkflowTriggerIndexObserver` with the artifact's new bindings. Any failure (including an observer's) propagates and **fails the publish** — no silently unindexed trigger.
 - **Default implementation:** `WorkflowTriggerIndexer`.
+
+### `IWorkflowTriggerIndexObserver` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Contribution (fan-in; enumerable). Register with `services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowTriggerIndexObserver, MyObserver>())` (or Singleton); the indexer resolves `IEnumerable<IWorkflowTriggerIndexObserver>`.
+- **Signature:** `OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken ct = default)` — the snapshot carries `ArtifactId` + the artifact's new `IReadOnlyCollection<WorkflowTriggerBinding>`.
+- **Usage:** post-index notification so a projection derived from the trigger index (e.g. the per-shell HTTP route table) refreshes as an atomic part of the publish, without the indexer depending on any consumer. Called after delete-and-resave, before `IndexAsync` returns. **Failure policy:** exceptions are NOT swallowed — an observer that throws fails the publish (same rule as an unindexed trigger). Keep observer work idempotent so a retried publish converges.
+- **Default implementation:** none (an unobserved index is valid). `RouteTableTriggerIndexObserver` (in `Elsa.Workflows.Runtime.Http`) is the shipped consumer.
 
 ### `IStimulusStartDeduplicator` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (narrow best-effort dedup for the stimulus START path, Condition A).

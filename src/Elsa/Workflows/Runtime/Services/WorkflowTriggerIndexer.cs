@@ -11,19 +11,28 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 /// </summary>
 /// <remarks>
 /// Invoked inside the publish flow; any failure propagates and fails the publish (no silently unindexed
-/// trigger). The delete-then-write sequence is idempotent, so retrying a failed publish converges.
+/// trigger). The delete-then-write sequence is idempotent, so retrying a failed publish converges. After the
+/// write succeeds — and before returning — it notifies every registered <see cref="IWorkflowTriggerIndexObserver"/>
+/// with the artifact's new bindings so index-derived projections (e.g. the HTTP route table) refresh as part
+/// of the same publish; an observer that throws also fails the publish (same "indexing failure fails the
+/// publish" rule).
 /// </remarks>
 public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
 {
     private readonly IWorkflowTriggerBindingExtractor _extractor;
     private readonly IWorkflowTriggerBindingStore _store;
+    private readonly IEnumerable<IWorkflowTriggerIndexObserver> _observers;
 
-    public WorkflowTriggerIndexer(IWorkflowTriggerBindingExtractor extractor, IWorkflowTriggerBindingStore store)
+    public WorkflowTriggerIndexer(
+        IWorkflowTriggerBindingExtractor extractor,
+        IWorkflowTriggerBindingStore store,
+        IEnumerable<IWorkflowTriggerIndexObserver>? observers = null)
     {
         ArgumentNullException.ThrowIfNull(extractor);
         ArgumentNullException.ThrowIfNull(store);
         _extractor = extractor;
         _store = store;
+        _observers = observers ?? [];
     }
 
     public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
@@ -37,6 +46,12 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
 
         foreach (var binding in bindings)
             await _store.SaveAsync(binding, cancellationToken);
+
+        // Notify projections after the write, before returning. Exceptions propagate and fail the publish.
+        var snapshot = new WorkflowTriggerIndexSnapshot(executable.Identity.ArtifactId, bindings);
+
+        foreach (var observer in _observers)
+            await observer.OnTriggersIndexedAsync(snapshot, cancellationToken);
 
         return bindings;
     }
