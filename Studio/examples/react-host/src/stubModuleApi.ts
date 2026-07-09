@@ -44,6 +44,7 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
   return {
     host,
     backend: createEndpointContext(backendBaseUrl),
+    runtime: {},
     featureAreas,
     navigation,
     routes,

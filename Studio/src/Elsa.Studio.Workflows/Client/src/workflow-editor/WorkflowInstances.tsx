@@ -3,14 +3,17 @@ import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getActivityExecutionInspection, getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
   getActivityDesignerSupport,
+  getChildSlots,
   latestActivityExecution,
   resolveScope,
+  type ChildSlot,
+  type ScopeFrame,
   type WorkflowEdgeData,
   type WorkflowNodeData
 } from "../workflowAdapter";
@@ -20,6 +23,7 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
+import { CopyValueButton } from "./executableShared";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
   activityNodeKey,
@@ -27,8 +31,7 @@ import {
   findAiAction,
   formatRunKind,
   formatWorkflowRunLoadError,
-  formatWorkflowVersionLoadError,
-  getVisibleWorkflowGraphNodeIds
+  formatWorkflowVersionLoadError
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
@@ -156,6 +159,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
   const [error, setError] = useState("");
   const [data, setData] = useState<WorkflowInstanceInspectionData | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const {
     inspectorWidth,
     inspectorCollapsed,
@@ -194,6 +198,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
         activityCatalog: activityCatalog.activities
       });
       setSelectedEvidenceId(null);
+      setFrames([]);
       setState("ready");
     } catch (e) {
       setData(null);
@@ -249,6 +254,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             details={data.details}
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
+            frames={frames}
+            onNavigateToScope={setFrames}
           />
           {inspectorExpanded && !maximizedSidePanel ? (
             <div
@@ -275,7 +282,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             selectedEvidenceId={selectedEvidenceId}
             onSelectEvidence={setSelectedEvidenceId}
             activityCatalog={data.activityCatalog}
-            graphNodeIds={data.definitionVersion ? getVisibleWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
+            graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
+            rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
             collapsed={inspectorCollapsed}
             expanded={inspectorExpanded}
             maximized={maximizedSidePanel === "inspector"}
@@ -288,40 +296,61 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
   );
 }
 
-function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, activityCatalog, details, selectedEvidenceId, onSelectEvidence }: {
+function WorkflowInstanceCanvas({
+  definitionVersion,
+  definitionVersionError,
+  activityCatalog,
+  details,
+  selectedEvidenceId,
+  onSelectEvidence,
+  frames,
+  onNavigateToScope
+}: {
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
   details: WorkflowInstanceDetails;
   selectedEvidenceId: string | null;
   onSelectEvidence(evidenceId: string | null): void;
+  frames: ScopeFrame[];
+  onNavigateToScope(frames: ScopeFrame[]): void;
 }) {
+  const scopeKey = getInstanceScopeKey(frames);
   const canvas = useMemo(() => {
     if (!definitionVersion) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
 
     const root = definitionVersion.state.rootActivity;
     if (!root) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
 
-    const rootCatalogItem = activityCatalog.find(activity => activity.activityVersionId === root.activityVersionId);
-    const support = getActivityDesignerSupport(root, rootCatalogItem);
-    const scope = support === "unsupported" ? null : resolveScope(root, [], activityCatalog);
-    const baseCanvas = support === "unsupported"
-      ? buildUnsupportedActivityCanvas(root, activityCatalog, definitionVersion.layout)
-      : scope
-        ? buildCanvas(scope, activityCatalog, definitionVersion.layout)
-        : buildUnsupportedActivityCanvas(root, activityCatalog, definitionVersion.layout);
+    const scope = resolveScope(root, frames, activityCatalog);
+    const scopeOwner = scope?.owner ?? root;
+    const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
+    const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
+    const baseCanvas = support === "unsupported" || !scope
+      ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout)
+      : buildCanvas(scope, activityCatalog, definitionVersion.layout);
     const readonlyNodes = baseCanvas.nodes.map(node => ({
       ...node,
       draggable: false,
       connectable: false,
-      deletable: false
+      deletable: false,
+      data: {
+        ...node.data,
+        onEnterSlot: (slot: ChildSlot) => {
+          onNavigateToScope([...frames, {
+            ownerNodeId: node.id,
+            slotId: slot.id,
+            label: `${node.data.label} / ${slot.label}`
+          }]);
+        }
+      }
     }));
 
     return {
       nodes: applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
       edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
     };
-  }, [activityCatalog, definitionVersion, details, selectedEvidenceId]);
+  }, [activityCatalog, definitionVersion, details, frames, onNavigateToScope, selectedEvidenceId]);
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
@@ -340,6 +369,17 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
         </div>
         <WorkflowStatusBadge status={details.instance.status} subStatus={details.instance.subStatus} />
       </header>
+      {definitionVersion ? (
+        <div className="wf-breadcrumb wf-instance-breadcrumb">
+          <button type="button" onClick={() => onNavigateToScope([])}>Root</button>
+          {frames.map((frame, index) => (
+            <span className="wf-breadcrumb-segment" key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
+              <ChevronRight size={13} />
+              <button type="button" onClick={() => onNavigateToScope(frames.slice(0, index + 1))}>{frame.label}</button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
           <div className="wf-empty">
@@ -350,6 +390,7 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
         {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this definition version.</div> : null}
         {canvas.nodes.length > 0 ? (
           <ReactFlow
+            key={scopeKey}
             nodes={canvas.nodes}
             edges={canvas.edges}
             nodeTypes={nodeTypes}
@@ -371,6 +412,24 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
   );
 }
 
+function getInstanceScopeKey(frames: ScopeFrame[]) {
+  if (frames.length === 0) return "root";
+  return frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
+}
+
+function collectWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersionDetails, activityCatalog: ActivityCatalogItem[]) {
+  const ids = new Set<string>();
+  const visit = (activity: ActivityNode | null | undefined) => {
+    if (!activity) return;
+    ids.add(activity.nodeId);
+    for (const slot of getChildSlots(activity, activityCatalog)) {
+      slot.activities.forEach(visit);
+    }
+  };
+  visit(definitionVersion.state.rootActivity);
+  return ids;
+}
+
 function WorkflowInstanceInspector({
   context,
   ai,
@@ -382,6 +441,7 @@ function WorkflowInstanceInspector({
   selectedEvidenceId = null,
   onSelectEvidence,
   graphNodeIds,
+  rootNodeId,
   activityCatalog = [],
   collapsed = false,
   expanded = true,
@@ -399,6 +459,7 @@ function WorkflowInstanceInspector({
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
   graphNodeIds?: Set<string>;
+  rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
   collapsed?: boolean;
   expanded?: boolean;
@@ -481,7 +542,7 @@ function WorkflowInstanceInspector({
           ) : activeTab === "issues" ? (
             <>
               <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
-              <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} />
+              <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} />
             </>
           ) : (
             <dl className="wf-instance-meta">
@@ -724,49 +785,105 @@ export function formatSnapshotPayload(payload: unknown) {
   }
 }
 
-function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
+const incidentStackTraceMetadataKeys = [
+  "runtime.faultStackTrace",
+  "runtime.exceptionStackTrace",
+  "runtime.stackTrace",
+  "faultStackTrace",
+  "exceptionStackTrace",
+  "stackTrace"
+];
+
+export function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
   incidents: IncidentStateSummary[];
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
 }) {
+  const [copyStatus, setCopyStatus] = useState("");
+
   return (
     <section className="wf-instance-section">
       <h4>Incidents</h4>
       {incidents.length === 0 ? <p>No incidents recorded.</p> : null}
       {incidents.map(incident => (
-        <button
-          type="button"
+        <article
           className="wf-instance-incident"
           data-severity={incident.severity.toLowerCase()}
           data-selected={incident.incidentId === selectedEvidenceId}
           key={incident.incidentId}
-          onClick={() => onSelectEvidence?.(incident.incidentId)}
         >
-          <strong>{incident.failureType}</strong>
-          <span>{incident.status} · {incident.severity}</span>
-          <p>{incident.message}</p>
-        </button>
+          <button
+            type="button"
+            className="wf-instance-incident-summary"
+            aria-label={`Select incident ${incident.failureType}`}
+            onClick={() => onSelectEvidence?.(incident.incidentId)}
+          >
+            <strong>{incident.failureType}</strong>
+            <span>{incident.status} · {incident.severity}</span>
+            <p>{incident.message}</p>
+          </button>
+          <CopyValueButton
+            value={formatIncidentForClipboard(incident)}
+            ariaLabel={`Copy incident ${incident.failureType}`}
+            copiedLabel="incident"
+            onCopied={label => setCopyStatus(`Copied ${label}`)}
+            onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
+          />
+          <IncidentStackTrace incident={incident} />
+        </article>
       ))}
+      {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
     </section>
   );
 }
 
-function WorkflowUnmatchedEvidence({ details, graphNodeIds }: { details: WorkflowInstanceDetails; graphNodeIds?: Set<string> }) {
+function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
+  const stackTrace = getIncidentStackTrace(incident);
+  if (!stackTrace) return null;
+
+  return (
+    <details className="wf-incident-stacktrace">
+      <summary>{previewStackTrace(stackTrace)}</summary>
+      <pre>{stackTrace}</pre>
+    </details>
+  );
+}
+
+export function getIncidentStackTrace(incident: IncidentStateSummary) {
+  const directStackTrace = firstNonBlank(incident.stackTrace, incident.exceptionStackTrace);
+  if (directStackTrace) return directStackTrace;
+
+  for (const key of incidentStackTraceMetadataKeys) {
+    const value = incident.metadata?.[key];
+    if (value && value.trim()) return value;
+  }
+
+  return null;
+}
+
+function firstNonBlank(...values: Array<string | null | undefined>) {
+  return values.find(value => value?.trim()) ?? null;
+}
+
+function previewStackTrace(stackTrace: string) {
+  const firstMeaningfulLine = stackTrace.split("\n").find(line => line.trim()) ?? stackTrace;
+  const preview = firstMeaningfulLine.trim();
+  return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
+}
+
+function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId }: { details: WorkflowInstanceDetails; graphNodeIds?: Set<string>; rootNodeId?: string | null }) {
   if (!graphNodeIds) return null;
 
-  const activityByExecutionId = new Map(details.activities.map(activity => [activity.activityExecutionId, activity]));
-  const unmatchedActivities = details.activities.filter(activity => !graphNodeIds.has(activityNodeKey(activity)));
-  const unmatchedIncidents = details.incidents.filter(incident => {
-    const activity = incident.activityExecutionId ? activityByExecutionId.get(incident.activityExecutionId) : null;
-    const nodeId = incident.executableNodeId ?? (activity ? activityNodeKey(activity) : "");
-    return !nodeId || !graphNodeIds.has(nodeId);
+  const unmatchedActivities = details.activities.filter(activity => {
+    const nodeId = activityNodeKey(activity);
+    return nodeId && nodeId !== rootNodeId && !graphNodeIds.has(nodeId);
   });
 
-  if (unmatchedActivities.length === 0 && unmatchedIncidents.length === 0) return null;
+  if (unmatchedActivities.length === 0) return null;
 
   return (
     <section className="wf-instance-section">
-      <h4>Unmatched runtime evidence</h4>
+      <h4>Executions outside canvas</h4>
       <div className="wf-instance-unmatched-list">
         {unmatchedActivities.map(activity => (
           <div className="wf-instance-unmatched" key={`activity-${activity.activityExecutionId}`}>
@@ -774,13 +891,31 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds }: { details: Workflo
             <small>{activity.activityExecutionId}</small>
           </div>
         ))}
-        {unmatchedIncidents.map(incident => (
-          <div className="wf-instance-unmatched" key={`incident-${incident.incidentId}`}>
-            <strong>{incident.failureType}</strong>
-            <small>{incident.incidentId}</small>
-          </div>
-        ))}
       </div>
     </section>
   );
+}
+
+function formatIncidentForClipboard(incident: IncidentStateSummary) {
+  const lines = [
+    `Incident: ${incident.failureType}`,
+    `Incident ID: ${incident.incidentId}`,
+    `Workflow execution ID: ${incident.workflowExecutionId}`,
+    incident.activityExecutionId ? `Activity execution ID: ${incident.activityExecutionId}` : "",
+    incident.executableNodeId ? `Executable node ID: ${incident.executableNodeId}` : "",
+    `Status: ${incident.status}`,
+    `Severity: ${incident.severity}`,
+    `Blocking: ${incident.isBlocking ? "Yes" : "No"}`,
+    incident.resolutionAction ? `Resolution action: ${incident.resolutionAction}` : "",
+    `Created: ${formatDate(incident.createdAt)}`,
+    incident.resolvedAt ? `Resolved: ${formatDate(incident.resolvedAt)}` : "",
+    "",
+    incident.message
+  ].filter(Boolean);
+
+  if (incident.metadata && Object.keys(incident.metadata).length > 0) {
+    lines.push("", "Metadata:", JSON.stringify(incident.metadata, null, 2));
+  }
+
+  return lines.join("\n");
 }

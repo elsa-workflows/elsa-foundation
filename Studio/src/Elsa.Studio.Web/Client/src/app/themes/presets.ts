@@ -649,7 +649,7 @@ export const builtInThemeDefinitions: Theme[] = [
     "stone",
     "Stone",
     "Carved slate surfaces with etched workflow lines.",
-    { ...stoneLightTheme, material: materialMode("limestone", "/studio/assets/stone-limestone-tile.png", 0.42, 390) },
+    { ...stoneLightTheme, material: materialMode("mist-stone", "/studio/assets/stone-mist-tile.png", 0.58, 390) },
     { ...stoneTheme, material: materialMode("slate", "/studio/assets/stone-slate-tile.png", 0.78, 390) }
   ),
   createThemeDefinition(

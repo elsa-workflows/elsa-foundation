@@ -1507,6 +1507,217 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("navigates workflow instance canvas activity slots with breadcrumbs", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const writeLineNode = {
+      nodeId: "nested-write-line",
+      activityVersionId: "write-line-v1",
+      inputs: [],
+      outputs: [],
+      structure: null
+    };
+    const forEachNode = {
+      nodeId: "foreach-1",
+      activityVersionId: "foreach-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.foreach.structure",
+        schemaVersion: "1.0.0",
+        payload: { body: writeLineNode }
+      }
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ status: "Failed", activityCount: 2 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "foreach-execution",
+              executableNodeId: "foreach-1",
+              authoredActivityId: "foreach-1",
+              activityType: "Elsa.Activities.ControlFlow.Activities.ForEach",
+              status: "Running",
+              completedAt: null
+            }),
+            activityExecution({
+              activityExecutionId: "nested-write-execution",
+              executableNodeId: "nested-write-line",
+              authoredActivityId: "nested-write-line",
+              activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+              status: "Failed",
+              subStatus: "Faulted"
+            })
+          ]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
+        return response(workflowDefinitionVersionDetails({
+          definition: {
+            id: "definition-1",
+            name: "Loops",
+            description: "Loops over values.",
+            createdAt: "2026-06-18T01:00:00Z",
+            lastModifiedAt: "2026-06-18T01:10:00Z"
+          },
+          state: {
+            variables: [],
+            rootActivity: flowchartRoot([forEachNode]),
+            inputs: [],
+            outputs: []
+          },
+          layout: [
+            { nodeId: "foreach-1", x: 180, y: 120 },
+            { nodeId: "nested-write-line", x: 200, y: 140 }
+          ]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [
+          activity({
+            activityVersionId: "flowchart-v1",
+            activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            category: "Flowchart",
+            displayName: "Flowchart"
+          }),
+          activity({
+            activityVersionId: "foreach-v1",
+            activityTypeKey: "Elsa.Activities.ControlFlow.Activities.ForEach",
+            category: "Control Flow",
+            displayName: "For Each",
+            designFacets: [{
+              kind: "elsa.foreach.structure",
+              schemaVersion: "1.0.0",
+              payload: {
+                mode: "sequence",
+                supportsScopedVariables: false,
+                slots: [{ name: "Body", property: "body", displayName: "Body", cardinality: "single" }],
+                initialPayload: { body: null }
+              }
+            }]
+          }),
+          activity({
+            activityVersionId: "write-line-v1",
+            activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+            category: "Primitives",
+            displayName: "Write Line"
+          })
+        ] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Definition version");
+    const canvasText = () => container.querySelector(".wf-instance-canvas")?.textContent ?? "";
+    expect(canvasText()).toContain("For Each");
+    expect(canvasText()).toContain("Body");
+    expect(canvasText()).not.toContain("Write Line");
+    await click(buttonByText(container, "Body"));
+    await waitForText(container, "For Each / Body");
+    expect(canvasText()).toContain("Write Line");
+    expect(canvasText()).not.toContain("For Each");
+    await click(buttonByText(container, "Root"));
+    await flushPromises();
+    expect(canvasText()).toContain("For Each");
+    expect(canvasText()).not.toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("copies incidents and hides normal root runtime evidence from the issues tab", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ status: "Failed", incidentCount: 1 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "root-execution",
+              executableNodeId: "root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+              status: "Faulted",
+              subStatus: "InputMaterializationFailed",
+              incidentIds: ["incident-1"],
+              faultCount: 1
+            }),
+            activityExecution()
+          ],
+          incidents: [incidentState({
+            incidentId: "incident-1",
+            activityExecutionId: "root-execution",
+            executableNodeId: null,
+            failureType: "InputMaterializationFailed",
+            message: "Input 'Collection' failed to evaluate its JavaScript expression."
+          })]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/versions/version-1")) {
+        return response(workflowDefinitionVersionDetails());
+      }
+
+      if (url.startsWith("https://server.example/_elsa/workflow-management/activities")) {
+        return response({ activities: [
+          activity({
+            activityVersionId: "flowchart-v1",
+            activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            category: "Flowchart",
+            displayName: "Flowchart"
+          }),
+          activity({
+            activityVersionId: "write-line-v1",
+            activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+            category: "Primitives",
+            displayName: "Write Line"
+          })
+        ] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    try {
+      await waitForText(container, "Definition version");
+      await click(buttonByText(container, "Issues (1)"));
+
+      expect(container.textContent).toContain("InputMaterializationFailed");
+      expect(container.textContent).toContain("Input 'Collection' failed to evaluate");
+      expect(container.textContent).not.toContain("Unmatched runtime evidence");
+      expect(container.textContent).not.toContain("Executions outside canvas");
+
+      await click(buttonByLabel(container, "Copy incident InputMaterializationFailed"));
+
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Incident: InputMaterializationFailed"));
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Input 'Collection' failed to evaluate its JavaScript expression."));
+      expect(container.textContent).toContain("Copied incident");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
   it("shows a not-found state only when the run record is absent", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1887,6 +2098,25 @@ function activityExecution(overrides: Partial<Record<string, unknown>> = {}) {
     incidentIds: [],
     faultCount: 0,
     aggregateFaultCount: 0,
+    metadata: {},
+    ...overrides
+  };
+}
+
+function incidentState(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    incidentId: "incident-1",
+    workflowExecutionId: "wfexec-1",
+    activityExecutionId: "activity-execution-1",
+    executableNodeId: "write-line-1",
+    severity: "Error",
+    status: "Blocking",
+    resolutionAction: "None",
+    failureType: "InputMaterializationFailed",
+    message: "Input failed.",
+    createdAt: "2026-06-18T01:00:02Z",
+    resolvedAt: null,
+    isBlocking: true,
     metadata: {},
     ...overrides
   };

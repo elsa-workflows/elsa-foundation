@@ -39,14 +39,100 @@
 
 .weaver-surface-actions { display: flex; align-items: center; gap: 0.5rem; }
 
-.weaver-auto-apply select,
-.weaver-surface select {
+.weaver-auto-apply {
+  position: relative;
+}
+
+.weaver-mode-button {
+  display: inline-flex;
+  min-width: 10.5rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
   background: var(--studio-surface-raised);
   color: var(--studio-text);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-sm);
-  padding: 0.25rem 0.4rem;
+  padding: 0.35rem 0.5rem;
   font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.weaver-mode-button:hover,
+.weaver-mode-button[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 46%, var(--studio-border));
+  background: var(--studio-surface);
+}
+
+.weaver-mode-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.weaver-mode-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 65;
+  display: grid;
+  width: min(22rem, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-raised);
+  box-shadow: var(--studio-shadow-sm);
+  padding: 0.25rem;
+}
+
+.weaver-mode-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+}
+
+.weaver-mode-option:hover,
+.weaver-mode-option:focus-visible {
+  border-color: color-mix(in srgb, var(--studio-accent) 32%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-accent) 12%, transparent);
+  outline: none;
+}
+
+.weaver-mode-option[aria-checked="true"] {
+  color: var(--studio-accent);
+}
+
+.weaver-mode-option span {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.weaver-mode-option strong,
+.weaver-mode-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weaver-mode-option strong {
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1.15;
+}
+
+.weaver-mode-option small {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .weaver-close {
@@ -286,8 +372,8 @@ html[data-theme="black-glass"] .weaver-status[data-tone="warning"] {
   color: var(--studio-warning-fg);
 }
 
-html[data-theme="black-glass"] .weaver-auto-apply select,
-html[data-theme="black-glass"] .weaver-surface select,
+html[data-theme="black-glass"] .weaver-mode-button,
+html[data-theme="black-glass"] .weaver-mode-menu,
 html[data-theme="black-glass"] .weaver-close,
 html[data-theme="black-glass"] .weaver-message-avatar,
 html[data-theme="black-glass"] .weaver-markdown pre,
@@ -298,6 +384,11 @@ html[data-theme="black-glass"] .weaver-composer-input textarea {
   border-color: var(--studio-glass-edge);
   background: var(--studio-glass-bg-soft);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+}
+
+html[data-theme="black-glass"] .weaver-mode-option:hover,
+html[data-theme="black-glass"] .weaver-mode-option:focus-visible {
+  background: color-mix(in srgb, var(--studio-accent) 15%, var(--studio-glass-bg));
 }
 
 html[data-theme="black-glass"] .weaver-message-body,
@@ -363,8 +454,8 @@ html[data-theme-material] .weaver-status[data-tone="warning"] {
   color: var(--studio-warning-fg);
 }
 
-html[data-theme-material] .weaver-auto-apply select,
-html[data-theme-material] .weaver-surface select,
+html[data-theme-material] .weaver-mode-button,
+html[data-theme-material] .weaver-mode-menu,
 html[data-theme-material] .weaver-close,
 html[data-theme-material] .weaver-message-avatar,
 html[data-theme-material] .weaver-markdown pre,
@@ -376,6 +467,16 @@ html[data-theme-material] .weaver-composer-input textarea {
   background: var(--studio-material-control-bg);
   background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .weaver-mode-menu {
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .weaver-mode-option:hover,
+html[data-theme-material] .weaver-mode-option:focus-visible {
+  background: var(--studio-material-hover-bg);
+  background-size: var(--studio-material-panel-bg-size);
 }
 
 html[data-theme-material] .weaver-message-body,

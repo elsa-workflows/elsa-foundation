@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { CheckCircle2, Shield, X } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
 import type { ElsaStudioModuleApi, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
@@ -19,7 +19,7 @@ const AUTO_APPLY_LABELS: Record<WeaverAutoApplyMode, string> = {
   "full-auto": "Autopilot"
 };
 
-// Tooltip copy for the autonomy dropdown, surfaced via the <option> title attribute.
+// Tooltip copy for the autonomy menu.
 const AUTO_APPLY_HINTS: Record<WeaverAutoApplyMode, string> = {
   "manual": "Every change is proposed for your review before anything is applied.",
   "auto-read-only": "Read-only steps run automatically; mutating changes are still proposed for review.",
@@ -82,18 +82,12 @@ export function WeaverSurface({
           <strong>Workflow assistant</strong>
         </div>
         <div className="weaver-surface-actions">
-          <label className="weaver-auto-apply">
-            <span className="sr-only">Auto-apply mode</span>
-            <select
-              value={session.autoApplyMode}
-              disabled={!session.ready}
-              onChange={event => session.setAutoApplyMode(event.target.value as WeaverAutoApplyMode)}
-            >
-              {session.allowedAutoApplyModes.map(mode => (
-                <option key={mode} value={mode} title={AUTO_APPLY_HINTS[mode]}>{AUTO_APPLY_LABELS[mode]}</option>
-              ))}
-            </select>
-          </label>
+          <WeaverAutoApplyMenu
+            value={session.autoApplyMode}
+            modes={session.allowedAutoApplyModes}
+            disabled={!session.ready}
+            onChange={session.setAutoApplyMode}
+          />
           {onClose ? (
             <button type="button" className="weaver-close" aria-label="Close assistant" onClick={onClose}>
               <X size={16} />
@@ -137,6 +131,87 @@ export function WeaverSurface({
         onRemoveFollowup={session.removeFollowup}
       />
     </section>
+  );
+}
+
+function WeaverAutoApplyMenu({
+  value,
+  modes,
+  disabled,
+  onChange
+}: {
+  value: WeaverAutoApplyMode;
+  modes: readonly WeaverAutoApplyMode[];
+  disabled: boolean;
+  onChange(mode: WeaverAutoApplyMode): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const selectMode = (mode: WeaverAutoApplyMode) => {
+    onChange(mode);
+    setOpen(false);
+  };
+
+  return (
+    <div className="weaver-auto-apply" ref={wrapperRef}>
+      <button
+        type="button"
+        className="weaver-mode-button"
+        aria-label="Auto-apply mode"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={disabled}
+        title={AUTO_APPLY_HINTS[value]}
+        onClick={() => setOpen(current => !current)}
+      >
+        <span>{AUTO_APPLY_LABELS[value]}</span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="weaver-mode-menu" role="menu" aria-label="Auto-apply mode">
+          {modes.map(mode => (
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={mode === value}
+              className="weaver-mode-option"
+              key={mode}
+              title={AUTO_APPLY_HINTS[mode]}
+              onClick={() => selectMode(mode)}
+            >
+              <span>
+                <strong>{AUTO_APPLY_LABELS[mode]}</strong>
+                <small>{AUTO_APPLY_HINTS[mode]}</small>
+              </span>
+              {mode === value ? <Check size={14} aria-hidden="true" /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

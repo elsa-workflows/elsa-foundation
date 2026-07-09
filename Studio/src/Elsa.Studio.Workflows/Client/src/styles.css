@@ -868,19 +868,14 @@
 .wf-instance-activity,
 .wf-instance-incident {
   display: grid;
-  gap: 4px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
   background: var(--wf-panel-muted);
   color: var(--wf-text);
-  cursor: pointer;
   font: inherit;
-  padding: 9px;
   text-align: left;
 }
 
-.wf-instance-activity:hover,
-.wf-instance-incident:hover,
 .wf-instance-activity[data-selected="true"],
 .wf-instance-incident[data-selected="true"] {
   border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
@@ -888,7 +883,42 @@
 }
 
 .wf-instance-activity {
+  gap: 4px;
+  cursor: pointer;
+  padding: 9px;
+}
+
+.wf-instance-activity:hover,
+.wf-instance-incident:hover,
+.wf-instance-incident:focus-within {
+  border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
+}
+
+.wf-instance-activity {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.wf-instance-incident {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  cursor: default;
+}
+
+.wf-instance-incident-summary {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.wf-instance-incident .wf-copy-button {
+  margin: -3px -3px 0 4px;
 }
 
 .wf-instance-activity .wf-status-badge {
@@ -908,6 +938,61 @@
 .wf-instance-incident span {
   color: var(--wf-muted-text);
   font-size: 12px;
+}
+
+.wf-instance-incident-summary {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 9px;
+  text-align: left;
+}
+
+.wf-instance-incident-summary strong,
+.wf-instance-incident-summary span,
+.wf-instance-incident-summary p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wf-instance-incident-summary strong,
+.wf-instance-incident-summary span {
+  white-space: nowrap;
+}
+
+.wf-incident-stacktrace {
+  border-top: 1px solid var(--wf-border);
+  background: var(--wf-panel);
+}
+
+.wf-incident-stacktrace summary {
+  overflow: hidden;
+  color: var(--wf-text);
+  cursor: pointer;
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-incident-stacktrace pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  border-top: 1px solid var(--wf-border);
+  color: var(--wf-text);
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 9px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .wf-instance-incident[data-severity="warning"] {
@@ -944,6 +1029,10 @@
 .wf-instance-unmatched small {
   color: var(--wf-muted-text);
   font-size: 12px;
+}
+
+.wf-copy-status {
+  margin-top: 8px;
 }
 
 .wf-timeline {
@@ -2000,6 +2089,19 @@
   opacity: 0.6;
 }
 
+.wf-breadcrumb-segment {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-breadcrumb-segment > svg {
+  flex: 0 0 auto;
+  color: var(--wf-muted-text);
+  opacity: 0.6;
+}
+
 .wf-breadcrumb button {
   border: 0;
   border-radius: var(--wf-radius-sm);
@@ -2021,6 +2123,10 @@
 .wf-breadcrumb button:last-of-type {
   color: var(--wf-text);
   font-weight: 650;
+}
+
+.wf-instance-breadcrumb {
+  border-top: 0;
 }
 
 .wf-canvas {
@@ -2403,6 +2509,32 @@
   line-height: 1;
   margin: 8px 0 0 44px;
   padding: 3px 7px;
+}
+
+.wf-node-slot-list {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 0 44px;
+}
+
+.wf-node-slot-list .wf-node-slot-badge {
+  margin: 0;
+}
+
+button.wf-node-slot-badge {
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+
+button.wf-node-slot-badge:hover,
+button.wf-node-slot-badge:focus-visible {
+  border-color: color-mix(in srgb, var(--wf-accent) 50%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
 }
 
 .wf-activity-icon {
@@ -4271,6 +4403,7 @@ html[data-theme-material] .wf-instance-inspector header,
 html[data-theme-material] .wf-instance-tabs,
 html[data-theme-material] .wf-instance-activity,
 html[data-theme-material] .wf-instance-incident,
+html[data-theme-material] .wf-incident-stacktrace,
 html[data-theme-material] .wf-instance-unmatched {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);

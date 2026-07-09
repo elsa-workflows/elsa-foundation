@@ -42,7 +42,25 @@ export function WorkflowActivityNode({ data, selected }: NodeProps) {
         </span>
       </div>
       {nodeData.childSlots.length > 0 ? (
-        <span className="wf-node-slot-badge">{nodeData.childSlots.length} slot{nodeData.childSlots.length === 1 ? "" : "s"}</span>
+        nodeData.onEnterSlot ? (
+          <span className="wf-node-slot-list">
+            {nodeData.childSlots.map(slot => (
+              <button
+                type="button"
+                className="wf-node-slot-badge"
+                key={slot.id}
+                onClick={event => {
+                  event.stopPropagation();
+                  nodeData.onEnterSlot?.(slot);
+                }}
+              >
+                {slot.label}
+              </button>
+            ))}
+          </span>
+        ) : (
+          <span className="wf-node-slot-badge">{nodeData.childSlots.length} slot{nodeData.childSlots.length === 1 ? "" : "s"}</span>
+        )
       ) : null}
       {runtime ? (
         <div className="wf-node-runtime-strip">
