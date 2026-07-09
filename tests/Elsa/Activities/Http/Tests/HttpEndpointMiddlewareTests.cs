@@ -19,7 +19,7 @@ namespace Elsa.Activities.Http.Tests;
 /// <summary>
 /// Unit coverage for the inbound <see cref="HttpEndpointMiddleware"/> (spec 089 B, method-aware/templated routes).
 /// It drives the middleware with a <see cref="DefaultHttpContext"/>, a fake <see cref="IStimulusRouter"/>, a
-/// list-backed <see cref="FakeRouteTable"/> seeded with the published templates, a real-semantics
+/// production-delegating <see cref="FakeRouteTable"/> seeded with the published templates, a real-semantics
 /// <see cref="TestRouteMatcher"/>, and the real <see cref="InMemoryWorkflowTriggerBindingStore"/> seeded with the
 /// claimant bindings. Together they prove: template resolution + route-value extraction, the (template, method)
 /// hashing identity, the ambiguity (409) guard, and the response contract — 202 with the started ids when a

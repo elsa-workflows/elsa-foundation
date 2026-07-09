@@ -45,7 +45,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         // binding store, then seed the probe's route so the request resolves and reaches dispatch (proving the
         // mounted middleware, not the sentinel, answered).
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
-        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
         using var provider = services.BuildServiceProvider();
         await provider.GetRequiredService<Elsa.Http.Core.Contracts.IRouteTable>().Add("seam-probe");

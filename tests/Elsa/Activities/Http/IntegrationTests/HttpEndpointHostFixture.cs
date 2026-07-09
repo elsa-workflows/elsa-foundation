@@ -102,7 +102,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // The IRouteTable/IRouteMatcher IMPLEMENTATIONS are internal to Elsa.Http; production-equivalent
                     // doubles (see RouteTableTestDoubles.cs) stand in for just those two services.
                     services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
-                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
                     services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
@@ -308,39 +308,5 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         using var scope = provider.CreateScope();
         foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
             task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
-    }
-}
-
-/// <summary>
-/// A minimal test authentication scheme (the standard ASP.NET test-handler pattern) honoring an
-/// <c>Authorization: Test &lt;name&gt;</c> header: any such header authenticates a caller named <c>&lt;name&gt;</c>;
-/// its absence yields no result (anonymous). It stands in for the shell's authentication stack so the real
-/// <c>AuthenticationBasedHttpEndpointAuthorizationHandler</c> can resolve a principal (spec 089 C, T010).
-/// </summary>
-public sealed class TestAuthHandler(
-    Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
-    Microsoft.Extensions.Logging.ILoggerFactory logger,
-    System.Text.Encodings.Web.UrlEncoder encoder)
-    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    public const string SchemeName = "Test";
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        if (!Request.Headers.TryGetValue("Authorization", out var header))
-            return Task.FromResult(AuthenticateResult.NoResult());
-
-        var value = header.ToString();
-        const string prefix = "Test ";
-        if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length <= prefix.Length)
-            return Task.FromResult(AuthenticateResult.Fail("Malformed test authorization header."));
-
-        var name = value[prefix.Length..].Trim();
-        var identity = new System.Security.Claims.ClaimsIdentity(
-            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, name)],
-            SchemeName);
-        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, SchemeName);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 }
