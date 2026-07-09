@@ -1,3 +1,5 @@
+using Elsa.Foundation.Identity.Abstractions.Extensions;
+using Elsa.Modularity.ExtensionBuilder.Authorization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +20,7 @@ public static class ExtensionBuilderServiceCollectionExtensions
     public static IServiceCollection AddElsaExtensionBuilder(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<ExtensionBuilderOptions>(configuration.GetSection("Elsa:ExtensionBuilder"));
+        services.AddPermissionContributor<ExtensionBuilderPermissionContributor>();
         services.AddSingleton<IExtensionBuilderTemplateCatalog, ExtensionBuilderTemplateCatalog>();
         services.AddSingleton<IExtensionBuilderStorage, ExtensionBuilderStorage>();
         services.AddSingleton<ExtensionBuilderBackgroundBuildQueue>();

@@ -9,7 +9,7 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 | `IAuthenticationProviderResolver` | `DefaultAuthenticationProviderResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs tenant-aware provider discovery beyond registered `IAuthenticationProviderModule` instances. |
 | `IOwnershipModeProvider` | `OptionsOwnershipModeProvider` (`Elsa.Foundation.Identity.Abstractions`) | Ownership mode is resolved from tenant configuration or another dynamic source. |
 | `IEffectiveCapabilitiesResolver` | `DefaultEffectiveCapabilitiesResolver` (`Elsa.Foundation.Identity.Abstractions`) | The host needs additional capability gates beyond ownership mode + provider capability support. |
-| `IPermissionCatalog` | `DefaultIdentityPermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application supplies a broader permission catalog while preserving the namespaced identity keys. |
+| `IPermissionCatalog` | `CompositePermissionCatalog` (`Elsa.Foundation.Identity.Abstractions`) | The application replaces the whole catalog surface. To *add* permissions, prefer contributing an `IPermissionContributor` (below); the composite aggregates the default identity permissions with all contributions. |
 | `IPermissionEvaluator` | `ClaimsPermissionEvaluator` (`Elsa.Foundation.Identity.Abstractions`) | Permissions are evaluated server-side from stores/caches instead of, or in addition to, normalized claims. |
 | `IAuthSessionService` | `ClaimsAuthSessionService` (`Elsa.Foundation.Identity.Api`) | The host needs to enrich the provider-agnostic Studio session from server-side state beyond normalized claims. |
 | `IClaimsNormalizer` | `DefaultClaimsNormalizer` (`Elsa.Foundation.Identity.Abstractions`) | A provider needs custom claim projection while still emitting normalized Elsa role/permission claims. |
@@ -24,6 +24,13 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 - **Register:** `services.AddScoped<IAuthenticationProviderModule, MyProviderModule>()`.
 - **Consumed by:** `DefaultAuthenticationProviderResolver`, which composes enabled provider descriptors for sign-in and capability discovery.
 - **Known implementations:** `OidcAuthenticationProviderModule` (`Elsa.Foundation.Identity.Oidc`) and `OpenIddictAuthenticationProviderModule` (`Elsa.Foundation.Identity.OpenIddict`) *(cross-domain provider modules)*.
+
+### `IPermissionContributor`
+
+- **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
+- **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
+- **Consumed by:** `CompositePermissionCatalog`, which aggregates every contributor. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; contributions may not shadow an identity permission key or duplicate another contribution (either throws at construction).
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.Modularity.ExtensionBuilder`) — the two host-control features that own `module-management.*` / `extension-builder.*` permissions per ADR 0037 *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 

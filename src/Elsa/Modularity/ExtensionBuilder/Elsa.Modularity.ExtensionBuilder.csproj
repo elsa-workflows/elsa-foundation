@@ -18,6 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Modularity.Core.csproj" />
     <ProjectReference Include="..\..\Git\Elsa.Git.csproj" />
+    <ProjectReference Include="..\..\Foundation\Identity\Abstractions\Elsa.Foundation.Identity.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -28,12 +28,27 @@ public static class FoundationIdentityServiceCollectionExtensions
         services.AddRequirePermissionPolicyProvider();
         services.TryAddScoped<IClaimsNormalizer, DefaultClaimsNormalizer>();
         services.TryAddScoped<IClaimMappingRuleEvaluator, ClaimMappingRuleEvaluator>();
-        services.TryAddSingleton<IPermissionCatalog, DefaultIdentityPermissionCatalog>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, DefaultIdentityPermissionCatalog>());
+        services.TryAddSingleton<IPermissionCatalog, CompositePermissionCatalog>();
         services.TryAddScoped<ISecurityDefaultGuardEvaluator, SecurityDefaultGuardEvaluator>();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SigningKeySecurityDefaultGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, HttpsMetadataSecurityDefaultGuard>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<ISecurityDefaultGuard, SecretHashSecurityDefaultGuard>());
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers a feature-owned <see cref="IPermissionContributor"/> so the feature can additively
+    /// contribute permissions to the shared catalog without replacing it (per ADR 0037). Safe to call
+    /// from a feature's own service-registration home; the identity abstractions do not need to be
+    /// initialized first because <see cref="CompositePermissionCatalog"/> aggregates every registered
+    /// contributor.
+    /// </summary>
+    public static IServiceCollection AddPermissionContributor<TContributor>(this IServiceCollection services)
+        where TContributor : class, IPermissionContributor
+    {
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, TContributor>());
         return services;
     }
 
