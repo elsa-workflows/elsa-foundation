@@ -8,6 +8,7 @@ import type {
   ActivityAvailabilityDiagnostics,
   ActivityAvailabilitySettings,
   ActivityCatalogResponse,
+  ActivityExecutionInspection,
   ActivityDescriptor,
   ActivityDescriptorsResponse,
   CreateDefinitionRequest,
@@ -47,6 +48,7 @@ export const workflowKeys = {
   executables: (definitionId?: string | null) => ["workflows", "executables", definitionId ?? "all"] as const,
   instances: ["workflows", "instances"] as const,
   instance: (workflowExecutionId: string) => ["workflows", "instances", workflowExecutionId] as const,
+  activityExecution: (workflowExecutionId: string, activityExecutionId: string) => ["workflows", "instances", workflowExecutionId, "activity-executions", activityExecutionId] as const,
   activities: ["workflows", "activities"] as const,
   activityDescriptors: ["workflows", "activity-descriptors"] as const,
   expressionDescriptors: ["workflows", "expression-descriptors"] as const,
@@ -349,6 +351,12 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
 
 export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {
   return context.http.getJson<WorkflowInstanceDetails>(`/runtime/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+}
+
+export async function getActivityExecutionInspection(context: StudioEndpointContext, workflowExecutionId: string, activityExecutionId: string) {
+  return context.http.getJson<ActivityExecutionInspection>(
+    `/runtime/workflows/instances/${encodeURIComponent(workflowExecutionId)}/activity-executions/${encodeURIComponent(activityExecutionId)}`
+  );
 }
 
 export async function listActivities(context: StudioEndpointContext) {

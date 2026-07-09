@@ -419,6 +419,86 @@ export interface WorkflowInstanceDetails {
   incidents: IncidentStateSummary[];
 }
 
+export interface ActivityExecutionInspection {
+  activityExecutionId: string;
+  workflowExecutionId: string;
+  executableNodeId: string;
+  authoredActivityId: string;
+  activityType: string;
+  activityTypeVersion: string;
+  status: string;
+  subStatus?: string | null;
+  executionSequence: number;
+  scheduledAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  firstCheckpointId?: string | null;
+  lastCheckpointId?: string | null;
+  lastCommittedAt?: string | null;
+  provenance: ActivitySchedulingProvenance;
+  outcomeNames: string[];
+  bookmarks: ActivityExecutionBookmarkSummary[];
+  incidents: ActivityExecutionIncidentSummary[];
+  valueSnapshots: ActivityExecutionInspectionValueSnapshot[];
+  metadata: Record<string, string>;
+}
+
+export interface ActivitySchedulingProvenance {
+  parentActivityExecutionId?: string | null;
+  schedulingActivityExecutionId?: string | null;
+  schedulingWorkflowExecutionId?: string | null;
+  branchId?: string | null;
+  iterationId?: string | null;
+  executionPathId?: string | null;
+  executionScopeId?: string | null;
+  schedulingCause?: string | null;
+  metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionBookmarkSummary {
+  bookmarkId: string;
+  resumeTargetId: string;
+  stimulusType: string;
+  stimulusHash: string;
+  createdAt: string;
+  expiresAt?: string | null;
+  metadata: Record<string, string>;
+  payload?: unknown;
+}
+
+export interface ActivityExecutionIncidentSummary {
+  incidentId: string;
+  severity: string;
+  status: string;
+  resolutionAction: string;
+  failureType: string;
+  message: string;
+  createdAt: string;
+  resolvedAt?: string | null;
+  isBlocking: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionInspectionValueSnapshot {
+  name: string;
+  subject: string;
+  captureMode: string;
+  type?: RuntimeValueTypeDescriptor | null;
+  capturedAt: string;
+  payload?: unknown;
+  captureReason: string;
+  isSensitive: boolean;
+  metadata: Record<string, string>;
+}
+
+export interface RuntimeValueTypeDescriptor {
+  typeName?: string | null;
+  displayName?: string | null;
+  alias?: string | null;
+  isCollection?: boolean | null;
+  elementType?: RuntimeValueTypeDescriptor | null;
+}
+
 export interface ActivityExecutionStateSummary {
   activityExecutionId: string;
   workflowExecutionId: string;

@@ -736,6 +736,115 @@
   font-size: 13px;
 }
 
+.wf-instance-note {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.wf-runtime-input-list {
+  display: grid;
+  gap: 8px;
+}
+
+.wf-runtime-input {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel-muted);
+  padding: 9px;
+}
+
+.wf-runtime-input header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.wf-runtime-input header span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.wf-runtime-input strong {
+  overflow: hidden;
+  color: var(--wf-text);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-runtime-input small {
+  overflow: hidden;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-runtime-capture-mode {
+  flex: 0 0 auto;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.wf-runtime-input-value {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-runtime-input-value-details {
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-panel);
+}
+
+.wf-runtime-input-value-details summary {
+  overflow: hidden;
+  color: var(--wf-text);
+  cursor: pointer;
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-runtime-input-value-details pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  border-top: 1px solid var(--wf-border);
+  color: var(--wf-text);
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .wf-instance-activity-list {
   display: grid;
   gap: 8px;
@@ -3962,8 +4071,17 @@ html[data-theme="black-glass"] .wf-canvas-tabs,
 html[data-theme="black-glass"] .wf-code-view-toolbar,
 html[data-theme="black-glass"] .wf-properties-section {
   border-color: var(--studio-glass-edge);
-  background: var(--studio-glass-bg);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  /* Specular sheen: a soft diagonal light band across the upper part, layered over the
+     translucent glass fill so panels read as lit glass sheets, not flat tint. */
+  background:
+    linear-gradient(128deg,
+      color-mix(in srgb, white 12%, transparent),
+      transparent 34%,
+      transparent 82%,
+      color-mix(in srgb, var(--studio-accent) 8%, transparent)),
+    var(--studio-glass-bg);
+  box-shadow: var(--studio-glass-glow),
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
   backdrop-filter: blur(18px) saturate(1.2);
 }
 
@@ -4052,6 +4170,36 @@ html[data-theme="black-glass"] .wf-grid {
 html[data-theme="black-glass"] .wf-grid-head {
   border-color: var(--studio-glass-edge);
   background: var(--studio-glass-bg-soft);
+}
+
+/* Dialogs/menus/popovers = raised glass sheets: strong glass fill + diagonal sheen, ambient
+   glow-strong halo, and chrome-scale blur (these are overlay-scale surfaces, not rows/nodes).
+   They already inherit --wf-shadow-overlay/-menu (→ glow-strong/glow) via the token remap;
+   here we add the sheen + backdrop blur the token can't carry. */
+html[data-theme="black-glass"] .wf-dialog,
+html[data-theme="black-glass"] .wf-property-editor-dialog,
+html[data-theme="black-glass"] .wf-syntax-picker-menu {
+  background:
+    linear-gradient(128deg,
+      color-mix(in srgb, white 13%, transparent),
+      transparent 32%,
+      transparent 80%,
+      color-mix(in srgb, var(--studio-accent) 9%, transparent)),
+    var(--studio-glass-bg-strong);
+  box-shadow: var(--studio-glass-glow-strong),
+    inset 0 1px 0 color-mix(in srgb, white 15%, transparent);
+  backdrop-filter: blur(22px) saturate(1.25);
+}
+
+/* Dense-row checkboxes sit on translucent glass rows — give them a solid recessed well +
+   luminous edge so they stay legible instead of dissolving into the glass (mirrors the
+   material checkbox treatment above). */
+html[data-theme="black-glass"] .wf-row-select input,
+html[data-theme="black-glass"] .availability-activity-option input[type="checkbox"] {
+  border-radius: 3px;
+  background-color: var(--studio-glass-well-bg);
+  box-shadow: 0 0 0 1px var(--studio-glass-edge),
+    inset 0 1px 2px color-mix(in srgb, black 30%, transparent);
 }
 
 html[data-theme-material] .wf-page,

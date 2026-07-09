@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import { getActivityExecutionInspection, getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -265,6 +265,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
             />
           ) : <div className="wf-side-resize-spacer" />}
           <WorkflowInstanceInspector
+            context={context}
             ai={ai}
             action={instanceAction ?? undefined}
             summary={data.details.instance}
@@ -371,6 +372,7 @@ function WorkflowInstanceCanvas({ definitionVersion, definitionVersionError, act
 }
 
 function WorkflowInstanceInspector({
+  context,
   ai,
   action,
   summary,
@@ -387,6 +389,7 @@ function WorkflowInstanceInspector({
   onToggleCollapsed,
   onToggleMaximized
 }: {
+  context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   action: StudioAiPromptActionContribution | undefined;
   summary: WorkflowInstanceSummary | null;
@@ -474,7 +477,7 @@ function WorkflowInstanceInspector({
               onSelectEvidence={openActivityEvidence}
             />
           ) : activeTab === "activity" ? (
-            <WorkflowActivityExecutionDetails activity={selectedActivity} activityCatalog={activityCatalog} />
+            <WorkflowActivityExecutionDetails context={context} activity={selectedActivity} activityCatalog={activityCatalog} />
           ) : activeTab === "issues" ? (
             <>
               <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
@@ -520,10 +523,58 @@ function findSelectedActivityExecution(activities: ActivityExecutionStateSummary
   return nodeActivities.length > 0 ? latestActivityExecution(nodeActivities) : null;
 }
 
-function WorkflowActivityExecutionDetails({ activity, activityCatalog }: {
+type ActivityExecutionInspectionState = {
+  activityExecutionId: string | null;
+  status: "idle" | "loading" | "ready" | "failed";
+  inspection: ActivityExecutionInspection | null;
+  error: string;
+};
+
+export function WorkflowActivityExecutionDetails({ context, activity, activityCatalog }: {
+  context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
   activityCatalog: ActivityCatalogItem[];
 }) {
+  const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
+  const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
+  const [inspectionState, setInspectionState] = useState<ActivityExecutionInspectionState>({
+    activityExecutionId: null,
+    status: "idle",
+    inspection: null,
+    error: ""
+  });
+
+  useEffect(() => {
+    if (!selectedActivityExecutionId || !selectedWorkflowExecutionId) {
+      setInspectionState({ activityExecutionId: null, status: "idle", inspection: null, error: "" });
+      return;
+    }
+
+    let cancelled = false;
+    const activityExecutionId = selectedActivityExecutionId;
+    setInspectionState({ activityExecutionId, status: "loading", inspection: null, error: "" });
+
+    getActivityExecutionInspection(context, selectedWorkflowExecutionId, activityExecutionId).then(
+      inspection => {
+        if (!cancelled) setInspectionState({ activityExecutionId, status: "ready", inspection, error: "" });
+      },
+      error => {
+        if (!cancelled) {
+          setInspectionState({
+            activityExecutionId,
+            status: "failed",
+            inspection: null,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [context, selectedActivityExecutionId, selectedWorkflowExecutionId]);
+
   if (!activity) {
     return (
       <section className="wf-instance-section">
@@ -539,32 +590,138 @@ function WorkflowActivityExecutionDetails({ activity, activityCatalog }: {
   const incidentCount = activity.incidentIds?.length ?? 0;
 
   return (
+    <>
+      <section className="wf-instance-section">
+        <h4>Activity</h4>
+        <dl className="wf-instance-meta">
+          <dt>Name</dt>
+          <dd>{activityLabel}</dd>
+          <dt>Status</dt>
+          <dd><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></dd>
+          <dt>Activity Execution ID</dt>
+          <dd>{activity.activityExecutionId}</dd>
+          <dt>Authored Activity ID</dt>
+          <dd>{activity.authoredActivityId}</dd>
+          <dt>Type</dt>
+          <dd>{shortTypeName(activity.activityType) ?? activity.activityType} <small>{activity.activityTypeVersion}</small></dd>
+          <dt>Started</dt>
+          <dd>{formatDate(activity.startedAt)}</dd>
+          <dt>Completed</dt>
+          <dd>{formatDate(activity.completedAt)}</dd>
+          <dt>Duration</dt>
+          <dd>{formatDuration(activity.startedAt, activity.completedAt) || "Unknown"}</dd>
+          <dt>Bookmarks</dt>
+          <dd>{bookmarkCount}</dd>
+          <dt>Incidents</dt>
+          <dd>{incidentCount}</dd>
+        </dl>
+      </section>
+      <WorkflowActivityInputSnapshots state={inspectionState} />
+    </>
+  );
+}
+
+function WorkflowActivityInputSnapshots({ state }: { state: ActivityExecutionInspectionState }) {
+  if (state.status === "idle") return null;
+
+  if (state.status === "loading") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Inputs</h4>
+        <p>Loading runtime input evidence...</p>
+      </section>
+    );
+  }
+
+  if (state.status === "failed") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Inputs</h4>
+        <p>Runtime input evidence is unavailable.</p>
+        {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+      </section>
+    );
+  }
+
+  const snapshots = (state.inspection?.valueSnapshots ?? []).filter(snapshot => snapshot.subject === "ActivityInput");
+  if (snapshots.length === 0) {
+    return (
+      <section className="wf-instance-section">
+        <h4>Inputs</h4>
+        <p>No runtime input snapshots were recorded for this execution.</p>
+      </section>
+    );
+  }
+
+  return (
     <section className="wf-instance-section">
-      <h4>Activity</h4>
-      <dl className="wf-instance-meta">
-        <dt>Name</dt>
-        <dd>{activityLabel}</dd>
-        <dt>Status</dt>
-        <dd><WorkflowStatusBadge status={activity.status} subStatus={activity.subStatus} /></dd>
-        <dt>Activity Execution ID</dt>
-        <dd>{activity.activityExecutionId}</dd>
-        <dt>Authored Activity ID</dt>
-        <dd>{activity.authoredActivityId}</dd>
-        <dt>Type</dt>
-        <dd>{shortTypeName(activity.activityType) ?? activity.activityType} <small>{activity.activityTypeVersion}</small></dd>
-        <dt>Started</dt>
-        <dd>{formatDate(activity.startedAt)}</dd>
-        <dt>Completed</dt>
-        <dd>{formatDate(activity.completedAt)}</dd>
-        <dt>Duration</dt>
-        <dd>{formatDuration(activity.startedAt, activity.completedAt) || "Unknown"}</dd>
-        <dt>Bookmarks</dt>
-        <dd>{bookmarkCount}</dd>
-        <dt>Incidents</dt>
-        <dd>{incidentCount}</dd>
-      </dl>
+      <h4>Inputs</h4>
+      <div className="wf-runtime-input-list">
+        {snapshots.map(snapshot => (
+          <RuntimeInputSnapshot key={`${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}`} snapshot={snapshot} />
+        ))}
+      </div>
     </section>
   );
+}
+
+function RuntimeInputSnapshot({ snapshot }: { snapshot: ActivityExecutionInspectionValueSnapshot }) {
+  const typeName = snapshot.type?.displayName || snapshot.type?.typeName || snapshot.type?.alias || "Unknown";
+  const hasPayload = snapshot.captureMode === "Payload";
+
+  return (
+    <article className="wf-runtime-input">
+      <header>
+        <span>
+          <strong>{snapshot.name}</strong>
+          <small>{typeName}</small>
+        </span>
+        <span className="wf-runtime-capture-mode">{formatCaptureMode(snapshot.captureMode)}</span>
+      </header>
+      {hasPayload ? (
+        <RuntimeInputPayload payload={snapshot.payload} />
+      ) : (
+        <p>{snapshot.captureReason || "The runtime capture policy did not include this input value."}</p>
+      )}
+      {snapshot.isSensitive ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
+    </article>
+  );
+}
+
+function RuntimeInputPayload({ payload }: { payload: unknown }) {
+  const text = formatSnapshotPayload(payload);
+  const compact = text.length <= 160 && !text.includes("\n");
+
+  return compact ? (
+    <code className="wf-runtime-input-value">{text}</code>
+  ) : (
+    <details className="wf-runtime-input-value-details">
+      <summary>{previewSnapshotPayload(text)}</summary>
+      <pre>{text}</pre>
+    </details>
+  );
+}
+
+function formatCaptureMode(mode: string) {
+  return mode.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function previewSnapshotPayload(text: string) {
+  const firstLine = text.split("\n", 1)[0] || text;
+  return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
+}
+
+export function formatSnapshotPayload(payload: unknown) {
+  if (payload === null) return "null";
+  if (payload === undefined) return "undefined";
+  if (typeof payload === "string") return payload;
+  if (typeof payload === "number" || typeof payload === "boolean" || typeof payload === "bigint") return String(payload);
+
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
 }
 
 function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
