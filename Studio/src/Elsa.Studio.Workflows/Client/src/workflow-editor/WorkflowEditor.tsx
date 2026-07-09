@@ -504,7 +504,7 @@ export function WorkflowEditor({
             </button>
           </div>
           <label className="wf-autosave-toggle">
-            <input className="wf-autosave-switch-input" type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
+            <input className="wf-switch-input" type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
             <span>Autosave</span>
           </label>
           {findRisksAction ? (

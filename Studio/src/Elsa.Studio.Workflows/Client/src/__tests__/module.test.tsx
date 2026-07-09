@@ -1028,26 +1028,10 @@ describe("workflows module", () => {
   });
 
   it("renders activity availability rows with compact types and helpful descriptions", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/activities/availability/settings")) return response({
-        scope: "host-default",
-        mode: "AllExcept",
-        rules: { activityTypes: [], sets: [] }
-      });
-      if (url.includes("/activities/availability/diagnostics")) return response({
-        items: [{
-          activityDefinitionId: "run-javascript-v1",
-          activityTypeKey: "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity",
-          displayName: "Activity",
-          description: "Runs JavaScript code inside a workflow.",
-          category: "Scripting",
-          state: "Available",
-          layer: "Catalog",
-          referenceKind: "ActivityType",
-          referenceName: "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity",
-          reason: "Catalog activity is available."
-        }, {
+    stubActivityAvailabilityFetch({
+      items: [
+        availabilityDiagnosticEntry({ displayName: "Activity" }),
+        availabilityDiagnosticEntry({
           activityDefinitionId: "send-email-v1",
           activityTypeKey: "Elsa.Activities.Email.SendEmail",
           displayName: "Send Email",
@@ -1055,14 +1039,11 @@ describe("workflows module", () => {
           category: "Messaging",
           state: "BlockedByHostBaseline",
           layer: "HostBaseline",
-          referenceKind: "ActivityType",
           referenceName: "Elsa.Activities.Email.SendEmail",
           reason: "Disabled by the host baseline."
-        }],
-        sets: []
-      });
-      return response(null, 404);
-    }));
+        })
+      ]
+    });
 
     const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
 
@@ -1072,8 +1053,81 @@ describe("workflows module", () => {
     const list = container.querySelector(".availability-activity-list");
     expect(list?.textContent).toContain("RunJavaScript.Activity");
     expect(list?.textContent).toContain("Runs JavaScript code inside a workflow.");
-    expect(list?.textContent).not.toContain("Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity");
+    expect(list?.textContent).not.toContain(runJavaScriptTypeKey);
     expect(list?.textContent).not.toContain("Catalog activity is available.");
+
+    // Rows are grouped under category headers instead of repeating a category badge per row.
+    const groupTitles = Array.from(container.querySelectorAll(".availability-group-title")).map(title => title.textContent);
+    expect(groupTitles).toEqual(["Messaging1", "Scripting1"]);
+
+    // Switches express effective availability: in AllExcept mode an unlisted activity is ON,
+    // and a host-blocked activity is forced off and not editable.
+    const runJavaScriptSwitch = checkboxByLabel(container, "Run JavaScript available in new workflows");
+    const sendEmailSwitch = checkboxByLabel(container, "Send Email available in new workflows");
+    expect(runJavaScriptSwitch?.checked).toBe(true);
+    expect(sendEmailSwitch?.checked).toBe(false);
+    expect(sendEmailSwitch?.disabled).toBe(true);
+
+    // The "Hidden only" quick filter narrows the list to activities that are not effectively available.
+    await click(buttonByText(container, "Hidden only"));
+    expect(list?.textContent).toContain("Send Email");
+    expect(list?.textContent).not.toContain("Run JavaScript");
+    await click(buttonByText(container, "Hidden only"));
+    expect(list?.textContent).toContain("Run JavaScript");
+
+    await unmount();
+  });
+
+  it("saves mode-aware availability toggles and inspects activity metadata in the details panel", async () => {
+    let savedBody: { mode: number; rules: { activityTypes: string[]; sets: string[] } } | null = null;
+    stubActivityAvailabilityFetch({
+      items: [availabilityDiagnosticEntry()],
+      sets: [{ name: "Scripting Tools", activityTypeKeys: [runJavaScriptTypeKey] }],
+      activities: [{
+        activityVersionId: "run-javascript-v1",
+        activityTypeKey: runJavaScriptTypeKey,
+        version: "1.0.0",
+        category: "Scripting",
+        displayName: "Run JavaScript",
+        description: "Runs JavaScript code inside a workflow.",
+        executionType: "Task",
+        inputs: [{ name: "script", displayName: "Script", type: { typeName: "String" }, description: "The code to run." }],
+        outputs: [],
+        designFacets: []
+      }],
+      onSave: body => { savedBody = body; }
+    });
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+    await waitForText(container, "Run JavaScript");
+
+    // Clicking the row opens the details inspector with catalog metadata and the raw payload.
+    await click(container.querySelector("button[title='Show activity details']"));
+    const details = container.querySelector(".availability-details");
+    expect(details?.textContent).toContain(runJavaScriptTypeKey);
+    expect(details?.textContent).toContain("1.0.0");
+    expect(details?.textContent).toContain("Script");
+    expect(details?.textContent).toContain("Raw metadata");
+
+    // Excluding a set locks its members' switches: an individual rule can't override the set rule.
+    const setSwitch = checkboxByLabel(container, "Activities in the Scripting Tools set available in new workflows");
+    expect(setSwitch?.checked).toBe(true);
+    await click(setSwitch);
+    const lockedSwitch = checkboxByLabel(container, "Run JavaScript available in new workflows");
+    expect(lockedSwitch?.checked).toBe(false);
+    expect(lockedSwitch?.disabled).toBe(true);
+    expect(lockedSwitch?.title).toBe('Controlled by the "Scripting Tools" set rule');
+    await click(checkboxByLabel(container, "Activities in the Scripting Tools set available in new workflows"));
+
+    // Turning the switch off marks the draft dirty; saving stores the AllExcept exclusion list.
+    const saveButton = buttonByText(container, "Save");
+    expect(saveButton?.disabled).toBe(true);
+    await click(checkboxByLabel(container, "Run JavaScript available in new workflows"));
+    expect(container.textContent).toContain("Unsaved changes");
+    await click(buttonByText(container, "Save"));
+    await waitForText(container, "Activity availability saved.");
+    expect(savedBody).toEqual({ scope: "host-default", mode: 0, rules: { activityTypes: [runJavaScriptTypeKey], sets: [] } });
+    expect(container.textContent).not.toContain("Unsaved changes");
 
     await unmount();
   });
@@ -1980,6 +2034,48 @@ function response(body: unknown, status = 200) {
   });
 }
 
+const runJavaScriptTypeKey = "Elsa.Workflows.Runtime.JavaScript.Activities.RunJavaScript.Activity";
+
+function availabilityDiagnosticEntry(overrides: Record<string, unknown> = {}) {
+  return {
+    activityDefinitionId: "run-javascript-v1",
+    activityTypeKey: runJavaScriptTypeKey,
+    displayName: "Run JavaScript",
+    description: "Runs JavaScript code inside a workflow.",
+    category: "Scripting",
+    state: "Available",
+    layer: "Catalog",
+    referenceKind: "ActivityType",
+    referenceName: runJavaScriptTypeKey,
+    reason: "Catalog activity is available.",
+    ...overrides
+  };
+}
+
+// Shared fetch stub for the activity availability page: settings GET/PUT, diagnostics, and catalog.
+function stubActivityAvailabilityFetch(options: {
+  items?: unknown[];
+  sets?: unknown[];
+  activities?: unknown[];
+  settings?: unknown;
+  onSave?: (body: { scope?: string; mode: number; rules: { activityTypes: string[]; sets: string[] } }) => void;
+} = {}) {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/activities/availability/settings")) {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body));
+        options.onSave?.(body);
+        return response({ scope: "host-default", mode: body.mode, rules: body.rules });
+      }
+      return response(options.settings ?? { scope: "host-default", mode: "AllExcept", rules: { activityTypes: [], sets: [] } });
+    }
+    if (url.includes("/activities/availability/diagnostics")) return response({ items: options.items ?? [], sets: options.sets ?? [] });
+    if (url.endsWith("/activities")) return response({ activities: options.activities ?? [] });
+    return response(null, 404);
+  }));
+}
+
 async function click(element: Element | null) {
   if (!(element instanceof HTMLElement)) throw new Error("Element not found");
   element.click();
@@ -2034,7 +2130,7 @@ function textareaByLabel(container: HTMLElement, label: string) {
 }
 
 function autosaveInput(container: HTMLElement) {
-  return container.querySelector<HTMLInputElement>(".wf-autosave-switch-input");
+  return container.querySelector<HTMLInputElement>(".wf-autosave-toggle .wf-switch-input");
 }
 
 function selectByLabel(container: HTMLElement, label: string) {

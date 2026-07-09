@@ -3,8 +3,11 @@ import type {
   ActivityAvailabilityDiagnosticState,
   ActivityAvailabilityDiagnostics,
   ActivityAvailabilityMode,
+  ActivityAvailabilitySetDiagnostic,
   ActivityAvailabilitySettings
 } from "./workflowTypes";
+import { groupByCategory } from "./categoryGrouping";
+import { argumentNameKeys, isPlainRecord, readArgumentType, readStringField } from "./workflowProperties";
 
 const diagnosticStateNames: ActivityAvailabilityDiagnosticState[] = [
   "Available",
@@ -21,6 +24,21 @@ const stateLabels: Record<ActivityAvailabilityDiagnosticState, string> = {
   RemovedFromCatalog: "Removed",
   UnresolvedReference: "Unresolved"
 };
+
+// Insertion order mirrors the backend enum so numeric wire values index correctly.
+const policyLayerLabels = {
+  Catalog: "Catalog",
+  HostBaseline: "Host baseline",
+  ManagementSettings: "Management settings"
+} as const;
+
+const policyLayerNames = Object.keys(policyLayerLabels) as Array<keyof typeof policyLayerLabels>;
+
+/** Human label for the policy layer that produced a diagnostic (number or string on the wire). */
+export function getAvailabilityLayerLabel(value: string | number | undefined | null): string {
+  const name = typeof value === "number" ? policyLayerNames[value] : value;
+  return (name && policyLayerLabels[name as keyof typeof policyLayerLabels]) || name?.toString() || "";
+}
 
 /** Normalizes a diagnostic state (number or string) into its canonical name. */
 export function getAvailabilityStateName(value: ActivityAvailabilityDiagnosticState | number | undefined | null): ActivityAvailabilityDiagnosticState {
@@ -42,6 +60,11 @@ export function getAvailabilityStateClass(value: ActivityAvailabilityDiagnosticS
 /** True when a diagnostic state means the activity is not addable to new workflows. */
 export function isUnavailableState(value: ActivityAvailabilityDiagnosticState | number | undefined | null): boolean {
   return getAvailabilityStateName(value) !== "Available";
+}
+
+/** True when the host baseline blocks the activity — the management UI cannot override it. */
+export function isHostBlockedEntry(entry: ActivityAvailabilityDiagnosticEntry): boolean {
+  return getAvailabilityStateName(entry.state) === "BlockedByHostBaseline";
 }
 
 export function normalizeAvailabilityMode(value: ActivityAvailabilityMode | number | undefined | null): ActivityAvailabilityMode {
@@ -72,6 +95,11 @@ function isActivityTypeReference(entry: ActivityAvailabilityDiagnosticEntry): bo
   return entry.referenceKind === 0 || entry.referenceKind === "ActivityType";
 }
 
+/** The identity an activity row contributes to the management rules list. */
+export function getAvailabilityRuleKey(entry: ActivityAvailabilityDiagnosticEntry): string {
+  return entry.activityTypeKey ?? entry.activityDefinitionId ?? "";
+}
+
 /** Catalog activity rows (resolved activity-type references) sorted by display name. */
 export function getAvailabilityActivityEntries(diagnostics: ActivityAvailabilityDiagnostics | null | undefined): ActivityAvailabilityDiagnosticEntry[] {
   return [...(diagnostics?.items ?? [])]
@@ -88,6 +116,87 @@ export function getUnresolvedAvailabilityEntries(diagnostics: ActivityAvailabili
       return state === "RemovedFromCatalog" || state === "UnresolvedReference";
     })
     .sort((left, right) => (left.referenceName ?? "").localeCompare(right.referenceName ?? ""));
+}
+
+/** Activity rows bucketed by category for the grouped availability list. */
+export interface AvailabilityCategoryGroup {
+  category: string;
+  entries: ActivityAvailabilityDiagnosticEntry[];
+}
+
+export function groupAvailabilityEntriesByCategory(entries: ActivityAvailabilityDiagnosticEntry[]): AvailabilityCategoryGroup[] {
+  return groupByCategory(entries, entry => entry.category).map(group => ({ category: group.category, entries: group.items }));
+}
+
+/**
+ * Whether the management draft leaves a rule target (activity type or set) available to new
+ * workflows: in "AllExcept" mode the list holds exclusions, in "Only" mode it holds inclusions.
+ * For activity rows prefer computeEffectiveAvailability, which also layers set rules and the
+ * host baseline.
+ */
+export function isRuleTargetEnabled(draft: AvailabilityDraft, list: "activityTypes" | "sets", key: string): boolean {
+  const listed = draft[list].includes(key);
+  return draft.mode === "Only" ? listed : !listed;
+}
+
+/** Returns a draft where the rule target's effective availability equals `enabled`. */
+export function setRuleTargetEnabled(draft: AvailabilityDraft, list: "activityTypes" | "sets", key: string, enabled: boolean): AvailabilityDraft {
+  const listed = draft.mode === "Only" ? enabled : !enabled;
+  if (draft[list].includes(key) === listed) return draft;
+  return { ...draft, [list]: toggleListValue(draft[list], key) };
+}
+
+export interface EffectiveActivityAvailability {
+  /** Whether the draft leaves the activity available to new workflows. */
+  enabled: boolean;
+  /** What prevents the row switch from changing the state, if anything. */
+  lockedBy: "host-baseline" | "set-rule" | null;
+  /** The selected set that governs the activity when lockedBy is "set-rule". */
+  governingSet?: string;
+}
+
+/**
+ * Resolves each activity's draft availability the way the backend rule expander does: sets
+ * selected in the rules contribute their member activity types to the mode's exclusion/inclusion
+ * list, and the host baseline overrides everything. A set-governed activity is locked because an
+ * individual activity rule cannot override its set's contribution. Keyed by the rule key.
+ */
+export function computeEffectiveAvailability(
+  entries: ActivityAvailabilityDiagnosticEntry[],
+  sets: ActivityAvailabilitySetDiagnostic[],
+  draft: AvailabilityDraft
+): Map<string, EffectiveActivityAvailability> {
+  const listedTypes = new Set(draft.activityTypes);
+  const selectedSets = new Set(draft.sets);
+  const governingSetByKey = new Map<string, string>();
+  for (const set of sets) {
+    if (!selectedSets.has(set.name)) continue;
+    for (const key of set.activityTypeKeys ?? []) {
+      if (!governingSetByKey.has(key)) governingSetByKey.set(key, set.name);
+    }
+  }
+
+  const result = new Map<string, EffectiveActivityAvailability>();
+  for (const entry of entries) {
+    const key = getAvailabilityRuleKey(entry);
+    if (isHostBlockedEntry(entry)) {
+      result.set(key, { enabled: false, lockedBy: "host-baseline" });
+      continue;
+    }
+    const governingSet = governingSetByKey.get(key);
+    const listed = listedTypes.has(key) || governingSet !== undefined;
+    const enabled = draft.mode === "Only" ? listed : !listed;
+    result.set(key, governingSet ? { enabled, lockedBy: "set-rule", governingSet } : { enabled, lockedBy: null });
+  }
+  return result;
+}
+
+export function isAvailabilityDraftDirty(draft: AvailabilityDraft, settings: ActivityAvailabilitySettings | null | undefined): boolean {
+  const baseline = createAvailabilityDraft(settings);
+  const normalize = (values: string[]) => [...values].sort((left, right) => left.localeCompare(right)).join("\n");
+  return draft.mode !== baseline.mode
+    || normalize(draft.activityTypes) !== normalize(baseline.activityTypes)
+    || normalize(draft.sets) !== normalize(baseline.sets);
 }
 
 export function toggleListValue(values: string[], value: string): string[] {
@@ -148,6 +257,28 @@ function getActivityTypeName(activityTypeKey: string | null | undefined): string
 
 function getActivityTypeSegments(activityTypeKey: string | null | undefined): string[] {
   return activityTypeKey?.split(".").filter(Boolean) ?? [];
+}
+
+/** A catalog input/output rendered in the availability details panel. */
+export interface AvailabilityArgumentSummary {
+  name: string;
+  typeName: string;
+  description: string;
+}
+
+/**
+ * Summarizes catalog argument metadata for display. Catalog inputs/outputs are `unknown[]` on the
+ * wire, so this leans on the shared tolerant readers from workflowProperties (casing aliases +
+ * legacy typeInformation shapes) and skips anything that has no name.
+ */
+export function summarizeAvailabilityArguments(values: unknown[] | null | undefined): AvailabilityArgumentSummary[] {
+  return (values ?? []).flatMap(value => {
+    if (!isPlainRecord(value)) return [];
+    const name = (readStringField(value, ["displayName", "DisplayName"]) || readStringField(value, argumentNameKeys)).trim();
+    if (!name) return [];
+    const typeName = (readArgumentType(value).alias || readStringField(value, ["typeName", "TypeName", "alias", "Alias"])).trim();
+    return [{ name, typeName, description: readStringField(value, ["description", "Description"]).trim() }];
+  });
 }
 
 /**

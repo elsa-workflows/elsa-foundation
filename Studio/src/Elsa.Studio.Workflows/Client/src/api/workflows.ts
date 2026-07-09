@@ -111,9 +111,10 @@ export function useSaveActivityAvailabilitySettings(context: StudioEndpointConte
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: SaveActivityAvailabilitySettingsRequest) => saveActivityAvailabilitySettings(context, request),
-    onSuccess: () => {
-      // Refresh both the management views and the picker, which now reflects the saved policy.
-      void queryClient.invalidateQueries({ queryKey: workflowKeys.activityAvailabilitySettings });
+    onSuccess: saved => {
+      // Seed the cache with the PUT response so the page's dirty indicator clears immediately,
+      // then refresh the management views and the picker, which now reflect the saved policy.
+      queryClient.setQueryData(workflowKeys.activityAvailabilitySettings, saved);
       void queryClient.invalidateQueries({ queryKey: workflowKeys.activityAvailabilityDiagnostics });
       void queryClient.invalidateQueries({ queryKey: workflowKeys.activities });
     }

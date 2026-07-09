@@ -4,6 +4,7 @@ import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, 
 import type { ChildSlot } from "../workflowAdapter";
 import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
+import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
 import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowConnectSource, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 
@@ -87,19 +88,10 @@ function getRootKind(activity: ActivityCatalogItem | undefined) {
 }
 
 export function groupActivityPalette(activities: ActivityCatalogItem[]): ActivityPaletteGroup[] {
-  const categories = new Map<string, ActivityCatalogItem[]>();
-
-  for (const activity of activities) {
-    const category = activity.category?.trim() || "Uncategorized";
-    categories.set(category, [...(categories.get(category) ?? []), activity]);
-  }
-
-  return Array.from(categories.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([category, categoryActivities]) => ({
-      category,
-      activities: categoryActivities.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
-    }));
+  return groupByCategory(activities, activity => activity.category).map(group => ({
+    category: group.category,
+    activities: group.items.sort((left, right) => getActivityDisplay(left).localeCompare(getActivityDisplay(right)))
+  }));
 }
 
 function isFlowchartActivity(activity: ActivityCatalogItem) {
