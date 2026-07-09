@@ -6,6 +6,7 @@ using Elsa.Http.Services;
 using Elsa.Primitives.Extensions;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Reflection;
 
 namespace Elsa.Http;
@@ -81,6 +82,9 @@ public class HttpFeature : IShellFeature
             .AddScoped<IDownloadableContentHandler, HttpFileDownloadableContentHandler>()
             ;
 
+        // Request-side body parser (spec 089 sub-unit C, research D6): stateless content-type dispatch
+        // yielding wire-safe JsonElement. Replaceable via TryAdd — register a custom impl before this feature.
+        services.TryAddSingleton<IHttpRequestBodyParser, HttpRequestBodyParser>();
     }
 
     private void RegisterFileDownloader(IServiceCollection services)

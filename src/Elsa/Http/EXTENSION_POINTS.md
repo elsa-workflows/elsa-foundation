@@ -29,6 +29,21 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Http` — the com
 
 ---
 
+## Replaceable single-implementation contracts
+
+### `IHttpRequestBodyParser` *(Core — `Elsa.Http.Core`)*
+- **Kind:** Replacement (single implementation, resolved by `GetService`; override by registering your own before `HttpFeature`).
+- **Signature:**
+  ```
+  JsonElement? Parse(string? contentType, string body);
+  ```
+- **Register:** `services.TryAddSingleton<IHttpRequestBodyParser, MyParser>()` (register yours first — `HttpFeature` uses `TryAdd`, so an earlier registration wins).
+- **Default impl:** `Elsa.Http` — `HttpRequestBodyParser` *(intra-domain)*. Stateless content-type dispatch: `application/json` / `text/json` / any `+json` suffix → parsed `JsonElement` (malformed → `null`, never throws); `text/*` → string element; unknown/absent content type or empty body → `null`. A `charset` (or other) parameter is tolerated.
+- **Consumed by:** the request middleware (`Elsa.Activities.Http`) to populate `HttpRequestModel.ParsedContent` (spec 089 sub-unit C, research D6).
+- **Purpose:** the request-side counterpart to the response-side `IHttpContentParser` set. It shares that set's content-type-dispatch *intent* but not its implementations: the response parsers are `HttpResponseMessage`/`Stream`-shaped and return `object` via a caller `ReturnType` + converter/serializer pipeline, whereas the inbound body is already a string and the only legal output is wire-safe `JsonElement` (ADR 0035/0036). The response-side path is untouched.
+
+---
+
 ## HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)*
 
 The `IHttpEndpointAuthorizationHandler` and `IHttpEndpointFaultHandler` contracts (with `AuthorizeHttpEndpointContext`, `HttpEndpointFaultContext`, and `HttpBadRequestException`) live in `Elsa.Http.Core` (spec 089 sub-unit C) so the request middleware in `Elsa.Activities.Http` and the default handlers in `Elsa.Workflows.Runtime.Http` share them without a cross-module edge — same placement logic as the `HttpEndpointRouting` routing vocabulary. Default implementations and override points are catalogued in [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md).
