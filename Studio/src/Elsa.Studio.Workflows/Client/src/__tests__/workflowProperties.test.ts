@@ -158,7 +158,8 @@ describe("descriptor helpers", () => {
     { alias: "Boolean", displayName: "Boolean", category: "Primitives", defaultEditor: "checkbox" },
     { alias: "DateTime", displayName: "Date/Time", category: "Primitives", defaultEditor: "date" },
     { alias: "Int32", displayName: "Integer", category: "Primitives", defaultEditor: "" },
-    { typeName: "Legacy.Type", displayName: "Legacy" }
+    // Legacy wire data may omit `alias`; descriptorAlias falls back to typeName.
+    { typeName: "Legacy.Type", displayName: "Legacy" } as VariableTypeDescriptor
   ];
 
   it("resolves the default editor hint for an alias, falling back to text", () => {

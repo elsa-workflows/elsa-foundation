@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 
@@ -1014,7 +1014,7 @@ describe("workflows module", () => {
   });
 
   it("shows an empty executable state when executable endpoints are unavailable", async () => {
-    const fetchMock = vi.fn(async () => response(null, 404));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response(null, 404));
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
 
@@ -1821,7 +1821,7 @@ function testApi(): ElsaStudioModuleApi {
       prompt: vi.fn(async () => null),
       alert: vi.fn(async () => {})
     }
-  } as ElsaStudioModuleApi;
+  } as unknown as ElsaStudioModuleApi;
 }
 
 function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: ReturnType<typeof registry>) {
@@ -2501,8 +2501,17 @@ async function waitForUrlParam(name: string, value: string) {
 
 function registry<T>(): StudioContributionRegistry<T> {
   const items: T[] = [];
+  const slot: StudioSlotDefinition = { id: "test-slot", kind: "test", owner: { kind: "host", id: "test" } };
   return {
-    add: item => items.push(item),
-    list: () => [...items]
+    slot,
+    add: item => { items.push(item); },
+    list: () => [...items],
+    compose: () => items.map((contribution, order) => ({
+      contribution,
+      slot,
+      availability: { state: "available" },
+      order,
+      stableKey: `test-${order}`
+    }))
   };
 }

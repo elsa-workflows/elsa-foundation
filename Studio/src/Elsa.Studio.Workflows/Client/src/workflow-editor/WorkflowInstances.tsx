@@ -3,7 +3,7 @@ import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getActivityExecutionInspection, getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
@@ -781,7 +781,26 @@ function RuntimeValueEvidenceCard({ snapshot }: { snapshot: ActivityExecutionIns
   );
 }
 
+// `DiagnosticSnapshotUnknownNode` has `kind: string`, which defeats discriminated-union narrowing —
+// route unknown kinds out first so the switch below narrows to the concrete node interfaces.
+type KnownDiagnosticSnapshotNode = Exclude<DiagnosticSnapshotNode, DiagnosticSnapshotUnknownNode>;
+
+// Record<K, true> makes the compiler reject a missing or misspelled kind when the union grows.
+const knownSnapshotKinds: Record<KnownDiagnosticSnapshotNode["kind"], true> = {
+  null: true, scalar: true, number: true, string: true, object: true, array: true,
+  redacted: true, truncated: true, unsupported: true, error: true,
+  permissionHidden: true, payloadReference: true
+};
+
+function isKnownSnapshotNode(node: DiagnosticSnapshotNode): node is KnownDiagnosticSnapshotNode {
+  return Object.hasOwn(knownSnapshotKinds, node.kind);
+}
+
 function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotNode; depth?: number }) {
+  if (!isKnownSnapshotNode(node)) {
+    return <DiagnosticSnapshotMarker node={{ kind: "unsupported", reason: `Unknown snapshot node: ${node.kind}` }} />;
+  }
+
   switch (node.kind) {
     case "null":
       return <code className="wf-runtime-input-value">null</code>;
@@ -807,12 +826,10 @@ function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotN
       return <DiagnosticSnapshotMarker node={node} />;
     case "payloadReference":
       return <DiagnosticSnapshotReference node={node} />;
-    default:
-      return <DiagnosticSnapshotMarker node={{ kind: "unsupported", reason: `Unknown snapshot node: ${node.kind}` }} />;
   }
 }
 
-function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotNode & { kind: "object" }; depth: number }) {
+function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotObjectNode; depth: number }) {
   const properties = node.properties ?? [];
   if (properties.length === 0) return <code className="wf-runtime-input-value">{"{}"}</code>;
 
@@ -831,7 +848,7 @@ function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotNod
   );
 }
 
-function DiagnosticSnapshotArray({ node, depth }: { node: DiagnosticSnapshotNode & { kind: "array" }; depth: number }) {
+function DiagnosticSnapshotArray({ node, depth }: { node: DiagnosticSnapshotArrayNode; depth: number }) {
   const items = node.items ?? [];
   if (items.length === 0) return <code className="wf-runtime-input-value">[]</code>;
 
@@ -861,7 +878,7 @@ function DiagnosticSnapshotMarker({ node }: { node: Pick<DiagnosticSnapshotNode,
   );
 }
 
-function DiagnosticSnapshotReference({ node }: { node: DiagnosticSnapshotNode & { kind: "payloadReference" } }) {
+function DiagnosticSnapshotReference({ node }: { node: DiagnosticSnapshotPayloadReferenceNode }) {
   const label = node.displayName || node.referenceKind || "Referenced payload";
   const resolutionReason = node.resolution?.reason || "Reference resolution is not available.";
   return (

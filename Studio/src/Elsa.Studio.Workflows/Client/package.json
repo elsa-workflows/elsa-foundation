@@ -19,7 +19,8 @@
   "scripts": {
     "build": "vite build",
     "build:lib": "vite build --config vite.lib.config.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@elsa-workflows/studio-code-editor": "workspace:*",

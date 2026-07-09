@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
-import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
+import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 
 describe("activity input wire adapter", () => {
   it("folds a top-level wrapped input into the canonical inputs array", () => {
@@ -181,7 +181,7 @@ describe("argument collection wire adapter", () => {
         isArray: true,
         storageDriverType: { typeName: "MemoryStorageDriver", namespace: "Elsa.Memory" },
         default: null
-      }] as unknown[]
+      }] as unknown as VariableDefinition[]
     };
 
     const expanded = expandStateFromWire(state);

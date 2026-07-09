@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Lint (ESLint)
+    name: Lint (ESLint) + Typecheck
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,3 +34,6 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck

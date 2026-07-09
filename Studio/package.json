@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && pnpm lint:css",
     "lint:css": "stylelint \"src/*/Client/src/**/*.css\" \"!src/Elsa.Studio.Web/**\""
   },
