@@ -28,6 +28,24 @@ function ExtensionBuilderView() {
   }
 
   if (state === "unavailable") {
+    // A 403 is a Studio authorization failure, not a backend problem: render a distinct permission surface that names
+    // it as a missing permission (not "backend unavailable", not a login prompt) and does not offer a doomed retry.
+    if (managementUnavailable?.kind === "forbidden") {
+      return (
+        <section className="extension-builder-page">
+          <div className="section-header modules-header">
+            <div>
+              <h2>Extension Builder</h2>
+              <p>Trusted-team project workspaces, builds, promotion, and runtime recovery.</p>
+            </div>
+          </div>
+          <StudioAlert tone="warning">
+            {`You do not have permission to use Extension Builder. ${backendManagementUnavailableMessage(managementUnavailable)}`}
+          </StudioAlert>
+        </section>
+      );
+    }
+
     // ADR 0037: the Studio management bridge reported backend management is not usable. Render an explicit surface
     // that names the real reason and offers a retry, rather than issuing doomed backend requests. No actions render.
     return (
@@ -119,6 +137,7 @@ function backendManagementUnavailableMessage(unavailable: BackendManagementUnava
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The backend management surface could not be reached.";
     case "degraded": return "The backend management surface is degraded.";
+    case "forbidden": return "This requires the extension-builder.read permission.";
     default: return "Backend management status is unknown.";
   }
 }

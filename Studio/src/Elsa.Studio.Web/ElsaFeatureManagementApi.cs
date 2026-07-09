@@ -15,12 +15,15 @@ internal static class ElsaFeatureManagementApi
 {
     public static IEndpointRouteBuilder MapElsaFeatureManagementApi(this IEndpointRouteBuilder endpoints)
     {
-        // Studio's OWN feature-management surface, gated by the shared Studio bridge user-session gate (ADR 0037).
-        var group = endpoints.MapGroup("/modularity/features")
-            .RequireAuthorization(StudioBridgeAuth.PolicyName);
+        // Studio's OWN feature-management surface (ADR 0037). Host-control permission gating (#249): reading the feature
+        // catalog requires `module-management.read`; applying feature changes is a host-control MUTATION and requires
+        // `module-management.manage`. When Studio auth is disabled both allow anonymously (demo shell).
+        var group = endpoints.MapGroup("/modularity/features");
 
-        group.MapGet("", GetFeaturesAsync);
-        group.MapPost("/apply", ApplyFeaturesAsync);
+        group.MapGet("", GetFeaturesAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+        group.MapPost("/apply", ApplyFeaturesAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
         return endpoints;
     }
 

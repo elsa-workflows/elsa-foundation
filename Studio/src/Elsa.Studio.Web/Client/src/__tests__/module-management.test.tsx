@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
+import { createEndpointContext, StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 describe("module management page", () => {
@@ -568,6 +568,33 @@ describe("module management page", () => {
     });
     await flushPromises();
     expect(activeGridPanel(container)?.textContent).toContain("Feature management");
+
+    await unmount();
+  });
+
+  it("renders a distinct permission-denied state (not backend-unavailable) when the bridge registry read is forbidden", async () => {
+    // A 403 on the Server-tab bridge registry read is a Studio authorization failure — the signed-in user lacks
+    // module-management.read (#249). It must render "Permission required" / "do not have permission", NOT the
+    // backend-unavailable/unreachable state and NOT a login prompt.
+    const { container, unmount } = await renderModuleManagementPage(stubApi({
+      bridgeRegistryGetJson: async () => { throw new StudioHttpError(403, "Forbidden"); }
+    }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Permission required");
+    expect(container.textContent).toContain("do not have permission");
+    expect(container.textContent).toContain("module-management.read");
+    // Not conflated with a backend-unavailable/reachability state.
+    expect(container.textContent).not.toContain("Unreachable");
+    expect(container.textContent).not.toContain("could not be reached");
+    expect(container.textContent).not.toContain("check the backend management configuration");
+    // The workbench is not rendered.
+    expect(activeGridPanel(container)).toBeNull();
 
     await unmount();
   });

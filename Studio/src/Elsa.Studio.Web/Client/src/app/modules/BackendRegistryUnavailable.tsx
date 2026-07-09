@@ -1,5 +1,5 @@
 import React from "react";
-import { Boxes } from "lucide-react";
+import { Boxes, ShieldAlert } from "lucide-react";
 import { EmptyState, StudioAlert } from "../ui";
 import { labelForBackendRegistryStatus, type BackendRegistryUnavailableKind, type HostModel } from "./moduleManagementApi";
 
@@ -17,6 +17,22 @@ export function BackendRegistryUnavailable({
   status: BackendRegistryUnavailableKind;
   detail: string;
 }) {
+  // A 403 is a Studio authorization failure, not a backend/config problem: name it as a permission problem and do NOT
+  // point the user at backend configuration or a login (#249, ADR 0037).
+  if (status === "forbidden") {
+    return (
+      <>
+        <StudioAlert tone="warning">
+          {host.label} module registry — {labelForBackendRegistryStatus(status)}. {detail}
+        </StudioAlert>
+        <EmptyState icon={<ShieldAlert size={22} />}>
+          You are signed in but do not have permission to view {host.label} module management. Ask an administrator for the
+          module-management.read permission.
+        </EmptyState>
+      </>
+    );
+  }
+
   return (
     <>
       <StudioAlert tone={status === "unconfigured" ? "warning" : "danger"}>

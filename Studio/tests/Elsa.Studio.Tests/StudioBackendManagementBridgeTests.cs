@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Elsa.Studio.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -141,12 +142,13 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task AllowsAuthenticatedBrowserRequestWhenStudioAuthEnabled()
+    public async Task AllowsAuthenticatedBrowserRequestWithModuleManagementReadWhenStudioAuthEnabled()
     {
-        // The backend session endpoint validates the browser bearer; an authenticated session lets the request through.
+        // The backend session endpoint validates the browser bearer AND reports its permissions; a session holding
+        // module-management.read passes the status/registry read gate (#249).
         var backend = RecordingBackend.RespondingWith(request =>
             request.RequestUri!.AbsolutePath.EndsWith("/identity/session")
-                ? JsonOk("""{ "status": "authenticated", "subject": "user-1" }""")
+                ? JsonOk(AuthenticatedSessionJson(StudioBridgeAuth.ModuleManagementReadPermission))
                 : JsonOk("""{ "modules": [] }"""));
         var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
         client.DefaultRequestHeaders.Authorization = new("Bearer", "a-valid-backend-bearer");
@@ -154,6 +156,24 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         var status = await GetStatusAsync(client);
 
         Assert.Equal(StudioBackendManagementStatus.Available, status.Status);
+    }
+
+    [Fact]
+    public async Task ForbidsAuthenticatedBrowserStatusRequestMissingModuleManagementReadWhenStudioAuthEnabled()
+    {
+        // A live session that lacks module-management.read is FORBIDDEN (403) — a distinct authorization failure, not a
+        // 401 and not a backend-status state. No backend management call is issued for a forbidden caller.
+        var backend = RecordingBackend.RespondingWith(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/identity/session")
+                ? JsonOk(AuthenticatedSessionJson())
+                : JsonOk("""{ "modules": [] }"""));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", "a-valid-backend-bearer");
+
+        var response = await client.GetAsync(StatusRoute);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(backend.ManagementRequests);
     }
 
     [Fact]
@@ -273,6 +293,40 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         // Fail closed on the browser side too: no backend management call is issued for an unauthenticated caller.
+        Assert.Empty(backend.ManagementRequests);
+    }
+
+    [Fact]
+    public async Task AllowsAuthenticatedBrowserCapabilitiesRequestWithExtensionBuilderReadWhenStudioAuthEnabled()
+    {
+        // The capabilities read is gated by extension-builder.read (not module-management): a holder passes (#249).
+        var backend = RecordingBackend.RespondingWith(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/identity/session")
+                ? JsonOk(AuthenticatedSessionJson(StudioBridgeAuth.ExtensionBuilderReadPermission))
+                : JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", "a-valid-backend-bearer");
+
+        var result = await GetCapabilitiesAsync(client);
+
+        Assert.Equal(StudioExtensionBuilderCapabilitiesResult.Available, result.Status);
+    }
+
+    [Fact]
+    public async Task ForbidsAuthenticatedBrowserCapabilitiesRequestMissingExtensionBuilderReadWhenStudioAuthEnabled()
+    {
+        // module-management.read does NOT satisfy the Extension Builder capabilities gate — the surfaces are gated
+        // independently, so a module-only holder is forbidden (403).
+        var backend = RecordingBackend.RespondingWith(request =>
+            request.RequestUri!.AbsolutePath.EndsWith("/identity/session")
+                ? JsonOk(AuthenticatedSessionJson(StudioBridgeAuth.ModuleManagementReadPermission))
+                : JsonOk(TrustedCapabilitiesJson));
+        var client = await StartBridgeHostAsync(backend, backendBaseUrl: BackendBaseUrl, managementKey: ManagementKey, authEnabled: true);
+        client.DefaultRequestHeaders.Authorization = new("Bearer", "a-valid-backend-bearer");
+
+        var response = await client.GetAsync(CapabilitiesRoute);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Empty(backend.ManagementRequests);
     }
 
@@ -432,6 +486,12 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
     private static HttpResponseMessage JsonOk(string json) =>
         new(HttpStatusCode.OK) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+
+    // Builds the backend session-endpoint response for an authenticated user carrying the given host-control
+    // permissions (the flat camelCase `permissions` array the gate projects onto the ticket). No permissions models a
+    // signed-in user with only a session and no host-control grants.
+    private static string AuthenticatedSessionJson(params string[] permissions) =>
+        JsonSerializer.Serialize(new { status = "authenticated", subject = "user-1", permissions });
 
     private async Task<HttpClient> StartBridgeHostAsync(
         RecordingBackend backend,

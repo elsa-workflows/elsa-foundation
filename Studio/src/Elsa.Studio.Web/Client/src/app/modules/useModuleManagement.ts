@@ -10,6 +10,8 @@ import {
   type ModuleManagementRegistryResponse
 } from "./moduleManagementApi";
 import type { ElsaStudioModuleApi } from "../../sdk";
+import { isPermissionDenied } from "../hostControlPermissions";
+import { useHostControlAccess } from "../useHostControlAccess";
 
 export interface ModuleManagementRegistries {
   hosts: HostModel[];
@@ -33,9 +35,12 @@ function useModuleManagementRegistry(host: HostModel) {
 // Both hosts' registries as parallel queries. Studio and Server always both exist, so the two
 // `useQuery` calls are unconditional (Rules of Hooks safe). Callers pick the active host via `byHost`.
 export function useModuleManagementRegistries(api: ElsaStudioModuleApi): ModuleManagementRegistries {
+  // Proactively gate the Studio host's mutation affordances on the user's manage permission (server-side manage gate is
+  // still authoritative). In demo/auth-disabled mode this resolves to true so full access is preserved (#249).
+  const { canManageModuleManagement } = useHostControlAccess();
   // Memoized so `activeHost` (found by identity below) stays stable across renders, avoiding needless
   // re-renders of children keyed on the host object.
-  const hosts = useMemo(() => createModuleManagementHosts(api), [api]);
+  const hosts = useMemo(() => createModuleManagementHosts(api, canManageModuleManagement), [api, canManageModuleManagement]);
   const studioHost = hosts.find(host => host.id === "studio") ?? hosts[0];
   const serverHost = hosts.find(host => host.id === "server") ?? hosts[1] ?? hosts[0];
   const studio = useModuleManagementRegistry(studioHost);
@@ -138,7 +143,11 @@ export function useHostOperations(
       await mutation.mutateAsync(operation);
       setStatus(success);
     } catch (e) {
-      setLocalError(getErrorMessage(e));
+      // A 403 on a mutation is a Studio authorization failure: the signed-in user holds read but not
+      // module-management.manage. Name it as a permission problem rather than surfacing a raw HTTP error (#249).
+      setLocalError(isPermissionDenied(e)
+        ? "You do not have permission to make this change. This requires the module-management.manage permission."
+        : getErrorMessage(e));
     }
   }
 

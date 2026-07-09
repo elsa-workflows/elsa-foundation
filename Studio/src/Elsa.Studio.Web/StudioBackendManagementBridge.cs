@@ -16,12 +16,19 @@ internal static class StudioBackendManagementBridge
 
     public static IEndpointRouteBuilder MapStudioBackendManagementBridge(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup(RouteGroup)
-            .RequireAuthorization(StudioBridgeAuth.PolicyName);
+        // Host-control permission gating (#249, ADR 0037). Status + registry read the backend module/feature registry,
+        // so they require `module-management.read`; the Extension Builder capabilities read requires
+        // `extension-builder.read`. When Studio auth is disabled every policy allows anonymously (demo shell). A
+        // signed-in user lacking the permission is forbidden (403) — distinct from an unauthenticated 401 and from the
+        // backend-status states this bridge also reports.
+        var group = endpoints.MapGroup(RouteGroup);
 
-        group.MapGet("/status", GetStatusAsync);
-        group.MapGet("/registry", GetRegistryAsync);
-        group.MapGet("/extension-builder/capabilities", GetExtensionBuilderCapabilitiesAsync);
+        group.MapGet("/status", GetStatusAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+        group.MapGet("/registry", GetRegistryAsync)
+            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+        group.MapGet("/extension-builder/capabilities", GetExtensionBuilderCapabilitiesAsync)
+            .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderReadPolicyName);
 
         return endpoints;
     }

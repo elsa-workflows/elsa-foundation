@@ -5,6 +5,7 @@ import {
   type StudioBackendManagementStatusKind,
   type StudioEndpointContext
 } from "../../sdk";
+import { isPermissionDenied } from "../hostControlPermissions";
 
 export type HostId = "studio" | "server";
 export type RegistryState = "loading" | "ready" | "failed";
@@ -34,8 +35,11 @@ export type HostRegistryResult =
   | { kind: "ready"; registry: ModuleManagementRegistryResponse }
   | { kind: "unavailable"; status: BackendRegistryUnavailableKind; detail: string };
 
-// The bridge's non-available statuses, plus "unknown" for a Studio-origin failure reaching the bridge itself.
-export type BackendRegistryUnavailableKind = Exclude<StudioBackendManagementStatusKind, "available"> | "unknown";
+// The bridge's non-available statuses, plus "unknown" for a Studio-origin failure reaching the bridge itself, plus
+// "forbidden" for a Studio authorization failure (403 — the signed-in user lacks the host-control permission). The
+// "forbidden" case is deliberately distinct from every backend-status state: it is "Studio denied you", never "backend
+// unavailable" and never a login prompt (#249, ADR 0037).
+export type BackendRegistryUnavailableKind = Exclude<StudioBackendManagementStatusKind, "available"> | "unknown" | "forbidden";
 
 export interface ModuleManagementRegistryResponse {
   host: ModuleManagementHost;
@@ -166,15 +170,19 @@ export const moduleManagementKeys = {
 
 const backendRegistryPath = "/_elsa/module-management/registry";
 
-export function createModuleManagementHosts(api: ElsaStudioModuleApi): HostModel[] {
+// `canManageStudioHost` reflects whether the signed-in user holds module-management.manage (from usePermissions).
+// It PROACTIVELY hides/disables the Studio host's mutation affordances a user can't use; the server-side manage gate
+// remains the authority (a stale session never grants a write). Defaults to true so demo/auth-disabled mode — where
+// permission checks do not apply and usePermissions reports no permissions — keeps full mutation access.
+export function createModuleManagementHosts(api: ElsaStudioModuleApi, canManageStudioHost = true): HostModel[] {
   return [
     {
       id: "studio",
       label: "Studio",
       runtime: "Elsa.Studio.Web",
       context: api.host,
-      // Studio mutates its OWN host through the Studio-origin gate — available.
-      mutationsAvailable: true,
+      // Studio mutates its OWN host through the Studio-origin gate — available when the user holds manage.
+      mutationsAvailable: canManageStudioHost,
       // Studio reads its own registry directly from the Studio origin. This path never touches the backend, so the
       // Studio tab keeps working when the backend host is down.
       readRegistry: () => readStudioRegistry(api.host)
@@ -201,7 +209,7 @@ async function readStudioRegistry(host: StudioEndpointContext): Promise<HostRegi
     const registry = await host.http.getJson<Partial<ModuleManagementRegistryResponse>>(backendRegistryPath);
     return { kind: "ready", registry: normalizeModuleManagementRegistry(registry) };
   } catch (error) {
-    return { kind: "unavailable", status: "unknown", detail: bridgeErrorDetail(error) };
+    return registryFailureResult(error);
   }
 }
 
@@ -222,12 +230,20 @@ async function readServerRegistryViaBridge(host: StudioEndpointContext): Promise
       detail: envelope.detail?.trim() || defaultBackendRegistryDetail(envelope.status === "available" ? "degraded" : envelope.status)
     };
   } catch (error) {
-    return { kind: "unavailable", status: "unknown", detail: bridgeErrorDetail(error) };
+    return registryFailureResult(error);
   }
 }
 
-function bridgeErrorDetail(error: unknown) {
-  return `The registry could not be read: ${getErrorMessage(error)}`;
+// Maps a thrown registry read to an explicit unavailable result. A 403 is a Studio authorization failure (the user
+// lacks module-management.read), surfaced as the distinct "forbidden" state so the UI renders "you lack permission"
+// rather than "backend unavailable". Any other throw is a Studio-origin failure reaching the bridge, surfaced as
+// "unknown".
+function registryFailureResult(error: unknown): Extract<HostRegistryResult, { kind: "unavailable" }> {
+  if (isPermissionDenied(error)) {
+    return { kind: "unavailable", status: "forbidden", detail: defaultBackendRegistryDetail("forbidden") };
+  }
+
+  return { kind: "unavailable", status: "unknown", detail: `The registry could not be read: ${getErrorMessage(error)}` };
 }
 
 // A human label for the backend-management state a Server-tab registry read landed in. Mirrors the host-health strip's
@@ -238,6 +254,7 @@ export function labelForBackendRegistryStatus(status: BackendRegistryUnavailable
     case "unauthorized": return "Unauthorized";
     case "unreachable": return "Unreachable";
     case "degraded": return "Degraded";
+    case "forbidden": return "Permission required";
     default: return "Unavailable";
   }
 }
@@ -248,6 +265,9 @@ function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): s
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The backend management surface could not be reached.";
     case "degraded": return "The backend management surface is degraded.";
+    // A Studio authorization failure (403): the signed-in user lacks the module-management.read permission. This is
+    // "Studio denied you", not a backend problem.
+    case "forbidden": return "You do not have permission to read module management. This requires the module-management.read permission.";
     default: return "Backend management status is unknown.";
   }
 }

@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { derivePackageId, ExtensionBuilderPage } from "../app/modules/ExtensionBuilderPage";
 import type { ExtensionRepositorySummary, ExtensionRuntimeStatus } from "../app/modules/extensionBuilderApi";
-import type { ElsaStudioModuleApi } from "../sdk";
+import { StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
   afterEach(() => {
@@ -76,6 +76,32 @@ describe("extension builder page", () => {
     await clickButton(container, "Retry");
     await flushPromises();
     expect(container.textContent).toContain("Backend management is unavailable");
+
+    await unmount();
+  });
+
+  it("renders a distinct permission-denied state (not backend-unavailable) when the capabilities read is forbidden", async () => {
+    // A 403 on the bridge capabilities read is a Studio authorization failure — the signed-in user lacks
+    // extension-builder.read (#249). It must render "do not have permission" / name the permission, NOT the
+    // backend-unavailable/retry surface, and NOT a login prompt.
+    const backendGetJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: backendGetJson,
+      hostGetJson: async url => {
+        if (url.endsWith(CAPABILITIES_BRIDGE_PATH)) throw new StudioHttpError(403, "Forbidden");
+        return {};
+      }
+    }));
+
+    await waitForText(container, "do not have permission");
+
+    expect(container.textContent).toContain("extension-builder.read");
+    // Not conflated with the backend-management-unavailable surface or its retry affordance.
+    expect(container.textContent).not.toContain("Backend management is unavailable");
+    expect(container.textContent).not.toContain("Retry");
+    expect(container.textContent).not.toContain("Create workspace");
+    // No direct backend Extension Builder request was issued.
+    expect(backendGetJson).not.toHaveBeenCalled();
 
     await unmount();
   });
