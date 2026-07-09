@@ -83,45 +83,67 @@ html[data-theme-mode="dark"] {
 }
 
 html[data-theme="black-glass"] {
-  --studio-bg: #05080d;
-  --studio-surface: color-mix(in srgb, #111a25 74%, transparent);
-  --studio-surface-muted: color-mix(in srgb, #1a2634 68%, transparent);
-  --studio-surface-raised: color-mix(in srgb, #203144 72%, transparent);
-  --studio-text: #eef7ff;
-  --studio-text-muted: #9bb3ca;
-  --studio-border: color-mix(in srgb, #75d7ff 28%, transparent);
-  --studio-accent: #65d8ff;
-  --studio-accent-text: #03131c;
-  --studio-accent-soft: color-mix(in srgb, #65d8ff 16%, transparent);
-  --studio-focus: color-mix(in srgb, #65d8ff 36%, transparent);
+  --studio-bg: #04070f;
+  --studio-surface: color-mix(in srgb, #0e1826 76%, transparent);
+  --studio-surface-muted: color-mix(in srgb, #16233a 70%, transparent);
+  --studio-surface-raised: color-mix(in srgb, #1d2f4c 74%, transparent);
+  --studio-text: #eaf3ff;
+  --studio-text-muted: #8fb3d9;
+  --studio-border: color-mix(in srgb, #4c9bff 34%, transparent);
+  --studio-accent: #3f8dff;
+  --studio-accent-text: #04101f;
+  --studio-accent-soft: color-mix(in srgb, #3f8dff 20%, transparent);
+  --studio-focus: color-mix(in srgb, #5aa9ff 42%, transparent);
 
-  --studio-glass-bg: color-mix(in srgb, #0b1119 76%, transparent);
-  --studio-glass-bg-strong: color-mix(in srgb, #111b28 86%, transparent);
-  --studio-glass-bg-soft: color-mix(in srgb, #152234 58%, transparent);
+  /*
+   * Specular sheen — a soft diagonal light band across the upper part of a glass panel.
+   * Composed first (top) in the bg stacks so it reads as a reflection catching the light.
+   * Kept subtle so dense stacked panels don't turn milky.
+   */
+  --studio-glass-sheen:
+    linear-gradient(150deg,
+      color-mix(in srgb, #cfe6ff 16%, transparent) 0%,
+      color-mix(in srgb, #9cc8ff 6%, transparent) 12%,
+      transparent 34%);
+  /* Blue outer halo + deep dark drop shadow, factored out so panels can bump the glow. */
+  --studio-glass-accent-glow: 0 0 34px color-mix(in srgb, #3f8dff 24%, transparent);
+
+  --studio-glass-bg:
+    var(--studio-glass-sheen),
+    linear-gradient(180deg, color-mix(in srgb, #12233c 82%, transparent), color-mix(in srgb, #081324 82%, transparent));
+  --studio-glass-bg-strong:
+    var(--studio-glass-sheen),
+    linear-gradient(180deg, color-mix(in srgb, #182c49 90%, transparent), color-mix(in srgb, #0b1830 90%, transparent));
+  --studio-glass-bg-soft:
+    linear-gradient(180deg, color-mix(in srgb, #182b47 60%, transparent), color-mix(in srgb, #0d1a2e 60%, transparent));
   /* Dense-row + recessed-well tiers in the glass idiom (black-glass is not a
-     [data-theme-material] theme, so it maps its own --wf-row/--wf-well). */
-  --studio-glass-row-bg: color-mix(in srgb, #0e1622 52%, transparent);
-  --studio-glass-well-bg: color-mix(in srgb, #050a12 66%, transparent);
-  --studio-glass-well-shadow: inset 0 2px 6px color-mix(in srgb, #02070d 60%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #78ddff 14%, transparent);
-  --studio-glass-edge: color-mix(in srgb, #8ee4ff 46%, transparent);
-  --studio-glass-edge-strong: color-mix(in srgb, #a9ecff 68%, transparent);
-  --studio-glass-grid: color-mix(in srgb, #70cfff 13%, transparent);
+     [data-theme-material] theme, so it maps its own --wf-row/--wf-well). Rows are FLAT
+     (no sheen) so a slab of rows doesn't ridge into corduroy. */
+  --studio-glass-row-bg: color-mix(in srgb, #0f1e34 54%, transparent);
+  --studio-glass-well-bg: color-mix(in srgb, #030912 70%, transparent);
+  --studio-glass-well-shadow: inset 0 2px 8px color-mix(in srgb, #010610 66%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #4c9bff 18%, transparent);
+  --studio-glass-edge: color-mix(in srgb, #6fc2ff 48%, transparent);
+  --studio-glass-edge-strong: color-mix(in srgb, #a9ecff 74%, transparent);
+  --studio-glass-grid: color-mix(in srgb, #4c9bff 9%, transparent);
   --studio-glass-texture: url("../../assets/materials/black-glass-tile.png");
   --studio-glass-texture-size: 420px 420px;
-  --studio-glass-glow: 0 0 0 1px color-mix(in srgb, #78ddff 22%, transparent),
-    0 18px 46px color-mix(in srgb, #02131f 74%, transparent),
-    0 0 34px color-mix(in srgb, #49bfff 10%, transparent);
-  --studio-glass-glow-strong: 0 0 0 1px color-mix(in srgb, #9debff 38%, transparent),
-    0 24px 58px color-mix(in srgb, #02131f 82%, transparent),
-    0 0 42px color-mix(in srgb, #4cc8ff 18%, transparent);
+  --studio-glass-glow: 0 0 0 1px color-mix(in srgb, #6fc2ff 26%, transparent),
+    0 20px 50px color-mix(in srgb, #01060f 80%, transparent),
+    var(--studio-glass-accent-glow);
+  --studio-glass-glow-strong: 0 0 0 1px color-mix(in srgb, #a9ecff 46%, transparent),
+    0 26px 62px color-mix(in srgb, #01060f 86%, transparent),
+    0 0 46px color-mix(in srgb, #3f8dff 34%, transparent);
+  /* Real blueprint/circuit backdrop: ambient light pools + faint blue grid + circuit-trace
+     lines + texture over a deep midnight-navy gradient. */
   --studio-blueprint-bg:
-    radial-gradient(circle at 72% 18%, color-mix(in srgb, #1b79ff 13%, transparent), transparent 28rem),
-    linear-gradient(color-mix(in srgb, #7bdcff 8%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #7bdcff 7%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 74% 14%, color-mix(in srgb, #2f7dff 20%, transparent), transparent 30rem),
+    radial-gradient(circle at 12% 82%, color-mix(in srgb, #1b5fd6 15%, transparent), transparent 34rem),
+    linear-gradient(var(--studio-glass-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--studio-glass-grid) 1px, transparent 1px),
     var(--studio-glass-texture),
-    linear-gradient(135deg, #07111b 0%, #03070c 58%, #091521 100%);
-  --studio-blueprint-bg-size: auto, 42px 42px, 42px 42px, var(--studio-glass-texture-size), auto;
+    linear-gradient(135deg, #060d1c 0%, #04070f 54%, #081226 100%);
+  --studio-blueprint-bg-size: auto, auto, 44px 44px, 44px 44px, var(--studio-glass-texture-size), auto;
   --studio-success-fg: #8ff0bd;
   --studio-warning-fg: #ffd38a;
   --studio-danger-fg: #ff9cab;
@@ -666,42 +688,57 @@ html[data-theme="brass-instrument"] {
 
 html[data-theme="black-glass"][data-theme-mode="light"] {
   color-scheme: light;
-  --studio-bg: #dfeef4;
-  --studio-surface: color-mix(in srgb, #f6fbff 72%, transparent);
-  --studio-surface-muted: color-mix(in srgb, #d5e8f0 68%, transparent);
-  --studio-surface-raised: color-mix(in srgb, #ffffff 76%, transparent);
-  --studio-text: #172631;
-  --studio-text-muted: #4f6574;
-  --studio-border: color-mix(in srgb, #2588b8 28%, #b6d0dc);
-  --studio-accent: #127dbc;
-  --studio-accent-text: #f7fcff;
-  --studio-accent-soft: color-mix(in srgb, #3aa4d9 14%, transparent);
-  --studio-focus: color-mix(in srgb, #2588b8 34%, transparent);
-  --studio-glass-bg: color-mix(in srgb, #f7fcff 72%, transparent);
-  --studio-glass-bg-strong: color-mix(in srgb, #ffffff 84%, transparent);
-  --studio-glass-bg-soft: color-mix(in srgb, #d9edf6 66%, transparent);
-  --studio-glass-row-bg: color-mix(in srgb, #eef7fb 50%, transparent);
-  --studio-glass-well-bg: color-mix(in srgb, #d3e8f1 66%, transparent);
-  --studio-glass-well-shadow: inset 0 2px 5px color-mix(in srgb, #5c8498 26%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, #117fb8 16%, transparent);
-  --studio-glass-edge: color-mix(in srgb, #2588b8 32%, #c5dce7);
-  --studio-glass-edge-strong: color-mix(in srgb, #0e75ad 50%, #b6d5e3);
-  --studio-glass-grid: color-mix(in srgb, #1688c4 14%, transparent);
+  --studio-bg: #eaf4fb;
+  --studio-surface: color-mix(in srgb, #ffffff 78%, transparent);
+  --studio-surface-muted: color-mix(in srgb, #dcecf7 70%, transparent);
+  --studio-surface-raised: color-mix(in srgb, #ffffff 82%, transparent);
+  --studio-text: #142330;
+  --studio-text-muted: #51708c;
+  --studio-border: color-mix(in srgb, #3f8dff 30%, #cadff0);
+  --studio-accent: #1f6fd6;
+  --studio-accent-text: #f8fcff;
+  --studio-accent-soft: color-mix(in srgb, #3f8dff 16%, transparent);
+  --studio-focus: color-mix(in srgb, #2f7dff 38%, transparent);
+
+  /* Crisp cool-white sheen: a bright diagonal reflection with high white content. */
+  --studio-glass-sheen:
+    linear-gradient(150deg,
+      color-mix(in srgb, #ffffff 62%, transparent) 0%,
+      color-mix(in srgb, #e4f1ff 30%, transparent) 14%,
+      transparent 40%);
+  --studio-glass-accent-glow: 0 0 26px color-mix(in srgb, #2f7dff 14%, transparent);
+
+  --studio-glass-bg:
+    var(--studio-glass-sheen),
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 74%, transparent), color-mix(in srgb, #e6f2fc 74%, transparent));
+  --studio-glass-bg-strong:
+    var(--studio-glass-sheen),
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 88%, transparent), color-mix(in srgb, #eef6fe 88%, transparent));
+  --studio-glass-bg-soft:
+    linear-gradient(180deg, color-mix(in srgb, #f0f8ff 68%, transparent), color-mix(in srgb, #dcecf8 68%, transparent));
+  --studio-glass-row-bg: color-mix(in srgb, #f2f9fe 52%, transparent);
+  --studio-glass-well-bg: color-mix(in srgb, #d8ebf7 68%, transparent);
+  --studio-glass-well-shadow: inset 0 2px 6px color-mix(in srgb, #5c8498 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #2f7dff 16%, transparent);
+  --studio-glass-edge: color-mix(in srgb, #3f8dff 34%, #d3e6f4);
+  --studio-glass-edge-strong: color-mix(in srgb, #1f6fd6 52%, #c2dcf0);
+  --studio-glass-grid: color-mix(in srgb, #2f7dff 11%, transparent);
   --studio-glass-texture: url("../../assets/materials/frosted-glass-tile.png");
   --studio-glass-texture-size: 460px 460px;
-  --studio-glass-glow: 0 0 0 1px color-mix(in srgb, #ffffff 72%, transparent),
-    0 18px 38px color-mix(in srgb, #5c8498 20%, transparent),
-    0 0 28px color-mix(in srgb, #2494c9 10%, transparent);
-  --studio-glass-glow-strong: 0 0 0 1px color-mix(in srgb, #117fb8 28%, transparent),
-    0 22px 48px color-mix(in srgb, #4f788c 26%, transparent),
-    0 0 36px color-mix(in srgb, #2494c9 16%, transparent);
+  --studio-glass-glow: 0 0 0 1px color-mix(in srgb, #ffffff 80%, transparent),
+    0 16px 36px color-mix(in srgb, #6c93ad 18%, transparent),
+    var(--studio-glass-accent-glow);
+  --studio-glass-glow-strong: 0 0 0 1px color-mix(in srgb, #2f7dff 26%, transparent),
+    0 22px 48px color-mix(in srgb, #5f86a0 24%, transparent),
+    0 0 34px color-mix(in srgb, #2f7dff 18%, transparent);
   --studio-blueprint-bg:
-    radial-gradient(circle at 72% 18%, color-mix(in srgb, #58b8e6 18%, transparent), transparent 28rem),
-    linear-gradient(color-mix(in srgb, #1688c4 10%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, #1688c4 8%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 74% 14%, color-mix(in srgb, #5aa9ff 22%, transparent), transparent 30rem),
+    radial-gradient(circle at 12% 82%, color-mix(in srgb, #8ec8ff 20%, transparent), transparent 34rem),
+    linear-gradient(var(--studio-glass-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--studio-glass-grid) 1px, transparent 1px),
     var(--studio-glass-texture),
-    linear-gradient(135deg, #e5f3f8 0%, #f8fcff 58%, #d4e9f2 100%);
-  --studio-blueprint-bg-size: auto, 42px 42px, 42px 42px, var(--studio-glass-texture-size), auto;
+    linear-gradient(135deg, #e8f3fc 0%, #f9fcff 56%, #d8ebf9 100%);
+  --studio-blueprint-bg-size: auto, auto, 44px 44px, 44px 44px, var(--studio-glass-texture-size), auto;
   --studio-success-fg: #217d4d;
   --studio-warning-fg: #8a6320;
   --studio-danger-fg: #a63a48;

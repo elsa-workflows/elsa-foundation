@@ -148,11 +148,16 @@ vocabulary. A module that wants the glass idiom under `black-glass` guards on
 [Rules](#rules)) and consumes:
 
 - surfaces: `--studio-glass-bg`, `-bg-strong`, `-bg-soft`;
+- specular light: `--studio-glass-sheen` (a soft diagonal top-light band composed into the
+  `-bg`/`-bg-strong` stacks so panels catch a reflection) and `--studio-glass-accent-glow`
+  (the blue outer-halo layer factored out of `-glow` so panels can compose their own halo);
 - dense tiers (the glass analogue of row/well): `--studio-glass-row-bg`,
   `--studio-glass-well-bg`, `--studio-glass-well-shadow`;
 - edges/glow: `--studio-glass-edge`, `-edge-strong`, `--studio-glass-glow`, `-glow-strong`;
 - texture/grid: `--studio-glass-texture`, `-texture-size`, `--studio-glass-grid`;
-- blueprint backdrop: `--studio-blueprint-bg`, `-bg-size`.
+- blueprint backdrop: `--studio-blueprint-bg`, `-bg-size` (deep midnight-navy gradient in
+  dark mode / crisp ice-blue in light, layered with ambient light pools, a faint blue grid,
+  and the glass texture).
 
 ## Rules
 

@@ -4071,8 +4071,17 @@ html[data-theme="black-glass"] .wf-canvas-tabs,
 html[data-theme="black-glass"] .wf-code-view-toolbar,
 html[data-theme="black-glass"] .wf-properties-section {
   border-color: var(--studio-glass-edge);
-  background: var(--studio-glass-bg);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+  /* Specular sheen: a soft diagonal light band across the upper part, layered over the
+     translucent glass fill so panels read as lit glass sheets, not flat tint. */
+  background:
+    linear-gradient(128deg,
+      color-mix(in srgb, white 12%, transparent),
+      transparent 34%,
+      transparent 82%,
+      color-mix(in srgb, var(--studio-accent) 8%, transparent)),
+    var(--studio-glass-bg);
+  box-shadow: var(--studio-glass-glow),
+    inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
   backdrop-filter: blur(18px) saturate(1.2);
 }
 
@@ -4161,6 +4170,36 @@ html[data-theme="black-glass"] .wf-grid {
 html[data-theme="black-glass"] .wf-grid-head {
   border-color: var(--studio-glass-edge);
   background: var(--studio-glass-bg-soft);
+}
+
+/* Dialogs/menus/popovers = raised glass sheets: strong glass fill + diagonal sheen, ambient
+   glow-strong halo, and chrome-scale blur (these are overlay-scale surfaces, not rows/nodes).
+   They already inherit --wf-shadow-overlay/-menu (→ glow-strong/glow) via the token remap;
+   here we add the sheen + backdrop blur the token can't carry. */
+html[data-theme="black-glass"] .wf-dialog,
+html[data-theme="black-glass"] .wf-property-editor-dialog,
+html[data-theme="black-glass"] .wf-syntax-picker-menu {
+  background:
+    linear-gradient(128deg,
+      color-mix(in srgb, white 13%, transparent),
+      transparent 32%,
+      transparent 80%,
+      color-mix(in srgb, var(--studio-accent) 9%, transparent)),
+    var(--studio-glass-bg-strong);
+  box-shadow: var(--studio-glass-glow-strong),
+    inset 0 1px 0 color-mix(in srgb, white 15%, transparent);
+  backdrop-filter: blur(22px) saturate(1.25);
+}
+
+/* Dense-row checkboxes sit on translucent glass rows — give them a solid recessed well +
+   luminous edge so they stay legible instead of dissolving into the glass (mirrors the
+   material checkbox treatment above). */
+html[data-theme="black-glass"] .wf-row-select input,
+html[data-theme="black-glass"] .availability-activity-option input[type="checkbox"] {
+  border-radius: 3px;
+  background-color: var(--studio-glass-well-bg);
+  box-shadow: 0 0 0 1px var(--studio-glass-edge),
+    inset 0 1px 2px color-mix(in srgb, black 30%, transparent);
 }
 
 html[data-theme-material] .wf-page,
