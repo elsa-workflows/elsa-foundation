@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -17,26 +18,76 @@ namespace Elsa.Activities.Http.Activities;
 /// The hash is computed over the normalized route template <em>and</em> the lowercased HTTP method (spec 089 B):
 /// a node that declares several supported methods yields one descriptor — and therefore one routing key — per
 /// method, so a request only matches the method it was published for. Template normalization is case- and
-/// slash-insensitive, and it lowercases parameter names inside <c>{}</c> too, so <c>orders/{Id}</c> and
-/// <c>Orders/{id}</c> are the same route: <b>template parameters are case-insensitive by normalization</b>.
-/// The shared vocabulary (stimulus type, metadata keys) lives on <see cref="HttpEndpointRouting"/>; this class
-/// re-exposes the stimulus type for local readability but the value originates there.
+/// slash-insensitive on <em>literal</em> segments and parameter names, so <c>orders/{Id}</c> and
+/// <c>Orders/{id}</c> are the same route: <b>template parameters are case-insensitive by normalization</b>. It
+/// deliberately does <b>not</b> touch inline constraint bodies (<c>{code:regex(^[A-Z]+$)}</c>) or default values
+/// (<c>{id=ABC}</c>) — those are case-significant to the route matcher, so lowercasing them would corrupt the
+/// route (issue #592 item 3). The shared vocabulary (stimulus type, metadata keys) lives on
+/// <see cref="HttpEndpointRouting"/>; this class re-exposes the stimulus type for local readability but the value
+/// originates there.
 /// </remarks>
-public static class HttpEndpointStimulus
+public static partial class HttpEndpointStimulus
 {
     /// <summary>The stimulus type shared by every HTTP endpoint trigger. Delegates to <see cref="HttpEndpointRouting.StimulusType"/>.</summary>
     public const string StimulusType = HttpEndpointRouting.StimulusType;
 
     /// <summary>
     /// Normalizes an endpoint route template so equivalent routes hash identically regardless of case or
-    /// surrounding slashes. Trims whitespace, trims leading/trailing '/', and lowercases the whole template
-    /// (including parameter names inside <c>{}</c>, making template parameters case-insensitive). Throws on
-    /// null/whitespace.
+    /// surrounding slashes. Trims whitespace and leading/trailing '/', then lowercases only the case-insensitive
+    /// facets: literal text (outside <c>{}</c>) and parameter names (inside <c>{}</c>, up to the first
+    /// <c>:</c>/<c>=</c>/<c>?</c> delimiter). Inline constraint bodies and default values are preserved verbatim —
+    /// they are case-significant to the route matcher (issue #592 item 3). Throws on null/whitespace.
     /// </summary>
     public static string NormalizeTemplate(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return path.Trim().Trim('/').ToLowerInvariant();
+        var trimmed = path.Trim().Trim('/');
+
+        // Fast path: no parameters means the whole template is literal and lowercases wholesale.
+        if (!trimmed.Contains('{'))
+            return trimmed.ToLowerInvariant();
+
+        // Lowercase literal text (outside {}) and each parameter's name (inside {} up to the first :/=/? delimiter);
+        // preserve constraint bodies ({code:regex(^[A-Z]+$)}) and default values ({id=ABC}) verbatim (item 3).
+        return ParameterSegment().Replace(LowercaseOutsideBraces(trimmed), match => NormalizeParameter(match.Value));
+    }
+
+    // A single {...} parameter segment (no nested braces — inline constraints like regex(...) use parentheses).
+    [GeneratedRegex(@"\{[^{}]*\}")]
+    private static partial Regex ParameterSegment();
+
+    /// <summary>Lowercases every character outside <c>{}</c> braces; brace contents pass through untouched here.</summary>
+    private static string LowercaseOutsideBraces(string template)
+    {
+        var builder = new StringBuilder(template.Length);
+        var insideBraces = false;
+
+        foreach (var character in template)
+        {
+            if (character == '{') insideBraces = true;
+            else if (character == '}') insideBraces = false;
+
+            builder.Append(insideBraces || character is '{' or '}' ? character : char.ToLowerInvariant(character));
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Lowercases a <c>{...}</c> parameter's name (case-insensitive to the matcher) but preserves its inline
+    /// constraint and default body verbatim: <c>{Code:regex(^[A-Z]+$)}</c> → <c>{code:regex(^[A-Z]+$)}</c>,
+    /// <c>{Id=ABC}</c> → <c>{id=ABC}</c>, <c>{*Rest}</c> → <c>{*rest}</c>.
+    /// </summary>
+    private static string NormalizeParameter(string segment)
+    {
+        var inner = segment[1..^1]; // strip { }
+        var delimiter = inner.IndexOfAny([':', '=', '?']);
+        if (delimiter < 0)
+            return "{" + inner.ToLowerInvariant() + "}";
+
+        var name = inner[..delimiter].ToLowerInvariant();
+        var rest = inner[delimiter..]; // keep constraint/default/optional marker verbatim
+        return "{" + name + rest + "}";
     }
 
     /// <summary>

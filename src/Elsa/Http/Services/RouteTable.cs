@@ -1,45 +1,55 @@
-﻿using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Elsa.Http.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections;
-using System.Collections.Concurrent;
 
 namespace Elsa.Http.Services;
 
 /// <inheritdoc />
 // Public for direct unit-test construction: InternalsVisibleTo is guard-forbidden outside the documented
 // allow-list, matching the precedent of the other public default services on this surface.
-public sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger) : IRouteTable
+public sealed class RouteTable : IRouteTable
 {
-    private static readonly object Key = new();
+    // Namespace the cache key per shell (issue #592 item 5): isolation no longer relies on IMemoryCache being
+    // per-shell — a shell discriminator makes the key unique so a future root-promoted, shell-shared cache can't
+    // alias two shells' route tables onto one entry.
+    private readonly string _key;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<RouteTable> _logger;
 
-    private ConcurrentDictionary<string, HttpRouteData> Routes => cache.GetOrCreate(Key, _ => new ConcurrentDictionary<string, HttpRouteData>())!;
+    public RouteTable(IMemoryCache cache, ILogger<RouteTable> logger, IOptions<RouteTableOptions>? options = null)
+    {
+        _cache = cache;
+        _logger = logger;
+        _key = $"Elsa.Http.RouteTable:{options?.Value.ShellDiscriminator ?? string.Empty}";
+    }
+
+    // The table is held as an immutable, specificity-ordered snapshot (issue #592 items 1 + 6): entries are ordered
+    // most-specific-first so the middleware's "first match wins" is deterministic, and each carries a precompiled
+    // TemplateMatcher so request-time matching is lookup + match, never parse. Mutations rebuild and re-publish the
+    // snapshot in a single cache.Set — the same atomic-swap the B6 review fix introduced (a reader observes either
+    // the old snapshot or the fully-built new one, never an empty/partial intermediate).
+    private IReadOnlyList<HttpRouteData> Snapshot => _cache.GetOrCreate(_key, _ => (IReadOnlyList<HttpRouteData>)[])!;
 
     /// <inheritdoc />
-    public ValueTask Add(string route)
-    {
-        return Add(new HttpRouteData(route));
-    }
+    public ValueTask Add(string route) => Add(new HttpRouteData(route));
 
     /// <inheritdoc />
     public ValueTask Add(HttpRouteData httpRouteData)
     {
-        var route = httpRouteData.Route;
-        var normalizedRoute = NormalizeRoute(route);
-
-        if (route.Contains("//"))
-        {
-            logger.LogWarning("Path cannot contain double slashes. Ignoring path: {Path}", route);
+        if (!IsValidRoute(httpRouteData.Route))
             return ValueTask.CompletedTask;
-        }
 
-        if (Routes.ContainsKey(normalizedRoute))
-        {
-            throw new InvalidOperationException($"Route '{route}' is already added");
-        }
+        var normalizedRoute = NormalizeRoute(httpRouteData.Route);
+        var current = Snapshot;
 
-        Routes.TryAdd(normalizedRoute, httpRouteData);
+        if (current.Any(existing => RouteKey(existing) == normalizedRoute))
+            throw new InvalidOperationException($"Route '{httpRouteData.Route}' is already added");
+
+        Publish(BuildOrdered(current.Append(Compile(httpRouteData))));
         return ValueTask.CompletedTask;
     }
 
@@ -47,8 +57,7 @@ public sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger) :
     public ValueTask Remove(string route)
     {
         var normalizedRoute = NormalizeRoute(route);
-        Routes.TryRemove(normalizedRoute, out _);
-
+        Publish(Snapshot.Where(existing => RouteKey(existing) != normalizedRoute).ToArray());
         return ValueTask.CompletedTask;
     }
 
@@ -67,43 +76,57 @@ public sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger) :
     }
 
     /// <inheritdoc />
-    public IEnumerator<HttpRouteData> GetEnumerator() => Routes.Values.GetEnumerator();
+    public IEnumerator<HttpRouteData> GetEnumerator() => Snapshot.GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
-    private static string NormalizeRoute(string path) => $"/{path.Trim('/')}";
-
-    public ValueTask Refresh(IEnumerable<string> routes)
-    {
-        return Refresh(routes.Select(route => new HttpRouteData(route)));
-    }
+    public ValueTask Refresh(IEnumerable<string> routes) => Refresh(routes.Select(route => new HttpRouteData(route)));
 
     public ValueTask Refresh(IEnumerable<HttpRouteData> routes)
     {
-        // Build a complete NEW table off to the side, then publish it in a single cache.Set. Readers go through
-        // the Routes getter on every access, so they observe either the old table or the fully-built new one —
-        // never the empty/partial intermediate a Clear()+Add loop would expose (which caused transient 404s during
-        // any publish). Build-time duplicates still surface (below) but abort the swap, leaving the live table
-        // intact rather than half-destroyed.
-        var newRoutes = new ConcurrentDictionary<string, HttpRouteData>();
+        // Build the complete NEW ordered+compiled snapshot off to the side, then publish it in a single cache.Set.
+        // Build-time duplicates abort the swap (throwing below) leaving the live table intact rather than
+        // half-destroyed. Ordering + precompilation happen here so per-request matching pays neither cost.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var compiled = new List<HttpRouteData>();
 
         foreach (var httpRouteData in routes)
         {
-            var route = httpRouteData.Route;
-
-            if (route.Contains("//"))
-            {
-                logger.LogWarning("Path cannot contain double slashes. Ignoring path: {Path}", route);
+            if (!IsValidRoute(httpRouteData.Route))
                 continue;
-            }
 
-            var normalizedRoute = NormalizeRoute(route);
+            if (!seen.Add(NormalizeRoute(httpRouteData.Route)))
+                throw new InvalidOperationException($"Route '{httpRouteData.Route}' is already added");
 
-            if (!newRoutes.TryAdd(normalizedRoute, httpRouteData))
-                throw new InvalidOperationException($"Route '{route}' is already added");
+            compiled.Add(Compile(httpRouteData));
         }
 
-        cache.Set(Key, newRoutes);
+        Publish(BuildOrdered(compiled));
         return ValueTask.CompletedTask;
     }
+
+    private void Publish(IReadOnlyList<HttpRouteData> snapshot) => _cache.Set(_key, snapshot);
+
+    private bool IsValidRoute(string route)
+    {
+        if (!route.Contains("//"))
+            return true;
+
+        _logger.LogWarning("Path cannot contain double slashes. Ignoring path: {Path}", route);
+        return false;
+    }
+
+    /// <summary>Precompiles the entry's <see cref="TemplateMatcher"/> so request-time matching skips the parse (item 6).</summary>
+    private static HttpRouteData Compile(HttpRouteData routeData)
+    {
+        routeData.CompiledMatcher = RouteMatcher.Compile(NormalizeRoute(routeData.Route));
+        return routeData;
+    }
+
+    /// <summary>Orders entries most-specific-first so the middleware's first-match-wins is deterministic (item 1).</summary>
+    private static IReadOnlyList<HttpRouteData> BuildOrdered(IEnumerable<HttpRouteData> routes) =>
+        routes.OrderBy(routeData => NormalizeRoute(routeData.Route), RouteTemplateSpecificity.StringComparer).ToArray();
+
+    private static string NormalizeRoute(string path) => $"/{path.Trim('/')}";
+    private static string RouteKey(HttpRouteData routeData) => NormalizeRoute(routeData.Route);
 }

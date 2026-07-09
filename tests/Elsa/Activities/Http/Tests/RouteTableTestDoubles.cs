@@ -1,85 +1,61 @@
 using System.Collections;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
+using Elsa.Http.Services;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Template;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Minimal list-backed <see cref="IRouteTable"/> for middleware unit scope. The middleware only enumerates the
-/// table (via <see cref="IEnumerable{HttpRouteData}"/>) and reads each entry's <see cref="HttpRouteData.Route"/>,
-/// so the mutation members are implemented straightforwardly for completeness; enumeration order is preserved so
-/// "first deterministic match wins" is testable.
+/// <see cref="IRouteTable"/> for middleware unit scope that delegates to the <b>production</b>
+/// <see cref="RouteTable"/> over a private <see cref="IMemoryCache"/>. Using the real implementation (rather than
+/// a list-backed stand-in that preserved insertion order) means the double cannot offer an ordering or matching
+/// guarantee production lacks: specificity ordering and precompiled matchers (issue #592 items 1 + 6) are
+/// exercised exactly as at runtime.
 /// </summary>
 internal sealed class FakeRouteTable : IRouteTable
 {
-    private readonly List<HttpRouteData> _routes = new();
+    private readonly RouteTable _inner = new(new MemoryCache(new MemoryCacheOptions()), NullLogger<RouteTable>.Instance);
 
-    public FakeRouteTable(params string[] templates)
-    {
-        foreach (var template in templates)
-            _routes.Add(new HttpRouteData(template));
-    }
+    public FakeRouteTable(params string[] templates) => _inner.Refresh(templates).AsTask().GetAwaiter().GetResult();
 
-    public ValueTask Add(string route) => Add(new HttpRouteData(route));
-
-    public ValueTask Add(HttpRouteData httpRouteData)
-    {
-        _routes.Add(httpRouteData);
-        return ValueTask.CompletedTask;
-    }
-
-    public ValueTask Remove(string route)
-    {
-        _routes.RemoveAll(r => StringComparer.Ordinal.Equals(r.Route, route));
-        return ValueTask.CompletedTask;
-    }
-
-    public async ValueTask AddRange(IEnumerable<string> routes)
-    {
-        foreach (var route in routes)
-            await Add(route);
-    }
-
-    public ValueTask Refresh(IEnumerable<string> routes)
-    {
-        _routes.Clear();
-        return AddRange(routes);
-    }
-
-    public ValueTask Refresh(IEnumerable<HttpRouteData> routes)
-    {
-        _routes.Clear();
-        _routes.AddRange(routes);
-        return ValueTask.CompletedTask;
-    }
-
-    public async ValueTask RemoveRange(IEnumerable<string> routes)
-    {
-        foreach (var route in routes)
-            await Remove(route);
-    }
-
-    public IEnumerator<HttpRouteData> GetEnumerator() => _routes.GetEnumerator();
-
+    public ValueTask Add(string route) => _inner.Add(route);
+    public ValueTask Add(HttpRouteData httpRouteData) => _inner.Add(httpRouteData);
+    public ValueTask Remove(string route) => _inner.Remove(route);
+    public ValueTask AddRange(IEnumerable<string> routes) => _inner.AddRange(routes);
+    public ValueTask Refresh(IEnumerable<string> routes) => _inner.Refresh(routes);
+    public ValueTask Refresh(IEnumerable<HttpRouteData> routes) => _inner.Refresh(routes);
+    public ValueTask RemoveRange(IEnumerable<string> routes) => _inner.RemoveRange(routes);
+    public IEnumerator<HttpRouteData> GetEnumerator() => _inner.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
 
 /// <summary>
 /// <see cref="IRouteMatcher"/> over the real ASP.NET <see cref="TemplateParser"/>/<see cref="TemplateMatcher"/>
 /// — a verbatim copy of the production <c>Elsa.Http.Services.RouteMatcher</c> (which is internal to Elsa.Http and
-/// not referenced by this unit-test project). Matching semantics are therefore identical to production.
+/// not referenced by this unit-test project). Matching semantics are therefore identical to production, including
+/// the precompiled-matcher overload the route table populates (issue #592 item 6).
 /// </summary>
 internal sealed class TestRouteMatcher : IRouteMatcher
 {
-    public RouteValueDictionary? Match(string routeTemplate, string route)
+    public RouteValueDictionary? Match(string routeTemplate, string route) => Match(Compile(routeTemplate), route);
+
+    public RouteValueDictionary? Match(HttpRouteData routeData, string route) =>
+        Match(routeData.CompiledMatcher as TemplateMatcher ?? Compile(routeData.Route), route);
+
+    private static RouteValueDictionary? Match(TemplateMatcher matcher, string route)
+    {
+        var values = new RouteValueDictionary();
+        return matcher.TryMatch(route, values) ? values : null;
+    }
+
+    private static TemplateMatcher Compile(string routeTemplate)
     {
         var template = TemplateParser.Parse(routeTemplate);
-        var matcher = new TemplateMatcher(template, GetDefaults(template));
-        var values = new RouteValueDictionary();
-
-        return matcher.TryMatch(route, values) ? values : null;
+        return new TemplateMatcher(template, GetDefaults(template));
     }
 
     private static RouteValueDictionary GetDefaults(RouteTemplate parsedTemplate)

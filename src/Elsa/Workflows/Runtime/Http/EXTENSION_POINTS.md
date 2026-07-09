@@ -8,7 +8,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ### `IHttpEndpointRoutesResolver` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*
 - **Signature:** `ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken ct = default)` — reshaped from the A-era `GetRoutes(string path)` echo (pre-release, no shim; this contract's only consumer is this feature's startup task and index observer).
-- **Default impl:** `HttpEndpointRoutesResolver` (this feature) — lists every `HttpEndpoint` trigger binding from `IWorkflowTriggerBindingStore`, reads each binding's `http:template` metadata, and projects the distinct templates (base-path-prefixed) into `HttpRouteData`.
+- **Default impl:** `HttpEndpointRoutesResolver` (this feature) — lists every `HttpEndpoint` trigger binding from `IWorkflowTriggerBindingStore`, reads each binding's `http:template` metadata, and projects the distinct (endpoint-relative) templates into `HttpRouteData`. Also enforces publish-time `(template, method)` uniqueness (issue #592 item 2): a `(StimulusType, StimulusHash)` claimed by two distinct `DefinitionId`s throws `EndpointRoutingConflictException`, which — because the resolver runs full-scan through `RouteTableTriggerIndexObserver` on every publish — fails the conflicting endpoint's publish (rather than surfacing only as a request-time 409).
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IHttpEndpointRoutesResolver, MyResolver>())` — e.g. to load routes from a custom store, add caching, or filter routes.
 
 ### `IHttpEndpointAuthorizationHandler` *(Core contract — `Elsa.Http.Core`; default impl here)*

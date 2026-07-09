@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Http.Exceptions;
 using Elsa.Workflows.Runtime.Http.Services;
 using Xunit;
 
@@ -84,5 +85,46 @@ public sealed class HttpEndpointRoutesResolverTests
     {
         var routes = await Resolver().ResolveRoutesAsync();
         Assert.Empty(routes);
+    }
+
+    // ---- Issue #592 item 2: publish-time (template, method) uniqueness ----
+
+    [Fact]
+    public async Task Throws_WhenTwoDefinitionsClaimTheSameTemplateAndMethod()
+    {
+        // Two DISTINCT definitions claim GET orders/{id}. Bindings.HttpEndpoint derives the stimulus hash from
+        // (template, method), so both carry the same hash — a cross-definition collision that must fail the
+        // publish (the resolver runs through the index observer, whose throw fails the publish).
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "orders/{id}", "GET", definitionId: "def-b"));
+
+        var exception = await Assert.ThrowsAsync<EndpointRoutingConflictException>(() => Resolver().ResolveRoutesAsync().AsTask());
+        Assert.Equal("GET orders/{id}", exception.Endpoint);
+    }
+
+    [Fact]
+    public async Task DoesNotThrow_WhenTheSameDefinitionOwnsBothBindings()
+    {
+        // Same definition, same (template, method) on two nodes (republish remnants / a duplicate node) — not an
+        // authoring conflict, so it resolves to one route without throwing.
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n2", "orders/{id}", "GET", definitionId: "def-a"));
+
+        var routes = await Resolver().ResolveRoutesAsync();
+
+        var route = Assert.Single(routes);
+        Assert.Equal("orders/{id}", route.Route);
+    }
+
+    [Fact]
+    public async Task DoesNotThrow_WhenTwoDefinitionsClaimDifferentMethodsOfTheSameTemplate()
+    {
+        // GET vs POST orders/{id} are distinct (template, method) pairs — different hashes — so two definitions
+        // may each own one without conflict.
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "orders/{id}", "POST", definitionId: "def-b"));
+
+        var route = Assert.Single(await Resolver().ResolveRoutesAsync());
+        Assert.Equal("orders/{id}", route.Route);
     }
 }

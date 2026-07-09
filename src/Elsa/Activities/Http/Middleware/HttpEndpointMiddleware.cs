@@ -84,8 +84,9 @@ public sealed class HttpEndpointMiddleware(
 
         // Resolve the concrete endpoint-relative path to a published route template (spec 089 B). The route
         // table holds endpoint-relative templates; TemplateMatcher wants rooted paths, so both sides get a
-        // leading slash for the match. First deterministic match wins (overlapping templates — e.g.
-        // orders/{id} vs orders/list — are matched in route-table order, elsa-core parity).
+        // leading slash for the match. The route table enumerates most-specific-first (issue #592 item 1), so
+        // "first match wins" is deterministic: a literal template (orders/list) beats a parameter template
+        // (orders/{id}) regardless of publish/insertion order.
         var (template, routeValues) = ResolveTemplate(endpointPath);
         if (template is null)
         {
@@ -243,7 +244,8 @@ public sealed class HttpEndpointMiddleware(
             if (string.IsNullOrWhiteSpace(template))
                 continue;
 
-            var values = routeMatcher.Match("/" + template.TrimStart('/'), rootedPath);
+            // Reuse the route table's precompiled matcher (issue #592 item 6) — no per-request template parse.
+            var values = routeMatcher.Match(routeData, rootedPath);
             if (values is null)
                 continue;
 

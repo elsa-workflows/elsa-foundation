@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Models;
+using Elsa.Workflows.Runtime.Http.Exceptions;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
@@ -104,15 +105,20 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_RepliesConflict_AndStartsNeither()
+    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_FailsTheSecondPublish()
     {
-        // Spec US2: a (template, GET) claimed by two distinct workflow definitions is an authoring error — 409,
-        // nothing started.
+        // Spec US2 + issue #592 item 2: a (template, GET) claimed by two distinct workflow definitions is an
+        // authoring error caught at PUBLISH time — the second publish of the conflicting endpoint fails, rather
+        // than the collision only surfacing as a request-time 409.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-a", "orders/{id}", ResultOutputName, "GET");
-        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET");
 
+        await Assert.ThrowsAsync<EndpointRoutingConflictException>(() =>
+            _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET"));
+
+        // The route-table refresh threw before swapping, so the live table still holds artifact-a's route. The
+        // request-time ambiguity guard remains a backstop (the test store did not roll back artifact-b's binding),
+        // so the request still 409s rather than starting either — nothing is dispatched.
         var response = await _fixture.Client.GetAsync("/workflows/http/orders/42");
-
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.Equal("ambiguous-endpoint", payload.RootElement.GetProperty("error").GetString());

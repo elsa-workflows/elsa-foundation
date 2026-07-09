@@ -74,6 +74,30 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal("42", dispatched.Input!.Value.GetProperty("RouteData").GetProperty("id").GetString());
     }
 
+    [Theory]
+    [InlineData("orders/list", "orders/{id}")] // more-specific template listed first
+    [InlineData("orders/{id}", "orders/list")] // ...and listed last: order must not matter
+    public async Task OverlappingTemplates_LiteralBeatsParameter_Deterministically(string first, string second)
+    {
+        // A request for the literal path must always bind the literal template (orders/list), never the parameter
+        // template (orders/{id}), regardless of the order the two templates were published into the route table
+        // (issue #592 item 1). The dispatched hash proves which template won.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-1", "orders/list", "GET"),
+            Binding("artifact-1", "orders/{id}", "GET"));
+        var middleware = Middleware(router, store, new[] { first, second });
+        var context = NewContext("/workflows/http/orders/list", "GET");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var dispatched = Assert.Single(router.Requests);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/list", "GET"), dispatched.StimulusHash);
+        // The literal template captured no route parameter.
+        Assert.Empty(dispatched.Input!.Value.GetProperty("RouteData").EnumerateObject());
+    }
+
     [Fact]
     public async Task UnmatchedConcretePath_RepliesNotFound_WithoutCallingTheRouter()
     {
