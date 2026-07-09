@@ -109,6 +109,16 @@
   color: var(--wf-text);
 }
 
+/* Page chrome — workspace pages render as one rounded, bordered card inside the shell's
+   padded content area (same treatment as .console-stream-page). The editor (.wf-editor)
+   stays full-bleed. Overlays are safe: menus/backdrops in list pages are position:fixed,
+   and the sticky availability headers live in their own inner scroll container. */
+.wf-page {
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  overflow: hidden;
+}
+
 .wf-page-header,
 .wf-toolbar,
 .wf-editor-top,
