@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "expiresAt": null,
   "identity": {
-    "artifactHash": "sha256:b154eb63e2a504b2198524eee0890532aa7ced020859731f6659a3396c96609b",
-    "artifactId": "artifact-b154eb63e2a5",
+    "artifactHash": "sha256:f50c7a48b163676826b15e112ee78adb4588bacd224b5baf920783542830eeb2",
+    "artifactId": "artifact-f50c7a48b163",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1",
@@ -101,7 +101,7 @@
             "storageDriverType": null,
             "type": {
               "alias": "String",
-              "collectionKind": 0
+              "collectionKind": "Single"
             }
           }
         ]
