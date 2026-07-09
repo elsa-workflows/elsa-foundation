@@ -78,9 +78,12 @@ public static class RuntimeWorkflowOutputStateProjection
             isSensitive: isSensitive,
             metadata: value.Metadata));
 
-        return decision.CapturesPayload
-            ? new WorkflowOutputProjection(name, value.InlineValue, IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt)
-            : new WorkflowOutputProjection(name, Value: null, IsRedacted: true, RedactionReason: decision.Reason, value.Type, value.CapturedAt);
+        return decision.Mode switch
+        {
+            RuntimePayloadCaptureMode.Payload => new WorkflowOutputProjection(name, value.InlineValue, IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt),
+            RuntimePayloadCaptureMode.DiagnosticSnapshot => new WorkflowOutputProjection(name, DefaultDiagnosticSnapshotFactory.Capture(value.InlineValue.Value, name, value.Type), IsRedacted: false, RedactionReason: null, value.Type, value.CapturedAt),
+            _ => new WorkflowOutputProjection(name, Value: null, IsRedacted: true, RedactionReason: decision.Reason, value.Type, value.CapturedAt)
+        };
     }
 }
 

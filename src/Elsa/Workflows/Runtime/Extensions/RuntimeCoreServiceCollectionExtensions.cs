@@ -92,6 +92,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
         services.TryAddSingleton<IWorkflowDrainOrchestrator, WorkflowDrainOrchestrator>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, WorkflowSchedulerCommandRouter>();
+        services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
+        services.TryAddSingleton<IRuntimeDiagnosticsSettingsStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
+        services.TryAddSingleton<IRuntimeDiagnosticsSettingsAccessor>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
 
         // Runtime execution pipeline spine (ADR 0029). The built-in placeholder middleware are registered so the
         // executor can resolve them by type from the built plan; the pass-through slots keep dispatch behavior-preserving

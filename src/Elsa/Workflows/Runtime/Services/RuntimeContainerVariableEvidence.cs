@@ -53,12 +53,20 @@ public static class RuntimeContainerVariableEvidence
                     decision,
                     type,
                     capturedAt,
-                    decision.CapturesPayload ? SerializeValue(variable.Value) : null,
+                    SerializeCapturedValue(decision, variable.Value, variable.Name, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })
             .ToArray();
     }
+
+    private static JsonElement? SerializeCapturedValue(RuntimePayloadCaptureDecision decision, object? value, string? valueName, RuntimeValueTypeDescriptor? type) =>
+        decision.Mode switch
+        {
+            RuntimePayloadCaptureMode.Payload => SerializeValue(value),
+            RuntimePayloadCaptureMode.DiagnosticSnapshot => DefaultDiagnosticSnapshotFactory.Capture(value, valueName, type),
+            _ => null
+        };
 
     private static JsonElement SerializeValue(object? value) =>
         value is JsonElement json

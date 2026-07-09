@@ -791,7 +791,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : IWork
                     decision,
                     type,
                     capturedAt,
-                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value),
+                    ActivityOutputPublisher.SerializeCapturedValue(decision, input.Value, input.Name, type),
                     isSensitive: false,
                     metadata: decision.Metadata);
             })

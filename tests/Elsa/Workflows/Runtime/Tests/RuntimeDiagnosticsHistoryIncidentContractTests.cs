@@ -131,14 +131,15 @@ public sealed class RuntimeDiagnosticsHistoryIncidentContractTests
     [InlineData(RuntimePayloadCaptureSubject.WorkflowOutput)]
     [InlineData(RuntimePayloadCaptureSubject.ActivityInput)]
     [InlineData(RuntimePayloadCaptureSubject.ActivityOutput)]
-    public void DefaultPayloadCapturePolicy_OmitsInputAndOutputSnapshots(RuntimePayloadCaptureSubject subject)
+    public void DefaultPayloadCapturePolicy_CapturesInputAndOutputDiagnosticSnapshots(RuntimePayloadCaptureSubject subject)
     {
         IRuntimePayloadCapturePolicy policy = new DefaultRuntimePayloadCapturePolicy();
 
         var decision = policy.Decide(NewCaptureRequest(subject));
 
-        Assert.Equal(RuntimePayloadCaptureMode.None, decision.Mode);
+        Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, decision.Mode);
         Assert.False(decision.CapturesPayload);
+        Assert.True(decision.CapturesEvidence);
     }
 
     [Fact]

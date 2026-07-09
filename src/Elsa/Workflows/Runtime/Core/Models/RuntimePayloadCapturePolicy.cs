@@ -52,6 +52,7 @@ public sealed class RuntimePayloadCaptureDecision
     public string Reason { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public bool CapturesPayload => Mode == RuntimePayloadCaptureMode.Payload;
+    public bool CapturesEvidence => Mode is RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload;
 }
 
 public enum RuntimePayloadCaptureSubject
@@ -70,5 +71,6 @@ public enum RuntimePayloadCaptureMode
 {
     None,
     MetadataOnly,
+    DiagnosticSnapshot,
     Payload
 }

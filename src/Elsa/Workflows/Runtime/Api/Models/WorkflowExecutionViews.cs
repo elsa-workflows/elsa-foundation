@@ -194,9 +194,11 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     string Name,
     string Subject,
     string CaptureMode,
+    string State,
     RuntimeValueTypeDescriptor? Type,
     DateTimeOffset CapturedAt,
     object? Payload,
+    object? Snapshot,
     string CaptureReason,
     bool IsSensitive,
     IReadOnlyDictionary<string, string> Metadata)
@@ -206,12 +208,23 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
+            SnapshotState(snapshot),
             snapshot.Type,
             snapshot.CapturedAt,
-            snapshot.Payload,
+            snapshot.CaptureMode == RuntimePayloadCaptureMode.Payload ? snapshot.Payload : null,
+            snapshot.CaptureMode == RuntimePayloadCaptureMode.DiagnosticSnapshot ? snapshot.Payload : null,
             snapshot.CaptureReason,
             snapshot.IsSensitive,
             snapshot.Metadata);
+
+    private static string SnapshotState(ActivityExecutionInspectionValueSnapshot snapshot) =>
+        snapshot.CaptureMode switch
+        {
+            RuntimePayloadCaptureMode.None => "notCaptured",
+            RuntimePayloadCaptureMode.MetadataOnly => "metadataOnly",
+            RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload when snapshot.Payload is not null => "captured",
+            _ => "unavailable"
+        };
 }
 
 public sealed record ActivityExecutionInspectionSummaryView(

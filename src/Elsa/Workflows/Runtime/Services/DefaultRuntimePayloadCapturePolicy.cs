@@ -5,6 +5,19 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 
 public sealed class DefaultRuntimePayloadCapturePolicy : IRuntimePayloadCapturePolicy
 {
+    private readonly IRuntimeDiagnosticsSettingsAccessor? _settingsAccessor;
+
+    public DefaultRuntimePayloadCapturePolicy()
+    {
+    }
+
+    public DefaultRuntimePayloadCapturePolicy(IRuntimeDiagnosticsSettingsAccessor settingsAccessor)
+    {
+        ArgumentNullException.ThrowIfNull(settingsAccessor);
+
+        _settingsAccessor = settingsAccessor;
+    }
+
     public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -12,19 +25,33 @@ public sealed class DefaultRuntimePayloadCapturePolicy : IRuntimePayloadCaptureP
         if (request.IsSensitive)
             return new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Sensitive runtime payloads are excluded by default.");
 
-        return request.Subject switch
-        {
-            RuntimePayloadCaptureSubject.Incident => new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.MetadataOnly, "Incident history captures metadata by default, not payload."),
-            RuntimePayloadCaptureSubject.Diagnostic => new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.MetadataOnly, "Diagnostics capture metadata by default, not payload."),
-            RuntimePayloadCaptureSubject.WorkflowInput => OmitInputOutput(),
-            RuntimePayloadCaptureSubject.WorkflowOutput => OmitInputOutput(),
-            RuntimePayloadCaptureSubject.ActivityInput => OmitInputOutput(),
-            RuntimePayloadCaptureSubject.ActivityOutput => OmitInputOutput(),
-            RuntimePayloadCaptureSubject.DurableValue => new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Durable value history snapshots require explicit capture policy."),
-            _ => new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.None, "Unknown runtime payload subject is not captured by default.")
-        };
+        var level = _settingsAccessor?.GetEffectiveLevel(request.Subject) ?? DefaultLevel(request.Subject);
+        var mode = RuntimeDiagnosticsSettingsResolver.ToCaptureMode(level);
+
+        return new RuntimePayloadCaptureDecision(mode, CaptureReason(mode));
     }
 
-    private static RuntimePayloadCaptureDecision OmitInputOutput() =>
-        new(RuntimePayloadCaptureMode.None, "Input and output snapshots are omitted by default.");
+    private static RuntimeDiagnosticsEvidenceLevel DefaultLevel(RuntimePayloadCaptureSubject subject) =>
+        subject switch
+        {
+            RuntimePayloadCaptureSubject.WorkflowInput => RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
+            RuntimePayloadCaptureSubject.WorkflowOutput => RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
+            RuntimePayloadCaptureSubject.ActivityInput => RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
+            RuntimePayloadCaptureSubject.ActivityOutput => RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
+            RuntimePayloadCaptureSubject.Incident => RuntimeDiagnosticsEvidenceLevel.Metadata,
+            RuntimePayloadCaptureSubject.Diagnostic => RuntimeDiagnosticsEvidenceLevel.Metadata,
+            RuntimePayloadCaptureSubject.DurableValue => RuntimeDiagnosticsEvidenceLevel.Metadata,
+            RuntimePayloadCaptureSubject.ContainerVariable => RuntimeDiagnosticsEvidenceLevel.DiagnosticSnapshot,
+            _ => RuntimeDiagnosticsEvidenceLevel.Off
+        };
+
+    private static string CaptureReason(RuntimePayloadCaptureMode mode) =>
+        mode switch
+        {
+            RuntimePayloadCaptureMode.None => "Runtime diagnostics policy did not capture value evidence.",
+            RuntimePayloadCaptureMode.MetadataOnly => "Runtime diagnostics policy captured metadata only.",
+            RuntimePayloadCaptureMode.DiagnosticSnapshot => "Diagnostic snapshot captured by runtime diagnostics policy.",
+            RuntimePayloadCaptureMode.Payload => "Full payload captured by runtime diagnostics policy.",
+            _ => "Runtime diagnostics policy did not capture value evidence."
+        };
 }

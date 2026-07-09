@@ -63,10 +63,8 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
     }
 
     [Fact]
-    public void Project_PolicyOmittedPayload_SurfacesNamedRedactedMarker_NotAbsent()
+    public void Project_DefaultPolicy_SurfacesNamedDiagnosticSnapshot_NotRawPayload()
     {
-        // The default capture policy omits workflow-output payloads: the entry must still appear, as an
-        // explicit marker carrying the policy's reason.
         var durableValues = States(RuntimeWorkflowStateSeed.BuildWorkflowOutputChanges(
             ExecutionId, new Dictionary<string, object?> { ["Result"] = "done" }, _now));
 
@@ -74,9 +72,11 @@ public sealed class RuntimeWorkflowOutputStateProjectionTests
 
         var projection = Assert.Single(projections);
         Assert.Equal("Result", projection.Name);
-        Assert.True(projection.IsRedacted);
-        Assert.Null(projection.Value);
-        Assert.False(string.IsNullOrWhiteSpace(projection.RedactionReason));
+        Assert.False(projection.IsRedacted);
+        Assert.Null(projection.RedactionReason);
+        var snapshot = Assert.IsType<JsonElement>(projection.Value);
+        Assert.Equal("string", snapshot.GetProperty("kind").GetString());
+        Assert.Equal("done", snapshot.GetProperty("preview").GetString());
     }
 
     [Fact]
