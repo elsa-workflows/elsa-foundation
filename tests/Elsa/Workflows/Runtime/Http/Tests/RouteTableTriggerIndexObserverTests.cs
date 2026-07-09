@@ -31,7 +31,7 @@ public sealed class RouteTableTriggerIndexObserverTests
     private RouteTableTriggerIndexObserver Observer() =>
         new(_services.GetRequiredService<IServiceScopeFactory>());
 
-    // One observer instance across a test's notifications so its per-artifact HTTP-contributor memory persists.
+    // One observer instance across a test's notifications so its known-non-HTTP artifact memory persists.
     private readonly RouteTableTriggerIndexObserver _observer;
 
     private async Task NotifyAsync(string artifactId)
@@ -78,13 +78,18 @@ public sealed class RouteTableTriggerIndexObserverTests
     }
 
     [Fact]
-    public async Task NonHttpPublish_NeverSeenAsHttp_SkipsTheRefresh()
+    public async Task RepeatNonHttpPublish_SkipsTheRefresh_AfterOneRefreshEstablishedItContributesNothing()
     {
-        // Spec 089 efficiency #8: a workflow that neither declares nor previously declared an HTTP endpoint cannot
-        // change the route set, so the observer must not pay for a full re-projection on its publish.
+        // Spec 089 efficiency #8: the FIRST no-HTTP publish of an unknown artifact refreshes (the observer cannot
+        // know the artifact did not just drop its last HTTP route); once that refresh succeeded, the artifact is
+        // positively known non-HTTP and repeat no-HTTP publishes — the common case — skip the re-projection.
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
+        Assert.Equal(1, _routeTable.RefreshCount);
+
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
         await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
 
-        Assert.Equal(0, _routeTable.RefreshCount);
+        Assert.Equal(1, _routeTable.RefreshCount);
         Assert.Empty(_routeTable.RouteTemplates);
     }
 
@@ -99,11 +104,26 @@ public sealed class RouteTableTriggerIndexObserverTests
     }
 
     [Fact]
+    public async Task HttpPublish_OfAKnownNonHttpArtifact_RefreshesAgain()
+    {
+        // A known-non-HTTP artifact that later declares an HTTP endpoint must refresh (and be forgotten as
+        // non-HTTP, so a subsequent removal refreshes too).
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
+        Assert.Equal(1, _routeTable.RefreshCount);
+
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
+        await NotifyAsync("a1");
+
+        Assert.Equal(2, _routeTable.RefreshCount);
+        Assert.Single(_routeTable.RouteTemplates);
+    }
+
+    [Fact]
     public async Task ArtifactDropsItsLastHttpRoute_StillRefreshes_ToReconcileTheVanishedRoute()
     {
         // The artifact first publishes an HTTP route (table gets it), then republishes with only a non-HTTP
-        // trigger. The new snapshot has no HTTP binding, but the observer remembers the artifact contributed one,
-        // so it refreshes to drop the now-superseded route — otherwise the table would serve a stale route.
+        // trigger. The new snapshot has no HTTP binding and the artifact is not known non-HTTP, so the observer
+        // refreshes and drops the now-superseded route — otherwise the table would serve a stale route.
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET"));
         await NotifyAsync("a1");
         Assert.Single(_routeTable.RouteTemplates);
@@ -115,6 +135,45 @@ public sealed class RouteTableTriggerIndexObserverTests
 
         Assert.Equal(2, _routeTable.RefreshCount);
         Assert.Empty(_routeTable.RouteTemplates);
+    }
+
+    [Fact]
+    public async Task RestartThenDropLastHttpRoute_FreshObserverStillRefreshes_NoStaleRouteSurvives()
+    {
+        // Restart-removal sequence (control-room review of #599): before the restart, a1's HTTP route was
+        // published and the (restarted) process rebuilt the table from the durable index via the startup task —
+        // so the route is live but the observer instance is FRESH and has no memory of a1. a1 then republishes
+        // without its HTTP trigger. A fresh observer must refresh (unknown artifact), reconciling the vanished
+        // route out; skipping here would serve the stale route forever.
+        await _routeTable.Refresh(new[] { "orders/{id}" }); // The startup task's rebuild, pre-republish.
+        var refreshesBeforeRepublish = _routeTable.RefreshCount;
+        await _store.SaveAsync(Bindings.Other("a1", "n1", stimulusType: "Event")); // The post-republish durable index.
+
+        var freshObserver = Observer();
+        var bindings = await _store.ListByArtifactAsync("a1");
+        await freshObserver.OnTriggersIndexedAsync(new WorkflowTriggerIndexSnapshot("a1", bindings));
+
+        Assert.Equal(refreshesBeforeRepublish + 1, _routeTable.RefreshCount);
+        Assert.Empty(_routeTable.RouteTemplates);
+    }
+
+    [Fact]
+    public async Task FailedRefresh_LeavesNoMemory_SoTheRetriedPublishRefreshesAgain()
+    {
+        // The observer failure fails the publish. The known-non-HTTP set must be written only AFTER a successful
+        // refresh — otherwise the retried publish would skip and any stale route would persist.
+        _routeTable.FailNextRefresh = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event")));
+        Assert.Equal(0, _routeTable.RefreshCount);
+
+        // The publish retry: same snapshot, must attempt the refresh again (and only now record the artifact).
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
+        Assert.Equal(1, _routeTable.RefreshCount);
+
+        // Subsequent repeats skip as usual.
+        await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));
+        Assert.Equal(1, _routeTable.RefreshCount);
     }
 
     private static WorkflowExecutable FakeExecutable(string artifactId) =>
