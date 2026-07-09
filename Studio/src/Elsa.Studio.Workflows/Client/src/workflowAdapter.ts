@@ -16,6 +16,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  onEnterSlot?(slot: ChildSlot): void;
 }
 
 export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger";
