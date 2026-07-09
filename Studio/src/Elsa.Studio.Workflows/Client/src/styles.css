@@ -853,23 +853,30 @@
 .wf-instance-activity,
 .wf-instance-incident {
   display: grid;
-  gap: 4px;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
   background: var(--wf-panel-muted);
   color: var(--wf-text);
-  cursor: pointer;
   font: inherit;
-  padding: 9px;
   text-align: left;
 }
 
-.wf-instance-activity:hover,
-.wf-instance-incident:hover,
 .wf-instance-activity[data-selected="true"],
 .wf-instance-incident[data-selected="true"] {
   border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
   box-shadow: inset 3px 0 0 var(--wf-accent);
+}
+
+.wf-instance-activity {
+  gap: 4px;
+  cursor: pointer;
+  padding: 9px;
+}
+
+.wf-instance-activity:hover,
+.wf-instance-incident:hover,
+.wf-instance-incident:focus-within {
+  border-color: color-mix(in srgb, var(--wf-accent) 52%, var(--wf-border));
 }
 
 .wf-instance-activity {
@@ -893,6 +900,61 @@
 .wf-instance-incident span {
   color: var(--wf-muted-text);
   font-size: 12px;
+}
+
+.wf-instance-incident-summary {
+  display: grid;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 9px;
+  text-align: left;
+}
+
+.wf-instance-incident-summary strong,
+.wf-instance-incident-summary span,
+.wf-instance-incident-summary p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wf-instance-incident-summary strong,
+.wf-instance-incident-summary span {
+  white-space: nowrap;
+}
+
+.wf-incident-stacktrace {
+  border-top: 1px solid var(--wf-border);
+  background: var(--wf-panel);
+}
+
+.wf-incident-stacktrace summary {
+  overflow: hidden;
+  color: var(--wf-text);
+  cursor: pointer;
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 7px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-incident-stacktrace pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  border-top: 1px solid var(--wf-border);
+  color: var(--wf-text);
+  font-family: var(--studio-mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 9px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .wf-instance-incident[data-severity="warning"] {
@@ -4257,6 +4319,7 @@ html[data-theme-material] .wf-instance-inspector header,
 html[data-theme-material] .wf-instance-tabs,
 html[data-theme-material] .wf-instance-activity,
 html[data-theme-material] .wf-instance-incident,
+html[data-theme-material] .wf-incident-stacktrace,
 html[data-theme-material] .wf-instance-unmatched {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);

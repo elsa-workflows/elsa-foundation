@@ -473,6 +473,8 @@ export interface ActivityExecutionIncidentSummary {
   resolutionAction: string;
   failureType: string;
   message: string;
+  stackTrace?: string | null;
+  exceptionStackTrace?: string | null;
   createdAt: string;
   resolvedAt?: string | null;
   isBlocking: boolean;
@@ -533,6 +535,8 @@ export interface IncidentStateSummary {
   resolutionAction: string;
   failureType: string;
   message: string;
+  stackTrace?: string | null;
+  exceptionStackTrace?: string | null;
   createdAt: string;
   resolvedAt?: string | null;
   isBlocking: boolean;
