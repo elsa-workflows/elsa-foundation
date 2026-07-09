@@ -168,7 +168,8 @@
   background: var(--wf-panel-muted);
 }
 
-.wf-autosave-switch-input {
+/* Shared on/off switch, used by the designer's autosave toggle and the availability page. */
+.wf-switch-input {
   position: relative;
   width: 34px;
   height: 20px;
@@ -181,7 +182,7 @@
   padding: 0;
 }
 
-.wf-autosave-switch-input::before {
+.wf-switch-input::before {
   content: "";
   position: absolute;
   top: 2px;
@@ -193,16 +194,30 @@
   transition: transform 120ms ease;
 }
 
-.wf-autosave-switch-input:checked {
+.wf-switch-input:checked {
   border-color: var(--wf-accent);
   background: var(--wf-accent);
 }
 
-.wf-autosave-switch-input:checked::before {
+.wf-switch-input:checked::before {
   transform: translateX(14px);
 }
 
-.wf-autosave-switch-input:focus-visible {
+.wf-switch-input:indeterminate {
+  border-color: color-mix(in srgb, var(--wf-accent) 60%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-accent) 55%, var(--wf-muted-text));
+}
+
+.wf-switch-input:indeterminate::before {
+  transform: translateX(7px);
+}
+
+.wf-switch-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wf-switch-input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--wf-accent) 34%, transparent);
   outline-offset: 2px;
 }
@@ -4326,8 +4341,7 @@ html[data-theme="black-glass"] .wf-syntax-picker-menu {
 /* Dense-row checkboxes sit on translucent glass rows — give them a solid recessed well +
    luminous edge so they stay legible instead of dissolving into the glass (mirrors the
    material checkbox treatment above). */
-html[data-theme="black-glass"] .wf-row-select input,
-html[data-theme="black-glass"] .availability-activity-option input[type="checkbox"] {
+html[data-theme="black-glass"] .wf-row-select input {
   border-radius: 3px;
   background-color: var(--studio-glass-well-bg);
   box-shadow: 0 0 0 1px var(--studio-glass-edge),
@@ -4496,8 +4510,7 @@ html[data-theme-material] .wf-grid-head {
 
 /* Checkboxes inside dense rows sit on grain — give them a solid surface + edge so they
    stay legible instead of drowning in the texture. */
-html[data-theme-material] .wf-row-select input,
-html[data-theme-material] .availability-activity-option input[type="checkbox"] {
+html[data-theme-material] .wf-row-select input {
   border-radius: 3px;
   background-color: var(--studio-surface);
   box-shadow: 0 0 0 1px var(--studio-material-edge);
