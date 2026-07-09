@@ -12,7 +12,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         string? idempotencyKey = null,
         IReadOnlyDictionary<string, string>? metadata = null,
         IReadOnlyDictionary<string, object?>? variables = null,
-        IReadOnlyDictionary<string, object?>? inputs = null)
+        IReadOnlyDictionary<string, object?>? inputs = null,
+        JsonElement? stimulusInput = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -30,6 +31,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         Variables = SnapshotValues(variables);
         Inputs = SnapshotValues(inputs);
+        StimulusInput = stimulusInput?.Clone();
     }
 
     public string ArtifactId { get; }
@@ -50,6 +52,15 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// </summary>
     public IReadOnlyDictionary<string, object?> Inputs { get; }
 
+    /// <summary>
+    /// The stimulus payload that triggered this start (spec 089 A), seeded as durable runtime state on its own
+    /// reserved channel — the start-side counterpart of the resume path's
+    /// <c>BookmarkResumeDispatchRequest.Input</c>. Deliberately NOT part of <see cref="Inputs"/>: it never
+    /// shares the workflow-input namespace, so it cannot collide with author-declared inputs and cannot be
+    /// forged through caller-facing input bags. Null for non-stimulus starts.
+    /// </summary>
+    public JsonElement? StimulusInput { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }
@@ -61,7 +72,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         WorkflowExecutableIdentity pinnedExecutable,
         string requestedArtifactId,
         IReadOnlyDictionary<string, JsonElement>? variables = null,
-        IReadOnlyDictionary<string, JsonElement>? inputs = null)
+        IReadOnlyDictionary<string, JsonElement>? inputs = null,
+        JsonElement? stimulusInput = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -70,6 +82,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         RequestedArtifactId = requestedArtifactId;
         Variables = SnapshotElements(variables);
         Inputs = SnapshotElements(inputs);
+        StimulusInput = stimulusInput?.Clone();
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -86,6 +99,12 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// checkpoint can seed them as durable runtime state.
     /// </summary>
     public IReadOnlyDictionary<string, JsonElement> Inputs { get; }
+
+    /// <summary>
+    /// The stimulus payload (spec 089 A) carried from start dispatch so the workflow-started checkpoint can
+    /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for non-stimulus starts.
+    /// </summary>
+    public JsonElement? StimulusInput { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(

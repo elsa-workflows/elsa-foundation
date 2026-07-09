@@ -99,7 +99,8 @@ public sealed class JavaScriptRuntimeFeatureEvaluationTests : IDisposable
             WorkflowDefinitionVersion: 0,
             WorkflowInputs: workflowInputs ?? empty,
             WorkflowVariables: workflowVariables ?? empty,
-            ActivityOutputValues: activityOutputValues ?? empty);
+            ActivityOutputValues: activityOutputValues ?? empty,
+            StimulusInput: null);
 
         return SimpleActivityExecutionContext.ForExecution(
             serviceProvider,

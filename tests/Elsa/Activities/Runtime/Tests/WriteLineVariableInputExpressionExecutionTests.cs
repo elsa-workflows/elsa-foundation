@@ -4,6 +4,7 @@ using Elsa.Activities.Primitives.Constructors;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Expressions.JavaScript;

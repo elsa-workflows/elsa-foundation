@@ -43,7 +43,8 @@ public static class RuntimeExecutionExpressionCarrier
             WorkflowDefinitionVersion: ResolveWorkflowDefinitionVersion(pinnedExecutable),
             WorkflowInputs: projections.WorkflowInputs,
             WorkflowVariables: projections.WorkflowVariables,
-            ActivityOutputValues: projections.ActivityOutputValues);
+            ActivityOutputValues: projections.ActivityOutputValues,
+            StimulusInput: projections.StimulusInput);
     }
 
     /// <summary>
@@ -87,4 +88,5 @@ public readonly record struct RuntimeExecutionExpressionCarrierState(
     int WorkflowDefinitionVersion,
     IReadOnlyDictionary<string, object?> WorkflowInputs,
     IReadOnlyDictionary<string, object?> WorkflowVariables,
-    IReadOnlyDictionary<string, object?> ActivityOutputValues);
+    IReadOnlyDictionary<string, object?> ActivityOutputValues,
+    object? StimulusInput);

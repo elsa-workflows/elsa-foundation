@@ -155,7 +155,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
             RuntimeCheckpointCommandPayload.WorkflowStartReason,
             postCommitIntents,
             seedVariables: startPayload.Variables,
-            seedInputs: startPayload.Inputs);
+            seedInputs: startPayload.Inputs,
+            seedStimulusInput: startPayload.StimulusInput);
 
         return new RuntimeSchedulerWorkItem(
             workItemId: $"{startWorkItem.WorkItemId}:checkpoint:{RuntimeCheckpointNames.WorkflowStarted}",

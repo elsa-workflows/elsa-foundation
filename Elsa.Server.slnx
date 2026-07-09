@@ -268,6 +268,7 @@
     <Project Path="tests/Elsa/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Http/">
+    <Project Path="tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="tests/Elsa/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Activities/Scripting/">
