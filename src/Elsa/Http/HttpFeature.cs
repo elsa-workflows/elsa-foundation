@@ -87,11 +87,19 @@ public class HttpFeature : IShellFeature
     {
         RegisterType<IFileDownloader>(services, FileDownloaderType);
 
-        // Add HttpClient specifically to the FileDownloader implementation
+        // Add HttpClient specifically to the FileDownloader implementation. AddHttpClient has many overloads, so a
+        // plain GetMethod(name) is ambiguous — select the two-generic-argument overload that takes just the service
+        // collection: AddHttpClient<TClient, TImplementation>(IServiceCollection).
         var type = FileDownloaderType.GetLoadedType();
         var methodName = nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient);
-        var method = typeof(HttpClientFactoryServiceCollectionExtensions).GetMethod(methodName, BindingFlags.Static | BindingFlags.Public)
-                     ?? throw new InvalidOperationException($"Could not find method '{nameof(HttpClientFactoryServiceCollectionExtensions.AddHttpClient)}'");
+        var method = typeof(HttpClientFactoryServiceCollectionExtensions)
+                         .GetMethods(BindingFlags.Static | BindingFlags.Public)
+                         .SingleOrDefault(m =>
+                             m.Name == methodName &&
+                             m.IsGenericMethodDefinition &&
+                             m.GetGenericArguments().Length == 2 &&
+                             m.GetParameters() is [{ ParameterType.IsGenericType: false } p] && p.ParameterType == typeof(IServiceCollection))
+                     ?? throw new InvalidOperationException($"Could not find method '{methodName}'");
 
         var genericMethod = method.MakeGenericMethod(typeof(IFileDownloader), type);
         genericMethod.Invoke(null, [services]);

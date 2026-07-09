@@ -8,7 +8,9 @@ using System.Collections.Concurrent;
 namespace Elsa.Http.Services;
 
 /// <inheritdoc />
-internal sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger) : IRouteTable
+// Public for direct unit-test construction: InternalsVisibleTo is guard-forbidden outside the documented
+// allow-list, matching the precedent of the other public default services on this surface.
+public sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger) : IRouteTable
 {
     private static readonly object Key = new();
 
@@ -73,17 +75,35 @@ internal sealed class RouteTable(IMemoryCache cache, ILogger<RouteTable> logger)
 
     public ValueTask Refresh(IEnumerable<string> routes)
     {
-        Routes.Clear();
-        return AddRange(routes);
+        return Refresh(routes.Select(route => new HttpRouteData(route)));
     }
 
-    public async ValueTask Refresh(IEnumerable<HttpRouteData> routes)
+    public ValueTask Refresh(IEnumerable<HttpRouteData> routes)
     {
-        Routes.Clear();
+        // Build a complete NEW table off to the side, then publish it in a single cache.Set. Readers go through
+        // the Routes getter on every access, so they observe either the old table or the fully-built new one —
+        // never the empty/partial intermediate a Clear()+Add loop would expose (which caused transient 404s during
+        // any publish). Build-time duplicates still surface (below) but abort the swap, leaving the live table
+        // intact rather than half-destroyed.
+        var newRoutes = new ConcurrentDictionary<string, HttpRouteData>();
 
-        foreach (var route in routes)
+        foreach (var httpRouteData in routes)
         {
-            await Add(route);
+            var route = httpRouteData.Route;
+
+            if (route.Contains("//"))
+            {
+                logger.LogWarning("Path cannot contain double slashes. Ignoring path: {Path}", route);
+                continue;
+            }
+
+            var normalizedRoute = NormalizeRoute(route);
+
+            if (!newRoutes.TryAdd(normalizedRoute, httpRouteData))
+                throw new InvalidOperationException($"Route '{route}' is already added");
         }
+
+        cache.Set(Key, newRoutes);
+        return ValueTask.CompletedTask;
     }
 }

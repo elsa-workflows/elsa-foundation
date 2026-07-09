@@ -4,8 +4,8 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 
 ## Request matching
 
-- Base path: `HttpEndpointOptions.BasePath` (per shell). Requests outside it pass through the pipeline untouched.
-- A: exact normalized path match (current behavior). B onward: concrete path resolved against the per-shell route-table templates; method must be in the endpoint's supported set.
+- Base path: `HttpEndpointOptions.BasePath` (per shell). Requests outside it pass through the pipeline untouched (segment-bounded; empty/root base path disables the middleware).
+- B (live): the endpoint-relative path is resolved against the per-shell route-table templates (ASP.NET route templates; first deterministic match wins for overlaps); the stimulus identity is (matched template, request method), so the method must be in the endpoint's supported set (unauthored default: GET).
 
 ## Responses
 
@@ -13,7 +13,7 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 |---|---|---|
 | Matched, async mode (and A baseline) | 202 Accepted | `{ "started": [executionIds] }` (resumes reported analogously from D) |
 | No matching trigger/bookmark | 404 Not Found | — |
-| Ambiguous match (>1 distinct workflow per (template, method)) [B] | 409 Conflict | problem summary; no instance started |
+| Ambiguous match (>1 distinct workflow per (template, method)) [B — live] | 409 Conflict | `{ "error": "ambiguous-endpoint", ... }`; no instance started |
 | Authorize failed [C] | 401 Unauthorized | — |
 | Body exceeds RequestSizeLimit [C] | 413 Content Too Large | — |
 | Workflow timeout in sync processing [C/E] | 408 Request Timeout | via fault handler |

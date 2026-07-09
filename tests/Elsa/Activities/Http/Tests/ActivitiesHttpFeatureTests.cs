@@ -4,8 +4,14 @@ using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Testing;
+using Elsa.Http;
+using Elsa.Http.Core.Contracts;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http;
+using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -78,6 +84,15 @@ public sealed class ActivitiesHttpFeatureTests
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
         services.AddScoped<IStimulusRouter, RecordingStimulusRouter>();
+        // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
+        // features ActivitiesHttpFeature.DependsOn ("Http" provides IRouteTable/IRouteMatcher; "WorkflowsRuntime-
+        // Triggers" provides IWorkflowTriggerBindingStore). This bare container stands in for that platform
+        // guarantee: the endpoint template is seeded so a request under the base path resolves and reaches
+        // dispatch, where the no-start router yields 404 (proving the mounted middleware, not the sentinel,
+        // answered).
+        services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
+        services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
+        services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
         // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
         services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
         var provider = services.BuildServiceProvider();
@@ -96,6 +111,7 @@ public sealed class ActivitiesHttpFeatureTests
         await using var scope = provider.CreateAsyncScope();
         var context = new Microsoft.AspNetCore.Http.DefaultHttpContext { RequestServices = scope.ServiceProvider };
         context.Request.Path = "/workflows/http/orders/webhook";
+        context.Request.Method = "GET";
         await pipeline(context);
 
         Assert.False(sentinelReached);
@@ -110,5 +126,47 @@ public sealed class ActivitiesHttpFeatureTests
                 .Cast<ShellFeatureAttribute>());
 
         Assert.Equal("ActivitiesHttp", attribute.Name);
+    }
+
+    [Fact]
+    public void DependsOn_IncludesWorkflowsRuntimeHttp_SoTheRouteTablePopulatorsAlwaysCompose()
+    {
+        // Contract pin for B2: enabling ActivitiesHttp alone (DependsOn only "Http") left the route table
+        // unpopulated — WorkflowsRuntimeHttp contributes the populators (UpdateRouteTableStartupTask,
+        // RouteTableTriggerIndexObserver, IHttpEndpointRoutesResolver). The DependsOn closure must include it.
+        var attribute = Assert.Single(
+            typeof(ActivitiesHttpFeature).GetCustomAttributes(typeof(ShellFeatureAttribute), inherit: false)
+                .Cast<ShellFeatureAttribute>());
+
+        Assert.Contains("WorkflowsRuntimeHttp", attribute.DependsOn.Cast<object>().Select(d => d.ToString()));
+    }
+
+    [Fact]
+    public void DependsOnClosure_ComposesTheRouteTableAndItsPopulators()
+    {
+        // B2 wiring proof: run the real ConfigureServices of ActivitiesHttp and its DependsOn closure
+        // (WorkflowsRuntimeHttp -> Http) plus the minimal runtime registrations those features expect from the
+        // rest of the platform, then build the provider and resolve the route table together with the populators
+        // that fill it. Before the fix, WorkflowsRuntimeHttp.ConfigureServices threw (C1) and ActivitiesHttp did
+        // not depend on it, so this composition — the one a host actually gets — was never exercised.
+        var services = new ServiceCollection();
+
+        new ActivitiesHttpFeature().ConfigureServices(services);
+        new WorkflowsRuntimeHttpFeature().ConfigureServices(services); // default settings: the C1 path
+        new HttpFeature().ConfigureServices(services);
+
+        // Platform-provided dependencies the closure reads at resolve time.
+        services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
+        services.AddMemoryCache();
+        services.AddLogging();
+        services.AddAuthorizationCore();
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var sp = scope.ServiceProvider;
+
+        Assert.NotNull(sp.GetRequiredService<IRouteTable>());
+        Assert.NotNull(sp.GetRequiredService<IHttpEndpointRoutesResolver>());
+        Assert.Contains(sp.GetServices<IStartupTask>(), t => t is UpdateRouteTableStartupTask);
     }
 }

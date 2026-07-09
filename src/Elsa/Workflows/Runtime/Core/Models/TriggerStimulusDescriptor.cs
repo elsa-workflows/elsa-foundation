@@ -8,7 +8,11 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class TriggerStimulusDescriptor
 {
-    public TriggerStimulusDescriptor(string stimulusType, string stimulusHash, string? correlationScope = null)
+    public TriggerStimulusDescriptor(
+        string stimulusType,
+        string stimulusHash,
+        string? correlationScope = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -19,9 +23,17 @@ public sealed class TriggerStimulusDescriptor
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         CorrelationScope = correlationScope;
+        Metadata = RuntimeModelMetadata.Snapshot(metadata);
     }
 
     public string StimulusType { get; }
     public string StimulusHash { get; }
     public string? CorrelationScope { get; }
+
+    /// <summary>
+    /// Free-form provider metadata carried verbatim onto the resulting <see cref="WorkflowTriggerBinding.Metadata"/>
+    /// (ordinal snapshot; empty by default). Providers that emit several descriptors for one node (e.g. one per HTTP
+    /// method) use it to record the routing facets a consumer needs — the extractor copies it through unchanged.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Metadata { get; }
 }

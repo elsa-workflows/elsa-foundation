@@ -20,14 +20,19 @@ public sealed record WorkflowTriggerBinding(
     DateTimeOffset CreatedAt)
 {
     /// <summary>
-    /// Builds the deterministic, collision-free binding id for a trigger node in an artifact. Parts are
-    /// escaped so a separator inside an id cannot forge a different (artifactId, executableNodeId) pair.
+    /// Builds the deterministic, collision-free binding id for a single trigger stimulus on a node in an
+    /// artifact. Parts are escaped so a separator inside an id cannot forge a different
+    /// (artifactId, executableNodeId, stimulusHash) triple. The stimulus hash is part of the key because one
+    /// node can emit several descriptors (e.g. one HTTP method each); two descriptors on the same node must not
+    /// collide. The id is a pure function of its inputs (no randomness) so republish's delete-and-resave, which
+    /// keys on the artifact, deterministically supersedes the prior generation.
     /// </summary>
-    public static string BuildId(string artifactId, string executableNodeId)
+    public static string BuildId(string artifactId, string executableNodeId, string stimulusHash)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
-        return $"{Escape(artifactId)}:{Escape(executableNodeId)}";
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
+        return $"{Escape(artifactId)}:{Escape(executableNodeId)}:{Escape(stimulusHash)}";
     }
 
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");

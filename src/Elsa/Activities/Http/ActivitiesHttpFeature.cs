@@ -23,6 +23,14 @@ namespace Elsa.Activities.Http;
 /// through the CShells middleware seam (<see cref="IMiddlewareShellFeature"/>) — enabling the feature is all a
 /// host needs; no manual <c>UseMiddleware</c> call (spec 089 FR-003).
 /// </summary>
+/// <remarks>
+/// Depends on <c>WorkflowsRuntimeHttp</c> (not just <c>Http</c>): that feature contributes the route-table
+/// populators (<c>UpdateRouteTableStartupTask</c>, <c>RouteTableTriggerIndexObserver</c>,
+/// <c>IHttpEndpointRoutesResolver</c>) that fill the route table from the durable trigger index. Enabling the
+/// endpoint activity alone without them would compose an empty route table, so every endpoint 404s — the
+/// DependsOn closure guarantees the populators always compose with this feature. No cycle: WorkflowsRuntimeHttp
+/// depends only on <c>Http</c> and <c>WorkflowsRuntimeTriggers</c>, not on <c>ActivitiesHttp</c>.
+/// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Runtime")]
@@ -30,7 +38,8 @@ namespace Elsa.Activities.Http;
 [ShellFeature(
     name: "ActivitiesHttp",
     DisplayName = "Activities HTTP",
-    Description = "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse."
+    Description = "HTTP activities: SendHttpRequest, the HttpEndpoint start trigger, and WriteHttpResponse.",
+    DependsOn = new object[] { "Http", "WorkflowsRuntimeHttp" }
 )]
 public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeature
 {

@@ -13,18 +13,18 @@ public sealed class CronTriggerStimulusProvider : IActivityTriggerStimulusProvid
 {
     private const string ExpressionInput = nameof(Cron.Expression);
 
-    public TriggerStimulusDescriptor? Describe(ExecutableNode node)
+    public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Cron.ActivityType))
-            return null;
+            return [];
 
         var expression = SchedulingNodeInputs.ReadLiteralString(node, ExpressionInput)
             ?? throw new ArgumentException(
                 $"Cron trigger node '{node.ExecutableNodeId}' has no literal '{ExpressionInput}'. A start trigger's " +
                 "cron expression must be an authored literal so its stimulus is fixed at publish time.");
 
-        return CronStimulus.DescribeTrigger(expression);
+        return [CronStimulus.DescribeTrigger(expression)];
     }
 }

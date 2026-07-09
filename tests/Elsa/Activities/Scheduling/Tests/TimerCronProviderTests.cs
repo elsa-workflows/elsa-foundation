@@ -24,12 +24,11 @@ public sealed class TimerCronProviderTests
     {
         var node = Node(Timer.ActivityType, nameof(Timer.Interval), "PT5M");
 
-        var trigger = _timerTrigger.Describe(node);
+        var trigger = Assert.Single(_timerTrigger.Describe(node));
         var schedule = _timerSchedule.Describe(node);
 
-        Assert.NotNull(trigger);
         Assert.NotNull(schedule);
-        Assert.Equal("Timer", trigger!.StimulusType);
+        Assert.Equal("Timer", trigger.StimulusType);
         Assert.Equal(TimerStimulus.Hash("PT5M"), trigger.StimulusHash);
         Assert.Equal(trigger.StimulusHash, schedule!.StimulusHash);
         Assert.Equal(RecurringScheduleKind.Interval, schedule.Kind);
@@ -41,10 +40,10 @@ public sealed class TimerCronProviderTests
     {
         var node = Node(Cron.ActivityType, nameof(Cron.Expression), "0 * * * *");
 
-        var trigger = _cronTrigger.Describe(node);
+        var trigger = Assert.Single(_cronTrigger.Describe(node));
         var schedule = _cronSchedule.Describe(node);
 
-        Assert.Equal("Cron", trigger!.StimulusType);
+        Assert.Equal("Cron", trigger.StimulusType);
         Assert.Equal(CronStimulus.Hash("0 * * * *"), trigger.StimulusHash);
         Assert.Equal(trigger.StimulusHash, schedule!.StimulusHash);
         Assert.Equal(RecurringScheduleKind.Cron, schedule.Kind);
@@ -52,13 +51,13 @@ public sealed class TimerCronProviderTests
     }
 
     [Fact]
-    public void Providers_ReturnNull_ForForeignActivityType()
+    public void Providers_ReturnEmpty_ForForeignActivityType()
     {
         var node = Node("Elsa.WriteLine", nameof(Timer.Interval), "PT5M");
 
-        Assert.Null(_timerTrigger.Describe(node));
+        Assert.Empty(_timerTrigger.Describe(node));
         Assert.Null(_timerSchedule.Describe(node));
-        Assert.Null(_cronTrigger.Describe(node));
+        Assert.Empty(_cronTrigger.Describe(node));
         Assert.Null(_cronSchedule.Describe(node));
     }
 

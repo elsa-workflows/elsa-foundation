@@ -203,7 +203,7 @@ public sealed class StimulusRouterTests
 
     private WorkflowTriggerBinding Binding(string artifactId, string nodeId) =>
         new(
-            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId),
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, StimulusHash),
             ArtifactId: artifactId,
             DefinitionId: "definition-1",
             ArtifactVersion: "1.0.0",

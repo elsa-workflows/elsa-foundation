@@ -122,10 +122,25 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
         return element.ValueKind == JsonValueKind.String ? element.GetString() : element.ToString();
     }
 
-    // --- Closed-query (PortableDocumentQuery) surface: not exercised by these tests, which drive the
-    // provider through the declared-index DocumentStoreQuery path. ---
-    public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");
+    // --- Closed-query (PortableDocumentQuery) surface. Only the clause-free "all documents of a kind" form
+    // (with optional offset paging) is implemented — the shape the trigger-binding store's type-scoped scan
+    // uses. A query carrying comparison clauses is still out of this double's remit. ---
+    public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default)
+    {
+        if (query.Clauses.Count > 0)
+            throw new NotSupportedException("Clause-bearing PortableDocumentQuery is not exercised by this test double.");
+
+        var all = _docs.Values
+            .Where(d => d.DocumentKind == query.DocumentKind)
+            .OrderBy(d => d.Id, StringComparer.Ordinal)
+            .ToArray();
+
+        var window = all.Skip(query.Skip ?? 0);
+        if (query.Take is { } take)
+            window = window.Take(take);
+
+        return Task.FromResult(new DocumentQueryResult(window.ToArray(), all.Length));
+    }
 
     public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("PortableDocumentQuery is not exercised by this test double.");

@@ -77,4 +77,19 @@ public sealed class InMemoryWorkflowTriggerBindingStore : IWorkflowTriggerBindin
             return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
         }
     }
+
+    public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var matches = _bindings.Values
+                .Where(binding => StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+                .ToArray();
+
+            return new ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>>(matches);
+        }
+    }
 }

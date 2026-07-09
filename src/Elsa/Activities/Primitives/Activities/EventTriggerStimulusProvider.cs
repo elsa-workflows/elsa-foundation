@@ -20,12 +20,12 @@ public sealed class EventTriggerStimulusProvider : IActivityTriggerStimulusProvi
     private const string EventNameInput = nameof(Event.EventName);
     private const string CorrelationIdInput = nameof(Event.CorrelationId);
 
-    public TriggerStimulusDescriptor? Describe(ExecutableNode node)
+    public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Event.ActivityType))
-            return null;
+            return [];
 
         var eventName = ReadLiteralString(node, EventNameInput)
             ?? throw new ArgumentException(
@@ -33,7 +33,7 @@ public sealed class EventTriggerStimulusProvider : IActivityTriggerStimulusProvi
                 "event name must be an authored literal so its stimulus is fixed at publish time.");
 
         var correlationScope = ReadLiteralString(node, CorrelationIdInput);
-        return EventStimulus.Describe(eventName, correlationScope);
+        return [EventStimulus.Describe(eventName, correlationScope)];
     }
 
     private static string? ReadLiteralString(ExecutableNode node, string inputName)

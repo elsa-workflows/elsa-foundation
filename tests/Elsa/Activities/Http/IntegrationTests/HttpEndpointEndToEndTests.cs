@@ -27,7 +27,9 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task MatchingRequest_StartsWorkflow_RepliesAccepted_AndTheRunObservesTheLiveRequest()
     {
-        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-orders", Path, ResultOutputName);
+        // SupportedMethods is routing-significant now (spec 089 B): a POST endpoint must author ["POST"] or it
+        // 404s under the GET default.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-orders", Path, ResultOutputName, "POST");
 
         var request = new HttpRequestMessage(HttpMethod.Post, $"/workflows/http/{Path}?tenant=acme")
         {
@@ -70,6 +72,50 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
 
         // The endpoint middleware ignored it and the request reached the terminal sentinel middleware.
         Assert.Equal((HttpStatusCode)HttpEndpointHostFixture.SentinelStatusCode, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TemplatedEndpoint_MatchingMethodAndPath_Starts_AndTheRunObservesExtractedRouteData()
+    {
+        // Spec US2: publish orders/{id} for GET,DELETE. A GET on a concrete path matches, the run starts, and the
+        // durable Result carries the extracted route value id=42.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-templated", "orders/{id}", ResultOutputName, "GET", "DELETE");
+
+        var response = await _fixture.Client.GetAsync("/workflows/http/orders/42");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
+
+        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
+        var model = captured.Deserialize<HttpRequestModel>()!;
+        Assert.Equal("GET", model.Method);
+        Assert.Equal("42", Assert.Contains("id", model.RouteData!));
+    }
+
+    [Fact]
+    public async Task TemplatedEndpoint_UnsupportedMethod_RepliesNotFound()
+    {
+        // orders/{id} accepts GET,DELETE only — POST has no (template, method) binding, so nothing matches.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-templated-2", "orders/{id}", ResultOutputName, "GET", "DELETE");
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/orders/42", new StringContent(""));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_RepliesConflict_AndStartsNeither()
+    {
+        // Spec US2: a (template, GET) claimed by two distinct workflow definitions is an authoring error — 409,
+        // nothing started.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-a", "orders/{id}", ResultOutputName, "GET");
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET");
+
+        var response = await _fixture.Client.GetAsync("/workflows/http/orders/42");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("ambiguous-endpoint", payload.RootElement.GetProperty("error").GetString());
     }
 
     private static async Task<IReadOnlyList<string>> ReadStartedIdsAsync(HttpResponseMessage response)

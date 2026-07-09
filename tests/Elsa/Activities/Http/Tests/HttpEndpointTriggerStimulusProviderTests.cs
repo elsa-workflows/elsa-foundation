@@ -1,38 +1,64 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
+using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Unit coverage for the <see cref="HttpEndpointTriggerStimulusProvider"/> (W16, on the W7 seam), mirroring the
-/// Event trigger provider tests: it recognizes published <see cref="HttpEndpoint"/> nodes, derives the stimulus
-/// from the authored <see cref="HttpEndpoint.Path"/> literal, returns null for other activity types, and fails
-/// the publish when the path is not an authored literal.
+/// Unit coverage for the <see cref="HttpEndpointTriggerStimulusProvider"/> (W16, on the W7 seam): it recognizes
+/// published <see cref="HttpEndpoint"/> nodes, derives one <c>(template, method)</c> descriptor per supported
+/// method from the authored literals, defaults to <c>GET</c> when methods are unauthored (elsa-core parity),
+/// returns empty for other activity types, and fails the publish when a routing-significant input is not an
+/// authored literal.
 /// </summary>
 public sealed class HttpEndpointTriggerStimulusProviderTests
 {
     private readonly HttpEndpointTriggerStimulusProvider _provider = new();
 
     [Fact]
-    public void Describe_ReturnsHttpEndpointStimulus_ForEndpointNodeWithLiteralPath()
+    public void Describe_UnauthoredMethods_YieldsSingleGetDescriptor()
     {
         var node = EndpointNode(path: "orders/webhook");
 
-        var descriptor = _provider.Describe(node);
+        var descriptor = Assert.Single(_provider.Describe(node));
 
-        Assert.NotNull(descriptor);
-        Assert.Equal("HttpEndpoint", descriptor!.StimulusType);
-        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook"), descriptor.StimulusHash);
+        Assert.Equal(HttpEndpointRouting.StimulusType, descriptor.StimulusType);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        Assert.Equal("orders/webhook", descriptor.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
+        Assert.Equal("get", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]);
     }
 
     [Fact]
-    public void Describe_ReturnsNull_ForNonHttpEndpointActivityType()
+    public void Describe_AuthoredMethods_YieldsOneDescriptorPerMethod()
+    {
+        var node = EndpointNode(path: "orders/{id}", methods: ["GET", "DELETE"]);
+
+        var descriptors = _provider.Describe(node);
+
+        Assert.Equal(2, descriptors.Count);
+        Assert.Collection(
+            descriptors, // deterministic lowercased-ordinal order: delete < get
+            first =>
+            {
+                Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "DELETE"), first.StimulusHash);
+                Assert.Equal("orders/{id}", first.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
+                Assert.Equal("delete", first.Metadata[HttpEndpointRouting.MethodMetadataKey]);
+            },
+            second =>
+            {
+                Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), second.StimulusHash);
+                Assert.Equal("get", second.Metadata[HttpEndpointRouting.MethodMetadataKey]);
+            });
+    }
+
+    [Fact]
+    public void Describe_ReturnsEmpty_ForNonHttpEndpointActivityType()
     {
         var node = EndpointNode(path: "orders/webhook", activityType: "Elsa.WriteLine");
 
-        Assert.Null(_provider.Describe(node));
+        Assert.Empty(_provider.Describe(node));
     }
 
     [Fact]
@@ -44,23 +70,81 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
-    public void Hash_IsDeterministic_Prefixed_AndPathNormalized()
+    public void Describe_Throws_WhenPathNonLiteral()
     {
-        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook"), HttpEndpointStimulus.Hash("orders/webhook"));
-        Assert.NotEqual(HttpEndpointStimulus.Hash("orders/webhook"), HttpEndpointStimulus.Hash("orders/other"));
-        Assert.StartsWith("sha256:", HttpEndpointStimulus.Hash("orders/webhook"));
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = ExpressionBinding(nameof(HttpEndpoint.Path))
+        };
 
-        // Case and surrounding slashes are normalized away, so equivalent routes hash identically.
-        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook"), HttpEndpointStimulus.Hash("/Orders/Webhook/"));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
     }
 
-    private static ExecutableNode EndpointNode(string? path, string activityType = "Elsa.HttpEndpoint")
+    [Fact]
+    public void Describe_Throws_WhenSupportedMethodsNonLiteral()
     {
-        using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = ExpressionBinding(nameof(HttpEndpoint.SupportedMethods))
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenSupportedMethodsContainsNonStringElements()
+    {
+        // [5, true] — a literal JSON array whose elements are not strings must fail the publish rather than coerce
+        // each element to garbage via ToString().
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), "[5, true]")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenSupportedMethodsMixesStringAndNonString()
+    {
+        // ["GET", {}] — a single non-string element is enough to fail the publish.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), """["GET", {}]""")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenPathLiteralIsNotAString()
+    {
+        // A non-string Path literal (a number here) is routing-significant and must throw, not ToString()-coerce.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = RawLiteralBinding(nameof(HttpEndpoint.Path), "42")
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    private static ExecutableNode EndpointNode(string? path, IReadOnlyCollection<string>? methods = null, string activityType = "Elsa.HttpEndpoint")
+    {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         if (path is not null)
             bindings[nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), path);
+        if (methods is not null)
+            bindings[nameof(HttpEndpoint.SupportedMethods)] = LiteralCollectionBinding(nameof(HttpEndpoint.SupportedMethods), methods);
 
+        return NodeWith(bindings, activityType);
+    }
+
+    private static ExecutableNode NodeWith(Dictionary<string, RuntimeInputBinding> bindings, string activityType = "Elsa.HttpEndpoint")
+    {
+        using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new ExecutableNode(
             executableNodeId: "node-http-endpoint",
             authoredActivityId: "authored-node-http-endpoint",
@@ -78,4 +162,19 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(value));
         return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
     }
+
+    private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values)
+    {
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(values));
+        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+    }
+
+    private static RuntimeInputBinding RawLiteralBinding(string name, string rawJson)
+    {
+        using var document = JsonDocument.Parse(rawJson);
+        return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
+    }
+
+    private static RuntimeInputBinding ExpressionBinding(string name) =>
+        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.foo"));
 }

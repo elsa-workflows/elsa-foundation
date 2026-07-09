@@ -65,4 +65,21 @@ public sealed class GroundworkWorkflowTriggerBindingStore(IDocumentStore store, 
         return await QueryDocumentsAsync<WorkflowTriggerBinding, WorkflowTriggerBinding>(
             ElsaRuntimeStorageManifest.WorkflowTriggerBindingByArtifact, artifactId, binding => binding, cancellationToken);
     }
+
+    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+
+        // No stimulus-type index exists (the cross-artifact index is hash-keyed); a full type-scoped scan is
+        // acceptable because this feeds the startup/refresh route-table rebuild, not a per-request path. A
+        // clause-free PortableDocumentQuery matches every document of this kind, and we narrow to the requested
+        // stimulus type in code — the same defensive filter ListByStimulusAsync applies. No new index is added,
+        // so the persisted document shape and SchemaVersion are unchanged.
+        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
+
+        return result.Documents
+            .Select(envelope => Serializer.Deserialize<WorkflowTriggerBinding>(envelope))
+            .Where(binding => StringComparer.Ordinal.Equals(binding.StimulusType, stimulusType))
+            .ToArray();
+    }
 }

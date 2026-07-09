@@ -20,12 +20,38 @@ public sealed class WorkflowTriggerBindingExtractorTests
 
         var binding = Assert.Single(extractor.Extract(executable));
 
-        Assert.Equal(WorkflowTriggerBinding.BuildId("artifact-1", "node-event"), binding.TriggerBindingId);
+        Assert.Equal(WorkflowTriggerBinding.BuildId("artifact-1", "node-event", "sha256:event:hello"), binding.TriggerBindingId);
         Assert.Equal("artifact-1", binding.ArtifactId);
         Assert.Equal("node-event", binding.ExecutableNodeId);
         Assert.Equal("Event", binding.StimulusType);
         Assert.Equal("sha256:event:hello", binding.StimulusHash);
         Assert.Equal("order-7", binding.CorrelationScope);
+    }
+
+    [Fact]
+    public void Extract_EmitsOneBindingPerDescriptor_WithDistinctIds_AndCopiesMetadataVerbatim()
+    {
+        // A single trigger node whose provider yields several descriptors (e.g. one HTTP method each) must
+        // produce one binding per descriptor, each with a distinct id, and carry each descriptor's metadata through.
+        var provider = new MultiDescriptorProvider(
+            "Elsa.HttpEndpoint",
+            new TriggerStimulusDescriptor("HttpEndpoint", "sha256:get", metadata: new Dictionary<string, string> { ["http:template"] = "orders/{id}", ["http:method"] = "get" }),
+            new TriggerStimulusDescriptor("HttpEndpoint", "sha256:delete", metadata: new Dictionary<string, string> { ["http:template"] = "orders/{id}", ["http:method"] = "delete" }));
+        var extractor = new WorkflowTriggerBindingExtractor([provider]);
+        var executable = Executable(TriggerNode("node-http", "Elsa.HttpEndpoint"));
+
+        var bindings = extractor.Extract(executable).ToList();
+
+        Assert.Equal(2, bindings.Count);
+        Assert.Equal(2, bindings.Select(b => b.TriggerBindingId).Distinct().Count());
+
+        var getBinding = Assert.Single(bindings, b => b.StimulusHash == "sha256:get");
+        Assert.Equal(WorkflowTriggerBinding.BuildId("artifact-1", "node-http", "sha256:get"), getBinding.TriggerBindingId);
+        Assert.Equal("orders/{id}", getBinding.Metadata["http:template"]);
+        Assert.Equal("get", getBinding.Metadata["http:method"]);
+
+        var deleteBinding = Assert.Single(bindings, b => b.StimulusHash == "sha256:delete");
+        Assert.Equal("delete", deleteBinding.Metadata["http:method"]);
     }
 
     [Fact]
@@ -97,9 +123,16 @@ public sealed class WorkflowTriggerBindingExtractorTests
     private sealed class FakeProvider(string activityType, string stimulusType, string stimulusHash, string? correlationScope = null)
         : IActivityTriggerStimulusProvider
     {
-        public TriggerStimulusDescriptor? Describe(ExecutableNode node) =>
+        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? new TriggerStimulusDescriptor(stimulusType, stimulusHash, correlationScope)
-                : null;
+                ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash, correlationScope)]
+                : [];
+    }
+
+    private sealed class MultiDescriptorProvider(string activityType, params TriggerStimulusDescriptor[] descriptors)
+        : IActivityTriggerStimulusProvider
+    {
+        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
+            StringComparer.Ordinal.Equals(node.ActivityType, activityType) ? descriptors : [];
     }
 }

@@ -39,7 +39,16 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         services.AddScoped<HttpEndpointMiddleware>();
         services.AddSingleton<IStimulusRouter>(router);
         services.AddSingleton<IOptions<HttpEndpointOptions>>(Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions()));
+        // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
+        // features ActivitiesHttpFeature.DependsOn (Http provides IRouteTable/IRouteMatcher; WorkflowsRuntime-
+        // Triggers provides IWorkflowTriggerBindingStore). Register production-equivalent doubles and an empty
+        // binding store, then seed the probe's route so the request resolves and reaches dispatch (proving the
+        // mounted middleware, not the sentinel, answered).
+        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
+        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+        services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
         using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<Elsa.Http.Core.Contracts.IRouteTable>().Add("seam-probe");
 
         var app = new StubApplicationBuilder(provider);
         ((IMiddlewareShellFeature)new ActivitiesHttpFeature()).UseMiddleware(app, environment: null);
