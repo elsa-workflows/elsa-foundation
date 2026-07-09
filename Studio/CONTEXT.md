@@ -261,8 +261,32 @@ The durable execution record for a Run.
 _Avoid_: Run when referring specifically to the persisted record identity
 
 **Executable**:
-A published runnable workflow artifact or version that can be dispatched.
-_Avoid_: Run, workflow instance
+A content-addressed, runnable workflow artifact identified by its Artifact Hash and dispatched for Published Runs. An Executable carries its own Execution Material, so it can be executed and inspected without resolving its source Workflow Definition; one or more Source References point at it.
+_Avoid_: Run, workflow instance, publish record
+
+**Source Reference**:
+A self-contained record linking one publish or Test Run source to the Executable its behavior resolves to, carrying the per-source facts: source identity, artifact version label, published time, scope, optional expiry, and the embedded Layout Sidecar. Behaviorally identical sources produce distinct Source References to the same Executable, and a Source Reference remains meaningful in environments where its source does not exist. An Executable is retained while any live Source Reference points at it.
+_Avoid_: Executable, artifact copy
+
+**Test Run Reference**:
+An expiring Source Reference created by a Test Run, pointing from a draft snapshot to the Executable the draft compiles to. When it resolves to the same Executable as a published version, the draft is behaviorally identical to that version.
+_Avoid_: Transient artifact, second executable
+
+**Execution Material**:
+The behavior-defining content of an Executable: the activity graph, per-activity configuration, and activity type and version references. Execution Material references activity implementations by identity; it never embeds them.
+_Avoid_: Layout, design metadata, activity descriptors
+
+**Artifact Hash**:
+The content identity of an Executable, computed over Execution Material only. Two Executables with the same Artifact Hash are behaviorally identical regardless of visual layout.
+_Avoid_: Checksum over layout, version number
+
+**Layout Sidecar**:
+The visual arrangement of an Executable's activity graph, copied at publish time and embedded on the Source Reference. It enables read-only rendering of the Executable in any environment but never contributes to the Artifact Hash; an Executable with no Source Reference at hand renders with automatic layout.
+_Avoid_: Execution material, design-time draft layout, artifact property
+
+**Executable Inspector**:
+The routed, read-only Studio surface for one Executable: its rendered activity graph, identity, and Source References. Inspect is the action that opens it; the Inspector never mutates the Executable.
+_Avoid_: Explain, executable editor, preview
 
 **Runtime Tab**:
 A workflow designer panel Contribution for viewing Runtime Evidence for recent dispatches and selected workflow executions.
