@@ -29,6 +29,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Http` — the com
 
 ---
 
+## HTTP endpoint behaviour contracts *(Core — `Elsa.Http.Core`)*
+
+The `IHttpEndpointAuthorizationHandler` and `IHttpEndpointFaultHandler` contracts (with `AuthorizeHttpEndpointContext`, `HttpEndpointFaultContext`, and `HttpBadRequestException`) live in `Elsa.Http.Core` (spec 089 sub-unit C) so the request middleware in `Elsa.Activities.Http` and the default handlers in `Elsa.Workflows.Runtime.Http` share them without a cross-module edge — same placement logic as the `HttpEndpointRouting` routing vocabulary. Default implementations and override points are catalogued in [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md).
+
+---
+
 ## Cross-references
 
 - HTTP endpoint behaviour overrides (routes resolver, auth handler, fault handler): [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md).

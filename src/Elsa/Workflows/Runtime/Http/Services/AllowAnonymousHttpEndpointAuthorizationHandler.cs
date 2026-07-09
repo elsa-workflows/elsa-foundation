@@ -1,5 +1,5 @@
-﻿using Elsa.Workflows.Runtime.Http.Contracts;
-using Elsa.Workflows.Runtime.Http.Models;
+﻿using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 

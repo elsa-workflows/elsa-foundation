@@ -98,4 +98,71 @@ public sealed class HttpEndpointStimulusTests
         Assert.ThrowsAny<ArgumentException>(() => HttpEndpointStimulus.NormalizeTemplate(null!));
         Assert.Throws<ArgumentException>(() => HttpEndpointStimulus.NormalizeTemplate("   "));
     }
+
+    [Fact]
+    public void Describe_StampsOptions_OnEveryMethodDescriptor()
+    {
+        var options = new HttpEndpointStimulusOptions(
+            Authorize: true,
+            Policy: "orders-admin",
+            RequestTimeout: TimeSpan.FromSeconds(30),
+            RequestSizeLimit: 1048576);
+
+        var descriptors = HttpEndpointStimulus.Describe("orders/{id}", ["GET", "POST"], options);
+
+        Assert.Equal(2, descriptors.Count);
+        foreach (var descriptor in descriptors)
+        {
+            Assert.Equal("true", descriptor.Metadata[HttpEndpointRouting.AuthorizeMetadataKey]);
+            Assert.Equal("orders-admin", descriptor.Metadata[HttpEndpointRouting.PolicyMetadataKey]);
+            Assert.Equal("00:00:30", descriptor.Metadata[HttpEndpointRouting.RequestTimeoutMetadataKey]);
+            Assert.Equal("1048576", descriptor.Metadata[HttpEndpointRouting.RequestSizeLimitMetadataKey]);
+            // Identity facets remain untouched alongside the options.
+            Assert.Equal("orders/{id}", descriptor.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
+        }
+    }
+
+    [Fact]
+    public void Describe_OmitsDefaultOptions_FromMetadata()
+    {
+        // Absent/default options (no auth, no policy, no timeout, no size limit) contribute no keys, keeping
+        // bindings lean and matching the no-options overload byte-for-byte.
+        var withNone = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], HttpEndpointStimulusOptions.None));
+        var withoutOptions = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"]));
+
+        foreach (var descriptor in new[] { withNone, withoutOptions })
+        {
+            Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
+            Assert.DoesNotContain(HttpEndpointRouting.PolicyMetadataKey, descriptor.Metadata.Keys);
+            Assert.DoesNotContain(HttpEndpointRouting.RequestTimeoutMetadataKey, descriptor.Metadata.Keys);
+            Assert.DoesNotContain(HttpEndpointRouting.RequestSizeLimitMetadataKey, descriptor.Metadata.Keys);
+        }
+    }
+
+    [Fact]
+    public void Describe_AuthorizeFalse_OmitsAuthorizeKey_ButKeepsOtherOptions()
+    {
+        var options = new HttpEndpointStimulusOptions(Authorize: false, Policy: "readers");
+
+        var descriptor = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], options));
+
+        Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
+        Assert.Equal("readers", descriptor.Metadata[HttpEndpointRouting.PolicyMetadataKey]);
+    }
+
+    [Fact]
+    public void Describe_Options_AreNonIdentity_HashUnchanged()
+    {
+        // The identity invariant pin: options ride the metadata but never enter the hash, so the routing key is
+        // the same with or without them.
+        var withOptions = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(
+            Authorize: true,
+            Policy: "orders-admin",
+            RequestTimeout: TimeSpan.FromSeconds(30),
+            RequestSizeLimit: 1048576)));
+        var withoutOptions = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"]));
+
+        Assert.Equal(withoutOptions.StimulusHash, withOptions.StimulusHash);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), withOptions.StimulusHash);
+    }
 }

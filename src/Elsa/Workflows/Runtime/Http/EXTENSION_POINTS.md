@@ -1,6 +1,6 @@
 # Extension points — Workflows.Runtime.Http domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Http` — a provider/feature project that ships default implementations of the HTTP endpoint behaviour contracts. The three behaviour contracts are feature contracts (defined here, not in a `.Core`). This feature also contributes one implementation of the `Elsa.Workflows.Runtime.Core` `IWorkflowTriggerIndexObserver` seam and registers a route-table startup task. `DependsOn`: `Http` (for the `IRouteTable` implementation it refreshes) and `WorkflowsRuntimeTriggers` (for the trigger-binding store the resolver reads and the indexer the observer hooks).
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime.Http` — a provider/feature project that ships default implementations of the HTTP endpoint behaviour contracts. The `IHttpEndpointRoutesResolver` contract is a feature contract (defined here); the `IHttpEndpointAuthorizationHandler` and `IHttpEndpointFaultHandler` contracts (with `AuthorizeHttpEndpointContext`, `HttpEndpointFaultContext`, `HttpBadRequestException`) moved to `Elsa.Http.Core` in spec 089 sub-unit C so the request middleware in `Elsa.Activities.Http` can consume them without a cross-module edge — this feature keeps their default implementations. This feature also contributes one implementation of the `Elsa.Workflows.Runtime.Core` `IWorkflowTriggerIndexObserver` seam and registers a route-table startup task. `DependsOn`: `Http` (for the `IRouteTable` implementation it refreshes) and `WorkflowsRuntimeTriggers` (for the trigger-binding store the resolver reads and the indexer the observer hooks).
 
 ---
 
@@ -11,14 +11,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Default impl:** `HttpEndpointRoutesResolver` (this feature) — lists every `HttpEndpoint` trigger binding from `IWorkflowTriggerBindingStore`, reads each binding's `http:template` metadata, and projects the distinct templates (base-path-prefixed) into `HttpRouteData`.
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IHttpEndpointRoutesResolver, MyResolver>())` — e.g. to load routes from a custom store, add caching, or filter routes.
 
-### `IHttpEndpointAuthorizationHandler` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*
-- **Signature:** `ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context, CancellationToken ct)`
+### `IHttpEndpointAuthorizationHandler` *(Core contract — `Elsa.Http.Core`; default impl here)*
+- **Signature:** `ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context)` — `AuthorizeHttpEndpointContext(HttpContext, string? Policy)` (the former Runtime-specific `Workflow` resource member was dropped when the contract moved to `Elsa.Http.Core`; the middleware authorizes before any workflow instance exists).
 - **Default impl:** `AuthenticationBasedHttpEndpointAuthorizationHandler` (this feature).
 - **Override:** swap via the feature's `AuthorizationHandlerType` property (replaces the DI registration at feature startup) — or `services.Replace(...)` directly for custom authorization logic.
 
-### `IHttpEndpointFaultHandler` *(Feature contract — `Elsa.Workflows.Runtime.Http`)*
-- **Signature:** `ValueTask HandleAsync(HttpEndpointFaultContext context, CancellationToken ct)`
-- **Default impl:** `HttpEndpointFaultHandler` (this feature) — writes a problem-details response.
+### `IHttpEndpointFaultHandler` *(Core contract — `Elsa.Http.Core`; default impl here)*
+- **Signature:** `ValueTask HandleAsync(HttpEndpointFaultContext context)` — `HttpEndpointFaultContext(HttpContext, IEnumerable<Exception> Exceptions, CancellationToken)`.
+- **Default impl:** `HttpEndpointFaultHandler` (this feature) — maps timeout/`HttpBadRequestException`/other faults to 408/400/500.
 - **Override:** swap via the feature's `FaultHandlerType` property — or `services.Replace(...)` for custom fault handling (custom error shapes, logging, alerting).
 
 ---

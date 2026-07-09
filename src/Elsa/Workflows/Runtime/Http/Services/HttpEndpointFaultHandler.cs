@@ -1,6 +1,6 @@
-﻿using Elsa.Workflows.Runtime.Http.Contracts;
-using Elsa.Workflows.Runtime.Http.Exceptions;
-using Elsa.Workflows.Runtime.Http.Models;
+﻿using Elsa.Http.Core.Contracts;
+using Elsa.Http.Core.Exceptions;
+using Elsa.Http.Core.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Runtime.Http.Services;

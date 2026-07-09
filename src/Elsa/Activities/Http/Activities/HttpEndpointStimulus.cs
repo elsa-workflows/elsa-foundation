@@ -60,11 +60,18 @@ public static class HttpEndpointStimulus
     /// keys. Methods are deduped case-insensitively and emitted in a deterministic (lowercased ordinal) order so
     /// republishing the same endpoint produces a stable binding set.
     /// </summary>
-    public static IReadOnlyCollection<TriggerStimulusDescriptor> Describe(string path, IReadOnlyCollection<string> methods)
+    /// <remarks>
+    /// The optional <paramref name="options"/> (authorize/policy/timeout/size-limit, spec 089 C) are stamped onto
+    /// every descriptor's metadata under the <see cref="HttpEndpointRouting"/> option keys, but they are
+    /// <b>non-identity</b>: they never enter <see cref="Hash"/>, so two endpoints that differ only in options
+    /// resolve to the same routing key. Absent/default options are omitted from the metadata to keep bindings lean.
+    /// </remarks>
+    public static IReadOnlyCollection<TriggerStimulusDescriptor> Describe(string path, IReadOnlyCollection<string> methods, HttpEndpointStimulusOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(methods);
 
         var template = NormalizeTemplate(path);
+        var optionMetadata = (options ?? HttpEndpointStimulusOptions.None).ToMetadata();
         var normalizedMethods = methods
             .Where(method => !string.IsNullOrWhiteSpace(method))
             .Select(method => method.Trim().ToLowerInvariant())
@@ -73,14 +80,19 @@ public static class HttpEndpointStimulus
             .ToArray();
 
         return normalizedMethods
-            .Select(method => new TriggerStimulusDescriptor(
-                StimulusType,
-                Hash(template, method),
-                metadata: new Dictionary<string, string>
+            .Select(method =>
+            {
+                var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     [HttpEndpointRouting.TemplateMetadataKey] = template,
                     [HttpEndpointRouting.MethodMetadataKey] = method
-                }))
+                };
+
+                foreach (var (key, value) in optionMetadata)
+                    metadata[key] = value;
+
+                return new TriggerStimulusDescriptor(StimulusType, Hash(template, method), metadata: metadata);
+            })
             .ToArray();
     }
 }
