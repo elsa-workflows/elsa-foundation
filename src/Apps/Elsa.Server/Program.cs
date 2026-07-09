@@ -240,7 +240,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
         {
             options.EnablePathRouting = true;
         })
-        .ConfigureAllShells(shell => shell.WithFeature<ModularityApiFeature>());
+        .ConfigureAllShells(shell => shell
+            .WithFeature<ModularityApiFeature>()
+            .WithFeature<RuntimeFaultStackTraceFeature>());
 });
 
 // Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
