@@ -17,7 +17,7 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementRetentionPolicy
 } from "./moduleManagementApi";
-import { BackendRegistryUnavailable } from "./BackendRegistryUnavailable";
+import { BackendRegistryUnavailable, HostMutationsUnavailable } from "./BackendRegistryUnavailable";
 import { readActiveRegistry, useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 interface FeedDraft {
@@ -75,17 +75,23 @@ export function PackageFeedsPage({ api }: { api: ElsaStudioModuleApi }) {
       {activeStatus ? <StudioAlert tone="success">{activeStatus}</StudioAlert> : null}
 
       {registry ? (
-        <PackageFeedsWorkbench
-          host={activeHost}
-          registry={registry}
-          busy={isPending}
-          onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
-          onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
-          onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
-          onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
-          onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
-          onPrune={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/prune", { dryRun: false }), `Pruned eligible package versions for ${activeHost.label}.`)}
-        />
+        <>
+          {activeHost.mutationsAvailable ? null : <HostMutationsUnavailable host={activeHost} />}
+          <PackageFeedsWorkbench
+            host={activeHost}
+            registry={registry}
+            busy={isPending}
+            // The Server host's writes go directly to backend host-control endpoints the browser can no longer
+            // authorize (ADR 0037 / #248), so all mutation affordances are disabled there. Feeds still render read-only.
+            canMutate={activeHost.mutationsAvailable}
+            onAddFeed={feed => runHostOperation(() => addFeed(activeHost.context, feed), `Added feed ${feed.name} to ${activeHost.label}. Restart is required to activate feed registration changes.`)}
+            onUpdateFeed={(feedName, feed) => runHostOperation(() => updateFeed(activeHost.context, feedName, feed), `Updated feed ${feedName} on ${activeHost.label}. Restart is required to activate feed registration changes.`)}
+            onDeleteFeed={feedName => confirmAndDeleteFeed(feedName)}
+            onSaveRetention={policy => runHostOperation(() => saveRetentionPolicy(activeHost.context, policy), `Updated ${activeHost.label} retention policy.`)}
+            onReconcile={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/reconcile", {}), `Reconciled ${activeHost.label}. Reload may be required.`)}
+            onPrune={() => runHostOperation(() => postJson(activeHost.context, "/_elsa/module-management/prune", { dryRun: false }), `Pruned eligible package versions for ${activeHost.label}.`)}
+          />
+        </>
       ) : unavailable ? (
         <BackendRegistryUnavailable host={activeHost} status={unavailable.status} detail={unavailable.detail} />
       ) : (
@@ -99,6 +105,7 @@ function PackageFeedsWorkbench({
   host,
   registry,
   busy,
+  canMutate,
   onAddFeed,
   onUpdateFeed,
   onDeleteFeed,
@@ -109,6 +116,7 @@ function PackageFeedsWorkbench({
   host: HostModel;
   registry: ModuleManagementRegistryResponse;
   busy: boolean;
+  canMutate: boolean;
   onAddFeed(feed: ModuleManagementFeed): void;
   onUpdateFeed(feedName: string, feed: ModuleManagementFeed): void;
   onDeleteFeed(feedName: string): void;
@@ -157,10 +165,10 @@ function PackageFeedsWorkbench({
                   <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
                 </span>
                 <div className="package-feed-row-actions">
-                  <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Edit ${feed.name} on ${host.label}`} aria-label={`Edit ${feed.name}`} onClick={() => setEditingFeed(feed)}>
                     <Pencil size={14} />
                   </button>
-                  <button type="button" className="studio-icon-button" disabled={busy || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
+                  <button type="button" className="studio-icon-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} title={`Delete ${feed.name} from ${host.label}`} aria-label={`Delete ${feed.name}`} onClick={() => onDeleteFeed(feed.name)}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -168,7 +176,7 @@ function PackageFeedsWorkbench({
             ))}
           </div>
 
-          <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
+          <button type="button" className="studio-button package-feeds-add-button" disabled={busy || !canMutate || !registry.capabilities.canManageFeeds} onClick={() => setAddFeedDialogOpen(true)}>
             <PackagePlus size={15} />
             Add feed
           </button>
@@ -206,11 +214,11 @@ function PackageFeedsWorkbench({
             </div>
 
             <div className="modules-operation-grid">
-              <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canReconcile} onClick={onReconcile}>
+              <button type="button" className="studio-button" disabled={busy || !canMutate || !registry.capabilities.canReconcile} onClick={onReconcile}>
                 <RefreshCcw size={15} />
                 Reconcile
               </button>
-              <button type="button" className="studio-button" disabled={busy || !registry.capabilities.canPrunePackages} onClick={onPrune}>
+              <button type="button" className="studio-button" disabled={busy || !canMutate || !registry.capabilities.canPrunePackages} onClick={onPrune}>
                 <Scissors size={15} />
                 Prune old versions
               </button>
@@ -257,7 +265,7 @@ function PackageFeedsWorkbench({
                 />
                 Protect last-known-good
               </label>
-              <button type="button" className="studio-button" disabled={busy || !retentionDirty} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
+              <button type="button" className="studio-button" disabled={busy || !canMutate || !retentionDirty} onClick={() => onSaveRetention(retentionDraft)}>Save retention</button>
             </div>
           </section>
         </aside>

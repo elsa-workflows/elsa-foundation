@@ -20,7 +20,6 @@ import { dialogController } from "./dialogs";
 
 export interface CreateStudioRegistryOptions {
   backendBaseUrl?: string;
-  backendHeaders?: HeadersInit;
   hostHttp?: StudioEndpointContext["http"];
   backendHttp?: StudioEndpointContext["http"];
   runtime?: StudioRuntimeSettings;
@@ -28,11 +27,10 @@ export interface CreateStudioRegistryOptions {
 
 export function createStudioRegistry(
   host: ElsaStudioHostContext,
-  backendBaseUrlOrOptions?: string | CreateStudioRegistryOptions,
-  backendHeaders?: HeadersInit
+  backendBaseUrlOrOptions?: string | CreateStudioRegistryOptions
 ): ElsaStudioModuleApi {
   const options = typeof backendBaseUrlOrOptions === "string"
-    ? { backendBaseUrl: backendBaseUrlOrOptions, backendHeaders }
+    ? { backendBaseUrl: backendBaseUrlOrOptions }
     : backendBaseUrlOrOptions ?? {};
   const hostContext = options.hostHttp ? { ...host, http: options.hostHttp } : host;
   const backend = createBackendContext(hostContext, options);
@@ -76,7 +74,7 @@ export function createStudioRegistry(
 }
 
 function createBackendContext(host: ElsaStudioHostContext, options: CreateStudioRegistryOptions) {
-  const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl, { headers: options.backendHeaders });
+  const backend = createEndpointContext(options.backendBaseUrl ?? host.baseUrl);
   return options.backendHttp ? { ...backend, http: options.backendHttp } : backend;
 }
 

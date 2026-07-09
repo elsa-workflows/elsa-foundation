@@ -55,36 +55,33 @@ describe("studio auth mounting", () => {
     await unmount();
   });
 
-  it("attaches a bearer token and preserves the #183 management-key header on backend requests", async () => {
+  it("attaches a bearer token and never sends a management-key header on backend requests (#248)", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
     manager.getAccessToken = vi.fn(async () => "access-token-1");
 
     // The authenticated client uses the global fetch; stub it so we can inspect the outgoing request.
     vi.stubGlobal("fetch", fetchMock);
-    const context = createStudioEndpointContext("https://foundation.example/", manager, {
-      "X-Elsa-Module-Management-Key": "secret"
-    });
+    const context = createStudioEndpointContext("https://foundation.example/", manager);
     await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).headers);
     expect(headers.get("Authorization")).toBe("Bearer access-token-1");
-    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
+    // ADR 0037 / #248: the browser holds no host management key, so no request may carry the header.
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBeNull();
   });
 
-  it("falls back to the plain SDK client (no auth) when no provider is configured", async () => {
+  it("falls back to the plain SDK client (no auth) and sends no management-key header when no provider is configured", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
-    const context = createStudioEndpointContext("https://foundation.example/", null, {
-      "X-Elsa-Module-Management-Key": "secret"
-    });
+    const context = createStudioEndpointContext("https://foundation.example/", null);
 
     await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers);
     expect(headers.get("Authorization")).toBeNull();
-    // The management-key header still rides along on the anonymous path.
-    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
+    // The anonymous path carries no management-key header either (ADR 0037 / #248).
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBeNull();
   });
 
   it("exposes a SignalR access-token factory on the authenticated context and none on the anonymous one", async () => {
@@ -99,39 +96,9 @@ describe("studio auth mounting", () => {
     expect(anonymous.accessTokenFactory).toBeUndefined();
   });
 
-  it("prefers the management key over the manager JWT for the host hub credential", async () => {
-    // #215 finding 1: the host management gate validates the API key, not the user JWT, so a configured
-    // management key wins over the manager-based factory for the host context's SignalR credential.
-    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
-    manager.getAccessToken = vi.fn(async () => "access-token-1");
-
-    const context = createStudioEndpointContext(
-      "https://studio.example/",
-      manager,
-      { "X-Elsa-Module-Management-Key": "mgmt-secret" },
-      "mgmt-secret"
-    );
-
-    await expect(context.accessTokenFactory?.()).resolves.toBe("mgmt-secret");
-    // The host REST client keeps attaching the user JWT — accessTokenFactory only steers non-HTTP transports.
-    expect(manager.getAccessToken).not.toHaveBeenCalled();
-  });
-
-  it("synthesizes the management-key hub credential even without a user provider", async () => {
-    // Anonymous deployments that still gate the host with a management key must open the hub via the key,
-    // not degrade to long polling. Key present + no manager -> a key-returning factory.
-    const context = createStudioEndpointContext(
-      "https://studio.example/",
-      null,
-      { "X-Elsa-Module-Management-Key": "mgmt-secret" },
-      "mgmt-secret"
-    );
-
-    await expect(context.accessTokenFactory?.()).resolves.toBe("mgmt-secret");
-  });
-
-  it("falls back to the manager JWT factory when no management key is configured", async () => {
-    // Key absent -> unchanged behavior: the host hub credential is the manager-based factory.
+  it("uses the manager JWT factory for the host hub credential (no browser management key after #248)", async () => {
+    // ADR 0037 / #248: the browser holds no host management key, so the host hub credential is always the manager-based
+    // JWT factory (the Studio bridge gate accepts that same backend-issued bearer as ?access_token= on the hub path).
     const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
     manager.getAccessToken = vi.fn(async () => "access-token-1");
 
@@ -139,18 +106,10 @@ describe("studio auth mounting", () => {
     await expect(context.accessTokenFactory?.()).resolves.toBe("access-token-1");
   });
 
-  it("gives the backend context no hub credential so the shell secret never leaks cross-origin", () => {
-    // #215 finding 2: the backend context (different origin) must never carry a management-key factory.
-    const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));
-    manager.getAccessToken = vi.fn(async () => "access-token-1");
-
-    // The backend call site passes headers but NO management key (App.tsx), so with an anonymous session
-    // there is no hub credential to leak. (Authenticated backend still exposes the user JWT, never the key.)
-    const anonymousBackend = createStudioEndpointContext(
-      "https://backend.example/",
-      null,
-      { "X-Elsa-Module-Management-Key": "mgmt-secret" }
-    );
+  it("gives the anonymous backend context no hub credential", () => {
+    // The anonymous backend context has no user session, so there is no hub credential at all — and never a
+    // management key, which the browser no longer holds after ADR 0037 / #248.
+    const anonymousBackend = createStudioEndpointContext("https://backend.example/", null);
     expect(anonymousBackend.accessTokenFactory).toBeUndefined();
   });
 

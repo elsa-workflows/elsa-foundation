@@ -15,7 +15,7 @@ import {
   type ModuleManagementRegistryResponse,
   type ModuleManagementStudioManifest
 } from "./moduleManagementApi";
-import { BackendRegistryUnavailable } from "./BackendRegistryUnavailable";
+import { BackendRegistryUnavailable, HostMutationsUnavailable } from "./BackendRegistryUnavailable";
 import { readActiveRegistry, useHostOperations, useModuleManagementRegistries } from "./useModuleManagement";
 
 type InspectorTab = "overview" | "contributions" | "package" | "manifest" | "diagnostics";
@@ -196,16 +196,20 @@ export function ModuleManagementPage({ api }: { api: ElsaStudioModuleApi }) {
               </div>
             </div>
             {activeView.sourceView === "nuplane" && registry ? (
-              <InlinePackageUploads
-                host={activeHost}
-                registry={registry}
-                busy={isPending}
-                dragActive={uploadDragActive}
-                uploadInputRef={uploadInputRef}
-                onUploadFiles={uploadSelectedFiles}
-                onDragActiveChange={setUploadDragActive}
-                onDeleteDropFolderPackage={fileName => confirmAndDeleteDropFolderPackage(fileName)}
-              />
+              activeHost.mutationsAvailable ? (
+                <InlinePackageUploads
+                  host={activeHost}
+                  registry={registry}
+                  busy={isPending}
+                  dragActive={uploadDragActive}
+                  uploadInputRef={uploadInputRef}
+                  onUploadFiles={uploadSelectedFiles}
+                  onDragActiveChange={setUploadDragActive}
+                  onDeleteDropFolderPackage={fileName => confirmAndDeleteDropFolderPackage(fileName)}
+                />
+              ) : (
+                <HostMutationsUnavailable host={activeHost} />
+              )
             ) : null}
             {visibleRows.length === 0 ? (
               <p className="modules-muted">{getEmptyRowsMessage(activeHost, activeView.sourceView, nuplaneRows.length, effectivePackageSourceFilter)}</p>

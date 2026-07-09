@@ -28,3 +28,19 @@ export function BackendRegistryUnavailable({
     </>
   );
 }
+
+// Explains that module-management MUTATIONS are unavailable for a host whose writes would go directly to backend
+// host-control endpoints (the Server tab). After ADR 0037 / #248 the browser holds no host management key, so those
+// direct writes can no longer be authorized; bridging them is a later slice. Read-only registry data still renders —
+// this note replaces only the write affordances (upload/delete/feeds/reconcile/prune/retention), so visiting the page
+// issues zero doomed backend requests.
+export function HostMutationsUnavailable({ host }: { host: HostModel }) {
+  return (
+    <StudioAlert tone="info">
+      {host.label} host management is read-only in Studio. Package uploads, feed edits, reconcile, prune, and retention
+      changes for the {host.label} host run directly against its host-control API, which the browser cannot authorize
+      without a host management key. Manage the {host.label} host from that host directly, or use a trusted
+      server-side/CLI tool.
+    </StudioAlert>
+  );
+}

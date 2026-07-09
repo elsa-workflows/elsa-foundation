@@ -20,8 +20,11 @@ internal static class ElsaModuleManagementApi
 
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {
+        // Studio's OWN host module-management surface. Gated by the shared Studio bridge user-session gate (ADR 0037):
+        // allowed anonymously in demo mode (Studio auth disabled), a validated backend user session otherwise. The
+        // browser no longer carries an Elsa host management key.
         var group = endpoints.MapGroup("/_elsa/module-management")
-            .RequireAuthorization(ModuleManagementAuth.PolicyName);
+            .RequireAuthorization(StudioBridgeAuth.PolicyName);
 
         group.MapGet("/registry", GetRegistryAsync);
         group.MapPost("/packages/upload", UploadPackageAsync)

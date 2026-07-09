@@ -451,7 +451,9 @@ describe("module management page", () => {
     await flushPromises();
 
     expect(bridgeRegistryGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/registry");
-    expect(container.textContent).not.toContain("Server host");
+    // The Server tab reads its feeds through the bridge (read-only) and shows the mutations-unavailable note; its feeds
+    // still render (#248).
+    expect(container.textContent).toContain("Server host management is read-only in Studio");
     expect(container.textContent).toContain("local-packages");
 
     await unmount();
@@ -613,15 +615,17 @@ describe("module management page", () => {
     await unmount();
   });
 
-  it("includes endpoint context headers in module management operations", async () => {
+  it("sends no management-key header on module management operations (#248)", async () => {
+    // ADR 0037 / #248: the app builds its endpoint contexts with no management-key header, so module-management
+    // requests carry none. The SPA holds no host management key at all.
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const context = createEndpointContext("https://foundation.example/", { headers: { "X-Elsa-Module-Management-Key": "secret" } });
+    const context = createEndpointContext("https://foundation.example/");
     await context.http.getJson("/_elsa/module-management/registry");
 
     const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-    expect(headers.get("X-Elsa-Module-Management-Key")).toBe("secret");
+    expect(headers.get("X-Elsa-Module-Management-Key")).toBeNull();
   });
 });
 

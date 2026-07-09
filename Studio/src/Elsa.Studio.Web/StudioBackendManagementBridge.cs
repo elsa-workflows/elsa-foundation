@@ -141,7 +141,7 @@ internal sealed record StudioBackendManagementStatus(
 
 /// <summary>
 /// Studio's first server-to-server HTTP client to the backend Elsa host. It attaches the backend host management key
-/// (<see cref="ModuleManagementAuth.ApiKeyHeaderName"/>) only on these Studio→backend calls; the browser never sees it.
+/// (<see cref="StudioBackendManagementOptions.ManagementApiKeyHeaderName"/>) only on these Studio→backend calls; the browser never sees it.
 /// The client fails closed: when no backend base URL or management key is configured it returns <c>unconfigured</c>
 /// without issuing any outbound request.
 /// </summary>
@@ -256,7 +256,7 @@ internal sealed class StudioBackendManagementClient(
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, surface.Path);
-            request.Headers.TryAddWithoutValidation(ModuleManagementAuth.ApiKeyHeaderName, options.ManagementApiKey);
+            request.Headers.TryAddWithoutValidation(StudioBackendManagementOptions.ManagementApiKeyHeaderName, options.ManagementApiKey);
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -376,6 +376,12 @@ internal sealed record StudioBackendManagementOptions(string? BackendBaseUrl, st
 {
     public const string BackendBaseUrlConfigurationKey = "Studio:BackendBaseUrl";
     public const string ManagementApiKeyConfigurationKey = "Studio:BackendModuleManagementApiKey";
+
+    /// <summary>
+    /// The request header the backend Elsa host expects the management key on. This is the backend host-control
+    /// contract; Studio attaches it server-side on Studio→backend calls only. The browser never carries it (ADR 0037).
+    /// </summary>
+    public const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
 
     public static StudioBackendManagementOptions FromConfiguration(IConfiguration configuration) =>
         new(configuration[BackendBaseUrlConfigurationKey], configuration[ManagementApiKeyConfigurationKey]);

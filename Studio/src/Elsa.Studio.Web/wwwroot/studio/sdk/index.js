@@ -1,10 +1,10 @@
 import { j as p } from "../vendor/chunks/jsx-runtime.js";
-import { createContext as ee, useContext as te, useState as F, useRef as $, useCallback as b, useLayoutEffect as re, useMemo as B, useEffect as ne } from "react";
+import { createContext as ee, useContext as te, useState as F, useRef as $, useCallback as b, useLayoutEffect as re, useMemo as N, useEffect as ne } from "react";
 const T = {
   status: "anonymous",
   roles: [],
   permissions: []
-}, O = {
+}, _ = {
   status: "unknown",
   roles: [],
   permissions: []
@@ -25,7 +25,7 @@ class oe {
   adapters = /* @__PURE__ */ new Map();
   activeAdapter = null;
   pendingLoginProviderId = null;
-  session = O;
+  session = _;
   getSession() {
     return this.session;
   }
@@ -105,7 +105,7 @@ class P extends Error {
     super(t), this.name = "AuthConfigurationError";
   }
 }
-function _(e) {
+function O(e) {
   const t = e.fetch ?? fetch, r = e.sessionEndpoint ?? "/_elsa/identity/session", n = e.logoutEndpoint ?? `/_elsa/identity/logout/${encodeURIComponent(e.id)}`;
   return {
     id: e.id,
@@ -219,14 +219,14 @@ class v extends Error {
   }
 }
 const he = "/_elsa/identity/token";
-function Ne(e = {}) {
+function Be(e = {}) {
   const t = e.baseUrl ?? window.location.origin, r = e.fetch ?? fetch, n = e.tokenEndpoint ?? he;
   return ie({
     bootstrap: () => q(r, t, "/_elsa/identity/bootstrap"),
     capabilities: () => q(r, t, "/_elsa/identity/capabilities"),
     isCallback: e.isCallback,
     getCallbackProviderId: e.getCallbackProviderId,
-    adapterFactory: (i) => _({
+    adapterFactory: (i) => O({
       id: i.id,
       kind: i.kind,
       baseUrl: t,
@@ -255,8 +255,8 @@ function L() {
     throw new Error("Auth SDK hooks must be used within <AuthProvider>.");
   return e;
 }
-function Be({ manager: e, children: t }) {
-  const [r, n] = F(() => e.getSession() ?? O), [i, o] = F(null), a = $(!1), s = $(0), c = b((f) => a.current && s.current === f, []), l = b(async (f) => {
+function Ne({ manager: e, children: t }) {
+  const [r, n] = F(() => e.getSession() ?? _), [i, o] = F(null), a = $(!1), s = $(0), c = b((f) => a.current && s.current === f, []), l = b(async (f) => {
     if (c(f)) {
       o(null);
       try {
@@ -300,7 +300,7 @@ function Be({ manager: e, children: t }) {
   }, [e, c]), D = b(async () => {
     const f = ++s.current, h = await e.refresh();
     return c(f) && (n(h), h.status === "authenticated" ? await l(f) : o(null)), h;
-  }, [l, e, c]), Z = B(() => ({
+  }, [l, e, c]), Z = N(() => ({
     session: r,
     capabilities: i,
     login: w,
@@ -314,7 +314,7 @@ function pe() {
 }
 function we() {
   const { permissions: e } = pe();
-  return B(() => {
+  return N(() => {
     const t = new Set(e);
     return {
       has: (r) => t.has(r),
@@ -323,10 +323,10 @@ function we() {
     };
   }, [e]);
 }
-function Oe() {
+function _e() {
   return L().capabilities;
 }
-function _e({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
+function Oe({ requires: e, requireAll: t = !0, fallback: r = null, children: n }) {
   const i = we(), o = typeof e == "string" ? [e] : e ?? [];
   return o.length === 0 || (t ? i.hasAll(o) : i.hasAny(o)) ? /* @__PURE__ */ p.jsx(p.Fragment, { children: n }) : /* @__PURE__ */ p.jsx(p.Fragment, { children: r });
 }
@@ -350,7 +350,7 @@ function ge(e) {
 ${e?.returnUrl ?? ""}`;
 }
 function Ge(e) {
-  return _({
+  return O({
     ...e,
     kind: "external-oidc"
   });
@@ -389,16 +389,16 @@ function be(e, t = {}) {
   return async () => await e.getAccessToken() ?? await t.fallbackAccessTokenFactory?.() ?? t.anonymousToken ?? "";
 }
 function Qe(e, t) {
-  const r = Ae(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
+  const r = ke(e.accessTokenFactory) ? e.accessTokenFactory.bind(e) : void 0;
   return {
     ...e,
     accessTokenFactory: be(t, { fallbackAccessTokenFactory: r })
   };
 }
-function Ae(e) {
+function ke(e) {
   return typeof e == "function";
 }
-const J = 1e4, u = {
+const J = 1e4, Xe = "/_elsa/studio/backend-management/status", Ye = "/_elsa/studio/backend-management/extension-builder/capabilities", Ze = "/_elsa/studio/backend-management/registry", u = {
   featureAreas: "studio.feature-areas",
   navigation: "studio.navigation",
   routes: "studio.routes",
@@ -426,7 +426,7 @@ const J = 1e4, u = {
   aiSurfaces: "studio.ai.surfaces",
   diagnostics: "studio.diagnostics",
   diagnosticsWidgets: "studio.diagnostics.widgets"
-}, A = {
+}, k = {
   featureAreas: { id: u.featureAreas, kind: "feature-area", title: "Feature areas", owner: d() },
   navigation: { id: u.navigation, kind: "navigation", title: "Navigation", owner: d() },
   routes: { id: u.routes, kind: "route", title: "Routes", owner: d() },
@@ -455,16 +455,16 @@ const J = 1e4, u = {
   diagnostics: { id: u.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: d() },
   diagnosticsWidgets: { id: u.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: d() }
 };
-function Xe(e) {
+function et(e) {
   return e;
 }
 function d(e = "studio-host") {
   return { kind: "host", id: e };
 }
-function Ye(e) {
+function tt(e) {
   return { kind: "module", id: e, moduleId: e };
 }
-function k(e = {}) {
+function A(e = {}) {
   const t = [], r = e.slot ?? {
     id: "studio.unknown",
     kind: "unknown",
@@ -477,21 +477,21 @@ function k(e = {}) {
       t.push(n);
     },
     list(n) {
-      return z(t, r, e, n).map((i) => i.contribution);
+      return M(t, r, e, n).map((i) => i.contribution);
     },
     compose(n) {
-      return z(t, r, e, n);
+      return M(t, r, e, n);
     }
   };
 }
-function Ze() {
+function rt() {
   const e = /* @__PURE__ */ new Set(), t = /* @__PURE__ */ new Set();
   return {
-    contextProviders: k({ slot: A.aiContextProviders }),
-    promptActions: k({ slot: A.aiPromptActions }),
-    tools: k({ slot: A.aiTools }),
-    proposalRenderers: k({ slot: A.aiProposalRenderers }),
-    surfaces: k({ slot: A.aiSurfaces }),
+    contextProviders: A({ slot: k.aiContextProviders }),
+    promptActions: A({ slot: k.aiPromptActions }),
+    tools: A({ slot: k.aiTools }),
+    proposalRenderers: A({ slot: k.aiProposalRenderers }),
+    surfaces: A({ slot: k.aiSurfaces }),
     dispatchPrompt(r) {
       for (const n of e)
         n(r);
@@ -508,7 +508,7 @@ function Ze() {
     }
   };
 }
-function et() {
+function nt() {
   const e = [], t = /* @__PURE__ */ new Set();
   let r = 1;
   const n = () => e[0] ?? null, i = () => {
@@ -560,24 +560,24 @@ function et() {
     }
   };
 }
-function z(e, t, r, n = {}) {
+function M(e, t, r, n = {}) {
   return e.map((i, o) => ({
     contribution: i,
     slot: t,
-    availability: ke(i, t, r, n),
+    availability: Ae(i, t, r, n),
     order: r.getOrder?.(i) ?? Se(i),
     stableKey: r.getStableKey?.(i) ?? Ce(i, o),
     index: o
   })).filter((i) => Pe(i.availability, n)).sort((i, o) => i.order - o.order || i.stableKey.localeCompare(o.stableKey) || i.index - o.index).map(({ index: i, ...o }) => o);
 }
-function ke(e, t, r, n) {
+function Ae(e, t, r, n) {
   const i = { contribution: e, slot: t, context: n.context }, o = C(r.slotOwner?.(i), "slot-owner");
   if (o.state !== "available")
     return o;
-  const a = M(e, "moduleId");
+  const a = z(e, "moduleId");
   if (a && n.disabledModuleIds?.includes(a))
     return { state: "hidden", reason: `Module ${a} is disabled.`, source: "module" };
-  const s = M(e, "featureId");
+  const s = z(e, "featureId");
   if (s && n.disabledFeatureIds?.includes(s))
     return { state: "hidden", reason: `Feature ${s} is disabled.`, source: "feature" };
   const c = C(me(e, n.context), "runtime"), l = C(r.hostPolicy?.(i), "host-policy");
@@ -621,7 +621,7 @@ function Ce(e, t) {
   }
   return `_${t.toString().padStart(4, "0")}`;
 }
-function M(e, t) {
+function z(e, t) {
   if (!R(e))
     return;
   const r = e[t];
@@ -636,7 +636,7 @@ function xe(e, t) {
 function R(e) {
   return typeof e == "object" && e !== null;
 }
-function tt(e, t = {}) {
+function it(e, t = {}) {
   return {
     baseUrl: e,
     headers: t.headers,
@@ -656,7 +656,7 @@ function V(e, t) {
       return i(o, y(n, {
         ...s,
         method: "POST",
-        headers: N(s?.headers),
+        headers: B(s?.headers),
         body: JSON.stringify(a)
       }));
     },
@@ -664,7 +664,7 @@ function V(e, t) {
       return i(o, y(n, {
         ...s,
         method: "PUT",
-        headers: N(s?.headers),
+        headers: B(s?.headers),
         body: JSON.stringify(a)
       }));
     },
@@ -764,7 +764,7 @@ async function Q(e) {
 function Fe(e) {
   return e.toLowerCase().includes("json");
 }
-async function rt(e) {
+async function ot(e) {
   if (e instanceof I)
     return e.message;
   if (Y(e))
@@ -775,7 +775,7 @@ async function rt(e) {
     }
   return e instanceof Error ? e.message : "Unknown error.";
 }
-async function nt(e) {
+async function st(e) {
   if (e instanceof I)
     return e.validationErrors;
   if (!Y(e))
@@ -826,7 +826,7 @@ function x(e) {
     headers: t
   };
 }
-function N(e) {
+function B(e) {
   const t = new Headers(e);
   return t.has("Content-Type") || t.set("Content-Type", "application/json"), t.has("Accept") || t.set("Accept", "application/json"), t;
 }
@@ -845,31 +845,34 @@ class I extends Error {
 export {
   v as AuthAdapterError,
   P as AuthConfigurationError,
-  _e as AuthGuard,
-  Be as AuthProvider,
+  Oe as AuthGuard,
+  Ne as AuthProvider,
   Ke as RequireAuth,
   I as StudioHttpError,
-  Ze as createAiContributionApi,
+  rt as createAiContributionApi,
   ie as createAuthProviderManager,
   Ve as createAuthenticatedHttpClient,
-  Ne as createBackendAuthProviderManager,
-  k as createContributionRegistry,
-  et as createDialogController,
-  tt as createEndpointContext,
+  Be as createBackendAuthProviderManager,
+  A as createContributionRegistry,
+  nt as createDialogController,
+  it as createEndpointContext,
   V as createHttpClient,
   Ge as createOidcAuthAdapter,
-  _ as createRedirectAuthAdapter,
+  O as createRedirectAuthAdapter,
   be as createSignalRAccessTokenFactory,
   De as createStudioHttpError,
-  Xe as defineStudioSlot,
-  rt as describeApiError,
+  et as defineStudioSlot,
+  ot as describeApiError,
   d as hostSlotOwner,
-  Ye as moduleSlotOwner,
+  tt as moduleSlotOwner,
   Le as readStudioHttpErrorMessage,
+  Ze as studioBackendManagementRegistryPath,
+  Xe as studioBackendManagementStatusPath,
+  Ye as studioExtensionBuilderCapabilitiesPath,
   u as studioSlotIds,
-  A as studioSlots,
-  nt as tryExtractValidationErrors,
-  Oe as useAuthCapabilities,
+  k as studioSlots,
+  st as tryExtractValidationErrors,
+  _e as useAuthCapabilities,
   L as useAuthContext,
   pe as useAuthSession,
   we as usePermissions,

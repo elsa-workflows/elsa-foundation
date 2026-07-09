@@ -502,7 +502,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            request.Headers.TryGetValues(ModuleManagementAuth.ApiKeyHeaderName, out var keyValues);
+            request.Headers.TryGetValues(StudioBackendManagementOptions.ManagementApiKeyHeaderName, out var keyValues);
             Requests.Add(new(request.RequestUri!.AbsolutePath, keyValues?.FirstOrDefault()));
 
             if (_throw is not null)

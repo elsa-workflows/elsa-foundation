@@ -15,8 +15,9 @@ internal static class ElsaFeatureManagementApi
 {
     public static IEndpointRouteBuilder MapElsaFeatureManagementApi(this IEndpointRouteBuilder endpoints)
     {
+        // Studio's OWN feature-management surface, gated by the shared Studio bridge user-session gate (ADR 0037).
         var group = endpoints.MapGroup("/modularity/features")
-            .RequireAuthorization(ModuleManagementAuth.PolicyName);
+            .RequireAuthorization(StudioBridgeAuth.PolicyName);
 
         group.MapGet("", GetFeaturesAsync);
         group.MapPost("/apply", ApplyFeaturesAsync);

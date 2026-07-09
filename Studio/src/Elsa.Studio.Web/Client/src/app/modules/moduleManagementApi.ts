@@ -14,6 +14,12 @@ export interface HostModel {
   label: string;
   runtime: string;
   context: StudioEndpointContext;
+  // Whether module-management MUTATIONS (upload, delete, reconcile, prune, feed add/edit/delete, retention save) are
+  // available from the browser for this host. Studio mutates its OWN host via the Studio-origin bridge gate. The
+  // Server host's mutations go directly to backend host-control endpoints, which the browser can no longer authorize
+  // now that it carries no host management key (ADR 0037 / #248) — those are a later bridge slice. Until then the UI
+  // hides/disables Server-tab mutation affordances instead of issuing doomed backend requests.
+  mutationsAvailable: boolean;
   // Reads this host's module registry. Studio reads its own registry directly; the Server host reads the backend
   // registry through the Studio management bridge (#246, ADR 0037) so the browser never calls backend host-control
   // endpoints and never carries the management key. Either read resolves to a discriminated result so callers render
@@ -167,6 +173,8 @@ export function createModuleManagementHosts(api: ElsaStudioModuleApi): HostModel
       label: "Studio",
       runtime: "Elsa.Studio.Web",
       context: api.host,
+      // Studio mutates its OWN host through the Studio-origin gate — available.
+      mutationsAvailable: true,
       // Studio reads its own registry directly from the Studio origin. This path never touches the backend, so the
       // Studio tab keeps working when the backend host is down.
       readRegistry: () => readStudioRegistry(api.host)
@@ -175,9 +183,11 @@ export function createModuleManagementHosts(api: ElsaStudioModuleApi): HostModel
       id: "server",
       label: "Server",
       runtime: "Elsa.Server",
-      // The Server tab still keeps the backend context for the read-only slice's out-of-scope mutations (upload,
-      // reconcile, prune, feed edits, retention) which stay on their current direct paths. Registry READS, however,
-      // now route through the Studio management bridge via api.host — the browser no longer calls the backend registry.
+      // The Server tab keeps the backend context for read-only bridge reads only. Its MUTATIONS (upload, reconcile,
+      // prune, feed edits, retention) would go DIRECT to backend host-control endpoints, which the browser can no
+      // longer authorize without a host management key (ADR 0037 / #248). They are a later bridge slice, so they are
+      // marked unavailable and the UI hides/disables them rather than issuing doomed backend requests.
+      mutationsAvailable: false,
       context: api.backend,
       readRegistry: () => readServerRegistryViaBridge(api.host)
     }
