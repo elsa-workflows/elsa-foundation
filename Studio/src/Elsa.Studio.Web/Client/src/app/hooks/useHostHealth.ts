@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ElsaStudioModuleApi } from "../../sdk";
+import {
+  studioBackendManagementStatusPath,
+  type ElsaStudioModuleApi,
+  type StudioBackendManagementStatus,
+  type StudioBackendManagementStatusKind
+} from "../../sdk";
 import { shellKeys } from "../queryKeys";
 
 export type HostHealthStatus = "checking" | "ok" | "attention" | "unavailable";
@@ -13,9 +18,15 @@ export interface HostHealthEntry {
 
 export interface HostHealthSnapshot {
   studio: HostHealthEntry;
-  server: HostHealthEntry;
-  backend: HostHealthEntry;
+  // Backend management availability, read from the Studio management bridge (ADR 0037) rather than by probing
+  // backend host-control endpoints directly. `kind` is the raw bridge status so the strip can render the explicit
+  // unconfigured/unreachable/unauthorized states instead of inferring them from a failed fetch.
+  backend: HostHealthEntry & { kind: BackendHealthKind };
 }
+
+// "unknown" covers the case where the bridge status endpoint itself is unreachable (a Studio-origin failure, not a
+// backend one) — distinct from the backend-management statuses the bridge reports.
+export type BackendHealthKind = StudioBackendManagementStatusKind | "unknown";
 
 interface HostHealthRegistry {
   modules: Array<{ status?: string; diagnostics?: Array<{ status?: string }> }>;
@@ -29,20 +40,20 @@ export const maxHealthPollMs = 60000;
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
 
-// Fetches all three host-health probes in parallel, mirroring the original single `run()` pass so the
-// backoff decision (any host unavailable) stays coherent across the strip.
+// Fetches the Studio host registry and the backend management bridge status in parallel. Both reads target the Studio
+// origin (`api.host`): the registry is the local host's own module registry, and the bridge status is Studio's report
+// of backend availability. Neither read touches backend host-control endpoints from the browser.
 async function fetchHostHealth(api: ElsaStudioModuleApi): Promise<HostHealthSnapshot> {
-  const [studio, server, backend] = await Promise.all([
+  const [studio, backend] = await Promise.all([
     readHostHealth(api.host.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Studio"),
-    readHostHealth(api.backend.http.getJson<HostHealthRegistry>("/_elsa/module-management/registry"), "Server"),
-    readBackendHealth(api.backend.baseUrl)
+    readBackendManagementHealth(api)
   ]);
 
-  return { studio, server, backend };
+  return { studio, backend };
 }
 
 function snapshotDegraded(snapshot: HostHealthSnapshot) {
-  return [snapshot.studio, snapshot.server, snapshot.backend].some(host => host.status === "unavailable");
+  return snapshot.studio.status === "unavailable" || snapshot.backend.status === "unavailable";
 }
 
 // Host-health polling, ported from the App.tsx `HostHealthStrip` useEffect onto TanStack Query while
@@ -110,68 +121,50 @@ async function readHostHealth(registryRequest: Promise<HostHealthRegistry>, host
   }
 }
 
-async function readBackendHealth(baseUrl: string): Promise<HostHealthEntry> {
-  // The backend Elsa Server exposes its liveness signal at the origin root (returns
-  // `{ "status": "Healthy", ... }` with CORS enabled) — it does not map a `/_elsa/health` route.
-  // Probe the root so the tile reflects the backend's real health check rather than a 404.
-  const healthUrl = new URL("/", baseUrl).toString();
-  // Prefer a readable (CORS) response so we can tell a healthy host apart from one returning 5xx.
-  // An opaque no-cors probe settles even for a crashing server, so it can't distinguish the two.
-  // Readable CORS request so we can inspect the real status: a rejected fetch means the
-  // host is unreachable, while any response (even an error status) means the API is up.
+// Reads the Studio management bridge status from the Studio origin and maps it to a host-health entry. The bridge
+// answers with an explicit backend-management state, so the browser renders the real reason (unconfigured / unreachable
+// / unauthorized / degraded) rather than inferring it from a failed backend fetch. A failure to reach the bridge itself
+// (a Studio-origin problem) surfaces as "unknown".
+async function readBackendManagementHealth(api: ElsaStudioModuleApi): Promise<HostHealthEntry & { kind: BackendHealthKind }> {
   try {
-    const response = await fetch(healthUrl, { cache: "no-store" });
-    if (response.ok) {
-      // A 2xx can still carry a self-reported "Degraded"/"Unhealthy" status (ASP.NET Core health
-      // checks answer 200 for Degraded), so inspect the body before declaring the backend healthy.
-      const reported = await readReportedHealthStatus(response);
-      if (reported && !isHealthyStatus(reported)) {
-        return {
-          status: "attention",
-          attention: 1,
-          detail: `${healthUrl} reported "${reported}".`
-        };
-      }
-
-      return {
-        status: "ok",
-        attention: 0,
-        detail: healthUrl
-      };
-    }
-
+    const status = await api.host.http.getJson<StudioBackendManagementStatus>(studioBackendManagementStatusPath);
+    return mapBackendManagementStatus(status);
+  } catch (e) {
     return {
-      status: "attention",
-      attention: 1,
-      detail: `${healthUrl} responded with ${response.status}.`
+      kind: "unknown",
+      status: "unavailable",
+      attention: 0,
+      detail: `Backend management status is unavailable: ${getHealthErrorMessage(e)}`
     };
-  } catch {
-    // The host may not send CORS headers on its health endpoint; fall back to a reachability-only probe
-    // (which can still confirm the socket is up) before declaring the API unavailable.
-    try {
-      await fetch(healthUrl, { cache: "no-store", mode: "no-cors" });
-      return { status: "ok", attention: 0, detail: healthUrl };
-    } catch (e) {
-      return { status: "unavailable", attention: 0, detail: `${healthUrl} (${getHealthErrorMessage(e)})` };
-    }
   }
 }
 
-// Best-effort read of the backend's self-reported health status (e.g. `{ "status": "Healthy" }`).
-// Returns null for a non-JSON or bodyless response so the caller falls back to treating a 2xx as healthy.
-async function readReportedHealthStatus(response: Response): Promise<string | null> {
-  if (!(response.headers.get("content-type") ?? "").includes("json")) return null;
-  try {
-    const body = await response.json();
-    const status = (body as { status?: unknown })?.status;
-    return typeof status === "string" ? status : null;
-  } catch {
-    return null;
+function mapBackendManagementStatus(status: StudioBackendManagementStatus): HostHealthEntry & { kind: BackendHealthKind } {
+  const detail = status.detail?.trim() || defaultBackendDetail(status.status);
+  switch (status.status) {
+    case "available":
+      return { kind: status.status, status: "ok", attention: 0, detail };
+    case "unconfigured":
+      // Fail-closed-by-design, not an outage: no attention weight and no backoff.
+      return { kind: status.status, status: "attention", attention: 0, detail };
+    case "degraded":
+      return { kind: status.status, status: "attention", attention: 1, detail };
+    case "unauthorized":
+    case "unreachable":
+    default:
+      return { kind: status.status as BackendHealthKind, status: "unavailable", attention: 0, detail };
   }
 }
 
-function isHealthyStatus(status: string): boolean {
-  return status.trim().toLowerCase() === "healthy";
+function defaultBackendDetail(kind: StudioBackendManagementStatusKind): string {
+  switch (kind) {
+    case "available": return "Backend management is reachable.";
+    case "unconfigured": return "Backend management is not configured.";
+    case "unauthorized": return "Backend rejected the Studio management credential.";
+    case "unreachable": return "Backend management could not be reached.";
+    case "degraded": return "Backend management is degraded.";
+    default: return "Backend management status is unknown.";
+  }
 }
 
 export function checkingHostHealth(detail: string): HostHealthEntry {
@@ -189,6 +182,19 @@ function countRegistryAttention(registry: HostHealthRegistry) {
   const hostDiagnostics = (registry.diagnostics ?? []).filter(diagnostic => diagnostic.status && attentionStatuses.has(diagnostic.status)).length;
 
   return moduleStatuses + moduleDiagnostics + hostDiagnostics;
+}
+
+// The label shown for a backend management tile. Unlike the generic host status, the bridge distinguishes
+// unconfigured/unreachable/unauthorized/degraded, so the tile names the real state instead of a generic "Unavailable".
+export function labelForBackendHealth(kind: BackendHealthKind): string {
+  switch (kind) {
+    case "available": return "Connected";
+    case "unconfigured": return "Not configured";
+    case "unauthorized": return "Unauthorized";
+    case "unreachable": return "Unreachable";
+    case "degraded": return "Degraded";
+    default: return "Unknown";
+  }
 }
 
 export function labelForHostStatus(status: HostHealthStatus) {

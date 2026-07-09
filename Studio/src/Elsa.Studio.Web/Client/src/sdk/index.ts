@@ -69,6 +69,28 @@ export interface StudioModuleContributionSummary {
 
 export type StudioValidationErrors = Record<string, string[]>;
 
+/**
+ * Backend management availability as reported by the Studio management bridge (ADR 0037). The browser reads this from
+ * the Studio origin (`api.host`) instead of probing backend host-control endpoints directly, so the backend host
+ * management key never reaches the browser and the SPA never issues doomed, 401-noisy backend requests.
+ */
+export type StudioBackendManagementStatusKind =
+  | "available"
+  | "unconfigured"
+  | "unreachable"
+  | "unauthorized"
+  | "degraded";
+
+export interface StudioBackendManagementStatus {
+  status: StudioBackendManagementStatusKind;
+  detail: string;
+  backendBaseUrl?: string | null;
+  checkedAt: string;
+}
+
+/** The Studio-owned bridge route the browser reads backend management status from (served by the Studio host). */
+export const studioBackendManagementStatusPath = "/_elsa/studio/backend-management/status";
+
 export interface StudioHttpClient {
   requestJson<T>(url: string, init?: RequestInit): Promise<T>;
   getJson<T>(url: string, init?: RequestInit): Promise<T>;

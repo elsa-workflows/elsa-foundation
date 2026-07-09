@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard, Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
-import type { ElsaStudioModuleApi, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
+import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 afterEach(() => {
@@ -11,162 +11,153 @@ afterEach(() => {
 });
 
 describe("dashboard", () => {
-  it("shows host health instead of Studio-only module count cards", async () => {
-    stubBackendFetch();
-    const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
+  it("shows Studio host and backend management tiles from the bridge status", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("available") }));
 
     await flushPromises();
 
     expect(container.textContent).toContain("Studio host");
-    expect(container.textContent).toContain("Server host");
-    expect(container.textContent).toContain("Backend API");
+    expect(container.textContent).toContain("Backend management");
     expect(container.textContent).toContain("Attention");
     expect(container.textContent).toContain("No host issues reported.");
+    // The old direct-backend probes are gone: no "Server host" tile, no "Backend API" liveness tile.
+    expect(container.textContent).not.toContain("Server host");
+    expect(container.textContent).not.toContain("Backend API");
     expect(container.textContent).not.toContain("Available modules");
-    expect(container.textContent).not.toContain("Loaded modules");
-    expect(container.textContent).not.toContain("Failed modules");
-    expect(backendGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
 
     await unmount();
   });
 
-  it("reports backend reachability separately from the server module registry", async () => {
-    const fetchMock = stubBackendFetch();
-    const backendGetJson = vi.fn(async () => {
-      throw new Error("Request failed with 404.");
-    });
-    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
+  it("reads backend management status from the Studio bridge, never the backend context", async () => {
+    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
+    const backendGetJson = vi.fn(async () => healthyRegistry());
+    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson, backendGetJson }));
 
     await flushPromises();
 
-    expect(container.textContent).toContain("Backend API");
+    // Bridge read goes to the Studio host origin; the backend context is never probed for registry/liveness.
+    expect(bridgeGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
+    expect(backendGetJson).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Connected");
-    expect(container.textContent).toContain("Server module registry is unavailable: Request failed with 404.");
+
+    await unmount();
+  });
+
+  it("does not issue any direct browser fetch to backend host-control endpoints", async () => {
+    // A global fetch that fails loudly: host-health must never reach it (all reads go through api.host.http).
+    const fetchMock = vi.fn(async () => { throw new Error("host-health must not fetch directly"); });
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("available") }));
+
+    await flushPromises();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
+  it("renders an explicit unconfigured state without marking it as an outage", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendStatus: bridgeStatus("unconfigured", "Backend management is not configured on the Studio host.")
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Backend management");
+    expect(container.textContent).toContain("Not configured");
+    expect(container.textContent).toContain("Backend management is not configured on the Studio host.");
+    // Unconfigured is fail-closed-by-design, not an outage: no attention weight is added.
+    expect(container.textContent).toContain("No host issues reported.");
+
+    await unmount();
+  });
+
+  it("renders an explicit unauthorized state", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendStatus: bridgeStatus("unauthorized", "The backend rejected the Studio management key.")
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Unauthorized");
+    expect(container.textContent).toContain("The backend rejected the Studio management key.");
+    expect(container.textContent).not.toContain("Connected");
+
+    await unmount();
+  });
+
+  it("renders an explicit unreachable state", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendStatus: bridgeStatus("unreachable", "The backend management surface could not be reached.")
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Unreachable");
+    expect(container.textContent).toContain("The backend management surface could not be reached.");
+
+    await unmount();
+  });
+
+  it("renders a degraded state for attention", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({
+      backendStatus: bridgeStatus("degraded", "The backend management surface responded with an unexpected status.")
+    }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Degraded");
     expect(container.textContent).toContain("Open Modules to review host-scoped issues.");
-    expect(fetchMock).toHaveBeenCalledWith("https://foundation.example/", { cache: "no-store" });
 
     await unmount();
   });
 
-  it("flags the Backend API tile for attention when the health probe returns an error status", async () => {
-    stubBackendFetch(() => new Response("", { status: 503 }));
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry()
-    }));
+  it("falls back to an unknown state when the bridge itself is unreachable", async () => {
+    const bridgeGetJson = vi.fn(async () => { throw new Error("bridge offline"); });
+    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
 
     await flushPromises();
 
-    expect(container.textContent).toContain("Backend API");
-    expect(container.textContent).toContain("Review");
-    expect(container.textContent).toContain("https://foundation.example/ responded with 503.");
-
-    await unmount();
-  });
-
-  it("flags the Backend API tile when a 200 response self-reports a non-healthy status", async () => {
-    stubBackendFetch(() => new Response(JSON.stringify({ status: "Degraded", service: "elsa-server" }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    }));
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry()
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Backend API");
-    expect(container.textContent).toContain("Review");
-    expect(container.textContent).toContain('https://foundation.example/ reported "Degraded".');
-    expect(container.textContent).not.toContain("Connected");
-
-    await unmount();
-  });
-
-  it("stays Connected when a 200 response reports a healthy status", async () => {
-    stubBackendFetch(() => new Response(JSON.stringify({ status: "Healthy", service: "elsa-server" }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    }));
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry()
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Backend API");
-    expect(container.textContent).toContain("Connected");
-
-    await unmount();
-  });
-
-  it("marks the Backend API tile unavailable when the health probe cannot reach the host", async () => {
-    stubBackendFetch(() => {
-      throw new Error("Failed to fetch");
-    });
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry()
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Backend API");
-    expect(container.textContent).toContain("Unavailable");
-    expect(container.textContent).toContain("https://foundation.example/ (Failed to fetch)");
-
-    await unmount();
-  });
-
-  it("flags the backend as degraded when it responds with a server error", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 503 })));
-    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson: async () => healthyRegistry() }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("responded with 503.");
-    expect(container.textContent).not.toContain("Connected");
+    expect(container.textContent).toContain("Unknown");
+    expect(container.textContent).toContain("Backend management status is unavailable: bridge offline");
 
     await unmount();
   });
 
   it("re-checks host health when modules change", async () => {
-    stubBackendFetch();
-    const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { unmount } = await renderDashboard(stubApi({ backendGetJson }));
+    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
+    const { unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
 
     await flushPromises();
-    expect(backendGetJson).toHaveBeenCalledTimes(1);
+    expect(bridgeGetJson).toHaveBeenCalledTimes(1);
 
     window.dispatchEvent(new Event("elsa-studio:modules-changed"));
     await flushPromises();
 
-    expect(backendGetJson).toHaveBeenCalledTimes(2);
+    expect(bridgeGetJson).toHaveBeenCalledTimes(2);
 
     await unmount();
   });
 
   it("re-checks host health when Refresh is clicked", async () => {
-    stubBackendFetch();
-    const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { container, unmount } = await renderDashboard(stubApi({ backendGetJson }));
+    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
+    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
 
     await flushPromises();
-    expect(backendGetJson).toHaveBeenCalledTimes(1);
+    expect(bridgeGetJson).toHaveBeenCalledTimes(1);
 
     const refresh = container.querySelector<HTMLButtonElement>(".host-health-refresh");
     expect(refresh).not.toBeNull();
     flushSync(() => refresh!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await flushPromises();
 
-    expect(backendGetJson).toHaveBeenCalledTimes(2);
+    expect(bridgeGetJson).toHaveBeenCalledTimes(2);
 
     await unmount();
   });
 
   it("renders dashboard widgets contributed through the Studio SDK", async () => {
-    stubBackendFetch();
     const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       widgets: [
         {
           id: "sample-widget",
@@ -184,9 +175,7 @@ describe("dashboard", () => {
   });
 
   it("renders dashboard widgets in deterministic order", async () => {
-    stubBackendFetch();
     const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       widgets: [
         { id: "beta", title: "Beta", component: () => <div>Beta widget</div> },
         { id: "alpha", title: "Alpha", component: () => <div>Alpha widget</div> },
@@ -202,9 +191,7 @@ describe("dashboard", () => {
   });
 
   it("shows a useful Dashboard empty state when no widgets are registered", async () => {
-    stubBackendFetch();
     const { container, unmount } = await renderDashboard(stubApi({
-      backendGetJson: async () => healthyRegistry()
     }));
 
     await flushPromises();
@@ -218,7 +205,6 @@ describe("dashboard", () => {
 describe("diagnostics", () => {
   it("renders diagnostics widgets in deterministic order", async () => {
     const { container, unmount } = await renderDiagnostics(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       diagnosticsWidgets: [
         diagnosticsWidget("beta", "Beta", () => <div>Beta widget</div>),
         diagnosticsWidget("alpha", "Alpha", () => <div>Alpha widget</div>),
@@ -233,7 +219,6 @@ describe("diagnostics", () => {
 
   it("shows a useful empty state when no diagnostics widgets are registered", async () => {
     const { container, unmount } = await renderDiagnostics(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       diagnostics: [{ moduleId: "Elsa.Studio.FeatureManagement", status: "available", reason: "Module manifest accepted." }]
     }));
 
@@ -250,7 +235,6 @@ describe("diagnostics", () => {
     }
 
     const { container, unmount } = await renderDiagnostics(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       diagnosticsWidgets: [
         {
           id: "healthy",
@@ -284,7 +268,6 @@ describe("diagnostics", () => {
     }
 
     const { container, unmount } = await renderDiagnostics(stubApi({
-      backendGetJson: async () => healthyRegistry(),
       diagnosticsWidgets: [
         {
           id: "live",
@@ -346,26 +329,36 @@ describe("navigation sections", () => {
   });
 });
 
+// All host-health reads go through `api.host.http` now: the Studio module registry and the Studio management bridge
+// status both live on the Studio origin. The host getJson dispatches by URL so a single stub covers both, and tests
+// can assert the bridge path is hit while the backend context is never probed.
 function stubApi(options: {
-  backendGetJson: (url: string) => Promise<unknown>;
+  backendStatus?: StudioBackendManagementStatus;
+  bridgeGetJson?: (url: string) => Promise<unknown>;
+  backendGetJson?: (url: string) => Promise<unknown>;
   widgets?: Array<{ id: string; title: string; order?: number; component: React.ComponentType }>;
   diagnosticsWidgets?: StudioDiagnosticsWidgetContribution[];
   diagnostics?: Array<{ moduleId: string; status: string; reason: string }>;
-}): ElsaStudioModuleApi {
+} = {}): ElsaStudioModuleApi {
+  const bridgeGetJson = options.bridgeGetJson ?? (async () => options.backendStatus ?? bridgeStatus("available"));
+  const hostGetJson = async (url: string) =>
+    url === "/_elsa/studio/backend-management/status" ? bridgeGetJson(url) : healthyRegistry();
+
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
       http: {
-        getJson: async () => healthyRegistry(),
+        getJson: hostGetJson,
         postJson: async () => ({})
       }
     },
     backend: {
       baseUrl: "https://foundation.example/",
       http: {
-        getJson: options.backendGetJson,
+        // Must never be called by host-health anymore; a probe here fails the test loudly.
+        getJson: options.backendGetJson ?? (async () => { throw new Error("backend context must not be probed by host-health"); }),
         postJson: async () => ({})
       }
     },
@@ -382,6 +375,10 @@ function stubApi(options: {
       list: () => options.diagnostics ?? []
     }
   } as ElsaStudioModuleApi;
+}
+
+function bridgeStatus(status: StudioBackendManagementStatus["status"], detail = ""): StudioBackendManagementStatus {
+  return { status, detail, backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString() };
 }
 
 function healthyRegistry() {
@@ -433,10 +430,4 @@ async function flushPromises() {
   for (let i = 0; i < 5; i++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-}
-
-function stubBackendFetch(responder: () => Response | Promise<Response> = () => new Response("", { status: 200 })) {
-  const fetchMock = vi.fn(async () => responder());
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
 }

@@ -41,6 +41,7 @@ import { useStudioManifest } from "./hooks/useStudioManifest";
 import {
   checkingHostHealth,
   getHealthErrorMessage,
+  labelForBackendHealth,
   labelForHostStatus,
   useHostHealth,
   type HostHealthStatus
@@ -783,8 +784,12 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
   // refetch-on-return, and modules-changed re-check that the strip previously hand-rolled.
   const { data, isFetching, dataUpdatedAt, refetch } = useHostHealth(api);
   const studio = data?.studio ?? checkingHostHealth("Checking Studio host.");
-  const server = data?.server ?? checkingHostHealth("Checking Server host.");
-  const backend = data?.backend ?? checkingHostHealth("Checking backend API.");
+  // Backend management availability now comes from the Studio management bridge (ADR 0037) — no direct browser probe
+  // of backend host-control endpoints. The tile names the explicit state (not configured / unauthorized / unreachable /
+  // degraded) instead of inferring it from a failed fetch.
+  const backend = data?.backend;
+  const backendEntry = backend ?? checkingHostHealth("Checking backend management.");
+  const backendLabel = backend ? labelForBackendHealth(backend.kind) : "Checking";
   const lastChecked = data && dataUpdatedAt ? new Date(dataUpdatedAt) : null;
   const refreshing = isFetching;
 
@@ -794,9 +799,9 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
     return () => clearInterval(id);
   }, []);
 
-  const unavailableHosts = [studio, server].filter(host => host.status === "unavailable").length;
-  const attention = studio.attention + server.attention + unavailableHosts;
-  const attentionStatus: HostHealthStatus = studio.status === "checking" || server.status === "checking"
+  const unavailableHosts = [studio, backendEntry].filter(host => host.status === "unavailable").length;
+  const attention = studio.attention + backendEntry.attention + unavailableHosts;
+  const attentionStatus: HostHealthStatus = studio.status === "checking" || backendEntry.status === "checking"
     ? "checking"
     : attention === 0
       ? "ok"
@@ -806,8 +811,7 @@ function HostHealthStrip({ api }: { api: ElsaStudioModuleApi }) {
     <div className="host-health">
       <div className="host-health-strip" aria-label="Host health">
         <HostHealthTile title="Studio host" value={labelForHostStatus(studio.status)} detail={studio.detail} status={studio.status} icon={<ShieldCheck size={18} />} />
-        <HostHealthTile title="Server host" value={labelForHostStatus(server.status)} detail={server.detail} status={server.status} icon={<ShieldCheck size={18} />} />
-        <HostHealthTile title="Backend API" value={backend.status === "ok" ? "Connected" : labelForHostStatus(backend.status)} detail={backend.detail} status={backend.status} icon={<Activity size={18} />} />
+        <HostHealthTile title="Backend management" value={backendLabel} detail={backendEntry.detail} status={backendEntry.status} icon={<Activity size={18} />} />
         <HostHealthTile title="Attention" value={attentionStatus === "checking" ? "Checking" : String(attention)} detail={attention === 0 ? "No host issues reported." : "Open Modules to review host-scoped issues."} status={attentionStatus} icon={<Gauge size={18} />} />
       </div>
       <div className="host-health-meta">

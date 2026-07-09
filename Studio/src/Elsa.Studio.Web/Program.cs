@@ -78,6 +78,12 @@ builder.Services.AddConsoleStreamStudioHostIfEnabled(configuration);
 // WebSocket/SSE handshake); every other endpoint takes the key by header only, keeping it out of access logs.
 builder.Services.AddModuleManagementAuth(configuration, builder.Environment, ConsoleStreamStudioServiceCollectionExtensions.HubPath);
 
+// Studio management bridge (ADR 0037): a Studio-owned server-side surface that reports backend management availability
+// so the browser stops probing backend host-control endpoints directly. The bridge is gated by a coarse user-session
+// gate (StudioBridgeAuth) and calls the backend host with the server-side management key (StudioBackendManagementClient).
+builder.Services.AddStudioBridgeAuth(configuration);
+builder.Services.AddStudioBackendManagementBridge(configuration);
+
 var app = builder.Build();
 
 app.UseAuthentication();
@@ -130,6 +136,7 @@ static Dictionary<string, object?> BuildWorkflowsRuntimeConfig(IConfiguration co
 app.UseStaticFiles();
 
 app.MapElsaModuleManagementApi();
+app.MapStudioBackendManagementBridge();
 app.MapElsaFeatureManagementApi();
 app.MapConsoleStreamStudioIfEnabled(configuration, ModuleManagementAuth.PolicyName);
 app.MapShells();
