@@ -16,6 +16,7 @@ public sealed class WorkflowExecutableInspector(
     IWorkflowExecutableSourceReferenceStore referenceStore,
     TimeProvider? timeProvider = null)
 {
+    private const string FlowchartStructureKind = "elsa.flowchart.structure";
     private const int LiteralPreviewLength = 80;
     private const int ExpressionPreviewLength = 80;
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
@@ -182,7 +183,88 @@ public sealed class WorkflowExecutableInspector(
                 .Select(slot => new WorkflowExecutableChildSlotView(
                     slot.Name,
                     slot.Activities.Select(ProjectNode).ToArray()))
-                .ToArray());
+                .ToArray())
+        {
+            Connections = ProjectConnections(node.Structure)
+        };
+
+    // Structure payloads can contain activity-owned runtime data, so the Inspector projects only the minimal
+    // allowlisted canvas contract. Exact kind matching prevents similarly named custom structures from leaking.
+    private static IReadOnlyList<WorkflowExecutableConnectionView>? ProjectConnections(ExecutableActivityStructure? structure)
+    {
+        if (structure is null || !StringComparer.Ordinal.Equals(structure.Kind, FlowchartStructureKind))
+            return null;
+
+        var payload = structure.Payload;
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty("connections", out var connections) ||
+            connections.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var projected = new List<WorkflowExecutableConnectionView>();
+        foreach (var connection in connections.EnumerateArray())
+        {
+            if (connection.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var source = ProjectEndpoint(connection, "source");
+            var target = ProjectEndpoint(connection, "target");
+            if (source is null || target is null)
+                continue;
+
+            projected.Add(new WorkflowExecutableConnectionView(source, target, ProjectVertices(connection)));
+        }
+
+        return projected;
+    }
+
+    private static WorkflowExecutableConnectionEndpointView? ProjectEndpoint(JsonElement connection, string propertyName)
+    {
+        if (!connection.TryGetProperty(propertyName, out var endpoint) ||
+            endpoint.ValueKind != JsonValueKind.Object ||
+            !endpoint.TryGetProperty("nodeId", out var nodeIdElement) ||
+            nodeIdElement.ValueKind != JsonValueKind.String)
+            return null;
+
+        var nodeId = nodeIdElement.GetString();
+        if (string.IsNullOrWhiteSpace(nodeId))
+            return null;
+
+        string? port = null;
+        if (endpoint.TryGetProperty("port", out var portElement) && portElement.ValueKind == JsonValueKind.String)
+        {
+            var candidate = portElement.GetString();
+            if (!string.IsNullOrWhiteSpace(candidate))
+                port = candidate.Trim();
+        }
+
+        return new WorkflowExecutableConnectionEndpointView(nodeId, port);
+    }
+
+    private static IReadOnlyList<WorkflowExecutableConnectionVertexView>? ProjectVertices(JsonElement connection)
+    {
+        if (!connection.TryGetProperty("vertices", out var vertices) || vertices.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var projected = new List<WorkflowExecutableConnectionVertexView>();
+        foreach (var vertex in vertices.EnumerateArray())
+        {
+            if (vertex.ValueKind != JsonValueKind.Object ||
+                !vertex.TryGetProperty("x", out var xElement) ||
+                !vertex.TryGetProperty("y", out var yElement) ||
+                xElement.ValueKind != JsonValueKind.Number ||
+                yElement.ValueKind != JsonValueKind.Number ||
+                !xElement.TryGetDouble(out var x) ||
+                !yElement.TryGetDouble(out var y) ||
+                !double.IsFinite(x) ||
+                !double.IsFinite(y))
+                continue;
+
+            projected.Add(new WorkflowExecutableConnectionVertexView(x, y));
+        }
+
+        return projected.Count == 0 ? null : projected;
+    }
 
     private static WorkflowExecutableInputBindingView ProjectInputBinding(RuntimeInputBinding binding) =>
         new(binding.InputName, binding.Source.ToString(), SummarizeBinding(binding));
