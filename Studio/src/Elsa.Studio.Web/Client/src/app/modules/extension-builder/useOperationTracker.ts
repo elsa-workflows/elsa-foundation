@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { getErrorMessage } from "../moduleManagementApi";
+import { describeExtensionBuilderError } from "./helpers";
 
 // Operations are grouped into independent scopes so that running one action (e.g. staging a file)
 // does not disable unrelated actions (e.g. Save or Build). Each scope tracks its own in-flight
@@ -44,7 +44,10 @@ export function useOperationTracker(): OperationTracker {
       setStatus(success);
       return result;
     } catch (e) {
-      setError(getErrorMessage(e));
+      // Every scoped operation error goes through the shared Extension Builder formatter so bridge infrastructure
+      // failures name the backend-management state (with the bridge's detail — e.g. a relay timeout's "may still have
+      // completed") and Studio 403s name the missing permission, instead of a generic message.
+      setError(describeExtensionBuilderError(e));
       return null;
     } finally {
       adjust(scope, -1);

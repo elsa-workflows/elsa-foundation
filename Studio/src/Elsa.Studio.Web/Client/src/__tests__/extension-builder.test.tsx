@@ -8,6 +8,7 @@ import { StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage?.clear();
@@ -111,26 +112,127 @@ describe("extension builder page", () => {
     await unmount();
   });
 
-  it("surfaces the bridge's 501 not-yet-available detail as a tracker error without flipping to unavailable", async () => {
-    // In PR1 of #256 the bridge answers every mutation with a 501 + friendly detail. The sdk error extraction reads
-    // `detail` first, so the message must surface as a regular tracker error on the ready page — NOT as the
-    // backend-management-unavailable surface.
-    const detail = "This action is not yet available through Studio. Workspace mutations are being routed through the Studio management bridge (issue #256).";
-    const postJson = vi.fn(async (url: string) => {
-      if (url.endsWith("/workspaces")) throw new StudioHttpError(501, detail, null, { detail, management: null });
-      return defaultPostJson(url);
-    });
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+  it("completes a mutation through the Studio management bridge without ever calling the backend context", async () => {
+    // PR2 of #256: the bridge forwards mutations to the backend (PR1's 501 not-yet-available answer is gone), so a
+    // workspace mutation succeeds through the host-context bridge route and the backend context is never called (the
+    // afterEach guard enforces the latter for every test).
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await waitForText(container, "Team Extensions");
 
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']"), "Managed Repository");
     await clickButton(container, "Create managed repo");
-    await waitForText(container, "not yet available through Studio");
+    await waitForText(container, "Created managed repository Managed Repository.");
 
-    expect(postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
-    expect(container.textContent).not.toContain("Backend management is unavailable");
-    // The page stays on the ready home surface.
-    expect(container.textContent).toContain("Team Extensions");
+    expect(hostHttpMock(api).postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
+    expect(backendCalls).toEqual([]);
+
+    await unmount();
+  });
+
+  it("keeps polling a running build across transient bridge failures with backoff and recovers on success", async () => {
+    // The build poll must not die silently on a bridge hiccup: the first two consecutive 503-management failures are
+    // retried with backoff (2s, then 5s, instead of the 900ms cadence), a successful poll resets the counter, and no
+    // tracker error is surfaced for a transient failure.
+    mockFetch();
+    const runningResult = runningBuild();
+    let buildReads = 0;
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? runningResult : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-running")) {
+        buildReads += 1;
+        if (buildReads <= 2) throw managementBridgeError(503, "degraded", "The backend management relay hiccupped.");
+        return { ...runningResult, status: "Succeeded", completedAt: new Date().toISOString(), artifact: artifact(), artifacts: [artifact()] };
+      }
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    // Fake timers (auto-advancing so the suite's promise-flush helpers keep working) drive the backoff waits.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await clickButton(container, "Build");
+    await waitFor(() => buildReads >= 1, "Expected the submit-time build poll.");
+
+    await advancePollTime(2600);
+    await waitFor(() => buildReads >= 2, "Expected the first backoff retry.");
+    await advancePollTime(5600);
+    await waitFor(() => buildReads >= 3, "Expected the second backoff retry.");
+
+    // The third poll succeeded: the build leaves the running state and no bridge tracker error was surfaced.
+    await waitFor(() => buttonContaining(container, "Building…") === undefined, "Expected the build to complete.");
+    expect(container.textContent).not.toContain("Backend management is degraded");
+
+    // Polling ended with the completed build; no stray retry remains scheduled.
+    await advancePollTime(10_000);
+    expect(buildReads).toBe(3);
+
+    await unmount();
+  });
+
+  it("stops the build poll with a tracker error after three consecutive bridge failures, leaving the build running", async () => {
+    mockFetch();
+    const runningResult = runningBuild();
+    let buildReads = 0;
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? runningResult : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-running")) {
+        buildReads += 1;
+        throw managementBridgeError(503, "unreachable", "The backend management surface could not be reached.");
+      }
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await clickButton(container, "Build");
+    await waitFor(() => buildReads >= 1, "Expected the submit-time build poll.");
+    await advancePollTime(2600);
+    await waitFor(() => buildReads >= 2, "Expected the first backoff retry.");
+    await advancePollTime(5600);
+    await waitFor(() => buildReads >= 3, "Expected the second backoff retry.");
+
+    // The third consecutive failure stops polling and names the backend-management state…
+    await waitForText(container, "Backend management is unreachable: The backend management surface could not be reached.");
+    // …while the build stays rendered as running: the manual refresh affordance is the retry.
+    expect(buttonContaining(container, "Building…")).toBeDefined();
+
+    // Polling stopped: no further reads even well past every cadence.
+    await advancePollTime(10_000);
+    expect(buildReads).toBe(3);
+
+    await unmount();
+  });
+
+  it("surfaces the relay-timeout detail on a promote and refreshes build and runtime state best-effort", async () => {
+    // A 504/unreachable on promote means the relay gave up waiting but the promotion may still have completed
+    // backend-side: the tracker error must carry the bridge's detail saying so, and the build + runtime status must be
+    // re-read so a promotion that actually landed becomes visible.
+    mockFetch();
+    const detail = "The backend management relay timed out; the promotion may still have completed on the backend.";
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/promote")) throw managementBridgeError(504, "unreachable", detail);
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+    const runtimeReads = () => getJson.mock.calls.filter(([url]) => String(url).endsWith("/runtime-status")).length;
+    const runtimeReadsBefore = runtimeReads();
+
+    await clickTab(container, "Promote");
+    await clickButton(container, "Promote build");
+    await waitForText(container, "Backend management is unreachable");
+
+    // The tracker error carries the bridge's may-still-have-completed detail…
+    expect(container.textContent).toContain("may still have completed");
+    // …and the mutation's effects are re-read best-effort: the runtime status and the promoted build.
+    await waitFor(() => runtimeReads() > runtimeReadsBefore, "Expected a best-effort runtime-status refresh after the relay timeout.");
+    expect(getJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/builds/build-1`);
 
     await unmount();
   });
@@ -319,7 +421,8 @@ describe("extension builder page", () => {
     );
     expect(postJson).toHaveBeenCalledWith(
       "/_elsa/studio/backend-management/extension-builder/workspaces/ws-managed/projects",
-      expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" })
+      expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" }),
+      { timeoutMs: 70_000 }
     );
 
     await unmount();
@@ -495,7 +598,7 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/clone", {
       repositoryUrl,
       displayName: "Cloned Extensions"
-    });
+    }, { timeoutMs: 130_000 });
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Cloned Extensions");
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`main · ${repositoryUrl}`);
     expect(container.textContent).toContain("Cloned repository Cloned Extensions.");
@@ -623,7 +726,7 @@ describe("extension builder page", () => {
     await clickExactButton(container, "Apply");
     await waitForText(container, "Applied C# class.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }), { timeoutMs: 70_000 });
     // The generated file opens in the editor (full path shown in the editor status bar).
     expect(container.querySelector(".extension-builder-editor-status")?.textContent).toContain("src/Generated/GeneratedActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("GeneratedActivity");
@@ -695,8 +798,8 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage-all", {});
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/push", {});
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/push", {}, { timeoutMs: 130_000 });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {}, { timeoutMs: 130_000 });
     expect(getJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
 
     await unmount();
@@ -901,7 +1004,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote build");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {}, { timeoutMs: 130_000 });
     expect(container.textContent).toContain("is loaded at runtime");
 
     await unmount();
@@ -980,7 +1083,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote package");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/artifacts/artifact-a/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/artifacts/artifact-a/promote", {}, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1130,7 +1233,7 @@ describe("extension builder page", () => {
 
     expect(promoteButton?.disabled).toBe(true);
     expect(promoteButton?.title).toContain("stale");
-    expect(postJson).not.toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
+    expect(postJson).not.toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {}, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1167,12 +1270,12 @@ describe("extension builder page", () => {
 
     await clickButton(container, "Retry reconciliation");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {});
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {}, { timeoutMs: 130_000 });
     await waitForText(container, "0.9.0");
 
     await clickButton(container, "Rollback");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" });
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" }, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1521,6 +1624,18 @@ async function openDock(container: Element, label: string) {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// Advances auto-advancing fake timers in steps, flushing between steps so React can commit state updates made from
+// promise callbacks (its scheduler uses MessageChannel macrotasks, which vi.advanceTimersByTimeAsync alone never
+// yields to) and effects can schedule the next poll timer before time moves past it.
+async function advancePollTime(totalMs: number) {
+  const step = 500;
+  for (let elapsed = 0; elapsed < totalMs; elapsed += step) {
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(step);
+  }
+  await flushPromises();
 }
 
 async function waitForText(container: Element, text: string) {

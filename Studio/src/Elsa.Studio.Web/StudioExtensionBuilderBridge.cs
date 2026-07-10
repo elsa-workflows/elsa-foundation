@@ -12,8 +12,8 @@ namespace Elsa.Studio.Web;
 ///
 /// <para><see cref="Operations"/> is a declarative table that is simultaneously the allowlist (nothing outside it is
 /// relayed) and the forwarding map: every route template is shape-identical relative to both the Studio route group
-/// and the backend Extension Builder root, so the incoming path suffix is the outbound path suffix. Mutations ship
-/// with <c>Bridged = false</c> in this PR and answer 501 without any outbound call; a follow-up flips them on.</para>
+/// and the backend Extension Builder root, so the incoming path suffix is the outbound path suffix. Every allowlisted
+/// operation — reads and mutations alike — relays.</para>
 /// </summary>
 internal static class StudioExtensionBuilderBridge
 {
@@ -39,8 +39,7 @@ internal static class StudioExtensionBuilderBridge
     /// <summary>
     /// One allowlisted Extension Builder operation. <see cref="Route"/> is relative to BOTH <see cref="RouteGroup"/>
     /// and <see cref="BackendRoot"/> (shape-identical by design). <see cref="TimeoutSeconds"/> is the per-request
-    /// budget on the backend headers/JSON-body phase; Text/Stream body copies run outside it. <see cref="Bridged"/> is
-    /// false for operations that are allowlisted but not yet relayed (they answer 501).
+    /// budget on the backend headers/JSON-body phase; Text/Stream body copies run outside it.
     /// </summary>
     internal sealed record BridgeOperation(
         string Name,
@@ -48,12 +47,10 @@ internal static class StudioExtensionBuilderBridge
         string Route,
         BridgeAccess Access,
         BridgePayloadKind Payload = BridgePayloadKind.Json,
-        int TimeoutSeconds = 8,
-        bool Bridged = true);
+        int TimeoutSeconds = 8);
 
-    // The full allowlist. Deliberately NOT bridged at all: the backend's POST /projects/{projectId}/builds — Studio has
-    // no caller for it. Reads relay now; mutations are table-complete but answer 501 until the mutation PR flips
-    // Bridged to true row by row.
+    // The full allowlist — every row relays. Deliberately NOT bridged at all: the backend's
+    // POST /projects/{projectId}/builds — Studio has no caller for it.
     internal static readonly IReadOnlyList<BridgeOperation> Operations =
     [
         // Read relays (extension-builder.read; manage implies read via the policy).
@@ -74,31 +71,31 @@ internal static class StudioExtensionBuilderBridge
         new("get-build-log", "GET", "/builds/{buildId}/log", BridgeAccess.Read, BridgePayloadKind.Text, TimeoutSeconds: 30),
         new("get-build-artifact", "GET", "/builds/{buildId}/artifact", BridgeAccess.Read, BridgePayloadKind.Stream, TimeoutSeconds: 120),
 
-        // Mutation relays (extension-builder.manage). Bridged = false in this PR: allowlisted, gated, and answering 501.
-        new("create-workspace", "POST", "/workspaces", BridgeAccess.Manage, Bridged: false),
-        new("delete-workspace", "DELETE", "/workspaces/{workspaceId}", BridgeAccess.Manage, TimeoutSeconds: 30, Bridged: false),
-        new("add-server-local-repository", "POST", "/repositories/server-local", BridgeAccess.Manage, TimeoutSeconds: 30, Bridged: false),
-        new("clone-repository", "POST", "/repositories/clone", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("select-working-copy", "POST", "/workspaces/{workspaceId}/working-copies/select", BridgeAccess.Manage, TimeoutSeconds: 30, Bridged: false),
-        new("put-workspace-file", "PUT", "/workspaces/{workspaceId}/files/{**path}", BridgeAccess.Manage, Bridged: false),
-        new("delete-workspace-file", "DELETE", "/workspaces/{workspaceId}/files/{**path}", BridgeAccess.Manage, Bridged: false),
-        new("move-workspace-file", "POST", "/workspaces/{workspaceId}/files/move", BridgeAccess.Manage, Bridged: false),
-        new("apply-template", "POST", "/workspaces/{workspaceId}/templates/apply", BridgeAccess.Manage, TimeoutSeconds: 60, Bridged: false),
-        new("stage", "POST", "/workspaces/{workspaceId}/source-control/stage", BridgeAccess.Manage, Bridged: false),
-        new("unstage", "POST", "/workspaces/{workspaceId}/source-control/unstage", BridgeAccess.Manage, Bridged: false),
-        new("stage-all", "POST", "/workspaces/{workspaceId}/source-control/stage-all", BridgeAccess.Manage, Bridged: false),
-        new("commit", "POST", "/workspaces/{workspaceId}/source-control/commit", BridgeAccess.Manage, TimeoutSeconds: 30, Bridged: false),
-        new("push", "POST", "/workspaces/{workspaceId}/source-control/push", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("pull", "POST", "/workspaces/{workspaceId}/source-control/pull", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("start-build", "POST", "/workspaces/{workspaceId}/builds", BridgeAccess.Manage, Bridged: false),
-        new("create-project", "POST", "/workspaces/{workspaceId}/projects", BridgeAccess.Manage, TimeoutSeconds: 60, Bridged: false),
-        new("delete-project", "DELETE", "/projects/{projectId}", BridgeAccess.Manage, TimeoutSeconds: 30, Bridged: false),
-        new("put-project-file", "PUT", "/projects/{projectId}/files/{**path}", BridgeAccess.Manage, Bridged: false),
-        new("delete-project-file", "DELETE", "/projects/{projectId}/files/{**path}", BridgeAccess.Manage, Bridged: false),
-        new("promote-build", "POST", "/builds/{buildId}/promote", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("promote-build-artifact", "POST", "/builds/{buildId}/artifacts/{artifactId}/promote", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("rollback-project", "POST", "/projects/{projectId}/rollback", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false),
-        new("retry-reconcile", "POST", "/projects/{projectId}/retry-reconcile", BridgeAccess.Manage, TimeoutSeconds: 120, Bridged: false)
+        // Mutation relays (extension-builder.manage).
+        new("create-workspace", "POST", "/workspaces", BridgeAccess.Manage),
+        new("delete-workspace", "DELETE", "/workspaces/{workspaceId}", BridgeAccess.Manage, TimeoutSeconds: 30),
+        new("add-server-local-repository", "POST", "/repositories/server-local", BridgeAccess.Manage, TimeoutSeconds: 30),
+        new("clone-repository", "POST", "/repositories/clone", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("select-working-copy", "POST", "/workspaces/{workspaceId}/working-copies/select", BridgeAccess.Manage, TimeoutSeconds: 30),
+        new("put-workspace-file", "PUT", "/workspaces/{workspaceId}/files/{**path}", BridgeAccess.Manage),
+        new("delete-workspace-file", "DELETE", "/workspaces/{workspaceId}/files/{**path}", BridgeAccess.Manage),
+        new("move-workspace-file", "POST", "/workspaces/{workspaceId}/files/move", BridgeAccess.Manage),
+        new("apply-template", "POST", "/workspaces/{workspaceId}/templates/apply", BridgeAccess.Manage, TimeoutSeconds: 60),
+        new("stage", "POST", "/workspaces/{workspaceId}/source-control/stage", BridgeAccess.Manage),
+        new("unstage", "POST", "/workspaces/{workspaceId}/source-control/unstage", BridgeAccess.Manage),
+        new("stage-all", "POST", "/workspaces/{workspaceId}/source-control/stage-all", BridgeAccess.Manage),
+        new("commit", "POST", "/workspaces/{workspaceId}/source-control/commit", BridgeAccess.Manage, TimeoutSeconds: 30),
+        new("push", "POST", "/workspaces/{workspaceId}/source-control/push", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("pull", "POST", "/workspaces/{workspaceId}/source-control/pull", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("start-build", "POST", "/workspaces/{workspaceId}/builds", BridgeAccess.Manage),
+        new("create-project", "POST", "/workspaces/{workspaceId}/projects", BridgeAccess.Manage, TimeoutSeconds: 60),
+        new("delete-project", "DELETE", "/projects/{projectId}", BridgeAccess.Manage, TimeoutSeconds: 30),
+        new("put-project-file", "PUT", "/projects/{projectId}/files/{**path}", BridgeAccess.Manage),
+        new("delete-project-file", "DELETE", "/projects/{projectId}/files/{**path}", BridgeAccess.Manage),
+        new("promote-build", "POST", "/builds/{buildId}/promote", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("promote-build-artifact", "POST", "/builds/{buildId}/artifacts/{artifactId}/promote", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("rollback-project", "POST", "/projects/{projectId}/rollback", BridgeAccess.Manage, TimeoutSeconds: 120),
+        new("retry-reconcile", "POST", "/projects/{projectId}/retry-reconcile", BridgeAccess.Manage, TimeoutSeconds: 120)
     ];
 
     public static IEndpointRouteBuilder MapStudioExtensionBuilderBridge(this IEndpointRouteBuilder endpoints)
@@ -122,12 +119,12 @@ internal static class StudioExtensionBuilderBridge
 }
 
 /// <summary>
-/// The Studio-owned error body every non-relayed bridge answer carries (503/504/501). <see cref="Management"/> reuses
-/// the bridge's explicit backend-management status envelope (null on 501, where the backend state is not in question).
-/// The 503/504 + this shape is the browser-side discriminator: relayed backend domain responses never produce these
-/// status codes, so the SPA can tell "Studio infrastructure said no" from "the backend's Extension Builder said no".
+/// The Studio-owned error body every non-relayed bridge answer carries (503/504). <see cref="Management"/> reuses
+/// the bridge's explicit backend-management status envelope. The 503/504 + this shape is the browser-side
+/// discriminator: relayed backend domain responses never produce these status codes, so the SPA can tell "Studio
+/// infrastructure said no" from "the backend's Extension Builder said no".
 /// </summary>
-internal sealed record StudioExtensionBuilderBridgeError(string Detail, StudioBackendManagementStatus? Management);
+internal sealed record StudioExtensionBuilderBridgeError(string Detail, StudioBackendManagementStatus Management);
 
 /// <summary>
 /// Relays a single allowlisted Extension Builder operation to the backend Elsa host. Only the management key
@@ -142,7 +139,6 @@ internal sealed class StudioExtensionBuilderRelayClient(
     TimeProvider timeProvider,
     ILogger<StudioExtensionBuilderRelayClient> logger)
 {
-    private const string NotBridgedDetail = "This action is not yet available through Studio. Workspace mutations are being routed through the Studio management bridge (issue #256).";
     private const string UnconfiguredDetail = "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
     private const string UnauthorizedDetail = "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.";
     private const string UnreachableDetail = "The backend Extension Builder surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.";
@@ -151,17 +147,11 @@ internal sealed class StudioExtensionBuilderRelayClient(
 
     public async Task RelayAsync(StudioExtensionBuilderBridge.BridgeOperation operation, HttpContext context)
     {
-        // Fail closed first: without a backend base URL or a management key ZERO outbound calls are issued (ADR 0037),
-        // even for not-yet-bridged operations — the infrastructure plane dominates.
+        // Fail closed first: without a backend base URL or a management key ZERO outbound calls are issued (ADR 0037)
+        // — the infrastructure plane dominates.
         if (!options.IsConfigured)
         {
             await WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable, StudioBackendManagementStatus.Unconfigured, UnconfiguredDetail);
-            return;
-        }
-
-        if (!operation.Bridged)
-        {
-            await WriteErrorAsync(context, StatusCodes.Status501NotImplemented, managementStatus: null, NotBridgedDetail);
             return;
         }
 
@@ -341,7 +331,7 @@ internal sealed class StudioExtensionBuilderRelayClient(
         return mediaType is not null && mediaType.Contains("json", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task WriteErrorAsync(HttpContext context, int statusCode, string? managementStatus, string detail)
+    private async Task WriteErrorAsync(HttpContext context, int statusCode, string managementStatus, string detail)
     {
         // A body-copy failure after headers went out cannot be turned into a Studio error answer anymore.
         if (context.Response.HasStarted)
@@ -350,9 +340,7 @@ internal sealed class StudioExtensionBuilderRelayClient(
             return;
         }
 
-        var management = managementStatus is null
-            ? null
-            : new StudioBackendManagementStatus(managementStatus, detail, options.NormalizedBackendBaseUrl, timeProvider.GetUtcNow());
+        var management = new StudioBackendManagementStatus(managementStatus, detail, options.NormalizedBackendBaseUrl, timeProvider.GetUtcNow());
 
         context.Response.StatusCode = statusCode;
         await context.Response.WriteAsJsonAsync(new StudioExtensionBuilderBridgeError(detail, management), context.RequestAborted);

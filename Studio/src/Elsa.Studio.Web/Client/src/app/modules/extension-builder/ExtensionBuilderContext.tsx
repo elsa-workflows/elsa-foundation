@@ -31,6 +31,7 @@ import {
   writeAutoSavePreference
 } from "./helpers";
 import { useBuilderData } from "./useBuilderData";
+import { buildPollDelayMs } from "./useBuildOperations";
 import { useBuilderOperations } from "./useBuilderOperations";
 import { useFileEditing } from "./useFileEditing";
 import { useOperationTracker } from "./useOperationTracker";
@@ -107,6 +108,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const activeFilePathRef = useRef("");
   const saveChain = useRef<Promise<unknown>>(Promise.resolve());
   const lastSavedContent = useRef<Map<string, string>>(new Map());
+  const buildPollFailures = useRef(0);
   const latestEdit = useRef({ autoSave: true, dirty: false, workspaceId: "", path: "", content: "", canEdit: false });
 
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
@@ -159,7 +161,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     projectDraft, templateDraft, extensionName, workingBranchName, setWorkingBranchName, allowProtectedBranchEdit,
     newFilePath, setNewFilePath,
     pollTimerId, mounted, projectDetailsRequestId, runtimeStatusRequestId, selectedIds, hydratedSelectionKey,
-    activeFilePathRef, saveChain, lastSavedContent,
+    activeFilePathRef, saveChain, lastSavedContent, buildPollFailures,
     selectedWorkspace, selectedRepository, selectedProject, editorDirty,
     clearBuildPoll
   };
@@ -288,12 +290,17 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inWorkspace, selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
 
+  // Build poll. The happy-path cadence is 900ms; refreshBuild owns the failure handling — after a transient bridge
+  // failure it bumps buildPollFailures and retriggers this effect by cloning activeBuild, so the retry is rescheduled
+  // here with backoff (2s, then 5s) instead of the 900ms cadence. The third consecutive bridge failure — or any domain
+  // error — leaves activeBuild untouched and sets a tracker error, so this effect never reschedules and polling stops
+  // (the manual refresh affordance is the retry).
   useEffect(() => {
     clearBuildPoll();
     if (!selectedWorkspace || !selectedProject || !activeBuild || !isBuildRunning(activeBuild)) return;
     pollTimerId.current = window.setTimeout(() => {
       void operations.refreshBuild(selectedWorkspace.id, selectedProject.id, activeBuild.id);
-    }, 900);
+    }, buildPollDelayMs(buildPollFailures.current));
     return () => clearBuildPoll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspace?.id, selectedProject?.id, activeBuild]);

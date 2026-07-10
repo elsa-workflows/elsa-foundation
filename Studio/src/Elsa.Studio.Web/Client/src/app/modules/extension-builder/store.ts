@@ -113,6 +113,10 @@ export interface BuilderCore {
   activeFilePathRef: MutableRefObject<string>;
   saveChain: MutableRefObject<Promise<unknown>>;
   lastSavedContent: MutableRefObject<Map<string, string>>;
+  // Consecutive bridge failures on the build poll (ADR 0037/#256). refreshBuild bumps it on a bridge-envelope error
+  // and the poll effect backs off (2s, then 5s) instead of the 900ms cadence; the third consecutive failure stops the
+  // poll with a tracker error, and any successful poll (or a fresh build submit) resets it.
+  buildPollFailures: MutableRefObject<number>;
 
   // Derived selections (recomputed each render).
   selectedWorkspace: ExtensionWorkspace | null;
