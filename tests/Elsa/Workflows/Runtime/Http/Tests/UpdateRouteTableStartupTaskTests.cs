@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;

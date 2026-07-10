@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Http.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
@@ -11,9 +12,10 @@ public sealed class HttpEndpointRoutesResolverTests
 
     // The resolver projects endpoint-relative templates only — the endpoints base path is a middleware concern
     // (HttpEndpointMiddleware strips it before consulting the route table), so it takes no base-path option. The
-    // waiting-bookmark union goes through the REAL expiry-aware lookup over the in-memory store, exercising the
-    // production expiry-filtering path rather than a fake.
-    private HttpEndpointRoutesResolver Resolver() => new(_store, new GlobalBookmarkStimulusLookup(_bookmarks));
+    // waiting-bookmark union goes through the REAL expiry-aware lookup over the in-memory store (via Resolvers.Build),
+    // exercising the production expiry-filtering path rather than a fake; a null logger stands in for the conflict
+    // warning.
+    private HttpEndpointRoutesResolver Resolver() => Resolvers.Build(_store, _bookmarks);
 
     [Fact]
     public async Task ProjectsDistinctTemplates_FromHttpBindingMetadata()
@@ -87,6 +89,38 @@ public sealed class HttpEndpointRoutesResolverTests
     {
         var routes = await Resolver().ResolveRoutesAsync();
         Assert.Empty(routes);
+    }
+
+    // ---- Issue #592 item 2: conflicts degrade at the resolver (uniqueness is enforced pre-write by the
+    // validator; a poisoned store must not brick startup or unrelated publishes) ----
+
+    [Fact]
+    public async Task CrossDefinitionConflictInTheStore_WarnsButStillResolvesRoutes()
+    {
+        // Two DISTINCT definitions claim GET orders/{id} — a state the pre-write validator normally prevents,
+        // reachable only out-of-band. The resolver must NOT throw (it also runs at shell startup and on every
+        // observed publish); it resolves the routes and leaves the conflict to the request-time 409 backstop.
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a2", "n2", "orders/{id}", "GET", definitionId: "def-b"));
+
+        var routes = await Resolver().ResolveRoutesAsync();
+
+        var route = Assert.Single(routes);
+        Assert.Equal("orders/{id}", route.Route);
+    }
+
+    [Fact]
+    public async Task SameDefinitionOwningBothBindings_ResolvesToOneRoute()
+    {
+        // Same definition, same (template, method) on two nodes (republish remnants / a duplicate node) — not an
+        // authoring conflict, resolves to one route.
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
+        await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n2", "orders/{id}", "GET", definitionId: "def-a"));
+
+        var routes = await Resolver().ResolveRoutesAsync();
+
+        var route = Assert.Single(routes);
+        Assert.Equal("orders/{id}", route.Route);
     }
 
     // ---- Mid-flow bookmark union (spec 089 D, T009 / D-D4) ----

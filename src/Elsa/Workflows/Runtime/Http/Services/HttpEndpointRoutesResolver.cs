@@ -3,6 +3,8 @@ using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
@@ -33,10 +35,24 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// A bookmark whose route was already refreshed away but is not yet consumed simply 404s at dispatch (spec 089 D,
 /// D-D4 edge case), which is acceptable and self-heals on the next refresh.
 /// </para>
+/// <para>
+/// <b>Conflicts degrade here, they don't brick (issue #592 item 2).</b> Publish-time
+/// <c>(template, method)</c> uniqueness across <em>trigger bindings</em> is enforced pre-write by
+/// <c>HttpEndpointRoutingUniquenessValidator</c> on the indexer's validation seam, so a healthy store never
+/// contains a cross-definition trigger collision. If one nonetheless appears (written out-of-band, or persisted
+/// before the validator existed), this resolver only <em>warns</em> and resolves the routes anyway — it also runs
+/// at shell startup (<c>UpdateRouteTableStartupTask</c>) and on HTTP-affecting publishes, so throwing would turn
+/// one poisoned entry into a host-wide publish outage and a boot failure. The middleware's request-time 409
+/// ambiguity guard is the serving backstop for the conflicting endpoint itself. The uniqueness check is
+/// <b>trigger-binding-only</b>: a waiting mid-flow bookmark that shares a <c>(template, method)</c> with a
+/// published trigger is legal (it is instance-scoped, not a competing definition, spec 089 D-D5), so bookmarks are
+/// deliberately exempt from the collision warning.
+/// </para>
 /// </remarks>
 public sealed class HttpEndpointRoutesResolver(
     IWorkflowTriggerBindingStore bindingStore,
-    IGlobalBookmarkStimulusLookup bookmarkStimulusLookup) : IHttpEndpointRoutesResolver
+    IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
+    ILogger<HttpEndpointRoutesResolver> logger) : IHttpEndpointRoutesResolver
 {
     public async ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default)
     {
@@ -48,12 +64,31 @@ public sealed class HttpEndpointRoutesResolver(
         var templates = new HashSet<string>(StringComparer.Ordinal);
         var routes = new List<HttpRouteData>();
 
+        // (1) Trigger bindings. Two bindings that share a (template, method) hash are legitimate when they belong
+        // to one definition (republish remnants / a duplicate node); a cross-definition collision is warned about
+        // (never thrown — see the class remarks). This uniqueness check applies to trigger bindings only.
+        var claimantsByHash = new Dictionary<string, string>(StringComparer.Ordinal);
         var bindings = await bindingStore.ListByStimulusTypeAsync(HttpEndpointRouting.StimulusType, cancellationToken);
         foreach (var binding in bindings)
-            AddTemplate(binding.Metadata, templates, routes);
+        {
+            if (claimantsByHash.TryGetValue(binding.StimulusHash, out var owner))
+            {
+                if (!StringComparer.Ordinal.Equals(owner, binding.DefinitionId))
+                    logger.LogWarning(
+                        "The HTTP endpoint '{Endpoint}' is claimed by more than one workflow definition. The publish-time uniqueness validator normally prevents this; requests to this endpoint will be rejected with 409 by the ambiguity guard until one claimant is unpublished.",
+                        EndpointRoutingConflictException.DescribeEndpoint(binding));
+            }
+            else
+            {
+                claimantsByHash[binding.StimulusHash] = binding.DefinitionId;
+            }
 
-        // Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions). The
-        // lookup returns full BookmarkState snapshots incl. Metadata, from which the durable template is read.
+            AddTemplate(binding.Metadata, templates, routes);
+        }
+
+        // (2) Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions).
+        // The lookup returns full BookmarkState snapshots incl. Metadata, from which the durable template is read.
+        // Bookmarks are instance-scoped and are NOT run through the cross-definition uniqueness check (D-D5).
         var waiting = await bookmarkStimulusLookup.FindWaitingByTypeAsync(
             new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
             cancellationToken);

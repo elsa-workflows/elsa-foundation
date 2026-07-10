@@ -172,6 +172,7 @@ An author sets an endpoint's response mode to synchronous. A client calls the en
 - Correlation-id / workflow-instance-id selectors (header/query) from elsa-core are out of scope for this unit; the stimulus router's correlation scope is unchanged.
 - The spec-069 inline drain runs to quiescence within the dispatch on the in-process actor; verified during planning (speckit-plan) before sub-unit E is scheduled.
 - Distributed (multi-node) synchronous responses are a future concern; the design leaves the degrade path (202) and does not build distributed transport.
+- Multi-node route-table freshness is a future concern; the per-shell route table is refreshed by a process-local observer (`RouteTableTriggerIndexObserver`) on each publish, so on a multi-node host other nodes serve their last-refreshed routes until they next publish or restart. No cross-node invalidation signal is built here — like distributed sync responses, this waits on a production-ready distributed provider (a durable route store / index-change subscription) rather than a bespoke broadcast. Single-node hosts are always fresh; a new node rebuilds its full route table from the durable trigger index at startup (`UpdateRouteTableStartupTask`).
 
 ## Sub-unit sequencing (each its own branch/PR)
 

@@ -194,6 +194,34 @@ public sealed class StimulusRouterTests
         Assert.Equal("wfexec-1", Assert.Single(resumeDispatcher.Requests).WorkflowExecutionId);
     }
 
+    [Fact]
+    public async Task Route_StartOnly_WithMatchedBindingsSupplied_ReusesThemAndNeverQueriesTheStore()
+    {
+        // Spec 089 efficiency #7: when the caller already fetched the match set (the HTTP middleware does, for its
+        // ambiguity guard + options), the router reuses it instead of issuing its own identical ListByStimulusAsync
+        // — one durable read per request, not two. The throwing store proves the router never consults it.
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(new ThrowingTriggerBindingStore(), new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+        var prefetched = new[] { Binding("artifact-1", "node-a"), Binding("artifact-2", "node-a") };
+
+        var result = await router.RouteAsync(new StimulusDispatchRequest(
+            StimulusType, StimulusHash, mode: StimulusRoutingMode.StartOnly, matchedTriggerBindings: prefetched));
+
+        Assert.Equal(2, result.StartedCount);
+        Assert.Equal(2, startDispatcher.Requests.Count);
+    }
+
+    /// <summary>A binding store whose cross-artifact lookup throws — proves the router used the supplied match set.</summary>
+    private sealed class ThrowingTriggerBindingStore : IWorkflowTriggerBindingStore
+    {
+        public ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<int> DeleteByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusAsync(string stimulusType, string stimulusHash, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The router must reuse the supplied match set, not query the store.");
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByArtifactAsync(string artifactId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
     private StimulusRouter Router(
         IWorkflowTriggerBindingStore bindingStore,
         InMemoryBookmarkStateStore bookmarkStore,

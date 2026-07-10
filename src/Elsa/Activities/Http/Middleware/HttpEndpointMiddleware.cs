@@ -94,10 +94,27 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
+        // From here on the request is ours to handle. A client disconnect cancels RequestAborted; any operation
+        // observing it (the claimant lookup, the dispatch, a response write) throws OperationCanceledException.
+        // There is no live connection to write a response to, so swallow it and return rather than letting it
+        // escape as an unhandled pipeline exception (#592 item 12). A cancellation the request did NOT ask for
+        // still propagates.
+        try
+        {
+            await HandleEndpointAsync(context, endpointPath);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task HandleEndpointAsync(HttpContext context, string endpointPath)
+    {
         // Resolve the concrete endpoint-relative path to a published route template (spec 089 B). The route
         // table holds endpoint-relative templates; TemplateMatcher wants rooted paths, so both sides get a
-        // leading slash for the match. First deterministic match wins (overlapping templates — e.g.
-        // orders/{id} vs orders/list — are matched in route-table order, elsa-core parity).
+        // leading slash for the match. The route table enumerates most-specific-first (issue #592 item 1), so
+        // "first match wins" is deterministic: a literal template (orders/list) beats a parameter template
+        // (orders/{id}) regardless of publish/insertion order.
         var (template, routeValues) = ResolveTemplate(endpointPath);
         if (template is null)
         {
@@ -107,35 +124,40 @@ public sealed class HttpEndpointMiddleware(
 
         var stimulusHash = HttpEndpointStimulus.Hash(template, context.Request.Method);
 
-        // Ambiguity guard (spec FR-009): a (template, method) claimed by more than one workflow definition is
-        // authoring error, not fan-out — reject before any dispatch so neither workflow starts.
+        // Fetch the trigger claimants once (also the source of the endpoint options when present). The ambiguity
+        // guard below shares this fetch rather than re-querying, and the router reuses it on the start path.
         var claimants = await triggerBindingStore.ListByStimulusAsync(HttpEndpointStimulus.StimulusType, stimulusHash, context.RequestAborted);
-        if (claimants.Select(binding => binding.DefinitionId).Distinct(StringComparer.Ordinal).Count() > 1)
-        {
-            context.Response.StatusCode = StatusCodes.Status409Conflict;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(new { error = "ambiguous-endpoint", detail = $"More than one workflow claims {context.Request.Method} {template}." }),
-                context.RequestAborted);
-            return;
-        }
 
-        // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). The
-        // ambiguity guard above proved all claimants share one definition, so any binding's metadata will do. When
-        // there is NO trigger claimant (a purely mid-flow endpoint), fall back to a waiting bookmark's metadata via
-        // the expiry-aware lookup filtered to this stimulus hash (spec 089 D, D-D5) — the claimant wins when both
-        // exist, so the bookmark lookup only runs when no claimant was found.
-        var optionsMetadata = claimants.FirstOrDefault()?.Metadata
-            ?? await ResolveWaitingBookmarkMetadataAsync(stimulusHash, context.RequestAborted);
-        var endpointOptions = EndpointOptions.FromMetadata(optionsMetadata);
+        // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). Sibling
+        // claimants of one definition share options; on an ambiguous route (rejected below) any claimant's
+        // Authorize flag is enough to know the endpoint is protected, so read the strongest: if ANY claimant
+        // authorizes, authorization must pass before we disclose anything else. When there is NO trigger claimant
+        // (a purely mid-flow endpoint) the options fall back to a waiting bookmark's metadata via the expiry-aware
+        // lookup filtered to this stimulus hash (spec 089 D, D-D5) — the claimant wins when both exist, so the
+        // bookmark lookup only runs when no claimant was found.
+        var endpointOptions = claimants.Count > 0
+            ? ResolveEndpointOptions(claimants)
+            : HttpEndpointStimulusOptions.FromMetadata(await ResolveWaitingBookmarkMetadataAsync(stimulusHash, context.RequestAborted));
 
-        // Authorization runs before the body is read or anything is dispatched (FR-012). Fail closed: an
-        // Authorize endpoint with no handler composed (WorkflowsRuntimeHttp feature absent) denies.
+        // Authorization runs before the body is read, before ambiguity/existence is disclosed, and before any
+        // dispatch (FR-012, #592 item 10 — auth before disclosure). Fail closed: an Authorize endpoint with no
+        // handler composed (WorkflowsRuntimeHttp feature absent) denies. A configuration fault (missing scheme /
+        // unregistered policy) surfaces as 500, distinct from the 401 an anonymous caller gets (#592 item 11).
         if (endpointOptions.Authorize)
         {
-            var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
-            var authorized = authorizationHandler is not null
-                && await authorizationHandler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, endpointOptions.Policy));
+            bool authorized;
+            try
+            {
+                var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
+                authorized = authorizationHandler is not null
+                    && await authorizationHandler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, endpointOptions.Policy));
+            }
+            catch (HttpEndpointAuthorizationConfigurationException)
+            {
+                context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                return;
+            }
+
             if (!authorized)
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -143,8 +165,24 @@ public sealed class HttpEndpointMiddleware(
             }
         }
 
+        // Ambiguity guard (spec FR-009): a (template, method) claimed by more than one workflow definition is an
+        // authoring error, not fan-out — reject before any dispatch so neither workflow starts. Evaluated only
+        // after authorization, so an anonymous caller cannot distinguish an ambiguous route from a valid one. The
+        // body is slimmed to a stable code — it must not echo the method/template to an (authorized) caller
+        // (#592 item 10). The guard stays trigger-claimant-only: bookmark resumes are instance-scoped and cannot
+        // be ambiguous across definitions (D-D5).
+        if (claimants.Select(binding => binding.DefinitionId).Distinct(StringComparer.Ordinal).Count() > 1)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(new { error = "ambiguous-endpoint" }),
+                context.RequestAborted);
+            return;
+        }
+
         var maxBodyBytes = endpointOptions.RequestSizeLimit ?? _options.MaxRequestBodyBytes;
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes, RequestServicesBodyParser(context));
+        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes);
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -153,15 +191,18 @@ public sealed class HttpEndpointMiddleware(
 
         var input = JsonSerializer.SerializeToElement(requestModel);
 
+        // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
+        // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
+        // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
+        // suspended on this mid-flow endpoint. The router's snapshot-before-start guard prevents an instance
+        // started by THIS request from also resuming itself.
         var dispatch = new StimulusDispatchRequest(
             stimulusType: HttpEndpointStimulus.StimulusType,
             stimulusHash: stimulusHash,
             input: input,
-            // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
-            // suspended on this mid-flow endpoint. The router's snapshot-before-start guard prevents an instance
-            // started by THIS request from also resuming itself.
             mode: StimulusRoutingMode.StartAndResume,
-            requestedBy: RequestedBy);
+            requestedBy: RequestedBy,
+            matchedTriggerBindings: claimants);
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).
@@ -178,6 +219,9 @@ public sealed class HttpEndpointMiddleware(
         }
         catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
         {
+            // A genuine dispatch fault (not a client abort — that path is swallowed by the top-level guard in
+            // InvokeAsync): map it to a status. A per-endpoint timeout trip is an OperationCanceledException on
+            // the linked token while RequestAborted stays live, so it lands here (mapped to 408), not the guard.
             await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
             return;
         }
@@ -195,8 +239,7 @@ public sealed class HttpEndpointMiddleware(
             .Select(start => start.WorkflowExecutionId!)
             .ToArray();
 
-        // Resumed = the execution ids of the DISPATCHED resumes only (mirroring StimulusResumeView.From, which
-        // projects every outcome; here the 202 body reports only the ones that actually resumed).
+        // Resumed = the execution ids of the DISPATCHED resumes only (a skipped/lost resume is not reported).
         var resumedIds = result.Resumes
             .Where(resume => resume.Status == BookmarkResumeDispatchStatus.Dispatched)
             .Select(resume => resume.WorkflowExecutionId)
@@ -210,29 +253,26 @@ public sealed class HttpEndpointMiddleware(
     }
 
     /// <summary>
-    /// The per-endpoint options parsed from claimant-binding metadata (values written by
-    /// <see cref="HttpEndpointTriggerStimulusProvider"/>; formats per data-model.md). Absent keys mean defaults.
+    /// Resolves the per-endpoint options from the claimant bindings' non-identity metadata. Sibling claimants of
+    /// one definition share options, so the first claimant's metadata drives timeout/size/policy. Authorization is
+    /// treated as the strongest claim across claimants: if ANY claimant requires authorization the endpoint is
+    /// protected, so authorization runs (and an anonymous caller is denied) before route ambiguity is disclosed on
+    /// an ambiguous route (#592 item 10). Empty claimants (a purely mid-flow endpoint) are handled by the caller
+    /// via <see cref="ResolveWaitingBookmarkMetadataAsync"/> instead.
     /// </summary>
-    private sealed record EndpointOptions(bool Authorize, string? Policy, TimeSpan? RequestTimeout, long? RequestSizeLimit)
+    private static HttpEndpointStimulusOptions ResolveEndpointOptions(IEnumerable<WorkflowTriggerBinding> claimants)
     {
-        public static EndpointOptions FromMetadata(IReadOnlyDictionary<string, string>? metadata)
-        {
-            if (metadata is null)
-                return new EndpointOptions(false, null, null, null);
+        HttpEndpointStimulusOptions? first = null;
+        var authorizeAny = false;
 
-            return new EndpointOptions(
-                Authorize: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey, out var authorize)
-                    && bool.TryParse(authorize, out var parsedAuthorize) && parsedAuthorize,
-                Policy: metadata.GetValueOrDefault(Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey),
-                RequestTimeout: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.RequestTimeoutMetadataKey, out var timeout)
-                    && TimeSpan.TryParseExact(timeout, "c", System.Globalization.CultureInfo.InvariantCulture, out var parsedTimeout)
-                        ? parsedTimeout
-                        : null,
-                RequestSizeLimit: metadata.TryGetValue(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey, out var sizeLimit)
-                    && long.TryParse(sizeLimit, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var parsedSizeLimit)
-                        ? parsedSizeLimit
-                        : null);
+        foreach (var claimant in claimants)
+        {
+            var options = HttpEndpointStimulusOptions.FromMetadata(claimant.Metadata);
+            first ??= options;
+            authorizeAny |= options.Authorize;
         }
+
+        return (first ?? HttpEndpointStimulusOptions.None) with { Authorize = authorizeAny };
     }
 
     /// <summary>
@@ -252,7 +292,7 @@ public sealed class HttpEndpointMiddleware(
             ?.Metadata;
     }
 
-    /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback when the policy feature is absent.</summary>
+    /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
         var faultException = timedOut && exception is OperationCanceledException
@@ -265,17 +305,9 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        // No handler composed: apply the same default mapping the policy module's handler uses.
-        context.Response.StatusCode = faultException switch
-        {
-            TimeoutException or OperationCanceledException => StatusCodes.Status408RequestTimeout,
-            HttpBadRequestException => StatusCodes.Status400BadRequest,
-            _ => StatusCodes.Status500InternalServerError
-        };
+        // No handler composed: apply the same default mapping the policy module's handler uses (shared owner).
+        context.Response.StatusCode = Elsa.Http.Core.HttpEndpointFaultMapping.ToStatusCode(faultException);
     }
-
-    private static IHttpRequestBodyParser? RequestServicesBodyParser(HttpContext context) =>
-        context.RequestServices?.GetService(typeof(IHttpRequestBodyParser)) as IHttpRequestBodyParser;
 
     /// <summary>
     /// Resolves the endpoint-relative path against the per-shell route table. Returns the matched template
@@ -291,7 +323,8 @@ public sealed class HttpEndpointMiddleware(
             if (string.IsNullOrWhiteSpace(template))
                 continue;
 
-            var values = routeMatcher.Match("/" + template.TrimStart('/'), rootedPath);
+            // Reuse the route table's precompiled matcher (issue #592 item 6) — no per-request template parse.
+            var values = routeMatcher.Match(routeData, rootedPath);
             if (values is null)
                 continue;
 
@@ -313,8 +346,7 @@ public sealed class HttpEndpointMiddleware(
         HttpContext context,
         string endpointPath,
         IReadOnlyDictionary<string, string> routeValues,
-        long maxBodyBytes,
-        IHttpRequestBodyParser? bodyParser)
+        long maxBodyBytes)
     {
         if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
             return null;
@@ -334,20 +366,16 @@ public sealed class HttpEndpointMiddleware(
         var query = context.Request.Query
             .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        // Parsed content (spec 089 C, FR-011): content-type-dispatched, wire-safe JsonElement; null when the
-        // parser seam is absent (Http feature not composed), the type is unrecognized, or the body is empty.
-        JsonElement? parsedContent = body is not null && bodyParser is not null
-            ? bodyParser.Parse(context.Request.ContentType, body)
-            : null;
-
+        // Parsed content is NOT persisted here (spec 089 efficiency #9): the HttpEndpoint activity derives it from
+        // Body + the Content-Type header via the deterministic IHttpRequestBodyParser seam, so the stimulus payload
+        // carries the raw body exactly once instead of the body plus a re-encoded copy of it.
         return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
             Method: context.Request.Method.ToUpperInvariant(),
             Headers: headers,
             Query: query,
             Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase),
-            ParsedContent: parsedContent);
+            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>

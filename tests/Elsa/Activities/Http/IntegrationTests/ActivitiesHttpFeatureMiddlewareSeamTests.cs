@@ -45,7 +45,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         // binding store, then seed the probe's route so the request resolves and reaches dispatch (proving the
         // mounted middleware, not the sentinel, answered).
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
-        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+        services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
         // The middleware also resolves waiting-bookmark options for resume-only matches (spec 089 D) via the
         // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers; supplied here (empty store).

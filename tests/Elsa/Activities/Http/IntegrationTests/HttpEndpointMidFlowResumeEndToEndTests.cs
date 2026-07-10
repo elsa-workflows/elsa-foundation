@@ -32,8 +32,10 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
     public async Task DirectlyStartedWorkflow_SuspendsAtMidFlowEndpoint_MatchingRequestResumesItWithTheLiveRequest()
     {
         // Spec US4 independent test: a workflow started DIRECTLY (no HTTP stimulus) suspends at a
-        // CanStartWorkflow=false endpoint; a matching request resumes it and the run's durable Result/RouteData/
-        // ParsedContent reflect the resume request.
+        // CanStartWorkflow=false endpoint; a matching request resumes it and the run's durable Result/RouteData
+        // reflect the resume request. (ParsedContent is derived at the activity from Body + the Content-Type header
+        // per spec 089 #9 — its derivation is unit-covered in HttpEndpointExecutionTests; here the delivered Body on
+        // the durable Result is the whole-chain evidence.)
         const string path = "callbacks/{id}";
         const string resultValueId = "midflow-result";
         await _fixture.PublishResumableHttpEndpointWorkflowAsync("artifact-midflow", path, "POST", resultValueId);
@@ -60,8 +62,6 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
         Assert.Equal("callbacks/42", model.Path);
         Assert.Equal("42", Assert.Contains("id", model.RouteData!));
         Assert.Equal("""{"ok":true}""", model.Body);
-        Assert.NotNull(model.ParsedContent);
-        Assert.True(model.ParsedContent!.Value.GetProperty("ok").GetBoolean());
     }
 
     [Fact]

@@ -5,6 +5,7 @@ using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Http.Core;
+using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
@@ -55,6 +56,13 @@ namespace Elsa.Activities.Http.Activities;
 /// inputs by construction, so an author input cannot collide with them and the execute API's inputs bag cannot
 /// forge them. Without a valid payload the Result falls back to a model projected from the authored route.
 /// </para>
+/// <para>
+/// <b>ParsedContent (spec 089 efficiency #9/#16).</b> The parsed body is <em>derived</em> here from
+/// <see cref="HttpRequestModel.Body"/> and the request <c>Content-Type</c> header via the deterministic
+/// <c>IHttpRequestBodyParser</c> seam — it is not persisted on the stimulus/resume payload. CLR <c>null</c> means
+/// "no content" (empty body, unrecognized/absent content type, malformed JSON, or a non-HTTP run); an explicit
+/// JSON <c>null</c> body surfaces as a present <see cref="JsonElement"/> of <see cref="JsonValueKind.Null"/>.
+/// </para>
 /// </remarks>
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 {
@@ -66,6 +74,9 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 
     /// <summary>The bookmark id prefix for a mid-flow suspension (one bookmark per supported method).</summary>
     private const string BookmarkIdPrefix = "http-endpoint:";
+
+    /// <summary>The non-routing method placeholder stamped on the authored-route fallback model (see <see cref="BuildAuthoredRouteModel"/>).</summary>
+    private const string NonRoutingMethodPlaceholder = "*";
 
     private static readonly string[] DefaultMethods = ["GET"];
 
@@ -129,8 +140,11 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     public OutputArgument<IDictionary<string, string>>? RouteData { get; set; }
 
     /// <summary>
-    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011); null when the
-    /// body was empty, the content type unrecognized, or the run was not started/resumed by an HTTP stimulus.
+    /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011), <em>derived</em>
+    /// here from <see cref="HttpRequestModel.Body"/> and the request <c>Content-Type</c> header via the
+    /// deterministic <c>IHttpRequestBodyParser</c> seam — not persisted on the stimulus/resume payload (spec 089
+    /// efficiency #9). Null when there is no content to parse; an explicit JSON <c>null</c> body surfaces as a
+    /// present <see cref="JsonElement"/> of <see cref="JsonValueKind.Null"/> (spec 089 #16).
     /// </summary>
     public OutputArgument<object?>? ParsedContent { get; set; }
 
@@ -182,7 +196,43 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     {
         context.Set(Result, model);
         context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
-        context.Set(ParsedContent, (object?)model.ParsedContent);
+        context.Set(ParsedContent, DeriveParsedContent(context, model));
+    }
+
+    /// <summary>
+    /// Derives the parsed body from the raw <see cref="HttpRequestModel.Body"/> and the request
+    /// <c>Content-Type</c> header (spec 089 #9). Returns CLR <c>null</c> for no content — an empty body, an
+    /// absent/unrecognized content type, or malformed JSON — and boxes the parser's <see cref="JsonElement"/>
+    /// otherwise, so an explicit JSON <c>null</c> stays distinguishable as a <see cref="JsonValueKind.Null"/>
+    /// element rather than collapsing to CLR null (spec 089 #16).
+    /// </summary>
+    private static object? DeriveParsedContent(IActivityExecutionContext context, HttpRequestModel model)
+    {
+        if (string.IsNullOrEmpty(model.Body))
+            return null;
+
+        // A body only reaches here on a genuine HTTP-stimulus start or resume (the authored/direct-run fallback
+        // carries a null Body), and that path composes the Http feature — which registers the parser — by
+        // construction (ActivitiesHttp → WorkflowsRuntimeHttp → Http). So the seam is guaranteed present whenever
+        // there is content to parse.
+        var parser = context.GetRequiredService<IHttpRequestBodyParser>();
+        var parsed = parser.Parse(GetContentType(model.Headers), model.Body);
+        return parsed is { } element ? element : null;
+    }
+
+    /// <summary>Reads the (case-insensitive) <c>Content-Type</c> request header from the model, if present.</summary>
+    private static string? GetContentType(IDictionary<string, string[]>? headers)
+    {
+        if (headers is null)
+            return null;
+
+        foreach (var (key, values) in headers)
+        {
+            if (string.Equals(key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                return values is { Length: > 0 } ? values[0] : null;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -275,12 +325,15 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     private HttpRequestModel BuildAuthoredRouteModel(IActivityExecutionContext context)
     {
         var path = context.Get(Path) ?? string.Empty;
-        var methods = context.Get(SupportedMethods);
-        var method = methods is { Count: > 0 } ? methods.First() : "*";
 
+        // Direct-run / non-HTTP-start fallback: no inbound request drove this execution, so there is no real
+        // request method. Post-B, the authored SupportedMethods are a routing-time concern (one binding per
+        // method) — projecting the first of them here would misleadingly imply this run was a GET/POST request.
+        // Emit a stable, non-routing placeholder instead so consumers can tell the model is authored, not live
+        // (#592 item 20).
         return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizeTemplate(path),
-            Method: method,
+            Method: NonRoutingMethodPlaceholder,
             Headers: new Dictionary<string, string[]>(),
             Query: new Dictionary<string, string[]>(),
             Body: null,

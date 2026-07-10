@@ -93,7 +93,7 @@ environment variables. Standard .NET double-underscore (`__`) env keys override 
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | Hosting environment | `Production` |
 | `ASPNETCORE_URLS` | Kestrel bind (already set in the image) | `http://+:8080` |
-| `Elsa__ModuleManagement__ApiKey` | Key for the `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
+| `Elsa__ModuleManagement__ApiKey` | The Elsa host management key the server accepts on its `/_elsa/module-management` API (header `X-Elsa-Module-Management-Key`). Server-side only — the browser never sees or sends it. **Must match** Studio's `Studio__BackendModuleManagementApiKey`. | `elsa-docker-demo-key` |
 | `Cors__AllowedOrigins__0`, `__1`, … | Browser origins allowed by the `ElsaStudio` CORS policy. The Studio container's **published host origin** must be listed. | `http://localhost:14000` |
 | `CShells__Shells__default__Features__GroundworkUnifiedPersistencePostgreSql__ConnectionString` | Optional: override the Postgres connection string without editing the mounted `shells.json`. | *(commented out)* |
 
@@ -164,6 +164,10 @@ Studio wiring (see `docker-compose.yml`):
   calls the backend directly, using the value surfaced at `GET /studio-runtime.js`. A compose
   service name like `http://elsa-server:8080` is not resolvable from the browser.
 - **`Studio__BackendModuleManagementApiKey` must equal the server's `Elsa__ModuleManagement__ApiKey`.**
+  This is the Elsa host management key, and it stays server-side in the Studio container — it is
+  never published to the browser. Browser-facing host-control reads (module management, Extension
+  Builder) go through the Studio management bridge, which attaches the key when calling the
+  backend (see ADR 0037).
 - The server's CORS policy must allow the Studio published origin (`Cors__AllowedOrigins__0`).
 
 ---

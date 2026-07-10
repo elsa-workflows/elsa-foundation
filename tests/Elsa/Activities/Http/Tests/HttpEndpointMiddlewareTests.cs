@@ -6,7 +6,6 @@ using Elsa.Activities.Http.Options;
 using Elsa.Activities.Testing;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
-using Elsa.Http.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -20,11 +19,14 @@ namespace Elsa.Activities.Http.Tests;
 /// <summary>
 /// Unit coverage for the inbound <see cref="HttpEndpointMiddleware"/> (spec 089 B, method-aware/templated routes).
 /// It drives the middleware with a <see cref="DefaultHttpContext"/>, a fake <see cref="IStimulusRouter"/>, a
-/// list-backed <see cref="FakeRouteTable"/> seeded with the published templates, a real-semantics
+/// production-delegating <see cref="FakeRouteTable"/> seeded with the published templates, a real-semantics
 /// <see cref="TestRouteMatcher"/>, and the real <see cref="InMemoryWorkflowTriggerBindingStore"/> seeded with the
 /// claimant bindings. Together they prove: template resolution + route-value extraction, the (template, method)
 /// hashing identity, the ambiguity (409) guard, and the response contract — 202 with the started ids when a
 /// trigger matched, 404 when the template is unknown or nothing started, and pass-through outside the base path.
+/// The #592 follow-up items add: authorization is evaluated before route existence/ambiguity is disclosed
+/// (item 10), a configuration fault maps to 500 rather than 401 (item 11), and a client abort during dispatch is
+/// swallowed rather than surfaced as a pipeline exception (item 12).
 /// </summary>
 public sealed class HttpEndpointMiddlewareTests
 {
@@ -75,6 +77,30 @@ public sealed class HttpEndpointMiddlewareTests
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), dispatched.StimulusHash);
         Assert.Equal("42", dispatched.Input!.Value.GetProperty("RouteData").GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData("orders/list", "orders/{id}")] // more-specific template listed first
+    [InlineData("orders/{id}", "orders/list")] // ...and listed last: order must not matter
+    public async Task OverlappingTemplates_LiteralBeatsParameter_Deterministically(string first, string second)
+    {
+        // A request for the literal path must always bind the literal template (orders/list), never the parameter
+        // template (orders/{id}), regardless of the order the two templates were published into the route table
+        // (issue #592 item 1). The dispatched hash proves which template won.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-1", "orders/list", "GET"),
+            Binding("artifact-1", "orders/{id}", "GET"));
+        var middleware = Middleware(router, store, new[] { first, second });
+        var context = NewContext("/workflows/http/orders/list", "GET");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var dispatched = Assert.Single(router.Requests);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/list", "GET"), dispatched.StimulusHash);
+        // The literal template captured no route parameter.
+        Assert.Empty(dispatched.Input!.Value.GetProperty("RouteData").EnumerateObject());
     }
 
     [Fact]
@@ -362,41 +388,24 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
-    public async Task ParsedContent_JsonBody_WithRealParser_IsSurfacedOnTheDispatchedInput()
+    public async Task DispatchedInput_CarriesTheRawBody_ButNotAReEncodedParsedContentCopy()
     {
-        // The real HttpRequestBodyParser (spec 089 C, T005) resolved from RequestServices parses an
-        // application/json body into ParsedContent on the serialized stimulus input.
+        // Spec 089 efficiency #9: parsed content is no longer persisted on the wire model — the activity derives
+        // it from Body at execution time — so the durable stimulus payload carries the body exactly once, with no
+        // re-encoded ParsedContent copy doubling it.
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
         var middleware = Middleware(router, store, "orders/webhook");
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"orderId":7}""",
-            contentType: "application/json",
-            services: ServicesWith<IHttpRequestBodyParser>(new HttpRequestBodyParser()));
+            contentType: "application/json");
 
         await middleware.InvokeAsync(context, _ => Task.CompletedTask);
 
         var dispatched = Assert.Single(router.Requests);
-        var parsed = dispatched.Input!.Value.GetProperty("ParsedContent");
-        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
-        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
-    }
-
-    [Fact]
-    public async Task ParsedContent_UnknownContentType_WithRealParser_IsNullOnTheDispatchedInput()
-    {
-        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
-        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
-        var middleware = Middleware(router, store, "orders/webhook");
-        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "0110",
-            contentType: "application/octet-stream",
-            services: ServicesWith<IHttpRequestBodyParser>(new HttpRequestBodyParser()));
-
-        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-
-        var dispatched = Assert.Single(router.Requests);
-        // Wire-optional: a null ParsedContent serializes to a JSON null (present, kind Null).
-        var parsed = dispatched.Input!.Value.GetProperty("ParsedContent");
-        Assert.Equal(JsonValueKind.Null, parsed.ValueKind);
+        Assert.Equal("""{"orderId":7}""", dispatched.Input!.Value.GetProperty("Body").GetString());
+        Assert.False(
+            dispatched.Input!.Value.TryGetProperty("ParsedContent", out _),
+            "ParsedContent must not be persisted on the stimulus payload.");
     }
 
     [Fact]
@@ -592,6 +601,68 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Empty(router.Requests);
     }
 
+    // ---- #592 item 10: authorization is evaluated BEFORE route existence/ambiguity is disclosed ----
+
+    [Fact]
+    public async Task Authorize_AmbiguousRoute_AnonymousCaller_Replies401_NotAmbiguity_RouterUntouched()
+    {
+        // Two definitions claim the same authorized (template, method). An anonymous caller must get 401, never
+        // the 409 that would reveal the route exists and is ambiguous (#592 item 10). Auth runs before the
+        // ambiguity guard, so the router is never consulted.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-1", "secure/{id}", "GET", definitionId: "definition-a", authorize: true),
+            Binding("artifact-2", "secure/{id}", "GET", definitionId: "definition-b", authorize: true));
+        var handler = new FakeAuthorizationHandler(authorize: false);
+        var middleware = Middleware(router, store, "secure/{id}");
+        var context = NewContext("/workflows/http/secure/42", "GET",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.True(handler.WasInvoked);
+    }
+
+    [Fact]
+    public async Task Authorize_AmbiguousRoute_MixedAuthorizeFlags_StillRequiresAuthorization()
+    {
+        // Only one of the two ambiguous claimants declares authorize=true. The endpoint is still protected: an
+        // anonymous caller must not slip past because a sibling definition left the flag off (#592 item 10).
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-1", "secure/{id}", "GET", definitionId: "definition-a", authorize: false),
+            Binding("artifact-2", "secure/{id}", "GET", definitionId: "definition-b", authorize: true));
+        var handler = new FakeAuthorizationHandler(authorize: false);
+        var middleware = Middleware(router, store, "secure/{id}");
+        var context = NewContext("/workflows/http/secure/42", "GET",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.True(handler.WasInvoked);
+    }
+
+    [Fact]
+    public async Task Authorize_ValidRoute_AnonymousCaller_Replies401()
+    {
+        // The unambiguous, valid case: an authorized endpoint denies an anonymous caller with 401 before dispatch.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "secure/{id}", "GET", authorize: true));
+        var handler = new FakeAuthorizationHandler(authorize: false);
+        var middleware = Middleware(router, store, "secure/{id}");
+        var context = NewContext("/workflows/http/secure/42", "GET",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+    }
+
     [Fact]
     public async Task ClaimantWins_OverBookmarkMetadata_WhenBothExist()
     {
@@ -632,6 +703,67 @@ public sealed class HttpEndpointMiddlewareTests
 
         Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
         Assert.Empty(router.Requests);
+    }
+
+    [Fact]
+    public async Task AmbiguousEndpoint_409Body_DoesNotEchoMethodOrTemplate()
+    {
+        // #592 item 10: the slimmed 409 body carries only a stable code, never the request method or the
+        // resolved template (which would disclose endpoint details).
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(
+            Binding("artifact-1", "orders/{id}", "GET", definitionId: "definition-a"),
+            Binding("artifact-2", "orders/{id}", "GET", definitionId: "definition-b"));
+        var middleware = Middleware(router, store, "orders/{id}");
+        var context = NewContext("/workflows/http/orders/42", "GET");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        var body = await ReadResponse(context);
+        Assert.DoesNotContain("orders/{id}", body);
+        Assert.DoesNotContain("GET", body);
+    }
+
+    // ---- #592 item 11: a configuration fault surfaces as 500, distinct from the 401 an anonymous caller gets ----
+
+    [Fact]
+    public async Task Authorize_HandlerThrowsConfigurationException_Replies500_NotAuthDenial_RouterUntouched()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "secure", "POST", authorize: true, policy: "missing-policy"));
+        var handler = FakeAuthorizationHandler.Throwing(
+            new HttpEndpointAuthorizationConfigurationException("no scheme", new InvalidOperationException()));
+        var middleware = Middleware(router, store, "secure");
+        var context = NewContext("/workflows/http/secure", "POST", body: """{"id":1}""",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+    }
+
+    // ---- #592 item 12: a client disconnect during dispatch is swallowed, not surfaced as a pipeline exception ----
+
+    [Fact]
+    public async Task ClientAbortDuringDispatch_IsSwallowed_NoResponseWritten_NoRethrow()
+    {
+        // The request is aborted while dispatch is in flight: the OperationCanceledException the dispatch observes
+        // must not escape the middleware (there is no live connection to write to). No throw, status untouched.
+        var router = BehaviourStimulusRouter.Throwing(new OperationCanceledException());
+        var store = await StoreWith(Binding("artifact-1", "aborted", "POST"));
+        var middleware = Middleware(router, store, "aborted");
+        using var aborted = new CancellationTokenSource();
+        await aborted.CancelAsync();
+        var context = NewContext("/workflows/http/aborted", "POST", body: "{}");
+        context.RequestAborted = aborted.Token;
+
+        // Must not throw.
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        // Default status (200) — nothing was written on the dead connection.
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
     private static HttpEndpointMiddleware Middleware(

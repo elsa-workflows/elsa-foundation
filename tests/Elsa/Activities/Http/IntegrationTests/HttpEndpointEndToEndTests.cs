@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Models;
+using Elsa.Workflows.Runtime.Http.Exceptions;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
@@ -104,18 +105,25 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_RepliesConflict_AndStartsNeither()
+    public async Task TwoWorkflowsOnTheSameTemplateAndMethod_FailsTheSecondPublish_PreWrite_AndFirstKeepsServing()
     {
-        // Spec US2: a (template, GET) claimed by two distinct workflow definitions is an authoring error — 409,
-        // nothing started.
+        // Spec US2 + issue #592 item 2: a (template, GET) claimed by two distinct workflow definitions is an
+        // authoring error caught at PUBLISH time, on the indexer's PRE-write validation seam — the second
+        // publish fails with the durable index untouched, rather than the collision persisting and only
+        // surfacing as a request-time 409.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-a", "orders/{id}", ResultOutputName, "GET");
-        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET");
 
+        await Assert.ThrowsAsync<EndpointRoutingConflictException>(() =>
+            _fixture.PublishHttpEndpointWorkflowAsync("artifact-b", "orders/{id}", ResultOutputName, "GET"));
+
+        // Pre-write proof: the conflicting artifact left NOTHING in the durable index.
+        Assert.Empty(await _fixture.ListTriggerBindingsAsync("artifact-b"));
+
+        // The store stayed clean, so the endpoint keeps serving normally — the request routes to artifact-a's
+        // workflow (202, one started run), no 409.
         var response = await _fixture.Client.GetAsync("/workflows/http/orders/42");
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        var payload = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        Assert.Equal("ambiguous-endpoint", payload.RootElement.GetProperty("error").GetString());
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Single(await ReadStartedIdsAsync(response));
     }
 
     // ---- Spec 089 sub-unit C (T010): authorization, ParsedContent, per-endpoint size limit end to end ----
@@ -153,7 +161,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task JsonBody_SurfacesParsedContentOnTheRunsDurableResult()
+    public async Task JsonBody_DerivesParsedContentOutput_AndKeepsTheRawBodyOnTheResult()
     {
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse", "parse/orders", ResultOutputName, "POST");
 
@@ -163,15 +171,33 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
-        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        // The Result carries the raw body; ParsedContent is no longer persisted on it (spec 089 efficiency #9).
+        var capturedResult = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
+        var model = capturedResult.Deserialize<HttpRequestModel>()!;
+        Assert.Equal("""{"orderId":7,"customer":"acme"}""", model.Body);
 
-        // The real HttpRequestBodyParser (T005) turned the JSON body into the wire-safe ParsedContent element.
-        Assert.NotNull(model.ParsedContent);
-        var parsed = model.ParsedContent!.Value;
-        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
-        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
-        Assert.Equal("acme", parsed.GetProperty("customer").GetString());
+        // The activity derived ParsedContent from Body via the deterministic parser seam, onto its own output.
+        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        Assert.Equal(JsonValueKind.Object, capturedParsed.ValueKind);
+        Assert.Equal(7, capturedParsed.GetProperty("orderId").GetInt32());
+        Assert.Equal("acme", capturedParsed.GetProperty("customer").GetString());
+    }
+
+    [Fact]
+    public async Task ExplicitJsonNullBody_SurfacesParsedContentAsAJsonNull_DistinctFromNoContent()
+    {
+        // Spec 089 #16: an explicit JSON `null` body must stay distinguishable from "no content". The activity
+        // derives it to a JsonElement of kind Null (a present value), not CLR null.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse-null", "parse/null", ResultOutputName, "POST");
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/parse/null",
+            new StringContent("null", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
+
+        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        Assert.Equal(JsonValueKind.Null, capturedParsed.ValueKind);
     }
 
     [Fact]

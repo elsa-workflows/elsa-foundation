@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- HttpContext (AuthorizeHttpEndpointContext / HttpEndpointFaultContext / fault mapping) comes from
+         Http.Abstractions; declare it explicitly rather than relying on the transitive edge from
+         Routing.Abstractions (#592 item 15). Versions are centrally managed in Directory.Packages.props. -->
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
     <PackageReference Include="Microsoft.AspNetCore.Routing.Abstractions" />
   </ItemGroup>
 

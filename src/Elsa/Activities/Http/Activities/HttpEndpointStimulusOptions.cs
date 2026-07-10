@@ -10,10 +10,11 @@ namespace Elsa.Activities.Http.Activities;
 /// <see cref="HttpEndpointStimulus.Hash"/> — two endpoints that differ only in options share a routing key.
 /// </summary>
 /// <remarks>
-/// <see cref="ToMetadata"/> is the single place that formats these values, keeping the wire encoding invariant and
-/// consistent between the describe and read sides. Defaults are omitted from the metadata to keep bindings lean:
-/// <c>Authorize == false</c>, a null <c>Policy</c>, a null <c>RequestTimeout</c>, and a null <c>RequestSizeLimit</c>
-/// each contribute no key.
+/// <see cref="ToMetadata"/> (write) and <see cref="FromMetadata"/> (read) are paired here as the single owner of
+/// the wire encoding, so the describe side and the middleware read side cannot drift (#592 item 14). Defaults are
+/// omitted from the metadata to keep bindings lean: <c>Authorize == false</c>, a null <c>Policy</c>, a null
+/// <c>RequestTimeout</c>, and a null <c>RequestSizeLimit</c> each contribute no key; reading absent keys yields the
+/// same defaults, so <c>FromMetadata(ToMetadata()) == this</c> round-trips.
 /// </remarks>
 public sealed record HttpEndpointStimulusOptions(
     bool Authorize = false,
@@ -47,5 +48,30 @@ public sealed record HttpEndpointStimulusOptions(
             metadata[HttpEndpointRouting.RequestSizeLimitMetadataKey] = sizeLimit.ToString(CultureInfo.InvariantCulture);
 
         return metadata;
+    }
+
+    /// <summary>
+    /// Reads the options back from claimant-binding metadata, inverting <see cref="ToMetadata"/> (the middleware
+    /// read side, #592 item 14). A null or empty metadata dictionary — and any absent, blank, or malformed key —
+    /// yields the corresponding default, so <c>FromMetadata(ToMetadata())</c> is the identity on any well-formed
+    /// options value.
+    /// </summary>
+    public static HttpEndpointStimulusOptions FromMetadata(IReadOnlyDictionary<string, string>? metadata)
+    {
+        if (metadata is null)
+            return None;
+
+        return new HttpEndpointStimulusOptions(
+            Authorize: metadata.TryGetValue(HttpEndpointRouting.AuthorizeMetadataKey, out var authorize)
+                && bool.TryParse(authorize, out var parsedAuthorize) && parsedAuthorize,
+            Policy: metadata.GetValueOrDefault(HttpEndpointRouting.PolicyMetadataKey),
+            RequestTimeout: metadata.TryGetValue(HttpEndpointRouting.RequestTimeoutMetadataKey, out var timeout)
+                && TimeSpan.TryParseExact(timeout, "c", CultureInfo.InvariantCulture, out var parsedTimeout)
+                    ? parsedTimeout
+                    : null,
+            RequestSizeLimit: metadata.TryGetValue(HttpEndpointRouting.RequestSizeLimitMetadataKey, out var sizeLimit)
+                && long.TryParse(sizeLimit, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSizeLimit)
+                    ? parsedSizeLimit
+                    : null);
     }
 }

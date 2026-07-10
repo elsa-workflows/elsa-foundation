@@ -62,6 +62,12 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // bookmark lifecycle notifier calls this observer after a bookmark create/consume commits, and it re-projects
         // the whole table (trigger bindings ∪ waiting bookmarks). Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, RouteTableBookmarkObserver>());
+
+        // Publish-time (template, method) uniqueness (issue #592 item 2): validates the extracted binding set on
+        // the indexer's PRE-write seam so a cross-definition conflict fails the second publish with the durable
+        // index untouched. HTTP-specific by design — shared stimulus identity is legitimate fan-out for other
+        // stimulus types. Contribution seam (fan-in), so TryAddEnumerable.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, HttpEndpointRoutingUniquenessValidator>());
     }
 
     private void RegisterFaultHandler(IServiceCollection services)

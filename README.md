@@ -48,6 +48,6 @@ This starts **Elsa.Server** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-server` and
 `elsaworkflows/elsa-studio` (SQLite, ephemeral). The [Docker quickstart](docker/compose/README.md)
 covers this plus the build-from-source path with PostgreSQL, and explains the settings that wire
-Studio to the server backend (`Studio__BackendBaseUrl`, the module-management API key, CORS). For the
+Studio to the server backend (`Studio__BackendBaseUrl`, the Elsa host management key, CORS). For the
 full container/image reference (environment variables, mounts, persistence composition,
 troubleshooting), see [docs/docker.md](docs/docker.md).

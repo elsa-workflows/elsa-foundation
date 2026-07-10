@@ -21,6 +21,7 @@ public sealed class RouteTableBookmarkObserverTests
         // Mirror the trigger-index observer test wiring: a real resolver over real stores, resolved through a fresh
         // scope. The route table's state is shared, so any scope mutates the same instance (production semantics).
         var services = new ServiceCollection();
+        services.AddLogging(); // the resolver takes ILogger<HttpEndpointRoutesResolver> (conflict-warning path, #592 item 2)
         services.AddSingleton<IWorkflowTriggerBindingStore>(_bindings);
         services.AddSingleton<IBookmarkStimulusIndex>(_bookmarks);
         services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();

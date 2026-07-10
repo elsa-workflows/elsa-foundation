@@ -61,6 +61,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
 
+    /// <summary>The durable value id the published workflow captures the <see cref="HttpEndpoint.ParsedContent"/> output under.</summary>
+    public const string ParsedContentOutputName = "EndpointParsedContent";
+
     private readonly IHost _host;
 
     private HttpEndpointHostFixture(IHost host) => _host = host;
@@ -106,10 +109,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // The IRouteTable/IRouteMatcher IMPLEMENTATIONS are internal to Elsa.Http; production-equivalent
                     // doubles (see RouteTableTestDoubles.cs) stand in for just those two services.
                     services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
-                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, MemoryCacheRouteTable>();
+                    services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
                     services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
+
+                    // Publish-time (template, method) uniqueness on the indexer's PRE-write seam (issue #592
+                    // item 2) — the same validator WorkflowsRuntimeHttpFeature contributes.
+                    services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutingUniquenessValidator>());
 
                     // Spec 089 sub-unit D (T010). The bookmark-lifecycle observer that keeps the route table in step
                     // with waiting mid-flow bookmarks — registered exactly like the publish-side trigger observer
@@ -330,6 +337,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<int> CountWorkflowExecutionsAsync() =>
         (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
 
+    /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
+    public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
+
     /// <summary>Reads the single durable value captured under the durable value id <paramref name="valueId"/> for a run.</summary>
     public async Task<JsonElement> ReadCapturedOutputAsync(string workflowExecutionId, string valueId)
     {
@@ -438,6 +449,15 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
                     lifecycle: DurableValueLifecycle.Instance,
                     storage: DurableValueStorage.Inline,
+                    captureOnSuccessfulCompletion: true),
+                // Also promote the ParsedContent output — since spec 089 efficiency #9 the parsed body is derived at
+                // the activity from Body (not persisted on the wire model), so tests read it from this output.
+                [nameof(HttpEndpoint.ParsedContent)] = new RuntimeOutputCapture(
+                    outputName: nameof(HttpEndpoint.ParsedContent),
+                    valueId: ParsedContentOutputName,
+                    type: new RuntimeValueTypeDescriptor("clr", typeof(object).FullName, null),
+                    lifecycle: DurableValueLifecycle.Instance,
+                    storage: DurableValueStorage.Inline,
                     captureOnSuccessfulCompletion: true)
             },
             metadata: metadata);
@@ -472,39 +492,5 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         using var scope = provider.CreateScope();
         foreach (var task in scope.ServiceProvider.GetServices<IStartupTask>())
             task.ExecuteAsync(CancellationToken.None).GetAwaiter().GetResult();
-    }
-}
-
-/// <summary>
-/// A minimal test authentication scheme (the standard ASP.NET test-handler pattern) honoring an
-/// <c>Authorization: Test &lt;name&gt;</c> header: any such header authenticates a caller named <c>&lt;name&gt;</c>;
-/// its absence yields no result (anonymous). It stands in for the shell's authentication stack so the real
-/// <c>AuthenticationBasedHttpEndpointAuthorizationHandler</c> can resolve a principal (spec 089 C, T010).
-/// </summary>
-public sealed class TestAuthHandler(
-    Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
-    Microsoft.Extensions.Logging.ILoggerFactory logger,
-    System.Text.Encodings.Web.UrlEncoder encoder)
-    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    public const string SchemeName = "Test";
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        if (!Request.Headers.TryGetValue("Authorization", out var header))
-            return Task.FromResult(AuthenticateResult.NoResult());
-
-        var value = header.ToString();
-        const string prefix = "Test ";
-        if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length <= prefix.Length)
-            return Task.FromResult(AuthenticateResult.Fail("Malformed test authorization header."));
-
-        var name = value[prefix.Length..].Trim();
-        var identity = new System.Security.Claims.ClaimsIdentity(
-            [new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, name)],
-            SchemeName);
-        var principal = new System.Security.Claims.ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, SchemeName);
-        return Task.FromResult(AuthenticateResult.Success(ticket));
     }
 }
