@@ -4,8 +4,9 @@
 
 **Created**: 2026-07-07
 
-**Status**: Draft (design skeleton — implementation not started; sharpened by a grilling pass, see
-[ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md) decisions D1–D11)
+**Status**: Implemented — merged 2026-07-08 in PR #577 (squash `23056231`); tasks.md 35/35 complete.
+Design sharpened by a grilling pass, see
+[ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md) decisions D1–D11
 
 **Input**: Implement [ADR 0034](../../docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md):
 a concrete git-backed `IWorkflowReconciliationSource` that reads immutable workflow-definition

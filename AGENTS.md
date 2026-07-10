@@ -159,18 +159,22 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-Active work unit: specs/085-workflow-definition-gitops (Workflow-Definition GitOps — a git
-reconciliation source + export sink layered on the operational catalog per ADR 0034; NOT a
-replacement operational store, NOT the Extension Builder git stack, v1 single-writer). All
-prerequisites are on main: deterministic payload serializer (086, #549 + ADR 0035 #570), the
-reconciler definition-metadata path (087/#546), the shared Elsa.Git library (src/Elsa/Git), and
-layout AdditionalProperties → opaque JsonElement (088). Read
-specs/085-workflow-definition-gitops/spec.md and
-docs/adr/0034-workflow-definitions-reconcile-from-and-export-to-git.md; the unit still needs
-plan/tasks (run speckit-plan → tasks → implement). The last completed unit was
-specs/089-http-endpoint-parity (HTTP Endpoint full parity with elsa-core — all five sub-units
-merged: A #578, B #585, C #589, D #604, E #605, plus review follow-ups #599/#600/#603 closing
-issue #592; the HttpEndpoint stack now covers live start-input delivery, (template, method)
-routing, parsing/auth/faults/limits, mid-flow resume, and synchronous responses over the
-spec-069 request-affine seam).
+Active work unit: none — pick the next unit (e.g. via the elsa-whats-next skill) before starting
+new Speckit work. Correction: PR #609 repointed this marker to 085 from a stale pre-#577 queue
+snapshot; spec 085 was already IMPLEMENTED and MERGED 2026-07-08 in PR #577 (squash `23056231`) —
+it does NOT need plan/tasks/implementation (plan.md, tasks.md 35/35, and the code are all on
+main). The last completed units, newest first:
+- specs/085-workflow-definition-gitops (Workflow-Definition GitOps per ADR 0034 — git
+  reconciliation source + export sink layered on the operational catalog; NOT a replacement
+  operational store, v1 single-writer). Delivered in PR #577: the
+  `Elsa.Workflows.Design.Reconciliation.Git` leaf project (`SourceKind="git"` source, Writer-only
+  set-diff export sweep, role-driven `GitWorkspace`, canonical on-disk JSON), plus shared
+  reconciler-seam additions (`ContentHash`/`Deleted` on the reconciliation model,
+  `IWorkflowDefinition.DeletedAt`, the FR-008a metadata-after-skip fix, and base-feature
+  reconcile-lifecycle activation).
+- specs/089-http-endpoint-parity (HTTP Endpoint full parity with elsa-core — all five sub-units
+  merged: A #578, B #585, C #589, D #604, E #605, plus review follow-ups #599/#600/#603 closing
+  issue #592; the HttpEndpoint stack now covers live start-input delivery, (template, method)
+  routing, parsing/auth/faults/limits, mid-flow resume, and synchronous responses over the
+  spec-069 request-affine seam).
 <!-- SPECKIT END -->
