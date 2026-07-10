@@ -31,6 +31,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private readonly ActivityDefinitionVersion _writeLineActivity = ActivityVersion("activity-write-line", "Text", new TypeReference("String"));
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
+    private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
     private readonly InMemoryWorkflowTestRunStore _testRunStore = new();
 
     [Fact]
@@ -43,8 +44,10 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("DispatchAccepted", view.Status);
         Assert.Equal("Accepted", view.CommandDispatchStatus);
         Assert.NotNull(view.WorkflowExecutionId);
-        Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
+        // Under ADR 0040 there is a single content-addressed store; the test-run artifact now lives in it (scope/
+        // expiry are reference facts, no longer segregated by an artifact-level list filter).
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
     }
 
@@ -64,13 +67,14 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("definition-1", view.DefinitionId);
         Assert.Equal("draft:snapshot-1", view.DefinitionVersionId);
         Assert.NotNull(view.WorkflowExecutionId);
-        Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
-        Assert.Empty(await _executableStore.ListAsync());
+        Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
+        // Single content-addressed store (ADR 0040): the draft test-run artifact is present. Reference-driven
+        // scope gating for dispatch (rejecting a test-run artifact from a normal runtime dispatch) is worker W3's
+        // slice; the artifact-level dispatcher no longer rejects by scope.
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
         var snapshot = await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId);
         Assert.NotNull(snapshot);
         Assert.Equal("write-one", snapshot.State.RootActivity!.NodeId);
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
-            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
     }
 
     [Fact]
@@ -89,7 +93,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Null(view.ArtifactId);
         Assert.Null(view.WorkflowExecutionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
+        Assert.Empty(await _executableStore.ListAsync());
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
         Assert.Null(await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId));
     }
@@ -143,7 +147,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("DispatchAccepted", view.Status);
         Assert.Equal("Accepted", view.CommandDispatchStatus);
         Assert.NotNull(view.WorkflowExecutionId);
-        Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
+        Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -175,42 +179,83 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
-    public async Task NormalRuntimeDispatchDoesNotStartTransientArtifact()
+    public async Task TestRunAppendsAnExpiringTestRunReferenceIntoTheSingleStore()
     {
+        // ADR 0040: the test run saves the artifact into the one content-addressed store and appends an expiring
+        // TestRun-scope source reference (scope/expiry are reference facts). The reference is what a dispatch gates on.
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
+        var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+
+        Assert.NotNull(await _executableStore.FindAsync(view.ArtifactId!));
+        var reference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(view.ArtifactId!));
+        Assert.Equal(WorkflowExecutableReferenceScope.TestRun, reference.Scope);
+        Assert.Equal(view.ExpiresAt, reference.ExpiresAt);
+        Assert.Null(reference.PublishedAt);
+    }
+
+    [Fact]
+    public async Task PublishedDispatchIsRejectedForArtifactWithOnlyTestRunReferences()
+    {
+        // Test (d): a NORMAL published dispatch of an artifact that only carries a TestRun reference is refused by the
+        // reference gate — a test-run artifact is not dispatchable as published even though it lives in the same store.
         var dispatcher = Dispatcher();
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher);
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
             dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
+
+        Assert.Equal(view.ArtifactId, exception.ArtifactId);
+        Assert.Equal(WorkflowExecutableReferenceScope.Published, exception.RequiredScope);
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.NoLiveReference, exception.Reason);
     }
 
     [Fact]
-    public async Task CleanupExpiredTransientArtifactsRemovesExecutableButKeepsTestRunMetadata()
+    public async Task DraftTestRunResolvesToSameArtifactIdAsBehaviorallyIdenticalVersion()
     {
-        var transientStore = new InMemoryTransientWorkflowExecutableStore(_executableStore);
-        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), Dispatcher(), transientStore);
-        var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        // Test (a) — the ADR 0040 equivalence signal. A draft snapshot and a durable version with identical behavior
+        // compile to the SAME artifact id because the hash is purely behavioral (ADR 0038) and the test-run flow now
+        // shares the published artifact prefix (scope lives on the reference, not the id). Same id ⇒ Studio can report
+        // "this draft is behaviorally identical to published vN" with no diffing.
+        var identicalRoot = Node("write-one", Text("hello"));
 
-        var deleted = await transientStore.CleanupExpiredAsync(view.ExpiresAt!.Value.AddTicks(1));
+        var versionView = await Handler(WorkflowVersion(identicalRoot))
+            .Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        var draftView = await DraftSnapshotHandler()
+            .Handle(new StartWorkflowDraftTestRun(
+                DefinitionId: "definition-1",
+                SnapshotId: "snapshot-1",
+                State: new WorkflowDefinitionState([], identicalRoot, [], [], null, null)), CancellationToken.None);
 
-        Assert.Equal(1, deleted);
-        Assert.Null(await transientStore.FindAsync(view.ArtifactId!));
-        Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
+        Assert.NotNull(versionView.ArtifactId);
+        Assert.Equal(versionView.ArtifactId, draftView.ArtifactId);
+        // Both references point at the single shared artifact.
+        Assert.Single(await _executableStore.ListAsync());
+        Assert.Equal(2, (await _sourceReferenceStore.ListByArtifactAsync(versionView.ArtifactId!)).Count);
     }
 
     [Fact]
-    public async Task CleanupExpiredTransientArtifactsUsesPersistedExpirationAfterTransientStoreRestart()
+    public async Task DispatchIsRejectedWithExpiryReasonWhenTheOnlyReferenceExpired()
     {
-        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
+        // Test (b): once the test run's only (TestRun) reference has passed its ExpiresAt, dispatching the artifact is
+        // refused with the distinguishing Expired reason — the artifact still exists, but nothing lets it run.
+        var dispatcher = Dispatcher();
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher);
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
-        var restartedTransientStore = new InMemoryTransientWorkflowExecutableStore(_executableStore);
 
-        var deleted = await restartedTransientStore.CleanupExpiredAsync(view.ExpiresAt!.Value.AddTicks(1));
+        // Drive the dispatcher's clock past the reference expiry so the same-scope reference is present but lapsed.
+        var expiredDispatcher = new WorkflowStartDispatcher(
+            _executableStore,
+            _sourceReferenceStore,
+            new InProcessWorkflowExecutionActorProvider(),
+            new ShortRuntimeExecutionIdGenerator(),
+            new FixedTimeProvider(view.ExpiresAt!.Value.AddSeconds(1)));
 
-        Assert.Equal(1, deleted);
-        Assert.Null(await restartedTransientStore.FindAsync(view.ArtifactId!));
-        Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
+            expiredDispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "test-run"), WorkflowExecutableReferenceScope.TestRun).AsTask());
+
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.Expired, exception.Reason);
+        Assert.Equal(WorkflowExecutableReferenceScope.TestRun, exception.RequiredScope);
     }
 
     [Fact]
@@ -318,7 +363,6 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private StartWorkflowTestRunRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         IWorkflowStartDispatcher? dispatcher = null,
-        ITransientWorkflowExecutableStore? transientStore = null,
         IReadOnlyCollection<ActivityDefinitionVersion>? activityVersions = null) =>
         new(
             TestCompiler.Create(
@@ -326,7 +370,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 new FakeActivityVersionStore((activityVersions ?? [_writeLineActivity]).ToList()),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
-            transientStore ?? new InMemoryTransientWorkflowExecutableStore(_executableStore),
+            _executableStore,
+            _sourceReferenceStore,
+            new EmptyWorkflowDefinitionVersionLayoutStore(),
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TimeProvider.System);
@@ -338,7 +384,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
                 new FakeActivityVersionStore([_writeLineActivity]),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
-            new InMemoryTransientWorkflowExecutableStore(_executableStore),
+            _executableStore,
+            _sourceReferenceStore,
+            new EmptyWorkflowDefinitionVersionLayoutStore(),
             _testRunStore,
             dispatcher ?? Dispatcher(),
             TimeProvider.System);
@@ -346,6 +394,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     private WorkflowStartDispatcher Dispatcher() =>
         new(
             _executableStore,
+            _sourceReferenceStore,
             new InProcessWorkflowExecutionActorProvider(),
             new ShortRuntimeExecutionIdGenerator());
 
@@ -409,5 +458,10 @@ public sealed class WorkflowTestRunRequestHandlerTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }

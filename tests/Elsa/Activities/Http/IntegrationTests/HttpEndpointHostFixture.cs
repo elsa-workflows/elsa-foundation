@@ -227,7 +227,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: node,
             resumeTargets: NewHttpEndpointResumeTargets(node.ExecutableNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
@@ -290,7 +289,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: sequenceNode,
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
         await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
@@ -405,7 +403,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: sequence,
             resumeTargets: NewHttpEndpointResumeTargets(endpoint.ExecutableNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
@@ -436,7 +433,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                 ? new Dictionary<string, WorkflowExecutableResumeTarget>()
                 : NewHttpEndpointResumeTargets(resumeTargetNodeId),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
         await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
@@ -616,7 +612,6 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

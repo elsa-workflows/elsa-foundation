@@ -87,13 +87,12 @@ public sealed class RuntimeBookmarkResumeContractTests
     }
 
     [Fact]
-    public void BookmarkResumeResolver_IgnoresSourceReferenceWhenCheckingPinnedExecutableSnapshot()
+    public void BookmarkResumeResolver_ResolvesWhenPinnedExecutableSnapshotMatches()
     {
-        var workflowExecution = NewWorkflowExecution(_identity with
-        {
-            Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "orders-v7", "7.0.0")
-        });
-        var executable = NewExecutable(_identity with { Source = null });
+        // Source provenance no longer lives on WorkflowExecutableIdentity (ADR 0038) — it moved to the source
+        // reference — so the pinned-snapshot check is purely over ArtifactId/DefinitionVersionId/ArtifactHash.
+        var workflowExecution = NewWorkflowExecution(_identity);
+        var executable = NewExecutable(_identity);
         var request = new BookmarkResumeRequest(
             WorkflowExecution: workflowExecution,
             Executable: executable,
@@ -259,7 +258,6 @@ public sealed class RuntimeBookmarkResumeContractTests
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

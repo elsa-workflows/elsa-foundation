@@ -157,8 +157,8 @@ public sealed class StimulusRouter : IStimulusRouter
             // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —
             // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
-            // boundaries.
-            var result = await _startDispatcher.DispatchAsync(startRequest, request.DispatchOptions, cancellationToken);
+            // boundaries. Stimulus-triggered starts are published dispatches (default reference scope, ADR 0040).
+            var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
         }
 

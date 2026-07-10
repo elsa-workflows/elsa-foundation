@@ -15,9 +15,11 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
 /// <summary>
 /// Durable <see cref="IOpenTelemetryStore"/> backed by EF Core. Writes enqueue onto a bounded channel so
 /// anonymous OTLP collector requests do not wait on database I/O; a single background drain loop persists
-/// batches and prunes each high-volume signal table to the configured retention capacity.
+/// batches and prunes each high-volume signal table to the configured retention capacity. On graceful
+/// shutdown the shell provider disposes the store via <see cref="DisposeAsync"/>, which drains the channel
+/// before cancelling so buffered telemetry is not discarded (issue #606).
 /// </summary>
-public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
+public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable, IAsyncDisposable
 {
     private const int BatchSize = 64;
     // Exponential backoff (issue #607, parity with EfCoreStructuredLogStore): the old fixed 1s x 5 was both
@@ -27,6 +29,8 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private const long ShedLogIntervalMs = 30_000;
     private static readonly TimeSpan DefaultBaseRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IDbContextFactory<OpenTelemetryDbContext> _dbContextFactory;
     private readonly IOpenTelemetrySourceRegistry _sourceRegistry;
@@ -101,10 +105,16 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(batch);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // A false TryWrite means the writer was completed (store stopping/stopped): drop the batch without
+        // marking its resources seen. This only covers the completed-writer path — under overflow, DropOldest
+        // accepts the write and silently evicts the oldest queued batch, whose already-marked resources never
+        // persist.
+        if (!_channel.Writer.TryWrite(batch))
+            return ValueTask.CompletedTask;
+
         foreach (var resource in batch.Resources)
             _sourceRegistry.MarkSeen(resource);
 
-        _channel.Writer.TryWrite(batch);
         return ValueTask.CompletedTask;
     }
 
@@ -114,6 +124,28 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             return;
 
         _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+    }
+
+    /// <summary>
+    /// Stops accepting writes, waits for the drain loop to finish attempting persistence of every batch
+    /// already enqueued (bounded retries; a persistently failing batch is dropped), then applies retention
+    /// pruning once more on the same best-effort basis. Awaiting this is a completion signal rather than a
+    /// timing guess. Throws <see cref="InvalidOperationException"/> when draining was never started and
+    /// <see cref="TimeoutException"/> when the loop fails to finish within a generous ceiling.
+    /// </summary>
+    public async Task CompleteDrainingAsync(CancellationToken cancellationToken = default)
+    {
+        if (_drainLoop is not { } drainLoop)
+            throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
+
+        _channel.Writer.TryComplete();
+        await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
+
+        // Apply retention once more so completion implies the capacities hold even when the tail of inserts
+        // never reached the prune interval. This runs here rather than in the drain loop so the Dispose path
+        // (which cancels instead of draining) does no post-completion database work.
+        if (_insertedSincePrune > 0)
+            await PruneWithRetryAsync(cancellationToken);
     }
 
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default)
@@ -424,9 +456,12 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private async Task MaybePruneAsync(int inserted, CancellationToken cancellationToken)
     {
         _insertedSincePrune += inserted;
-        if (_insertedSincePrune < _pruneInterval)
-            return;
+        if (_insertedSincePrune >= _pruneInterval)
+            await PruneWithRetryAsync(cancellationToken);
+    }
 
+    private async Task PruneWithRetryAsync(CancellationToken cancellationToken)
+    {
         for (var attempt = 0; ; attempt++)
         {
             try
@@ -565,10 +600,47 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private static bool Matches(string? candidate, string? search) =>
         !string.IsNullOrEmpty(candidate) && !string.IsNullOrEmpty(search) && candidate.Contains(search, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Hard-stop for synchronous disposal contexts only: completes the writer and immediately cancels the
+    /// drain loop, discarding whatever is still queued in the channel. Best-effort by design — a graceful
+    /// host shutdown goes through <see cref="DisposeAsync"/> instead, which drains before cancelling.
+    /// </summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
+
+        _channel.Writer.TryComplete();
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    /// <summary>
+    /// Graceful shutdown path (issue #606): completes the writer and gives the drain loop a bounded window
+    /// (<see cref="ShutdownDrainTimeout"/>) to persist and prune what is still buffered before the hard
+    /// cancel. The shell provider is disposed asynchronously on host shutdown, so this — not
+    /// <see cref="Dispose"/> — is the path a graceful shutdown takes; loss past the window is accepted
+    /// rather than stalling shutdown indefinitely.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        var drainLoop = _drainLoop;
+        if (Volatile.Read(ref _draining) == 1 && drainLoop is not null)
+        {
+            _channel.Writer.TryComplete();
+
+            try
+            {
+                await drainLoop.WaitAsync(ShutdownDrainTimeout);
+            }
+            catch (TimeoutException)
+            {
+                // The shutdown window elapsed; fall through to the hard cancel and accept the loss.
+            }
+        }
 
         _channel.Writer.TryComplete();
         _cts.Cancel();

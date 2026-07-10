@@ -97,7 +97,6 @@ public sealed class RecurringTriggerScheduleIndexerTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            publishedAt: DateTimeOffset.UnixEpoch,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode TriggerNode(string nodeId, string activityType) =>
