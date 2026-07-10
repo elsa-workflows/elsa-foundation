@@ -24,7 +24,8 @@ public sealed class TasksFeatureRegistrationTests
         var terminatorRegistration = Assert.Single(services
             .Where(d => d.ServiceType == typeof(ShellTerminatorRegistration))
             .Select(d => d.ImplementationInstance)
-            .OfType<ShellTerminatorRegistration>());
+            .OfType<ShellTerminatorRegistration>(),
+            x => x.TerminatorType == typeof(StopShellTasksTerminator));
         Assert.Equal(LifecyclePhase.Start, terminatorRegistration.Phase);
         Assert.Equal(0, terminatorRegistration.Order);
 
