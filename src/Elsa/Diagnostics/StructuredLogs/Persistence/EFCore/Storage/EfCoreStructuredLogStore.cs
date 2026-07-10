@@ -24,6 +24,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     private const int DefaultMaxRetainedEntries = 100_000;
     private const int DefaultPruneInterval = 5_000;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IDbContextFactory<StructuredLogsDbContext> _dbContextFactory;
     private readonly int _maxRecentQuerySize;
@@ -86,6 +87,28 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
             return;
 
         _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+    }
+
+    /// <summary>
+    /// Stops accepting writes, waits for the drain loop to finish attempting persistence of every entry
+    /// already enqueued (bounded retries; a persistently failing batch is dropped), then applies retention
+    /// pruning once more on the same best-effort basis. Awaiting this is a completion signal rather than a
+    /// timing guess. Throws <see cref="InvalidOperationException"/> when draining was never started and
+    /// <see cref="TimeoutException"/> when the loop fails to finish within a generous ceiling.
+    /// </summary>
+    public async Task CompleteDrainingAsync(CancellationToken cancellationToken = default)
+    {
+        if (_drainLoop is not { } drainLoop)
+            throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
+
+        _channel.Writer.TryComplete();
+        await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
+
+        // Apply retention once more so completion implies the cap holds even when the tail of inserts
+        // never reached the prune interval. This runs here rather than in the drain loop so the Dispose path
+        // (which cancels instead of draining) does no post-completion database work.
+        if (_insertedSincePrune > 0)
+            await PruneWithRetryAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -243,9 +266,12 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable
     private async Task MaybePruneAsync(int inserted, CancellationToken cancellationToken)
     {
         _insertedSincePrune += inserted;
-        if (_insertedSincePrune < _pruneInterval)
-            return;
+        if (_insertedSincePrune >= _pruneInterval)
+            await PruneWithRetryAsync(cancellationToken);
+    }
 
+    private async Task PruneWithRetryAsync(CancellationToken cancellationToken)
+    {
         for (var attempt = 0; ; attempt++)
         {
             try
