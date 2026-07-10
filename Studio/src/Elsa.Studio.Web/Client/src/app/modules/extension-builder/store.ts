@@ -26,9 +26,9 @@ type Setter<T> = Dispatch<SetStateAction<T>>;
 // selections so the split hooks operate on one source of truth without re-declaring state.
 export interface BuilderCore {
   api: ElsaStudioModuleApi;
-  context: ElsaStudioModuleApi["backend"];
-  // The Studio-origin context. Only the Extension Builder capability read is routed through it (via the management
-  // bridge); every other Extension Builder call stays on `context` (api.backend). See ADR 0037.
+  // The Studio-origin context every Extension Builder call goes through: the browser talks only to the Studio
+  // management bridge, never to the backend host-control surface directly. See ADR 0037.
+  context: ElsaStudioModuleApi["host"];
   hostContext: ElsaStudioModuleApi["host"];
   tracker: OperationTracker;
 

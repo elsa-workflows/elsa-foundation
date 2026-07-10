@@ -1,13 +1,21 @@
 import {
+  createStudioHttpError,
+  StudioHttpError,
+  studioExtensionBuilderBridgeRoot,
   studioExtensionBuilderCapabilitiesPath,
   withDefaultHeaders,
   type StudioBackendManagementStatusKind,
   type StudioEndpointContext,
-  type StudioExtensionBuilderCapabilitiesResult
+  type StudioExtensionBuilderCapabilitiesResult,
+  type StudioManagementBridgeErrorBody
 } from "../../sdk";
 import { isPermissionDenied } from "../hostControlPermissions";
 
-const root = "/_elsa/extension-builder";
+// Every Extension Builder call goes through the Studio management bridge route group on the Studio origin
+// (ADR 0037, #256): the caller passes the Studio-origin context (api.host), the browser sends only its normal Studio
+// credentials, and Studio attaches the server-side management key on the Studio→backend relay. The backend route
+// suffixes are preserved verbatim under this root, so only the root differs from the direct backend surface.
+const root = studioExtensionBuilderBridgeRoot;
 
 // The Studio management bridge's answer for the backend Extension Builder capabilities read (ADR 0037), normalized for
 // the UI: when `status` is not "available" the capabilities are absent and the UI renders an explicit
@@ -348,6 +356,24 @@ export async function getBackendManagementCapabilities(hostContext: StudioEndpoi
   }
 }
 
+// A recognized Studio-management-bridge infrastructure failure (503, or 504 for a relay timeout) extracted from a
+// thrown error. Distinct from backend domain errors (400/404/409), which the bridge relays verbatim with their
+// original bodies, and from a Studio 403 (the signed-in user lacks a host-control permission).
+export interface ManagementBridgeFailure {
+  kind: Exclude<StudioBackendManagementStatusKind, "available">;
+  detail: string;
+}
+
+const managementBridgeFailureKinds: readonly StudioBackendManagementStatusKind[] = ["unconfigured", "unauthorized", "unreachable", "degraded"];
+
+/** Non-null when the thrown error is the bridge's infrastructure envelope (503/504 + management body). */
+export function readManagementBridgeFailure(error: unknown): ManagementBridgeFailure | null {
+  if (!(error instanceof StudioHttpError) || (error.status !== 503 && error.status !== 504)) return null;
+  const management = (error.payload as Partial<StudioManagementBridgeErrorBody> | null | undefined)?.management;
+  if (!management || !managementBridgeFailureKinds.includes(management.status)) return null;
+  return { kind: management.status as ManagementBridgeFailure["kind"], detail: management.detail || error.message };
+}
+
 export async function listWorkspaces(context: StudioEndpointContext) {
   const response = await context.http.getJson<RawExtensionWorkspace[] | { workspaces: RawExtensionWorkspace[] }>(`${root}/workspaces`);
   const workspaces = Array.isArray(response) ? response : response.workspaces;
@@ -521,7 +547,7 @@ export async function getBuildLog(context: StudioEndpointContext, _workspaceId: 
     cache: "no-store",
     headers: { "Accept": "text/plain, application/json" }
   }));
-  if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}.`);
+  if (!response.ok) throw await createStudioHttpError(response);
   const text = await response.text();
   if (response.headers.get("content-type")?.includes("application/json")) {
     const payload = JSON.parse(text) as { log?: string; lines?: string[] };
@@ -568,7 +594,9 @@ function normalizeCapabilities(value: Partial<ExtensionBuilderCapabilities>): Ex
 
 async function requestJson<T = Record<string, never>>(context: StudioEndpointContext, url: string, init: RequestInit) {
   const response = await fetch(new URL(url, context.baseUrl).toString(), withDefaultHeaders(context.headers, init));
-  if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}.`);
+  // Throw the structured SDK error so bridge infrastructure failures on PUT/DELETE stay detectable
+  // (readManagementBridgeFailure) and messages extract from problem-details bodies instead of raw text.
+  if (!response.ok) throw await createStudioHttpError(response);
   const text = await response.text();
   return (text ? JSON.parse(text) : {}) as T;
 }

@@ -47,7 +47,9 @@ export function useExtensionBuilder(): ExtensionBuilderContextValue {
 }
 
 export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioModuleApi; children: ReactNode }) {
-  const context = api.backend;
+  // Every Extension Builder call is routed through the Studio management bridge on the Studio origin (ADR 0037, #256),
+  // so the whole module runs on api.host and the browser never talks to the backend host-control surface directly.
+  const context = api.host;
   const hostContext = api.host;
   const tracker = useOperationTracker();
 

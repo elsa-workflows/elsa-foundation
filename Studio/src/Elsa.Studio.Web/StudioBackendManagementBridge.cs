@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Studio.Web;
 
@@ -29,6 +30,9 @@ internal static class StudioBackendManagementBridge
             .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
         group.MapGet("/extension-builder/capabilities", GetExtensionBuilderCapabilitiesAsync)
             .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderReadPolicyName);
+
+        // The Extension Builder operation relays (#256) live in their own table-driven group under this one.
+        endpoints.MapStudioExtensionBuilderBridge();
 
         return endpoints;
     }
@@ -247,11 +251,11 @@ internal sealed class StudioBackendManagementClient(
         CancellationToken cancellationToken)
     {
         var checkedAt = DateTimeOffset.UtcNow;
-        var backendBaseUrl = NormalizeBaseUrl(options.BackendBaseUrl);
+        var backendBaseUrl = options.NormalizedBackendBaseUrl;
 
         // Fail closed: without a backend base URL or a management key we make ZERO outbound calls (ADR 0037: possession
         // of no credential must never reach the bridge's backend call path).
-        if (string.IsNullOrWhiteSpace(options.BackendBaseUrl) || string.IsNullOrWhiteSpace(options.ManagementApiKey))
+        if (!options.IsConfigured)
         {
             return (new(
                 StudioBackendManagementStatus.Unconfigured,
@@ -370,9 +374,6 @@ internal sealed class StudioBackendManagementClient(
         string UnauthorizedDetail,
         string UnreachableDetail,
         string UnrecognizedPayloadDetail);
-
-    private static string? NormalizeBaseUrl(string? baseUrl) =>
-        string.IsNullOrWhiteSpace(baseUrl) ? null : baseUrl.TrimEnd('/');
 }
 
 /// <summary>
@@ -390,6 +391,14 @@ internal sealed record StudioBackendManagementOptions(string? BackendBaseUrl, st
     /// </summary>
     public const string ManagementApiKeyHeaderName = "X-Elsa-Module-Management-Key";
 
+    /// <summary>Both halves of the Studio→backend credential pair are present. When false every bridge surface fails
+    /// closed to <c>unconfigured</c> with zero outbound calls (ADR 0037).</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(BackendBaseUrl) && !string.IsNullOrWhiteSpace(ManagementApiKey);
+
+    /// <summary>The backend base URL without its trailing slash, or null when unset — the browser-facing form every
+    /// bridge status DTO reports.</summary>
+    public string? NormalizedBackendBaseUrl => string.IsNullOrWhiteSpace(BackendBaseUrl) ? null : BackendBaseUrl.TrimEnd('/');
+
     public static StudioBackendManagementOptions FromConfiguration(IConfiguration configuration) =>
         new(configuration[BackendBaseUrlConfigurationKey], configuration[ManagementApiKeyConfigurationKey]);
 }
@@ -400,22 +409,31 @@ internal static class StudioBackendManagementBridgeServiceCollectionExtensions
     private static readonly TimeSpan BackendRequestTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Registers the typed <see cref="StudioBackendManagementClient"/> over <see cref="IHttpClientFactory"/>. When no
-    /// backend base URL is configured, no <c>BaseAddress</c> is set — the client still resolves and fails closed to
-    /// <c>unconfigured</c> without issuing any request.
+    /// Registers the typed <see cref="StudioBackendManagementClient"/> and <see cref="StudioExtensionBuilderRelayClient"/>
+    /// over <see cref="IHttpClientFactory"/>. When no backend base URL is configured, no <c>BaseAddress</c> is set —
+    /// the clients still resolve and fail closed to <c>unconfigured</c> without issuing any request.
     /// </summary>
     public static IServiceCollection AddStudioBackendManagementBridge(this IServiceCollection services, IConfiguration configuration)
     {
         var options = StudioBackendManagementOptions.FromConfiguration(configuration);
         services.AddSingleton(options);
+        services.TryAddSingleton(TimeProvider.System);
 
         services.AddHttpClient<StudioBackendManagementClient>(client =>
-        {
-            client.Timeout = BackendRequestTimeout;
-            if (!string.IsNullOrWhiteSpace(options.BackendBaseUrl))
-                client.BaseAddress = new Uri(options.BackendBaseUrl, UriKind.Absolute);
-        });
+            ConfigureBackendClient(client, options, BackendRequestTimeout));
+
+        // The relay enforces per-operation budgets with a linked CancellationTokenSource; the client-level timeout must
+        // neither race those budgets nor cap a long Text/Stream body copy, so it is disabled here.
+        services.AddHttpClient<StudioExtensionBuilderRelayClient>(client =>
+            ConfigureBackendClient(client, options, Timeout.InfiniteTimeSpan));
 
         return services;
+    }
+
+    private static void ConfigureBackendClient(HttpClient client, StudioBackendManagementOptions options, TimeSpan timeout)
+    {
+        client.Timeout = timeout;
+        if (!string.IsNullOrWhiteSpace(options.BackendBaseUrl))
+            client.BaseAddress = new Uri(options.BackendBaseUrl, UriKind.Absolute);
     }
 }

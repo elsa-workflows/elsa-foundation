@@ -28,11 +28,12 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
 
     // Bearers the stub backend recognizes, each mapped to the permission set the backend session reports for it. These
     // exercise the permission policies (#249): a session with no host-control permissions, a read-only holder, a
-    // manage holder (which must satisfy read too), and an Extension Builder read holder.
+    // manage holder (which must satisfy read too), and Extension Builder read/manage holders.
     private const string NoPermissionBearer = "user-without-permissions";
     private const string ModuleReadBearer = "user-module-read";
     private const string ModuleManageBearer = "user-module-manage";
     private const string ExtensionBuilderReadBearer = "user-extension-builder-read";
+    private const string ExtensionBuilderManageBearer = "user-extension-builder-manage";
 
     // A path under the query-token prefix (a browser WebSocket/SSE handshake) stands in for the console-stream hub,
     // and a plain REST probe that is not under it.
@@ -42,6 +43,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     private const string ReadRoute = "/module-management-read";
     private const string ManageRoute = "/module-management-manage";
     private const string ExtensionBuilderReadRoute = "/extension-builder-read";
+    private const string ExtensionBuilderManageRoute = "/extension-builder-manage";
 
     private static readonly IReadOnlyDictionary<string, string[]> BearerPermissions = new Dictionary<string, string[]>
     {
@@ -49,7 +51,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         [NoPermissionBearer] = [],
         [ModuleReadBearer] = [StudioBridgeAuth.ModuleManagementReadPermission],
         [ModuleManageBearer] = [StudioBridgeAuth.ModuleManagementManagePermission],
-        [ExtensionBuilderReadBearer] = [StudioBridgeAuth.ExtensionBuilderReadPermission]
+        [ExtensionBuilderReadBearer] = [StudioBridgeAuth.ExtensionBuilderReadPermission],
+        [ExtensionBuilderManageBearer] = [StudioBridgeAuth.ExtensionBuilderManagePermission]
     };
 
     private WebApplication? _app;
@@ -226,10 +229,38 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ExtensionBuilderReadSurfaceAllowsExtensionBuilderManageHolder()
+    {
+        // extension-builder.manage implies extension-builder.read, expanded locally by the read policy (#256).
+        var response = await SendWithBearerAsync(HttpMethod.Get, ExtensionBuilderReadRoute, ExtensionBuilderManageBearer);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExtensionBuilderManageSurfaceAllowsExtensionBuilderManageHolder()
+    {
+        var response = await SendWithBearerAsync(HttpMethod.Post, ExtensionBuilderManageRoute, ExtensionBuilderManageBearer);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExtensionBuilderManageSurfaceForbidsReadOnlyHolderAs403()
+    {
+        // A read-only Extension Builder holder must NOT be able to mutate: the manage surface forbids a session that
+        // holds only extension-builder.read.
+        var response = await SendWithBearerAsync(HttpMethod.Post, ExtensionBuilderManageRoute, ExtensionBuilderReadBearer);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
     [Theory]
     [InlineData("GET", ReadRoute)]
     [InlineData("POST", ManageRoute)]
     [InlineData("GET", ExtensionBuilderReadRoute)]
+    [InlineData("POST", ExtensionBuilderManageRoute)]
     public async Task PermissionSurfacesAllowAnonymouslyWhenAuthDisabled(string method, string route)
     {
         // Demo/auth-disabled posture: every permission surface allows anonymously, exactly like the base gate, so the
@@ -277,14 +308,16 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
         app.MapPost(HubPath, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.PolicyName);
-        // One probe per permission policy (#249): the read/manage/EB-read surfaces, so a single host exercises the whole
-        // permission matrix against the real policies.
+        // One probe per permission policy (#249, #256): the read/manage surfaces of both permission families, so a
+        // single host exercises the whole permission matrix against the real policies.
         app.MapGet(ReadRoute, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
         app.MapPost(ManageRoute, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
         app.MapGet(ExtensionBuilderReadRoute, () => Results.Ok())
             .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderReadPolicyName);
+        app.MapPost(ExtensionBuilderManageRoute, () => Results.Ok())
+            .RequireAuthorization(StudioBridgeAuth.ExtensionBuilderManagePolicyName);
 
         await app.StartAsync();
         _app = app;

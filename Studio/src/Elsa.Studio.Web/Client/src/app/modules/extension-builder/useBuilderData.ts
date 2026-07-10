@@ -8,10 +8,10 @@ import {
   listRepositories,
   listTemplates,
   listWorkspaces,
+  readManagementBridgeFailure,
   readRepositoryFile
 } from "../extensionBuilderApi";
-import { getErrorMessage } from "../moduleManagementApi";
-import { canApplyProjectState, isCurrentSelection, patchProject } from "./helpers";
+import { canApplyProjectState, describeExtensionBuilderError, isCurrentSelection, patchProject } from "./helpers";
 import type { BuilderCore } from "./store";
 
 // Data-loading side of the store: bootstrap, workspace refresh, repository tree / source status /
@@ -38,11 +38,10 @@ export function useBuilderData(core: BuilderCore): BuilderData {
     core.setManagementUnavailable(null);
     setError(null);
     try {
-      // ADR 0037: the capability read is routed through the Studio management bridge on the Studio origin
-      // (api.host), so the browser never carries the backend host management key. The bridge answers with an
-      // explicit envelope; when backend management is not usable we render a dedicated unavailable surface and gate
-      // actions instead of issuing doomed backend requests. Every OTHER Extension Builder call below stays on the
-      // direct backend context.
+      // ADR 0037 / #256: every Extension Builder call is routed through the Studio management bridge on the Studio
+      // origin (api.host), so the browser never carries the backend host management key. The capability read answers
+      // with an explicit envelope; when backend management is not usable we render a dedicated unavailable surface and
+      // gate actions instead of issuing doomed requests.
       const management = await getBackendManagementCapabilities(core.hostContext);
       if (management.status !== "available" || !management.capabilities) {
         core.setCapabilities(null);
@@ -69,7 +68,17 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       core.setSelectedWorkspaceId(current => (current || workspaceList[0]?.id || repositoryList[0]?.id) ?? "");
       core.setState("ready");
     } catch (e) {
-      setError(getErrorMessage(e));
+      // A bridge infrastructure failure (503/504 + management envelope) on the bootstrap reads is the same "backend
+      // management is not usable" condition the capability probe reports as data, so it flips to the explicit
+      // unavailable surface. Anything else keeps the generic failed state.
+      const bridgeFailure = readManagementBridgeFailure(e);
+      if (bridgeFailure) {
+        core.setCapabilities(null);
+        core.setManagementUnavailable(bridgeFailure);
+        core.setState("unavailable");
+        return;
+      }
+      setError(describeExtensionBuilderError(e));
       core.setState("failed");
     }
   }
@@ -91,7 +100,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       await refreshWorkspaces(options);
       return true;
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(describeExtensionBuilderError(e));
       return false;
     }
   }
@@ -107,7 +116,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       if (nextSelectedSolutionPath !== core.selectedSolutionPath) core.setSelectedSolutionPath(nextSelectedSolutionPath);
       return tree;
     } catch (e) {
-      if (core.selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      if (core.selectedIds.current.workspaceId === workspaceId) setError(describeExtensionBuilderError(e));
       return null;
     }
   }
@@ -122,7 +131,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       }
       return gitStatus;
     } catch (e) {
-      if (core.selectedIds.current.workspaceId === workspaceId) setError(getErrorMessage(e));
+      if (core.selectedIds.current.workspaceId === workspaceId) setError(describeExtensionBuilderError(e));
       return null;
     }
   }
@@ -169,7 +178,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
         resetEditor(core);
       }
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(describeExtensionBuilderError(e));
     }
   }
 
@@ -180,7 +189,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       core.setWorkspaces(current => patchProject(current, workspaceId, refreshedProject));
       return refreshedProject;
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(describeExtensionBuilderError(e));
       return null;
     }
   }
@@ -194,7 +203,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       core.setRuntimeStatus(runtime);
     } catch (e) {
       if (!core.mounted.current || requestId !== core.runtimeStatusRequestId.current || !isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) return;
-      setError(getErrorMessage(e));
+      setError(describeExtensionBuilderError(e));
     }
   }
 

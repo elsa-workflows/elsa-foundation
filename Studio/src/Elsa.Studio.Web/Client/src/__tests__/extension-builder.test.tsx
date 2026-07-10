@@ -11,6 +11,9 @@ describe("extension builder page", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage?.clear();
+    // Backstop for ADR 0037/#256: the browser must never call the backend host-control surface. Any backend-context
+    // http call recorded by the failing stub during a test fails that test here.
+    expect(backendCalls.splice(0)).toEqual([]);
   });
 
   it("gates interactive builder surfaces with ExtensionBuilderCapabilities", async () => {
@@ -32,18 +35,20 @@ describe("extension builder page", () => {
     await unmount();
   });
 
-  it("reads capabilities through the Studio management bridge on the host context, not the backend context", async () => {
-    const hostGetJson = vi.fn(defaultHostGetJson);
-    const backendGetJson = vi.fn(defaultGetJson);
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson: backendGetJson, hostGetJson }));
+  it("routes capability and workspace-surface reads through the Studio management bridge on the host context, never the backend context", async () => {
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
 
     await waitForText(container, "Team Extensions");
 
-    // The capability read hits the Studio-owned bridge path on api.host…
-    expect(hostGetJson).toHaveBeenCalledWith(CAPABILITIES_BRIDGE_PATH);
-    // …and the browser never probes the direct backend Extension Builder capabilities endpoint.
-    expect(backendGetJson).not.toHaveBeenCalledWith(expect.stringContaining("/extension-builder/capabilities"));
-    expect(backendGetJson.mock.calls.every(([url]) => !url.endsWith("/capabilities"))).toBe(true);
+    // The capability read and every bootstrap read hit the Studio-owned bridge route group on api.host…
+    const hostGet = hostHttpMock(api).getJson;
+    expect(hostGet).toHaveBeenCalledWith(CAPABILITIES_BRIDGE_PATH);
+    expect(hostGet).toHaveBeenCalledWith(`${BRIDGE_ROOT}/repositories`);
+    expect(hostGet).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`);
+    expect(hostGet).toHaveBeenCalledWith(`${BRIDGE_ROOT}/templates`);
+    // …and the browser never issues a backend-context request (the afterEach guard also fails on any recorded call).
+    expect(backendCalls).toEqual([]);
 
     await unmount();
   });
@@ -54,9 +59,9 @@ describe("extension builder page", () => {
     ["unauthorized", "rejected the Studio management credential"],
     ["degraded", "degraded"]
   ] as const)("renders an explicit unavailable state and gates actions when the bridge reports %s", async (status, expected) => {
-    const backendGetJson = vi.fn(defaultGetJson);
+    const workspaceGetJson = vi.fn(defaultGetJson);
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
-      getJson: backendGetJson,
+      getJson: workspaceGetJson,
       hostGetJson: async url => url.endsWith(CAPABILITIES_BRIDGE_PATH)
         ? bridgeStatusResult(status, defaultBridgeDetail(status))
         : {}
@@ -64,13 +69,13 @@ describe("extension builder page", () => {
 
     await waitForText(container, "Backend management is unavailable");
 
-    // The explicit reason is named and actions are gated: no create/attach affordances, no doomed backend calls.
+    // The explicit reason is named and actions are gated: no create/attach affordances, no doomed workspace reads.
     expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
     expect(container.textContent).not.toContain("Create workspace");
     expect(container.textContent).not.toContain("Attach server-local");
     expect(container.querySelector(".extension-builder-solution-card")).toBeNull();
-    // Only the bridge capability read happened; no direct backend Extension Builder request was issued.
-    expect(backendGetJson).not.toHaveBeenCalled();
+    // Only the bridge capability read happened; no workspace-surface bridge read was issued.
+    expect(workspaceGetJson).not.toHaveBeenCalled();
 
     // Retry re-runs the bridge read.
     await clickButton(container, "Retry");
@@ -84,9 +89,9 @@ describe("extension builder page", () => {
     // A 403 on the bridge capabilities read is a Studio authorization failure — the signed-in user lacks
     // extension-builder.read (#249). It must render "do not have permission" / name the permission, NOT the
     // backend-unavailable/retry surface, and NOT a login prompt.
-    const backendGetJson = vi.fn(defaultGetJson);
+    const workspaceGetJson = vi.fn(defaultGetJson);
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
-      getJson: backendGetJson,
+      getJson: workspaceGetJson,
       hostGetJson: async url => {
         if (url.endsWith(CAPABILITIES_BRIDGE_PATH)) throw new StudioHttpError(403, "Forbidden");
         return {};
@@ -100,8 +105,73 @@ describe("extension builder page", () => {
     expect(container.textContent).not.toContain("Backend management is unavailable");
     expect(container.textContent).not.toContain("Retry");
     expect(container.textContent).not.toContain("Create workspace");
-    // No direct backend Extension Builder request was issued.
-    expect(backendGetJson).not.toHaveBeenCalled();
+    // No workspace-surface bridge read was issued.
+    expect(workspaceGetJson).not.toHaveBeenCalled();
+
+    await unmount();
+  });
+
+  it("surfaces the bridge's 501 not-yet-available detail as a tracker error without flipping to unavailable", async () => {
+    // In PR1 of #256 the bridge answers every mutation with a 501 + friendly detail. The sdk error extraction reads
+    // `detail` first, so the message must surface as a regular tracker error on the ready page — NOT as the
+    // backend-management-unavailable surface.
+    const detail = "This action is not yet available through Studio. Workspace mutations are being routed through the Studio management bridge (issue #256).";
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/workspaces")) throw new StudioHttpError(501, detail, null, { detail, management: null });
+      return defaultPostJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+    await waitForText(container, "Team Extensions");
+
+    await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']"), "Managed Repository");
+    await clickButton(container, "Create managed repo");
+    await waitForText(container, "not yet available through Studio");
+
+    expect(postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
+    expect(container.textContent).not.toContain("Backend management is unavailable");
+    // The page stays on the ready home surface.
+    expect(container.textContent).toContain("Team Extensions");
+
+    await unmount();
+  });
+
+  it("flips to the backend-management-unavailable surface when a bootstrap read rejects with the bridge's 503 envelope", async () => {
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/workspaces")) throw managementBridgeError(503, "unreachable", "The backend management surface could not be reached.");
+        return defaultGetJson(url);
+      }
+    }));
+
+    await waitForText(container, "Backend management is unavailable");
+
+    // The surface names the reported state's detail and gates all actions.
+    expect(container.textContent).toContain("could not be reached");
+    expect(container.textContent).not.toContain("Create workspace");
+    expect(container.querySelector(".extension-builder-solution-card")).toBeNull();
+
+    await unmount();
+  });
+
+  it("surfaces a mid-session bridge failure as a tracker error naming the state without flipping the page", async () => {
+    let failSourceControlReads = false;
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      getJson: async url => {
+        if (failSourceControlReads && url.endsWith("/source-control/status")) {
+          throw managementBridgeError(504, "degraded", "The backend management relay timed out.");
+        }
+        return defaultGetJson(url);
+      }
+    }));
+    await waitForText(container, "Team Extensions");
+
+    failSourceControlReads = true;
+    await openSolution(container);
+    await waitForText(container, "Backend management is degraded: The backend management relay timed out.");
+
+    // A mid-session failure is a tracker error inside the workspace — the page does not flip to unavailable.
+    expect(container.textContent).not.toContain("Backend management is unavailable");
+    expect(container.querySelector(".extension-builder-solution-card")).toBeNull(); // still inside the workspace
 
     await unmount();
   });
@@ -193,7 +263,7 @@ describe("extension builder page", () => {
     await flushPromises();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloWorld.cs",
+      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloWorld.cs",
       expect.objectContaining({ method: "PUT" })
     );
 
@@ -242,13 +312,13 @@ describe("extension builder page", () => {
     await clickButton(container, "New extension");
     await waitForText(container, "Created extension Acme Orders.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces", { displayName: "Acme Orders" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces", { displayName: "Acme Orders" });
     expect(postJson).toHaveBeenCalledWith(
-      "/_elsa/extension-builder/workspaces/ws-managed/working-copies/select",
+      "/_elsa/studio/backend-management/extension-builder/workspaces/ws-managed/working-copies/select",
       expect.objectContaining({ allowProtectedBranchEdit: false })
     );
     expect(postJson).toHaveBeenCalledWith(
-      "/_elsa/extension-builder/workspaces/ws-managed/projects",
+      "/_elsa/studio/backend-management/extension-builder/workspaces/ws-managed/projects",
       expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" })
     );
 
@@ -375,7 +445,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Attach server-local");
     await waitForText(container, "Server Extensions");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/repositories/server-local", {
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/server-local", {
       path: serverPath,
       displayName: "Server Extensions"
     });
@@ -422,7 +492,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Clone from Git");
     await waitForText(container, "Cloned Extensions");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/repositories/clone", {
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/clone", {
       repositoryUrl,
       displayName: "Cloned Extensions"
     });
@@ -457,7 +527,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Create managed repo");
     await waitForText(container, "Created managed repository Managed Repository.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces", { displayName: "Managed Repository" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces", { displayName: "Managed Repository" });
     const activeRepository = container.querySelector(".extension-builder-solution-card.active");
     expect(activeRepository?.textContent).toContain("Managed Repository");
     expect(activeRepository?.textContent).toContain("main · not connected");
@@ -471,7 +541,7 @@ describe("extension builder page", () => {
     const postJson = vi.fn(async (url: string, body: unknown) => {
       if (url.endsWith("/working-copies/select")) {
         opened = true;
-        expect(url).toBe("/_elsa/extension-builder/workspaces/ws-1/working-copies/select");
+        expect(url).toBe("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/working-copies/select");
         expect(body).toEqual({
           sessionId: expect.any(String),
           branchName: "feature/session-work",
@@ -495,7 +565,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Open working branch");
     await waitForText(container, "Opened working branch feature/session-work.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/working-copies/select", expect.objectContaining({
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/working-copies/select", expect.objectContaining({
       branchName: "feature/session-work",
       allowProtectedBranchEdit: false
     }));
@@ -553,7 +623,7 @@ describe("extension builder page", () => {
     await clickExactButton(container, "Apply");
     await waitForText(container, "Applied C# class.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
     // The generated file opens in the editor (full path shown in the editor status bar).
     expect(container.querySelector(".extension-builder-editor-status")?.textContent).toContain("src/Generated/GeneratedActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("GeneratedActivity");
@@ -621,13 +691,13 @@ describe("extension builder page", () => {
     await clickExactButton(container, "Pull");
     await waitForText(container, "Pulled remote changes.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/stage-all", {});
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/push", {});
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/pull", {});
-    expect(getJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage-all", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/push", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {});
+    expect(getJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
 
     await unmount();
   });
@@ -684,7 +754,7 @@ describe("extension builder page", () => {
     await flushPromises();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
+      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
       expect.objectContaining({ method: "PUT" })
     );
 
@@ -764,7 +834,7 @@ describe("extension builder page", () => {
     await flushPromises();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
+      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
       expect.objectContaining({ method: "PUT" })
     );
     await waitForText(container, "Team Extensions");
@@ -816,14 +886,14 @@ describe("extension builder page", () => {
     await clickButton(container, "Save");
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://foundation.example/_elsa/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
+      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
       expect.objectContaining({ method: "PUT" })
     );
 
     await clickButton(container, "Build");
     await flushPromises();
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", { projectId: "proj-1", command: "Build", targetPath: null });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/builds", { projectId: "proj-1", command: "Build", targetPath: null });
     expect(container.textContent).toContain("Build submitted");
     expect(container.textContent).toContain("Succeeded");
 
@@ -831,7 +901,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote build");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
     expect(container.textContent).toContain("is loaded at runtime");
 
     await unmount();
@@ -852,7 +922,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Run command");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/builds", {
       projectId: "proj-1",
       command: "Test",
       targetPath: "src/TeamExtensions.Tests/TeamExtensions.Tests.csproj"
@@ -863,7 +933,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Run command");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/builds", {
       projectId: "proj-1",
       command: "Restore",
       targetPath: null
@@ -896,7 +966,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Run command");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/workspaces/ws-1/builds", {
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/builds", {
       projectId: "proj-1",
       command: "Pack",
       targetPath: "Hello.slnx"
@@ -910,7 +980,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote package");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/artifacts/artifact-a/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/artifacts/artifact-a/promote", {});
 
     await unmount();
   });
@@ -1060,7 +1130,7 @@ describe("extension builder page", () => {
 
     expect(promoteButton?.disabled).toBe(true);
     expect(promoteButton?.title).toContain("stale");
-    expect(postJson).not.toHaveBeenCalledWith("/_elsa/extension-builder/builds/build-1/promote", {});
+    expect(postJson).not.toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
 
     await unmount();
   });
@@ -1097,12 +1167,12 @@ describe("extension builder page", () => {
 
     await clickButton(container, "Retry reconciliation");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {});
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {});
     await waitForText(container, "0.9.0");
 
     await clickButton(container, "Rollback");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" });
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" });
 
     await unmount();
   });
@@ -1200,34 +1270,71 @@ function runningBuild() {
   };
 }
 
-// The Studio-owned bridge route the capability read is routed through (ADR 0037). Mirrors
-// `studioExtensionBuilderCapabilitiesPath` in the SDK.
-const CAPABILITIES_BRIDGE_PATH = "/_elsa/studio/backend-management/extension-builder/capabilities";
+// The Studio-owned bridge route group every Extension Builder call is routed through (ADR 0037, #256). Mirrors
+// `studioExtensionBuilderBridgeRoot` / `studioExtensionBuilderCapabilitiesPath` in the SDK.
+const BRIDGE_ROOT = "/_elsa/studio/backend-management/extension-builder";
+const CAPABILITIES_BRIDGE_PATH = `${BRIDGE_ROOT}/capabilities`;
+
+// Backend-context calls recorded by the failing stub. The afterEach guard asserts this stays empty: after
+// ADR 0037/#256 the browser must never talk to the backend host-control surface.
+const backendCalls: string[] = [];
+
+function failingBackendHttp() {
+  const reject = (verb: string) => vi.fn(async (url: string) => {
+    backendCalls.push(`${verb} ${url}`);
+    throw new Error(`Unexpected backend-context ${verb} ${url}: Extension Builder must use the Studio management bridge (ADR 0037, #256).`);
+  });
+  return {
+    requestJson: reject("REQUEST"),
+    getJson: reject("GET"),
+    postJson: reject("POST"),
+    putJson: reject("PUT"),
+    deleteJson: reject("DELETE"),
+    postForm: reject("POST-FORM")
+  };
+}
+
+function hostHttpMock(api: ElsaStudioModuleApi) {
+  return api.host.http as unknown as Record<"getJson" | "postJson" | "putJson" | "deleteJson", ReturnType<typeof vi.fn>>;
+}
+
+// The bridge's infrastructure error envelope (503, or 504 for a relay timeout): camelCase body with a top-level
+// detail and a management status block, thrown as the StudioHttpError the sdk client would produce.
+function managementBridgeError(status: 503 | 504, kind: string, detail: string) {
+  return new StudioHttpError(status, detail, null, {
+    detail,
+    management: { status: kind, detail, backendBaseUrl: null, checkedAt: new Date().toISOString() }
+  });
+}
 
 function stubApi(options?: {
   getJson?: (url: string) => Promise<unknown>;
   postJson?: (url: string, body: unknown) => Promise<unknown>;
+  putJson?: (url: string, body: unknown) => Promise<unknown>;
+  deleteJson?: (url: string) => Promise<unknown>;
   hostGetJson?: (url: string) => Promise<unknown>;
 }): ElsaStudioModuleApi {
-  // The capability read now goes through the Studio management bridge on the Studio origin (api.host); every other
-  // Extension Builder call stays on api.backend. Default the host to an "available" bridge result carrying trusted
-  // capabilities so the existing suite (which exercises the full workbench) still boots.
-  const hostGetJson = options?.hostGetJson ?? defaultHostGetJson;
+  // Every Extension Builder call goes through the Studio management bridge on the Studio origin (api.host): the
+  // capabilities probe (hostGetJson override) and all workspace-surface reads (getJson override) share the host
+  // getJson, dispatched on the capabilities path. The backend context's http verbs FAIL any test that calls them —
+  // the browser never talks to the backend host-control surface (ADR 0037, #256).
+  const capabilitiesGetJson = options?.hostGetJson ?? defaultHostGetJson;
+  const workspaceGetJson = options?.getJson ?? defaultGetJson;
   return {
     host: {
       baseUrl: "https://studio.example/",
       hostVersion: "1.0.0",
       sdkVersion: "1.0.0",
       http: {
-        getJson: hostGetJson
+        getJson: vi.fn(async (url: string) => url.endsWith(CAPABILITIES_BRIDGE_PATH) ? capabilitiesGetJson(url) : workspaceGetJson(url)),
+        postJson: vi.fn(options?.postJson ?? defaultPostJson),
+        putJson: vi.fn(options?.putJson ?? (async () => ({}))),
+        deleteJson: vi.fn(options?.deleteJson ?? (async () => ({})))
       }
     },
     backend: {
       baseUrl: "https://foundation.example/",
-      http: {
-        getJson: options?.getJson ?? defaultGetJson,
-        postJson: options?.postJson ?? defaultPostJson
-      }
+      http: failingBackendHttp()
     },
     dialogs: {
       confirm: vi.fn(async () => true),
@@ -1267,7 +1374,6 @@ function defaultBridgeDetail(status: string) {
 }
 
 async function defaultGetJson(url: string): Promise<unknown> {
-  if (url.endsWith("/capabilities")) return trustedCapabilities();
   if (url.endsWith("/repositories")) return [repositorySummary()];
   if (url.endsWith("/workspaces")) return [workspaceWithProject()];
   if (url.endsWith("/templates")) return templates();
@@ -1331,11 +1437,13 @@ function mockFetch() {
 }
 
 async function clickButton(container: Element, text: string) {
-  const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
-    .filter(candidate => !candidate.disabled && (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label")?.includes(text)));
-  const button = buttons.find(candidate => candidate.getAttribute("role") !== "tab") ?? buttons[0];
-  if (!button) throw new Error(`Could not find button containing '${text}'.`);
-  flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  const findButton = () => {
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .filter(candidate => !candidate.disabled && (candidate.textContent?.includes(text) || candidate.getAttribute("aria-label")?.includes(text)));
+    return buttons.find(candidate => candidate.getAttribute("role") !== "tab") ?? buttons[0];
+  };
+  await waitFor(() => findButton() !== undefined, `Could not find button containing '${text}'.`);
+  flushSync(() => findButton()!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await flushPromises();
 }
 
@@ -1388,10 +1496,10 @@ async function setChecked(element: HTMLInputElement, value: boolean) {
 }
 
 async function clickTab(container: Element, text: string) {
-  const button = Array.from(container.querySelectorAll<HTMLButtonElement>("[role='tab']"))
+  const findTab = () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role='tab']"))
     .find(candidate => candidate.textContent?.includes(text));
-  if (!button) throw new Error(`Could not find tab containing '${text}'.`);
-  flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await waitFor(() => findTab() !== undefined, `Could not find tab containing '${text}'.`);
+  flushSync(() => findTab()!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   await flushPromises();
 }
 

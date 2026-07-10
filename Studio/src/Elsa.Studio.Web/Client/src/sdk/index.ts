@@ -123,6 +123,24 @@ export interface StudioExtensionBuilderCapabilitiesResult {
 export const studioExtensionBuilderCapabilitiesPath = "/_elsa/studio/backend-management/extension-builder/capabilities";
 
 /**
+ * The Studio-owned bridge route group the browser reaches every backend Extension Builder endpoint through
+ * (ADR 0037, #256). Each backend route suffix is preserved verbatim under this root — same methods, query params, and
+ * payload bodies — with Studio attaching the server-side management key on the Studio→backend relay.
+ */
+export const studioExtensionBuilderBridgeRoot = "/_elsa/studio/backend-management/extension-builder";
+
+/**
+ * The camelCase error body the Studio management bridge returns for infrastructure failures: 503, or 504 for a relay
+ * timeout — never for backend domain logic (400/404/409 bodies relay verbatim). `management` carries the bridge's
+ * backend-management status (unconfigured/unauthorized/unreachable/degraded) when the failure could be attributed,
+ * `null` otherwise.
+ */
+export interface StudioManagementBridgeErrorBody {
+  detail: string;
+  management: StudioBackendManagementStatus | null;
+}
+
+/**
  * The backend host registry as surfaced by the Studio management bridge (#246, ADR 0037). The browser reads this from
  * the Studio origin (`api.host`) with only its normal credentials; Studio attaches the server-side management key on
  * the Studio→backend call. The envelope carries the same explicit backend-management `status` as the status endpoint,
@@ -141,13 +159,21 @@ export interface StudioBackendManagementRegistryEnvelope<TRegistry = unknown> {
 /** The Studio-owned bridge route the browser reads the backend host registry from (served by the Studio host). */
 export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-management/registry";
 
+/**
+ * Per-request options for the Studio http client. `timeoutMs` overrides the endpoint-wide request timeout for a single
+ * call (e.g. long-running management relays); everything else is standard fetch `RequestInit`.
+ */
+export interface StudioRequestInit extends RequestInit {
+  timeoutMs?: number;
+}
+
 export interface StudioHttpClient {
-  requestJson<T>(url: string, init?: RequestInit): Promise<T>;
-  getJson<T>(url: string, init?: RequestInit): Promise<T>;
-  postJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
-  putJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
-  deleteJson<T>(url: string, init?: RequestInit): Promise<T>;
-  postForm<T>(url: string, body: FormData, init?: RequestInit): Promise<T>;
+  requestJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
+  getJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
+  postJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
+  putJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
+  deleteJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
+  postForm<T>(url: string, body: FormData, init?: StudioRequestInit): Promise<T>;
 }
 
 export interface StudioEndpointContext {
@@ -1258,16 +1284,16 @@ export interface StudioHttpClientOptions {
 export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: HeadersInit | StudioHttpClientOptions): StudioHttpClient {
   const options = normalizeHttpClientOptions(defaultHeadersOrOptions);
   const { defaultHeaders } = options;
-  const send = <T>(url: string, init?: RequestInit) => requestJson<T>(baseUrl, url, init, options);
+  const send = <T>(url: string, init?: StudioRequestInit) => requestJson<T>(baseUrl, url, init, options);
 
   return {
-    requestJson<T>(url: string, init?: RequestInit) {
+    requestJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
-    async getJson<T>(url: string, init?: RequestInit) {
+    async getJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },
-    async postJson<T>(url: string, body: unknown, init?: RequestInit) {
+    async postJson<T>(url: string, body: unknown, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, {
         ...init,
         method: "POST",
@@ -1275,7 +1301,7 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
         body: JSON.stringify(body)
       }));
     },
-    async putJson<T>(url: string, body: unknown, init?: RequestInit) {
+    async putJson<T>(url: string, body: unknown, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, {
         ...init,
         method: "PUT",
@@ -1283,13 +1309,13 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
         body: JSON.stringify(body)
       }));
     },
-    async deleteJson<T>(url: string, init?: RequestInit) {
+    async deleteJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept({
         ...init,
         method: "DELETE"
       })));
     },
-    async postForm<T>(url: string, body: FormData, init?: RequestInit) {
+    async postForm<T>(url: string, body: FormData, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept({
         ...init,
         method: "POST",
@@ -1315,7 +1341,7 @@ function isHttpClientOptions(value: HeadersInit | StudioHttpClientOptions | unde
     && ("fetch" in value || "applyTimeout" in value || "defaultHeaders" in value);
 }
 
-export function withDefaultHeaders(defaultHeaders: HeadersInit | undefined, init: RequestInit = {}): RequestInit {
+export function withDefaultHeaders(defaultHeaders: HeadersInit | undefined, init: StudioRequestInit = {}): StudioRequestInit {
   if (!defaultHeaders)
     return init;
 
@@ -1331,7 +1357,7 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
   return headers;
 }
 
-async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit, options: StudioHttpClientOptions = {}): Promise<T> {
+async function requestJson<T>(baseUrl: string, url: string, init?: StudioRequestInit, options: StudioHttpClientOptions = {}): Promise<T> {
   const requestUrl = resolveStudioUrl(baseUrl, url);
   const request = options.fetch ?? fetch;
   const response = options.applyTimeout === false
@@ -1341,9 +1367,10 @@ async function requestJson<T>(baseUrl: string, url: string, init?: RequestInit, 
   return parseJsonResponse<T>(requestUrl, response);
 }
 
-async function fetchWithTimeout(request: typeof fetch, requestUrl: string, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(request: typeof fetch, requestUrl: string, init?: StudioRequestInit): Promise<Response> {
+  const timeoutMs = init?.timeoutMs ?? requestTimeoutMs;
   const timeout = new AbortController();
-  const timeoutId = globalThis.setTimeout(() => timeout.abort(), requestTimeoutMs);
+  const timeoutId = globalThis.setTimeout(() => timeout.abort(), timeoutMs);
 
   try {
     return await request(requestUrl, {
@@ -1352,7 +1379,7 @@ async function fetchWithTimeout(request: typeof fetch, requestUrl: string, init?
     });
   } catch (error) {
     if (timeout.signal.aborted && !init?.signal?.aborted) {
-      throw new Error(`Request to ${requestUrl} timed out after ${requestTimeoutMs / 1000} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`);
+      throw new Error(`Request to ${requestUrl} timed out after ${timeoutMs / 1000} seconds. Check Studio:BackendBaseUrl and make sure the backend API is responding.`);
     }
 
     throw error;
@@ -1519,7 +1546,7 @@ function resolveStudioUrl(baseUrl: string, url: string) {
   return new URL(url, baseUrl).toString();
 }
 
-function withJsonAccept(init?: RequestInit): RequestInit | undefined {
+function withJsonAccept(init?: StudioRequestInit): StudioRequestInit | undefined {
   const headers = new Headers(init?.headers);
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");

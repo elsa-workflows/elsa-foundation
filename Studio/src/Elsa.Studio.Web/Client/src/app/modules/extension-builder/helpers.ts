@@ -1,17 +1,32 @@
 import type { StudioCodeDiagnostic, StudioCodeDiagnosticSeverity, StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import type { StudioStatusTone } from "../../ui";
-import type {
-  BuildDiagnostic,
-  BuildResult,
-  ExtensionProject,
-  ExtensionRuntimeStatus,
-  ExtensionTemplate,
-  ExtensionTemplateParameter,
-  ExtensionWorkspace,
-  PackagePromotionResult,
-  RepositoryFileSummary
+import { isPermissionDenied } from "../../hostControlPermissions";
+import {
+  readManagementBridgeFailure,
+  type BuildDiagnostic,
+  type BuildResult,
+  type ExtensionProject,
+  type ExtensionRuntimeStatus,
+  type ExtensionTemplate,
+  type ExtensionTemplateParameter,
+  type ExtensionWorkspace,
+  type PackagePromotionResult,
+  type RepositoryFileSummary
 } from "../extensionBuilderApi";
+import { getErrorMessage } from "../moduleManagementApi";
 import type { EditorTab, ProjectDraft, TemplateApplicationDraft } from "./types";
+
+// Maps a thrown Extension Builder error to a user-facing message: a Studio-management-bridge infrastructure failure
+// (503/504 envelope) names the backend-management state, a Studio 403 names the missing host-control permission, and
+// anything else falls through to the generic error message the module already used.
+export function describeExtensionBuilderError(error: unknown): string {
+  const bridgeFailure = readManagementBridgeFailure(error);
+  if (bridgeFailure) return `Backend management is ${bridgeFailure.kind}: ${bridgeFailure.detail}`;
+  if (isPermissionDenied(error)) {
+    return "You do not have permission to perform this Extension Builder action. This requires the extension-builder.read permission for reads and extension-builder.manage for changes.";
+  }
+  return getErrorMessage(error);
+}
 
 export function patchProject(workspaces: ExtensionWorkspace[], workspaceId: string, project: ExtensionProject) {
   return workspaces.map(workspace => workspace.id === workspaceId

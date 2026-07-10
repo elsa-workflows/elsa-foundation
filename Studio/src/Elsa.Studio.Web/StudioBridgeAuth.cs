@@ -30,7 +30,8 @@ namespace Elsa.Studio.Web;
 /// (#249, ADR 0037): the backend session response already lists the user's permissions, so the introspection reads them
 /// and projects them onto the ticket as <c>elsa.identity.permission</c> claims. Named permission policies
 /// (<see cref="ModuleManagementReadPolicyName"/>, <see cref="ModuleManagementManagePolicyName"/>,
-/// <see cref="ExtensionBuilderReadPolicyName"/>) then gate the individual surfaces. A signed-in user who lacks the
+/// <see cref="ExtensionBuilderReadPolicyName"/>, <see cref="ExtensionBuilderManagePolicyName"/>) then gate the
+/// individual surfaces. A signed-in user who lacks the
 /// required permission is <b>forbidden (403)</b> — distinct from an unauthenticated <b>401</b> and from the bridge's
 /// backend-status states (<c>unconfigured</c>/<c>unreachable</c>/<c>unauthorized</c>).</para>
 ///
@@ -61,6 +62,12 @@ internal static class StudioBridgeAuth
     /// <c>extension-builder.manage</c> satisfies it too (locally expanded).
     /// </summary>
     public const string ExtensionBuilderReadPolicyName = "StudioManagementBridge:ExtensionBuilder.Read";
+
+    /// <summary>
+    /// Policy for the bridge's Extension Builder MUTATION relays (workspace, file, source-control, build, and promote
+    /// operations, #256). Requires <c>extension-builder.manage</c>. A mere authenticated session is not enough.
+    /// </summary>
+    public const string ExtensionBuilderManagePolicyName = "StudioManagementBridge:ExtensionBuilder.Manage";
 
     // Host-control permission keys owned by the backend features (mirrored here from
     // Elsa.Modularity.Api.Authorization.ModuleManagementPermissionKeys and
@@ -131,7 +138,9 @@ internal static class StudioBridgeAuth
             .AddPolicy(ModuleManagementManagePolicyName, policy =>
                 ConfigurePermissionPolicy(policy, authEnabled, ModuleManagementManagePermission))
             .AddPolicy(ExtensionBuilderReadPolicyName, policy =>
-                ConfigurePermissionPolicy(policy, authEnabled, ExtensionBuilderReadPermission, ExtensionBuilderManagePermission));
+                ConfigurePermissionPolicy(policy, authEnabled, ExtensionBuilderReadPermission, ExtensionBuilderManagePermission))
+            .AddPolicy(ExtensionBuilderManagePolicyName, policy =>
+                ConfigurePermissionPolicy(policy, authEnabled, ExtensionBuilderManagePermission));
 
         return services;
     }
