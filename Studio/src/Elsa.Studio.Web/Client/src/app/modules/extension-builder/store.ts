@@ -29,7 +29,6 @@ export interface BuilderCore {
   // The Studio-origin context every Extension Builder call goes through: the browser talks only to the Studio
   // management bridge, never to the backend host-control surface directly. See ADR 0037.
   context: ElsaStudioModuleApi["host"];
-  hostContext: ElsaStudioModuleApi["host"];
   tracker: OperationTracker;
 
   // Session-scoped identifiers.

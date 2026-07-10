@@ -1,7 +1,6 @@
 import {
   getBuild,
   getBuildLog,
-  isManagementRelayTimeout,
   promoteBuild,
   promoteBuildArtifact,
   readManagementBridgeFailure,
@@ -9,7 +8,7 @@ import {
   type BuildArtifact,
   type RepositoryBuildCommand
 } from "../extensionBuilderApi";
-import { describeExtensionBuilderError, isBuildForCurrentRevision, isCurrentSelection, mergeBuildHistory, patchProject } from "./helpers";
+import { describeExtensionBuilderError, isBuildForCurrentRevision, isCurrentSelection, mergeBuildHistory, patchProject, rethrowAfterRelayTimeoutRefresh } from "./helpers";
 import type { BuilderData } from "./useBuilderData";
 import type { BuilderCore } from "./store";
 
@@ -54,9 +53,6 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
       `${command} submitted for ${core.selectedProject.name}.`
     );
     if (build) {
-      // A fresh submit starts a fresh poll: consecutive-failure state from a previous build must not shorten or stop
-      // the new build's poll budget.
-      core.buildPollFailures.current = 0;
       const revisionedBuild = { ...build, revision: build.revision ?? requestedRevision };
       if (revisionedBuild.revision) {
         core.setWorkspaces(current => patchProject(current, core.selectedWorkspace!.id, { ...core.selectedProject!, currentRevision: revisionedBuild.revision }));
@@ -98,16 +94,12 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
     }
   }
 
-  // A 504/unreachable answer on a promote means the Studio→backend relay timed out but the promotion may still have
-  // completed backend-side (the bridge detail says so, and runOperation surfaces it as the tracker error when the
-  // error is rethrown). Best-effort refresh the state the promotion would have changed — the build and the runtime
-  // status — so a mutation that actually landed becomes visible.
+  // On a relay timeout a promote may still have landed backend-side: refresh the build and the runtime status —
+  // the state the promotion would have changed — before the error surfaces.
   function refreshAfterPromoteRelayTimeout(error: unknown, workspaceId: string, projectId: string, buildId: string): never {
-    if (isManagementRelayTimeout(error)) {
-      void refreshBuild(workspaceId, projectId, buildId);
-      void data.refreshRuntimeStatus(workspaceId, projectId);
-    }
-    throw error;
+    return rethrowAfterRelayTimeoutRefresh(error,
+      () => refreshBuild(workspaceId, projectId, buildId),
+      () => data.refreshRuntimeStatus(workspaceId, projectId));
   }
 
   async function handlePromote() {

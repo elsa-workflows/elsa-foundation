@@ -375,6 +375,21 @@ public sealed class StudioExtensionBuilderBridgeTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ForwardsTheCorrectSuffixWhenTheBrowserSendsMixedCaseRoutePath()
+    {
+        // Route matching is case-insensitive but GetEncodedPathAndQuery preserves the browser's casing; the suffix
+        // locator must not silently slice a garbage path when the route-group casing differs.
+        var backend = RecordingBackend.RespondingWith(_ => JsonOk("{}"));
+        var client = await StartBridgeHostAsync(backend);
+
+        var response = await client.GetAsync(StudioExtensionBuilderBridge.RouteGroup.ToUpperInvariant() + "/workspaces/ws-1");
+
+        Assert.True(response.IsSuccessStatusCode);
+        var recorded = Assert.Single(backend.Requests);
+        Assert.Equal("/_elsa/extension-builder/workspaces/ws-1", recorded.PathAndQuery);
+    }
+
+    [Fact]
     public async Task RelaysBuildLogAsPlainTextVerbatim()
     {
         const string log = "restore ok\nbuild ok\n1 warning";

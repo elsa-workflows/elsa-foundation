@@ -6,7 +6,6 @@ import {
   createWorkspace,
   deleteProject,
   deleteWorkspace,
-  isManagementRelayTimeout,
   retryReconciliation,
   rollbackPackage,
   selectWorkingCopy,
@@ -248,13 +247,10 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
     if (firstGeneratedFile) await files.openFile(workspaceId, firstGeneratedFile.path);
   }
 
-  // A 504/unreachable answer on a runtime mutation (retry-reconcile, rollback) means the Studio→backend relay timed
-  // out but the operation may still have completed backend-side (the bridge detail says so, and runOperation surfaces
-  // it as the tracker error when the error is rethrown). Best-effort refresh the runtime status so a mutation that
-  // actually landed becomes visible.
+  // On a relay timeout a runtime mutation (retry-reconcile, rollback) may still have landed backend-side: refresh
+  // the runtime status before the error surfaces.
   function refreshRuntimeAfterRelayTimeout(error: unknown, workspaceId: string, projectId: string): never {
-    if (isManagementRelayTimeout(error)) void data.refreshRuntimeStatus(workspaceId, projectId);
-    throw error;
+    return rethrowAfterRelayTimeoutRefresh(error, () => data.refreshRuntimeStatus(workspaceId, projectId));
   }
 
   async function handleRetryReconciliation() {

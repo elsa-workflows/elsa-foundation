@@ -158,9 +158,17 @@ internal sealed class StudioExtensionBuilderRelayClient(
         // The incoming Studio path suffix IS the backend path suffix (the table's templates are shape-identical), and
         // GetEncodedPathAndQuery preserves segment encoding and relays the query string as-is. The suffix is located by
         // searching for the route group rather than slicing at its length because GetEncodedPathAndQuery prepends any
-        // PathBase the Studio host is mounted under.
+        // PathBase the Studio host is mounted under — case-insensitively, because route matching is case-insensitive
+        // while the encoded path preserves the casing the browser sent.
         var encodedPathAndQuery = context.Request.GetEncodedPathAndQuery();
-        var routeGroupIndex = encodedPathAndQuery.IndexOf(StudioExtensionBuilderBridge.RouteGroup, StringComparison.Ordinal);
+        var routeGroupIndex = encodedPathAndQuery.IndexOf(StudioExtensionBuilderBridge.RouteGroup, StringComparison.OrdinalIgnoreCase);
+        if (routeGroupIndex < 0)
+        {
+            // Unlocatable suffix (e.g. percent-encoded route-group characters): refuse rather than relay a garbage path.
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
         var backendPathAndQuery = string.Concat(
             StudioExtensionBuilderBridge.BackendRoot,
             encodedPathAndQuery.AsSpan(routeGroupIndex + StudioExtensionBuilderBridge.RouteGroup.Length));

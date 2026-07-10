@@ -51,7 +51,6 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   // Every Extension Builder call is routed through the Studio management bridge on the Studio origin (ADR 0037, #256),
   // so the whole module runs on api.host and the browser never talks to the backend host-control surface directly.
   const context = api.host;
-  const hostContext = api.host;
   const tracker = useOperationTracker();
 
   const [state, setState] = useState<BuilderState>("loading");
@@ -109,6 +108,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const saveChain = useRef<Promise<unknown>>(Promise.resolve());
   const lastSavedContent = useRef<Map<string, string>>(new Map());
   const buildPollFailures = useRef(0);
+  const lastPolledBuildId = useRef<string | null>(null);
   const latestEdit = useRef({ autoSave: true, dirty: false, workspaceId: "", path: "", content: "", canEdit: false });
 
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
@@ -148,7 +148,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   }
 
   const core: BuilderCore = {
-    api, context, hostContext, tracker, sessionId, defaultWorkingBranchName,
+    api, context, tracker, sessionId, defaultWorkingBranchName,
     setState, setManagementUnavailable, capabilities, setCapabilities, repositories, setRepositories, workspaces, setWorkspaces,
     templates, setTemplates, projectTemplates, selectedWorkspaceId, setSelectedWorkspaceId, selectedProjectId, setSelectedProjectId,
     setFiles, setSolutions, selectedSolutionPath, setSelectedSolutionPath, editorTabs, setEditorTabs,
@@ -298,6 +298,12 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   useEffect(() => {
     clearBuildPoll();
     if (!selectedWorkspace || !selectedProject || !activeBuild || !isBuildRunning(activeBuild)) return;
+    // A different build (fresh submit or a selection change to another running build) gets a fresh retry budget:
+    // consecutive-failure state belongs to one build's poll, never to the context.
+    if (lastPolledBuildId.current !== activeBuild.id) {
+      lastPolledBuildId.current = activeBuild.id;
+      buildPollFailures.current = 0;
+    }
     pollTimerId.current = window.setTimeout(() => {
       void operations.refreshBuild(selectedWorkspace.id, selectedProject.id, activeBuild.id);
     }, buildPollDelayMs(buildPollFailures.current));
