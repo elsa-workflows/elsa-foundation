@@ -3980,6 +3980,10 @@ button.wf-node-slot-badge:focus-visible {
   gap: 8px;
 }
 
+.wf-inspector-owner-hint {
+  margin-top: -6px;
+}
+
 .wf-slot-row {
   display: flex;
   align-items: stretch;

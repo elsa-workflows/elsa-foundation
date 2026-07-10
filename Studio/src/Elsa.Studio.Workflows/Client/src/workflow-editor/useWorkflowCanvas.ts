@@ -189,9 +189,11 @@ export function useWorkflowCanvas({
         ]
       : layout, []);
 
-  const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition) => {
+  // Returns the created ActivityNode when the drop landed in the current scope's slot (so callers can
+  // chain navigation, e.g. descending into a just-assigned container); null for every other outcome.
+  const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
-      return;
+      return null;
     }
 
     const next = createActivityNode(activity, createNodeId(activity));
@@ -204,20 +206,20 @@ export function useWorkflowCanvas({
         ({ draft: current }) => current ? { ...current, state: { ...current.state, rootActivity: next } } : null,
         next.nodeId
       );
-      return;
+      return null;
     }
 
     if (plan.kind === "leafError") {
       setStatus("");
       setError("The current root activity does not accept child activities. Drop Flowchart or Sequence to wrap it in a composite root.");
-      return;
+      return null;
     }
 
     if (plan.kind === "staleFrames") {
       setStatus("");
       setError("This slot could not be resolved — returning to the workflow root.");
       resetToRoot();
-      return;
+      return null;
     }
 
     if (plan.kind === "wrapRoot") {
@@ -233,7 +235,7 @@ export function useWorkflowCanvas({
       }, draft?.state.rootActivity?.nodeId ?? null);
       setError("");
       setStatus(`Wrapped root in ${getActivityDisplay(activity)}`);
-      return;
+      return null;
     }
 
     // plan.kind === "addToSlot": append (many) or set (single) the dropped activity into the resolved slot.
@@ -261,6 +263,8 @@ export function useWorkflowCanvas({
       setError("");
       setStatus(`Replaced ${plan.slot.label} content`);
     }
+
+    return next;
   }, [catalogByVersion, draft?.state.rootActivity, frames, isUnsupportedDesigner, editDraftAndSelect, resetToRoot, pinLayout, setError, setStatus]);
 
   const createCanvasActivity = useCallback((activity: ActivityCatalogItem, position: XYPosition) => {

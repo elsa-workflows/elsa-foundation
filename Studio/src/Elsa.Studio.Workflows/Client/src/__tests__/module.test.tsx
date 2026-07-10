@@ -556,7 +556,7 @@ describe("workflows module", () => {
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Write Line");
+    await waitForCanvasNode(container, "Write Line");
 
     const activityNodes = container.querySelectorAll(".wf-canvas .wf-node");
     expect(activityNodes).toHaveLength(1);
@@ -622,7 +622,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Write Line");
+    await waitForCanvasNode(container, "Write Line");
     await click(container.querySelector(".wf-canvas .react-flow__node"));
     const writeLineNode = Array.from(container.querySelectorAll(".react-flow__node"))
       .find(node => node.textContent?.includes("Write Line")) ?? null;
@@ -705,7 +705,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Write Lines");
+    await waitForCanvasNode(container, "Write Lines");
     await click(Array.from(container.querySelectorAll(".react-flow__node"))
       .find(node => node.textContent?.includes("Write Lines")) ?? null);
     await waitForText(container, "Lines");
@@ -785,7 +785,7 @@ describe("workflows module", () => {
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Write Lines");
+    await waitForCanvasNode(container, "Write Lines");
     await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Lines")) ?? null);
     await waitForText(container, "Lines");
 
@@ -2479,6 +2479,20 @@ async function waitForText(container: HTMLElement, text: string) {
   }
 
   throw new Error(`Timed out waiting for text: ${text}`);
+}
+
+// Waits for a CANVAS node containing `text`. waitForText alone is not enough before interacting with
+// the canvas: the inspector shows the scope owner as soon as the draft loads, so the activity's name
+// can appear in the panel a flush before React Flow commits the node elements.
+async function waitForCanvasNode(container: HTMLElement, text: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flushPromises();
+    const node = Array.from(container.querySelectorAll(".wf-canvas .wf-node"))
+      .find(candidate => candidate.textContent?.includes(text));
+    if (node) return node;
+  }
+
+  throw new Error(`Timed out waiting for canvas node: ${text}`);
 }
 
 async function waitForTextToDisappear(container: HTMLElement, text: string) {

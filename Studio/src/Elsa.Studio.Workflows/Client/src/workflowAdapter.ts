@@ -172,6 +172,66 @@ export function findNodeScopePath(
   return visit(root, []);
 }
 
+export interface SlotNavigationPlan {
+  frames: ScopeFrame[];
+  selectedNodeId: string | null;
+}
+
+// Computes the frame path for entering `slot` on the activity `ownerNodeId`, given the live `frames`
+// (whose resolved owner is `scopeOwner`). Returns null when the slot has no addressable path (a
+// non-primary slot of the root scope owner — every frame descends INTO a child, so the root's own
+// non-primary slots are unreachable; see findNodeScopePath).
+//
+// Policy:
+// - A single-cardinality slot whose only child is itself a canvas container (primary slot in
+//   flowchart/sequence mode) is entered by descending THROUGH the child: the canvas shows the
+//   container's contents rather than a one-node canvas holding the container. The descent's
+//   intermediate frame gets an empty label (the breadcrumb hides it) so the hop reads as one crumb,
+//   carried by the leaf frame.
+// - A single slot holding a leaf is entered with the leaf pre-selected.
+// - Entering a slot of the CURRENT scope owner retargets the last frame instead of appending one
+//   (an owner is never a child of itself, so an appended frame would not resolve).
+export function planSlotNavigation(
+  frames: ScopeFrame[],
+  scopeOwner: ActivityNode | null,
+  ownerNodeId: string,
+  slot: ChildSlot,
+  label: string,
+  catalog?: ActivityCatalogLookup
+): SlotNavigationPlan | null {
+  const child = slot.cardinality === "single" && slot.activities.length === 1 ? slot.activities[0] : null;
+  const childPrimary = child ? getChildSlots(child, catalog)[0] : undefined;
+  const descendChild = child && childPrimary && childPrimary.mode !== "generic" ? child : null;
+  const ownerIsScopeOwner = scopeOwner?.nodeId === ownerNodeId;
+
+  if (ownerIsScopeOwner && frames.length === 0) {
+    // The root scope owner. Its primary slot IS the root canvas (frames=[]); other slots are not
+    // addressable as frames.
+    if (scopeOwner && getChildSlots(scopeOwner, catalog)[0]?.id !== slot.id) return null;
+    if (descendChild) {
+      return { frames: [{ ownerNodeId: descendChild.nodeId, slotId: childPrimary!.id, label }], selectedNodeId: null };
+    }
+    return { frames: [], selectedNodeId: child?.nodeId ?? null };
+  }
+
+  const base = ownerIsScopeOwner ? frames.slice(0, -1) : frames;
+  if (descendChild) {
+    return {
+      frames: [
+        ...base,
+        { ownerNodeId, slotId: slot.id, label: "" },
+        { ownerNodeId: descendChild.nodeId, slotId: childPrimary!.id, label }
+      ],
+      selectedNodeId: null
+    };
+  }
+
+  return {
+    frames: [...base, { ownerNodeId, slotId: slot.id, label }],
+    selectedNodeId: child?.nodeId ?? null
+  };
+}
+
 // Picks the slot the last frame named on `owner`; falls back to the primary slot when there are no
 // frames (root scope). Returns null when the named slot no longer exists (stale frame after an edit).
 function resolveScopeSlot(owner: ActivityNode, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ChildSlot | null {
