@@ -128,7 +128,7 @@ public sealed class HttpEndpointMiddleware(
         }
 
         var maxBodyBytes = endpointOptions.RequestSizeLimit ?? _options.MaxRequestBodyBytes;
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes, RequestServicesBodyParser(context));
+        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes);
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -137,12 +137,15 @@ public sealed class HttpEndpointMiddleware(
 
         var input = JsonSerializer.SerializeToElement(requestModel);
 
+        // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
+        // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
         var dispatch = new StimulusDispatchRequest(
             stimulusType: HttpEndpointStimulus.StimulusType,
             stimulusHash: stimulusHash,
             input: input,
             mode: StimulusRoutingMode.StartOnly,
-            requestedBy: RequestedBy);
+            requestedBy: RequestedBy,
+            matchedTriggerBindings: claimants);
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).
@@ -227,9 +230,6 @@ public sealed class HttpEndpointMiddleware(
         };
     }
 
-    private static IHttpRequestBodyParser? RequestServicesBodyParser(HttpContext context) =>
-        context.RequestServices?.GetService(typeof(IHttpRequestBodyParser)) as IHttpRequestBodyParser;
-
     /// <summary>
     /// Resolves the endpoint-relative path against the per-shell route table. Returns the matched template
     /// (endpoint-relative, as stored) plus its extracted route values, or (null, empty) when nothing matches.
@@ -267,8 +267,7 @@ public sealed class HttpEndpointMiddleware(
         HttpContext context,
         string endpointPath,
         IReadOnlyDictionary<string, string> routeValues,
-        long maxBodyBytes,
-        IHttpRequestBodyParser? bodyParser)
+        long maxBodyBytes)
     {
         if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
             return null;
@@ -288,20 +287,16 @@ public sealed class HttpEndpointMiddleware(
         var query = context.Request.Query
             .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
 
-        // Parsed content (spec 089 C, FR-011): content-type-dispatched, wire-safe JsonElement; null when the
-        // parser seam is absent (Http feature not composed), the type is unrecognized, or the body is empty.
-        JsonElement? parsedContent = body is not null && bodyParser is not null
-            ? bodyParser.Parse(context.Request.ContentType, body)
-            : null;
-
+        // Parsed content is NOT persisted here (spec 089 efficiency #9): the HttpEndpoint activity derives it from
+        // Body + the Content-Type header via the deterministic IHttpRequestBodyParser seam, so the stimulus payload
+        // carries the raw body exactly once instead of the body plus a re-encoded copy of it.
         return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
             Method: context.Request.Method.ToUpperInvariant(),
             Headers: headers,
             Query: query,
             Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase),
-            ParsedContent: parsedContent);
+            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>

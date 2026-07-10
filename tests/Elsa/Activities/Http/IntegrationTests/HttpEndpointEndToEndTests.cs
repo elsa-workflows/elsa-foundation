@@ -161,7 +161,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task JsonBody_SurfacesParsedContentOnTheRunsDurableResult()
+    public async Task JsonBody_DerivesParsedContentOutput_AndKeepsTheRawBodyOnTheResult()
     {
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse", "parse/orders", ResultOutputName, "POST");
 
@@ -171,15 +171,33 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
-        var captured = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
-        var model = captured.Deserialize<HttpRequestModel>()!;
+        // The Result carries the raw body; ParsedContent is no longer persisted on it (spec 089 efficiency #9).
+        var capturedResult = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, ResultOutputName);
+        var model = capturedResult.Deserialize<HttpRequestModel>()!;
+        Assert.Equal("""{"orderId":7,"customer":"acme"}""", model.Body);
 
-        // The real HttpRequestBodyParser (T005) turned the JSON body into the wire-safe ParsedContent element.
-        Assert.NotNull(model.ParsedContent);
-        var parsed = model.ParsedContent!.Value;
-        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
-        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
-        Assert.Equal("acme", parsed.GetProperty("customer").GetString());
+        // The activity derived ParsedContent from Body via the deterministic parser seam, onto its own output.
+        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        Assert.Equal(JsonValueKind.Object, capturedParsed.ValueKind);
+        Assert.Equal(7, capturedParsed.GetProperty("orderId").GetInt32());
+        Assert.Equal("acme", capturedParsed.GetProperty("customer").GetString());
+    }
+
+    [Fact]
+    public async Task ExplicitJsonNullBody_SurfacesParsedContentAsAJsonNull_DistinctFromNoContent()
+    {
+        // Spec 089 #16: an explicit JSON `null` body must stay distinguishable from "no content". The activity
+        // derives it to a JsonElement of kind Null (a present value), not CLR null.
+        await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse-null", "parse/null", ResultOutputName, "POST");
+
+        var response = await _fixture.Client.PostAsync("/workflows/http/parse/null",
+            new StringContent("null", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
+
+        var capturedParsed = await _fixture.ReadCapturedOutputAsync(workflowExecutionId, HttpEndpointHostFixture.ParsedContentOutputName);
+        Assert.Equal(JsonValueKind.Null, capturedParsed.ValueKind);
     }
 
     [Fact]

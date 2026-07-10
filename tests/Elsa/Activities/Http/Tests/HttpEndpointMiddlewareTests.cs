@@ -6,7 +6,6 @@ using Elsa.Activities.Http.Options;
 using Elsa.Activities.Testing;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
-using Elsa.Http.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -383,41 +382,24 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
-    public async Task ParsedContent_JsonBody_WithRealParser_IsSurfacedOnTheDispatchedInput()
+    public async Task DispatchedInput_CarriesTheRawBody_ButNotAReEncodedParsedContentCopy()
     {
-        // The real HttpRequestBodyParser (spec 089 C, T005) resolved from RequestServices parses an
-        // application/json body into ParsedContent on the serialized stimulus input.
+        // Spec 089 efficiency #9: parsed content is no longer persisted on the wire model — the activity derives
+        // it from Body at execution time — so the durable stimulus payload carries the body exactly once, with no
+        // re-encoded ParsedContent copy doubling it.
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
         var middleware = Middleware(router, store, "orders/webhook");
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"orderId":7}""",
-            contentType: "application/json",
-            services: ServicesWith<IHttpRequestBodyParser>(new HttpRequestBodyParser()));
+            contentType: "application/json");
 
         await middleware.InvokeAsync(context, _ => Task.CompletedTask);
 
         var dispatched = Assert.Single(router.Requests);
-        var parsed = dispatched.Input!.Value.GetProperty("ParsedContent");
-        Assert.Equal(JsonValueKind.Object, parsed.ValueKind);
-        Assert.Equal(7, parsed.GetProperty("orderId").GetInt32());
-    }
-
-    [Fact]
-    public async Task ParsedContent_UnknownContentType_WithRealParser_IsNullOnTheDispatchedInput()
-    {
-        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
-        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
-        var middleware = Middleware(router, store, "orders/webhook");
-        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "0110",
-            contentType: "application/octet-stream",
-            services: ServicesWith<IHttpRequestBodyParser>(new HttpRequestBodyParser()));
-
-        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
-
-        var dispatched = Assert.Single(router.Requests);
-        // Wire-optional: a null ParsedContent serializes to a JSON null (present, kind Null).
-        var parsed = dispatched.Input!.Value.GetProperty("ParsedContent");
-        Assert.Equal(JsonValueKind.Null, parsed.ValueKind);
+        Assert.Equal("""{"orderId":7}""", dispatched.Input!.Value.GetProperty("Body").GetString());
+        Assert.False(
+            dispatched.Input!.Value.TryGetProperty("ParsedContent", out _),
+            "ParsedContent must not be persisted on the stimulus payload.");
     }
 
     [Fact]

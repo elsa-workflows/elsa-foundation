@@ -113,7 +113,10 @@ public sealed class StimulusRouter : IStimulusRouter
         IReadOnlyDictionary<string, string> dispatchMetadata,
         CancellationToken cancellationToken)
     {
-        var bindings = await _triggerBindingStore.ListByStimulusAsync(request.StimulusType, request.StimulusHash, cancellationToken);
+        // Reuse the caller's already-fetched match set when supplied (e.g. the HTTP endpoint middleware fetched it
+        // for its ambiguity guard + per-endpoint options), so a request costs one durable trigger read, not two.
+        var bindings = request.MatchedTriggerBindings
+            ?? await _triggerBindingStore.ListByStimulusAsync(request.StimulusType, request.StimulusHash, cancellationToken);
 
         // Deterministic order so fan-out of starts is stable across providers.
         var ordered = bindings

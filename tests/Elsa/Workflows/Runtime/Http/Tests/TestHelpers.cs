@@ -32,6 +32,12 @@ internal sealed class FakeRouteTable : IRouteTable
 
     public IReadOnlyList<string> RouteTemplates => _routes.Select(r => r.Route).ToArray();
 
+    /// <summary>How many times <see cref="Refresh(IEnumerable{HttpRouteData})"/>/<see cref="Refresh(IEnumerable{string})"/> ran — proves the observer's HTTP-affecting gate.</summary>
+    public int RefreshCount { get; private set; }
+
+    /// <summary>When set, the next <c>Refresh</c> throws (after clearing the flag) — simulates a publish-failing refresh so the retry path can be asserted.</summary>
+    public bool FailNextRefresh { get; set; }
+
     public ValueTask Add(string route) => Add(new HttpRouteData(route));
 
     public ValueTask Add(HttpRouteData httpRouteData)
@@ -54,15 +60,28 @@ internal sealed class FakeRouteTable : IRouteTable
 
     public ValueTask Refresh(IEnumerable<string> routes)
     {
+        ThrowIfFailRequested();
+        RefreshCount++;
         _routes.Clear();
         return AddRange(routes);
     }
 
     public ValueTask Refresh(IEnumerable<HttpRouteData> routes)
     {
+        ThrowIfFailRequested();
+        RefreshCount++;
         _routes.Clear();
         _routes.AddRange(routes);
         return ValueTask.CompletedTask;
+    }
+
+    // A failed refresh leaves the table untouched (the real RouteTable swaps atomically) and does not count.
+    private void ThrowIfFailRequested()
+    {
+        if (!FailNextRefresh)
+            return;
+        FailNextRefresh = false;
+        throw new InvalidOperationException("Simulated route-table refresh failure.");
     }
 
     public async ValueTask RemoveRange(IEnumerable<string> routes)
