@@ -3,7 +3,7 @@ import { AlertTriangle, Repeat2 } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
 import type { ScopedVariableAnalysis } from "../api/workflows";
-import { slotEntryLabel, type ChildSlot } from "../workflowAdapter";
+import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { ScopedVariablesEditor } from "../WorkflowPropertiesView";
@@ -130,7 +130,7 @@ export function InspectorPanel({
         <div className="wf-slot-list">
           <span>Embedded slots</span>
           {selectedSlots.map(slot => {
-            const label = slotEntryLabel(selectedNodeLabel, slot.label);
+            const label = slotCrumbLabel(selectedNodeLabel, slot);
             return (
               <div className="wf-slot-row" key={slot.id}>
                 <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
@@ -162,7 +162,7 @@ export function InspectorPanel({
             setSlotPicker(null);
             const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
             if (!slot) return;
-            onReplaceSlotActivity(selectedNode.nodeId, slot, slotEntryLabel(selectedNodeLabel, slot.label), activity);
+            onReplaceSlotActivity(selectedNode.nodeId, slot, slotCrumbLabel(selectedNodeLabel, slot), activity);
           }}
           onClose={() => setSlotPicker(null)}
         />

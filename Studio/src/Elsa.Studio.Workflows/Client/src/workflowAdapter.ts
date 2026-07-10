@@ -160,13 +160,6 @@ function resolveDescendThroughChild(slot: ChildSlot, catalog?: ActivityCatalogLo
   return childPrimary && childPrimary.mode !== "generic" ? { child, childPrimary } : null;
 }
 
-// The "Owner / Slot" crumb label used everywhere a slot is entered (canvas badges, inspector slot
-// lists, the run viewer, diagnostics navigation), so every route renders the same breadcrumb for the
-// same scope.
-export function slotEntryLabel(ownerLabel: string, slotLabel: string) {
-  return `${ownerLabel} / ${slotLabel}`;
-}
-
 // Finds the scope frames that bring `nodeId` into view, so a diagnostic can navigate the designer to a
 // node anywhere in the tree. `labelFor` supplies the display name used in breadcrumb labels. The frames
 // follow planSlotNavigation's conventions, so the landing breadcrumb reads exactly as if the author had
@@ -220,8 +213,8 @@ export function findNodeScopePath(
         // ("For Each / Body"); a non-primary viewed slot is the retarget case, labeled after the
         // container itself.
         label: viewedSlot.id === getChildSlots(nextHop.child, catalog)[0]?.id
-          ? slotEntryLabel(labelFor(nextHop.parent), nextHop.slot.label)
-          : slotEntryLabel(labelFor(nextHop.child), viewedSlot.label)
+          ? slotCrumbLabel(labelFor(nextHop.parent), nextHop.slot)
+          : slotCrumbLabel(labelFor(nextHop.child), viewedSlot)
       });
       index += 2;
     } else {
@@ -229,7 +222,7 @@ export function findNodeScopePath(
       frames.push({
         ownerNodeId: hop.child.nodeId,
         slotId: viewedSlot.id,
-        label: slotEntryLabel(labelFor(hop.child), viewedSlot.label)
+        label: slotCrumbLabel(labelFor(hop.child), viewedSlot)
       });
       index += 1;
     }
@@ -295,6 +288,12 @@ export function planSlotNavigation(
     frames: [...base, { ownerNodeId, slotId: slot.id, label }],
     selectedNodeId: child?.nodeId ?? null
   };
+}
+
+// Breadcrumb label for entering `slot` on the activity labelled `ownerLabel` — the one format every
+// slot-entry surface (editor canvas badges, inspector slot list, run viewer) shares.
+export function slotCrumbLabel(ownerLabel: string, slot: ChildSlot): string {
+  return `${ownerLabel} / ${slot.label}`;
 }
 
 // Picks the slot the last frame named on `owner`; falls back to the primary slot when there are no
