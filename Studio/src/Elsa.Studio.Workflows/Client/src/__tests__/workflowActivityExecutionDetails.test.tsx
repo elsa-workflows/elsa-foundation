@@ -7,15 +7,20 @@ import { getActivityExecutionInspection } from "../api/workflows";
 import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
+  buildInstanceCanvas,
   formatSnapshotPayload,
   getIncidentStackTrace
 } from "../workflow-editor/WorkflowInstances";
+import type { ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityExecutionInspection,
   ActivityExecutionStateSummary,
-  IncidentStateSummary
+  IncidentStateSummary,
+  WorkflowDefinitionVersionDetails,
+  WorkflowInstanceDetails
 } from "../workflowTypes";
+import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/workflows", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/workflows")>()),
@@ -322,5 +327,76 @@ describe("getIncidentStackTrace", () => {
 describe("formatSnapshotPayload", () => {
   it("formats structured payloads as readable JSON", () => {
     expect(formatSnapshotPayload({ message: "hello", count: 2 })).toBe("{\n  \"message\": \"hello\",\n  \"count\": 2\n}");
+  });
+});
+
+describe("buildInstanceCanvas", () => {
+  // ForEach whose Body holds a Flowchart with two leaves — the editor's descend policy must apply to
+  // run inspection too: entering Body shows the flowchart's contents, not a one-node canvas.
+  const innerFlowchart = flowchartNode("fc-inner", [leafNode("wl-1"), leafNode("wl-2")]);
+  const foreach = forEachNode("fe-1", innerFlowchart);
+  const root = flowchartNode("fc-root", [foreach]);
+  const instanceCatalog = [writeLine, flowchartActivity, forEachActivity];
+
+  const definitionVersion: WorkflowDefinitionVersionDetails = {
+    id: "def-v1",
+    version: "1.0.0",
+    definition: { id: "def-1", name: "Test", description: null, createdAt: "2026-07-09T10:00:00Z", lastModifiedAt: "2026-07-09T10:00:00Z" },
+    state: { rootActivity: root },
+    layout: []
+  };
+
+  const instanceDetails = (activities: ActivityExecutionStateSummary[]): WorkflowInstanceDetails => ({
+    instance: {} as WorkflowInstanceDetails["instance"],
+    activities,
+    incidents: []
+  });
+
+  function enterForEachBody() {
+    const navigated: ScopeFrame[][] = [];
+    const canvas = buildInstanceCanvas(definitionVersion, instanceCatalog, instanceDetails([]), null, [], frames => navigated.push(frames));
+    const feNode = canvas.nodes.find(node => node.id === "fe-1")!;
+    feNode.data.onEnterSlot!(feNode.data.childSlots[0]);
+    expect(navigated).toHaveLength(1);
+    return navigated[0];
+  }
+
+  it("descends through a single flowchart Body child on slot entry", () => {
+    const frames = enterForEachBody();
+
+    // Hidden descent hop through the ForEach, visible leaf frame on the flowchart carrying the crumb.
+    expect(frames.map(frame => ({ ownerNodeId: frame.ownerNodeId, label: frame.label }))).toEqual([
+      { ownerNodeId: "fe-1", label: "" },
+      { ownerNodeId: "fc-inner", label: "For Each / Body" }
+    ]);
+
+    const descended = buildInstanceCanvas(definitionVersion, instanceCatalog, instanceDetails([]), null, frames, () => {});
+    expect(descended.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
+  });
+
+  it("gives an unsupported scope owner no slot navigation, matching the editor's static placeholder", () => {
+    // A leaf activity as root has no structure and no slots, so its designer support is "unsupported"
+    // and the viewer renders the one-node placeholder canvas.
+    const unsupportedVersion: WorkflowDefinitionVersionDetails = { ...definitionVersion, state: { rootActivity: leafNode("leaf-root") } };
+    const navigated: ScopeFrame[][] = [];
+    const canvas = buildInstanceCanvas(unsupportedVersion, instanceCatalog, instanceDetails([]), null, [], frames => navigated.push(frames));
+
+    const placeholder = canvas.nodes.find(node => node.id === "leaf-root")!;
+    // No child slots → the graph renders no badges, so slot entry is unreachable through the UI…
+    expect(placeholder.data.childSlots).toEqual([]);
+    // …and even a forced call plans no navigation (planSlotNavigation returns null for a slot the
+    // owner does not expose), mirroring the editor's disabled badges on unsupported designers.
+    placeholder.data.onEnterSlot!({ id: "bogus", label: "Bogus", property: "bogus", cardinality: "single", mode: "generic", activities: [] });
+    expect(navigated).toEqual([]);
+  });
+
+  it("attaches runtime evidence overlays inside the descended canvas", () => {
+    const frames = enterForEachBody();
+    const execution: ActivityExecutionStateSummary = { ...activity, executableNodeId: "wl-1", authoredActivityId: "wl-1" };
+
+    const descended = buildInstanceCanvas(definitionVersion, instanceCatalog, instanceDetails([execution]), null, frames, () => {});
+    const overlaid = descended.nodes.find(node => node.id === "wl-1")!;
+    expect(overlaid.data.runtime?.status).toBe("Completed");
+    expect(descended.nodes.find(node => node.id === "wl-2")!.data.runtime).toBeUndefined();
   });
 });

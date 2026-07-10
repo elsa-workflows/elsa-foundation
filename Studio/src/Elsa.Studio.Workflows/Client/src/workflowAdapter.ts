@@ -232,6 +232,12 @@ export function planSlotNavigation(
   };
 }
 
+// Breadcrumb label for entering `slot` on the activity labelled `ownerLabel` — the one format every
+// slot-entry surface (editor canvas badges, inspector slot list, run viewer) shares.
+export function slotCrumbLabel(ownerLabel: string, slot: ChildSlot): string {
+  return `${ownerLabel} / ${slot.label}`;
+}
+
 // Picks the slot the last frame named on `owner`; falls back to the primary slot when there are no
 // frames (root scope). Returns null when the named slot no longer exists (stale frame after an edit).
 function resolveScopeSlot(owner: ActivityNode, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ChildSlot | null {

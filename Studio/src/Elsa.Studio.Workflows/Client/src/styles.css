@@ -2375,19 +2375,6 @@
   opacity: 0.6;
 }
 
-.wf-breadcrumb-segment {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-}
-
-.wf-breadcrumb-segment > svg {
-  flex: 0 0 auto;
-  color: var(--wf-muted-text);
-  opacity: 0.6;
-}
-
 .wf-breadcrumb button {
   border: 0;
   border-radius: var(--wf-radius-sm);
