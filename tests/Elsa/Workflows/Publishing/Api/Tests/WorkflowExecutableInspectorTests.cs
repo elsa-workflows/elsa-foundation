@@ -110,6 +110,91 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_ProjectsOnlyFlowchartConnections_WithoutLeakingExecutablePayloads()
+    {
+        const string descriptorSecret = "descriptor-secret-must-not-leak";
+        const string flowchartStructureSecret = "flowchart-structure-secret-must-not-leak";
+        const string nonFlowchartStructureSecret = "non-flowchart-structure-secret-must-not-leak";
+
+        var source = Node("source", "WriteLine");
+        var target = Node("target", "WriteLine");
+        var nonFlowchart = Node(
+            "near-match",
+            "CustomCanvas",
+            structure: new ExecutableActivityStructure(
+                "elsa.flowchart.structure.v2",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    connections = new[]
+                    {
+                        new
+                        {
+                            source = new { nodeId = "must-not-project", port = "Done" },
+                            target = new { nodeId = "must-not-project-either", port = "Done" }
+                        }
+                    },
+                    secret = nonFlowchartStructureSecret
+                })));
+        var root = Node(
+            "root",
+            "Flowchart",
+            [new ExecutableChildSlot("Flowchart.Activities", [source, target, nonFlowchart])],
+            new ExecutableActivityStructure(
+                "elsa.flowchart.structure",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    connections = new[]
+                    {
+                        new
+                        {
+                            source = new { nodeId = "source", port = "Approved" },
+                            target = new { nodeId = "target", port = "Input" },
+                            vertices = new[] { new { x = 120.5, y = 64.25 }, new { x = 240.0, y = 96.0 } }
+                        }
+                    },
+                    nodeMetadata = new { secret = flowchartStructureSecret }
+                })),
+            JsonSerializer.SerializeToElement(new { secret = descriptorSecret }));
+        await SaveExecutableAsync("artifact-a", root);
+
+        var detail = await Inspector.GetAsync("artifact-a");
+
+        var connection = Assert.Single(detail!.RootActivity.Connections!);
+        Assert.Equal("source", connection.Source.NodeId);
+        Assert.Equal("Approved", connection.Source.Port);
+        Assert.Equal("target", connection.Target.NodeId);
+        Assert.Equal("Input", connection.Target.Port);
+        Assert.Collection(
+            connection.Vertices!,
+            vertex =>
+            {
+                Assert.Equal(120.5, vertex.X);
+                Assert.Equal(64.25, vertex.Y);
+            },
+            vertex =>
+            {
+                Assert.Equal(240.0, vertex.X);
+                Assert.Equal(96.0, vertex.Y);
+            });
+
+        var projectedNearMatch = Assert.Single(detail.RootActivity.ChildSlots).Activities[2];
+        Assert.Null(projectedNearMatch.Connections);
+
+        var wireJson = JsonSerializer.SerializeToElement(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var wireRoot = wireJson.GetProperty("rootActivity");
+        Assert.True(wireRoot.TryGetProperty("connections", out _));
+        var wireNearMatch = wireRoot.GetProperty("childSlots")[0].GetProperty("activities")[2];
+        Assert.False(wireNearMatch.TryGetProperty("connections", out _));
+        Assert.False(wireRoot.TryGetProperty("descriptorPayload", out _));
+        Assert.False(wireRoot.TryGetProperty("structure", out _));
+        Assert.DoesNotContain(descriptorSecret, wireJson.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(flowchartStructureSecret, wireJson.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(nonFlowchartStructureSecret, wireJson.GetRawText(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Detail_ChoosesNewestLiveReference_ForLayout_ByDefault()
     {
         await SaveExecutableAsync("artifact-a");
@@ -200,18 +285,24 @@ public sealed class WorkflowExecutableInspectorTests
             DeletedReason: deletedAt is null ? null : "test",
             Layout: layout));
 
-    private static ExecutableNode Node(string id, string activityType, IReadOnlyCollection<ExecutableChildSlot>? childSlots = null) =>
+    private static ExecutableNode Node(
+        string id,
+        string activityType,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        ExecutableActivityStructure? structure = null,
+        JsonElement? descriptorPayload = null) =>
         new(
             executableNodeId: id,
             authoredActivityId: $"authored-{id}",
             activityType: activityType,
             activityTypeVersion: "1.0.0",
             descriptorType: $"{activityType}Descriptor",
-            descriptorPayload: JsonDocument.Parse("{}").RootElement,
+            descriptorPayload: descriptorPayload ?? JsonSerializer.SerializeToElement(new { }),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: childSlots);
+            childSlots: childSlots,
+            structure: structure);
 
     private static ExecutableNode RootWithChild()
     {

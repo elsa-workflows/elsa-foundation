@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Models;
@@ -98,7 +99,31 @@ public sealed record WorkflowExecutableNodeView(
     string ActivityTypeVersion,
     string? StructureKind,
     IReadOnlyList<WorkflowExecutableInputBindingView> InputBindings,
-    IReadOnlyList<WorkflowExecutableChildSlotView> ChildSlots);
+    IReadOnlyList<WorkflowExecutableChildSlotView> ChildSlots)
+{
+    /// <summary>
+    /// Compact canvas connections projected from allowlisted activity structure kinds. The full structure payload
+    /// remains private; nodes without a supported canvas structure omit this property from the wire.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<WorkflowExecutableConnectionView>? Connections { get; init; }
+}
+
+/// <summary>A compact canvas connection containing only endpoints and optional routing vertices.</summary>
+public sealed record WorkflowExecutableConnectionView(
+    WorkflowExecutableConnectionEndpointView Source,
+    WorkflowExecutableConnectionEndpointView Target,
+    IReadOnlyList<WorkflowExecutableConnectionVertexView>? Vertices = null);
+
+/// <summary>A canvas connection endpoint identified by authored node id and an optional port.</summary>
+public sealed record WorkflowExecutableConnectionEndpointView(
+    string NodeId,
+    string? Port);
+
+/// <summary>An optional routing vertex for a canvas connection.</summary>
+public sealed record WorkflowExecutableConnectionVertexView(
+    double X,
+    double Y);
 
 /// <summary>A named child slot holding the ordered child nodes owned by a container activity contract.</summary>
 public sealed record WorkflowExecutableChildSlotView(
