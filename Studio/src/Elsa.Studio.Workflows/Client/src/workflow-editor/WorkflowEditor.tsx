@@ -10,6 +10,7 @@ import {
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
+  slotEntryLabel,
   updateActivity,
   type ChildSlot
 } from "../workflowAdapter";
@@ -368,7 +369,7 @@ export function WorkflowEditor({
   // unsupported-designer placeholder, whose node IS the scope owner and has no navigable frame.
   const slotNavigation = useMemo<WorkflowSlotNavigation | null>(() => {
     if (isUnsupportedDesigner) return null;
-    return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, `${ownerLabel} / ${slot.label}`);
+    return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, slotEntryLabel(ownerLabel, slot.label));
   }, [enterSlotScope, isUnsupportedDesigner]);
 
   const updateSelectedActivity = useCallback((activity: ActivityNode) => {

@@ -12,6 +12,7 @@ import {
   getChildSlots,
   latestActivityExecution,
   resolveScope,
+  slotEntryLabel,
   type ChildSlot,
   type ScopeFrame,
   type WorkflowEdgeData,
@@ -340,7 +341,7 @@ function WorkflowInstanceCanvas({
           onNavigateToScope([...frames, {
             ownerNodeId: node.id,
             slotId: slot.id,
-            label: `${node.data.label} / ${slot.label}`
+            label: slotEntryLabel(node.data.label, slot.label)
           }]);
         }
       }
