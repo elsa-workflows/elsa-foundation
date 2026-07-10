@@ -43,8 +43,8 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
             if (!IsTrigger(node))
                 continue;
 
-            var descriptors = Describe(node);
-            if (descriptors.Count == 0)
+            var result = Describe(node);
+            if (!result.IsRecognized)
                 throw new WorkflowTriggerExtractionException(
                     identity.ArtifactId,
                     node.ExecutableNodeId,
@@ -52,7 +52,9 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                     "but no registered trigger stimulus provider could describe its stimulus. A published trigger that " +
                     "cannot be indexed is refused so it never silently fails to fire.");
 
-            foreach (var descriptor in descriptors)
+            // A recognized node with zero descriptors declares itself a non-start (spec 089 D:
+            // CanStartWorkflow = false) — no bindings, no publish failure. Only an unrecognized node fails.
+            foreach (var descriptor in result.Descriptors)
             {
                 bindings.Add(new WorkflowTriggerBinding(
                     TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId, descriptor.StimulusHash),
@@ -72,16 +74,18 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
         return bindings;
     }
 
-    private IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
+    private ActivityTriggerStimulusResult Describe(ExecutableNode node)
     {
+        // First provider that owns the activity type wins — even if it produces zero descriptors (a recognized
+        // non-start). Only when NO provider recognizes the node do we fall through to NotRecognized (→ publish fails).
         foreach (var provider in _providers)
         {
-            var descriptors = provider.Describe(node);
-            if (descriptors.Count > 0)
-                return descriptors;
+            var result = provider.Describe(node);
+            if (result.IsRecognized)
+                return result;
         }
 
-        return [];
+        return ActivityTriggerStimulusResult.NotRecognized;
     }
 
     private static bool IsTrigger(ExecutableNode node) =>

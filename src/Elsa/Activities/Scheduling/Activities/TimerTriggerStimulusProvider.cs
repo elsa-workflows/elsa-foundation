@@ -13,18 +13,18 @@ public sealed class TimerTriggerStimulusProvider : IActivityTriggerStimulusProvi
 {
     private const string IntervalInput = nameof(Timer.Interval);
 
-    public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
+    public ActivityTriggerStimulusResult Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Timer.ActivityType))
-            return [];
+            return ActivityTriggerStimulusResult.NotRecognized;
 
         var interval = SchedulingNodeInputs.ReadLiteralString(node, IntervalInput)
             ?? throw new ArgumentException(
                 $"Timer trigger node '{node.ExecutableNodeId}' has no literal '{IntervalInput}'. A start trigger's " +
                 "interval must be an authored literal so its stimulus is fixed at publish time.");
 
-        return [TimerStimulus.DescribeTrigger(interval)];
+        return ActivityTriggerStimulusResult.Recognized([TimerStimulus.DescribeTrigger(interval)]);
     }
 }

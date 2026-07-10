@@ -128,10 +128,10 @@ public sealed class WorkflowTriggerIndexerTests
 
     private sealed class FakeProvider(string activityType, string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {
-        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash)]
-                : [];
+                ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash)])
+                : ActivityTriggerStimulusResult.NotRecognized;
     }
 
     private sealed class RecordingObserver : IWorkflowTriggerIndexObserver

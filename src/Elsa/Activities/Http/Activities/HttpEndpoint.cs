@@ -1,34 +1,59 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Http.Activities;
 
 /// <summary>
-/// An HTTP endpoint start trigger (W16, on the W7 <c>IActivityTriggerStimulusProvider</c> seam). Authored with
-/// <see cref="Elsa.Activities.Runtime.Core.Models.ActivityExecutionType.Trigger"/>, it lets an inbound HTTP
-/// request start a workflow with no explicit execution id: the publish-time trigger extractor reads its
-/// <see cref="Path"/> and records a durable trigger binding keyed by the endpoint's stimulus (via
-/// <see cref="HttpEndpointTriggerStimulusProvider"/>), and the request middleware starts a new instance when a
-/// matching request arrives.
+/// An HTTP endpoint activity (W16, on the W7 <c>IActivityTriggerStimulusProvider</c> seam). It plays two roles
+/// depending on where it sits in a workflow and how it is authored:
+/// <list type="bullet">
+/// <item><description><b>Start trigger.</b> With <see cref="CanStartWorkflow"/> = true (the default) the
+/// publish-time trigger extractor reads its <see cref="Path"/> and <see cref="SupportedMethods"/> and records a
+/// durable trigger binding per <c>(template, method)</c> (via <see cref="HttpEndpointTriggerStimulusProvider"/>);
+/// the request middleware starts a new instance when a matching request arrives.</description></item>
+/// <item><description><b>Mid-flow resume point.</b> When the activity runs as a step inside an already-running
+/// workflow (not the node that triggered the run), it suspends and waits for a matching request to resume it
+/// (spec 089 D). Setting <see cref="CanStartWorkflow"/> = false additionally opts the node out of the start role
+/// so it produces no trigger bindings at publish time.</description></item>
+/// </list>
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>Start vs mid-flow decision (D-D1).</b> The run-time branch is chosen from the run's trigger-node identity
+/// (<see cref="IExecutionExpressionState.TriggerNodeId"/>, spec 089 D) and <see cref="CanStartWorkflow"/>:
+/// <list type="table">
+/// <item><term><c>TriggerNodeId</c> == this node's id</term><description><b>Start path</b> — completes with the
+/// live request from the stimulus channel (falls back to the authored route on a foreign/malformed payload).</description></item>
+/// <item><term><c>TriggerNodeId</c> == null (direct run) and <see cref="CanStartWorkflow"/> == true</term>
+/// <description><b>Completes</b> via the authored-route fallback — preserves sub-unit A's direct-run behavior for a
+/// start-capable endpoint executed with no HTTP stimulus.</description></item>
+/// <item><term>every other case (another node triggered the run; a mid-flow node; or
+/// <see cref="CanStartWorkflow"/> == false on any run)</term><description><b>Suspends</b> — creates one bookmark
+/// per supported method and waits for a matching request to resume it.</description></item>
+/// </list>
+/// A <see cref="CanStartWorkflow"/> = false node therefore always suspends, even on a direct run (the spec 089 D
+/// independent test starts a workflow directly and must suspend at the mid-flow endpoint). The default of true is
+/// a deliberate deviation from elsa-core's default-false: it preserves every sub-unit A–C behavior.
+/// </para>
+/// <para>
 /// <b>Response model.</b> This is the <c>async/202</c> baseline: the endpoint replies <c>202 Accepted</c> the
-/// moment it starts the workflow, so no request is waiting when the run executes. A workflow that wants to
-/// record an intended response uses <see cref="WriteHttpResponse"/>, which writes a durable, observable
+/// moment it starts (or resumes) the workflow, so no request is waiting when the run executes. A workflow that
+/// wants to record an intended response uses <see cref="WriteHttpResponse"/>, which writes a durable, observable
 /// artifact. Synchronous request/response correlation is spec 089 sub-unit E (request-affine execution).
 /// </para>
 /// <para>
-/// <b>Result resolution.</b> The middleware serializes the live request as the stimulus input, and the router's
-/// start path carries it on the dedicated stimulus-input channel (spec 089 FR-001/FR-002) — surfaced here via
-/// <see cref="IExecutionExpressionState.StimulusInput"/>. That channel is separate from workflow inputs by
-/// construction, so an author input cannot collide with it and the execute API's inputs bag cannot forge it.
-/// When the execution was not started by an HTTP stimulus (direct run, or a foreign/malformed stimulus
-/// payload), the Result falls back to a model projected from the authored route.
+/// <b>Result resolution.</b> On the start path the middleware serializes the live request as the stimulus input,
+/// and the router's start path carries it on the dedicated stimulus-input channel (spec 089 FR-001/FR-002) —
+/// surfaced via <see cref="IExecutionExpressionState.StimulusInput"/>. On resume it rides
+/// <see cref="IExecutionExpressionState.ResumeInput"/> (spec 089 D). Both channels are separate from workflow
+/// inputs by construction, so an author input cannot collide with them and the execute API's inputs bag cannot
+/// forge them. Without a valid payload the Result falls back to a model projected from the authored route.
 /// </para>
 /// </remarks>
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
@@ -36,27 +61,44 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>
     public const string ActivityType = "Elsa.HttpEndpoint";
 
+    /// <summary>The stable runtime resume-target id for the mid-flow resume callback (spec 089 D).</summary>
+    public const string ResumeTargetId = "resume-target:http-endpoint";
+
+    /// <summary>The bookmark id prefix for a mid-flow suspension (one bookmark per supported method).</summary>
+    private const string BookmarkIdPrefix = "http-endpoint:";
+
+    private static readonly string[] DefaultMethods = ["GET"];
+
     public HttpEndpoint() : base(ActivityType)
     {
     }
 
     /// <summary>
-    /// The endpoint-relative route template that starts the workflow (e.g. <c>orders/{id}</c>). Drives the
-    /// stimulus hash together with each supported method. Required, authored literal.
+    /// The endpoint-relative route template that starts (or resumes) the workflow (e.g. <c>orders/{id}</c>). Drives
+    /// the stimulus hash together with each supported method. Required, authored literal.
     /// </summary>
     public InputArgument<string> Path { get; set; } = null!;
 
     /// <summary>
-    /// The HTTP methods this endpoint accepts (spec 089 B: routing-significant — one trigger binding per
+    /// The HTTP methods this endpoint accepts (spec 089 B: routing-significant — one trigger binding / bookmark per
     /// (template, method)). Authored literal; unauthored defaults to <c>GET</c> (elsa-core parity).
     /// </summary>
     public InputArgument<ICollection<string>>? SupportedMethods { get; set; }
 
     /// <summary>
+    /// Whether this endpoint may start a new workflow. When true (the default) the publish-time extractor records
+    /// trigger bindings and the request middleware can start a fresh instance. When false the node produces NO
+    /// trigger bindings and always runs as a mid-flow suspension point (spec 089 D). Authored literal, resolved at
+    /// publish time like <see cref="Path"/>; a non-literal fails the publish. <b>Non-identity</b>: it never enters
+    /// the endpoint stimulus hash.
+    /// </summary>
+    public InputArgument<bool>? CanStartWorkflow { get; set; }
+
+    /// <summary>
     /// When true, the endpoint requires an authorized caller (spec 089 C: the middleware resolves an
     /// <c>IHttpEndpointAuthorizationHandler</c> and 401s an unauthorized request before dispatch). Authored
     /// literal, resolved at publish time like <see cref="Path"/>; a non-literal fails the publish. Defaults to
-    /// false (unauthored → omitted from binding metadata).
+    /// false (unauthored → omitted from binding/bookmark metadata).
     /// </summary>
     public InputArgument<bool>? Authorize { get; set; }
 
@@ -88,30 +130,128 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 
     /// <summary>
     /// The request body parsed by content type into a wire-safe JSON value (spec 089 C, FR-011); null when the
-    /// body was empty, the content type unrecognized, or the run was not started by an HTTP stimulus.
+    /// body was empty, the content type unrecognized, or the run was not started/resumed by an HTTP stimulus.
     /// </summary>
     public OutputArgument<object?>? ParsedContent { get; set; }
 
-    protected override void Execute(IActivityExecutionContext context)
+    /// <summary>
+    /// Runs the start-vs-mid-flow decision (D-D1). On the start path (or a start-capable direct run) it completes
+    /// with the resolved request; otherwise it suspends by creating one bookmark per supported method (D-D2).
+    /// </summary>
+    protected override ValueTask ExecuteAsync(IActivityExecutionContext context)
     {
-        var model = ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context);
+        if (ShouldComplete(context))
+        {
+            CompleteWithRequest(context, ResolveStimulusRequest(context) ?? BuildAuthoredRouteModel(context));
+            return ValueTask.CompletedTask;
+        }
+
+        Suspend(context);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Resume callback (D-D3): a matching request resumed a mid-flow bookmark. The live request rides
+    /// <see cref="IExecutionExpressionState.ResumeInput"/>; validation follows the start path exactly (shared
+    /// helper), and a missing/malformed input falls back to the authored-route model (D-D7). Completing the
+    /// activity is handled by the resume work handler after this returns.
+    /// </summary>
+    [ResumeTarget(ResumeTargetId)]
+    private void OnRequestReceived(IActivityExecutionContext context) =>
+        CompleteWithRequest(context, ResolveResumeRequest(context) ?? BuildAuthoredRouteModel(context));
+
+    /// <summary>
+    /// True when this execution should complete now rather than suspend (D-D1): it is the node that triggered the
+    /// run, or a start-capable node on a direct run (no trigger identity on the run).
+    /// </summary>
+    private bool ShouldComplete(IActivityExecutionContext context)
+    {
+        var triggerNodeId = (context.ExpressionExecutionContext as IExecutionExpressionState)?.TriggerNodeId;
+
+        // This node triggered the run → start path.
+        if (triggerNodeId is not null && context is IRuntimeActivityExecutionContext runtimeContext &&
+            StringComparer.Ordinal.Equals(triggerNodeId, runtimeContext.ExecutableNode.ExecutableNodeId))
+            return true;
+
+        // Direct run (no trigger identity) of a start-capable endpoint → complete via the authored-route fallback.
+        // A CanStartWorkflow = false node always suspends, even on a direct run.
+        return triggerNodeId is null && CanStart(context);
+    }
+
+    private void CompleteWithRequest(IActivityExecutionContext context, HttpRequestModel model)
+    {
         context.Set(Result, model);
         context.Set(RouteData, model.RouteData ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
         context.Set(ParsedContent, (object?)model.ParsedContent);
     }
 
     /// <summary>
-    /// Resolves the live request model from the dedicated stimulus-input channel. Returns null when the input
-    /// is absent (non-HTTP start) or is not a valid request-model payload (a foreign stimulus started this
-    /// artifact, or the payload is malformed) — the caller then uses the authored-route fallback. Validation is
-    /// strict on the identifying members: a JSON object that deserializes without <c>Path</c> and <c>Method</c>
-    /// is not a request model, never a half-populated Result.
+    /// Suspends the workflow by creating one bookmark per supported method (D-D2): <c>bookmarkId =
+    /// "http-endpoint:{activityExecutionId}:{method}"</c>, the shared endpoint stimulus type, a per-method
+    /// <see cref="HttpEndpointStimulus.Hash"/>, no expiry, and the same metadata payload the trigger provider
+    /// stamps on bindings (template + method + endpoint options) — reusing <see cref="HttpEndpointStimulus.Describe"/>
+    /// so the describe/suspend sides never drift.
     /// </summary>
-    private static HttpRequestModel? ResolveStimulusRequest(IActivityExecutionContext context)
+    private void Suspend(IActivityExecutionContext context)
     {
-        if (context.ExpressionExecutionContext is not IExecutionExpressionState { StimulusInput: JsonElement { ValueKind: JsonValueKind.Object } json })
-            return null;
+        var runtimeContext = RequireRuntimeContext(context);
+        var activityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
 
+        var path = context.Get(Path) ?? string.Empty;
+        var methods = context.Get(SupportedMethods) is { Count: > 0 } authored ? authored : DefaultMethods;
+
+        // One descriptor per method carries the per-method hash and the full binding-parity metadata payload.
+        foreach (var descriptor in HttpEndpointStimulus.Describe(path, methods.ToArray(), ReadOptions(context)))
+        {
+            var method = descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey];
+            context.CreateBookmark(new ActivityBookmarkRequest(
+                bookmarkId: $"{BookmarkIdPrefix}{activityExecutionId}:{method}",
+                resumeTargetId: ResumeTargetId,
+                stimulusType: descriptor.StimulusType,
+                stimulusHash: descriptor.StimulusHash,
+                expiresAt: null,
+                metadata: descriptor.Metadata));
+        }
+    }
+
+    /// <summary>Reads the non-identity endpoint options from the activity's inputs for the bookmark metadata.</summary>
+    private HttpEndpointStimulusOptions ReadOptions(IActivityExecutionContext context) =>
+        new(
+            Authorize: Authorize is not null && context.Get(Authorize),
+            Policy: Policy is not null ? context.Get(Policy) : null,
+            RequestTimeout: RequestTimeout is not null ? context.Get(RequestTimeout) : null,
+            RequestSizeLimit: RequestSizeLimit is not null ? context.Get(RequestSizeLimit) : null);
+
+    private bool CanStart(IActivityExecutionContext context) =>
+        CanStartWorkflow is null || context.Get(CanStartWorkflow);
+
+    /// <summary>
+    /// Resolves the live request model from the dedicated stimulus-input channel (start path). Returns null when
+    /// the input is absent (non-HTTP start) or is not a valid request-model payload — the caller then uses the
+    /// authored-route fallback.
+    /// </summary>
+    private static HttpRequestModel? ResolveStimulusRequest(IActivityExecutionContext context) =>
+        context.ExpressionExecutionContext is IExecutionExpressionState { StimulusInput: JsonElement { ValueKind: JsonValueKind.Object } json }
+            ? DeserializeRequest(json)
+            : null;
+
+    /// <summary>
+    /// Resolves the live request model from the resume-input channel (mid-flow resume path, D-D3/D-D7). Applies the
+    /// same validation discipline as the start path; a missing/malformed input yields null (authored-route fallback).
+    /// </summary>
+    private static HttpRequestModel? ResolveResumeRequest(IActivityExecutionContext context) =>
+        context.ExpressionExecutionContext is IExecutionExpressionState { ResumeInput: JsonElement { ValueKind: JsonValueKind.Object } json }
+            ? DeserializeRequest(json)
+            : null;
+
+    /// <summary>
+    /// Deserializes and validates a request-model payload shared by the start and resume paths (DRY). Validation is
+    /// strict on the identifying members: a JSON object that deserializes without <c>Path</c> and <c>Method</c> is
+    /// not a request model, never a half-populated Result. A malformed payload falls back (returns null) rather than
+    /// faulting — the durable value remains inspectable for diagnosis.
+    /// </summary>
+    private static HttpRequestModel? DeserializeRequest(JsonElement json)
+    {
         try
         {
             var model = json.Deserialize<HttpRequestModel>();
@@ -128,8 +268,6 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
         }
         catch (JsonException)
         {
-            // Malformed payload on the stimulus channel: fall back rather than fault. The durable stimulus
-            // value remains inspectable on the instance for diagnosis.
             return null;
         }
     }
@@ -147,5 +285,13 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
             Query: new Dictionary<string, string[]>(),
             Body: null,
             RouteData: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static IRuntimeActivityExecutionContext RequireRuntimeContext(IActivityExecutionContext context)
+    {
+        if (context is IRuntimeActivityExecutionContext runtimeContext)
+            return runtimeContext;
+
+        throw new InvalidOperationException("HttpEndpoint requires an Elsa runtime activity execution context to suspend.");
     }
 }

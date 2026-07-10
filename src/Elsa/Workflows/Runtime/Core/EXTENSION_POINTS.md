@@ -141,7 +141,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 ### `IWorkflowTriggerBindingExtractor` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one extractor derives trigger bindings from a published executable).
 - **Signature:** `Extract(WorkflowExecutable executable)`.
-- **Usage:** walks the pinned executable's node tree, selects compiler-marked start-trigger nodes, and resolves each one's stimulus identity through the registered `IActivityTriggerStimulusProvider` set. A start-trigger node no provider can describe **throws**, failing the publish rather than persisting an unroutable trigger.
+- **Usage:** walks the pinned executable's node tree, selects compiler-marked start-trigger nodes, and resolves each one's stimulus identity through the registered `IActivityTriggerStimulusProvider` set. A start-trigger node **no** provider recognizes (`ActivityTriggerStimulusResult.NotRecognized` from every provider) **throws**, failing the publish rather than persisting an unroutable trigger; a node a provider recognizes but returns **zero** descriptors for (a declared non-start, spec 089 D) yields no bindings without throwing.
 - **Default implementation:** `WorkflowTriggerBindingExtractor`.
 
 ### `IWorkflowTriggerIndexer` *(Core — `Elsa.Workflows.Runtime.Core`)*
@@ -481,8 +481,8 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor (fan-in; one provider per start-trigger activity type, resolved as `IEnumerable<T>` by `IWorkflowTriggerBindingExtractor`).
-- **Signature:** `TriggerStimulusDescriptor? Describe(ExecutableNode node);`
-- **Usage:** at **publish time** the trigger extractor asks each registered provider to describe a node; a provider returns the node's stimulus identity `(stimulusType, stimulusHash, correlationScope?)` when it recognizes the activity type, or `null` ("not mine"). Providers read only the pinned published `ExecutableNode` (its literal input bindings), never a running workflow, so stimulus identity is fixed at publish time. A provider whose trigger carries a non-literal, unresolvable stimulus key **throws**, failing the publish.
+- **Signature:** `ActivityTriggerStimulusResult Describe(ExecutableNode node);`
+- **Usage:** at **publish time** the trigger extractor asks each registered provider to describe a node; a provider returns `ActivityTriggerStimulusResult.Recognized([...])` carrying the node's stimulus identities `(stimulusType, stimulusHash, correlationScope?, metadata)` when it owns the activity type, or `ActivityTriggerStimulusResult.NotRecognized` ("not mine"). A **recognized** result may carry **zero** descriptors when the node declares itself a non-start (spec 089 D: a mid-flow `HttpEndpoint` with `CanStartWorkflow = false`) — that yields no trigger bindings and, crucially, does **not** fail the publish (a bare empty collection could not express this, being indistinguishable from "not mine"). Providers read only the pinned published `ExecutableNode` (its literal input bindings), never a running workflow, so stimulus identity is fixed at publish time. A provider whose trigger carries a non-literal, unresolvable stimulus key **throws**, failing the publish. A start-trigger node that **no** provider recognizes also **throws**.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, MyProvider>())`.
 
 **Known implementations (shipped):**
