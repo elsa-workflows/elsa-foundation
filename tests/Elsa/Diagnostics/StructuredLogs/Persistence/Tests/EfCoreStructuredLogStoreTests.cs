@@ -142,12 +142,35 @@ public sealed class EfCoreStructuredLogStoreTests
 
         await store.CompleteDrainingAsync();
 
-        // Completion applies retention once more, so the durable table holds exactly the retention cap.
+        // In-loop prunes fire once every prune interval and completion prunes any sub-interval tail,
+        // so the durable table holds exactly the retention cap.
         using var db = host.CreateDbContext();
         Assert.Equal(5, db.StructuredLogEntries.Count());
 
         var newest = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 1 });
         Assert.Equal(40L, Assert.Single(newest).Sequence);
+
+        store.Dispose();
+    }
+
+    [Fact]
+    public async Task CompleteDrainingPrunesTailBelowPruneInterval()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        // Six inserts can never reach the prune interval, so only the completion-time prune can enforce the cap.
+        var store = new EfCoreStructuredLogStore(host, Options.Create(new StructuredLogsOptions()), maxRetainedEntries: 5, pruneInterval: 100);
+        store.StartDraining();
+
+        for (var i = 1; i <= 6; i++)
+            store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
+
+        await store.CompleteDrainingAsync();
+
+        using var db = host.CreateDbContext();
+        Assert.Equal(5, db.StructuredLogEntries.Count());
+
+        var newest = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 1 });
+        Assert.Equal(6L, Assert.Single(newest).Sequence);
 
         store.Dispose();
     }
