@@ -21,6 +21,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private const int MaxBatchRetries = 5;
     private const int DefaultPruneInterval = 500;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IDbContextFactory<OpenTelemetryDbContext> _dbContextFactory;
     private readonly IOpenTelemetrySourceRegistry _sourceRegistry;
@@ -77,10 +78,16 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(batch);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // A false TryWrite means the writer was completed (store stopping/stopped): drop the batch without
+        // marking its resources seen. This only covers the completed-writer path — under overflow, DropOldest
+        // accepts the write and silently evicts the oldest queued batch, whose already-marked resources never
+        // persist.
+        if (!_channel.Writer.TryWrite(batch))
+            return ValueTask.CompletedTask;
+
         foreach (var resource in batch.Resources)
             _sourceRegistry.MarkSeen(resource);
 
-        _channel.Writer.TryWrite(batch);
         return ValueTask.CompletedTask;
     }
 
@@ -90,6 +97,28 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             return;
 
         _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+    }
+
+    /// <summary>
+    /// Stops accepting writes, waits for the drain loop to finish attempting persistence of every batch
+    /// already enqueued (bounded retries; a persistently failing batch is dropped), then applies retention
+    /// pruning once more on the same best-effort basis. Awaiting this is a completion signal rather than a
+    /// timing guess. Throws <see cref="InvalidOperationException"/> when draining was never started and
+    /// <see cref="TimeoutException"/> when the loop fails to finish within a generous ceiling.
+    /// </summary>
+    public async Task CompleteDrainingAsync(CancellationToken cancellationToken = default)
+    {
+        if (_drainLoop is not { } drainLoop)
+            throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
+
+        _channel.Writer.TryComplete();
+        await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
+
+        // Apply retention once more so completion implies the capacities hold even when the tail of inserts
+        // never reached the prune interval. This runs here rather than in the drain loop so the Dispose path
+        // (which cancels instead of draining) does no post-completion database work.
+        if (_insertedSincePrune > 0)
+            await PruneWithRetryAsync(cancellationToken);
     }
 
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default)
@@ -391,9 +420,12 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private async Task MaybePruneAsync(int inserted, CancellationToken cancellationToken)
     {
         _insertedSincePrune += inserted;
-        if (_insertedSincePrune < _pruneInterval)
-            return;
+        if (_insertedSincePrune >= _pruneInterval)
+            await PruneWithRetryAsync(cancellationToken);
+    }
 
+    private async Task PruneWithRetryAsync(CancellationToken cancellationToken)
+    {
         for (var attempt = 0; ; attempt++)
         {
             try

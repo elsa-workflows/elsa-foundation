@@ -21,12 +21,13 @@ public sealed class EfCoreOpenTelemetryStoreTests
 
         Assert.Equal(resource.Id, Assert.Single(context.SourceRegistry.List()).Id);
 
-        var persisted = await WaitForConditionAsync(async () =>
-        {
-            var diagnostics = await context.Store.GetDiagnosticsAsync();
-            return diagnostics.TraceCount == 1 && diagnostics.SpanCount == 1 && diagnostics.MetricPointCount == 1 && diagnostics.LogRecordCount == 1;
-        });
-        Assert.True(persisted);
+        await context.Store.CompleteDrainingAsync();
+
+        var diagnostics = await context.Store.GetDiagnosticsAsync();
+        Assert.Equal(1, diagnostics.TraceCount);
+        Assert.Equal(1, diagnostics.SpanCount);
+        Assert.Equal(1, diagnostics.MetricPointCount);
+        Assert.Equal(1, diagnostics.LogRecordCount);
 
         var resources = await context.Store.QueryResourcesAsync(new OpenTelemetryResourceFilter { ServiceName = "api", Take = 10 });
         Assert.Equal(resource.Id, Assert.Single(resources.Items).Id);
@@ -58,8 +59,7 @@ public sealed class EfCoreOpenTelemetryStoreTests
         await context.Store.WriteAsync(new OpenTelemetryBatch([resource], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(1))], [], [], [], []));
         await context.Store.WriteAsync(new OpenTelemetryBatch([], [context.Trace("trace-1", resource.Id, context.Now.AddSeconds(2))], [], [], [], []));
 
-        var persisted = await WaitForConditionAsync(async () => (await context.Store.GetDiagnosticsAsync()).TraceCount == 2);
-        Assert.True(persisted);
+        await context.Store.CompleteDrainingAsync();
 
         var result = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
 
@@ -84,8 +84,7 @@ public sealed class EfCoreOpenTelemetryStoreTests
             [context.Point("point-api", apiInstrument.Id, api.Id), context.Point("point-worker", workerInstrument.Id, worker.Id)],
             [context.Log("log-api", api.Id, "trace-api"), context.Log("log-worker", worker.Id, "trace-worker")]));
 
-        var persisted = await WaitForConditionAsync(async () => (await context.Store.GetDiagnosticsAsync()).MetricPointCount == 2);
-        Assert.True(persisted);
+        await context.Store.CompleteDrainingAsync();
 
         var metrics = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { ServiceName = "api", Take = 10 });
         var logs = await context.Store.QueryLogsAsync(new OpenTelemetryLogFilter { ServiceName = "worker", Take = 10 });
@@ -117,8 +116,7 @@ public sealed class EfCoreOpenTelemetryStoreTests
             [context.Point("point-2", upper.Id, resource.Id)],
             []));
 
-        var persisted = await WaitForConditionAsync(async () => (await context.Store.GetDiagnosticsAsync()).MetricPointCount == 2);
-        Assert.True(persisted);
+        await context.Store.CompleteDrainingAsync();
 
         var result = await context.Store.QueryMetricsAsync(new OpenTelemetryMetricFilter { InstrumentName = "request.count", Take = 10 });
 
@@ -152,36 +150,16 @@ public sealed class EfCoreOpenTelemetryStoreTests
                 [context.Log($"log-{i}", resource.Id, trace.TraceId)]));
         }
 
-        var pruned = await WaitForConditionAsync(async () =>
-        {
-            var diagnostics = await context.Store.GetDiagnosticsAsync();
-            var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
-            return diagnostics.TraceCount == 2 &&
-                   diagnostics.SpanCount == 2 &&
-                   diagnostics.MetricPointCount == 2 &&
-                   diagnostics.LogRecordCount == 2 &&
-                   diagnostics.ResourceCount == 2 &&
-                   traces.Items.Select(x => x.TraceId).SequenceEqual(["trace-5", "trace-6"]);
-        });
+        await context.Store.CompleteDrainingAsync();
 
-        var finalDiagnostics = await context.Store.GetDiagnosticsAsync();
-        var finalTraces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
-        Assert.True(pruned, $"Final counts: resources={finalDiagnostics.ResourceCount}, traces={finalDiagnostics.TraceCount}, spans={finalDiagnostics.SpanCount}, points={finalDiagnostics.MetricPointCount}, logs={finalDiagnostics.LogRecordCount}; traces=[{string.Join(",", finalTraces.Items.Select(x => x.TraceId))}]");
+        var diagnostics = await context.Store.GetDiagnosticsAsync();
+        Assert.Equal(2, diagnostics.ResourceCount);
+        Assert.Equal(2, diagnostics.TraceCount);
+        Assert.Equal(2, diagnostics.SpanCount);
+        Assert.Equal(2, diagnostics.MetricPointCount);
+        Assert.Equal(2, diagnostics.LogRecordCount);
 
         var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
         Assert.Equal(["trace-5", "trace-6"], traces.Items.Select(x => x.TraceId));
-    }
-
-    private static async Task<bool> WaitForConditionAsync(Func<Task<bool>> probe, int timeoutMs = 5000)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (await probe())
-                return true;
-            await Task.Delay(25);
-        }
-
-        return await probe();
     }
 }
