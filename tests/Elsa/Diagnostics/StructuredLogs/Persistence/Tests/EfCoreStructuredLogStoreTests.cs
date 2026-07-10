@@ -2,6 +2,7 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Entities;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
+using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -182,6 +183,15 @@ public sealed class EfCoreStructuredLogStoreTests
         using var store = NewStore(host);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.CompleteDrainingAsync());
+    }
+
+    [Fact]
+    public async Task ShellTerminatorWhenDrainingWasNeverStartedIsNoOp()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        using var store = NewStore(host);
+
+        await new StopStructuredLogDrainingShellTerminator(store).TerminateAsync();
     }
 
     [Fact]

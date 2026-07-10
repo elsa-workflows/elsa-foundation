@@ -12,5 +12,5 @@ public sealed class StopStructuredLogDrainingShellTerminator(EfCoreStructuredLog
 {
     /// <inheritdoc />
     public Task TerminateAsync(CancellationToken cancellationToken = default) =>
-        store.CompleteDrainingAsync(cancellationToken);
+        store.CompleteDrainingIfStartedAsync(cancellationToken);
 }

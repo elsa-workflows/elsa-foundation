@@ -110,6 +110,21 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
         if (Volatile.Read(ref _drainLoop) is not { } drainLoop)
             throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
 
+        await CompleteDrainingCoreAsync(drainLoop, cancellationToken);
+    }
+
+    /// <summary>
+    /// Completes draining when the loop was started; otherwise returns successfully. Shell terminators use
+    /// this tolerant path because shutdown can follow a partially failed startup that never reached the
+    /// draining startup task.
+    /// </summary>
+    public Task CompleteDrainingIfStartedAsync(CancellationToken cancellationToken = default) =>
+        Volatile.Read(ref _drainLoop) is { } drainLoop
+            ? CompleteDrainingCoreAsync(drainLoop, cancellationToken)
+            : Task.CompletedTask;
+
+    private async Task CompleteDrainingCoreAsync(Task drainLoop, CancellationToken cancellationToken)
+    {
         _channel.Writer.TryComplete();
         await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
 

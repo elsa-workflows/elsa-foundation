@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Tasks;
 using Xunit;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.Tests;
@@ -171,6 +172,14 @@ public sealed class EfCoreOpenTelemetryStoreTests
         using var context = new OpenTelemetryPersistenceTestContext(startDraining: false);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => context.Store.CompleteDrainingAsync());
+    }
+
+    [Fact]
+    public async Task ShellTerminator_WhenDrainingWasNeverStarted_IsNoOp()
+    {
+        using var context = new OpenTelemetryPersistenceTestContext(startDraining: false);
+
+        await new StopOpenTelemetryDrainingShellTerminator(context.Store).TerminateAsync();
     }
 
     [Fact]
