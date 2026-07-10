@@ -72,6 +72,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, stimulusInput: stimulusInput);
 
     /// <summary>
+    /// Runs with a stimulus payload AND the matched trigger's node id on the start command's dedicated channels
+    /// (spec 089 A/D), mirroring how the stimulus router's start path delivers the payload and the trigger-node
+    /// identity for a trigger-started run. Lets an activity that plays both start-trigger and mid-flow roles
+    /// (e.g. <c>HttpEndpoint</c>) tell whether it is the node that triggered the run.
+    /// </summary>
+    public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, JsonElement stimulusInput, string triggerNodeId) =>
+        RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId);
+
+    /// <summary>
     /// Saves the executable, starts the in-process agent, and drains the scheduler.
     /// </summary>
     /// <param name="allowPendingWorkOnTerminalCompletion">
@@ -84,7 +93,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         WorkflowExecutable executable,
         bool allowPendingWorkOnTerminalCompletion,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
-        JsonElement? stimulusInput = null)
+        JsonElement? stimulusInput = null,
+        string? triggerNodeId = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -102,7 +112,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
@@ -119,6 +129,63 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 throw new InvalidOperationException($"Scheduler did not drain to completion ({pending.Count} work item(s) remain).");
         }
 
+        return new WorkflowExecutionRun(states, workflowState);
+    }
+
+    /// <summary>
+    /// Dispatches a <c>ResumeBookmark</c> command against the same in-process agent and drains it, mirroring how a
+    /// matched stimulus resumes a waiting bookmark. Use after a <see cref="RunAsync"/> that suspended: the executable
+    /// and durable state persist on the shared provider, so start → suspend → resume is a real round-trip. The
+    /// resume input rides the dedicated resume-input channel (spec 089 D).
+    /// </summary>
+    public async Task<WorkflowExecutionRun> ResumeAsync(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string bookmarkId,
+        string activityExecutionId,
+        string executableNodeId,
+        string resumeTargetId,
+        string stimulusType,
+        string stimulusHash,
+        JsonElement? input = null)
+    {
+        var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
+            .GetAgentAsync(NewActivationRequest());
+
+        var payload = new RuntimeResumeBookmarkCommandPayload(
+            pinnedExecutable: pinnedExecutable,
+            bookmarkId: bookmarkId,
+            activityExecutionId: activityExecutionId,
+            executableNodeId: executableNodeId,
+            resumeTargetId: resumeTargetId,
+            stimulusType: stimulusType,
+            stimulusHash: stimulusHash,
+            input: input,
+            reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason);
+
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-resume",
+            WorkflowExecutionId: WorkflowExecutionId,
+            Kind: WorkflowExecutionCommandKind.ResumeBookmark,
+            EnqueuedAt: Now,
+            Payload: JsonSerializer.SerializeToElement(payload),
+            Metadata: new Dictionary<string, string>());
+
+        var envelope = new WorkflowExecutionCommandEnvelope(
+            envelopeId: "envelope-resume",
+            workflowExecutionId: WorkflowExecutionId,
+            command: command,
+            idempotencyKey: $"{WorkflowExecutionId}:resume:{bookmarkId}",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now,
+            sequence: 2,
+            metadata: new Dictionary<string, string>());
+
+        var dispatch = await agent.EnqueueAsync(envelope);
+        if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+            throw new InvalidOperationException($"Resume command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
+
+        var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(WorkflowExecutionId);
+        var workflowState = await _provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(WorkflowExecutionId);
         return new WorkflowExecutionRun(states, workflowState);
     }
 
@@ -189,9 +256,10 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private static WorkflowExecutionCommandEnvelope NewStartEnvelope(
         WorkflowExecutableIdentity pinnedExecutable,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
-        JsonElement? stimulusInput = null)
+        JsonElement? stimulusInput = null,
+        string? triggerNodeId = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput);
+        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId);
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: WorkflowExecutionId,

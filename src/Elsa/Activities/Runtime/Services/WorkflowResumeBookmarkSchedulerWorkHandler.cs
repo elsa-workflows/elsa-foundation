@@ -255,9 +255,19 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
+        var recordedOutputs = context.GetRecordedOutputs();
+        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, recordedOutputs, _timeProvider.GetUtcNow()));
+
+        // Durably persist the resume target's CaptureOnSuccessfulCompletion outputs, mirroring the invoke path: a
+        // resume callback that sets outputs (e.g. the mid-flow HttpEndpoint's Result/RouteData/ParsedContent, spec
+        // 089 D) captures them to durable values, not just inspection snapshots. Folded into the consumption
+        // checkpoint alongside the workflow-scope variable write-back so it commits atomically with the consumption.
+        var durableOutputChanges = ActivityOutputPublisher.BuildDurableOutputChanges(
+            workItem, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId, executableNode, recordedOutputs, _timeProvider.GetUtcNow());
+        var durableValueChanges = workflowVariableWriteBackChanges.Concat(durableOutputChanges).ToArray();
+
         var completedState = CompleteActivity(workItem, resumePayload, state, SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, workflowVariableWriteBackChanges), cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, durableValueChanges), cancellationToken);
     }
 
     private RuntimeSchedulerWorkItem NewCompletionWorkItem(
