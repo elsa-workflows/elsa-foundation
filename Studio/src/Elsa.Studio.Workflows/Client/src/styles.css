@@ -3222,6 +3222,19 @@ button.wf-node-slot-badge:focus-visible {
   color: var(--wf-warning-text);
 }
 
+.wf-runtime-equivalence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--wf-success) 35%, var(--wf-border));
+  border-radius: var(--wf-radius-sm);
+  background: var(--wf-success-soft);
+  color: var(--wf-success);
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 8px;
+}
+
 .wf-runtime-meta {
   display: grid;
   gap: 10px;

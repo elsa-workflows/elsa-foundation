@@ -61,6 +61,21 @@ declare module "@elsa-workflows/studio-sdk" {
     permissions?: string[];
     agentScopes?: string[];
     moduleId?: string;
+    inputSchema?: unknown;
+    execute?(input: Record<string, unknown>): Promise<unknown>;
+  }
+
+  export interface StudioHttpClient {
+    requestJson<T>(url: string, init?: RequestInit): Promise<T>;
+    getJson<T>(url: string): Promise<T>;
+    postJson<T>(url: string, body: unknown): Promise<T>;
+    putJson<T>(url: string, body: unknown): Promise<T>;
+    deleteJson<T>(url: string): Promise<T>;
+  }
+
+  export interface StudioEndpointContext {
+    baseUrl: string;
+    http: StudioHttpClient;
   }
 
   export interface StudioAiProposalRendererProps {
@@ -101,6 +116,7 @@ declare module "@elsa-workflows/studio-sdk" {
   }
 
   export interface ElsaStudioModuleApi {
+    readonly backend: StudioEndpointContext;
     readonly ai: StudioAiContributionApi;
   }
 }

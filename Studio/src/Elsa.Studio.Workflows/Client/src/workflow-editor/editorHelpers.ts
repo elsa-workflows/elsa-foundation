@@ -130,6 +130,23 @@ export function compareExecutablesByPublishedDate(left: WorkflowExecutableSummar
   return getExecutablePublishedTime(right) - getExecutablePublishedTime(left);
 }
 
+// ADR 0040's equivalence signal: artifacts are content-addressed over behavior only, so a draft test run
+// resolving to the same artifact id as a published executable of this definition proves the draft is
+// behaviorally identical to that published version — no diffing needed. Requiring `publishedAt` keeps the
+// claim honest when the executables list ever includes rows whose newest reference is the test run itself.
+export function findPublishedEquivalent(
+  testRunArtifactId: string | null | undefined,
+  executables: WorkflowExecutableSummary[],
+  definitionId: string
+) {
+  if (!testRunArtifactId) return null;
+  return executables.find(executable =>
+    executable.artifactId === testRunArtifactId
+    && executableBelongsToDefinition(executable, definitionId)
+    && !!executable.publishedAt
+  ) ?? null;
+}
+
 function getExecutablePublishedTime(executable: WorkflowExecutableSummary) {
   const value = executable.publishedAt ?? executable.createdAt;
   const time = value ? new Date(value).getTime() : 0;

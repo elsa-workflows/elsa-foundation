@@ -687,6 +687,15 @@ export interface StudioAiToolContribution {
   permissions?: string[];
   agentScopes?: string[];
   moduleId?: string;
+  /** JSON Schema describing the tool's input arguments, surfaced to the agent harness. */
+  inputSchema?: unknown;
+  /**
+   * Client-side executor backing the tool. Modules capture their own authenticated endpoint context
+   * (`api.backend`) in this closure, so every invocation carries the signed-in user's credentials and
+   * the backend's permission gating applies — the tool can never read further than the user could
+   * through the same bridge endpoints (no bridge-key bypass).
+   */
+  execute?(input: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface StudioAiProposalRendererProps {
