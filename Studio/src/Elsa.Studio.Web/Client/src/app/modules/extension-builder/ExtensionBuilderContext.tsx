@@ -31,6 +31,7 @@ import {
   writeAutoSavePreference
 } from "./helpers";
 import { useBuilderData } from "./useBuilderData";
+import { buildPollDelayMs } from "./useBuildOperations";
 import { useBuilderOperations } from "./useBuilderOperations";
 import { useFileEditing } from "./useFileEditing";
 import { useOperationTracker } from "./useOperationTracker";
@@ -50,7 +51,6 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   // Every Extension Builder call is routed through the Studio management bridge on the Studio origin (ADR 0037, #256),
   // so the whole module runs on api.host and the browser never talks to the backend host-control surface directly.
   const context = api.host;
-  const hostContext = api.host;
   const tracker = useOperationTracker();
 
   const [state, setState] = useState<BuilderState>("loading");
@@ -107,6 +107,8 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   const activeFilePathRef = useRef("");
   const saveChain = useRef<Promise<unknown>>(Promise.resolve());
   const lastSavedContent = useRef<Map<string, string>>(new Map());
+  const buildPollFailures = useRef(0);
+  const lastPolledBuildId = useRef<string | null>(null);
   const latestEdit = useRef({ autoSave: true, dirty: false, workspaceId: "", path: "", content: "", canEdit: false });
 
   const selectedWorkspace = workspaces.find(workspace => workspace.id === selectedWorkspaceId) ?? (!selectedWorkspaceId ? workspaces[0] ?? null : null);
@@ -146,7 +148,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
   }
 
   const core: BuilderCore = {
-    api, context, hostContext, tracker, sessionId, defaultWorkingBranchName,
+    api, context, tracker, sessionId, defaultWorkingBranchName,
     setState, setManagementUnavailable, capabilities, setCapabilities, repositories, setRepositories, workspaces, setWorkspaces,
     templates, setTemplates, projectTemplates, selectedWorkspaceId, setSelectedWorkspaceId, selectedProjectId, setSelectedProjectId,
     setFiles, setSolutions, selectedSolutionPath, setSelectedSolutionPath, editorTabs, setEditorTabs,
@@ -159,7 +161,7 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     projectDraft, templateDraft, extensionName, workingBranchName, setWorkingBranchName, allowProtectedBranchEdit,
     newFilePath, setNewFilePath,
     pollTimerId, mounted, projectDetailsRequestId, runtimeStatusRequestId, selectedIds, hydratedSelectionKey,
-    activeFilePathRef, saveChain, lastSavedContent,
+    activeFilePathRef, saveChain, lastSavedContent, buildPollFailures,
     selectedWorkspace, selectedRepository, selectedProject, editorDirty,
     clearBuildPoll
   };
@@ -288,12 +290,23 @@ export function ExtensionBuilderProvider({ api, children }: { api: ElsaStudioMod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inWorkspace, selectedWorkspace?.id, selectedProject?.id, selectedSolutionPath]);
 
+  // Build poll. The happy-path cadence is 900ms; refreshBuild owns the failure handling — after a transient bridge
+  // failure it bumps buildPollFailures and retriggers this effect by cloning activeBuild, so the retry is rescheduled
+  // here with backoff (2s, then 5s) instead of the 900ms cadence. The third consecutive bridge failure — or any domain
+  // error — leaves activeBuild untouched and sets a tracker error, so this effect never reschedules and polling stops
+  // (the manual refresh affordance is the retry).
   useEffect(() => {
     clearBuildPoll();
     if (!selectedWorkspace || !selectedProject || !activeBuild || !isBuildRunning(activeBuild)) return;
+    // A different build (fresh submit or a selection change to another running build) gets a fresh retry budget:
+    // consecutive-failure state belongs to one build's poll, never to the context.
+    if (lastPolledBuildId.current !== activeBuild.id) {
+      lastPolledBuildId.current = activeBuild.id;
+      buildPollFailures.current = 0;
+    }
     pollTimerId.current = window.setTimeout(() => {
       void operations.refreshBuild(selectedWorkspace.id, selectedProject.id, activeBuild.id);
-    }, 900);
+    }, buildPollDelayMs(buildPollFailures.current));
     return () => clearBuildPoll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWorkspace?.id, selectedProject?.id, activeBuild]);

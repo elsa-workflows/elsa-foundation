@@ -3,14 +3,23 @@ import {
   getBuildLog,
   promoteBuild,
   promoteBuildArtifact,
+  readManagementBridgeFailure,
   submitBuild,
   type BuildArtifact,
   type RepositoryBuildCommand
 } from "../extensionBuilderApi";
-import { getErrorMessage } from "../moduleManagementApi";
-import { isBuildForCurrentRevision, isCurrentSelection, mergeBuildHistory, patchProject } from "./helpers";
+import { describeExtensionBuilderError, isBuildForCurrentRevision, isCurrentSelection, mergeBuildHistory, patchProject, rethrowAfterRelayTimeoutRefresh } from "./helpers";
 import type { BuilderData } from "./useBuilderData";
 import type { BuilderCore } from "./store";
+
+// Build-poll cadence: 900ms while polls succeed. After a consecutive bridge failure on the poll the retry backs off —
+// 2s after the first failure, 5s after the second — before the third consecutive failure stops the poll entirely
+// (see refreshBuild). Shared with the poll effect in ExtensionBuilderContext, which owns the timer.
+export function buildPollDelayMs(consecutiveFailures: number) {
+  if (consecutiveFailures >= 2) return 5000;
+  if (consecutiveFailures === 1) return 2000;
+  return 900;
+}
 
 // Build/pack + promotion command slice of the store: submit, poll-driven refresh, and promote of
 // either the primary artifact or a chosen package artifact. Submit runs under the "build" scope and
@@ -63,15 +72,34 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
         getBuildLog(context, workspaceId, projectId, buildId).catch(() => "")
       ]);
       if (!core.mounted.current || !isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) return;
+      core.buildPollFailures.current = 0;
       const artifact = build.artifact ?? null;
-      if (!core.mounted.current || !isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) return;
       const nextBuild = { ...build, revision: build.revision ?? fallbackRevision ?? core.activeBuild?.revision ?? null, artifact };
       core.setActiveBuild(nextBuild);
       core.setBuildHistory(current => mergeBuildHistory(current, nextBuild));
       core.setBuildLog(log);
     } catch (e) {
-      setError(getErrorMessage(e));
+      if (!core.mounted.current || !isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) return;
+      // A bridge infrastructure failure (503/504 envelope) is retried with backoff: bump the consecutive-failure count
+      // and retrigger the poll effect by cloning the active build — the effect reads the count and reschedules at
+      // 2s/5s instead of the 900ms cadence (buildPollDelayMs). The third consecutive bridge failure — or any domain
+      // error the bridge relayed verbatim (e.g. a 404 build-not-found) — stops polling and surfaces a tracker error,
+      // leaving the build rendered as running so the manual refresh affordance is the retry.
+      if (readManagementBridgeFailure(e) && ++core.buildPollFailures.current < 3) {
+        core.setActiveBuild(current => current ? { ...current } : current);
+        return;
+      }
+      core.buildPollFailures.current = 0;
+      setError(describeExtensionBuilderError(e));
     }
+  }
+
+  // On a relay timeout a promote may still have landed backend-side: refresh the build and the runtime status —
+  // the state the promotion would have changed — before the error surfaces.
+  function refreshAfterPromoteRelayTimeout(error: unknown, workspaceId: string, projectId: string, buildId: string): never {
+    return rethrowAfterRelayTimeoutRefresh(error,
+      () => refreshBuild(workspaceId, projectId, buildId),
+      () => data.refreshRuntimeStatus(workspaceId, projectId));
   }
 
   async function handlePromote() {
@@ -83,9 +111,11 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
     }
     const workspaceId = core.selectedWorkspace.id;
     const projectId = core.selectedProject.id;
+    const buildId = core.activeBuild.id;
     const result = await runOperation(
       "promote",
-      () => promoteBuild(context, workspaceId, projectId, core.activeBuild!.id, { buildId: core.activeBuild!.id }),
+      () => promoteBuild(context, workspaceId, projectId, buildId, { buildId })
+        .catch(error => refreshAfterPromoteRelayTimeout(error, workspaceId, projectId, buildId)),
       `Promotion response received for ${latestArtifact.packageId} ${latestArtifact.version}.`
     );
     await applyPromotionResult(result, workspaceId, projectId);
@@ -99,9 +129,11 @@ export function useBuildOperations(core: BuilderCore, data: BuilderData): BuildO
     }
     const workspaceId = core.selectedWorkspace.id;
     const projectId = core.selectedProject.id;
+    const buildId = core.activeBuild.id;
     const result = await runOperation(
       "promote",
-      () => promoteBuildArtifact(context, workspaceId, projectId, core.activeBuild!.id, artifact.id, { buildId: core.activeBuild!.id }),
+      () => promoteBuildArtifact(context, workspaceId, projectId, buildId, artifact.id, { buildId })
+        .catch(error => refreshAfterPromoteRelayTimeout(error, workspaceId, projectId, buildId)),
       `Promotion response received for ${artifact.packageId} ${artifact.version}.`
     );
     await applyPromotionResult(result, workspaceId, projectId);

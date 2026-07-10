@@ -2,6 +2,7 @@ import type { StudioCodeDiagnostic, StudioCodeDiagnosticSeverity, StudioCodeDocu
 import type { StudioStatusTone } from "../../ui";
 import { isPermissionDenied } from "../../hostControlPermissions";
 import {
+  isManagementRelayTimeout,
   readManagementBridgeFailure,
   type BuildDiagnostic,
   type BuildResult,
@@ -26,6 +27,16 @@ export function describeExtensionBuilderError(error: unknown): string {
     return "You do not have permission to perform this Extension Builder action. This requires the extension-builder.read permission for reads and extension-builder.manage for changes.";
   }
   return getErrorMessage(error);
+}
+
+// A 504/unreachable answer on a mutation means the Studio→backend relay timed out but the operation may still have
+// completed backend-side (the bridge detail says so, and runOperation surfaces it as the tracker error when the error
+// is rethrown). Fire the given best-effort refreshes so a mutation that actually landed becomes visible, then rethrow.
+export function rethrowAfterRelayTimeoutRefresh(error: unknown, ...refreshes: Array<() => unknown>): never {
+  if (isManagementRelayTimeout(error)) {
+    for (const refresh of refreshes) void refresh();
+  }
+  throw error;
 }
 
 export function patchProject(workspaces: ExtensionWorkspace[], workspaceId: string, project: ExtensionProject) {

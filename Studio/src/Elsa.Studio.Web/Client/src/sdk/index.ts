@@ -1360,7 +1360,9 @@ function mergeHeaders(defaultHeaders: HeadersInit, requestHeaders?: HeadersInit)
 async function requestJson<T>(baseUrl: string, url: string, init?: StudioRequestInit, options: StudioHttpClientOptions = {}): Promise<T> {
   const requestUrl = resolveStudioUrl(baseUrl, url);
   const request = options.fetch ?? fetch;
-  const response = options.applyTimeout === false
+  // applyTimeout: false (the authenticated client) opts out of the implicit default timeout only; an explicit
+  // per-request timeoutMs is a caller contract and is honored regardless of the client's default-timeout policy.
+  const response = options.applyTimeout === false && init?.timeoutMs === undefined
     ? await request(requestUrl, init)
     : await fetchWithTimeout(request, requestUrl, init);
 

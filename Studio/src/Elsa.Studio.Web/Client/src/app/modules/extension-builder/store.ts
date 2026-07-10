@@ -29,7 +29,6 @@ export interface BuilderCore {
   // The Studio-origin context every Extension Builder call goes through: the browser talks only to the Studio
   // management bridge, never to the backend host-control surface directly. See ADR 0037.
   context: ElsaStudioModuleApi["host"];
-  hostContext: ElsaStudioModuleApi["host"];
   tracker: OperationTracker;
 
   // Session-scoped identifiers.
@@ -113,6 +112,10 @@ export interface BuilderCore {
   activeFilePathRef: MutableRefObject<string>;
   saveChain: MutableRefObject<Promise<unknown>>;
   lastSavedContent: MutableRefObject<Map<string, string>>;
+  // Consecutive bridge failures on the build poll (ADR 0037/#256). refreshBuild bumps it on a bridge-envelope error
+  // and the poll effect backs off (2s, then 5s) instead of the 900ms cadence; the third consecutive failure stops the
+  // poll with a tracker error, and any successful poll (or a fresh build submit) resets it.
+  buildPollFailures: MutableRefObject<number>;
 
   // Derived selections (recomputed each render).
   selectedWorkspace: ExtensionWorkspace | null;

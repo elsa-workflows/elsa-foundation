@@ -42,7 +42,7 @@ export function useBuilderData(core: BuilderCore): BuilderData {
       // origin (api.host), so the browser never carries the backend host management key. The capability read answers
       // with an explicit envelope; when backend management is not usable we render a dedicated unavailable surface and
       // gate actions instead of issuing doomed requests.
-      const management = await getBackendManagementCapabilities(core.hostContext);
+      const management = await getBackendManagementCapabilities(core.context);
       if (management.status !== "available" || !management.capabilities) {
         core.setCapabilities(null);
         core.setManagementUnavailable({ kind: management.status, detail: management.detail });
