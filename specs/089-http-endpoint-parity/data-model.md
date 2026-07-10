@@ -44,9 +44,9 @@ Identity rule: only (template, method) participate in `StimulusHash`; options ri
 
 Reuses `src/Elsa/Http` `RouteTable`/`HttpRouteData`. Content = `http:template` values of all HTTP trigger bindings in the shell (+ mid-flow bookmark templates in D). Rebuilt at shell start (startup task) and on binding change; never persisted.
 
-## BookmarkState (unchanged, D)
+## BookmarkState (as-built, D)
 
-Mid-flow `HttpEndpoint` bookmarks use the existing `BookmarkState` shape with `(StimulusType = http:endpoint, StimulusHash = hash(template, method))`; no schema change.
+Mid-flow `HttpEndpoint` bookmarks use the existing `BookmarkState` shape with no schema change: `StimulusType = HttpEndpointRouting.StimulusType` (`"HttpEndpoint"`), `StimulusHash = HttpEndpointStimulus.Hash(template, method)`, `ExpiresAt = null`. **One bookmark per supported method** (`bookmarkId = "http-endpoint:{activityExecutionId}:{method}"`), each carrying the SAME `Metadata` payload the trigger provider stamps on bindings — `http:template` + `http:method` + the non-identity endpoint options (`http:authorize`/`http:policy`/`http:requestTimeout`/`http:requestSizeLimit`) via `HttpEndpointStimulusOptions.ToMetadata()`. The metadata is what the route-table resolver reads (template) and the middleware reads for options on a resume-only match (D-D5). Expiry is enforced only in the `IGlobalBookmarkStimulusLookup` layer; the raw `IBookmarkStimulusIndex` type scan is unfiltered.
 
 ## HttpResponseInstruction (unchanged, E)
 
