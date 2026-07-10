@@ -3,12 +3,15 @@ using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.Services;
+using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Http.Middleware;
@@ -30,8 +33,24 @@ namespace Elsa.Activities.Http.Middleware;
 /// <b>Async/202.</b> The router's start and resume paths are asynchronous (they enqueue work through the actor
 /// mailbox); the middleware does not wait for the workflow to run. When at least one instance was started OR
 /// resumed it replies <c>202 Accepted</c> with <c>{ started: [...], resumed: [...] }</c> (started/resumed
-/// execution ids); when neither happened it replies <c>404 Not Found</c>. Synchronous request/response
-/// correlation is spec 089 sub-unit E.
+/// execution ids); when neither happened it replies <c>404 Not Found</c>.
+/// </para>
+/// <para>
+/// <b>Sync (spec 089 sub-unit E, E-D5).</b> When the resolved <see cref="MergedHttpEndpointOptions.ResponseMode"/>
+/// is <see cref="ResponseMode.Sync"/> the middleware lets the workflow author the live response in the same
+/// exchange. It populates the request scope's <see cref="SyncHttpResponseSink"/> with the live
+/// <see cref="HttpContext"/> and dispatches with <see cref="WorkflowExecutionCommandDispatchOptions.AmbientServices"/>
+/// = <c>context.RequestServices</c>, so a <see cref="WriteHttpResponse"/> draining inline on the in-process actor
+/// resolves that same sink and writes the response (E-D2). The in-process drain runs on the caller's async flow, so
+/// after <c>RouteAsync</c> returns the write has already happened: if <c>sink.ResponseWritten</c> (or the response
+/// otherwise started) the middleware returns without touching the response (the workflow owns it). Otherwise it
+/// degrades to the same <c>202</c> writer as async mode — ONE degrade path covering suspend-before-response, a run
+/// that authored no <see cref="WriteHttpResponse"/>, and a non-local (<see cref="BookmarkResumeDispatchStatus"/>
+/// deferred) dispatch whose ambient services never crossed the transport — with no locality inspection. The 404
+/// branch (zero starts AND zero dispatched resumes) still runs FIRST, before the sink is consulted. Sink resolution
+/// is null-safe: an absent registration degrades to async behaviour rather than throwing. The per-endpoint timeout
+/// (408) and fault mapping (400/500) already enclose the dispatch and now bound the synchronous wait. Async mode is
+/// bit-identical to the pre-E behaviour — no sink populate, no ambient services.
 /// </para>
 /// <para>
 /// <b>Live input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body) is serialized
@@ -194,6 +213,15 @@ public sealed class HttpEndpointMiddleware(
 
         var input = JsonSerializer.SerializeToElement(requestModel);
 
+        // Sync mode (E-D5): let the workflow author the live response in this exchange. Populate the request scope's
+        // sink with the live HttpContext and dispatch with the request services as ambient services, so a
+        // WriteHttpResponse draining inline resolves this same sink and writes the response (E-D2). Resolving the
+        // sink is null-safe: an absent registration (or a non-sync request) leaves it null and the path degrades to
+        // async behaviour. Async mode carries no sink and no ambient services — bit-identical to the pre-E baseline.
+        var sync = endpointOptions.ResponseMode == ResponseMode.Sync;
+        var responseSink = sync ? context.RequestServices?.GetService<SyncHttpResponseSink>() : null;
+        responseSink?.Populate(context);
+
         // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
         // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
         // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
@@ -205,7 +233,8 @@ public sealed class HttpEndpointMiddleware(
             input: input,
             mode: StimulusRoutingMode.StartAndResume,
             requestedBy: RequestedBy,
-            matchedTriggerBindings: claimants);
+            matchedTriggerBindings: claimants,
+            dispatchOptions: sync ? new WorkflowExecutionCommandDispatchOptions(context.RequestServices) : null);
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam (FR-013/FR-014).
@@ -230,12 +259,19 @@ public sealed class HttpEndpointMiddleware(
         }
 
         // Nothing matched: no trigger started AND no waiting instance was resumed (spec 089 D, D-D6). A resolved
-        // route whose only claim was a since-consumed bookmark deterministically lands here → 404.
+        // route whose only claim was a since-consumed bookmark deterministically lands here → 404. This branch stays
+        // FIRST — a sync-mode request that started/resumed nothing is still 404, never a 202 degrade (E-D5).
         if (result.StartedCount == 0 && result.ResumedCount == 0)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
+
+        // Sync mode: the in-process drain ran on this async flow, so any live write already happened. If the
+        // workflow authored the response (sink marked, or the response otherwise started) return without touching
+        // it; otherwise fall through to the shared 202 degrade path (E-D5).
+        if (responseSink?.ResponseWritten == true || context.Response.HasStarted)
+            return;
 
         var startedIds = result.Starts
             .Where(start => start.WorkflowExecutionId is not null)
@@ -325,6 +361,14 @@ public sealed class HttpEndpointMiddleware(
     /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
+        // Sync mode can fault AFTER WriteHttpResponse already wrote the live response (e.g. endpoint -> write ->
+        // stalling activity tripping the request timeout). Once the response has started, a status code can no
+        // longer be written — attempting it throws and escapes as an unhandled pipeline exception on a connection
+        // that already carries the workflow-authored response. The caller got that response; the fault remains
+        // observable in durable state per normal runtime semantics, so the response is left untouched.
+        if (context.Response.HasStarted)
+            return;
+
         var faultException = timedOut && exception is OperationCanceledException
             ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
             : exception;

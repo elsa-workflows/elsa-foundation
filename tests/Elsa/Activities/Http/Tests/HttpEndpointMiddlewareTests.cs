@@ -3,7 +3,9 @@ using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.Services;
 using Elsa.Activities.Testing;
+using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -877,6 +879,219 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
+    // ---- Spec 089 sub-unit E (T006): synchronous same-exchange responses + 202 degrade ----
+
+    [Fact]
+    public async Task Sync_WorkflowAuthorsResponse_MiddlewareReturnsWithoutWriting_No202Stomp()
+    {
+        // A sync-mode claimant (http:responseMode=Sync). The router callback simulates the inline drain: it writes
+        // the workflow-authored status + body to the live response and marks the sink. After RouteAsync the
+        // middleware sees ResponseWritten and returns WITHOUT stomping a 202 — the response is whatever the workflow
+        // authored (here 201 + a JSON body), never the {started,resumed} degrade envelope.
+        var (services, sink) = SyncServices();
+        var router = RecordingStimulusRouter.WithCallback(
+            async _ =>
+            {
+                sink.HttpContext!.Response.StatusCode = StatusCodes.Status201Created;
+                sink.HttpContext.Response.ContentType = "application/json";
+                await sink.HttpContext.Response.WriteAsync("""{"ok":true}""");
+                sink.MarkResponseWritten();
+            },
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(sink.ResponseWritten);
+        Assert.Same(context, sink.HttpContext);
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        var body = await ReadResponse(context);
+        Assert.Equal("""{"ok":true}""", body);
+        Assert.DoesNotContain("started", body);
+    }
+
+    [Fact]
+    public async Task Sync_NoLiveWrite_DegradesTo202_WithStartedResumedBody()
+    {
+        // Sync mode, but the inline drain wrote nothing (suspend-before-response / no WriteHttpResponse / non-local
+        // deferred — one degrade path). The sink stays unmarked, so the middleware falls through to the shared 202
+        // writer with the {started,resumed} envelope.
+        var (services, sink) = SyncServices();
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.False(sink.ResponseWritten);
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("wf-exec-1", payload.GetProperty("started")[0].GetString());
+        Assert.Empty(payload.GetProperty("resumed").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Sync_Dispatch_CarriesRequestServicesAsAmbientServices_SameInstance()
+    {
+        // The sync dispatch must carry the request's RequestServices as ambient services (spec-069 chain), so the
+        // inline drain builds the activity context with them and WriteHttpResponse resolves THIS sink.
+        var (services, sink) = SyncServices();
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        var dispatched = Assert.Single(router.Requests);
+        Assert.NotNull(dispatched.DispatchOptions);
+        Assert.Same(context.RequestServices, dispatched.DispatchOptions!.AmbientServices);
+        // The middleware populated the request scope's sink with the live context.
+        Assert.Same(context, sink.HttpContext);
+    }
+
+    [Fact]
+    public async Task Async_NoMetadata_DispatchOptionsNull_AndSinkUntouched()
+    {
+        // Async mode (no responseMode metadata) is bit-identical to the pre-E baseline: no ambient services on the
+        // dispatch and the sink is never populated even when one is registered on the request scope.
+        var (services, sink) = SyncServices();
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST")); // Async default
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        var dispatched = Assert.Single(router.Requests);
+        Assert.Null(dispatched.DispatchOptions);
+        Assert.Null(sink.HttpContext);
+        Assert.False(sink.ResponseWritten);
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sync_ResumeOnlyMatch_BookmarkMetadataSync_TakesSyncPath()
+    {
+        // A purely mid-flow endpoint whose waiting bookmark authored responseMode=Sync (E-D6 any-Sync). No trigger
+        // claimant, so the mode comes from the bookmark merge; the sync path is taken — ambient services attached,
+        // sink populated, and the callback's live write returned without a 202 stomp.
+        var (services, sink) = SyncServices();
+        var router = RecordingStimulusRouter.WithCallback(
+            async _ =>
+            {
+                sink.HttpContext!.Response.StatusCode = StatusCodes.Status200OK;
+                await sink.HttpContext.Response.WriteAsync("resumed-body");
+                sink.MarkResponseWritten();
+            },
+            resumes: new[] { new StimulusResumeOutcome("wf-resumed-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-resumed-1", "callbacks/{id}", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "callbacks/{id}", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/callbacks/42", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        var dispatched = Assert.Single(router.Requests);
+        Assert.Same(context.RequestServices, dispatched.DispatchOptions!.AmbientServices);
+        Assert.True(sink.ResponseWritten);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Equal("resumed-body", await ReadResponse(context));
+    }
+
+    [Fact]
+    public async Task Sync_ZeroStartsAndResumes_Replies404_PrecedenceOverDegrade()
+    {
+        // Sync mode but nothing started or resumed: the 404 branch stays FIRST — a sync request that matched no work
+        // is 404, never a 202 degrade, and the sink (though populated for the dispatch) is not consulted.
+        var (services, sink) = SyncServices();
+        var router = new RecordingStimulusRouter(); // routes nothing
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.False(sink.ResponseWritten);
+        Assert.Empty(await ReadResponse(context));
+    }
+
+    [Fact]
+    public async Task Sync_ResponseHasStarted_WithoutSinkMark_ReturnsWithout202Stomp()
+    {
+        // The workflow wrote directly to the live response (Response.HasStarted) but did NOT mark the sink — the
+        // middleware must still detect the started response and return without stomping a 202 over it.
+        var (services, sink) = SyncServices();
+        var startedFeature = new StartedResponseFeature();
+        var router = RecordingStimulusRouter.WithCallback(
+            _ =>
+            {
+                startedFeature.MarkStarted();
+                return ValueTask.CompletedTask;
+            },
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(startedFeature);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.False(sink.ResponseWritten);
+        Assert.True(context.Response.HasStarted);
+        // Middleware left the status untouched (200 default) — it did NOT overwrite with 202.
+        Assert.NotEqual(StatusCodes.Status202Accepted, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sync_FaultAfterLiveWrite_LeavesStartedResponseUntouched()
+    {
+        // Review fix (089-E adversarial pass): a sync workflow can write the live response and THEN fault (e.g.
+        // endpoint -> WriteHttpResponse -> activity tripping the request timeout). Once Response.HasStarted, the
+        // fault path must not write a status code over the already-authored response (and must not throw).
+        var (services, sink) = SyncServices();
+        var startedFeature = new StartedResponseFeature();
+        var router = RecordingStimulusRouter.WithCallback(
+            _ =>
+            {
+                startedFeature.MarkStarted();
+                sink.MarkResponseWritten();
+                throw new InvalidOperationException("post-write dispatch fault");
+            },
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(startedFeature);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(context.Response.HasStarted);
+        // The fault path returned without touching the started response — no 500 overwrite, no thrown exception.
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Sync_DispatchTimeout_Replies408_FaultPathStillWraps()
+    {
+        // Sync mode does not bypass the timeout/fault wrapping: a dispatch that delays past the endpoint timeout
+        // still trips the linked CTS and maps to 408 (the fault path now bounds the synchronous wait).
+        var (services, _) = SyncServices();
+        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromSeconds(30));
+        var store = await StoreWith(Binding("artifact-1", "slow", "POST",
+            requestTimeout: TimeSpan.FromMilliseconds(20), responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow");
+        var context = NewContext("/workflows/http/slow", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+    }
+
     private static HttpEndpointMiddleware Middleware(
         IStimulusRouter router,
         IWorkflowTriggerBindingStore store,
@@ -912,7 +1127,8 @@ public sealed class HttpEndpointMiddlewareTests
         string method,
         bool authorize = false,
         string? policy = null,
-        long? requestSizeLimit = null)
+        long? requestSizeLimit = null,
+        ResponseMode responseMode = ResponseMode.Async)
     {
         var hash = HttpEndpointStimulus.Hash(template, method);
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -927,6 +1143,8 @@ public sealed class HttpEndpointMiddlewareTests
         if (requestSizeLimit is { } sizeLimit)
             metadata[Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey] =
                 sizeLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (responseMode != ResponseMode.Async)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = responseMode.ToString();
 
         return new BookmarkState(
             BookmarkId: $"http-endpoint:{workflowExecutionId}:{method.ToLowerInvariant()}",
@@ -959,7 +1177,8 @@ public sealed class HttpEndpointMiddlewareTests
         bool authorize = false,
         string? policy = null,
         TimeSpan? requestTimeout = null,
-        long? requestSizeLimit = null)
+        long? requestSizeLimit = null,
+        ResponseMode responseMode = ResponseMode.Async)
     {
         var hash = HttpEndpointStimulus.Hash(template, method);
 
@@ -980,6 +1199,8 @@ public sealed class HttpEndpointMiddlewareTests
         if (requestSizeLimit is { } sizeLimit)
             metadata[Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey] =
                 sizeLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (responseMode != ResponseMode.Async)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = responseMode.ToString();
 
         return new WorkflowTriggerBinding(
             TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, hash),
@@ -998,6 +1219,20 @@ public sealed class HttpEndpointMiddlewareTests
     /// <summary>A RequestServices provider carrying a single <typeparamref name="TService"/> registration.</summary>
     private static IServiceProvider ServicesWith<TService>(TService instance) where TService : class =>
         new ServiceCollection().AddSingleton(instance).BuildServiceProvider();
+
+    /// <summary>
+    /// A RequestServices provider carrying a live <see cref="SyncHttpResponseSink"/> (as the middleware's request
+    /// scope would) plus any extra registrations. Returns the sink instance so a test can assert the middleware
+    /// populated it and observe what the router callback marked.
+    /// </summary>
+    private static (IServiceProvider Services, SyncHttpResponseSink Sink) SyncServices(params object[] extras)
+    {
+        var sink = new SyncHttpResponseSink();
+        var collection = new ServiceCollection().AddSingleton(sink);
+        foreach (var extra in extras)
+            collection.AddSingleton(extra.GetType(), extra);
+        return (collection.BuildServiceProvider(), sink);
+    }
 
     private static IOptions<HttpEndpointOptions> Options(string? basePath = null, long? maxBodyBytes = null) =>
         Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions
@@ -1027,6 +1262,25 @@ public sealed class HttpEndpointMiddlewareTests
             context.RequestServices = services;
         context.Response.Body = new MemoryStream();
         return context;
+    }
+
+    /// <summary>
+    /// A response feature whose <see cref="HasStarted"/> flips to true on <see cref="MarkStarted"/> — lets a sync
+    /// test simulate the workflow starting the live response (writing headers) WITHOUT marking the sink, so the
+    /// middleware's <c>Response.HasStarted</c> discriminator (not just the sink) is exercised.
+    /// </summary>
+    private sealed class StartedResponseFeature : Microsoft.AspNetCore.Http.Features.IHttpResponseFeature
+    {
+        public int StatusCode { get; set; } = StatusCodes.Status200OK;
+        public string? ReasonPhrase { get; set; }
+        public Microsoft.AspNetCore.Http.IHeaderDictionary Headers { get; set; } = new Microsoft.AspNetCore.Http.HeaderDictionary();
+        public Stream Body { get; set; } = Stream.Null;
+        public bool HasStarted { get; private set; }
+
+        public void MarkStarted() => HasStarted = true;
+
+        public void OnStarting(Func<object, Task> callback, object state) { }
+        public void OnCompleted(Func<object, Task> callback, object state) { }
     }
 
     /// <summary>A read-only stream that records whether it was ever read from (proves the body stays untouched on 401).</summary>

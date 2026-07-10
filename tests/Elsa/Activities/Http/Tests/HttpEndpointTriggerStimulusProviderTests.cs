@@ -156,6 +156,83 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
+    public void Describe_ResponseModeSyncLiteral_StampsSyncMode_OnEveryDescriptor()
+    {
+        // Spec 089 E-D1: a literal ResponseMode = "Sync" is read via ReadLiteralEnum and rides the binding metadata
+        // on every method descriptor (so a resumed endpoint gets its mode for free — scenario 5.5).
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.SupportedMethods)] = LiteralCollectionBinding(nameof(HttpEndpoint.SupportedMethods), ["GET", "POST"]),
+            [nameof(HttpEndpoint.ResponseMode)] = LiteralBinding(nameof(HttpEndpoint.ResponseMode), "Sync")
+        };
+
+        var descriptors = _provider.Describe(NodeWith(bindings)).Descriptors;
+
+        Assert.Equal(2, descriptors.Count);
+        foreach (var descriptor in descriptors)
+        {
+            Assert.Equal("Sync", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
+            // Non-identity: the mode never changes the routing key.
+            Assert.Equal(
+                HttpEndpointStimulus.Hash("orders/{id}", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]),
+                descriptor.StimulusHash);
+        }
+    }
+
+    [Fact]
+    public void Describe_ResponseModeAsyncLiteral_OmitsModeKey()
+    {
+        // Async is the default and contributes no key (round-trip identity with the unauthored default).
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.ResponseMode)] = LiteralBinding(nameof(HttpEndpoint.ResponseMode), "Async")
+        };
+
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)).Descriptors);
+
+        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
+    public void Describe_UnauthoredResponseMode_OmitsModeKey()
+    {
+        var node = EndpointNode(path: "orders/webhook");
+
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
+
+        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenResponseModeNonLiteral()
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.ResponseMode)] = ExpressionBinding(nameof(HttpEndpoint.ResponseMode))
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Theory]
+    [InlineData("\"Sideways\"")] // undefined member name
+    [InlineData("\"sync\"")] // wrong case — parse is case-sensitive
+    [InlineData("99")] // undefined numeric value
+    public void Describe_Throws_WhenResponseModeInvalid(string rawJson)
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.ResponseMode)] = RawLiteralBinding(nameof(HttpEndpoint.ResponseMode), rawJson)
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+    }
+
+    [Fact]
     public void Describe_ReturnsNotRecognized_ForNonHttpEndpointActivityType()
     {
         var node = EndpointNode(path: "orders/webhook", activityType: "Elsa.WriteLine");

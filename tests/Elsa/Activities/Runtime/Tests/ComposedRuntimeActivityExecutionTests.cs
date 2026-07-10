@@ -94,6 +94,57 @@ public sealed class ComposedRuntimeActivityExecutionTests
     }
 
     [Fact]
+    public async Task StartDispatcher_WithAmbientServices_LeavesNoServiceProviderInPersistedState()
+    {
+        // Spec 089 T003 / FR-021: driving a real start through the T002 dispatcher spine WITH ambient services must
+        // (a) route those services to the inline-drained activity — proven by the request-scoped probe firing — while
+        // (b) leaving no live-service reference anywhere in the durably persisted stores. The persisted state models
+        // are string/JSON/primitive by design; assert both the type surface and the serialized JSON stay provider-free.
+        var services = new ServiceCollection();
+        services.AddSingleton<InlineExecutionProbe>();
+        services.AddScoped<RequestScopedExecutionProbe>();
+        services.AddSingleton<IActivityConstructor, ProbeActivityConstructor>();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var requestScope = provider.CreateAsyncScope();
+        var executable = NewExecutable(_now);
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        var requestProbe = requestScope.ServiceProvider.GetRequiredService<RequestScopedExecutionProbe>();
+
+        // The exact call the stimulus router makes on the sync-mode HTTP path (spec 089 E-D4).
+        var result = await provider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(executable.Identity.ArtifactId, "runtime-test"),
+            new WorkflowExecutionCommandDispatchOptions(requestScope.ServiceProvider));
+
+        // (a) The ambient request scope reached the inline-drained activity execution context.
+        var activityStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(result.WorkflowExecutionId);
+        var activityState = Assert.Single(activityStates);
+        Assert.Equal($"probe:node-start:{activityState.Execution.ActivityExecutionId}", requestProbe.Invocation);
+
+        // (b) No persisted store carries a live-service reference — neither on the model type surface nor in its JSON.
+        var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(result.WorkflowExecutionId);
+        var durableValues = await provider.GetRequiredService<IDurableValueStateStore>().ListAsync(result.WorkflowExecutionId);
+
+        AssertNoServiceProviderReference(workflowState!);
+        foreach (var state in activityStates)
+            AssertNoServiceProviderReference(state);
+        foreach (var durableValue in durableValues)
+            AssertNoServiceProviderReference(durableValue);
+    }
+
+    private static void AssertNoServiceProviderReference(object persisted)
+    {
+        Assert.DoesNotContain(
+            persisted.GetType().GetProperties(),
+            property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
+
+        // The persisted state is serializable; a leaked provider would surface as its concrete type name in the JSON.
+        var json = JsonSerializer.Serialize(persisted);
+        Assert.DoesNotContain("ServiceProvider", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task InProcessAgent_DrainsComposedParentAndChildActivityExecutionToQuiescence()
     {
         var observer = new RecordingSchedulerDrainObserver();

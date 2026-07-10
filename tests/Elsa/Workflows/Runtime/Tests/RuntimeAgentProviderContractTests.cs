@@ -126,6 +126,38 @@ public sealed class RuntimeAgentProviderContractTests
     }
 
     [Fact]
+    public void StimulusDispatchRequest_KeepsAmbientServicesOffTheDurableMetadataChannel()
+    {
+        // Spec 089 E-D4 / FR-021: the request carries request-affine ambient services ONLY on the dedicated
+        // DispatchOptions channel (a live reference), never through the durable Metadata channel that flows into the
+        // persisted WorkflowExecutionCommandEnvelope. Reflection-pin both halves of that invariant.
+        var options = new WorkflowExecutionCommandDispatchOptions(new EmptyServiceProvider());
+        var request = new StimulusDispatchRequest(
+            stimulusType: "Event",
+            stimulusHash: "sha256:event:hello",
+            correlationId: "order-7",
+            metadata: new Dictionary<string, string> { ["caller"] = "unit-test" },
+            dispatchOptions: options);
+
+        // The options ride only on the dedicated property, and it IS the non-serialized options type.
+        Assert.Same(options, request.DispatchOptions);
+        Assert.Equal(typeof(WorkflowExecutionCommandDispatchOptions), typeof(StimulusDispatchRequest).GetProperty(nameof(StimulusDispatchRequest.DispatchOptions))!.PropertyType);
+
+        // No property on the request surfaces an IServiceProvider through a durable channel: only DispatchOptions
+        // touches services, and it is excluded from the metadata that reaches the envelope.
+        Assert.DoesNotContain(
+            typeof(StimulusDispatchRequest).GetProperties(),
+            property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
+
+        // BuildDispatchMetadata is the only channel that flows into the durable envelope. It is a string→string map
+        // (structurally incapable of carrying a service provider) and must not leak the options in any form.
+        var dispatchMetadata = request.BuildDispatchMetadata();
+        Assert.IsAssignableFrom<IReadOnlyDictionary<string, string>>(dispatchMetadata);
+        Assert.DoesNotContain(dispatchMetadata.Values, value => value.Contains("ServiceProvider", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("unit-test", dispatchMetadata["caller"]);
+    }
+
+    [Fact]
     public void CommandKinds_IncludeActorStyleAgentVocabulary()
     {
         var names = Enum.GetNames<WorkflowExecutionCommandKind>();
@@ -259,6 +291,11 @@ public sealed class RuntimeAgentProviderContractTests
             EnqueuedAt: _now,
             Payload: document.RootElement.Clone(),
             Metadata: new Dictionary<string, string>());
+    }
+
+    private sealed class EmptyServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
     }
 
     private static bool IsActorFrameworkReference(string? name) =>

@@ -52,7 +52,10 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
         _timeProvider = timeProvider;
     }
 
-    public async ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<BookmarkResumeDispatchResult> DispatchAsync(
+        BookmarkResumeDispatchRequest request,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -139,7 +142,7 @@ public sealed class BookmarkResumeDispatcher : IBookmarkResumeDispatcher
             metadata: metadata);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
-        var commandDispatch = await agent.EnqueueAsync(envelope, cancellationToken);
+        var commandDispatch = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
         var status = MapDispatchStatus(commandDispatch.Status);
 
         return new BookmarkResumeDispatchResult(

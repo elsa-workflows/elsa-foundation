@@ -188,4 +188,42 @@ public sealed class HttpEndpointStimulusTests
         Assert.Equal(withoutOptions.StimulusHash, withOptions.StimulusHash);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), withOptions.StimulusHash);
     }
+
+    [Fact]
+    public void Describe_StampsResponseMode_Sync_OnEveryMethodDescriptor()
+    {
+        // Spec 089 E-D1: the response mode rides the binding/bookmark metadata (via Describe folding ToMetadata),
+        // so a resumed endpoint's mode is available for free (scenario 5.5). Pinned here on the describe side.
+        var options = new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync);
+
+        var descriptors = HttpEndpointStimulus.Describe("orders/{id}", ["GET", "POST"], options);
+
+        Assert.Equal(2, descriptors.Count);
+        foreach (var descriptor in descriptors)
+            Assert.Equal("Sync", descriptor.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
+    }
+
+    [Fact]
+    public void Describe_ResponseModeAsync_IsOmittedFromMetadata()
+    {
+        // Async is the default and contributes no key, so an async endpoint's metadata is byte-for-byte the
+        // pre-E shape (round-trip identity).
+        var withAsync = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async)));
+        var withoutOptions = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"]));
+
+        foreach (var descriptor in new[] { withAsync, withoutOptions })
+            Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
+    }
+
+    [Fact]
+    public void Describe_ResponseMode_IsNonIdentity_HashUnchanged()
+    {
+        // The response mode is non-identity: two endpoints differing only in mode share a routing key, so a
+        // sync request and its async sibling resolve to the same identity (E-D1, E-D6).
+        var sync = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync)));
+        var async = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async)));
+
+        Assert.Equal(async.StimulusHash, sync.StimulusHash);
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), sync.StimulusHash);
+    }
 }

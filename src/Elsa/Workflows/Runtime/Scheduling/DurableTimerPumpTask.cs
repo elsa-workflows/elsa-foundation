@@ -137,7 +137,7 @@ public sealed class DurableTimerPumpTask : IRecurringTask
                 idempotencyKey: $"timer:{timer.TimerId}",
                 requestedBy: DurableTimerConstants.PumpRequestedBy);
 
-            result = await _dispatcher.DispatchAsync(request, cancellationToken);
+            result = await _dispatcher.DispatchAsync(request, cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException)
         {

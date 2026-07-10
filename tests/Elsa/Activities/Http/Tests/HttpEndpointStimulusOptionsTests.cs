@@ -1,4 +1,5 @@
 using Elsa.Activities.Http.Activities;
+using Elsa.Http.Core;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -18,11 +19,13 @@ public sealed class HttpEndpointStimulusOptionsTests
         new HttpEndpointStimulusOptions(Authorize: true, Policy: "admins"),
         new HttpEndpointStimulusOptions(RequestTimeout: TimeSpan.FromSeconds(30)),
         new HttpEndpointStimulusOptions(RequestSizeLimit: 1048576),
+        new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync),
         new HttpEndpointStimulusOptions(
             Authorize: true,
             Policy: "admins",
             RequestTimeout: TimeSpan.FromMinutes(2) + TimeSpan.FromMilliseconds(500),
-            RequestSizeLimit: 4096)
+            RequestSizeLimit: 4096,
+            ResponseMode: ResponseMode.Sync)
     };
 
     [Theory]
@@ -78,6 +81,46 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey));
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestTimeoutMetadataKey));
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey));
+    }
+
+    // ---- E-D1 response-mode round-trip ----
+
+    [Fact]
+    public void ResponseModeAsync_ContributesNoMetadataKey()
+    {
+        // Async is the default and omitted, so an async endpoint's metadata is byte-for-byte the pre-E shape.
+        Assert.Empty(new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata());
+        Assert.DoesNotContain(
+            Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey,
+            new HttpEndpointStimulusOptions(Authorize: true).ToMetadata().Keys);
+    }
+
+    [Fact]
+    public void ResponseModeSync_EmitsKey_AsEnumName()
+    {
+        var metadata = new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync).ToMetadata();
+
+        Assert.Equal("Sync", metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey]);
+    }
+
+    [Theory]
+    [InlineData("not-a-mode")]
+    [InlineData("sync")] // wrong case: parse is case-sensitive, unparseable ⇒ Async
+    [InlineData("99")]
+    public void FromMetadata_InvalidResponseMode_FallsBackToAsync(string raw)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = raw
+        };
+
+        Assert.Equal(ResponseMode.Async, HttpEndpointStimulusOptions.FromMetadata(metadata).ResponseMode);
+    }
+
+    [Fact]
+    public void FromMetadata_AbsentResponseMode_IsAsync()
+    {
+        Assert.Equal(ResponseMode.Async, HttpEndpointStimulusOptions.FromMetadata(new Dictionary<string, string>()).ResponseMode);
     }
 
     // ---- D-D5 fail-closed merge across divergent waiting bookmarks ----
@@ -156,5 +199,54 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.Equal(new[] { "admins" }, merged.Policies);
         Assert.Equal(64, merged.RequestSizeLimit);
         Assert.Equal(TimeSpan.FromSeconds(10), merged.RequestTimeout);
+    }
+
+    // ---- E-D6 response-mode merge (any-Sync) ----
+
+    [Fact]
+    public void MergeForResume_ResponseMode_IsSyncIfAnyBookmarkRequestsSync()
+    {
+        // E-D6: the response is per-request. A sync-authored waiting endpoint gets its same-exchange reply even
+        // when an async sibling shares the identity — Sync wins if ANY matching bookmark asks for it.
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata(),
+            new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync).ToMetadata()
+        ]);
+
+        Assert.Equal(ResponseMode.Sync, merged.ResponseMode);
+    }
+
+    [Fact]
+    public void MergeForResume_ResponseMode_IsAsyncWhenNoBookmarkRequestsSync()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async).ToMetadata(),
+            new HttpEndpointStimulusOptions(Authorize: true).ToMetadata()
+        ]);
+
+        Assert.Equal(ResponseMode.Async, merged.ResponseMode);
+    }
+
+    [Fact]
+    public void MergeForResume_Empty_IsAsync()
+    {
+        Assert.Equal(ResponseMode.Async, HttpEndpointStimulusOptions.MergeForResume([]).ResponseMode);
+        Assert.Equal(ResponseMode.Async, MergedHttpEndpointOptions.None.ResponseMode);
+    }
+
+    // ---- FromClaimant projects the claimant's mode (D-D5 claimant-wins) ----
+
+    [Theory]
+    [InlineData(ResponseMode.Async)]
+    [InlineData(ResponseMode.Sync)]
+    public void FromClaimant_CarriesTheClaimantResponseMode(ResponseMode mode)
+    {
+        var merged = MergedHttpEndpointOptions.FromClaimant(
+            new HttpEndpointStimulusOptions(Policy: "admins", ResponseMode: mode),
+            authorizeOverride: true);
+
+        Assert.Equal(mode, merged.ResponseMode);
     }
 }

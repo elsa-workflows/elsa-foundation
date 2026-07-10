@@ -39,6 +39,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -49,12 +50,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         if (executable.Scope == WorkflowExecutableScope.TransientTestRun)
             throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
-        return await DispatchCoreAsync(request, executable, cancellationToken);
+        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -68,12 +70,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
         await _executableStore.SaveAsync(executable, cancellationToken);
 
-        return await DispatchCoreAsync(request, executable, cancellationToken);
+        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         if (executable.ExpiresAt is { } expiresAt && expiresAt <= _timeProvider.GetUtcNow())
@@ -116,7 +119,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             metadata: metadata);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
-        var dispatchResult = await agent.EnqueueAsync(envelope, cancellationToken);
+        var dispatchResult = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
 
         return new WorkflowExecutionStartDispatchResult(
             workflowExecutionId: workflowExecutionId,
