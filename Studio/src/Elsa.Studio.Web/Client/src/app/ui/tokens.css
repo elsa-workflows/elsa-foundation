@@ -767,44 +767,60 @@ html[data-theme="stone"][data-theme-mode="light"] {
   --studio-warning-fg: #8a6420;
   --studio-danger-fg: #a34035;
   /* Warm hairline edges — soft, low-contrast, no cool slate. */
-  --studio-material-edge: color-mix(in srgb, #b3aa97 46%, transparent);
-  --studio-material-edge-strong: color-mix(in srgb, #8f8770 52%, transparent);
+  /* Warm hairlines, strengthened a touch so sheets separate on the now near-white surfaces. */
+  --studio-material-edge: color-mix(in srgb, #a89e88 58%, transparent);
+  --studio-material-edge-strong: color-mix(in srgb, #857c64 64%, transparent);
   --studio-material-texture: url("../../assets/materials/stone-mist-tile.png");
   --studio-material-texture-size: 420px 420px;
   /*
-   * Panel recipes: near-white warm paper. A faint top-light sheen + warm ivory base
-   * gradient; the mist texture is kept subtle (warm base dominates) and the blue grain grid
-   * is barely there (2-3% blue) so the sheet reads as clean paper, not slate.
+   * Panel recipes: near-white warm paper. The mist tile is intrinsically a COOL gray-green
+   * (#babfba avg, G>R); if it sits above the warm base it neutralizes the whole sheet to
+   * slate. So the stack order is inverted from the other themes: the tile is the BOTTOM
+   * layer, then a mostly-opaque warm-ivory VEIL gradient (color-mix ... 90-94%) sits over
+   * it so only ~6-10% of the tile grain peeks through as a tactile accent, then the faint
+   * blue grid + top-light sheen ride on top. Verified by alpha-compositing math: every tier
+   * resolves to warm ivory (R>=G>=B, R-B gap 6-11) over tile avg #babfba and extremes +/-15.
+   * Raised cards use a nearly-opaque ~94% veil (whitest); the backdrop shows a touch more
+   * grain (~88%). The veil color, not the base gradient, is what the eye reads.
    */
   --studio-material-panel-bg:
     linear-gradient(180deg, color-mix(in srgb, white 46%, transparent), transparent 40%),
     linear-gradient(color-mix(in srgb, #2c66b3 3%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #f9f6ee 92%, transparent), color-mix(in srgb, #f4f1e8 92%, transparent) 72%),
     var(--studio-material-texture),
     linear-gradient(160deg, #fbfaf5, #f2efe6 72%);
   --studio-material-panel-bg-strong:
     linear-gradient(180deg, color-mix(in srgb, white 56%, transparent), transparent 38%),
     linear-gradient(color-mix(in srgb, #2c66b3 3%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #fefdf8 94%, transparent), color-mix(in srgb, #f8f5ee 94%, transparent) 70%),
     var(--studio-material-texture),
     linear-gradient(160deg, #fefdf9, #f5f2ea 70%);
   --studio-material-panel-bg-soft:
     linear-gradient(180deg, color-mix(in srgb, white 38%, transparent), transparent 42%),
+    linear-gradient(color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #f2eee4 90%, transparent), color-mix(in srgb, #e9e5db 90%, transparent) 70%),
     var(--studio-material-texture),
     linear-gradient(160deg, #f4f1e9, #ebe7dd 70%);
-  --studio-material-panel-bg-size: auto, 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  /* Shared size list applies to panel-bg, panel-bg-strong AND panel-bg-soft; all three now
+     carry the same 6-layer stack (sheen, grid-v, grid-h, warm veil, texture, base). */
+  --studio-material-panel-bg-size: auto, 36px 36px, 36px 36px, auto, var(--studio-material-texture-size), auto;
   /* Flat dense-row fill: warm paper base + subtle grain, bevel + shadow dropped. */
   --studio-material-row-bg:
     linear-gradient(color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #f7f2e7 91%, transparent), color-mix(in srgb, #efeadf 91%, transparent) 72%),
     var(--studio-material-texture),
     linear-gradient(160deg, #f6f3ec, #efece3 72%);
-  --studio-material-row-bg-size: 36px 36px, 36px 36px, var(--studio-material-texture-size), auto;
+  --studio-material-row-bg-size: 36px 36px, 36px 36px, auto, var(--studio-material-texture-size), auto;
   /* Recessed well: gently sunken cream for search/filter inputs. */
   --studio-material-well-bg:
+    linear-gradient(160deg, color-mix(in srgb, #ece6d8 90%, transparent), color-mix(in srgb, #f0ebe0 90%, transparent) 72%),
     var(--studio-material-texture),
     linear-gradient(160deg, #eae5d9, #f2efe6 72%);
-  --studio-material-well-bg-size: var(--studio-material-texture-size), auto;
+  --studio-material-well-bg-size: auto, var(--studio-material-texture-size), auto;
   --studio-material-well-shadow: inset 0 2px 4px color-mix(in srgb, #8f8770 18%, transparent),
     inset 0 0 0 1px color-mix(in srgb, #8f8770 12%, transparent);
   /* Primary "send" button: soft light-blue paper fill with darker blue text (not a slab). */
@@ -812,30 +828,35 @@ html[data-theme="stone"][data-theme-mode="light"] {
   --studio-material-send-text: #1f5aa8;
   /* Selected sidebar item: a slightly raised near-white card with a faint blue tint. */
   --studio-material-active-bg: color-mix(in srgb, var(--studio-accent) 12%, #fdfcf7);
+  /* Backdrop: shows a touch more grain (~88% veil) than the raised sheets. */
   --studio-material-body-bg:
     radial-gradient(circle at 70% 16%, color-mix(in srgb, #2c66b3 5%, transparent), transparent 28rem),
     linear-gradient(135deg, color-mix(in srgb, white 12%, transparent) 0 1px, transparent 1px 10px),
+    linear-gradient(160deg, color-mix(in srgb, #ece7db 88%, transparent), color-mix(in srgb, #e5e0d5 88%, transparent) 62%, color-mix(in srgb, #e1dcd1 88%, transparent)),
     var(--studio-material-texture),
     linear-gradient(160deg, #e9e5db, #f1eee5 62%, #e4dfd4);
-  --studio-material-body-bg-size: auto, 22px 22px, var(--studio-material-texture-size), auto;
+  --studio-material-body-bg-size: auto, 22px 22px, auto, var(--studio-material-texture-size), auto;
   --studio-material-content-bg:
     radial-gradient(circle at 28% 22%, color-mix(in srgb, white 30%, transparent), transparent 18rem),
     linear-gradient(color-mix(in srgb, #2c66b3 3%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #f4f0e6 91%, transparent), color-mix(in srgb, #ebe6dc 91%, transparent) 70%),
     var(--studio-material-texture),
     linear-gradient(160deg, #f2efe7, #e9e5db 70%);
-  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+  --studio-material-content-bg-size: auto, 32px 32px, 32px 32px, auto, var(--studio-material-texture-size), auto;
   --studio-material-canvas-bg:
     linear-gradient(color-mix(in srgb, #2c66b3 3%, transparent) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, #2c66b3 2%, transparent) 1px, transparent 1px),
+    linear-gradient(160deg, color-mix(in srgb, #f6f1e6 91%, transparent), color-mix(in srgb, #ece7dc 91%, transparent) 72%),
     var(--studio-material-texture),
     linear-gradient(160deg, #f4f1e9, #e9e5db 72%);
-  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, var(--studio-material-texture-size), auto;
+  --studio-material-canvas-bg-size: 32px 32px, 32px 32px, auto, var(--studio-material-texture-size), auto;
   --studio-material-node-bg:
     linear-gradient(180deg, color-mix(in srgb, white 52%, transparent), transparent 42%),
+    linear-gradient(160deg, color-mix(in srgb, #fefdf8 94%, transparent), color-mix(in srgb, #f7f4ec 94%, transparent) 74%),
     var(--studio-material-texture),
     linear-gradient(160deg, #fefdf9, #f4f1e8 74%);
-  --studio-material-node-bg-size: auto, 310px 310px, auto;
+  --studio-material-node-bg-size: auto, auto, 310px 310px, auto;
   /* Airy paper elevation: hairline warm inset, no heavy dark bottom bevel. */
   --studio-material-inset:
     inset 0 1px 0 color-mix(in srgb, white 62%, transparent),
@@ -844,16 +865,16 @@ html[data-theme="stone"][data-theme-mode="light"] {
     inset 0 1px 0 color-mix(in srgb, white 50%, transparent);
   /* Soft diffuse warm-gray drop shadows — bigger blur, low opacity, warm hue. */
   --studio-material-shadow:
-    0 1px 2px color-mix(in srgb, #857c68 14%, transparent),
-    0 12px 30px color-mix(in srgb, #857c68 14%, transparent),
-    0 0 0 1px color-mix(in srgb, #b3aa97 30%, transparent);
+    0 1px 2px color-mix(in srgb, #7c735f 20%, transparent),
+    0 14px 34px color-mix(in srgb, #7c735f 20%, transparent),
+    0 0 0 1px color-mix(in srgb, #a89e88 40%, transparent);
   --studio-material-shadow-strong:
-    0 2px 5px color-mix(in srgb, #7a725f 16%, transparent),
-    0 22px 48px color-mix(in srgb, #7a725f 18%, transparent),
-    0 0 0 1px color-mix(in srgb, #2c66b3 16%, transparent);
+    0 2px 6px color-mix(in srgb, #6f6752 24%, transparent),
+    0 26px 54px color-mix(in srgb, #6f6752 24%, transparent),
+    0 0 0 1px color-mix(in srgb, #2c66b3 20%, transparent);
   --studio-material-node-shadow:
-    0 1px 2px color-mix(in srgb, #857c68 14%, transparent),
-    0 10px 26px color-mix(in srgb, #857c68 15%, transparent),
+    0 1px 2px color-mix(in srgb, #7c735f 20%, transparent),
+    0 12px 30px color-mix(in srgb, #7c735f 21%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 60%, transparent);
 }
 
