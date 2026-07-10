@@ -4,6 +4,7 @@ import { setDialogs } from "./workflow-editor/dialogs";
 import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
 import { RuntimeDiagnosticsSettingsPage } from "./RuntimeDiagnosticsSettingsPage";
 import {
+  WorkflowExecutableInspectorPage,
   WorkflowExecutablesPage,
   WorkflowInstanceDetailsPage,
   WorkflowInstancesPage,
@@ -51,6 +52,12 @@ export function register(api: ElsaStudioModuleApi) {
         path: "/workflows/executables",
         label: "Workflow executables",
         component: () => <WorkflowExecutablesPage context={api.backend} ai={api.ai} />
+      },
+      {
+        id: "workflows-executable-inspector",
+        path: "/workflows/executables/:artifactId",
+        label: "Executable Inspector",
+        component: () => <WorkflowExecutableInspectorPage context={api.backend} ai={api.ai} />
       },
       {
         id: "workflows-instances",

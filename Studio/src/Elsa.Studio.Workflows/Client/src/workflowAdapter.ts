@@ -16,6 +16,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
+  // ghost ("not available in this environment") instead of pretending the activity resolves.
+  ghost?: boolean;
   onEnterSlot?(slot: ChildSlot): void;
 }
 

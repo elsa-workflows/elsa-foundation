@@ -3376,6 +3376,136 @@ button.wf-node-slot-badge:focus-visible {
   white-space: nowrap;
 }
 
+/* Executable Inspector + artifact-row executables table (studio ADR 0010, plan §3). */
+.wf-toolbar-checkbox {
+  gap: 6px;
+  cursor: pointer;
+}
+
+.wf-toolbar-checkbox input {
+  margin: 0;
+  accent-color: var(--wf-accent);
+}
+
+.wf-executable-row-group {
+  display: grid;
+  border-bottom: 1px solid var(--wf-border);
+}
+
+.wf-executable-row-group .wf-grid-row {
+  border-bottom: 0;
+}
+
+.wf-executable-version-cell {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.wf-reference-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-executable-references {
+  border-top: 1px dashed var(--wf-border);
+  background: var(--wf-panel-muted);
+  padding: 8px 12px 10px;
+}
+
+.wf-reference-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wf-reference-item {
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-md);
+  background: var(--wf-panel);
+}
+
+.wf-reference-item[data-active="true"] {
+  border-color: color-mix(in srgb, var(--wf-accent) 40%, var(--wf-border));
+  background: var(--wf-accent-soft);
+}
+
+.wf-reference-select {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--wf-text);
+  font: inherit;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+button.wf-reference-select {
+  cursor: pointer;
+}
+
+.wf-reference-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.wf-reference-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
+.wf-reference-meta small {
+  margin: 0;
+}
+
+/* Scope chips: Published keeps the default accent chip tone; test runs get the warning tint their
+   expiring nature suggests. */
+.wf-reference-scope-testrun {
+  background: color-mix(in srgb, var(--wf-warning) 14%, var(--wf-panel));
+  color: var(--wf-warning-text);
+}
+
+.wf-reference-retired {
+  background: var(--wf-danger-soft);
+  color: var(--wf-danger);
+}
+
+.wf-executable-selection {
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-executable-drift {
+  border-left: 3px solid var(--wf-warning);
+  padding-left: 8px;
+}
+
+.wf-executable-bindings > div {
+  min-width: 0;
+}
+
+.wf-node-ghost {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.wf-node-ghost-note {
+  color: var(--wf-warning-text);
+}
+
 .wf-properties {
   position: relative;
   z-index: 2;
