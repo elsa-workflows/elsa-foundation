@@ -12,12 +12,22 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="xunit" />
+    <!-- Shared HTTP-endpoint test doubles (route table/matcher + test auth scheme, #592 item 18). The route-table
+         double delegates to the production RouteTable (Elsa.Http) so it cannot offer ordering/matching guarantees
+         production lacks (#592 items 1 + 6); MemoryCache + NullLogger feed its constructor. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Abstractions" />
+    <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
+    <PackageReference Include="Microsoft.AspNetCore.Routing" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\src\Elsa\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Elsa\Http\Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />

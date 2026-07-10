@@ -180,15 +180,21 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
         }
     }
 
+    /// <summary>The non-routing method placeholder stamped on the authored-route fallback model (see <see cref="BuildAuthoredRouteModel"/>).</summary>
+    private const string NonRoutingMethodPlaceholder = "*";
+
     private HttpRequestModel BuildAuthoredRouteModel(IActivityExecutionContext context)
     {
         var path = context.Get(Path) ?? string.Empty;
-        var methods = context.Get(SupportedMethods);
-        var method = methods is { Count: > 0 } ? methods.First() : "*";
 
+        // Direct-run / non-HTTP-start fallback: no inbound request drove this execution, so there is no real
+        // request method. Post-B, the authored SupportedMethods are a routing-time concern (one binding per
+        // method) — projecting the first of them here would misleadingly imply this run was a GET/POST request.
+        // Emit a stable, non-routing placeholder instead so consumers can tell the model is authored, not live
+        // (#592 item 20).
         return new HttpRequestModel(
             Path: HttpEndpointStimulus.NormalizeTemplate(path),
-            Method: method,
+            Method: NonRoutingMethodPlaceholder,
             Headers: new Dictionary<string, string[]>(),
             Query: new Dictionary<string, string[]>(),
             Body: null,

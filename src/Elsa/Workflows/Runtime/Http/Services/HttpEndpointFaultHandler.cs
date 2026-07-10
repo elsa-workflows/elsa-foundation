@@ -1,12 +1,14 @@
-﻿using Elsa.Http.Core.Contracts;
-using Elsa.Http.Core.Exceptions;
+using Elsa.Http.Core;
+using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Microsoft.AspNetCore.Http;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
-/// A default fault handler that writes information about the fault to the <see cref="HttpResponse"/>.
+/// A default fault handler that writes information about the fault to the <see cref="HttpResponse"/>. The
+/// fault → status mapping is owned by <see cref="HttpEndpointFaultMapping"/> so it stays identical to the
+/// middleware's inline fallback (spec 089 sub-unit C, follow-up #592 item 13).
 /// </summary>
 /// <remarks>
 /// Public (like the shipped <c>IHttpEndpointAuthorizationHandler</c> implementations, spec 089 C T008) so the
@@ -18,33 +20,7 @@ public sealed class HttpEndpointFaultHandler : IHttpEndpointFaultHandler
     /// <inheritdoc />
     public ValueTask HandleAsync(HttpEndpointFaultContext context)
     {
-        var httpContext = context.HttpContext;
-        var isTimeoutIncident = GetIsTimeoutFault(context);
-        var isBadRequest = GetIsBadRequestFault(context);
-        var statusCode = isTimeoutIncident
-            ? StatusCodes.Status408RequestTimeout
-            : isBadRequest
-                ? StatusCodes.Status400BadRequest
-                : StatusCodes.Status500InternalServerError;
-
-        httpContext.Response.StatusCode = statusCode;
+        context.HttpContext.Response.StatusCode = HttpEndpointFaultMapping.ToStatusCode(context.Exceptions);
         return ValueTask.CompletedTask;
-    }
-
-    private static bool GetIsTimeoutFault(HttpEndpointFaultContext context)
-    {
-        return ContainsException(context, typeof(OperationCanceledException), typeof(TaskCanceledException), typeof(TimeoutException));
-    }
-
-    private static bool GetIsBadRequestFault(HttpEndpointFaultContext context)
-    {
-        return ContainsException(context, typeof(HttpBadRequestException));
-    }
-
-    private static bool ContainsException(HttpEndpointFaultContext context, params Type[] exceptionTypes)
-    {
-        return context.Exceptions
-            .Select(x => x.GetType())
-            .Any(exceptionTypes.Contains);
     }
 }
