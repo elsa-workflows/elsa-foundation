@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
@@ -39,6 +40,23 @@ public sealed class SqliteStructuredLogsPersistenceFeatureTests
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IStartupTask) &&
             d.ImplementationType == typeof(StartStructuredLogDrainingStartupTask));
+    }
+
+    [Fact]
+    public void RegistersTheDrainingShellTerminator()
+    {
+        var services = Configure();
+
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(StopStructuredLogDrainingShellTerminator) &&
+            d.Lifetime == ServiceLifetime.Transient);
+        var registration = Assert.Single(services
+            .Where(d => d.ServiceType == typeof(ShellTerminatorRegistration))
+            .Select(d => d.ImplementationInstance)
+            .OfType<ShellTerminatorRegistration>(),
+            x => x.TerminatorType == typeof(StopStructuredLogDrainingShellTerminator));
+        Assert.Equal(LifecyclePhase.Default, registration.Phase);
+        Assert.Equal(0, registration.Order);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
@@ -30,5 +31,6 @@ public abstract class EFCoreOpenTelemetryPersistenceFeatureBase : EFCorePersiste
         services.AddSingleton<EfCoreOpenTelemetryStore>();
         services.AddSingleton<IOpenTelemetryStore>(sp => sp.GetRequiredService<EfCoreOpenTelemetryStore>());
         services.AddScoped<IStartupTask, StartOpenTelemetryDrainingStartupTask>();
+        services.AddShellTerminator<StopOpenTelemetryDrainingShellTerminator>(LifecyclePhase.Default, 0);
     }
 }

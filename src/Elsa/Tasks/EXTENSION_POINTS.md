@@ -11,7 +11,14 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   start/stop lifecycle of shell-lifetime background and recurring tasks (and the singleton
   `IEventChannel`), so it must live for the shell's lifetime — a scoped manager is disposed at the
   end of the shell-initializer scope and would tear those singletons down shortly after activation.
-- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`.
+- **Lifecycle:** `RunShellTasksInitializer` starts tasks in CShells' `Start` phase;
+  `StopShellTasksTerminator` stops them at the mirrored `Start`-phase teardown point, before later
+  terminators flush stores and before the shell provider is disposed. `TaskManager.DisposeAsync`
+  awaits the same idempotent stop operation as a fallback.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. Implement
+  `IStoppableTaskManager` as an additive capability when the replacement owns shell-lifetime work that
+  must stop before provider disposal; existing `ITaskManager` implementations remain compatible and
+  otherwise keep their previous DI-disposal behavior.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature).

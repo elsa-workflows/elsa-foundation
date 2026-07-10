@@ -11,12 +11,14 @@ namespace Elsa.Tasks.Services;
 /// Manages the lifecycle of startup, background, and recurring tasks for tenants.
 /// Executes tasks in the proper sequence: startup tasks first, then background tasks, then recurring tasks.
 /// </summary>
-public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IAsyncDisposable
+public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IStoppableTaskManager, IAsyncDisposable
 {
     private readonly ILogger<TaskManager> logger = loggerFactory.CreateLogger<TaskManager>();
     private readonly CancellationTokenSource _shutdownCancellationTokenSource = new();
+    private readonly object _stopLock = new();
     private int _disposeRequested;
     private TaskStateManager? taskStateManager;
+    private Task? _stopTask;
 
     public async Task StartExecutingRegisteredTasks(CancellationToken token)
     {
@@ -168,10 +170,24 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
         }
     }
 
-    public async ValueTask DisposeAsync()
+    /// <inheritdoc />
+    public Task StopExecutingRegisteredTasks(CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Exchange(ref _disposeRequested, 1) == 1)
-            return;
+        Task stopTask;
+        lock (_stopLock)
+        {
+            // The terminator and provider disposal must await the same operation. If CShells abandons a
+            // cancelled terminator, disposal still observes the in-flight stop instead of returning early
+            // while that operation continues to use shell services.
+            stopTask = _stopTask ??= StopCoreAsync();
+        }
+
+        return stopTask.WaitAsync(cancellationToken);
+    }
+
+    private async Task StopCoreAsync()
+    {
+        Interlocked.Exchange(ref _disposeRequested, 1);
 
         try
         {
@@ -205,4 +221,6 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
             // Already disposed by a concurrent path.
         }
     }
+
+    public ValueTask DisposeAsync() => new(StopExecutingRegisteredTasks());
 }

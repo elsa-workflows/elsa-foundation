@@ -7,9 +7,9 @@ namespace Elsa.Persistence.EFCore.Storage;
 /// Shared channel-drain lifecycle for durable diagnostics stores that decouple a hot capture path from
 /// database I/O: writes enqueue onto a bounded channel (oldest dropped under sustained overload) and a
 /// single background drain loop batch-persists with exponential-backoff retries, applying retention
-/// pruning every <paramref name="pruneInterval"/> inserts. On graceful shutdown the shell provider
-/// disposes the store via <see cref="DisposeAsync"/>, which drains the channel before cancelling so
-/// buffered items are not discarded (issue #606). Extracted from the hand-mirrored twins
+/// pruning every <paramref name="pruneInterval"/> inserts. On graceful shell shutdown a terminator calls
+/// <see cref="CompleteDrainingAsync"/> before provider disposal so buffered items are not discarded;
+/// <see cref="DisposeAsync"/> remains the bounded fallback (issue #606). Extracted from the hand-mirrored twins
 /// <c>EfCoreOpenTelemetryStore</c>/<c>EfCoreStructuredLogStore</c> (issues #403/#606/#607).
 /// </summary>
 /// <typeparam name="TItem">The unit enqueued by the capture path and batch-persisted by the drain loop.</typeparam>
@@ -110,6 +110,21 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
         if (Volatile.Read(ref _drainLoop) is not { } drainLoop)
             throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
 
+        await CompleteDrainingCoreAsync(drainLoop, cancellationToken);
+    }
+
+    /// <summary>
+    /// Completes draining when the loop was started; otherwise returns successfully. Shell terminators use
+    /// this tolerant path because shutdown can follow a partially failed startup that never reached the
+    /// draining startup task.
+    /// </summary>
+    public Task CompleteDrainingIfStartedAsync(CancellationToken cancellationToken = default) =>
+        Volatile.Read(ref _drainLoop) is { } drainLoop
+            ? CompleteDrainingCoreAsync(drainLoop, cancellationToken)
+            : Task.CompletedTask;
+
+    private async Task CompleteDrainingCoreAsync(Task drainLoop, CancellationToken cancellationToken)
+    {
         _channel.Writer.TryComplete();
         await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
 
@@ -276,7 +291,8 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
     /// <summary>
     /// Hard-stop for synchronous disposal contexts only: completes the writer and immediately cancels the
     /// drain loop, discarding whatever is still queued in the channel. Best-effort by design — a graceful
-    /// host shutdown goes through <see cref="DisposeAsync"/> instead, which drains before cancelling.
+    /// shell drain invokes <see cref="CompleteDrainingAsync"/> through an <c>IShellTerminator</c> before the
+    /// provider is disposed.
     /// Idempotent (issue #403): a second call must not throw ObjectDisposedException from the
     /// already-disposed CancellationTokenSource.
     /// </summary>
@@ -291,12 +307,13 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
     }
 
     /// <summary>
-    /// Graceful shutdown path (issue #606): completes the writer and gives the drain loop the bounded
-    /// shutdown window to persist what is still buffered before the hard cancel. The shell provider is
-    /// disposed asynchronously on host shutdown, so this — not <see cref="Dispose"/> — is the path a
-    /// graceful shutdown takes; loss past the window is accepted rather than stalling shutdown
-    /// indefinitely (async disposal carries no cancellation token, so the configured window is the only
-    /// bound).
+    /// Last-resort asynchronous cleanup (issue #606): completes the writer and gives the drain loop the
+    /// bounded shutdown window to persist what is still buffered before the hard cancel. On a graceful
+    /// CShells drain an <c>IShellTerminator</c> first invokes <see cref="CompleteDrainingAsync"/> while the
+    /// provider and its database services are still usable; this fallback covers plain DI containers and
+    /// emergency paths where terminators do not run. Loss past the window is accepted rather than stalling
+    /// disposal indefinitely (async disposal carries no cancellation token, so the configured window is
+    /// the only bound).
     /// </summary>
     public async ValueTask DisposeAsync()
     {

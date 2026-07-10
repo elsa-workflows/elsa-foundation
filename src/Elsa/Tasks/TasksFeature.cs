@@ -36,5 +36,6 @@ public class TasksFeature : IShellFeature
         services.AddSingleton<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddSingleton<ITaskManager, TaskManager>();
         services.AddShellInitializer<RunShellTasksInitializer>(LifecyclePhase.Start, 0);
+        services.AddShellTerminator<StopShellTasksTerminator>(LifecyclePhase.Start, 0);
     }
 }
