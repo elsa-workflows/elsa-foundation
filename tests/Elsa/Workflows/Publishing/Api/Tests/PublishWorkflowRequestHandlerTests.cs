@@ -142,9 +142,11 @@ public sealed class PublishWorkflowRequestHandlerTests
         var published = await Handler(workflowVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var dispatcher = new WorkflowStartDispatcher(
             _store,
+            _referenceStore,
             new InProcessWorkflowExecutionActorProvider(),
             new ShortRuntimeExecutionIdGenerator());
 
+        // The publish above appended a live Published source reference the dispatch gates on (ADR 0040).
         var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(published.ArtifactId, "test"));
 
         Assert.Equal(published.ArtifactId, result.PinnedExecutable.ArtifactId);
