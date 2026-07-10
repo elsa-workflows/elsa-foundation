@@ -361,6 +361,14 @@ public sealed class HttpEndpointMiddleware(
     /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
+        // Sync mode can fault AFTER WriteHttpResponse already wrote the live response (e.g. endpoint -> write ->
+        // stalling activity tripping the request timeout). Once the response has started, a status code can no
+        // longer be written — attempting it throws and escapes as an unhandled pipeline exception on a connection
+        // that already carries the workflow-authored response. The caller got that response; the fault remains
+        // observable in durable state per normal runtime semantics, so the response is left untouched.
+        if (context.Response.HasStarted)
+            return;
+
         var faultException = timedOut && exception is OperationCanceledException
             ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
             : exception;

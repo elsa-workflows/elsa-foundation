@@ -576,6 +576,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<int> CountWorkflowExecutionsAsync() =>
         (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
 
+    /// <summary>The single persisted workflow execution's state — asserts exactly one run exists.</summary>
+    public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
+        Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
         await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);

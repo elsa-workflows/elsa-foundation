@@ -69,6 +69,12 @@
 - [X] T009 QA gate: rebase onto latest `origin/main` (D must be merged by then — verify, never assume), full `dotnet build` + full `dotnet test Elsa.Server.slnx` (ALL projects) + architecture guard 49/49.
       — Note: #604 (D) squash-merged as `224c6e2a`; E rebased via `rebase --onto origin/main b2980887` (C-on-B precedent), zero conflicts, 10 commits replayed. Gate: full build 0W/0E; full `dotnet test Elsa.Server.slnx` — 52/52 projects, 3502 passed, 0 failed, architecture guard 49/49. Spec 089 program complete on this PR's merge.
 
+## Review fixes (adversarial pass)
+
+- **major** (filed as blocker, downgraded by both verifiers): sync mode can fault AFTER `WriteHttpResponse` already wrote the live response (endpoint → write → timing-out/faulting activity); `HandleDispatchFaultAsync` then set a status code on a started response → unhandled `InvalidOperationException` on a partially-written connection. Fix: `Response.HasStarted` guard at the top of the fault path (mirrors the degrade path's existing guard) — the caller already holds the workflow-authored response; the fault stays observable in durable state. Pinned by `Sync_FaultAfterLiveWrite_LeavesStartedResponseUntouched`.
+- **minor**: scenario 5.3's E2E asserted only execution-count==1 for "the instance continues per normal runtime semantics". Strengthened: loads the single execution's state row and re-reads the endpoint's captured durable result post-408 (new fixture helper `SingleWorkflowExecutionAsync`).
+- Finder note: the `baseline-integrity` review dimension initially failed on an infrastructure limit and was re-run via workflow resume before handoff.
+
 ## Dependencies
 
 - T002 → T003 (same worker); Phase 2 → T004/T005 (Worker A) ∥ T006 (Worker B) — T006 consumes T004's `MergedHttpEndpointOptions.ResponseMode` and T005's sink type: Worker B starts from Worker A's T004 vocabulary commit if sequencing is needed, or the orchestrator lands T004 first (it is small) — orchestrator's call at launch time

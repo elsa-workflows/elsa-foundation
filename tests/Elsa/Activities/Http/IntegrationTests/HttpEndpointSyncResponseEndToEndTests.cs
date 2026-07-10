@@ -102,9 +102,12 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
 
-        // Durable state remains valid: the run was persisted (the endpoint completed and captured its result before
-        // the stall), so the timeout aborted the in-flight wait without corrupting the instance.
-        Assert.Equal(1, await _fixture.CountWorkflowExecutionsAsync());
+        // Durable state remains valid (review-fix strengthening): the run persisted, its state row loads, and the
+        // endpoint's captured result survived the aborted wait — the instance continues per normal runtime
+        // semantics rather than merely still being counted.
+        var execution = await _fixture.SingleWorkflowExecutionAsync();
+        var capturedResult = await _fixture.ReadCapturedOutputAsync(execution.WorkflowExecutionId, "sync-slow-result");
+        Assert.Equal(JsonValueKind.Object, capturedResult.ValueKind);
     }
 
     [Fact]

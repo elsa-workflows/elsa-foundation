@@ -1048,6 +1048,34 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
+    public async Task Sync_FaultAfterLiveWrite_LeavesStartedResponseUntouched()
+    {
+        // Review fix (089-E adversarial pass): a sync workflow can write the live response and THEN fault (e.g.
+        // endpoint -> WriteHttpResponse -> activity tripping the request timeout). Once Response.HasStarted, the
+        // fault path must not write a status code over the already-authored response (and must not throw).
+        var (services, sink) = SyncServices();
+        var startedFeature = new StartedResponseFeature();
+        var router = RecordingStimulusRouter.WithCallback(
+            _ =>
+            {
+                startedFeature.MarkStarted();
+                sink.MarkResponseWritten();
+                throw new InvalidOperationException("post-write dispatch fault");
+            },
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(startedFeature);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(context.Response.HasStarted);
+        // The fault path returned without touching the started response — no 500 overwrite, no thrown exception.
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task Sync_DispatchTimeout_Replies408_FaultPathStillWraps()
     {
         // Sync mode does not bypass the timeout/fault wrapping: a dispatch that delays past the endpoint timeout
