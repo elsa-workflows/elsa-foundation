@@ -33,7 +33,6 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     private static readonly TimeSpan DefaultBaseRetryDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IDbContextFactory<StructuredLogsDbContext> _dbContextFactory;
     private readonly int _maxRecentQuerySize;
@@ -43,7 +42,8 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     private readonly CancellationTokenSource _cts = new();
     private readonly ILogger<EfCoreStructuredLogStore> _logger;
     private readonly TimeSpan _baseRetryDelay;
-    private int _draining;
+    private readonly TimeSpan _shutdownDrainTimeout;
+    private readonly object _drainStartLock = new();
     private int _insertedSincePrune;
     private int _disposed;
     private Task? _drainLoop;
@@ -79,6 +79,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
         _baseRetryDelay = baseRetryDelay ?? DefaultBaseRetryDelay;
         var value = options.Value;
         _maxRecentQuerySize = Math.Max(1, value.MaxRecentQuerySize);
+        _shutdownDrainTimeout = value.ShutdownDrainTimeout < TimeSpan.Zero ? TimeSpan.Zero : value.ShutdownDrainTimeout;
         _maxRetainedEntries = Math.Max(1, maxRetainedEntries);
         _pruneInterval = Math.Max(1, pruneInterval);
         var capacity = Math.Max(value.BufferCapacity, BatchSize) * 4;
@@ -105,10 +106,17 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     /// </summary>
     public void StartDraining()
     {
-        if (Interlocked.Exchange(ref _draining, 1) == 1)
+        if (Volatile.Read(ref _drainLoop) is not null)
             return;
 
-        _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+        lock (_drainStartLock)
+        {
+            // _drainLoop is the single "draining started" signal: it is only ever assigned here, fully
+            // constructed, so a concurrent DisposeAsync/CompleteDrainingAsync either sees null (drain never
+            // started) or the live loop task — never a started-but-unpublished in-between that would make
+            // shutdown skip the graceful drain (#606 follow-up).
+            _drainLoop ??= Task.Run(() => RunDrainLoopAsync(_cts.Token));
+        }
     }
 
     /// <summary>
@@ -120,7 +128,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     /// </summary>
     public async Task CompleteDrainingAsync(CancellationToken cancellationToken = default)
     {
-        if (_drainLoop is not { } drainLoop)
+        if (Volatile.Read(ref _drainLoop) is not { } drainLoop)
             throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
 
         _channel.Writer.TryComplete();
@@ -387,24 +395,24 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
 
     /// <summary>
     /// Graceful shutdown path (issue #606): completes the writer and gives the drain loop a bounded window
-    /// (<see cref="ShutdownDrainTimeout"/>) to persist and prune what is still buffered before the hard
-    /// cancel. The shell provider is disposed asynchronously on host shutdown, so this — not
+    /// (<see cref="StructuredLogsOptions.ShutdownDrainTimeout"/>) to persist what is still buffered before
+    /// the hard cancel. The shell provider is disposed asynchronously on host shutdown, so this — not
     /// <see cref="Dispose"/> — is the path a graceful shutdown takes; loss past the window is accepted
-    /// rather than stalling shutdown indefinitely.
+    /// rather than stalling shutdown indefinitely (async disposal carries no cancellation token, so the
+    /// configured window is the only bound).
     /// </summary>
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
-        var drainLoop = _drainLoop;
-        if (Volatile.Read(ref _draining) == 1 && drainLoop is not null)
-        {
-            _channel.Writer.TryComplete();
+        _channel.Writer.TryComplete();
 
+        if (Volatile.Read(ref _drainLoop) is { } drainLoop)
+        {
             try
             {
-                await drainLoop.WaitAsync(ShutdownDrainTimeout);
+                await drainLoop.WaitAsync(_shutdownDrainTimeout);
             }
             catch (TimeoutException)
             {
@@ -412,7 +420,6 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
             }
         }
 
-        _channel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
     }

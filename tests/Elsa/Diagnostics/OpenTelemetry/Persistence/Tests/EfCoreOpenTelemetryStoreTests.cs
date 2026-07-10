@@ -174,6 +174,17 @@ public sealed class EfCoreOpenTelemetryStoreTests
     }
 
     [Fact]
+    public async Task DisposeAsync_ClampsNegativeShutdownDrainTimeout()
+    {
+        // A negative configured window must clamp to zero (immediate hard stop), not surface an
+        // ArgumentOutOfRangeException from WaitAsync in the middle of host shutdown.
+        using var context = new OpenTelemetryPersistenceTestContext(new OpenTelemetryDiagnosticsOptions { ShutdownDrainTimeout = TimeSpan.FromSeconds(-1) });
+        await context.Store.WriteAsync(new OpenTelemetryBatch([context.Resource("resource-api", "api")], [], [], [], [], []));
+
+        await context.Store.DisposeAsync();
+    }
+
+    [Fact]
     public async Task DisposeAsync_PersistsBufferedBatchesBeforeCancelling()
     {
         // The issue #606 shutdown scenario: batches are still queued in the channel when the shell

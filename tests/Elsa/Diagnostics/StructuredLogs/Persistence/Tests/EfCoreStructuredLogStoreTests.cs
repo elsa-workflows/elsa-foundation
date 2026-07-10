@@ -180,6 +180,19 @@ public sealed class EfCoreStructuredLogStoreTests
         Assert.Equal(10, db.StructuredLogEntries.Count());
     }
 
+    [Fact]
+    public async Task DisposeAsyncClampsNegativeShutdownDrainTimeout()
+    {
+        // A negative configured window must clamp to zero (immediate hard stop), not surface an
+        // ArgumentOutOfRangeException from WaitAsync in the middle of host shutdown.
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host, o => o.ShutdownDrainTimeout = TimeSpan.FromSeconds(-1));
+        store.StartDraining();
+        store.Append(TestEntries.Create(sequence: 1, message: "m1"));
+
+        await store.DisposeAsync();
+    }
+
     /// <summary>
     /// Covers the dispose-guard half of issue #403: a second Dispose() call must be a no-op (parity with
     /// EfCoreOpenTelemetryStore) instead of throwing ObjectDisposedException from the already-disposed
