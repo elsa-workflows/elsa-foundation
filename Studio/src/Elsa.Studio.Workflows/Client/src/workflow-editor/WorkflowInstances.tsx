@@ -11,6 +11,7 @@ import {
   getActivityDesignerSupport,
   getChildSlots,
   latestActivityExecution,
+  planSlotNavigation,
   resolveScope,
   type ChildSlot,
   type ScopeFrame,
@@ -316,41 +317,10 @@ function WorkflowInstanceCanvas({
   onNavigateToScope(frames: ScopeFrame[]): void;
 }) {
   const scopeKey = getInstanceScopeKey(frames);
-  const canvas = useMemo(() => {
-    if (!definitionVersion) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
-
-    const root = definitionVersion.state.rootActivity;
-    if (!root) return { nodes: [] as Node<WorkflowNodeData>[], edges: [] as Edge<WorkflowEdgeData>[] };
-
-    const scope = resolveScope(root, frames, activityCatalog);
-    const scopeOwner = scope?.owner ?? root;
-    const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
-    const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
-    const baseCanvas = support === "unsupported" || !scope
-      ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout)
-      : buildCanvas(scope, activityCatalog, definitionVersion.layout);
-    const readonlyNodes = baseCanvas.nodes.map(node => ({
-      ...node,
-      draggable: false,
-      connectable: false,
-      deletable: false,
-      data: {
-        ...node.data,
-        onEnterSlot: (slot: ChildSlot) => {
-          onNavigateToScope([...frames, {
-            ownerNodeId: node.id,
-            slotId: slot.id,
-            label: `${node.data.label} / ${slot.label}`
-          }]);
-        }
-      }
-    }));
-
-    return {
-      nodes: applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
-      edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
-    };
-  }, [activityCatalog, definitionVersion, details, frames, onNavigateToScope, selectedEvidenceId]);
+  const canvas = useMemo(
+    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope),
+    [activityCatalog, definitionVersion, details, frames, onNavigateToScope, selectedEvidenceId]
+  );
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
@@ -372,12 +342,15 @@ function WorkflowInstanceCanvas({
       {definitionVersion ? (
         <div className="wf-breadcrumb wf-instance-breadcrumb">
           <button type="button" onClick={() => onNavigateToScope([])}>Root</button>
-          {frames.map((frame, index) => (
+          {frames.map((frame, index) => frame.label ? (
+            // Unlabelled frames are descent hops planSlotNavigation tucks under the next crumb
+            // (entering a slot through its single container child); the visible crumb navigates to
+            // the full hop chain, so hiding them keeps the trail one-entry-per-slot.
             <span className="wf-breadcrumb-segment" key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
               <ChevronRight size={13} />
               <button type="button" onClick={() => onNavigateToScope(frames.slice(0, index + 1))}>{frame.label}</button>
             </span>
-          ))}
+          ) : null)}
         </div>
       ) : null}
       <div className="wf-instance-canvas">
@@ -410,6 +383,48 @@ function WorkflowInstanceCanvas({
       </div>
     </section>
   );
+}
+
+// Builds the read-only run-inspection canvas for the scope addressed by `frames`. Slot badges navigate
+// along the same planned frame path as the editor (planSlotNavigation): a slot holding a single canvas
+// container is descended THROUGH so the canvas shows the container's contents instead of a one-node
+// canvas holding the container. Only the plan's frames are used — selection stays evidence-driven.
+export function buildInstanceCanvas(
+  definitionVersion: WorkflowDefinitionVersionDetails | null,
+  activityCatalog: ActivityCatalogItem[],
+  details: WorkflowInstanceDetails,
+  selectedEvidenceId: string | null,
+  frames: ScopeFrame[],
+  onNavigateToScope: (frames: ScopeFrame[]) => void
+): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[] } {
+  const root = definitionVersion?.state.rootActivity;
+  if (!definitionVersion || !root) return { nodes: [], edges: [] };
+
+  const scope = resolveScope(root, frames, activityCatalog);
+  const scopeOwner = scope?.owner ?? root;
+  const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
+  const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
+  const baseCanvas = support === "unsupported" || !scope
+    ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, definitionVersion.layout)
+    : buildCanvas(scope, activityCatalog, definitionVersion.layout);
+  const readonlyNodes = baseCanvas.nodes.map(node => ({
+    ...node,
+    draggable: false,
+    connectable: false,
+    deletable: false,
+    data: {
+      ...node.data,
+      onEnterSlot: (slot: ChildSlot) => {
+        const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, `${node.data.label} / ${slot.label}`, activityCatalog);
+        if (plan) onNavigateToScope(plan.frames);
+      }
+    }
+  }));
+
+  return {
+    nodes: applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
+    edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
+  };
 }
 
 function getInstanceScopeKey(frames: ScopeFrame[]) {
