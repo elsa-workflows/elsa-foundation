@@ -42,18 +42,21 @@ public sealed class HttpEndpointMiddlewareTests
 
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
 
-        // The request maps to the matched template + method via the shared hashing scheme, dispatched in StartOnly
-        // mode so it never resumes a waiting instance. A concrete (parameter-free) template carries no RouteData.
+        // The request maps to the matched template + method via the shared hashing scheme, dispatched in
+        // StartAndResume mode (spec 089 D) so it both starts triggers and resumes waiting instances. A concrete
+        // (parameter-free) template carries no RouteData.
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.StimulusType, dispatched.StimulusType);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "POST"), dispatched.StimulusHash);
-        Assert.Equal(StimulusRoutingMode.StartOnly, dispatched.Mode);
+        Assert.Equal(StimulusRoutingMode.StartAndResume, dispatched.Mode);
         Assert.NotNull(dispatched.Input);
         Assert.Empty(dispatched.Input!.Value.GetProperty("RouteData").EnumerateObject());
 
         var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
         var started = payload.GetProperty("started");
         Assert.Equal("wf-exec-42", started[0].GetString());
+        // The response now carries a (here empty) resumed array alongside started (spec 089 D, D-D6).
+        Assert.Empty(payload.GetProperty("resumed").EnumerateArray());
     }
 
     [Fact]
@@ -474,19 +477,227 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Contains(faultHandler.LastContext!.Exceptions, e => e is InvalidOperationException);
     }
 
+    // ---- Spec 089 sub-unit D (T011): StartAndResume — resume-only matches, merged body, bookmark-metadata options ----
+
+    [Fact]
+    public async Task ResumeOnlyMatch_NoClaimant_Replies202_WithResumedIds()
+    {
+        // A purely mid-flow endpoint: no trigger claimant, one waiting instance resumed by this request. The route
+        // is in the table (from the resolver's bookmark union); dispatch resumes and the body reports it.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-resumed-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-resumed-1", "callbacks/{id}", "POST"));
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "callbacks/{id}", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/callbacks/42", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var dispatched = Assert.Single(router.Requests);
+        Assert.Equal(StimulusRoutingMode.StartAndResume, dispatched.Mode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Empty(payload.GetProperty("started").EnumerateArray());
+        var resumed = payload.GetProperty("resumed");
+        Assert.Equal("wf-resumed-1", resumed[0].GetString());
+    }
+
+    [Fact]
+    public async Task StartAndResumeMatch_Replies202_WithMergedStartedAndResumedBody()
+    {
+        // One request both starts a trigger and resumes a waiting instance — the body carries both arrays.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-started-1") },
+            resumes: new[] { new StimulusResumeOutcome("wf-resumed-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("wf-started-1", payload.GetProperty("started")[0].GetString());
+        Assert.Equal("wf-resumed-1", payload.GetProperty("resumed")[0].GetString());
+    }
+
+    [Fact]
+    public async Task NeitherStartedNorResumed_Replies404()
+    {
+        // The template resolves (in the table) but the router neither starts nor resumes anything → 404, requiring
+        // BOTH zero starts and zero dispatched resumes (spec 089 D, D-D6).
+        var router = new RecordingStimulusRouter();
+        var store = await StoreWith(Binding("artifact-1", "callbacks", "POST"));
+        var middleware = Middleware(router, store, "callbacks");
+        var context = NewContext("/workflows/http/callbacks", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
+    public async Task NonDispatchedResume_DoesNotCountAsMatch_Replies404()
+    {
+        // A resume outcome that did NOT dispatch (e.g. NotFound after a race) must not be reported as resumed nor
+        // keep the request from 404-ing — ResumedCount counts only Dispatched.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-x", BookmarkResumeDispatchStatus.NotFound, reason: "gone") });
+        var store = await StoreWith(Binding("artifact-1", "callbacks", "POST"));
+        var middleware = Middleware(router, store, "callbacks");
+        var context = NewContext("/workflows/http/callbacks", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_BookmarkMetadataAuthorize_FailingHandler_Replies401_BeforeBodyRead()
+    {
+        // No trigger claimant, but the waiting bookmark's metadata marks the endpoint authorize=true — enforcement
+        // uses the bookmark's options (D-D5) and fails closed before the body is read or anything dispatched.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "secure", "POST", authorize: true, policy: "admins"));
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "secure", bookmarkLookup: bookmarks);
+        var handler = new FakeAuthorizationHandler(authorize: false);
+        var body = new TrackingStream(Encoding.UTF8.GetBytes("""{"id":1}"""));
+        var context = NewContext("/workflows/http/secure", "POST", bodyStream: body,
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.False(body.WasRead);
+        Assert.True(handler.WasInvoked);
+        Assert.Equal("admins", handler.LastContext!.Policy);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_BookmarkMetadataSizeLimit_OversizedBody_Replies413()
+    {
+        // No trigger claimant; the waiting bookmark's metadata sets a per-endpoint size limit smaller than the
+        // global cap, and an oversized body 413s before dispatch (D-D5 enforcement applies to resume-only matches).
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "sized", "POST", requestSizeLimit: 16));
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "sized", maxBodyBytes: 256, bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/sized", "POST", body: new string('x', 64));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+    }
+
+    [Fact]
+    public async Task ClaimantWins_OverBookmarkMetadata_WhenBothExist()
+    {
+        // Both a trigger claimant and a waiting bookmark exist for the (template, method), and their options DIFFER:
+        // the claimant does NOT authorize, the bookmark WOULD. D-D5 says the claimant wins — so no auth runs and the
+        // request dispatches (202) even though the bookmark's metadata alone would have demanded authorization.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-started-1") });
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST")); // authorize=false
+        var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "orders/webhook", "POST", authorize: true));
+        var middleware = Middleware(router, store, "orders/webhook", bookmarkLookup: bookmarks);
+        // A failing auth handler is present; if the bookmark's authorize=true were consulted it would 401.
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(new FakeAuthorizationHandler(authorize: false)));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
+    public async Task Ambiguity409Guard_StaysClaimantOnly_UnaffectedByBookmarks()
+    {
+        // The 409 guard is trigger-claimant-only (bookmark resumes are instance-scoped, never ambiguous across
+        // definitions). Two definitions claim the same (template, method) → 409 before dispatch, regardless of any
+        // waiting bookmark on the same hash.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var store = await StoreWith(
+            Binding("artifact-1", "orders/{id}", "GET", definitionId: "definition-a"),
+            Binding("artifact-2", "orders/{id}", "GET", definitionId: "definition-b"));
+        var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "orders/{id}", "GET"));
+        var middleware = Middleware(router, store, "orders/{id}", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/orders/42", "GET");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+    }
+
     private static HttpEndpointMiddleware Middleware(
         IStimulusRouter router,
         IWorkflowTriggerBindingStore store,
         params string[] templates) =>
-        new(router, new FakeRouteTable(templates), new TestRouteMatcher(), store, Options());
+        new(router, new FakeRouteTable(templates), new TestRouteMatcher(), store, EmptyBookmarkLookup(), Options());
 
     private static HttpEndpointMiddleware Middleware(
         IStimulusRouter router,
         IWorkflowTriggerBindingStore store,
         string template,
         string? basePath = null,
-        long? maxBodyBytes = null) =>
-        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, Options(basePath, maxBodyBytes));
+        long? maxBodyBytes = null,
+        IGlobalBookmarkStimulusLookup? bookmarkLookup = null) =>
+        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, bookmarkLookup ?? EmptyBookmarkLookup(), Options(basePath, maxBodyBytes));
+
+    /// <summary>A lookup over an empty bookmark store — the common case where every match is trigger-claimant-backed.</summary>
+    private static IGlobalBookmarkStimulusLookup EmptyBookmarkLookup() =>
+        new GlobalBookmarkStimulusLookup(new InMemoryBookmarkStateStore());
+
+    /// <summary>A lookup over a store seeded with the given waiting HttpEndpoint bookmarks (resume-only option source).</summary>
+    private static async Task<IGlobalBookmarkStimulusLookup> BookmarkLookupWith(params BookmarkState[] bookmarks)
+    {
+        var store = new InMemoryBookmarkStateStore();
+        foreach (var bookmark in bookmarks)
+            await store.SaveAsync(bookmark);
+        return new GlobalBookmarkStimulusLookup(store);
+    }
+
+    /// <summary>Builds a waiting HttpEndpoint bookmark carrying the given (template, method) hash + options metadata.</summary>
+    private static BookmarkState WaitingBookmark(
+        string workflowExecutionId,
+        string template,
+        string method,
+        bool authorize = false,
+        string? policy = null,
+        long? requestSizeLimit = null)
+    {
+        var hash = HttpEndpointStimulus.Hash(template, method);
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = HttpEndpointStimulus.NormalizeTemplate(template),
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = method.ToLowerInvariant()
+        };
+        if (authorize)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.AuthorizeMetadataKey] = "true";
+        if (policy is not null)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.PolicyMetadataKey] = policy;
+        if (requestSizeLimit is { } sizeLimit)
+            metadata[Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey] =
+                sizeLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return new BookmarkState(
+            BookmarkId: $"http-endpoint:{workflowExecutionId}:{method.ToLowerInvariant()}",
+            WorkflowExecutionId: workflowExecutionId,
+            ActivityExecutionId: $"ae-{workflowExecutionId}",
+            ExecutableNodeId: $"node-{workflowExecutionId}",
+            ResumeTargetId: "OnResume",
+            StimulusType: HttpEndpointStimulus.StimulusType,
+            StimulusHash: hash,
+            Payload: null,
+            Metadata: metadata,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            ExpiresAt: null);
+    }
 
     private static async Task<InMemoryWorkflowTriggerBindingStore> StoreWith(params WorkflowTriggerBinding[] bindings)
     {

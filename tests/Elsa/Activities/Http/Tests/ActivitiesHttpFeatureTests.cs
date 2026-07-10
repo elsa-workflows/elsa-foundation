@@ -93,6 +93,11 @@ public sealed class ActivitiesHttpFeatureTests
         services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
         services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
+        // The middleware also resolves waiting-bookmark options for resume-only matches (spec 089 D) via the
+        // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers (in ActivitiesHttp's
+        // DependsOn closure); the bare container stands in for that guarantee with an empty bookmark store.
+        services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup>();
         // CShells guarantees an IMiddlewareFactory in every shell container; this bare container stands in for one.
         services.AddSingleton<Microsoft.AspNetCore.Http.IMiddlewareFactory, Microsoft.AspNetCore.Http.MiddlewareFactory>();
         var provider = services.BuildServiceProvider();
@@ -157,6 +162,10 @@ public sealed class ActivitiesHttpFeatureTests
 
         // Platform-provided dependencies the closure reads at resolve time.
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
+        // The route resolver now unions waiting-bookmark templates (spec 089 D) via the cross-execution lookup —
+        // contributed in production by WorkflowsRuntimeTriggers; supplied here as the platform stand-in.
+        services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup>();
         services.AddMemoryCache();
         services.AddLogging();
         services.AddAuthorizationCore();
