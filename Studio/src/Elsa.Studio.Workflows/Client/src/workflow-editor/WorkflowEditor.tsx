@@ -8,6 +8,7 @@ import {
   findNodeScopePath,
   getActivityDisplay,
   normalizeActivityStructures,
+  planSlotNavigation,
   replaceSlotActivities,
   updateActivity,
   type ChildSlot
@@ -75,7 +76,6 @@ export function WorkflowEditor({
     select,
     navigateToScope,
     resetToRoot,
-    enterSlot,
     startTestRun,
     clearTestRun,
     setPublishedArtifact
@@ -134,9 +134,13 @@ export function WorkflowEditor({
     scope,
     selectedNode,
     selectedDescriptor,
-    selectedNodeAvailability,
     selectedSlots,
-    selectedSupportsScopedVariables,
+    inspectedNode,
+    inspectedIsScopeOwner,
+    inspectedDescriptor,
+    inspectedNodeAvailability,
+    inspectedSlots,
+    inspectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
     canAddActivitiesToCanvas
@@ -212,12 +216,27 @@ export function WorkflowEditor({
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
-  // the first-drop-becomes-root flow), so this is gated on frames.length > 0.
+  // the first-drop-becomes-root flow), so this is gated on frames.length > 0. Flowchart-mode scopes are
+  // excluded: they are already a full canvas (slot entry descends into containers), so they get the same
+  // empty-canvas "Add activity" button as the root instead of the choose-a-container card.
   const insideEmptySlot = !isUnsupportedDesigner
+    && !isFlowchartDesigner
     && frames.length > 0
     && !!scope
     && scope.slot.activities.length === 0
     && nodes.length === 0;
+
+  // SlotEmptyState pick: after the add lands, descend into the picked activity when it is a canvas
+  // container — the same view slot entry would choose (a one-node canvas holding a container helps
+  // nobody). For leaves the plan only retargets, so addActivity's own selection stands and no
+  // navigation happens.
+  const pickActivityForEmptySlot = useCallback((activity: ActivityCatalogItem) => {
+    const added = addActivity(activity);
+    if (!added || !scope || !scopeOwner || frames.length === 0) return;
+    const label = frames[frames.length - 1].label;
+    const plan = planSlotNavigation(frames, scopeOwner, scopeOwner.nodeId, { ...scope.slot, activities: [added] }, label, catalogByVersion);
+    if (plan && plan.frames.length > frames.length) navigateToScope(plan.frames, plan.selectedNodeId);
+  }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
   // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
   // reducer's batch transition.
@@ -313,15 +332,17 @@ export function WorkflowEditor({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canvasView, undo, redo]);
 
-  // Enter a slot from the inspector list or a canvas slot badge. A filled single-cardinality slot lands
-  // with its assigned activity selected, so the inspector immediately shows that activity's properties.
+  // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
+  // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
+  // a slot holding a single leaf lands with the leaf selected, and slots of the current scope owner
+  // retarget the last frame. A null plan (non-primary slot of the root owner) is not navigable.
   const enterSlotScope = useCallback((ownerNodeId: string, slot: ChildSlot, label: string) => {
-    const assigned = slot.cardinality === "single" ? slot.activities[0]?.nodeId ?? null : null;
-    enterSlot(ownerNodeId, slot.id, label, assigned);
-  }, [enterSlot]);
+    const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, label, catalogByVersion);
+    if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
+  }, [catalogByVersion, frames, navigateToScope, scopeOwner]);
 
-  // Assign or replace the activity of a single-cardinality slot, then land inside the slot with the new
-  // activity selected — the same place the initial pick-from-empty-slot flow ends up.
+  // Assign or replace the activity of a single-cardinality slot, then navigate the same way slot entry
+  // would: inside a just-assigned container's canvas, or landing on a just-assigned leaf selected.
   const replaceSlotActivity = useCallback((ownerNodeId: string, slot: ChildSlot, label: string, activity: ActivityCatalogItem) => {
     const replaced = slot.activities.length > 0;
     const next = createActivityNode(activity, createNodeId(activity));
@@ -336,10 +357,11 @@ export function WorkflowEditor({
         }
       };
     });
-    enterSlot(ownerNodeId, slot.id, label, next.nodeId);
+    const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, { ...slot, activities: [next] }, label, catalogByVersion);
+    if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
     setError("");
     setStatus(replaced ? `Replaced ${slot.label} content` : `Assigned ${getActivityDisplay(activity)} to ${slot.label}`);
-  }, [catalogByVersion, editDraft, enterSlot]);
+  }, [catalogByVersion, editDraft, frames, navigateToScope, scopeOwner]);
 
   // Canvas slot badges navigate into their slot (matching the run viewer), wired through a context so
   // node data identity stays stable across drag re-renders. Null (static badges) for the
@@ -394,6 +416,14 @@ export function WorkflowEditor({
   if (!details || !draft) {
     return <div className="wf-empty">{error || "Loading workflow editor..."}</div>;
   }
+
+  // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
+  // has no node on its own canvas — fall back to its catalog display name.
+  const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : undefined;
+  const inspectedLabel = inspectedNode
+    ? (nodes.find(node => node.id === inspectedNode.nodeId)?.data.label
+      ?? (inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode.nodeId))
+    : "";
 
   const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
     ? testRun.view
@@ -456,15 +486,16 @@ export function WorkflowEditor({
       render: () => (
         <InspectorPanel
           context={context}
-          selectedNode={selectedNode}
-          selectedNodeLabel={selectedNode ? (nodes.find(node => node.id === selectedNode.nodeId)?.data.label ?? selectedNode.nodeId) : ""}
-          selectedActivityType={selectedNode ? (selectedDescriptor?.typeName ?? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
-          selectedDescriptor={selectedDescriptor}
-          selectedNodeAvailability={selectedNodeAvailability}
-          selectedSlots={selectedSlots}
+          selectedNode={inspectedNode}
+          selectedNodeLabel={inspectedLabel}
+          selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}
+          selectedDescriptor={inspectedDescriptor}
+          selectedNodeAvailability={inspectedNodeAvailability}
+          selectedSlots={inspectedSlots}
+          inspectingScopeOwner={inspectedIsScopeOwner}
           catalog={catalog}
           catalogByVersion={catalogByVersion}
-          selectedSupportsScopedVariables={selectedSupportsScopedVariables}
+          selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
           expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
@@ -646,12 +677,15 @@ export function WorkflowEditor({
           <>
           <div className="wf-breadcrumb">
             <button type="button" onClick={() => resetToRoot()}>Root</button>
-            {frames.map((frame, index) => (
+            {frames.map((frame, index) => frame.label ? (
+              // Unlabelled frames are descent hops planSlotNavigation tucks under the next crumb
+              // (entering a slot through its single container child); the visible crumb navigates to
+              // the full hop chain, so hiding them keeps the trail one-entry-per-slot.
               <React.Fragment key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
                 <ChevronRight size={13} />
                 <button type="button" onClick={() => navigateToScope(frames.slice(0, index + 1), null)}>{frame.label}</button>
               </React.Fragment>
-            ))}
+            ) : null)}
           </div>
           <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
             <WorkflowEdgeActionsContext.Provider value={edgeActions}>
@@ -699,7 +733,7 @@ export function WorkflowEditor({
               <SlotEmptyState
                 slotLabel={scope?.slot.label ?? "this slot"}
                 catalog={catalog}
-                onPickActivity={addActivity}
+                onPickActivity={pickActivityForEmptySlot}
                 onBrowseAll={openEmptyConnectMenu}
               />
             ) : isFlowchartDesigner && nodes.length === 0 ? (

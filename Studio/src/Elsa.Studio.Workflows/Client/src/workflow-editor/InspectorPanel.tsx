@@ -30,6 +30,9 @@ interface InspectorPanelProps {
   selectedDescriptor: StudioActivityDescriptor | null;
   selectedNodeAvailability: ActivityAvailabilityDiagnosticEntry | null;
   selectedSlots: ChildSlot[];
+  // True when the inspected node is the scope OWNER (shown because nothing on the canvas is selected):
+  // the container whose contents the canvas displays, e.g. the flowchart a slot entry descended into.
+  inspectingScopeOwner?: boolean;
   catalog: ActivityCatalogItem[];
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
@@ -54,6 +57,7 @@ export function InspectorPanel({
   selectedDescriptor,
   selectedNodeAvailability,
   selectedSlots,
+  inspectingScopeOwner = false,
   catalog,
   catalogByVersion,
   selectedSupportsScopedVariables,
@@ -81,6 +85,9 @@ export function InspectorPanel({
   return (
     <div className="wf-inspector-content">
       <h3>{selectedNodeLabel}</h3>
+      {inspectingScopeOwner ? (
+        <p className="wf-muted wf-inspector-owner-hint">Container of this canvas — select a node to inspect it instead.</p>
+      ) : null}
       <dl>
         <dt>Node ID</dt>
         <dd>{selectedNode.nodeId}</dd>

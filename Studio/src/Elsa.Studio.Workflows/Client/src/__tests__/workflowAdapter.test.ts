@@ -22,20 +22,11 @@ import {
   type ScopeFrame
 } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { writeLine } from "./fixtures";
 
-const writeLine: ActivityCatalogItem = {
-  activityVersionId: "activity-write-line-v1",
-  activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-  version: "1.0.0",
-  category: "Primitives",
-  displayName: "Write Line",
-  description: null,
-  executionType: "Action",
-  inputs: [],
-  outputs: [],
-  designFacets: []
-};
-
+// The sequence/flowchart variants below deliberately have NO design facets, and this file's forEach
+// facet declares mode "sequence" — they exercise the legacy/fallback structure paths, unlike the
+// real-backend shapes in ./fixtures. Only the base writeLine is shared.
 const sequenceActivity: ActivityCatalogItem = {
   ...writeLine,
   activityVersionId: "activity-sequence-v1",

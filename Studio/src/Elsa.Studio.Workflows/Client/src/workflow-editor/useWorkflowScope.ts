@@ -56,19 +56,32 @@ export function useWorkflowScope({
     () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
     [catalogByVersion, descriptorsByType, selectedNode]
   );
-  const selectedNodeAvailability = useMemo(
-    () => selectedNode
-      ? availabilityLookup({ activityVersionId: selectedNode.activityVersionId, activityTypeKey: catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey })
-      : null,
-    [availabilityLookup, catalogByVersion, selectedNode]
-  );
   const selectedSlots = selectedNode ? getChildSlots(selectedNode, catalogByVersion) : [];
-  const selectedSupportsScopedVariables = selectedNode
-    ? supportsScopedVariables(selectedNode, catalogByVersion.get(selectedNode.activityVersionId))
+  // With nothing selected the inspector shows the scope OWNER — the container whose canvas is
+  // displayed. That is the only inspection surface for containers a slot entry descends through
+  // (they never appear as nodes), and it covers the root container too.
+  const inspectedNode = selectedNode ?? scopeOwner;
+  const inspectedIsScopeOwner = !selectedNode && !!scopeOwner;
+  const inspectedDescriptor = useMemo(
+    () => inspectedNode ? resolveActivityDescriptor(inspectedNode, catalogByVersion, descriptorsByType) : null,
+    [catalogByVersion, descriptorsByType, inspectedNode]
+  );
+  const inspectedNodeAvailability = useMemo(
+    () => inspectedNode
+      ? availabilityLookup({ activityVersionId: inspectedNode.activityVersionId, activityTypeKey: catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey })
+      : null,
+    [availabilityLookup, catalogByVersion, inspectedNode]
+  );
+  const inspectedSlots = inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [];
+  const inspectedSupportsScopedVariables = inspectedNode
+    ? supportsScopedVariables(inspectedNode, catalogByVersion.get(inspectedNode.activityVersionId))
     : false;
-  // Scope-aware variable visibility + shadowing for the selected activity (ADR-0027). Backed by a
-  // pending design endpoint; degrades to status "unavailable" until it ships.
-  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNodeId, catalogByVersion);
+  // Scope-aware variable visibility + shadowing for the SELECTED activity (ADR-0027). Deliberately
+  // NOT keyed to the inspected owner: the owner changes with every scope navigation, so keying the
+  // fetch to it would re-fire the analyze request per navigation. Owner inspection degrades to the
+  // hook's no-selection behaviour; revisit when the analyze endpoint ships (elsa-foundation#285).
+  // Backed by a pending design endpoint; degrades to status "unavailable" until it ships.
+  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNode?.nodeId ?? null, catalogByVersion);
   // Flowchart editing (free connections, empty-canvas add button) is driven by the RESOLVED slot's mode,
   // not the owner's primary-slot mode: with the new scope-frame semantics a container's non-primary slot
   // (e.g. a flowchart-mode branch of a multi-slot activity) can be viewed directly, and it should behave
@@ -85,9 +98,13 @@ export function useWorkflowScope({
     scope,
     selectedNode,
     selectedDescriptor,
-    selectedNodeAvailability,
     selectedSlots,
-    selectedSupportsScopedVariables,
+    inspectedNode,
+    inspectedIsScopeOwner,
+    inspectedDescriptor,
+    inspectedNodeAvailability,
+    inspectedSlots,
+    inspectedSupportsScopedVariables,
     scopedVariableAnalysis,
     isFlowchartDesigner,
     canAddActivitiesToCanvas

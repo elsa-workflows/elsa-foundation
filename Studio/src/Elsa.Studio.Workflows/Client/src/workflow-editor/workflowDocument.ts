@@ -46,10 +46,10 @@ export type WorkflowDocumentAction =
   // Edit that also moves the selection to a known node (adding/wrapping a root or a scoped activity).
   | { type: "draftEditedAndSelected"; recipe: WorkflowDraftRecipe; selectedNodeId: string | null }
   | { type: "selectionChanged"; selectedNodeId: string | null }
+  // Scope navigation (breadcrumb clicks, slot entry, variable-repair jumps). Slot entry always goes
+  // through here with a full frame path computed by planSlotNavigation — descending through a slot's
+  // single container child needs multi-frame hops, so there is no single-frame "enter slot" transition.
   | { type: "scopeNavigated"; frames: ScopeFrame[]; selectedNodeId: string | null }
-  // Descend one slot deeper. `selectedNodeId` lets the caller land with a child of the entered slot
-  // pre-selected (inspecting a single-cardinality slot's assigned activity); null enters unselected.
-  | { type: "slotEntered"; frame: ScopeFrame; selectedNodeId: string | null }
   | { type: "testRunStarted"; testRun: WorkflowTestRunState }
   | { type: "testRunCleared" }
   | { type: "publishedArtifactChanged"; publishedArtifactId: string | null };
@@ -79,8 +79,6 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
       return state.selectedNodeId === action.selectedNodeId ? state : { ...state, selectedNodeId: action.selectedNodeId };
     case "scopeNavigated":
       return { ...state, frames: action.frames, selectedNodeId: action.selectedNodeId };
-    case "slotEntered":
-      return { ...state, frames: [...state.frames, action.frame], selectedNodeId: action.selectedNodeId };
     case "testRunStarted":
       return { ...state, testRun: action.testRun };
     case "testRunCleared":
@@ -123,9 +121,6 @@ export function useWorkflowDocument() {
     },
     resetToRoot() {
       dispatch({ type: "scopeNavigated", frames: [], selectedNodeId: null });
-    },
-    enterSlot(ownerNodeId: string, slotId: string, label: string, selectedNodeId: string | null = null) {
-      dispatch({ type: "slotEntered", frame: { ownerNodeId, slotId, label }, selectedNodeId });
     },
     startTestRun(testRun: WorkflowTestRunState) {
       dispatch({ type: "testRunStarted", testRun });
