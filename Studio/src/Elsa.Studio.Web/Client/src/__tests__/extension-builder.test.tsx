@@ -8,6 +8,7 @@ import { StudioHttpError, type ElsaStudioModuleApi } from "../sdk";
 
 describe("extension builder page", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage?.clear();
@@ -111,26 +112,132 @@ describe("extension builder page", () => {
     await unmount();
   });
 
-  it("surfaces the bridge's 501 not-yet-available detail as a tracker error without flipping to unavailable", async () => {
-    // In PR1 of #256 the bridge answers every mutation with a 501 + friendly detail. The sdk error extraction reads
-    // `detail` first, so the message must surface as a regular tracker error on the ready page — NOT as the
-    // backend-management-unavailable surface.
-    const detail = "This action is not yet available through Studio. Workspace mutations are being routed through the Studio management bridge (issue #256).";
-    const postJson = vi.fn(async (url: string) => {
-      if (url.endsWith("/workspaces")) throw new StudioHttpError(501, detail, null, { detail, management: null });
-      return defaultPostJson(url);
-    });
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ postJson }));
+  it("completes a mutation through the Studio management bridge without ever calling the backend context", async () => {
+    // PR2 of #256: the bridge forwards mutations to the backend (PR1's 501 not-yet-available answer is gone), so a
+    // workspace mutation succeeds through the host-context bridge route and the backend context is never called (the
+    // afterEach guard enforces the latter for every test).
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await waitForText(container, "Team Extensions");
 
     await fill(await waitForElement<HTMLInputElement>(container, "[aria-label='Repository name']"), "Managed Repository");
     await clickButton(container, "Create managed repo");
-    await waitForText(container, "not yet available through Studio");
+    await waitForText(container, "Created managed repository Managed Repository.");
 
-    expect(postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
-    expect(container.textContent).not.toContain("Backend management is unavailable");
-    // The page stays on the ready home surface.
-    expect(container.textContent).toContain("Team Extensions");
+    expect(hostHttpMock(api).postJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/workspaces`, { displayName: "Managed Repository" });
+    expect(backendCalls).toEqual([]);
+
+    await unmount();
+  });
+
+  it("keeps polling a running build across transient bridge failures with backoff and recovers on success", async () => {
+    // The build poll must not die silently on a bridge hiccup: the first two consecutive 503-management failures are
+    // retried with backoff (2s, then 5s, instead of the 900ms cadence), a successful poll resets the counter, and no
+    // tracker error is surfaced for a transient failure.
+    mockFetch();
+    const runningResult = runningBuild();
+    let buildReads = 0;
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? runningResult : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-running")) {
+        buildReads += 1;
+        if (buildReads <= 2) throw managementBridgeError(503, "degraded", "The backend management relay hiccupped.");
+        return { ...runningResult, status: "Succeeded", completedAt: new Date().toISOString(), artifact: artifact(), artifacts: [artifact()] };
+      }
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    // Fake timers (auto-advancing so the suite's promise-flush helpers keep working) drive the backoff waits.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await clickButton(container, "Build");
+    await waitFor(() => buildReads >= 1, "Expected the submit-time build poll.");
+
+    await advancePollTime(2600);
+    await waitFor(() => buildReads >= 2, "Expected the first backoff retry.");
+    await advancePollTime(5600);
+    await waitFor(() => buildReads >= 3, "Expected the second backoff retry.");
+
+    // The third poll succeeded: the build leaves the running state and no bridge tracker error was surfaced.
+    await waitFor(() => buttonContaining(container, "Building…") === undefined, "Expected the build to complete.");
+    expect(container.textContent).not.toContain("Backend management is degraded");
+
+    // Polling ended with the completed build; no stray retry remains scheduled.
+    await advancePollTime(10_000);
+    expect(buildReads).toBe(3);
+
+    await unmount();
+  });
+
+  it("stops the build poll with a tracker error after three consecutive bridge failures, leaving the build running", async () => {
+    mockFetch();
+    const runningResult = runningBuild();
+    let buildReads = 0;
+    const postJson = vi.fn(async (url: string) => url.endsWith("/builds") ? runningResult : defaultPostJson(url));
+    const getJson = vi.fn(async (url: string) => {
+      if (url.includes("/builds/build-running")) {
+        buildReads += 1;
+        // The submit-time poll succeeds (the build starts fine); every cadence poll after it hits the bridge failure.
+        // Starting the failures on the cadence keeps the count deterministic: the poll effect grants a fresh retry
+        // budget when it first sees the new build, so a submit-time failure would or would not be counted depending on
+        // microtask ordering.
+        if (buildReads === 1) return runningResult;
+        throw managementBridgeError(503, "unreachable", "The backend management surface could not be reached.");
+      }
+      return defaultGetJson(url);
+    });
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    await clickButton(container, "Build");
+    await waitFor(() => buildReads >= 1, "Expected the submit-time build poll.");
+    await advancePollTime(2600);
+    await waitFor(() => buildReads >= 2, "Expected the first failing cadence poll.");
+    await advancePollTime(5600);
+    await waitFor(() => buildReads >= 4, "Expected the 2s and 5s backoff retries.");
+
+    // The third consecutive failure stops polling and names the backend-management state…
+    await waitForText(container, "Backend management is unreachable: The backend management surface could not be reached.");
+    // …while the build stays rendered as running: the manual refresh affordance is the retry.
+    expect(buttonContaining(container, "Building…")).toBeDefined();
+
+    // Polling stopped: no further reads even well past every cadence.
+    await advancePollTime(10_000);
+    expect(buildReads).toBe(4);
+
+    await unmount();
+  });
+
+  it("surfaces the relay-timeout detail on a promote and refreshes build and runtime state best-effort", async () => {
+    // A 504/unreachable on promote means the relay gave up waiting but the promotion may still have completed
+    // backend-side: the tracker error must carry the bridge's detail saying so, and the build + runtime status must be
+    // re-read so a promotion that actually landed becomes visible.
+    mockFetch();
+    const detail = "The backend management relay timed out; the promotion may still have completed on the backend.";
+    const postJson = vi.fn(async (url: string) => {
+      if (url.endsWith("/promote")) throw managementBridgeError(504, "unreachable", detail);
+      return defaultPostJson(url);
+    });
+    const getJson = vi.fn(defaultGetJson);
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    await openSolution(container);
+    await waitForText(container, "Activities/HelloActivity.cs");
+    const runtimeReads = () => getJson.mock.calls.filter(([url]) => String(url).endsWith("/runtime-status")).length;
+    const runtimeReadsBefore = runtimeReads();
+
+    await clickTab(container, "Promote");
+    await clickButton(container, "Promote build");
+    await waitForText(container, "Backend management is unreachable");
+
+    // The tracker error carries the bridge's may-still-have-completed detail…
+    expect(container.textContent).toContain("may still have completed");
+    // …and the mutation's effects are re-read best-effort: the runtime status and the promoted build.
+    await waitFor(() => runtimeReads() > runtimeReadsBefore, "Expected a best-effort runtime-status refresh after the relay timeout.");
+    expect(getJson).toHaveBeenCalledWith(`${BRIDGE_ROOT}/builds/build-1`);
 
     await unmount();
   });
@@ -253,8 +360,8 @@ describe("extension builder page", () => {
   it("creates a file with a path separator as a slash-delimited URL, not an encoded segment", async () => {
     // The backend file routes are catch-all and do not decode "%2F"; encoding the whole path would
     // create a file literally named "Activities%2FHelloWorld.cs" (and 404 on read).
-    const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -262,9 +369,9 @@ describe("extension builder page", () => {
     await clickButton(container, "Create file");
     await flushPromises();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloWorld.cs",
-      expect.objectContaining({ method: "PUT" })
+    expect(hostHttpMock(api).putJson).toHaveBeenCalledWith(
+      `${BRIDGE_ROOT}/workspaces/ws-1/files/Activities/HelloWorld.cs`,
+      expect.objectContaining({ content: expect.any(String) })
     );
 
     await unmount();
@@ -315,11 +422,13 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces", { displayName: "Acme Orders" });
     expect(postJson).toHaveBeenCalledWith(
       "/_elsa/studio/backend-management/extension-builder/workspaces/ws-managed/working-copies/select",
-      expect.objectContaining({ allowProtectedBranchEdit: false })
+      expect.objectContaining({ allowProtectedBranchEdit: false }),
+      { timeoutMs: 40_000 }
     );
     expect(postJson).toHaveBeenCalledWith(
       "/_elsa/studio/backend-management/extension-builder/workspaces/ws-managed/projects",
-      expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" })
+      expect.objectContaining({ templateId: "elsa-activity", displayName: "Acme Orders", packageId: "Acme.Orders", packageVersion: "1.0.0" }),
+      { timeoutMs: 70_000 }
     );
 
     await unmount();
@@ -448,7 +557,7 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/server-local", {
       path: serverPath,
       displayName: "Server Extensions"
-    });
+    }, { timeoutMs: 40_000 });
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Server Extensions");
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`release · ${remoteState}`);
     expect(container.textContent).toContain("Attached server-local repository Server Extensions.");
@@ -495,7 +604,7 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/repositories/clone", {
       repositoryUrl,
       displayName: "Cloned Extensions"
-    });
+    }, { timeoutMs: 130_000 });
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain("Cloned Extensions");
     expect(container.querySelector(".extension-builder-solution-card.active")?.textContent).toContain(`main · ${repositoryUrl}`);
     expect(container.textContent).toContain("Cloned repository Cloned Extensions.");
@@ -568,7 +677,7 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/working-copies/select", expect.objectContaining({
       branchName: "feature/session-work",
       allowProtectedBranchEdit: false
-    }));
+    }), { timeoutMs: 40_000 });
     // The command-bar breadcrumb reflects the refreshed active branch.
     expect(container.querySelector(".extension-builder-crumb")?.textContent).toContain("feature/session-work");
 
@@ -623,7 +732,7 @@ describe("extension builder page", () => {
     await clickExactButton(container, "Apply");
     await waitForText(container, "Applied C# class.");
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }));
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/templates/apply", expect.objectContaining({ templateId: "csharp-class" }), { timeoutMs: 70_000 });
     // The generated file opens in the editor (full path shown in the editor status bar).
     expect(container.querySelector(".extension-builder-editor-status")?.textContent).toContain("src/Generated/GeneratedActivity.cs");
     expect(container.querySelector<HTMLTextAreaElement>("[aria-label='Project file editor']")?.value).toContain("GeneratedActivity");
@@ -694,22 +803,18 @@ describe("extension builder page", () => {
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/unstage", { path: "src/Status.cs" });
     expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/stage-all", {});
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" });
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/push", {});
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/commit", { message: "Add source control file" }, { timeoutMs: 40_000 });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/push", {}, { timeoutMs: 130_000 });
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/pull", {}, { timeoutMs: 130_000 });
     expect(getJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/source-control/diff/src/Status.cs?staged=true");
 
     await unmount();
   });
 
   it("blocks navigation and keeps the edit when an auto-save flush fails", async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (init?.method === "PUT") throw new Error("Request failed with 503.");
-      if (String(url).includes("/log")) return new Response("", { status: 200, headers: { "content-type": "text/plain" } });
-      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({
+      putJson: async () => { throw new Error("Request failed with 503."); }
+    }));
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -739,8 +844,8 @@ describe("extension builder page", () => {
   });
 
   it("auto-saves the active file after a debounce when auto-save is on", async () => {
-    const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -753,9 +858,9 @@ describe("extension builder page", () => {
     await new Promise(resolve => setTimeout(resolve, 1200));
     await flushPromises();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
-      expect.objectContaining({ method: "PUT" })
+    expect(hostHttpMock(api).putJson).toHaveBeenCalledWith(
+      `${BRIDGE_ROOT}/workspaces/ws-1/files/Activities/HelloActivity.cs`,
+      expect.objectContaining({ content: expect.stringContaining("// auto") })
     );
 
     await unmount();
@@ -768,30 +873,15 @@ describe("extension builder page", () => {
     // edit auto-persists on its own.
     const putBodies: string[] = [];
     const firstPut = deferred<void>();
-    let putCount = 0;
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (String(url).includes("/log")) {
-        return new Response("Build succeeded.", { status: 200, headers: { "content-type": "text/plain" } });
-      }
-      if (init?.method === "PUT") {
-        const body = JSON.parse(String(init?.body ?? "{}"));
-        putBodies.push(body.content);
-        putCount += 1;
-        // Only the first PUT (the explicit Save) is held open; the trailing auto-save resolves immediately.
-        if (putCount === 1) await firstPut.promise;
-        return new Response(JSON.stringify({ path: "Activities/HelloActivity.cs", type: "file", content: body.content }), {
-          status: 200,
-          headers: { "content-type": "application/json" }
-        });
-      }
-      return new Response(JSON.stringify({ path: "Activities/HelloActivity.cs", type: "file", content: JSON.parse(String(init?.body ?? "{}")).content }), {
-        status: 200,
-        headers: { "content-type": "application/json" }
-      });
+    const putJson = vi.fn(async (url: string, body: unknown) => {
+      const content = (body as { content?: string })?.content ?? "";
+      putBodies.push(content);
+      // Only the first PUT (the explicit Save) is held open; the trailing auto-save resolves immediately.
+      if (putBodies.length === 1) await firstPut.promise;
+      return { path: "Activities/HelloActivity.cs", type: "file", content };
     });
-    vi.stubGlobal("fetch", fetchMock);
 
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ putJson }));
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -802,7 +892,7 @@ describe("extension builder page", () => {
     await fill(editor, `${editor.value}\n// explicit-save`);
     await clickButton(container, "Save");
     await flushPromises();
-    await waitFor(() => putCount === 1, "Expected the explicit Save PUT to be in flight.");
+    await waitFor(() => putBodies.length === 1, "Expected the explicit Save PUT to be in flight.");
 
     // Trailing edit made while the Save is still in flight — no further keystroke after the Save settles.
     await fill(editor, `${editor.value}\n// trailing-edit`);
@@ -820,8 +910,8 @@ describe("extension builder page", () => {
   });
 
   it("flushes a pending edit when navigating away with auto-save on", async () => {
-    const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -833,9 +923,9 @@ describe("extension builder page", () => {
     await clickButton(container, "Solutions");
     await flushPromises();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
-      expect.objectContaining({ method: "PUT" })
+    expect(hostHttpMock(api).putJson).toHaveBeenCalledWith(
+      `${BRIDGE_ROOT}/workspaces/ws-1/files/Activities/HelloActivity.cs`,
+      expect.objectContaining({ content: expect.stringContaining("// nav") })
     );
     await waitForText(container, "Team Extensions");
 
@@ -843,8 +933,8 @@ describe("extension builder page", () => {
   });
 
   it("does not auto-save when the toggle is turned off", async () => {
-    const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi());
+    const api = stubApi();
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -858,7 +948,7 @@ describe("extension builder page", () => {
     await new Promise(resolve => setTimeout(resolve, 1200));
     await flushPromises();
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(hostHttpMock(api).putJson).not.toHaveBeenCalled();
 
     await unmount();
   });
@@ -873,8 +963,9 @@ describe("extension builder page", () => {
       if (url.includes("/builds/build-1")) return succeededBuild({ sourceRevisionId: null });
       return defaultGetJson(url);
     });
-    const fetchMock = mockFetch();
-    const { container, unmount } = await renderExtensionBuilderPage(stubApi({ getJson, postJson }));
+    mockFetch();
+    const api = stubApi({ getJson, postJson });
+    const { container, unmount } = await renderExtensionBuilderPage(api);
     await openSolution(container);
     await waitForText(container, "Activities/HelloActivity.cs");
 
@@ -885,9 +976,9 @@ describe("extension builder page", () => {
 
     await clickButton(container, "Save");
     await flushPromises();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://studio.example/_elsa/studio/backend-management/extension-builder/workspaces/ws-1/files/Activities/HelloActivity.cs",
-      expect.objectContaining({ method: "PUT" })
+    expect(hostHttpMock(api).putJson).toHaveBeenCalledWith(
+      `${BRIDGE_ROOT}/workspaces/ws-1/files/Activities/HelloActivity.cs`,
+      expect.objectContaining({ content: expect.stringContaining("// updated") })
     );
 
     await clickButton(container, "Build");
@@ -901,7 +992,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote build");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {}, { timeoutMs: 130_000 });
     expect(container.textContent).toContain("is loaded at runtime");
 
     await unmount();
@@ -980,7 +1071,7 @@ describe("extension builder page", () => {
     await clickButton(container, "Promote package");
     await flushPromises();
 
-    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/artifacts/artifact-a/promote", {});
+    expect(postJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/artifacts/artifact-a/promote", {}, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1130,7 +1221,7 @@ describe("extension builder page", () => {
 
     expect(promoteButton?.disabled).toBe(true);
     expect(promoteButton?.title).toContain("stale");
-    expect(postJson).not.toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {});
+    expect(postJson).not.toHaveBeenCalledWith("/_elsa/studio/backend-management/extension-builder/builds/build-1/promote", {}, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1167,12 +1258,12 @@ describe("extension builder page", () => {
 
     await clickButton(container, "Retry reconciliation");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {});
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/retry-reconcile`, {}, { timeoutMs: 130_000 });
     await waitForText(container, "0.9.0");
 
     await clickButton(container, "Rollback");
     await flushPromises();
-    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" });
+    expect(postJson).toHaveBeenCalledWith(`/_elsa/studio/backend-management/extension-builder/projects/${selectedProject.id}/rollback`, { version: "0.9.0" }, { timeoutMs: 130_000 });
 
     await unmount();
   });
@@ -1328,7 +1419,7 @@ function stubApi(options?: {
       http: {
         getJson: vi.fn(async (url: string) => url.endsWith(CAPABILITIES_BRIDGE_PATH) ? capabilitiesGetJson(url) : workspaceGetJson(url)),
         postJson: vi.fn(options?.postJson ?? defaultPostJson),
-        putJson: vi.fn(options?.putJson ?? (async () => ({}))),
+        putJson: vi.fn(options?.putJson ?? defaultPutJson),
         deleteJson: vi.fn(options?.deleteJson ?? (async () => ({})))
       }
     },
@@ -1383,6 +1474,9 @@ async function defaultGetJson(url: string): Promise<unknown> {
   if (url.endsWith("/runtime-status")) return loadedRuntime();
   if (url.includes("/builds/build-1")) return succeededBuild();
   if (url.endsWith("Activities/HelloActivity.cs")) return repositoryFile();
+  // Read-back of a file a test just created or saved: echo an empty file for the decoded /files/ suffix so the
+  // editor always opens a valid file (an empty object would crash it on the missing path).
+  if (url.includes("/files/")) return { path: decodeURIComponent(url.split("/files/")[1]), kind: "File", content: "" };
   if (url.includes("/projects/proj-1")) return { ...project(), builds: [succeededBuild()] };
   return {};
 }
@@ -1391,6 +1485,14 @@ async function defaultPostJson(url: string): Promise<unknown> {
   if (url.endsWith("/builds")) return succeededBuild();
   if (url.endsWith("/promote")) return acceptedPromotion();
   return {};
+}
+
+// Echoes a file write back like the backend does, deriving the path from the decoded URL suffix after
+// /files/ so the page keeps a valid active file (an empty echo would crash the explorer/editor on
+// path.split) no matter which path a test saved.
+async function defaultPutJson(url: string, body: unknown): Promise<unknown> {
+  const path = decodeURIComponent(url.split("/files/")[1] ?? "Activities/HelloActivity.cs");
+  return { path, type: "file", content: (body as { content?: string })?.content };
 }
 
 const ADVANCED_PREFERENCE_KEY = "elsa.extensionBuilder.advanced";
@@ -1421,16 +1523,12 @@ async function renderExtensionBuilderPage(api: ElsaStudioModuleApi, options?: { 
   };
 }
 
+// The build-log read is the only Extension Builder call left on raw fetch (plain text); everything else goes
+// through the host http client, so any other fetch in a test is a routing regression and fails loudly.
 function mockFetch() {
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-    if (String(url).includes("/log")) {
-      return new Response("Build succeeded.", { status: 200, headers: { "content-type": "text/plain" } });
-    }
-
-    return new Response(JSON.stringify({ path: "Activities/HelloActivity.cs", type: "file", content: JSON.parse(String(init?.body ?? "{}")).content }), {
-      status: 200,
-      headers: { "content-type": "application/json" }
-    });
+  const fetchMock = vi.fn(async (url: string) => {
+    if (!String(url).includes("/log")) throw new Error(`Unexpected fetch ${url}: Extension Builder must use the host http client.`);
+    return new Response("Build succeeded.", { status: 200, headers: { "content-type": "text/plain" } });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -1521,6 +1619,18 @@ async function openDock(container: Element, label: string) {
 
 async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+// Advances auto-advancing fake timers in steps, flushing between steps so React can commit state updates made from
+// promise callbacks (its scheduler uses MessageChannel macrotasks, which vi.advanceTimersByTimeAsync alone never
+// yields to) and effects can schedule the next poll timer before time moves past it.
+async function advancePollTime(totalMs: number) {
+  const step = 500;
+  for (let elapsed = 0; elapsed < totalMs; elapsed += step) {
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(step);
+  }
+  await flushPromises();
 }
 
 async function waitForText(container: Element, text: string) {

@@ -247,6 +247,12 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
     if (firstGeneratedFile) await files.openFile(workspaceId, firstGeneratedFile.path);
   }
 
+  // On a relay timeout a runtime mutation (retry-reconcile, rollback) may still have landed backend-side: refresh
+  // the runtime status before the error surfaces.
+  function refreshRuntimeAfterRelayTimeout(error: unknown, workspaceId: string, projectId: string): never {
+    return rethrowAfterRelayTimeoutRefresh(error, () => data.refreshRuntimeStatus(workspaceId, projectId));
+  }
+
   async function handleRetryReconciliation() {
     if (!core.selectedWorkspace || !core.selectedProject) return;
     const workspaceId = core.selectedWorkspace.id;
@@ -254,7 +260,8 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
     const requestId = ++core.runtimeStatusRequestId.current;
     const updatedRuntime = await runOperation(
       "runtime",
-      () => retryReconciliation(context, workspaceId, projectId),
+      () => retryReconciliation(context, workspaceId, projectId)
+        .catch(error => refreshRuntimeAfterRelayTimeout(error, workspaceId, projectId)),
       `Retry reconciliation requested for ${core.selectedProject.name}.`
     );
     if (updatedRuntime && requestId === core.runtimeStatusRequestId.current && isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) core.setRuntimeStatus(updatedRuntime);
@@ -268,7 +275,8 @@ export function useBuilderOperations(core: BuilderCore, data: BuilderData, files
     const requestId = ++core.runtimeStatusRequestId.current;
     const updatedRuntime = await runOperation(
       "runtime",
-      () => rollbackPackage(context, workspaceId, projectId, version),
+      () => rollbackPackage(context, workspaceId, projectId, version)
+        .catch(error => refreshRuntimeAfterRelayTimeout(error, workspaceId, projectId)),
       `Rolled back ${core.selectedProject.packageId} to ${version}.`
     );
     if (updatedRuntime && requestId === core.runtimeStatusRequestId.current && isCurrentSelection(core.selectedIds.current, workspaceId, projectId)) core.setRuntimeStatus(updatedRuntime);

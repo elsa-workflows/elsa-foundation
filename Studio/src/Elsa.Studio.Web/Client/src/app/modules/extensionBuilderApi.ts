@@ -17,6 +17,16 @@ import { isPermissionDenied } from "../hostControlPermissions";
 // suffixes are preserved verbatim under this root, so only the root differs from the direct backend surface.
 const root = studioExtensionBuilderBridgeRoot;
 
+// Browser-side timeouts for mutations the bridge relays with a long server-side budget (120s for clone/push/pull/
+// promote/rollback/retry-reconcile, 60s for templates-apply/create-project, 30s for workspace/project deletes,
+// server-local attach, working-copy select, and commit). The sdk default (10s) would abort these requests in the
+// browser long before the relay answers; outlasting the relay budget means a slow backend surfaces as the bridge's own
+// 504/unreachable envelope — whose detail says the operation may still have completed — instead of a generic browser
+// timeout. Follow-up reads (e.g. the runtime-status read after rollback) stay on the default timeout.
+const longRelayTimeout = { timeoutMs: 130_000 };
+const mediumRelayTimeout = { timeoutMs: 70_000 };
+const shortRelayTimeout = { timeoutMs: 40_000 };
+
 // The Studio management bridge's answer for the backend Extension Builder capabilities read (ADR 0037), normalized for
 // the UI: when `status` is not "available" the capabilities are absent and the UI renders an explicit
 // backend-management-unavailable state instead of issuing doomed backend requests.
@@ -374,6 +384,16 @@ export function readManagementBridgeFailure(error: unknown): ManagementBridgeFai
   return { kind: management.status as ManagementBridgeFailure["kind"], detail: management.detail || error.message };
 }
 
+/**
+ * True when the thrown error is the bridge's 504 relay-timeout envelope: the Studio→backend relay gave up waiting for
+ * a slow operation, so the mutation may still have completed backend-side. Callers use this to trigger best-effort
+ * state refreshes alongside the surfaced error. Distinct from a 503/unreachable, where the bridge knew the backend was
+ * down before relaying and the mutation never ran.
+ */
+export function isManagementRelayTimeout(error: unknown) {
+  return error instanceof StudioHttpError && error.status === 504 && readManagementBridgeFailure(error)?.kind === "unreachable";
+}
+
 export async function listWorkspaces(context: StudioEndpointContext) {
   const response = await context.http.getJson<RawExtensionWorkspace[] | { workspaces: RawExtensionWorkspace[] }>(`${root}/workspaces`);
   const workspaces = Array.isArray(response) ? response : response.workspaces;
@@ -394,14 +414,14 @@ export async function attachServerLocalRepository(context: StudioEndpointContext
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/server-local`, {
     path: request.path,
     displayName: request.name || null
-  }), []);
+  }, shortRelayTimeout), []);
 }
 
 export async function cloneRepository(context: StudioEndpointContext, request: CloneRepositoryRequest) {
   return normalizeWorkspace(await context.http.postJson<RawExtensionWorkspace>(`${root}/repositories/clone`, {
     repositoryUrl: request.repositoryUrl,
     displayName: request.name || null
-  }), []);
+  }, longRelayTimeout), []);
 }
 
 export async function getWorkspace(context: StudioEndpointContext, workspaceId: string) {
@@ -409,7 +429,7 @@ export async function getWorkspace(context: StudioEndpointContext, workspaceId: 
 }
 
 export async function deleteWorkspace(context: StudioEndpointContext, workspaceId: string) {
-  return requestJson(context, `${root}/workspaces/${segment(workspaceId)}`, { method: "DELETE" });
+  return context.http.deleteJson(`${root}/workspaces/${segment(workspaceId)}`, shortRelayTimeout);
 }
 
 export async function listWorkingCopies(context: StudioEndpointContext, workspaceId: string, sessionId?: string | null) {
@@ -420,7 +440,7 @@ export async function listWorkingCopies(context: StudioEndpointContext, workspac
 }
 
 export async function selectWorkingCopy(context: StudioEndpointContext, workspaceId: string, request: SelectWorkingCopyRequest) {
-  return normalizeWorkingCopySummary(await context.http.postJson<RawExtensionWorkingCopySummary>(`${root}/workspaces/${segment(workspaceId)}/working-copies/select`, request));
+  return normalizeWorkingCopySummary(await context.http.postJson<RawExtensionWorkingCopySummary>(`${root}/workspaces/${segment(workspaceId)}/working-copies/select`, request, shortRelayTimeout));
 }
 
 export async function getRepositoryTree(context: StudioEndpointContext, workspaceId: string, solutionPath?: string | null) {
@@ -433,11 +453,7 @@ export async function readRepositoryFile(context: StudioEndpointContext, workspa
 }
 
 export async function writeRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string, request: WriteProjectFileRequest) {
-  return normalizeRepositoryFile(await requestJson<RawRepositoryFile>(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(request)
-  }));
+  return normalizeRepositoryFile(await context.http.putJson<RawRepositoryFile>(`${workspaceRoot(workspaceId)}/files/${filePath(path)}`, request));
 }
 
 export async function moveRepositoryFile(context: StudioEndpointContext, workspaceId: string, sourcePath: string, destinationPath: string) {
@@ -445,11 +461,11 @@ export async function moveRepositoryFile(context: StudioEndpointContext, workspa
 }
 
 export async function deleteRepositoryFile(context: StudioEndpointContext, workspaceId: string, path: string) {
-  return requestJson(context, `${workspaceRoot(workspaceId)}/files/${filePath(path)}`, { method: "DELETE" });
+  return context.http.deleteJson(`${workspaceRoot(workspaceId)}/files/${filePath(path)}`);
 }
 
 export async function applyRepositoryTemplate(context: StudioEndpointContext, workspaceId: string, request: ApplyRepositoryTemplateRequest) {
-  return normalizeAppliedRepositoryTemplate(await context.http.postJson<RawAppliedRepositoryTemplate>(`${workspaceRoot(workspaceId)}/templates/apply`, request));
+  return normalizeAppliedRepositoryTemplate(await context.http.postJson<RawAppliedRepositoryTemplate>(`${workspaceRoot(workspaceId)}/templates/apply`, request, mediumRelayTimeout));
 }
 
 export async function getSourceControlStatus(context: StudioEndpointContext, workspaceId: string) {
@@ -474,15 +490,15 @@ export async function stageAllRepositoryChanges(context: StudioEndpointContext, 
 }
 
 export async function commitRepositoryChanges(context: StudioEndpointContext, workspaceId: string, message: string) {
-  return normalizeSourceControlCommitResult(await context.http.postJson<RawSourceControlCommitResult>(`${workspaceRoot(workspaceId)}/source-control/commit`, { message }));
+  return normalizeSourceControlCommitResult(await context.http.postJson<RawSourceControlCommitResult>(`${workspaceRoot(workspaceId)}/source-control/commit`, { message }, shortRelayTimeout));
 }
 
 export async function pushRepository(context: StudioEndpointContext, workspaceId: string) {
-  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/push`, {}));
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/push`, {}, longRelayTimeout));
 }
 
 export async function pullRepository(context: StudioEndpointContext, workspaceId: string) {
-  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/pull`, {}));
+  return normalizeRemoteSyncResult(await context.http.postJson<RawRemoteSyncResult>(`${workspaceRoot(workspaceId)}/source-control/pull`, {}, longRelayTimeout));
 }
 
 export async function listTemplates(context: StudioEndpointContext) {
@@ -497,7 +513,7 @@ export async function createProject(context: StudioEndpointContext, workspaceId:
     packageId: request.packageId,
     packageVersion: request.packageVersion,
     displayName: request.name
-  }));
+  }, mediumRelayTimeout));
 }
 
 export async function getProject(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
@@ -505,7 +521,7 @@ export async function getProject(context: StudioEndpointContext, _workspaceId: s
 }
 
 export async function deleteProject(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
-  return requestJson(context, `${root}/projects/${segment(projectId)}`, { method: "DELETE" });
+  return context.http.deleteJson(`${root}/projects/${segment(projectId)}`, shortRelayTimeout);
 }
 
 export async function listProjectFiles(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
@@ -519,15 +535,11 @@ export async function readProjectFile(context: StudioEndpointContext, _workspace
 }
 
 export async function writeProjectFile(context: StudioEndpointContext, _workspaceId: string, projectId: string, path: string, request: WriteProjectFileRequest) {
-  return normalizeProjectFile(await requestJson<RawProjectFile>(context, `${projectRoot(projectId)}/files/${filePath(path)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify(request)
-  }));
+  return normalizeProjectFile(await context.http.putJson<RawProjectFile>(`${projectRoot(projectId)}/files/${filePath(path)}`, request));
 }
 
 export async function deleteProjectFile(context: StudioEndpointContext, _workspaceId: string, projectId: string, path: string) {
-  return requestJson(context, `${projectRoot(projectId)}/files/${filePath(path)}`, { method: "DELETE" });
+  return context.http.deleteJson(`${projectRoot(projectId)}/files/${filePath(path)}`);
 }
 
 export async function submitBuild(context: StudioEndpointContext, workspaceId: string, projectId: string, request: BuildRequest = {}) {
@@ -543,9 +555,14 @@ export async function getBuild(context: StudioEndpointContext, _workspaceId: str
 }
 
 export async function getBuildLog(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string) {
+  // Raw fetch because the log is plain text, which the JSON http client cannot return — so the bearer the
+  // authenticated client would attach must be added explicitly from the context's token factory.
+  const token = await context.accessTokenFactory?.();
   const response = await fetch(new URL(`${root}/builds/${segment(buildId)}/log`, context.baseUrl).toString(), withDefaultHeaders(context.headers, {
     cache: "no-store",
-    headers: { "Accept": "text/plain, application/json" }
+    headers: token
+      ? { "Accept": "text/plain, application/json", "Authorization": `Bearer ${token}` }
+      : { "Accept": "text/plain, application/json" }
   }));
   if (!response.ok) throw await createStudioHttpError(response);
   const text = await response.text();
@@ -557,11 +574,11 @@ export async function getBuildLog(context: StudioEndpointContext, _workspaceId: 
 }
 
 export async function promoteBuild(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, request: PackagePromotionRequest) {
-  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
+  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}, longRelayTimeout));
 }
 
 export async function promoteBuildArtifact(context: StudioEndpointContext, _workspaceId: string, _projectId: string, buildId: string, artifactId: string, request: PackagePromotionRequest) {
-  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/artifacts/${segment(artifactId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}));
+  return normalizePromotionResult(await context.http.postJson<RawPackagePromotionResult>(`${root}/builds/${segment(buildId)}/artifacts/${segment(artifactId)}/promote`, request.targetFeed ? { targetFeed: request.targetFeed } : {}, longRelayTimeout));
 }
 
 export async function getRuntimeStatus(context: StudioEndpointContext, _workspaceId: string, projectId: string) {
@@ -569,12 +586,12 @@ export async function getRuntimeStatus(context: StudioEndpointContext, _workspac
 }
 
 export async function rollbackPackage(context: StudioEndpointContext, workspaceId: string, projectId: string, version: string) {
-  await context.http.postJson<RawPackagePromotionResult>(`${projectRoot(projectId)}/rollback`, { version });
+  await context.http.postJson<RawPackagePromotionResult>(`${projectRoot(projectId)}/rollback`, { version }, longRelayTimeout);
   return getRuntimeStatus(context, workspaceId, projectId);
 }
 
 export async function retryReconciliation(context: StudioEndpointContext, workspaceId: string, projectId: string) {
-  await context.http.postJson<RawExtensionBuilderOperationResponse>(`${projectRoot(projectId)}/retry-reconcile`, {});
+  await context.http.postJson<RawExtensionBuilderOperationResponse>(`${projectRoot(projectId)}/retry-reconcile`, {}, longRelayTimeout);
   return getRuntimeStatus(context, workspaceId, projectId);
 }
 
@@ -590,15 +607,6 @@ function normalizeCapabilities(value: Partial<ExtensionBuilderCapabilities>): Ex
     canPromote: value.canPromote ?? false,
     canRollback: value.canRollback ?? false
   };
-}
-
-async function requestJson<T = Record<string, never>>(context: StudioEndpointContext, url: string, init: RequestInit) {
-  const response = await fetch(new URL(url, context.baseUrl).toString(), withDefaultHeaders(context.headers, init));
-  // Throw the structured SDK error so bridge infrastructure failures on PUT/DELETE stay detectable
-  // (readManagementBridgeFailure) and messages extract from problem-details bodies instead of raw text.
-  if (!response.ok) throw await createStudioHttpError(response);
-  const text = await response.text();
-  return (text ? JSON.parse(text) : {}) as T;
 }
 
 async function hydrateWorkspace(context: StudioEndpointContext, workspace: RawExtensionWorkspace) {

@@ -1,6 +1,5 @@
 import { deleteRepositoryFile, moveRepositoryFile, readRepositoryFile, writeRepositoryFile } from "../extensionBuilderApi";
-import { getErrorMessage } from "../moduleManagementApi";
-import { upsertEditorTab, upsertFile } from "./helpers";
+import { describeExtensionBuilderError, upsertEditorTab, upsertFile } from "./helpers";
 import type { BuilderData } from "./useBuilderData";
 import type { BuilderCore } from "./store";
 
@@ -51,7 +50,7 @@ export function useFileEditing(core: BuilderCore, data: BuilderData): BuilderFil
       core.setLineHint(null);
       return true;
     } catch (e) {
-      setError(getErrorMessage(e));
+      setError(describeExtensionBuilderError(e));
       return false;
     }
   }
@@ -110,7 +109,7 @@ export function useFileEditing(core: BuilderCore, data: BuilderData): BuilderFil
       }
       return true;
     } catch (e) {
-      if (core.mounted.current) setError(getErrorMessage(e));
+      if (core.mounted.current) setError(describeExtensionBuilderError(e));
       return false;
     } finally {
       if (core.mounted.current && showSaving) core.setAutoSaving(false);
