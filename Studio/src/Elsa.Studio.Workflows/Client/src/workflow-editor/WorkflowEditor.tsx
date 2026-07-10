@@ -10,6 +10,7 @@ import {
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
+  slotCrumbLabel,
   updateActivity,
   type ChildSlot
 } from "../workflowAdapter";
@@ -28,6 +29,7 @@ import {
 } from "./editorHelpers";
 import { nodeTypes, edgeTypes, ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
+import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { useSidePanelLayout } from "./useSidePanelLayout";
@@ -368,7 +370,7 @@ export function WorkflowEditor({
   // unsupported-designer placeholder, whose node IS the scope owner and has no navigable frame.
   const slotNavigation = useMemo<WorkflowSlotNavigation | null>(() => {
     if (isUnsupportedDesigner) return null;
-    return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, `${ownerLabel} / ${slot.label}`);
+    return (ownerNodeId, ownerLabel, slot) => enterSlotScope(ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot));
   }, [enterSlotScope, isUnsupportedDesigner]);
 
   const updateSelectedActivity = useCallback((activity: ActivityNode) => {
@@ -675,18 +677,7 @@ export function WorkflowEditor({
             <WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} />
           ) : (
           <>
-          <div className="wf-breadcrumb">
-            <button type="button" onClick={() => resetToRoot()}>Root</button>
-            {frames.map((frame, index) => frame.label ? (
-              // Unlabelled frames are descent hops planSlotNavigation tucks under the next crumb
-              // (entering a slot through its single container child); the visible crumb navigates to
-              // the full hop chain, so hiding them keeps the trail one-entry-per-slot.
-              <React.Fragment key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
-                <ChevronRight size={13} />
-                <button type="button" onClick={() => navigateToScope(frames.slice(0, index + 1), null)}>{frame.label}</button>
-              </React.Fragment>
-            ) : null)}
-          </div>
+          <ScopeBreadcrumb frames={frames} onNavigate={next => navigateToScope(next, null)} />
           <div className="wf-canvas" ref={canvasRef} onDragOver={onCanvasDragOver} onDragLeave={onCanvasDragLeave} onDrop={onCanvasDrop}>
             <WorkflowEdgeActionsContext.Provider value={edgeActions}>
               <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>

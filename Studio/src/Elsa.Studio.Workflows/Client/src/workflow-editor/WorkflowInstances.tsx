@@ -13,6 +13,7 @@ import {
   latestActivityExecution,
   planSlotNavigation,
   resolveScope,
+  slotCrumbLabel,
   type ChildSlot,
   type ScopeFrame,
   type WorkflowEdgeData,
@@ -24,6 +25,7 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
+import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { CopyValueButton } from "./executableShared";
 import type { InstanceInspectorTab, WorkflowEditorPanelTab, WorkflowInstanceInspectionData } from "./editorTypes";
 import {
@@ -340,18 +342,7 @@ function WorkflowInstanceCanvas({
         <WorkflowStatusBadge status={details.instance.status} subStatus={details.instance.subStatus} />
       </header>
       {definitionVersion ? (
-        <div className="wf-breadcrumb wf-instance-breadcrumb">
-          <button type="button" onClick={() => onNavigateToScope([])}>Root</button>
-          {frames.map((frame, index) => frame.label ? (
-            // Unlabelled frames are descent hops planSlotNavigation tucks under the next crumb
-            // (entering a slot through its single container child); the visible crumb navigates to
-            // the full hop chain, so hiding them keeps the trail one-entry-per-slot.
-            <span className="wf-breadcrumb-segment" key={`${frame.ownerNodeId}-${frame.slotId}-${index}`}>
-              <ChevronRight size={13} />
-              <button type="button" onClick={() => onNavigateToScope(frames.slice(0, index + 1))}>{frame.label}</button>
-            </span>
-          ) : null)}
-        </div>
+        <ScopeBreadcrumb className="wf-instance-breadcrumb" frames={frames} onNavigate={onNavigateToScope} />
       ) : null}
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
@@ -415,7 +406,7 @@ export function buildInstanceCanvas(
     data: {
       ...node.data,
       onEnterSlot: (slot: ChildSlot) => {
-        const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, `${node.data.label} / ${slot.label}`, activityCatalog);
+        const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
         if (plan) onNavigateToScope(plan.frames);
       }
     }

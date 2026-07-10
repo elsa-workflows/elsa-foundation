@@ -374,6 +374,22 @@ describe("buildInstanceCanvas", () => {
     expect(descended.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
   });
 
+  it("gives an unsupported scope owner no slot navigation, matching the editor's static placeholder", () => {
+    // A leaf activity as root has no structure and no slots, so its designer support is "unsupported"
+    // and the viewer renders the one-node placeholder canvas.
+    const unsupportedVersion: WorkflowDefinitionVersionDetails = { ...definitionVersion, state: { rootActivity: leafNode("leaf-root") } };
+    const navigated: ScopeFrame[][] = [];
+    const canvas = buildInstanceCanvas(unsupportedVersion, instanceCatalog, instanceDetails([]), null, [], frames => navigated.push(frames));
+
+    const placeholder = canvas.nodes.find(node => node.id === "leaf-root")!;
+    // No child slots → the graph renders no badges, so slot entry is unreachable through the UI…
+    expect(placeholder.data.childSlots).toEqual([]);
+    // …and even a forced call plans no navigation (planSlotNavigation returns null for a slot the
+    // owner does not expose), mirroring the editor's disabled badges on unsupported designers.
+    placeholder.data.onEnterSlot!({ id: "bogus", label: "Bogus", property: "bogus", cardinality: "single", mode: "generic", activities: [] });
+    expect(navigated).toEqual([]);
+  });
+
   it("attaches runtime evidence overlays inside the descended canvas", () => {
     const frames = enterForEachBody();
     const execution: ActivityExecutionStateSummary = { ...activity, executableNodeId: "wl-1", authoredActivityId: "wl-1" };
