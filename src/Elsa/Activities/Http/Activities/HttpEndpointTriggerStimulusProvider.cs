@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Http.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -28,6 +29,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
     private const string PolicyInput = nameof(HttpEndpoint.Policy);
     private const string RequestTimeoutInput = nameof(HttpEndpoint.RequestTimeout);
     private const string RequestSizeLimitInput = nameof(HttpEndpoint.RequestSizeLimit);
+    private const string ResponseModeInput = nameof(HttpEndpoint.ResponseMode);
     private static readonly string[] DefaultMethods = ["GET"];
 
     public ActivityTriggerStimulusResult Describe(ExecutableNode node)
@@ -55,7 +57,8 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             Authorize: ReadLiteralBool(node, AuthorizeInput) ?? false,
             Policy: ReadLiteralStringOption(node, PolicyInput),
             RequestTimeout: ReadLiteralTimeSpan(node, RequestTimeoutInput),
-            RequestSizeLimit: ReadLiteralLong(node, RequestSizeLimitInput));
+            RequestSizeLimit: ReadLiteralLong(node, RequestSizeLimitInput),
+            ResponseMode: ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async);
 
         return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path, effectiveMethods, options));
     }
@@ -120,6 +123,23 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             JsonValueKind.String when bool.TryParse(literal.GetString(), out var parsed) => parsed,
             _ => throw new ArgumentException(
                 $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a boolean.")
+        });
+
+    /// <summary>
+    /// Reads an optional literal enum option (the endpoint's response mode), mirroring <see cref="ReadLiteralBool"/>.
+    /// Accepts a JSON string authored as the enum member name (case-sensitive, e.g. <c>"Sync"</c>) or a JSON number
+    /// authored as a defined member's underlying value. Returns null when the input is unauthored (caller applies the
+    /// default and the option is omitted from metadata); a non-literal, or a literal that is not a defined member of
+    /// <typeparamref name="T"/>, throws the same publish-time failure as the other options — an unroutable/undecodable
+    /// mode must not persist.
+    /// </summary>
+    private static T? ReadLiteralEnum<T>(ExecutableNode node, string inputName) where T : struct, Enum =>
+        ReadLiteralOption(node, inputName, literal => literal.ValueKind switch
+        {
+            JsonValueKind.String when Enum.TryParse<T>(literal.GetString(), ignoreCase: false, out var parsed) && Enum.IsDefined(parsed) => parsed,
+            JsonValueKind.Number when literal.TryGetInt32(out var number) && Enum.IsDefined(typeof(T), number) => (T)Enum.ToObject(typeof(T), number),
+            _ => throw new ArgumentException(
+                $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a defined {typeof(T).Name} value.")
         });
 
     private static TimeSpan? ReadLiteralTimeSpan(ExecutableNode node, string inputName) =>

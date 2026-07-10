@@ -39,4 +39,12 @@ public static class HttpEndpointRouting
     /// <c>long</c> (e.g. <c>1048576</c>). NON-IDENTITY.
     /// </summary>
     public const string RequestSizeLimitMetadataKey = "http:requestSizeLimit";
+
+    /// <summary>
+    /// Trigger-binding metadata key carrying the endpoint's <see cref="ResponseMode"/> (the <c>Enum.ToString()</c>
+    /// name, e.g. <c>"Sync"</c>) — spec 089 sub-unit E, E-D1. NON-IDENTITY: the mode rides the binding metadata but
+    /// does not participate in <c>HttpEndpointStimulus.Hash</c>. Omitted from metadata when the endpoint is
+    /// <see cref="ResponseMode.Async"/> (the default), keeping bindings lean.
+    /// </summary>
+    public const string ResponseModeMetadataKey = "http:responseMode";
 }
