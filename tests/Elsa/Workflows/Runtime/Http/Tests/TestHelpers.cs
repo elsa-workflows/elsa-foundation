@@ -114,3 +114,63 @@ internal static class Bindings
             Metadata: metadata,
             CreatedAt: DateTimeOffset.UnixEpoch);
 }
+
+internal static class Resolvers
+{
+    /// <summary>
+    /// Builds a real <see cref="HttpEndpointRoutesResolver"/> over the given trigger-binding store and an
+    /// optional bookmark store (empty by default), wiring the production expiry-aware lookup. Keeps the resolver's
+    /// two-arg construction in one place so tests that don't care about bookmarks stay terse.
+    /// </summary>
+    public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver Build(
+        Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
+        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null) =>
+        new(bindingStore, new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
+}
+
+internal static class Bookmarks
+{
+    /// <summary>Builds a waiting HTTP-endpoint bookmark carrying the standard routing metadata (mid-flow suspension).</summary>
+    public static BookmarkState HttpEndpoint(
+        string workflowExecutionId,
+        string template,
+        string method,
+        DateTimeOffset? expiresAt = null,
+        IReadOnlyDictionary<string, string>? extraMetadata = null)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = template,
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = method.ToLowerInvariant(),
+        };
+
+        if (extraMetadata is not null)
+            foreach (var (key, value) in extraMetadata)
+                metadata[key] = value;
+
+        return Build(workflowExecutionId, Elsa.Http.Core.HttpEndpointRouting.StimulusType, $"sha256:{template}:{method}", metadata, expiresAt);
+    }
+
+    /// <summary>Builds a non-HTTP bookmark (used to prove the resolver/observer ignore other stimulus types).</summary>
+    public static BookmarkState Other(string workflowExecutionId, string stimulusType = "Event") =>
+        Build(workflowExecutionId, stimulusType, $"sha256:{stimulusType}:{workflowExecutionId}", new Dictionary<string, string>(StringComparer.Ordinal));
+
+    public static BookmarkState Build(
+        string workflowExecutionId,
+        string stimulusType,
+        string stimulusHash,
+        IReadOnlyDictionary<string, string> metadata,
+        DateTimeOffset? expiresAt = null) =>
+        new(
+            BookmarkId: $"http-endpoint:{workflowExecutionId}:{stimulusHash}",
+            WorkflowExecutionId: workflowExecutionId,
+            ActivityExecutionId: $"ae-{workflowExecutionId}",
+            ExecutableNodeId: $"node-{workflowExecutionId}",
+            ResumeTargetId: "OnResume",
+            StimulusType: stimulusType,
+            StimulusHash: stimulusHash,
+            Payload: null,
+            Metadata: metadata,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            ExpiresAt: expiresAt);
+}

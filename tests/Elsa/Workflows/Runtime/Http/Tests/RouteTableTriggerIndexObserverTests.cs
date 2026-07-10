@@ -21,6 +21,10 @@ public sealed class RouteTableTriggerIndexObserverTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowTriggerBindingStore>(_store);
         services.AddSingleton<IRouteTable>(_routeTable);
+        // The resolver unions waiting-bookmark templates via the expiry-aware lookup (spec 089 D); an empty
+        // in-memory bookmark store keeps these trigger-index observer tests focused on the trigger path.
+        services.AddSingleton<IBookmarkStimulusIndex>(new InMemoryBookmarkStateStore());
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
         services.Configure<WorkflowsRuntimeHttpFeatureOptions>(_ => { });
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
         _services = services.BuildServiceProvider();

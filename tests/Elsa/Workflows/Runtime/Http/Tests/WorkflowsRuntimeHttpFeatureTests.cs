@@ -27,8 +27,12 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         // DEFAULT settings — no type-name overrides. This is the path that used to throw.
         new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
 
-        // Minimal dependencies the reflectively-registered handlers need at resolve time.
+        // Minimal dependencies the reflectively-registered handlers need at resolve time. The route resolver also
+        // needs the cross-execution bookmark lookup (spec 089 D union) — normally contributed by the
+        // WorkflowsRuntimeTriggers dependency; here it is added explicitly since the feature is composed in isolation.
         services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
+        services.AddSingleton<IBookmarkStimulusIndex, InMemoryBookmarkStateStore>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
         services.AddLogging();
         services.AddAuthorizationCore();
 

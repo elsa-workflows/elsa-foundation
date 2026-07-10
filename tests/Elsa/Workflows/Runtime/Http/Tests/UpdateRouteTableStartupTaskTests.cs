@@ -11,7 +11,7 @@ public sealed class UpdateRouteTableStartupTaskTests
     private readonly FakeRouteTable _routeTable = new();
 
     private UpdateRouteTableStartupTask Task() =>
-        new(new HttpEndpointRoutesResolver(_store), _routeTable);
+        new(Resolvers.Build(_store), _routeTable);
 
     [Fact]
     public async Task PopulatesRouteTable_FromBindings()
