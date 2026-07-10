@@ -64,14 +64,14 @@ describe("findNodeScopePath", () => {
     expect(findNodeScopePath(root, "c")).toEqual([]);
   });
 
-  it("returns the frame path to a nested node's scope", () => {
+  it("returns the frame path to a nested node's scope with an Owner / Slot crumb", () => {
     expect(findNodeScopePath(root, "b")).toEqual([
-      { ownerNodeId: "c", slotId: "elsa.sequence.structure:activities", label: "c" }
+      { ownerNodeId: "c", slotId: "elsa.sequence.structure:activities", label: "c / Activities" }
     ]);
   });
 
   it("uses the supplied label resolver for descended containers", () => {
-    expect(findNodeScopePath(root, "b", activity => `label:${activity.nodeId}`)?.[0].label).toBe("label:c");
+    expect(findNodeScopePath(root, "b", activity => `label:${activity.nodeId}`)?.[0].label).toBe("label:c / Activities");
   });
 
   it("returns an empty path for the root node itself", () => {
@@ -91,7 +91,7 @@ describe("findNodeScopePath", () => {
     const path = findNodeScopePath(rootWithChild, "in-secondary", activity => activity.nodeId, twoSlotCatalog);
 
     expect(path).toEqual([
-      { ownerNodeId: "container", slotId: "acme.two-slot.structure:secondary", label: "container" }
+      { ownerNodeId: "container", slotId: "acme.two-slot.structure:secondary", label: "container / Secondary" }
     ]);
     const scope = resolveScope(rootWithChild, path!, twoSlotCatalog);
     expect(scope?.slot.activities.map(activity => activity.nodeId)).toEqual(["in-secondary"]);

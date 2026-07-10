@@ -388,7 +388,9 @@ export function WorkflowEditor({
   }, [catalogByVersion, editDraft]);
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
-  // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027).
+  // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
+  // path follows planSlotNavigation's breadcrumb conventions, so landing here reads exactly like
+  // having navigated through slot entry.
   const repairVariableReference = useCallback((nodeId: string | null) => {
     if (!nodeId) return;
     const currentRoot = draft?.state.rootActivity;
