@@ -429,6 +429,10 @@ export interface WorkflowTestRunView {
   expiresAt?: string | null;
 }
 
+// An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).
+// Rows are content-addressed artifacts; the flat Definition*/Published*/Source* fields mirror the newest
+// reference for backward compatibility, and `references` carries every Source Reference newest-first.
+// `references` is optional because the legacy /_demo endpoint returns the flat shape only.
 export interface WorkflowExecutableSummary {
   artifactId: string;
   artifactVersion: string;
@@ -445,6 +449,79 @@ export interface WorkflowExecutableSummary {
   rootActivityVersion: string;
   nodeCount: number;
   resumeTargetCount: number;
+  references?: WorkflowExecutableReference[];
+}
+
+// The executables list scope filter (plan §3): the default view shows only artifacts with at least one
+// live Published reference.
+export type WorkflowExecutableListScope = "published" | "test-runs" | "all";
+
+// One Source Reference (ADR 0038/0040): a self-contained per-publish record pointing at an artifact.
+// `scope` is "Published" or "TestRun"; a reference with `deletedAt` is retired, one past `expiresAt`
+// is expired — either way it no longer keeps the artifact runnable.
+export interface WorkflowExecutableReference {
+  sourceReferenceId: string;
+  artifactId: string;
+  sourceKind?: string | null;
+  sourceId?: string | null;
+  sourceVersion?: string | null;
+  definitionId: string;
+  definitionVersionId: string;
+  artifactVersion: string;
+  createdAt: string;
+  publishedAt?: string | null;
+  scope: string;
+  expiresAt?: string | null;
+  deletedAt?: string | null;
+  deletedReason?: string | null;
+}
+
+// A node in the Execution Material tree served by GET /executables/{artifactId}. Input bindings are
+// compact summaries (secrets stay references, never literals); the structure payload is not on the
+// wire, only its kind — so flowchart connections are not available to the Inspector canvas.
+export interface WorkflowExecutableNode {
+  executableNodeId: string;
+  authoredActivityId: string;
+  activityType: string;
+  activityTypeVersion: string;
+  structureKind?: string | null;
+  inputBindings: WorkflowExecutableInputBinding[];
+  childSlots: WorkflowExecutableChildSlot[];
+}
+
+export interface WorkflowExecutableChildSlot {
+  name: string;
+  activities: WorkflowExecutableNode[];
+}
+
+export interface WorkflowExecutableInputBinding {
+  inputName: string;
+  source: string;
+  summary?: string | null;
+}
+
+// The reference the detail endpoint rendered the Layout Sidecar from, and how it was chosen:
+// "requested" (?ref= resolved), "newest-live", or "newest" (no live reference remains).
+export interface WorkflowExecutableChosenReference {
+  sourceReferenceId: string;
+  selection: string;
+  layout: DesignMetadataRecord[];
+}
+
+// The executable detail response (plan §3): identity block, Execution Material node tree, the chosen
+// reference's layout, and the full reference list. Assembled without consulting the definition table,
+// so it stays inspectable where its source definition does not exist.
+export interface WorkflowExecutableDetails {
+  artifactId: string;
+  artifactHash: string;
+  createdAt: string;
+  rootActivityType: string;
+  rootActivityVersion: string;
+  nodeCount: number;
+  resumeTargetCount: number;
+  rootActivity: WorkflowExecutableNode;
+  chosenReference?: WorkflowExecutableChosenReference | null;
+  references: WorkflowExecutableReference[];
 }
 
 export interface WorkflowExecutableRunResponse {

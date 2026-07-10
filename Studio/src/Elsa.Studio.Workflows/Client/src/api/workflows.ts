@@ -29,6 +29,8 @@ import type {
   WorkflowDefinitionState,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
+  WorkflowExecutableDetails,
+  WorkflowExecutableListScope,
   WorkflowExecutableRunResponse,
   WorkflowExecutablesResponse,
   WorkflowExecutableSummary,
@@ -323,8 +325,43 @@ export async function runExecutable(context: StudioEndpointContext, artifactId: 
   return context.http.postJson<WorkflowExecutableRunResponse>(`${basePath}/executables/${encodeURIComponent(artifactId)}/run`, {});
 }
 
-export async function listExecutables(context: StudioEndpointContext) {
-  const paths = [`${basePath}/executables`, "/_demo/workflows/executables"];
+export interface ListExecutablesOptions {
+  scope?: WorkflowExecutableListScope;
+  includeRetired?: boolean;
+}
+
+// The default view (scope=published, live references only) is also the backend default, so the request
+// stays parameterless unless the user narrows it — which keeps older backends without the scope filter
+// working for the default view.
+function executableListQuery(options: ListExecutablesOptions) {
+  const parameters = new URLSearchParams();
+  if (options.scope && options.scope !== "published") parameters.set("scope", options.scope);
+  if (options.includeRetired) parameters.set("includeRetired", "true");
+  const query = parameters.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function getExecutable(context: StudioEndpointContext, artifactId: string, sourceReferenceId?: string | null) {
+  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
+  return context.http.getJson<WorkflowExecutableDetails>(`${basePath}/executables/${encodeURIComponent(artifactId)}${query}`);
+}
+
+// Deleting an executable retires its Source References (ADR 0040). Content addressing lets behaviorally
+// identical definitions share one artifact, so callers in a definition-scoped context pass definitionId
+// to retire only that definition's references; without it the whole artifact is targeted.
+export async function deleteExecutable(context: StudioEndpointContext, artifactId: string, definitionId?: string | null) {
+  const query = definitionId ? `?definitionId=${encodeURIComponent(definitionId)}` : "";
+  await context.http.deleteJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}${query}`);
+}
+
+export async function restoreExecutable(context: StudioEndpointContext, artifactId: string, definitionId?: string | null) {
+  const query = definitionId ? `?definitionId=${encodeURIComponent(definitionId)}` : "";
+  await context.http.postJson<unknown>(`${basePath}/executables/${encodeURIComponent(artifactId)}/restore${query}`, {});
+}
+
+export async function listExecutables(context: StudioEndpointContext, options: ListExecutablesOptions = {}) {
+  const query = executableListQuery(options);
+  const paths = [`${basePath}/executables${query}`, `/_demo/workflows/executables${query}`];
   const errors: unknown[] = [];
 
   for (const path of paths) {

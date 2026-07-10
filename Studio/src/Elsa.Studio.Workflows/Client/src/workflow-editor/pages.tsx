@@ -3,6 +3,7 @@ import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi,
 import { WorkflowEditor } from "./WorkflowEditor";
 import { WorkflowDefinitions } from "./WorkflowDefinitions";
 import { WorkflowExecutables } from "./WorkflowExecutables";
+import { WorkflowExecutableInspectorWorkbench } from "./WorkflowExecutableInspector";
 import { WorkflowInstances, WorkflowInstanceDetailsWorkbench } from "./WorkflowInstances";
 
 export function WorkflowManagementPage({
@@ -73,6 +74,43 @@ export function WorkflowExecutablesPage({ context, ai }: { context: StudioEndpoi
   );
 }
 
+export function WorkflowExecutableInspectorPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const [location, setLocation] = useState(readExecutableInspectorLocation);
+
+  useEffect(() => {
+    const syncFromLocation = () => setLocation(readExecutableInspectorLocation());
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
+  }, []);
+
+  // Selecting a reference re-renders the same artifact from that reference's Layout Sidecar; the
+  // choice is part of the page address (?ref=) so it survives reload and can be shared.
+  const selectReference = useCallback((sourceReferenceId: string | null) => {
+    const url = new URL(window.location.href);
+
+    if (sourceReferenceId) {
+      url.searchParams.set("ref", sourceReferenceId);
+    } else {
+      url.searchParams.delete("ref");
+    }
+
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    setLocation(readExecutableInspectorLocation());
+  }, []);
+
+  return (
+    <WorkflowsPageFrame title="Executable Inspector">
+      <WorkflowExecutableInspectorWorkbench
+        context={context}
+        ai={ai}
+        artifactId={location.artifactId}
+        sourceReferenceId={location.sourceReferenceId}
+        onSelectReference={selectReference}
+      />
+    </WorkflowsPageFrame>
+  );
+}
+
 export function WorkflowInstancesPage({ context }: { context: StudioEndpointContext }) {
   return (
     <WorkflowsPageFrame title="Runs">
@@ -111,6 +149,14 @@ function readDefinitionIdFromUrl() {
 
 function readExecutableDefinitionFilterFromUrl() {
   return new URLSearchParams(window.location.search).get("definition");
+}
+
+function readExecutableInspectorLocation() {
+  const match = /^\/workflows\/executables\/([^/]+)$/.exec(window.location.pathname);
+  return {
+    artifactId: match ? decodeURIComponent(match[1]) : "",
+    sourceReferenceId: new URLSearchParams(window.location.search).get("ref")
+  };
 }
 
 function readWorkflowExecutionIdFromUrl() {
