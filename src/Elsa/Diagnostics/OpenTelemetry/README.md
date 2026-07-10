@@ -72,7 +72,10 @@ Enable `DiagnosticsOpenTelemetryPersistenceEFCoreSqlite` alongside `DiagnosticsO
 - disables generic EF command/query machinery because this is a diagnostics store, not a read-model domain;
 - routes this DbContext's EF logging to `NullLoggerFactory` to avoid diagnostics feedback loops;
 - uses `IDbContextFactory<OpenTelemetryDbContext>` as a singleton to avoid captive dependencies from the singleton store;
-- runs migrations from the SQLite provider package and starts the drain loop through `StartOpenTelemetryDrainingStartupTask`.
+- runs migrations from the SQLite provider package and starts the drain loop through `StartOpenTelemetryDrainingStartupTask`;
+- flushes the channel through `StopOpenTelemetryDrainingShellTerminator` during graceful shell
+  termination, after task producers stop and before the shell provider disposes the DbContext
+  factory. Async store disposal remains the bounded fallback when terminators do not run.
 
 The live SSE feed remains in-process (`IOpenTelemetryLiveFeed`) for every storage backend; persistence affects query/history endpoints, not the one-way live tail. Stream frames still carry no monotonic event id, so the OTEL SSE stream still has no `Last-Event-ID` resume.
 

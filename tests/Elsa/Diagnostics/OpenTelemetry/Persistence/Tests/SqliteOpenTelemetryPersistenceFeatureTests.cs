@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
@@ -48,6 +49,18 @@ public sealed class SqliteOpenTelemetryPersistenceFeatureTests
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IStartupTask) &&
             d.ImplementationType == typeof(StartOpenTelemetryDrainingStartupTask));
+    }
+
+    [Fact]
+    public void RegistersTheDrainingShellTerminator()
+    {
+        var services = new ServiceCollection();
+        new SqliteOpenTelemetryPersistenceShellFeature().ConfigureServices(services);
+
+        Assert.Contains(services, d =>
+            d.ServiceType == typeof(StopOpenTelemetryDrainingShellTerminator) &&
+            d.Lifetime == ServiceLifetime.Transient);
+        Assert.Contains(services, d => d.ServiceType == typeof(IShellTerminator));
     }
 
     [Fact]

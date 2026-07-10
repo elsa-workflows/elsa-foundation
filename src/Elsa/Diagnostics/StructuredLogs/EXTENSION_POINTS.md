@@ -51,6 +51,10 @@ Key design points (so the override stays safe on a high-volume, hot logging path
 - **Durable cursor:** `PersistedStructuredLogEntry` uses its own auto-increment `long Id` (not the per-process `Sequence`, which can repeat across restarts and which SQLite would not honour as a `RowNumber`). Queries order by `Id`. The entity deliberately does **not** derive from `Entity`.
 - **Retention:** the drain loop periodically prunes rows below `maxId - maxRetainedEntries` so the table stays bounded like the in-memory ring buffer.
 - **Startup ordering:** a migration startup task runs first; a draining startup task (`StartStructuredLogDrainingStartupTask`) then calls `store.StartDraining()`. Batch inserts retry briefly to tolerate the pre-migration window.
+- **Shutdown ordering:** `StopStructuredLogDrainingShellTerminator` completes and flushes the channel
+  during graceful shell termination, after `Start`-phase task producers have stopped and while the
+  DbContext factory is still usable. Async store disposal remains the bounded fallback for plain DI
+  containers and emergency paths where CShells skips terminators.
 
 ---
 

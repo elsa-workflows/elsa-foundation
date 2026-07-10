@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
@@ -34,11 +35,12 @@ public abstract class EFCoreStructuredLogsPersistenceFeatureBase : EFCorePersist
 
     protected override void OnAfterConfigured(IServiceCollection services)
     {
-        // Single instance shared by the store contract and the draining startup task. Registered with
+        // Single instance shared by the store contract and its lifecycle hooks. Registered with
         // AddSingleton (not TryAdd): the StructuredLogs feature registers its in-memory store with
         // TryAddSingleton, so this override wins regardless of feature ordering.
         services.AddSingleton<EfCoreStructuredLogStore>();
         services.AddSingleton<IStructuredLogStore>(sp => sp.GetRequiredService<EfCoreStructuredLogStore>());
         services.AddScoped<IStartupTask, StartStructuredLogDrainingStartupTask>();
+        services.AddShellTerminator<StopStructuredLogDrainingShellTerminator>();
     }
 }
