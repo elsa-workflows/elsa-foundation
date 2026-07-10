@@ -6,7 +6,7 @@ describe("workflow agent context", () => {
   it("collects bounded workflow context only on workflow surfaces", async () => {
     const provider = createWorkflowAgentContextProvider(() => ({
       workflowId: "order-approval",
-      selectedActivityId: "send-email",
+      selectedNodeId: "send-email",
       summary: "Order approval workflow",
       diagnostics: [{ severity: "warning", message: "No timeout branch is configured." }]
     }));

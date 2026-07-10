@@ -263,7 +263,27 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ details, draft, selectedNode, selectedNodeId, selectedDescriptor, catalogByVersion });
+  useWorkflowContextBridge({ details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
+
+  // Memoized so contributed panels get a stable context identity and can bail out of re-renders
+  // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
+  const panelContext = useMemo<WorkflowDesignerPanelContext | null>(() => {
+    if (!details || !draft) return null;
+    return {
+      definition: details.definition,
+      draft,
+      selectedActivity: selectedNode,
+      selectedActivityDescriptor: selectedDescriptor,
+      selectedActivitySlots: selectedSlots,
+      inspectedActivity: inspectedNode,
+      inspectedActivityDescriptor: inspectedDescriptor,
+      inspectedActivitySlots: inspectedSlots,
+      inspectedIsScopeOwner,
+      catalog,
+      currentScopeOwner: scopeOwner,
+      frames
+    };
+  }, [catalog, details, draft, frames, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, inspectedSlots, scopeOwner, selectedDescriptor, selectedNode, selectedSlots]);
 
   useEffect(() => {
     setExpandedPaletteCategories(current => {
@@ -435,16 +455,6 @@ export function WorkflowEditor({
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const panelContext: WorkflowDesignerPanelContext = {
-    definition: details.definition,
-    draft,
-    selectedActivity: selectedNode,
-    selectedActivityDescriptor: selectedDescriptor,
-    selectedActivitySlots: selectedSlots,
-    catalog,
-    currentScopeOwner: scopeOwner,
-    frames
-  };
   const contributedPanelTabs = workflowDesignerPanels
     .map(panel => {
       const ContributedPanel = panel.component;
@@ -454,7 +464,7 @@ export function WorkflowEditor({
         side: panel.side,
         order: panel.order ?? 500,
         icon: null,
-        render: () => <ContributedPanel context={panelContext} />
+        render: () => panelContext && <ContributedPanel context={panelContext} />
       };
     });
   const leftPanelTabs: WorkflowEditorPanelTab[] = [

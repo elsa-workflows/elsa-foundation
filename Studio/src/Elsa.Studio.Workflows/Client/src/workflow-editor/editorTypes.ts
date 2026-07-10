@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Edge } from "@xyflow/react";
-import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioWorkflowContextConnection } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
 
@@ -46,7 +46,7 @@ export type ConnectMenuState =
   | { kind: "spliceEdge"; edgeId: string; clientX: number; clientY: number }
   | { kind: "fromEmpty"; clientX: number; clientY: number };
 
-export type WorkflowGraphConnection = { source: string; target: string; sourcePort?: string; targetPort?: string };
+export type WorkflowGraphConnection = StudioWorkflowContextConnection;
 
 export type WorkflowNodeAvailabilityLookup = (input: { activityVersionId?: string | null; activityTypeKey?: string | null }) => ActivityAvailabilityDiagnosticEntry | null;
 
@@ -71,6 +71,16 @@ export interface WorkflowDesignerPanelContext {
   selectedActivity: ActivityNode | null;
   selectedActivityDescriptor: StudioActivityDescriptor | null;
   selectedActivitySlots: ReturnType<typeof getChildSlots>;
+  // The inspector's view: the selected activity, or — with nothing selected — the scope OWNER
+  // (the container whose canvas is displayed). Panels mirroring the inspector should render from
+  // these; `selected*` stays strictly selection-based.
+  inspectedActivity: ActivityNode | null;
+  inspectedActivityDescriptor: StudioActivityDescriptor | null;
+  inspectedActivitySlots: ReturnType<typeof getChildSlots>;
+  // True only on the owner FALLBACK — nothing is selected and the owner is shown. NOT "the inspected
+  // activity is the scope owner": when an owner is itself explicitly selected (possible for
+  // unsupported designers) this is false even though `inspectedActivity === currentScopeOwner`.
+  inspectedIsScopeOwner: boolean;
   catalog: ActivityCatalogItem[];
   currentScopeOwner: ActivityNode | null;
   frames: ScopeFrame[];
@@ -85,20 +95,3 @@ export interface WorkflowInstanceInspectionData {
   activityCatalog: ActivityCatalogItem[];
 }
 
-declare global {
-  interface Window {
-    __ELSA_STUDIO_WORKFLOW_CONTEXT__?: {
-      workflowId: string;
-      workflowDefinitionId?: string;
-      workflowVersionId?: string | null;
-      draftId?: string | null;
-      revision?: string | null;
-      selectedNodeId?: string | null;
-      selectedActivityType?: string | null;
-      summary?: string;
-      activities?: Array<{ id: string; type: string; displayName?: string }>;
-      connections?: WorkflowGraphConnection[];
-      diagnostics?: Array<{ severity: string; message: string }>;
-    };
-  }
-}

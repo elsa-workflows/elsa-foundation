@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
-import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource } from "../module";
+import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 
 afterEach(() => {
@@ -333,9 +333,14 @@ describe("workflows module", () => {
           displayName: "Write Line"
         })
       ] });
-      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
       return response({ definitions: [definition()] });
     }));
+    const captured = capturingPanel();
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
       api.workflowDesigner.panels.add({
         id: "custom.left",
@@ -349,7 +354,7 @@ describe("workflows module", () => {
         title: "Audit",
         side: "right",
         order: 50,
-        component: () => <div className="custom-right-panel">Module right panel</div>
+        component: captured.component
       });
     });
 
@@ -360,8 +365,46 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Library"));
     expect(container.textContent).toContain("Module left panel");
 
+    // With nothing selected the panel context mirrors the inspector's owner fallback: the inspected
+    // activity is the root scope owner while selectedActivity stays null.
     await click(buttonByText(container, "Audit"));
     expect(container.textContent).toContain("Module right panel");
+    expect(captured.context?.inspectedIsScopeOwner).toBe(true);
+    expect(captured.context?.inspectedActivity?.nodeId).toBe("root");
+    expect(captured.context?.inspectedActivitySlots).toHaveLength(1);
+    expect(captured.context?.selectedActivity).toBeNull();
+    expect(captured.context?.currentScopeOwner?.nodeId).toBe("root");
+
+    await unmount();
+  });
+
+  it("provides a null inspected context to contributed panels when the draft has no root", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const captured = capturingPanel();
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowDesigner.panels.add({ id: "custom.right", title: "Audit", side: "right", order: 50, component: captured.component });
+    });
+
+    await waitForText(container, "Audit");
+    await click(buttonByText(container, "Audit"));
+
+    // No root activity: there is no scope owner to fall back to, so the panel still mounts and the
+    // inspected view is empty rather than crashing.
+    expect(container.textContent).toContain("Module right panel");
+    expect(captured.context?.inspectedActivity).toBeNull();
+    expect(captured.context?.inspectedIsScopeOwner).toBe(false);
+    expect(captured.context?.inspectedActivitySlots).toHaveLength(0);
+    expect(captured.context?.selectedActivity).toBeNull();
 
     await unmount();
   });
@@ -435,14 +478,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: flowchartRoot([]),
-            inputs: [],
-            outputs: []
-          }
-        }),
+        draft: draftWithFlowchartRoot(),
         versions: []
       });
       return response({ definitions: [definition()] });
@@ -479,14 +515,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: flowchartRoot([]),
-            inputs: [],
-            outputs: []
-          }
-        }),
+        draft: draftWithFlowchartRoot(),
         versions: []
       });
       return response({ definitions: [definition()] });
@@ -824,14 +853,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: workflowDraft({
-          state: {
-            variables: [],
-            rootActivity: flowchartRoot([]),
-            inputs: [],
-            outputs: []
-          }
-        }),
+        draft: draftWithFlowchartRoot(),
         versions: []
       });
       return response({ definitions: [definition()] });
@@ -1223,7 +1245,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: workflowDraft({ state: { variables: [], rootActivity: flowchartRoot([]), inputs: [], outputs: [] } }),
+        draft: draftWithFlowchartRoot(),
         versions: []
       });
       return response({ definitions: [definition()] });
@@ -1361,7 +1383,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: workflowDraft({ state: { variables: [], rootActivity: flowchartRoot([]), inputs: [], outputs: [] } }),
+        draft: draftWithFlowchartRoot(),
         versions: []
       });
       return response({ definitions: [definition()] });
@@ -2185,6 +2207,23 @@ function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
     validationErrors: [],
     ...overrides
   };
+}
+
+function draftWithFlowchartRoot(activities: unknown[] = []) {
+  return workflowDraft({ state: { variables: [], rootActivity: flowchartRoot(activities), inputs: [], outputs: [] } });
+}
+
+// Contributed-panel double that records the latest designer panel context so tests can assert on its
+// fields directly instead of round-tripping values through rendered text.
+function capturingPanel() {
+  const captured = {
+    context: null as WorkflowDesignerPanelContext | null,
+    component: ({ context }: { context: unknown }) => {
+      captured.context = context as WorkflowDesignerPanelContext;
+      return <div className="custom-right-panel">Module right panel</div>;
+    }
+  };
+  return captured;
 }
 
 function flowchartRoot(activities: unknown[]) {
