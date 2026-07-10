@@ -49,7 +49,7 @@ public sealed class WorkflowExecutableCompiler(
                 activityRows[activityVersionId] = await activityVersions.GetWithDefinitionAsync(activityVersionId, cancellationToken);
 
             var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows);
-            var artifactHash = hasher.ComputeHash(source, compiledRoot);
+            var artifactHash = hasher.ComputeHash(compiledRoot);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
             var metadata = (request.CompatibilityMetadata ?? new Dictionary<string, string>())
                 .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
