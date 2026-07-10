@@ -195,6 +195,18 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public void Connection_WithoutVertices_OmitsVerticesFromWebJson()
+    {
+        var connection = new WorkflowExecutableConnectionView(
+            new WorkflowExecutableConnectionEndpointView("source", "Done"),
+            new WorkflowExecutableConnectionEndpointView("target", "Input"));
+
+        var wireJson = JsonSerializer.SerializeToElement(connection, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.False(wireJson.TryGetProperty("vertices", out _));
+    }
+
+    [Fact]
     public async Task Detail_ChoosesNewestLiveReference_ForLayout_ByDefault()
     {
         await SaveExecutableAsync("artifact-a");

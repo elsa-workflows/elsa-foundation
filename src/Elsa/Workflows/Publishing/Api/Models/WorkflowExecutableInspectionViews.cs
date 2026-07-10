@@ -113,6 +113,7 @@ public sealed record WorkflowExecutableNodeView(
 public sealed record WorkflowExecutableConnectionView(
     WorkflowExecutableConnectionEndpointView Source,
     WorkflowExecutableConnectionEndpointView Target,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     IReadOnlyList<WorkflowExecutableConnectionVertexView>? Vertices = null);
 
 /// <summary>A canvas connection endpoint identified by authored node id and an optional port.</summary>
