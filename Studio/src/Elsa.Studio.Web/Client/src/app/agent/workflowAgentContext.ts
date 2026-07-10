@@ -1,33 +1,10 @@
-import type { StudioAgentContextProviderContribution, StudioAgentSurface } from "../../sdk";
+import type { StudioAgentContextProviderContribution, StudioAgentSurface, StudioWorkflowContextConnection, StudioWorkflowContextSnapshot } from "../../sdk";
 
-export interface WorkflowGraphConnection {
-  source: string;
-  target: string;
-  sourcePort?: string;
-  targetPort?: string;
-}
-
-export interface WorkflowAgentContextSnapshot {
-  workflowId: string;
-  workflowDefinitionId?: string;
-  workflowVersionId?: string | null;
-  draftId?: string | null;
-  revision?: string | null;
-  version?: string;
-  selectedNodeId?: string | null;
-  selectedActivityType?: string | null;
-  selectedActivityId?: string;
-  summary?: string;
-  activities?: Array<{ id: string; type: string; displayName?: string }>;
-  connections?: WorkflowGraphConnection[];
-  diagnostics?: Array<{ severity: string; message: string }>;
-}
-
-declare global {
-  interface Window {
-    __ELSA_STUDIO_WORKFLOW_CONTEXT__?: WorkflowAgentContextSnapshot;
-  }
-}
+// The snapshot contract (and the window global declaration) lives in the SDK so the writer — the
+// Workflows module's context bridge — and this reader cannot drift; these aliases keep the names this
+// module has always exported.
+export type WorkflowGraphConnection = StudioWorkflowContextConnection;
+export type WorkflowAgentContextSnapshot = StudioWorkflowContextSnapshot;
 
 export function createWorkflowAgentContextProvider(getSnapshot: () => WorkflowAgentContextSnapshot | null = getWindowWorkflowSnapshot): StudioAgentContextProviderContribution {
   return {
@@ -48,7 +25,7 @@ export function createWorkflowAgentContextProvider(getSnapshot: () => WorkflowAg
         label: snapshot.summary ?? "Active workflow",
         contentType: "workflow.definition",
         sensitivity: "internal",
-        scope: snapshot.selectedActivityId ? "selection" : "screen",
+        scope: snapshot.selectedNodeId ? "selection" : "screen",
         content: snapshot
       }];
     }

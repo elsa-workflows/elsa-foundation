@@ -15,7 +15,9 @@ import "./styles.css";
 // Re-exported for the test suite (src/__tests__/module.test.tsx), which imports these connect-end
 // helpers directly alongside register().
 export { isConnectEndOverExistingWorkflowNode, resolveConnectEndSource } from "./workflow-editor/editorHelpers";
-export type { WorkflowConnectSource } from "./workflow-editor/editorTypes";
+// WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
+// contributed-panel authors can type their `context` prop instead of hand-copying the shape.
+export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);

@@ -257,6 +257,56 @@ export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
   component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
 }
 
+export interface StudioWorkflowContextActivity {
+  id: string;
+  type: string;
+  displayName?: string;
+}
+
+export interface StudioWorkflowContextConnection {
+  source: string;
+  target: string;
+  sourcePort?: string;
+  targetPort?: string;
+}
+
+export interface StudioWorkflowContextDiagnostic {
+  severity: string;
+  message: string;
+}
+
+// Snapshot of the open workflow that the designer publishes onto `window.__ELSA_STUDIO_WORKFLOW_CONTEXT__`
+// for out-of-band consumers (the host's agent context provider, Weaver tooling). Defined once here so the
+// writer (the Workflows module's context bridge) and every reader share a single contract.
+export interface StudioWorkflowContextSnapshot {
+  workflowId: string;
+  workflowDefinitionId?: string;
+  workflowVersionId?: string | null;
+  draftId?: string | null;
+  revision?: string | null;
+  selectedNodeId?: string | null;
+  selectedActivityType?: string | null;
+  /** Node the inspector shows: the selection, or the scope owner when nothing is selected. */
+  inspectedNodeId?: string | null;
+  inspectedActivityType?: string | null;
+  /**
+   * True only on the owner FALLBACK — nothing is selected and the scope owner is shown. False when the
+   * owner itself is explicitly selected (possible for unsupported designers); compare inspectedNodeId
+   * against the scope to detect that case.
+   */
+  inspectedIsScopeOwner?: boolean;
+  summary?: string;
+  activities?: StudioWorkflowContextActivity[];
+  connections?: StudioWorkflowContextConnection[];
+  diagnostics?: StudioWorkflowContextDiagnostic[];
+}
+
+declare global {
+  interface Window {
+    __ELSA_STUDIO_WORKFLOW_CONTEXT__?: StudioWorkflowContextSnapshot;
+  }
+}
+
 export interface StudioFeatureAreaNavLeaf {
   id?: string;
   title: string;

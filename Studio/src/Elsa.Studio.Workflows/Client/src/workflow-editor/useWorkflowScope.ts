@@ -56,7 +56,7 @@ export function useWorkflowScope({
     () => selectedNode ? resolveActivityDescriptor(selectedNode, catalogByVersion, descriptorsByType) : null,
     [catalogByVersion, descriptorsByType, selectedNode]
   );
-  const selectedSlots = selectedNode ? getChildSlots(selectedNode, catalogByVersion) : [];
+  const selectedSlots = useMemo(() => selectedNode ? getChildSlots(selectedNode, catalogByVersion) : [], [catalogByVersion, selectedNode]);
   // With nothing selected the inspector shows the scope OWNER — the container whose canvas is
   // displayed. That is the only inspection surface for containers a slot entry descends through
   // (they never appear as nodes), and it covers the root container too.
@@ -72,7 +72,7 @@ export function useWorkflowScope({
       : null,
     [availabilityLookup, catalogByVersion, inspectedNode]
   );
-  const inspectedSlots = inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [];
+  const inspectedSlots = useMemo(() => inspectedNode ? getChildSlots(inspectedNode, catalogByVersion) : [], [catalogByVersion, inspectedNode]);
   const inspectedSupportsScopedVariables = inspectedNode
     ? supportsScopedVariables(inspectedNode, catalogByVersion.get(inspectedNode.activityVersionId))
     : false;
