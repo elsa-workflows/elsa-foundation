@@ -1013,6 +1013,24 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("opens the source definition from the executables grid", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/_elsa/workflow-management/executables")) return response([executable()]);
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByLabel(container, "Open source definition definition-1"));
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(window.location.search).toBe("?definition=definition-1");
+
+    await unmount();
+  });
+
   it("shows an empty executable state when executable endpoints are unavailable", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response(null, 404));
     vi.stubGlobal("fetch", fetchMock);

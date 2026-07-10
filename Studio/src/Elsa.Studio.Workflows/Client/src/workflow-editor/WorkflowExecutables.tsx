@@ -170,13 +170,25 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
 function WorkflowExecutableSourceCell({ executable, onCopied, onCopyFailed }: { executable: WorkflowExecutableSummary; onCopied(label: string): void; onCopyFailed(label: string): void }) {
   const sourceId = executable.sourceId || executable.definitionVersionId || executable.definitionId;
   const sourceVersion = executable.sourceVersion;
+  const definitionId = executable.definitionId;
+
+  const openSourceDefinition = () => {
+    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
 
   return (
     <span className="wf-source-cell">
       <span className="wf-source-kind">{formatExecutableSourceKind(executable.sourceKind)}</span>
       {sourceId ? (
         <span className="wf-cell-line">
-          <code title={sourceId}>{sourceId}</code>
+          {definitionId ? (
+            <button type="button" className="wf-link-button" aria-label={`Open source definition ${definitionId}`} onClick={openSourceDefinition}>
+              <code title={sourceId}>{sourceId}</code>
+            </button>
+          ) : (
+            <code title={sourceId}>{sourceId}</code>
+          )}
           <CopyValueButton value={sourceId} ariaLabel={`Copy source ID ${sourceId}`} copiedLabel="source ID" onCopied={onCopied} onCopyFailed={onCopyFailed} />
         </span>
       ) : null}
