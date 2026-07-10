@@ -60,15 +60,11 @@ public sealed class WorkflowExecutableCompiler(
                     DefinitionId: source.DefinitionId,
                     DefinitionVersionId: source.DefinitionVersionId,
                     ArtifactVersion: source.ArtifactVersion,
-                    ArtifactHash: artifactHash,
-                    Source: source.SourceReference),
+                    ArtifactHash: artifactHash),
                 rootActivity: compiledRoot,
                 resumeTargets: executableNodeCompiler.BuildResumeTargets(compiledRoot),
                 createdAt: request.CreatedAt,
-                publishedAt: request.PublishedAt,
-                compatibilityMetadata: metadata,
-                scope: request.Scope,
-                expiresAt: request.ExpiresAt);
+                compatibilityMetadata: metadata);
         }
         catch (ArgumentException exception) when (exception is not WorkflowExecutableCompilationException)
         {
@@ -86,6 +82,8 @@ public sealed class WorkflowExecutableCompiler(
             DefinitionVersionId: version.Id,
             ArtifactVersion: version.Version,
             State: version.State,
-            SourceReference: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", version.Id, version.Version));
+            SourceKind: "WorkflowDefinitionVersion",
+            SourceId: version.Id,
+            SourceVersion: version.Version);
     }
 }

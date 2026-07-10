@@ -28,6 +28,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private const string TriggerActivityTypeKey = "Test.Trigger";
 
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
+    private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
 
     [Fact]
@@ -75,7 +76,15 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 BuildStructureService(),
                 TestWellKnownTypeRegistry.Create()),
             _executableStore,
-            new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore));
+            _referenceStore,
+            new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore),
+            new NullLayoutStore());
+    }
+
+    private sealed class NullLayoutStore : IWorkflowDefinitionVersionLayoutStore
+    {
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<WorkflowDefinitionVersionLayout?>(null);
     }
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode rootActivity) =>

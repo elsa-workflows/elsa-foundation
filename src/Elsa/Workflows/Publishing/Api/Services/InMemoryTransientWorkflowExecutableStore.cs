@@ -4,26 +4,26 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
+/// <summary>
+/// Transitional facade over the single content-addressed artifact store for expiring test-run executables
+/// (ADR 0040). The artifact no longer carries scope/expiry (those are reference facts), so this shim tracks the
+/// per-artifact expiry alongside and sweeps expired artifacts from the shared store. The reference-driven test-run
+/// rewiring (an expiring TestRun-scope source reference) is worker W3's slice.
+/// </summary>
 public sealed class InMemoryTransientWorkflowExecutableStore(IWorkflowExecutableStore executableStore)
     : ITransientWorkflowExecutableStore
 {
     private readonly Dictionary<string, DateTimeOffset> _expirations = new(StringComparer.Ordinal);
     private readonly Lock _gate = new();
 
-    public async ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default)
+    public async ValueTask SaveAsync(WorkflowExecutable executable, DateTimeOffset expiresAt, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(executable);
-
-        if (executable.Scope != WorkflowExecutableScope.TransientTestRun)
-            throw new ArgumentException("Transient store only accepts transient test-run executables.", nameof(executable));
-
-        if (executable.ExpiresAt is null)
-            throw new ArgumentException("Transient test-run executables require an expiration timestamp.", nameof(executable));
 
         await executableStore.SaveAsync(executable, cancellationToken);
 
         lock (_gate)
-            _expirations[executable.Identity.ArtifactId] = executable.ExpiresAt.Value;
+            _expirations[executable.Identity.ArtifactId] = expiresAt;
     }
 
     public async ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -31,37 +31,37 @@ public sealed class InMemoryTransientWorkflowExecutableStore(IWorkflowExecutable
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
         var executable = await executableStore.FindAsync(artifactId, cancellationToken);
-        if (executable?.Scope != WorkflowExecutableScope.TransientTestRun)
+        if (executable is null)
             return null;
 
-        if (IsExpired(executable, DateTimeOffset.UtcNow))
+        // Only artifacts this facade minted (tracked in _expirations) are visible through it; a durable published
+        // artifact sharing the id is not a test-run artifact.
+        if (!TryGetExpiry(artifactId, out var expiresAt))
+            return null;
+
+        if (expiresAt <= DateTimeOffset.UtcNow)
         {
             await executableStore.DeleteAsync(artifactId, cancellationToken);
             Forget(artifactId);
             return null;
         }
 
-        Remember(executable);
         return executable;
     }
 
     public async ValueTask<int> CleanupExpiredAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var storedExpiredArtifactIds = (await executableStore.ListAsync(includeTransient: true, cancellationToken: cancellationToken))
-            .Where(executable => executable.Scope == WorkflowExecutableScope.TransientTestRun && IsExpired(executable, now))
-            .Select(executable => executable.Identity.ArtifactId);
-
-        string[] trackedExpiredArtifactIds;
+        string[] expiredArtifactIds;
         lock (_gate)
         {
-            trackedExpiredArtifactIds = _expirations
+            expiredArtifactIds = _expirations
                 .Where(item => item.Value <= now)
                 .Select(item => item.Key)
                 .ToArray();
         }
 
         var deleted = 0;
-        foreach (var artifactId in storedExpiredArtifactIds.Concat(trackedExpiredArtifactIds).Distinct(StringComparer.Ordinal))
+        foreach (var artifactId in expiredArtifactIds)
         {
             if (await executableStore.DeleteAsync(artifactId, cancellationToken))
                 deleted++;
@@ -72,22 +72,10 @@ public sealed class InMemoryTransientWorkflowExecutableStore(IWorkflowExecutable
         return deleted;
     }
 
-    private bool IsExpired(WorkflowExecutable executable, DateTimeOffset now)
+    private bool TryGetExpiry(string artifactId, out DateTimeOffset expiresAt)
     {
-        if (executable.ExpiresAt is { } expiresAt)
-            return expiresAt <= now;
-
         lock (_gate)
-            return _expirations.TryGetValue(executable.Identity.ArtifactId, out expiresAt) && expiresAt <= now;
-    }
-
-    private void Remember(WorkflowExecutable executable)
-    {
-        if (executable.ExpiresAt is null)
-            return;
-
-        lock (_gate)
-            _expirations[executable.Identity.ArtifactId] = executable.ExpiresAt.Value;
+            return _expirations.TryGetValue(artifactId, out expiresAt);
     }
 
     private void Forget(string artifactId)

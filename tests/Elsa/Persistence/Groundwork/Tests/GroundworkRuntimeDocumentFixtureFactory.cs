@@ -26,6 +26,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     [
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind,
+        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind,
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
@@ -93,6 +94,9 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             case ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind:
                 await new GroundworkWorkflowExecutableStore(store, Serializer).SaveAsync(Executable());
                 break;
+            case ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind:
+                await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).SaveAsync(Reference());
+                break;
             case ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind:
                 await new GroundworkActivityExecutionStateStore(store, Serializer).SaveAsync(ActivityState());
                 break;
@@ -148,6 +152,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             (await new GroundworkBookmarkStateStore(store, Serializer).FindAsync(Wf, "bm-1"))?.StimulusType,
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind =>
             (await new GroundworkWorkflowExecutableStore(store, Serializer).FindAsync("artifact-1"))?.Identity.DefinitionId,
+        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind =>
+            (await new GroundworkWorkflowExecutableSourceReferenceStore(store, Serializer).FindAsync("sourceref-1"))?.ArtifactId,
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind =>
             (await new GroundworkActivityExecutionStateStore(store, Serializer).FindAsync(Wf, "ae-1"))?.Status,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind =>
@@ -192,6 +198,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     {
         ElsaRuntimeStorageManifest.BookmarkStateDocumentKind => "Http",
         ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind => "definition-1",
+        ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind => "artifact-1",
         ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind => ActivityExecutionStatus.Running,
         ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind => "ae-1",
         ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind => WorkflowExecutionStatus.Completed,
@@ -286,19 +293,32 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
                 DefinitionId: "definition-1",
                 DefinitionVersionId: "version-1",
                 ArtifactVersion: "1",
-                ArtifactHash: "hash-artifact-1",
-                Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", "1")),
+                ArtifactHash: "hash-artifact-1"),
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
             },
             createdAt: DateTimeOffset.UnixEpoch,
-            publishedAt: DateTimeOffset.UnixEpoch,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
-            scope: WorkflowExecutableScope.Published,
-            expiresAt: null);
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
     }
+
+    private static WorkflowExecutableSourceReference Reference() => new(
+        SourceReferenceId: "sourceref-1",
+        ArtifactId: "artifact-1",
+        SourceKind: "WorkflowDefinitionVersion",
+        SourceId: "version-1",
+        SourceVersion: "1",
+        DefinitionId: "definition-1",
+        DefinitionVersionId: "version-1",
+        ArtifactVersion: "1",
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        PublishedAt: DateTimeOffset.UnixEpoch,
+        Scope: WorkflowExecutableReferenceScope.Published,
+        ExpiresAt: null,
+        DeletedAt: null,
+        DeletedReason: null,
+        Layout: [new WorkflowExecutableLayoutRecord("root", 10, 20, 100, 60, Json("""{ "collapsed": false }"""))]);
 
     private static ActivityExecutionState ActivityState() => new(
         Execution: new ActivityExecution("ae-1", Wf, "node-ae-1", "authored", "Elsa.Log", "1.0.0"),
@@ -366,8 +386,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
             DefinitionId: "definition-1",
             DefinitionVersionId: "version-1",
             ArtifactVersion: "1",
-            ArtifactHash: "hash-wf-1",
-            Source: null),
+            ArtifactHash: "hash-wf-1"),
         WorkflowExecutionStatus.Completed,
         SubStatus: null,
         CreatedAt: DateTimeOffset.UnixEpoch,

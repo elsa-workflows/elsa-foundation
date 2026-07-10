@@ -3,7 +3,10 @@ using System.Collections.ObjectModel;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Runtime-owned executable artifact produced by compile/publish and consumed by workflow execution.
+/// A content-addressed, fully immutable workflow executable artifact (ADR 0038): pure behavior, one row per
+/// distinct behavior. Per-publish facts — scope, expiry, published/deleted timestamps, source provenance and the
+/// layout sidecar — do NOT live here; they belong to the <see cref="WorkflowExecutableSourceReference"/> records
+/// that point at this artifact.
 /// </summary>
 public sealed class WorkflowExecutable
 {
@@ -12,20 +15,12 @@ public sealed class WorkflowExecutable
         ExecutableNode rootActivity,
         IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> resumeTargets,
         DateTimeOffset createdAt,
-        DateTimeOffset? publishedAt,
-        IReadOnlyDictionary<string, string> compatibilityMetadata,
-        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
-        DateTimeOffset? expiresAt = null,
-        DateTimeOffset? deletedAt = null,
-        string? deletedReason = null)
+        IReadOnlyDictionary<string, string> compatibilityMetadata)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(resumeTargets);
         ArgumentNullException.ThrowIfNull(compatibilityMetadata);
-
-        if (scope == WorkflowExecutableScope.Published && expiresAt is not null)
-            throw new ArgumentException("Published workflow executables cannot expire.", nameof(expiresAt));
 
         var nodeSnapshot = Flatten(rootActivity).ToArray();
 
@@ -35,12 +30,7 @@ public sealed class WorkflowExecutable
         NodesById = new ReadOnlyDictionary<string, ExecutableNode>(nodeSnapshot.ToDictionary(node => node.ExecutableNodeId, StringComparer.Ordinal));
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         CreatedAt = createdAt;
-        PublishedAt = publishedAt;
         CompatibilityMetadata = new ReadOnlyDictionary<string, string>(compatibilityMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal));
-        Scope = scope;
-        ExpiresAt = expiresAt;
-        DeletedAt = deletedAt;
-        DeletedReason = deletedReason;
     }
 
     public WorkflowExecutableIdentity Identity { get; }
@@ -49,18 +39,7 @@ public sealed class WorkflowExecutable
     public IReadOnlyDictionary<string, ExecutableNode> NodesById { get; }
     public IReadOnlyDictionary<string, WorkflowExecutableResumeTarget> ResumeTargets { get; }
     public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset? PublishedAt { get; }
     public IReadOnlyDictionary<string, string> CompatibilityMetadata { get; }
-    public WorkflowExecutableScope Scope { get; }
-    public DateTimeOffset? ExpiresAt { get; }
-    public DateTimeOffset? DeletedAt { get; }
-    public string? DeletedReason { get; }
-
-    public WorkflowExecutable WithDeleted(DateTimeOffset deletedAt, string? reason = null) =>
-        new(Identity, RootActivity, ResumeTargets, CreatedAt, PublishedAt, CompatibilityMetadata, Scope, ExpiresAt, deletedAt, reason);
-
-    public WorkflowExecutable WithRestored() =>
-        new(Identity, RootActivity, ResumeTargets, CreatedAt, PublishedAt, CompatibilityMetadata, Scope, ExpiresAt);
 
     private static IEnumerable<ExecutableNode> Flatten(ExecutableNode rootActivity)
     {
@@ -76,10 +55,4 @@ public sealed class WorkflowExecutable
                 stack.Push(child);
         }
     }
-}
-
-public enum WorkflowExecutableScope
-{
-    Published,
-    TransientTestRun
 }

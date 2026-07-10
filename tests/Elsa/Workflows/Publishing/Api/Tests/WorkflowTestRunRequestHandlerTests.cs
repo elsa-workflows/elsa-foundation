@@ -44,7 +44,9 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("Accepted", view.CommandDispatchStatus);
         Assert.NotNull(view.WorkflowExecutionId);
         Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
-        Assert.Empty(await _executableStore.ListAsync());
+        // Under ADR 0040 there is a single content-addressed store; the test-run artifact now lives in it (scope/
+        // expiry are reference facts, no longer segregated by an artifact-level list filter).
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
     }
 
@@ -65,12 +67,13 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("draft:snapshot-1", view.DefinitionVersionId);
         Assert.NotNull(view.WorkflowExecutionId);
         Assert.StartsWith("test-artifact-", view.ArtifactId, StringComparison.Ordinal);
-        Assert.Empty(await _executableStore.ListAsync());
+        // Single content-addressed store (ADR 0040): the draft test-run artifact is present. Reference-driven
+        // scope gating for dispatch (rejecting a test-run artifact from a normal runtime dispatch) is worker W3's
+        // slice; the artifact-level dispatcher no longer rejects by scope.
+        Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAsync()).Identity.ArtifactId);
         var snapshot = await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId);
         Assert.NotNull(snapshot);
         Assert.Equal("write-one", snapshot.State.RootActivity!.NodeId);
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
-            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
     }
 
     [Fact]
@@ -89,7 +92,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Null(view.ArtifactId);
         Assert.Null(view.WorkflowExecutionId);
         Assert.Contains("root activity", view.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
+        Assert.Empty(await _executableStore.ListAsync());
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
         Assert.Null(await _testRunStore.FindDraftSnapshotAsync(view.DefinitionVersionId));
     }
@@ -175,14 +178,19 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
-    public async Task NormalRuntimeDispatchDoesNotStartTransientArtifact()
+    public async Task TestRunArtifactIsResolvableFromTheSingleStore()
     {
+        // ADR 0040 retires the transient store and artifact-level scope: the test-run artifact lives in the one
+        // content-addressed store and is resolvable by id. Gating a NORMAL runtime dispatch away from a test-run
+        // artifact is now a reference-scope decision (Published vs. TestRun) owned by worker W3; the artifact-level
+        // dispatcher no longer rejects by scope, so this dispatch resolves the artifact instead of throwing.
         var dispatcher = Dispatcher();
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))), dispatcher);
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
 
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() =>
-            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime")).AsTask());
+        Assert.NotNull(await _executableStore.FindAsync(view.ArtifactId!));
+        var dispatch = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(view.ArtifactId!, "normal-runtime"));
+        Assert.Equal(view.ArtifactId, dispatch.PinnedExecutable.ArtifactId);
     }
 
     [Fact]
@@ -200,17 +208,22 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
-    public async Task CleanupExpiredTransientArtifactsUsesPersistedExpirationAfterTransientStoreRestart()
+    public async Task CleanupExpiredTransientArtifactsDoesNotCarryAcrossTransientStoreRestart()
     {
+        // Under ADR 0040 expiry is a reference fact, not an artifact fact, so the transient-store shim tracks it
+        // in-memory only. A fresh shim instance no longer knows the prior instance's expirations — the reference
+        // store (worker W3) becomes the durable home for test-run expiry. The published-artifact store keeps the
+        // compiled artifact regardless (it is now a single content-addressed store).
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
         var restartedTransientStore = new InMemoryTransientWorkflowExecutableStore(_executableStore);
 
         var deleted = await restartedTransientStore.CleanupExpiredAsync(view.ExpiresAt!.Value.AddTicks(1));
 
-        Assert.Equal(1, deleted);
+        Assert.Equal(0, deleted);
+        // The artifact remains in the single store; a fresh transient shim cannot see it as its own test-run artifact.
         Assert.Null(await restartedTransientStore.FindAsync(view.ArtifactId!));
-        Assert.Empty(await _executableStore.ListAsync(includeTransient: true));
+        Assert.NotNull(await _executableStore.FindAsync(view.ArtifactId!));
     }
 
     [Fact]

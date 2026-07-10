@@ -430,7 +430,6 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: node,
             resumeTargets: resumeTargets,
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -461,7 +460,6 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: withOptions,
             resumeTargets: executable.ResumeTargets,
             createdAt: executable.CreatedAt,
-            publishedAt: executable.PublishedAt,
             compatibilityMetadata: executable.CompatibilityMetadata);
     }
 

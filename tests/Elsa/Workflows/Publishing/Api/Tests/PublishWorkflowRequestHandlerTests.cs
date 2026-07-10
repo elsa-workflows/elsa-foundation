@@ -62,6 +62,80 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task SameBehaviorFromTwoDefinitionVersionsYieldsOneArtifactAndTwoReferences()
+    {
+        // Acceptance 1 (ADR 0038): publishing the same behavior from two different definition versions resolves to
+        // ONE content-addressed artifact and appends TWO source references pointing at it.
+        var firstVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-A", versionId: "version-A", version: "1.0.0");
+        var secondVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-B", versionId: "version-B", version: "3.7.0");
+
+        var first = await Handler(firstVersion).Handle(new PublishWorkflow("version-A"), CancellationToken.None);
+        var second = await Handler(secondVersion).Handle(new PublishWorkflow("version-B"), CancellationToken.None);
+
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.Equal(first.ArtifactHash, second.ArtifactHash);
+        Assert.Single(await _store.ListAsync());
+
+        var references = await _referenceStore.ListByArtifactAsync(first.ArtifactId);
+        Assert.Equal(2, references.Count);
+        Assert.Equal(["definition-A", "definition-B"], references.Select(r => r.DefinitionId).OrderBy(x => x, StringComparer.Ordinal));
+        Assert.Equal(["version-A", "version-B"], references.Select(r => r.DefinitionVersionId).OrderBy(x => x, StringComparer.Ordinal));
+        Assert.All(references, reference =>
+        {
+            Assert.Equal(first.ArtifactId, reference.ArtifactId);
+            Assert.Equal(WorkflowExecutableReferenceScope.Published, reference.Scope);
+            Assert.NotNull(reference.PublishedAt);
+            Assert.Null(reference.ExpiresAt);
+        });
+    }
+
+    [Fact]
+    public async Task RepublishingIdenticalVersionIsIdempotentOnArtifactAndAppendsReference()
+    {
+        // Acceptance 2 (ADR 0038): republishing an identical version resolves to the same artifact (idempotent, not
+        // overwritten) and appends another reference.
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var handler = Handler(version);
+
+        var first = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var storedFirst = await _store.FindAsync(first.ArtifactId);
+        var second = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var storedSecond = await _store.FindAsync(second.ArtifactId);
+
+        Assert.Equal(first.ArtifactId, second.ArtifactId);
+        Assert.Single(await _store.ListAsync());
+        // Idempotent: the stored artifact instance is not replaced on republish.
+        Assert.Same(storedFirst, storedSecond);
+        Assert.Equal(2, (await _referenceStore.ListByArtifactAsync(first.ArtifactId)).Count);
+        Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
+    }
+
+    [Fact]
+    public async Task AppendedReferenceCarriesLayoutRecordsCopiedFromDefinitionVersion()
+    {
+        // Acceptance 3 (ADR 0039): the appended reference embeds the layout sidecar copied verbatim from the
+        // definition version's layout store.
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var additional = JsonSerializer.SerializeToElement(new { color = "blue" });
+        var layout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = "version-1",
+            Records = [new DesignMetadataRecord("write-one", 12.5, 34.0, 200, 80, additional)]
+        };
+
+        var view = await Handler(version, layout, _writeLineActivity).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var reference = Assert.Single(await _referenceStore.ListByArtifactAsync(view.ArtifactId));
+        var record = Assert.Single(reference.Layout);
+        Assert.Equal("write-one", record.NodeId);
+        Assert.Equal(12.5, record.X);
+        Assert.Equal(34.0, record.Y);
+        Assert.Equal(200, record.Width);
+        Assert.Equal(80, record.Height);
+        Assert.Equal("blue", record.AdditionalProperties!.Value.GetProperty("color").GetString());
+    }
+
+    [Fact]
     public async Task PublishedExecutableArtifactCanBeDispatchedForExecution()
     {
         var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
@@ -257,10 +331,18 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.NotEqual(stringView.ArtifactHash, integerView.ArtifactHash);
     }
 
+    private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
+
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
         Handler(workflowVersion, _writeLineActivity);
 
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion, params ActivityDefinitionVersion[] activityVersions) =>
+        Handler(workflowVersion, layout: null, activityVersions);
+
+    private PublishWorkflowRequestHandler Handler(
+        WorkflowDefinitionVersion workflowVersion,
+        WorkflowDefinitionVersionLayout? layout,
+        params ActivityDefinitionVersion[] activityVersions) =>
         new(
             TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
@@ -268,15 +350,20 @@ public sealed class PublishWorkflowRequestHandlerTests
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
             _store,
+            _referenceStore,
             new WorkflowTriggerIndexer(
                 new WorkflowTriggerBindingExtractor([]),
-                new InMemoryWorkflowTriggerBindingStore()));
+                new InMemoryWorkflowTriggerBindingStore()),
+            new FakeLayoutStore(layout));
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
-        new("definition-1", "1.0.0")
+        WorkflowVersion(rootActivity, "definition-1", "version-1", "1.0.0");
+
+    private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity, string definitionId, string versionId, string version) =>
+        new(definitionId, version)
         {
-            Id = "version-1",
-            Definition = new WorkflowDefinition { Id = "definition-1", Name = "Demo" },
+            Id = versionId,
+            Definition = new WorkflowDefinition { Id = definitionId, Name = "Demo" },
             State = new WorkflowDefinitionState([], rootActivity, [], [], null, null)
         };
 
@@ -370,4 +457,9 @@ public sealed class PublishWorkflowRequestHandlerTests
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
+    private sealed class FakeLayoutStore(WorkflowDefinitionVersionLayout? layout) : IWorkflowDefinitionVersionLayoutStore
+    {
+        public Task<WorkflowDefinitionVersionLayout?> FindByVersionIdAsync(string workflowDefinitionVersionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(layout);
+    }
 }

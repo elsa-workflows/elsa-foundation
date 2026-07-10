@@ -46,9 +46,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
-        if (executable.Scope == WorkflowExecutableScope.TransientTestRun)
-            throw new WorkflowExecutableNotFoundException(request.ArtifactId);
-
+        // Scope and expiry are now reference facts (ADR 0040), not artifact facts. Reference-driven dispatch
+        // (resolving the reference to gate Published vs. TestRun and enforce expiry) is worker W3's slice; here the
+        // dispatcher simply dispatches a stored artifact.
         return await DispatchCoreAsync(request, executable, cancellationToken);
     }
 
@@ -59,9 +59,6 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(executable);
-
-        if (executable.Scope != WorkflowExecutableScope.TransientTestRun)
-            throw new ArgumentException("Transient dispatch requires a transient test-run executable.", nameof(executable));
 
         if (!string.Equals(request.ArtifactId, executable.Identity.ArtifactId, StringComparison.Ordinal))
             throw new ArgumentException("Transient dispatch request artifact ID must match the executable artifact ID.", nameof(request));
@@ -76,9 +73,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutable executable,
         CancellationToken cancellationToken)
     {
-        if (executable.ExpiresAt is { } expiresAt && expiresAt <= _timeProvider.GetUtcNow())
-            throw new WorkflowExecutableNotFoundException(request.ArtifactId);
-
+        // Expiry moved to the source reference (ADR 0040); reference-driven expiry enforcement is worker W3's slice.
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
         var metadata = CreateDispatchMetadata(request, executable.Identity);
