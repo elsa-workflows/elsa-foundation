@@ -13,14 +13,18 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
 /// <summary>
 /// Durable <see cref="IOpenTelemetryStore"/> backed by EF Core. Writes enqueue onto a bounded channel so
 /// anonymous OTLP collector requests do not wait on database I/O; a single background drain loop persists
-/// batches and prunes each high-volume signal table to the configured retention capacity.
+/// batches and prunes each high-volume signal table to the configured retention capacity. On graceful
+/// shutdown the shell provider disposes the store via <see cref="DisposeAsync"/>, which drains the channel
+/// before cancelling so buffered telemetry is not discarded (issue #606).
 /// </summary>
-public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
+public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable, IAsyncDisposable
 {
     private const int BatchSize = 64;
     private const int MaxBatchRetries = 5;
     private const int DefaultPruneInterval = 500;
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan CompleteDrainTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IDbContextFactory<OpenTelemetryDbContext> _dbContextFactory;
     private readonly IOpenTelemetrySourceRegistry _sourceRegistry;
@@ -90,6 +94,24 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             return;
 
         _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+    }
+
+    /// <summary>
+    /// Completes the channel writer and waits for the drain loop to persist everything still queued,
+    /// bounded by <paramref name="timeout"/> (default 2 minutes). The drain loop runs a final retention
+    /// prune before exiting, so on return the signal tables reflect the configured capacities. No further
+    /// writes are accepted afterwards; queries remain available. Idempotent once draining has started.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><see cref="StartDraining"/> was never called, so there is no drain loop to complete.</exception>
+    /// <exception cref="TimeoutException">The drain loop did not finish within <paramref name="timeout"/>.</exception>
+    public async Task CompleteDrainingAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        var drainLoop = _drainLoop;
+        if (Volatile.Read(ref _draining) == 0 || drainLoop is null)
+            throw new InvalidOperationException($"Draining was never started; call {nameof(StartDraining)} before {nameof(CompleteDrainingAsync)}.");
+
+        _channel.Writer.TryComplete();
+        await drainLoop.WaitAsync(timeout ?? CompleteDrainTimeout, cancellationToken);
     }
 
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default)
@@ -303,6 +325,12 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
                     await MaybePruneAsync(inserted, cancellationToken);
                 }
             }
+
+            // The writer completed and the channel is empty (graceful drain). Run a final retention prune
+            // so callers of CompleteDrainingAsync observe tables at their configured capacities regardless
+            // of where the insert counter stood relative to the prune interval.
+            if (_insertedSincePrune > 0)
+                await PruneAsync(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -394,6 +422,11 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         if (_insertedSincePrune < _pruneInterval)
             return;
 
+        await PruneAsync(cancellationToken);
+    }
+
+    private async Task PruneAsync(CancellationToken cancellationToken)
+    {
         for (var attempt = 0; ; attempt++)
         {
             try
@@ -496,10 +529,47 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private static bool Matches(string? candidate, string? search) =>
         !string.IsNullOrEmpty(candidate) && !string.IsNullOrEmpty(search) && candidate.Contains(search, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Hard-stop for synchronous disposal contexts only: completes the writer and immediately cancels the
+    /// drain loop, discarding whatever is still queued in the channel. Best-effort by design — a graceful
+    /// host shutdown goes through <see cref="DisposeAsync"/> instead, which drains before cancelling.
+    /// </summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
+
+        _channel.Writer.TryComplete();
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    /// <summary>
+    /// Graceful shutdown path (issue #606): completes the writer and gives the drain loop a bounded window
+    /// (<see cref="ShutdownDrainTimeout"/>) to persist and prune what is still buffered before the hard
+    /// cancel. The shell provider is disposed asynchronously on host shutdown, so this — not
+    /// <see cref="Dispose"/> — is the path a graceful shutdown takes; loss past the window is accepted
+    /// rather than stalling shutdown indefinitely.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        var drainLoop = _drainLoop;
+        if (Volatile.Read(ref _draining) == 1 && drainLoop is not null)
+        {
+            _channel.Writer.TryComplete();
+
+            try
+            {
+                await drainLoop.WaitAsync(ShutdownDrainTimeout);
+            }
+            catch (TimeoutException)
+            {
+                // The shutdown window elapsed; fall through to the hard cancel and accept the loss.
+            }
+        }
 
         _channel.Writer.TryComplete();
         _cts.Cancel();

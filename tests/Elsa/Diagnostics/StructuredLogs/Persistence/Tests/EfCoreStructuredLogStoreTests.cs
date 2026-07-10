@@ -114,14 +114,10 @@ public sealed class EfCoreStructuredLogStoreTests
 
         store.Append(entry);
 
-        var persisted = await WaitForAsync(async () =>
-        {
-            var recent = await store.GetRecentAsync(StructuredLogFilter.None);
-            return recent.Count == 1 ? recent[0] : null;
-        });
+        await store.CompleteDrainingAsync();
 
-        Assert.NotNull(persisted);
-        Assert.Equal("boom", persisted!.Message);
+        var persisted = Assert.Single(await store.GetRecentAsync(StructuredLogFilter.None));
+        Assert.Equal("boom", persisted.Message);
         Assert.Equal(LogLevel.Error, persisted.Level);
         Assert.Equal("alice", Assert.Single(persisted.Properties, p => p.Name == "user").Value);
         var scope = Assert.Single(persisted.Scopes);
@@ -144,17 +140,12 @@ public sealed class EfCoreStructuredLogStoreTests
         for (var i = 1; i <= 40; i++)
             store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
 
-        // Eventually the table is pruned down to roughly the retention cap and the newest row survives.
-        // Generous deadline: prunes racing the probe can hit transient SQLite contention and go through
-        // retry cycles (1s delay each) before succeeding, especially on a loaded machine.
-        var pruned = await WaitForConditionAsync(() =>
-        {
-            using var db = host.CreateDbContext();
-            var count = db.StructuredLogEntries.Count();
-            return count is > 0 and <= 9; // cap (5) + at most one prune-interval (4) of slack
-        }, timeoutMs: 30_000);
+        // Deterministic (deflake of the former poll-based variant): once the drain completes, every queued
+        // entry is persisted and the final retention prune has run, so the exact cap can be asserted.
+        await store.CompleteDrainingAsync();
 
-        Assert.True(pruned);
+        using var db = host.CreateDbContext();
+        Assert.Equal(5, db.StructuredLogEntries.Count());
 
         var newest = await store.GetRecentAsync(new StructuredLogFilter { MaxCount = 1 });
         Assert.Equal(40L, Assert.Single(newest).Sequence);
@@ -162,13 +153,41 @@ public sealed class EfCoreStructuredLogStoreTests
         store.Dispose();
     }
 
+    [Fact]
+    public async Task CompleteDrainingAsyncThrowsWhenDrainingWasNeverStarted()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        using var store = NewStore(host);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CompleteDrainingAsync());
+    }
+
+    [Fact]
+    public async Task DisposeAsyncPersistsBufferedEntriesBeforeCancelling()
+    {
+        // The issue #606 shutdown scenario: entries are still queued in the channel when the shell
+        // provider disposes the store. The async path must drain them instead of cancelling mid-batch.
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host);
+        store.StartDraining();
+
+        for (var i = 1; i <= 10; i++)
+            store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
+
+        await store.DisposeAsync();
+
+        using var db = host.CreateDbContext();
+        Assert.Equal(10, db.StructuredLogEntries.Count());
+    }
+
     /// <summary>
     /// Covers the dispose-guard half of issue #403: a second Dispose() call must be a no-op (parity with
     /// EfCoreOpenTelemetryStore) instead of throwing ObjectDisposedException from the already-disposed
-    /// CancellationTokenSource.
+    /// CancellationTokenSource. The sync and async paths share the guard, so any later call in either
+    /// direction is equally a no-op.
     /// </summary>
     [Fact]
-    public void DisposeIsIdempotent()
+    public async Task DisposeIsIdempotentAcrossSyncAndAsyncPaths()
     {
         using var host = StructuredLogsTestHost.Create();
         var store = NewStore(host);
@@ -176,32 +195,6 @@ public sealed class EfCoreStructuredLogStoreTests
 
         store.Dispose();
         store.Dispose();
-    }
-
-    private static async Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs = 5000)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (probe())
-                return true;
-            await Task.Delay(25);
-        }
-
-        return probe();
-    }
-
-    private static async Task<T?> WaitForAsync<T>(Func<Task<T?>> probe, int timeoutMs = 5000) where T : class
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            var result = await probe();
-            if (result is not null)
-                return result;
-            await Task.Delay(25);
-        }
-
-        return await probe();
+        await store.DisposeAsync();
     }
 }
