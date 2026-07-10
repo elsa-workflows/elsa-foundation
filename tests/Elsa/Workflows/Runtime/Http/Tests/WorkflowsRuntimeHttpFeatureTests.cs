@@ -57,6 +57,8 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         // populators always compose with the endpoint activity (B2).
         Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask));
         Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowTriggerIndexObserver));
+        // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume (spec 089 D).
+        Assert.Contains(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));
     }
 }

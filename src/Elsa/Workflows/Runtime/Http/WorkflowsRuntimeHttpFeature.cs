@@ -57,6 +57,11 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // Keep the route table fresh on every publish: the trigger indexer notifies this observer after it
         // rewrites an artifact's bindings. Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
+
+        // Keep the route table fresh as instances suspend on / resume from mid-flow endpoints (spec 089 D): the
+        // bookmark lifecycle notifier calls this observer after a bookmark create/consume commits, and it re-projects
+        // the whole table (trigger bindings ∪ waiting bookmarks). Contribution seam (fan-in), so TryAddEnumerable.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, RouteTableBookmarkObserver>());
     }
 
     private void RegisterFaultHandler(IServiceCollection services)
