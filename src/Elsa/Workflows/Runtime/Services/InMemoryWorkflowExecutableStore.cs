@@ -13,37 +13,13 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         ArgumentNullException.ThrowIfNull(executable);
 
         lock (_gate)
-            _executables[executable.Identity.ArtifactId] = executable;
+        {
+            // Idempotent by artifact id: artifacts are content-addressed and immutable, so an already-stored
+            // artifact is authoritative — a behaviorally identical republish must not overwrite it (ADR 0038).
+            _executables.TryAdd(executable.Identity.ArtifactId, executable);
+        }
 
         return ValueTask.CompletedTask;
-    }
-
-    public ValueTask<bool> SoftDeleteAsync(string artifactId, DateTimeOffset deletedAt, string? reason = null, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-
-        lock (_gate)
-        {
-            if (!_executables.TryGetValue(artifactId, out var executable))
-                return ValueTask.FromResult(false);
-
-            _executables[artifactId] = executable.WithDeleted(deletedAt, reason);
-            return ValueTask.FromResult(true);
-        }
-    }
-
-    public ValueTask<bool> RestoreAsync(string artifactId, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
-
-        lock (_gate)
-        {
-            if (!_executables.TryGetValue(artifactId, out var executable))
-                return ValueTask.FromResult(false);
-
-            _executables[artifactId] = executable.WithRestored();
-            return ValueTask.FromResult(true);
-        }
     }
 
     public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -54,26 +30,17 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
             return ValueTask.FromResult(_executables.Remove(artifactId));
     }
 
-    public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default, bool includeDeleted = false)
+    public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
         lock (_gate)
-        {
-            var executable = _executables.GetValueOrDefault(artifactId);
-            return ValueTask.FromResult(executable?.DeletedAt is null || includeDeleted ? executable : null);
-        }
+            return ValueTask.FromResult(_executables.GetValueOrDefault(artifactId));
     }
 
-    public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(
-        bool includeTransient = false,
-        CancellationToken cancellationToken = default,
-        bool includeDeleted = false)
+    public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default)
     {
         lock (_gate)
-            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values
-                .Where(executable => includeTransient || executable.Scope == WorkflowExecutableScope.Published)
-                .Where(executable => includeDeleted || executable.DeletedAt is null)
-                .ToArray());
+            return ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>(_executables.Values.ToArray());
     }
 }

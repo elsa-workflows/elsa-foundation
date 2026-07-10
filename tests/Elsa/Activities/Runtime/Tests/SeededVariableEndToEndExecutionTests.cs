@@ -186,7 +186,6 @@ public sealed class SeededVariableEndToEndExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -221,7 +220,6 @@ public sealed class SeededVariableEndToEndExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

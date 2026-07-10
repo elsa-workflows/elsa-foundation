@@ -670,7 +670,6 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             rootActivity: NewNode("node-wait", document.RootElement, inputBinding, includeOutputCapture),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

@@ -7,6 +7,13 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowStartDispatcher
 {
+    /// <summary>
+    /// Dispatches a start of the stored artifact, gated on its Source References (ADR 0040). The dispatch is refused
+    /// with a <see cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableReferenceRejectedException"/> when the
+    /// artifact carries references but none is a live reference of <paramref name="requiredScope"/> (published dispatch
+    /// requires a live Published reference; a test-run dispatch requires a live TestRun reference and its ExpiresAt is
+    /// enforced). An artifact with no references at all is dispatched unchanged (direct/seeded runtime path).
+    /// </summary>
     /// <param name="dispatchOptions">
     /// Optional per-request dispatch options forwarded verbatim to the workflow execution agent (spec 089 FR-019).
     /// It carries the ambient request scope the in-process inline drain uses to build activity execution contexts.
@@ -14,13 +21,7 @@ public interface IWorkflowStartDispatcher
     /// </param>
     ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
-        CancellationToken cancellationToken = default);
-
-    /// <param name="dispatchOptions">See <see cref="DispatchAsync"/>. <c>null</c> ⇒ <see cref="WorkflowExecutionCommandDispatchOptions.Default"/>.</param>
-    ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(
-        WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutable executable,
+        WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default);
 }

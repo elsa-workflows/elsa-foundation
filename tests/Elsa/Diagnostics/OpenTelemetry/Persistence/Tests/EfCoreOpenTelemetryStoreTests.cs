@@ -24,7 +24,10 @@ public sealed class EfCoreOpenTelemetryStoreTests
         await context.Store.CompleteDrainingAsync();
 
         var diagnostics = await context.Store.GetDiagnosticsAsync();
-        Assert.Equal((1, 1, 1, 1), (diagnostics.TraceCount, diagnostics.SpanCount, diagnostics.MetricPointCount, diagnostics.LogRecordCount));
+        Assert.Equal(1, diagnostics.TraceCount);
+        Assert.Equal(1, diagnostics.SpanCount);
+        Assert.Equal(1, diagnostics.MetricPointCount);
+        Assert.Equal(1, diagnostics.LogRecordCount);
 
         var resources = await context.Store.QueryResourcesAsync(new OpenTelemetryResourceFilter { ServiceName = "api", Take = 10 });
         Assert.Equal(resource.Id, Assert.Single(resources.Items).Id);

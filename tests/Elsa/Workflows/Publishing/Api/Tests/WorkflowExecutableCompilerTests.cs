@@ -40,15 +40,13 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-"));
 
         Assert.StartsWith("artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
-        Assert.Equal(WorkflowExecutableScope.Published, executable.Scope);
-        Assert.Null(executable.ExpiresAt);
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
     }
 
@@ -60,7 +58,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -90,7 +88,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -117,7 +115,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -138,7 +136,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -157,7 +155,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "missing-version",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -176,7 +174,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() => compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -191,7 +189,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -216,7 +214,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -237,7 +235,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -264,17 +262,17 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.TransientTestRun,
+            Scope: WorkflowExecutableReferenceScope.TestRun,
             CreatedAt: now,
             PublishedAt: null,
             ExpiresAt: expiresAt,
             ArtifactIdPrefix: "test-artifact-",
             CompatibilityMetadata: new Dictionary<string, string> { ["runtime.testRunId"] = "testrun-1" }));
 
+        // Scope/expiry are reference facts now (ADR 0040); the compiled artifact is pure behavior. The compile
+        // request still carries them (the publish/test-run handlers stamp them onto the reference), but the
+        // executable itself only exposes behavior + compatibility metadata.
         Assert.StartsWith("test-artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
-        Assert.Equal(WorkflowExecutableScope.TransientTestRun, executable.Scope);
-        Assert.Equal(expiresAt, executable.ExpiresAt);
-        Assert.Null(executable.PublishedAt);
         Assert.Equal("testrun-1", executable.CompatibilityMetadata["runtime.testRunId"]);
         Assert.Equal(3, executable.Nodes.Count);
     }
@@ -291,7 +289,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "draft:snapshot-1",
-            Scope: WorkflowExecutableScope.TransientTestRun,
+            Scope: WorkflowExecutableReferenceScope.TestRun,
             CreatedAt: now,
             PublishedAt: null,
             ExpiresAt: now.AddMinutes(30),
@@ -302,14 +300,14 @@ public sealed class WorkflowExecutableCompilerTests
                 DefinitionVersionId: "draft:snapshot-1",
                 ArtifactVersion: "draft",
                 State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null),
-                SourceReference: new WorkflowExecutableSourceReference("WorkflowDraftSnapshot", "snapshot-1", "draft"))
+                SourceKind: "WorkflowDraftSnapshot",
+                SourceId: "snapshot-1",
+                SourceVersion: "draft")
         });
 
         Assert.StartsWith("test-artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);
         Assert.Equal("definition-1", executable.Identity.DefinitionId);
         Assert.Equal("draft:snapshot-1", executable.Identity.DefinitionVersionId);
-        Assert.Equal("WorkflowDraftSnapshot", executable.Identity.Source?.SourceKind);
-        Assert.Equal("snapshot-1", executable.Identity.Source?.SourceId);
     }
 
     [Fact]
@@ -332,7 +330,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var executable = await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,
@@ -389,7 +387,7 @@ public sealed class WorkflowExecutableCompilerTests
     private static WorkflowExecutableCompileRequest NewRequest(DateTimeOffset now) =>
         new(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: now,
             PublishedAt: now,
             ExpiresAt: null,

@@ -996,7 +996,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             rootActivity: WithChildren(start, [other]),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -1010,7 +1009,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             rootActivity: start,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -1038,7 +1036,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
             rootActivity: start,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

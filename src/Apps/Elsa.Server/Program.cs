@@ -50,6 +50,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Nuplane;
 using Nuplane.Admin;
@@ -195,6 +196,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
             // composed; without it the shell fails to activate with a FeatureNotFoundException.
             typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+
+            // Reference GC pump (ADR 0040). Opt-in like resumption; its assembly is in the catalog so the feature can
+            // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
+            typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
             // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
             typeof(FoundationAgentAbstractionsFeature).Assembly,

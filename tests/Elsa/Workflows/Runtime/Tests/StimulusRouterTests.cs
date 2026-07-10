@@ -341,7 +341,7 @@ public sealed class StimulusRouterTests
         public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
         public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
 
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
             DispatchOptions.Add(dispatchOptions);
@@ -349,9 +349,6 @@ public sealed class StimulusRouterTests
             onStart?.Invoke(executionId);
             return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId));
         }
-
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutable executable, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
 
         private static WorkflowExecutionStartDispatchResult Result(string artifactId, string executionId) =>
             new(

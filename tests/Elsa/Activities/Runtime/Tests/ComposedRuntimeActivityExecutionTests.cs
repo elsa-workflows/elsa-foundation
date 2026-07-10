@@ -115,7 +115,7 @@ public sealed class ComposedRuntimeActivityExecutionTests
         // The exact call the stimulus router makes on the sync-mode HTTP path (spec 089 E-D4).
         var result = await provider.GetRequiredService<IWorkflowStartDispatcher>().DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(executable.Identity.ArtifactId, "runtime-test"),
-            new WorkflowExecutionCommandDispatchOptions(requestScope.ServiceProvider));
+            dispatchOptions: new WorkflowExecutionCommandDispatchOptions(requestScope.ServiceProvider));
 
         // (a) The ambient request scope reached the inline-drained activity execution context.
         var activityStates = await provider.GetRequiredService<IActivityExecutionStateStore>().ListAsync(result.WorkflowExecutionId);
@@ -261,7 +261,6 @@ public sealed class ComposedRuntimeActivityExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -287,7 +286,6 @@ public sealed class ComposedRuntimeActivityExecutionTests
             rootActivity: parent,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

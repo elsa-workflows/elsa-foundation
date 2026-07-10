@@ -10,8 +10,7 @@
       "artifactId": "artifact-wf-1",
       "artifactVersion": "1",
       "definitionId": "definition-1",
-      "definitionVersionId": "version-1",
-      "source": null
+      "definitionVersionId": "version-1"
     },
     "startedAt": "1970-01-01T00:00:00\u002B00:00",
     "status": 3,

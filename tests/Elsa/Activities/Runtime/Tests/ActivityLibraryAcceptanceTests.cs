@@ -153,7 +153,6 @@ public sealed class ActivityLibraryAcceptanceTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
-            publishedAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static int VariableInt(IEnumerable<DurableValueState> durableValues, string variableName) =>

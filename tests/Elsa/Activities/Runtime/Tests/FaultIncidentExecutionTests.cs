@@ -113,7 +113,6 @@ public sealed class FaultIncidentExecutionTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

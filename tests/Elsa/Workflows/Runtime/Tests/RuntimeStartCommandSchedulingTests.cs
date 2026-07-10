@@ -93,10 +93,7 @@ public sealed class RuntimeStartCommandSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var executable = NewExecutable(["node-start"], ["node-start"]);
         await store.SaveAsync(executable);
-        var pinned = executable.Identity with
-        {
-            Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", "1.0.0")
-        };
+        var pinned = executable.Identity;
         var handler = NewHandler(store, queue);
 
         await handler.HandleAsync(NewStartWorkItem(pinned));
@@ -353,7 +350,6 @@ public sealed class RuntimeStartCommandSchedulingTests
             rootActivity: ToRootActivity(nodeIds.Select(NewNode).ToArray()),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode ToRootActivity(IReadOnlyCollection<ExecutableNode> nodes)
