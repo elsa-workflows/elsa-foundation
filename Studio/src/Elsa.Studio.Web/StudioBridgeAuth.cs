@@ -1,9 +1,12 @@
 using System.Net;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Studio.Web;
@@ -96,6 +99,22 @@ internal static class StudioBridgeAuth
 
     private const string AuthEnabledConfigurationKey = "Studio:Auth:Enabled";
 
+    /// <summary>
+    /// TTL, in seconds, of the in-memory bearer-introspection cache (<c>0</c> disables caching entirely). Every bridge
+    /// request re-validates the browser bearer against the backend session endpoint; without a cache the Extension
+    /// Builder build poll alone produces ~2 backend round-trips per second per user. The TTL bounds staleness: a
+    /// permission change or logout takes effect within this window at worst.
+    /// </summary>
+    public const string SessionCacheSecondsConfigurationKey = "Studio:Auth:SessionCacheSeconds";
+
+    /// <summary>Upper bound on cached introspection entries, so a flood of unique (e.g. forged) bearers cannot grow
+    /// memory unboundedly. When full, the entry closest to expiry is evicted first. Values below 1 fall back to the
+    /// default bound — disabling the cache is <see cref="SessionCacheSecondsConfigurationKey"/>'s job (set it to 0).</summary>
+    public const string SessionCacheMaxEntriesConfigurationKey = "Studio:Auth:SessionCacheMaxEntries";
+
+    public const int DefaultSessionCacheSeconds = 30;
+    public const int DefaultSessionCacheMaxEntries = 1000;
+
     public static IServiceCollection AddStudioBridgeAuth(
         this IServiceCollection services,
         IConfiguration configuration,
@@ -115,6 +134,18 @@ internal static class StudioBridgeAuth
             if (!string.IsNullOrWhiteSpace(backendBaseUrl))
                 client.BaseAddress = new Uri(backendBaseUrl, UriKind.Absolute);
         });
+
+        // The introspection cache (see StudioBridgeSessionCache). TimeProvider is TryAdd'd so tests (and the bridge
+        // registration, which TryAdds the same) can substitute a fake clock to drive expiry.
+        var sessionCacheSeconds = configuration.GetValue(SessionCacheSecondsConfigurationKey, DefaultSessionCacheSeconds);
+        var sessionCacheMaxEntries = configuration.GetValue(SessionCacheMaxEntriesConfigurationKey, DefaultSessionCacheMaxEntries);
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(serviceProvider => new StudioBridgeSessionCache(
+            serviceProvider.GetRequiredService<TimeProvider>(),
+            TimeSpan.FromSeconds(Math.Max(0, sessionCacheSeconds)),
+            // "0 = no cap" is a natural misreading of the cap key; a non-positive value falls back to the default
+            // bound rather than silently disabling the cache — disabling is the Seconds key's documented job.
+            sessionCacheMaxEntries > 0 ? sessionCacheMaxEntries : DefaultSessionCacheMaxEntries));
 
         services.AddAuthentication()
             .AddScheme<StudioBridgeAuthOptions, StudioBridgeAuthHandler>(SchemeName, schemeOptions =>
@@ -199,7 +230,8 @@ internal sealed class StudioBridgeAuthHandler(
     IOptionsMonitor<StudioBridgeAuthOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    StudioBridgeSessionCache sessionCache)
     : AuthenticationHandler<StudioBridgeAuthOptions>(options, logger, encoder)
 {
     /// <summary>The named HttpClient used to introspect the browser bearer against the backend session endpoint.</summary>
@@ -223,12 +255,29 @@ internal sealed class StudioBridgeAuthHandler(
             return AuthenticateResult.Fail("Studio cannot validate the user session because no backend base URL is configured.");
         }
 
+        // Cache both definitive outcomes of an introspection: a recognized session (positive) spares the per-request
+        // backend round-trip (the Extension Builder build poll alone is ~2 introspections/second per user), and an
+        // explicit anonymous session (negative, shorter TTL) absorbs repeated introspections of a rejected token.
+        // Concurrent first misses still introspect independently — bounded by the in-flight request count, accepted
+        // here over per-key single-flight complexity.
+        if (sessionCache.TryGet(bearer, out var cached))
+            return ToResult(cached);
+
         try
         {
             var session = await ReadBackendSessionAsync(bearer, Context.RequestAborted);
-            return session is { IsAuthenticated: true }
-                ? Success(session.Subject ?? "backend-user", session.Permissions)
-                : AuthenticateResult.Fail("The backend did not recognize the supplied user session.");
+            var outcome = new StudioBridgeCachedSession(
+                session is { IsAuthenticated: true },
+                session?.Subject,
+                session?.Permissions ?? []);
+
+            // Only a definitive backend session (authenticated or anonymous) is cacheable. A null session means the
+            // backend answered but yielded no session — a 5xx, an unauthorized response, or an unparseable body — an
+            // indeterminate result that must fail only this request: replaying it would serve cached 401s to a valid
+            // bearer for the negative TTL after a single backend blip. Transport failures below are likewise uncached.
+            if (session is not null)
+                sessionCache.Set(bearer, outcome);
+            return ToResult(outcome);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !Context.RequestAborted.IsCancellationRequested)
         {
@@ -236,6 +285,11 @@ internal sealed class StudioBridgeAuthHandler(
             return AuthenticateResult.Fail("The user session could not be validated against the backend.");
         }
     }
+
+    private AuthenticateResult ToResult(StudioBridgeCachedSession session) =>
+        session.IsAuthenticated
+            ? Success(session.Subject ?? "backend-user", session.Permissions)
+            : AuthenticateResult.Fail("The backend did not recognize the supplied user session.");
 
     /// <summary>
     /// Reads the browser bearer from the <c>Authorization: Bearer</c> header, or from the <c>access_token</c> query
@@ -278,8 +332,18 @@ internal sealed class StudioBridgeAuthHandler(
             return null;
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var session = await JsonSerializer.DeserializeAsync<BackendSession>(stream, SessionJsonOptions, cancellationToken);
-        return session;
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<BackendSession>(stream, SessionJsonOptions, cancellationToken);
+        }
+        catch (JsonException ex)
+        {
+            // A 200 whose body is not the session contract (e.g. a proxy error page or SPA fallback served on the
+            // session path) must fail this one request as unauthenticated — letting the exception escape would surface
+            // a 500 out of the authentication pipeline instead of a 401.
+            Logger.LogWarning(ex, "The backend session endpoint returned a response that could not be parsed as a session.");
+            return null;
+        }
     }
 
     // Anonymous demo mode carries no permissions; the permission policies allow anonymously anyway (see
@@ -310,4 +374,105 @@ internal sealed class StudioBridgeAuthHandler(
     {
         public bool IsAuthenticated => string.Equals(Status, "authenticated", StringComparison.OrdinalIgnoreCase);
     }
+}
+
+/// <summary>
+/// A completed bearer-introspection outcome as the cache stores it: authenticated-or-not plus the subject and
+/// permission set the gate projects onto the ticket. Anonymous/invalid outcomes are cached too (with
+/// <see cref="StudioBridgeSessionCache"/>'s shorter negative TTL) so a rejected token cannot stampede the backend.
+/// </summary>
+internal sealed record StudioBridgeCachedSession(bool IsAuthenticated, string? Subject, IReadOnlyList<string> Permissions);
+
+/// <summary>
+/// Bounded, short-TTL in-memory cache for the gate's bearer introspections. Every browser-facing bridge request
+/// re-validates its bearer against the backend session endpoint; the Extension Builder build poll alone re-reads build
+/// status and log every ~900ms, so without a cache each polling user costs ~2 backend round-trips per second. The TTL
+/// (<see cref="StudioBridgeAuth.SessionCacheSecondsConfigurationKey"/>, default 30s, 0 = disabled) bounds staleness:
+/// a permission change or logout takes effect within the TTL at worst. Negative (anonymous/invalid) outcomes use the
+/// shorter of the TTL and <see cref="NegativeTtlCeiling"/> so a fresh login is not rejected for long while still
+/// absorbing repeated introspections of a rejected token.
+///
+/// <para>Entries are keyed by a SHA-256 hash of the bearer — the raw token is never stored or logged. The entry count
+/// is capped (<see cref="StudioBridgeAuth.SessionCacheMaxEntriesConfigurationKey"/>, default 1000; the registration
+/// guarantees a positive value) so a flood of unique tokens cannot grow memory unboundedly; when full, expired entries
+/// are purged first, then the entry closest to expiry is evicted — never the entry just written (see
+/// <see cref="EvictLocked"/>). Reads and writes take a plain lock — at bridge request rates contention is
+/// negligible.</para>
+/// </summary>
+internal sealed class StudioBridgeSessionCache(TimeProvider timeProvider, TimeSpan ttl, int maxEntries)
+{
+    private static readonly TimeSpan NegativeTtlCeiling = TimeSpan.FromSeconds(5);
+
+    private readonly TimeSpan _negativeTtl = ttl < NegativeTtlCeiling ? ttl : NegativeTtlCeiling;
+    private readonly Dictionary<string, (StudioBridgeCachedSession Session, DateTimeOffset ExpiresAt)> _entries = new();
+    private readonly Lock _gate = new();
+
+    private bool Enabled => ttl > TimeSpan.Zero;
+
+    public bool TryGet(string bearer, out StudioBridgeCachedSession session)
+    {
+        session = null!;
+        if (!Enabled)
+            return false;
+
+        var key = KeyFor(bearer);
+        lock (_gate)
+        {
+            if (!_entries.TryGetValue(key, out var entry))
+                return false;
+
+            if (entry.ExpiresAt <= timeProvider.GetUtcNow())
+            {
+                _entries.Remove(key);
+                return false;
+            }
+
+            session = entry.Session;
+            return true;
+        }
+    }
+
+    public void Set(string bearer, StudioBridgeCachedSession session)
+    {
+        if (!Enabled)
+            return;
+
+        var key = KeyFor(bearer);
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = now + (session.IsAuthenticated ? ttl : _negativeTtl);
+        lock (_gate)
+        {
+            _entries[key] = (session, expiresAt);
+            if (_entries.Count > maxEntries)
+                EvictLocked(now, key);
+        }
+    }
+
+    // Cap enforcement — the count can only ever overshoot by the single entry Set just wrote, so at most one live
+    // eviction is needed. One pass removes expired entries in place (Dictionary permits Remove during enumeration)
+    // while tracking the earliest-expiring survivor as the eviction victim. The just-written key is exempt: a
+    // short-TTL negative entry is always the earliest-expiring when the cache is saturated with fresher positives,
+    // and evicting it on insert would defeat negative caching exactly under the load the cap exists for.
+    private void EvictLocked(DateTimeOffset now, string justWrittenKey)
+    {
+        string? victim = null;
+        var earliest = DateTimeOffset.MaxValue;
+        foreach (var (key, entry) in _entries)
+        {
+            if (key == justWrittenKey)
+                continue;
+
+            if (entry.ExpiresAt <= now)
+                _entries.Remove(key);
+            else if (entry.ExpiresAt < earliest)
+                (victim, earliest) = (key, entry.ExpiresAt);
+        }
+
+        if (_entries.Count > maxEntries && victim is not null)
+            _entries.Remove(victim);
+    }
+
+    // The raw bearer must never sit in memory as a lookup key (defense in depth against heap dumps); a SHA-256 hash
+    // is collision-safe as an identity and cheap at bridge request rates.
+    private static string KeyFor(string bearer) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(bearer)));
 }
