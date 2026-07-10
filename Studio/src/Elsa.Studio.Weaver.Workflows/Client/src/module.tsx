@@ -2,10 +2,12 @@ import React from "react";
 import type {
   ElsaStudioModuleApi,
   StudioAiContextAttachment,
-  StudioAiProposalRendererProps
+  StudioAiProposalRendererProps,
+  StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
 
 const moduleId = "Elsa.Studio.Weaver.Workflows";
+const workflowManagementBasePath = "/_elsa/workflow-management";
 
 export function register(api: ElsaStudioModuleApi) {
   api.ai.contextProviders.add({
@@ -89,7 +91,13 @@ export function register(api: ElsaStudioModuleApi) {
     placement: "selection",
     contextKind: "workflow-executable",
     createPrompt: context => ({
-      message: "Explain this workflow executable, its root activity, source version, and runtime execution implications.",
+      // The attachment is the WorkflowExecutableSummary — metadata only. The prompt directs Weaver to
+      // pull the actual structure through the get-executable-detail tool so the explanation is grounded
+      // in the real node tree instead of guessed from the summary.
+      message: [
+        "Explain this workflow executable, its root activity, source version, and runtime execution implications.",
+        "The attached summary carries identity metadata only. Before explaining, call the get-executable-detail tool with this artifact id to retrieve the compiled node tree, input bindings, and references, and ground the explanation in that structure."
+      ].join("\n"),
       mode: "enqueue",
       attachments: [createAttachment("workflow-executable", readReferenceId(context), context)],
       source: { moduleId, actionId: "weaver.workflows.explain-executable", label: "Explain executable" }
@@ -154,6 +162,31 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.ai.tools.add({
+    name: "get-executable-detail",
+    displayName: "Get executable detail",
+    description: "Reads a workflow executable by artifact id: identity, compiled node tree with input-binding summaries, the chosen reference's layout, and all source references. Descriptor payloads are omitted and secret values are never inlined.",
+    mutability: "read-only",
+    dangerLevel: "low",
+    tenantBehavior: "tenant-scoped",
+    moduleId,
+    permissions: ["workflows:read"],
+    agentScopes: ["workflow-author"],
+    inputSchema: {
+      type: "object",
+      properties: {
+        artifactId: { type: "string", description: "The content-addressed artifact id of the executable to inspect." },
+        sourceReferenceId: { type: "string", description: "Optional source reference id selecting which reference's layout is returned; defaults to the newest live reference." }
+      },
+      required: ["artifactId"],
+      additionalProperties: false
+    },
+    // Executes through the module's authenticated endpoint context — the same context every other
+    // workflow-management call uses — so the endpoint's workflow read permission gates the tool and
+    // there is no bridge-key bypass (plan §6, ADR 0037).
+    execute: input => getExecutableDetail(api.backend, input)
+  });
+
+  api.ai.tools.add({
     name: "workflow.proposal.create",
     displayName: "Create workflow proposal",
     description: "Creates a reviewed workflow create/update proposal that requires explicit user approval before apply.",
@@ -209,6 +242,21 @@ export function WorkflowProposalRenderer({ proposal }: StudioAiProposalRendererP
       ) : null}
     </section>
   );
+}
+
+// Backs the get-executable-detail Weaver Tool. Exported for the test suite. 404 (unknown artifact)
+// and 403 (missing workflow read permission) surface as the endpoint's errors, unmodified.
+export async function getExecutableDetail(context: StudioEndpointContext, input: Record<string, unknown>) {
+  const artifactId = readTrimmedString(input.artifactId);
+  if (!artifactId) throw new Error("get-executable-detail requires a non-empty artifactId.");
+
+  const sourceReferenceId = readTrimmedString(input.sourceReferenceId);
+  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
+  return context.http.getJson<unknown>(`${workflowManagementBasePath}/executables/${encodeURIComponent(artifactId)}${query}`);
+}
+
+function readTrimmedString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function createWorkflowAttachment(kind: string, reference: unknown) {

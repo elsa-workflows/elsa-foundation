@@ -28,7 +28,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     ?? (slotNavigation ? (slot: ChildSlot) => slotNavigation(id, nodeData.label, slot) : undefined);
   return (
     <div
-      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : ""].filter(Boolean).join(" ")}
+      className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : ""].filter(Boolean).join(" ")}
       data-icon={nodeData.icon ?? "activity"}
     >
       {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
@@ -41,7 +41,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
         <span className="wf-node-copy">
           <strong>{nodeData.label}</strong>
-          {subtitle ? <small>{subtitle}</small> : null}
+          {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle ? <small>{subtitle}</small> : null}
         </span>
       </div>
       {nodeData.childSlots.length > 0 ? (

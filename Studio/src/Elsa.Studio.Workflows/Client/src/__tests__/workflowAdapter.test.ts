@@ -522,10 +522,8 @@ describe("scope frames (target semantics)", () => {
   });
 
   it("finds a scope path for a node nested inside a ForEach body two levels deep and surfaces it", () => {
-    const deepLeaf = node("deep");
-    const innerSequence = sequenceNode("inner", [deepLeaf]);
-    const forEach = createActivityNode(forEachActivity, "foreach");
-    forEach.structure = { ...forEach.structure!, payload: { body: innerSequence } };
+    const innerSequence = sequenceNode("inner", [node("deep")]);
+    const forEach = containerNode(forEachActivity, "foreach", { body: innerSequence });
     const root = flowchartRoot([forEach]);
     const catalog = [flowchartActivity, forEachActivity];
 
@@ -537,7 +535,86 @@ describe("scope frames (target semantics)", () => {
     const scope = resolveScope(root, path!, catalog);
     expect(scope?.slot.activities.map(activity => activity.nodeId)).toContain("deep");
   });
+
+  it("labels the path like slot navigation: hidden descend hop + Owner / Slot leaf crumb", () => {
+    // The exact variable-repair scenario: a node inside the flowchart held by a ForEach body. Entering
+    // that body via planSlotNavigation descends THROUGH the flowchart, so the repair path must match:
+    // a hidden empty-label frame on the ForEach and one visible "For Each / Body" crumb — never a
+    // clickable bare "Flowchart" crumb landing on a one-node canvas.
+    const innerFlowchart = containerNode(flowchartActivity, "inner-flowchart", { activities: [node("deep")] });
+    const forEach = containerNode(forEachActivity, "foreach", { body: innerFlowchart });
+    const root = flowchartRoot([forEach]);
+    const catalog = [flowchartActivity, forEachActivity];
+
+    const path = findNodeScopePath(root, "deep", activity => getActivityDisplay(catalog.find(item => item.activityVersionId === activity.activityVersionId) ?? writeLine), catalog);
+
+    expect(path).toEqual([
+      { ownerNodeId: "foreach", slotId: "elsa.foreach.structure:body", label: "" },
+      { ownerNodeId: "inner-flowchart", slotId: `${flowchartStructureKind}:activities`, label: "For Each / Body" }
+    ]);
+    // The contract holds: the landed scope's slot contains the target node.
+    expect(resolveScope(root, path!, catalog)?.slot.activities.map(activity => activity.nodeId)).toEqual(["deep"]);
+  });
+
+  it("labels a directly-entered container crumb with its own name and the viewed slot", () => {
+    // A container in a MANY slot is entered via its own slot badge, so its crumb names the container
+    // itself ("Flowchart / Activities") — no descend hop is involved.
+    const nested = containerNode(flowchartActivity, "nested-flowchart", { activities: [node("deep")] });
+    const root = flowchartRoot([nested]);
+    const catalog = [flowchartActivity];
+
+    const path = findNodeScopePath(root, "deep", () => "Flowchart", catalog);
+
+    expect(path).toEqual([
+      { ownerNodeId: "nested-flowchart", slotId: `${flowchartStructureKind}:activities`, label: "Flowchart / Activities" }
+    ]);
+  });
+
+  it("labels a non-primary landing slot as a retarget crumb naming the container", () => {
+    // Descending through a container lands on its primary slot; a target in a NON-primary slot is the
+    // retarget case, so the crumb names the container and that slot instead of the entered slot.
+    const twoSlot = containerNode(twoSlotActivity, "two-slot", { primary: node("in-primary"), secondary: node("deep") });
+    const holder = containerNode(forEachActivity, "foreach", { body: twoSlot });
+    const root = flowchartRoot([holder]);
+    const catalog = [flowchartActivity, forEachActivity, twoSlotActivity];
+
+    const path = findNodeScopePath(root, "deep", activity => activity.nodeId, catalog);
+
+    expect(path).toEqual([
+      { ownerNodeId: "foreach", slotId: "elsa.foreach.structure:body", label: "" },
+      { ownerNodeId: "two-slot", slotId: "acme.two-slot.structure:secondary", label: "two-slot / Secondary" }
+    ]);
+    expect(resolveScope(root, path!, catalog)?.slot.activities.map(activity => activity.nodeId)).toEqual(["deep"]);
+  });
+
+  it("keeps each descend pair's visible crumb through chained descend-through hops", () => {
+    // This file's ForEach facet is mode "sequence" with a single body slot, so a ForEach inside a
+    // ForEach body is itself descended through — two consecutive descend-through hops. Navigation
+    // descends one level per entry (enter fe1's body → land on fe2's canvas showing fe3, then enter
+    // fe3's body), so fe2's crumb stays visible; hiding it would collapse the trail to one crumb and
+    // make the intermediate scope unreachable from the breadcrumb.
+    const fe3 = containerNode(forEachActivity, "fe3", { body: node("deep") });
+    const fe2 = containerNode(forEachActivity, "fe2", { body: fe3 });
+    const fe1 = containerNode(forEachActivity, "fe1", { body: fe2 });
+    const root = flowchartRoot([fe1]);
+    const catalog = [flowchartActivity, forEachActivity];
+
+    const path = findNodeScopePath(root, "deep", activity => activity.nodeId, catalog);
+
+    expect(path).toEqual([
+      { ownerNodeId: "fe1", slotId: "elsa.foreach.structure:body", label: "" },
+      { ownerNodeId: "fe2", slotId: "elsa.foreach.structure:body", label: "fe1 / Body" },
+      { ownerNodeId: "fe3", slotId: "elsa.foreach.structure:body", label: "fe3 / Body" }
+    ]);
+    expect(resolveScope(root, path!, catalog)?.slot.activities.map(activity => activity.nodeId)).toEqual(["deep"]);
+  });
 });
+
+// A catalog-built container with slot content merged into its initial structure payload.
+function containerNode(item: ActivityCatalogItem, nodeId: string, payload: Record<string, unknown>): ActivityNode {
+  const activity = createActivityNode(item, nodeId);
+  return { ...activity, structure: { ...activity.structure!, payload: { ...activity.structure!.payload, ...payload } } };
+}
 
 function sequenceRoot(activities: ActivityNode[]): ActivityNode {
   return sequenceNode("root", activities, "sequence-root");

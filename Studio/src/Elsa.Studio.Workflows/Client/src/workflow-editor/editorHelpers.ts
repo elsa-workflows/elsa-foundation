@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
 import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
@@ -130,6 +130,23 @@ export function compareExecutablesByPublishedDate(left: WorkflowExecutableSummar
   return getExecutablePublishedTime(right) - getExecutablePublishedTime(left);
 }
 
+// ADR 0040's equivalence signal: artifacts are content-addressed over behavior only, so a draft test run
+// resolving to the same artifact id as a published executable of this definition proves the draft is
+// behaviorally identical to that published version — no diffing needed. Requiring `publishedAt` keeps the
+// claim honest when the executables list ever includes rows whose newest reference is the test run itself.
+export function findPublishedEquivalent(
+  testRunArtifactId: string | null | undefined,
+  executables: WorkflowExecutableSummary[],
+  definitionId: string
+) {
+  if (!testRunArtifactId) return null;
+  return executables.find(executable =>
+    executable.artifactId === testRunArtifactId
+    && executableBelongsToDefinition(executable, definitionId)
+    && !!executable.publishedAt
+  ) ?? null;
+}
+
 function getExecutablePublishedTime(executable: WorkflowExecutableSummary) {
   const value = executable.publishedAt ?? executable.createdAt;
   const time = value ? new Date(value).getTime() : 0;
@@ -158,6 +175,75 @@ export function formatExecutableSourceKind(sourceKind?: string | null) {
 export function readExecutableRunWorkflowExecutionId(response: WorkflowExecutableRunResponse | null | undefined) {
   const workflowExecutionId = response?.workflowExecutionId ?? response?.runId ?? response?.executionId;
   return typeof workflowExecutionId === "string" && workflowExecutionId.trim() ? workflowExecutionId : null;
+}
+
+// Surfaces the reference-gate refusal behind a failed executable run (ADR 0040): the backend answers
+// 409 with { error } distinguishing an expired test-run reference from a retired one. The backend
+// sentence is shown verbatim, followed by the recovery hint matching the structured reason.
+export function formatExecutableRunError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const payload = (typeof error === "object" && error && "payload" in error ? (error as { payload?: unknown }).payload : null)
+    ?? tryParseJson(message);
+  const backendError = payload && typeof payload === "object" && typeof (payload as { error?: unknown }).error === "string"
+    ? (payload as { error: string }).error
+    : null;
+  if (!backendError) return message;
+
+  if (/no live .* reference/i.test(backendError)) {
+    return /expired/i.test(backendError)
+      ? `${backendError} Start a new test run from the definition editor to mint a fresh reference.`
+      : `${backendError} Restore the executable or republish its definition to run it.`;
+  }
+
+  return backendError;
+}
+
+function tryParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+// Display label for a Source Reference scope ("Published" | "TestRun" on the wire).
+export function formatReferenceScope(scope: string | null | undefined) {
+  const normalized = scope?.trim().toLowerCase() ?? "";
+  if (normalized === "published") return "Published";
+  if (normalized === "testrun" || normalized === "test-run") return "Test run";
+  return scope?.trim() || "Unknown";
+}
+
+export type ExecutableReferenceStatus = "live" | "retired" | "expired";
+
+export function getExecutableReferenceStatus(reference: WorkflowExecutableReference, now: Date = new Date()): ExecutableReferenceStatus {
+  if (reference.deletedAt) return "retired";
+  if (reference.expiresAt && new Date(reference.expiresAt).getTime() <= now.getTime()) return "expired";
+  return "live";
+}
+
+// How the inspected reference's source relates to its definition in THIS environment. "absent" is the
+// promotion case (the artifact traveled without its definition); "behind" drives the drift caption.
+//
+// This is a pure VERSION comparison for now. The behavioral-equivalence upgrade (plan §3 / studio#262:
+// a draft test run resolving to this same artifact id proves the draft is behaviorally identical)
+// slots in here as a third input once the test-run equivalence signal ships.
+export type ExecutableSourceDrift =
+  | { kind: "absent" }
+  | { kind: "current" }
+  | { kind: "behind"; referenceVersion: string | null; latestVersion: string | null };
+
+export function computeExecutableSourceDrift(
+  reference: WorkflowExecutableReference,
+  definition: WorkflowDefinitionSummary | null
+): ExecutableSourceDrift {
+  if (!definition) return { kind: "absent" };
+  if (!definition.latestVersionId || definition.latestVersionId === reference.definitionVersionId) return { kind: "current" };
+  return {
+    kind: "behind",
+    referenceVersion: reference.sourceVersion ?? reference.artifactVersion ?? null,
+    latestVersion: definition.latestVersion ?? null
+  };
 }
 
 export async function copyTextToClipboard(value: string) {

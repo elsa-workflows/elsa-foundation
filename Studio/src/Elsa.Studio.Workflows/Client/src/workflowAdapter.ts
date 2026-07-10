@@ -16,6 +16,9 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
+  // ghost ("not available in this environment") instead of pretending the activity resolves.
+  ghost?: boolean;
   onEnterSlot?(slot: ChildSlot): void;
 }
 
@@ -116,12 +119,59 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   return owner;
 }
 
+// One containment step on the way to a target node: `child` lives in `slot` of `parent`.
+interface ScopeHop {
+  parent: ActivityNode;
+  slot: ChildSlot;
+  child: ActivityNode;
+}
+
+// Depth-first locates `nodeId`, returning the containment hops from `root` down to the container whose
+// `targetSlot` directly holds it (zero hops when a root slot holds it). Null when absent from the tree.
+function findContainmentChain(
+  root: ActivityNode,
+  nodeId: string,
+  catalog?: ActivityCatalogLookup
+): { hops: ScopeHop[]; targetSlot: ChildSlot } | null {
+  const visit = (owner: ActivityNode, hops: ScopeHop[]): { hops: ScopeHop[]; targetSlot: ChildSlot } | null => {
+    const slots = getChildSlots(owner, catalog);
+
+    for (const slot of slots) {
+      if (slot.activities.some(activity => activity.nodeId === nodeId)) return { hops, targetSlot: slot };
+    }
+
+    for (const slot of slots) {
+      for (const child of slot.activities) {
+        const found = visit(child, [...hops, { parent: owner, slot, child }]);
+        if (found) return found;
+      }
+    }
+
+    return null;
+  };
+
+  return visit(root, []);
+}
+
+// The descend policy shared by slot entry (planSlotNavigation) and diagnostics navigation
+// (findNodeScopePath), so the two can never disagree: a single-cardinality slot whose only child is
+// itself a canvas container (non-generic primary slot) is entered by descending THROUGH the child.
+function resolveDescendThroughChild(slot: ChildSlot, catalog?: ActivityCatalogLookup): { child: ActivityNode; childPrimary: ChildSlot } | null {
+  if (slot.cardinality !== "single" || slot.activities.length !== 1) return null;
+  const child = slot.activities[0];
+  const childPrimary = getChildSlots(child, catalog)[0];
+  return childPrimary && childPrimary.mode !== "generic" ? { child, childPrimary } : null;
+}
+
 // Finds the scope frames that bring `nodeId` into view, so a diagnostic can navigate the designer to a
-// node anywhere in the tree. `labelFor` supplies the breadcrumb label for each descended container.
-// With the target ScopeFrame semantics a node in ANY slot is landable: the returned path's last frame
-// names the slot that directly contains `nodeId`. Contract: resolveScope(root, path).slot.activities
-// contains `nodeId` (an empty path lands `nodeId` in the root owner's primary slot). Returns null when
-// the node is not present in the tree at all.
+// node anywhere in the tree. `labelFor` supplies the display name used in breadcrumb labels. The frames
+// follow planSlotNavigation's conventions, so the landing breadcrumb reads exactly as if the author had
+// navigated there through slot entry: a descend-through entry contributes a hidden empty-label frame on
+// the slot owner, and each visible frame carries an "Owner / Slot" label. With the target ScopeFrame
+// semantics a node in ANY slot is landable: the returned path's last frame names the slot that directly
+// contains `nodeId`. Contract: resolveScope(root, path).slot.activities contains `nodeId` (an empty
+// path lands `nodeId` in the root owner's primary slot). Returns null when the node is not present in
+// the tree at all.
 export function findNodeScopePath(
   root: ActivityNode | null | undefined,
   nodeId: string,
@@ -132,44 +182,56 @@ export function findNodeScopePath(
   // The root scope itself is reached with no frames.
   if (root.nodeId === nodeId) return [];
 
-  // Returns the frames that, appended after `frames`, reach `nodeId` from container `owner` — or null
-  // if `owner` doesn't contain it. `frames` are the descent frames already accumulated for the
-  // containers above `owner` (each frame names a container and the slot on it we descended through /
-  // will view). `owner` itself is the container the LAST accumulated frame points at (or the root when
-  // `frames` is empty), so when `owner` directly holds the target we only need to fix up that last
-  // frame's slotId to the slot that holds it — no new frame is added.
-  const visit = (owner: ActivityNode, frames: ScopeFrame[]): ScopeFrame[] | null => {
-    const slots = getChildSlots(owner, catalog);
+  const located = findContainmentChain(root, nodeId, catalog);
+  if (!located) return null;
+  const { hops, targetSlot } = located;
 
-    for (const slot of slots) {
-      if (!slot.activities.some(activity => activity.nodeId === nodeId)) continue;
-      const lastFrame = frames.at(-1);
-      // No accumulated frames means `owner` is the root. Every frame descends INTO a child (the root
-      // is the implicit starting owner and never appears as a frame's ownerNodeId), so only the root's
-      // primary slot is reachable — the empty path lands it via resolveScope's slots[0] fallback. A
-      // node in the root's non-primary slot has no navigable path; treat it as not found.
-      if (!lastFrame) return slot.id === slots[0]?.id ? frames : null;
-      // Retarget the last descent frame's slotId to the slot that actually holds the node.
-      return [...frames.slice(0, -1), { ...lastFrame, slotId: slot.id }];
+  // A direct child of the root: every frame descends INTO a child (the root is the implicit starting
+  // owner and never appears as a frame's ownerNodeId), so only the root's primary slot is reachable —
+  // the empty path lands it via resolveScope's slots[0] fallback. A node in the root's non-primary
+  // slot has no navigable path; treat it as not found.
+  if (hops.length === 0) {
+    return targetSlot.id === getChildSlots(root, catalog)[0]?.id ? [] : null;
+  }
+
+  // Replay the slot entries a user would perform along the chain, consuming hops greedily: an entry
+  // that descends THROUGH its single container child consumes TWO hops and emits the hidden owner
+  // frame + visible container frame pair planSlotNavigation produces; any other entry consumes one hop
+  // and emits one visible frame. planSlotNavigation descends one level per entry, so a frame is hidden
+  // only as the first half of its own pair — a chained descend-through further down must not blank the
+  // previous pair's visible crumb.
+  const frames: ScopeFrame[] = [];
+  for (let index = 0; index < hops.length;) {
+    const hop = hops[index];
+    const nextHop = hops[index + 1];
+    // Each visible frame views the slot the chain continues through; the last frame views the slot
+    // that directly holds the target, honouring the resolveScope contract.
+    if (nextHop && resolveDescendThroughChild(nextHop.slot, catalog)) {
+      const viewedSlot = hops[index + 2]?.slot ?? targetSlot;
+      frames.push({ ownerNodeId: hop.child.nodeId, slotId: nextHop.slot.id, label: "" });
+      frames.push({
+        ownerNodeId: nextHop.child.nodeId,
+        slotId: viewedSlot.id,
+        // Descending lands on the child's primary slot, labeled after the slot that was entered
+        // ("For Each / Body"); a non-primary viewed slot is the retarget case, labeled after the
+        // container itself.
+        label: viewedSlot.id === getChildSlots(nextHop.child, catalog)[0]?.id
+          ? slotCrumbLabel(labelFor(nextHop.parent), nextHop.slot)
+          : slotCrumbLabel(labelFor(nextHop.child), viewedSlot)
+      });
+      index += 2;
+    } else {
+      const viewedSlot = nextHop?.slot ?? targetSlot;
+      frames.push({
+        ownerNodeId: hop.child.nodeId,
+        slotId: viewedSlot.id,
+        label: slotCrumbLabel(labelFor(hop.child), viewedSlot)
+      });
+      index += 1;
     }
+  }
 
-    for (const slot of slots) {
-      for (const child of slot.activities) {
-        // Descend into `child`; the frame names `child` and (provisionally) its own primary slot — the
-        // slot the canvas would show if we stopped here. If the deeper recursion lands directly in
-        // `child` it rewrites this frame's slotId to the child slot holding the target; if it descends
-        // further, this frame stays a pure descent hop (its slotId is ignored by resolveScopeOwner).
-        const childSlots = getChildSlots(child, catalog);
-        const provisionalSlotId = childSlots[0]?.id ?? slot.id;
-        const found = visit(child, [...frames, { ownerNodeId: child.nodeId, slotId: provisionalSlotId, label: labelFor(child) }]);
-        if (found) return found;
-      }
-    }
-
-    return null;
-  };
-
-  return visit(root, []);
+  return frames;
 }
 
 export interface SlotNavigationPlan {
@@ -200,27 +262,26 @@ export function planSlotNavigation(
   catalog?: ActivityCatalogLookup
 ): SlotNavigationPlan | null {
   const child = slot.cardinality === "single" && slot.activities.length === 1 ? slot.activities[0] : null;
-  const childPrimary = child ? getChildSlots(child, catalog)[0] : undefined;
-  const descendChild = child && childPrimary && childPrimary.mode !== "generic" ? child : null;
+  const descend = resolveDescendThroughChild(slot, catalog);
   const ownerIsScopeOwner = scopeOwner?.nodeId === ownerNodeId;
 
   if (ownerIsScopeOwner && frames.length === 0) {
     // The root scope owner. Its primary slot IS the root canvas (frames=[]); other slots are not
     // addressable as frames.
     if (scopeOwner && getChildSlots(scopeOwner, catalog)[0]?.id !== slot.id) return null;
-    if (descendChild) {
-      return { frames: [{ ownerNodeId: descendChild.nodeId, slotId: childPrimary!.id, label }], selectedNodeId: null };
+    if (descend) {
+      return { frames: [{ ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
     return { frames: [], selectedNodeId: child?.nodeId ?? null };
   }
 
   const base = ownerIsScopeOwner ? frames.slice(0, -1) : frames;
-  if (descendChild) {
+  if (descend) {
     return {
       frames: [
         ...base,
         { ownerNodeId, slotId: slot.id, label: "" },
-        { ownerNodeId: descendChild.nodeId, slotId: childPrimary!.id, label }
+        { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }
       ],
       selectedNodeId: null
     };

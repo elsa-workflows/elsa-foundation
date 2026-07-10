@@ -60,6 +60,7 @@ describe("workflows module", () => {
     expect(api.routes.list()).toEqual([
       expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
       expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
+      expect.objectContaining({ id: "workflows-executable-inspector", label: "Executable Inspector", path: "/workflows/executables/:artifactId" }),
       expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
       expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" }),
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
@@ -883,6 +884,43 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("scopes an artifact delete to the definition when deleting from the editor's artifacts panel", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "DELETE") return response(null, 204);
+      if (url.includes("/_elsa/workflow-management/executables")) return response([
+        executable({ artifactId: "artifact-current", definitionId: "definition-1" })
+      ]);
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ definitions: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Autosave");
+    await click(buttonByText(container, "Artifacts"));
+    await waitForText(container, "artifact-current");
+
+    await click(buttonByLabel(container, "Delete executable artifact-current for this workflow"));
+    await flushPromises();
+
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("retires this definition's references") }));
+    // Definition-scoped context: the delete carries ?definitionId= so a shared artifact stays
+    // runnable for other definitions referencing it.
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/_elsa/workflow-management/executables/artifact-current?definitionId=definition-1",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
   it("creates a workflow definition from the selected root type card", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1065,6 +1103,210 @@ describe("workflows module", () => {
       "https://server.example/_elsa/workflow-management/executables",
       "https://server.example/_demo/workflows/executables"
     ]);
+
+    await unmount();
+  });
+
+  it("expands an artifact row into its source references", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable({
+      references: [
+        executableReference(),
+        executableReference({
+          sourceReferenceId: "ref-test",
+          artifactVersion: "1.0.0",
+          scope: "TestRun",
+          publishedAt: null,
+          expiresAt: "2026-01-01T00:00:00Z"
+        })
+      ]
+    })] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    expect(container.querySelector(".wf-reference-list")).toBeNull();
+
+    await click(buttonByLabel(container, "Show references of artifact-1"));
+
+    const referenceList = container.querySelector(".wf-reference-list");
+    expect(referenceList?.textContent).toContain("Version 2.0.0");
+    expect(referenceList?.textContent).toContain("Published");
+    expect(referenceList?.textContent).toContain("Test run");
+    expect(referenceList?.textContent).toContain("Expired");
+    expect(referenceList?.textContent).toContain("Expires");
+
+    await unmount();
+  });
+
+  it("requests the reference scope filter and retired references", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({ executables: [executable({ deletedAt: "2026-06-19T01:00:00Z" })] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://server.example/_elsa/workflow-management/executables");
+
+    await select(selectByLabel(container, "Executable reference scope"), "test-runs");
+    await waitForText(container, "artifact-1");
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=test-runs");
+
+    await click(checkboxByLabel(container, "Include retired references"));
+    await waitForText(container, "Retired");
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=test-runs&includeRetired=true");
+
+    // A retired artifact offers Restore instead of Delete.
+    expect(buttonByLabel(container, "Restore executable artifact-1")).toBeTruthy();
+    expect(buttonByLabel(container, "Delete executable artifact-1")).toBeNull();
+
+    await unmount();
+  });
+
+  it("opens the Executable Inspector from an executables row", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable()] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByLabel(container, "Inspect executable artifact-1"));
+
+    expect(window.location.pathname).toBe("/workflows/executables/artifact-1");
+
+    await unmount();
+  });
+
+  it("deletes an executable artifact from the table after confirmation", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") return response(null, 204);
+      return response({ executables: [executable()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByLabel(container, "Delete executable artifact-1"));
+    await flushPromises();
+
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("retires all of its source references") }));
+    // Table context is artifact-level: no definition scoping on the delete.
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/_elsa/workflow-management/executables/artifact-1",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
+  it("surfaces the structured 409 reference-gate reason when a run is rejected", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return response({ error: "Workflow executable artifact 'artifact-1' has no live Published reference: the matching reference has expired." }, 409);
+      }
+      return response({ executables: [executable()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "has no live Published reference");
+
+    expect(container.textContent).toContain("the matching reference has expired");
+    expect(container.textContent).toContain("Start a new test run from the definition editor");
+
+    await unmount();
+  });
+
+  it("renders the Executable Inspector with sidecar layout, ghost nodes and reference selection", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) {
+        return url.includes("ref=ref-0")
+          ? response(executableDetail({ chosenReference: { sourceReferenceId: "ref-0", selection: "requested", layout: [] } }))
+          : response(executableDetail());
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence", displayName: "Sequence" }),
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine", displayName: "Write Line" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition({ latestVersionId: "version-2", latestVersion: "2.0.0" }), draft: null, versions: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Showing newest live reference ref-1");
+
+    // Identity panel: artifact id, hash, node/resume-target counts.
+    expect(container.textContent).toContain("sha256:abc");
+    expect(container.textContent).toContain("Resume targets");
+    expect(container.textContent).toContain("Executable Inspector");
+
+    // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
+    await waitForText(container, "Write Line");
+    await waitForText(container, "Not available in this environment");
+    const ghost = container.querySelector(".wf-node-ghost");
+    expect(ghost?.textContent).toContain("SendEmail");
+
+    // The reference is current with the definition's latest version: no drift caption, source link enabled.
+    expect(container.textContent).not.toContain("the definition's latest is");
+    const openSource = buttonByText(container, "Open source definition") as HTMLButtonElement;
+    expect(openSource.disabled).toBe(false);
+
+    // Selecting another reference re-inspects through ?ref= and states the requested selection.
+    await click(buttonByText(container, "References (2)"));
+    await click(buttonByLabel(container, "Show reference ref-0"));
+    await waitForText(container, "Showing requested reference ref-0");
+
+    expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/_elsa/workflow-management/executables/artifact-1?ref=ref-0");
+
+    await unmount();
+  });
+
+  it("captions source drift when the inspected reference is behind the definition's latest version", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }), draft: null, versions: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "the definition's latest is 9.0.0");
+
+    expect(container.textContent).toContain("published from version 2.0.0");
+    expect((buttonByText(container, "Open source definition") as HTMLButtonElement).disabled).toBe(false);
+
+    await unmount();
+  });
+
+  it("disables the source link with a reason when the definition is absent in this environment", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "This workflow definition is not available in this environment.");
+
+    const openSource = buttonByText(container, "Open source definition") as HTMLButtonElement;
+    expect(openSource.disabled).toBe(true);
+    expect(openSource.title).toContain("not available in this environment");
 
     await unmount();
   });
@@ -2065,6 +2307,74 @@ function executable(overrides: Partial<Record<string, unknown>> = {}) {
     rootActivityVersion: "1.0.0",
     nodeCount: 3,
     resumeTargetCount: 0,
+    ...overrides
+  };
+}
+
+function executableReference(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    sourceReferenceId: "ref-1",
+    artifactId: "artifact-1",
+    sourceKind: "definition",
+    sourceId: "definition-1",
+    sourceVersion: "2.0.0",
+    definitionId: "definition-1",
+    definitionVersionId: "version-2",
+    artifactVersion: "2.0.0",
+    createdAt: "2026-06-18T01:00:00Z",
+    publishedAt: "2026-06-18T01:10:00Z",
+    scope: "Published",
+    expiresAt: null,
+    deletedAt: null,
+    deletedReason: null,
+    ...overrides
+  };
+}
+
+function executableWireNode(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    executableNodeId: "exec-write-line-1",
+    authoredActivityId: "write-line-1",
+    activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+    activityTypeVersion: "1.0.0",
+    structureKind: null,
+    inputBindings: [],
+    childSlots: [],
+    ...overrides
+  };
+}
+
+function executableDetail(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactId: "artifact-1",
+    artifactHash: "sha256:abc",
+    createdAt: "2026-06-18T01:00:00Z",
+    rootActivityType: "Elsa.Activities.Sequence.Activities.Sequence",
+    rootActivityVersion: "1.0.0",
+    nodeCount: 3,
+    resumeTargetCount: 1,
+    rootActivity: executableWireNode({
+      executableNodeId: "exec-root",
+      authoredActivityId: "root",
+      activityType: "Elsa.Activities.Sequence.Activities.Sequence",
+      structureKind: "elsa.sequence.structure",
+      childSlots: [{
+        name: "Sequence.Activities",
+        activities: [
+          executableWireNode({ inputBindings: [{ inputName: "Text", source: "Literal", summary: "\"Hello\"" }] }),
+          executableWireNode({ executableNodeId: "exec-send-email-1", authoredActivityId: "send-email-1", activityType: "Elsa.Activities.Email.SendEmail" })
+        ]
+      }]
+    }),
+    chosenReference: {
+      sourceReferenceId: "ref-1",
+      selection: "newest-live",
+      layout: [{ nodeId: "write-line-1", x: 40, y: 20 }, { nodeId: "send-email-1", x: 320, y: 20 }]
+    },
+    references: [
+      executableReference(),
+      executableReference({ sourceReferenceId: "ref-0", artifactVersion: "1.0.0", sourceVersion: "1.0.0", definitionVersionId: "version-1", publishedAt: "2026-06-17T01:00:00Z" })
+    ],
     ...overrides
   };
 }

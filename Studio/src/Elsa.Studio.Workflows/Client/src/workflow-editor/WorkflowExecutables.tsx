@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Play, RotateCcw, Search, Sparkles, X } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, Trash2, X } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { listExecutables, runExecutable } from "../api/workflows";
-import type { WorkflowExecutableSummary } from "../workflowTypes";
+import { deleteExecutable, listExecutables, restoreExecutable, runExecutable } from "../api/workflows";
+import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
-import { ExecutableRunStatusLine, CopyValueButton } from "./executableShared";
+import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } from "./executableShared";
+import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
 import {
   compareExecutablesByPublishedDate,
@@ -14,9 +15,16 @@ import {
   executableMatchesDefinitionFilter,
   findAiAction,
   formatExecutableRoot,
+  formatExecutableRunError,
   formatExecutableSourceKind,
   readExecutableRunWorkflowExecutionId
 } from "./editorHelpers";
+
+export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
+  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
+  window.history.pushState({}, "", `/workflows/executables/${encodeURIComponent(artifactId)}${query}`);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -24,6 +32,9 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
   const [status, setStatus] = useState("");
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [executables, setExecutables] = useState<WorkflowExecutableSummary[]>([]);
+  const [scope, setScope] = useState<WorkflowExecutableListScope>("published");
+  const [includeRetired, setIncludeRetired] = useState(false);
+  const [expandedArtifactIds, setExpandedArtifactIds] = useState<ReadonlySet<string>>(new Set());
   const normalizedDefinitionFilter = definitionFilter?.trim().toLowerCase() ?? "";
   const visibleExecutables = useMemo(
     () => normalizedDefinitionFilter
@@ -45,13 +56,13 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
     setState("loading");
     setError("");
     try {
-      setExecutables(await listExecutables(context));
+      setExecutables(await listExecutables(context, { scope, includeRetired }));
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }
-  }, [context]);
+  }, [context, includeRetired, scope]);
 
   useEffect(() => {
     void load();
@@ -67,7 +78,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
       setLastRun({ artifactId: executable.artifactId, workflowExecutionId });
       setStatus(`Started ${executable.artifactId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatExecutableRunError(e));
     }
   };
 
@@ -79,6 +90,44 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
       setLastRun(null);
       setStatus(`Sent ${executable.artifactId} to Weaver`);
     }
+  };
+
+  // Table-level delete targets the artifact as a whole (every definition's references); the
+  // definition-scoped variant lives on the editor's artifacts panel, which passes its definitionId.
+  const remove = async (executable: WorkflowExecutableSummary) => {
+    if (!(await getDialogs().confirm({ message: `Delete executable ${executable.artifactId}? This retires all of its source references; the artifact can no longer be run.`, confirmLabel: "Delete", tone: "danger" }))) return;
+    setStatus("");
+    setLastRun(null);
+    setError("");
+    try {
+      await deleteExecutable(context, executable.artifactId);
+      setStatus(`Deleted ${executable.artifactId}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const restore = async (executable: WorkflowExecutableSummary) => {
+    setStatus("");
+    setLastRun(null);
+    setError("");
+    try {
+      await restoreExecutable(context, executable.artifactId);
+      setStatus(`Restored ${executable.artifactId}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const toggleReferences = (artifactId: string) => {
+    setExpandedArtifactIds(previous => {
+      const next = new Set(previous);
+      if (next.has(artifactId)) next.delete(artifactId);
+      else next.add(artifactId);
+      return next;
+    });
   };
 
   const markCopied = (label: string) => {
@@ -97,6 +146,23 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
     <>
       <div className="wf-toolbar">
         <button type="button" onClick={() => void load()}>Refresh</button>
+        <label className="wf-toolbar-field">
+          <span>Scope</span>
+          <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
+            <option value="published">Published</option>
+            <option value="test-runs">Test runs</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <label className="wf-toolbar-field wf-toolbar-checkbox">
+          <input
+            type="checkbox"
+            aria-label="Include retired references"
+            checked={includeRetired}
+            onChange={event => setIncludeRetired(event.target.checked)}
+          />
+          <span>Include retired</span>
+        </label>
         <label className="wf-search wf-executable-definition-filter">
           <Search size={14} />
           <input
@@ -115,6 +181,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
         ) : null}
       </div>
       {state === "failed" ? <WfErrorCard message={error} /> : null}
+      {state === "ready" && error ? <WfErrorCard message={error} /> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <WfListSkeleton /> : null}
       {state === "ready" && visibleExecutables.length === 0 ? (
@@ -134,33 +201,66 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
             <span>Published</span>
             <span>Actions</span>
           </div>
-          {visibleExecutables.map(executable => (
-            <div className="wf-grid-row" role="row" key={executable.artifactId}>
-              <span className="wf-artifact-cell">
-                <span className="wf-cell-line">
-                  <strong title={executable.artifactId}>{executable.artifactId}</strong>
-                  <CopyValueButton value={executable.artifactId} ariaLabel={`Copy artifact ID ${executable.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-                </span>
-                <span className="wf-cell-line wf-cell-line-muted">
-                  <small title={executable.artifactHash}>{executable.artifactHash}</small>
-                  <CopyValueButton value={executable.artifactHash} ariaLabel={`Copy artifact hash ${executable.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-                </span>
-              </span>
-              <span className="wf-cell-line wf-version-cell">
-                <span>{executable.artifactVersion}</span>
-                <CopyValueButton value={executable.artifactVersion} ariaLabel={`Copy artifact version ${executable.artifactVersion}`} copiedLabel="artifact version" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-              </span>
-              <WorkflowExecutableSourceCell executable={executable} onCopied={markCopied} onCopyFailed={markCopyFailed} />
-              <span>{formatExecutableRoot(executable)}</span>
-              <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
-              <span className="wf-row-actions">
-                <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
-                {explainExecutableAction ? (
-                  <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
+          {visibleExecutables.map(executable => {
+            const references = executable.references ?? [];
+            const expanded = expandedArtifactIds.has(executable.artifactId);
+            const retired = Boolean(executable.deletedAt);
+            return (
+              <div className="wf-executable-row-group" key={executable.artifactId}>
+                <div className="wf-grid-row" role="row">
+                  <span className="wf-artifact-cell">
+                    <span className="wf-cell-line">
+                      <strong title={executable.artifactId}>{executable.artifactId}</strong>
+                      <CopyValueButton value={executable.artifactId} ariaLabel={`Copy artifact ID ${executable.artifactId}`} copiedLabel="artifact ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                      {retired ? <span className="wf-chip wf-reference-retired">Retired</span> : null}
+                    </span>
+                    <span className="wf-cell-line wf-cell-line-muted">
+                      <small title={executable.artifactHash}>{executable.artifactHash}</small>
+                      <CopyValueButton value={executable.artifactHash} ariaLabel={`Copy artifact hash ${executable.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                    </span>
+                  </span>
+                  <span className="wf-version-cell wf-executable-version-cell">
+                    <span className="wf-cell-line">
+                      <span>{executable.artifactVersion}</span>
+                      <CopyValueButton value={executable.artifactVersion} ariaLabel={`Copy artifact version ${executable.artifactVersion}`} copiedLabel="artifact version" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                    </span>
+                    {references.length > 0 ? (
+                      <button
+                        type="button"
+                        className="wf-link-button wf-reference-toggle"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? "Hide" : "Show"} references of ${executable.artifactId}`}
+                        onClick={() => toggleReferences(executable.artifactId)}
+                      >
+                        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        {references.length} reference{references.length === 1 ? "" : "s"}
+                      </button>
+                    ) : null}
+                  </span>
+                  <WorkflowExecutableSourceCell executable={executable} onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                  <span>{formatExecutableRoot(executable)}</span>
+                  <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
+                  <span className="wf-row-actions">
+                    <button type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</button>
+                    <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
+                    {explainExecutableAction ? (
+                      <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
+                    ) : null}
+                    {retired ? (
+                      <button type="button" aria-label={`Restore executable ${executable.artifactId}`} onClick={() => void restore(executable)}><RotateCcw size={13} /> Restore</button>
+                    ) : (
+                      <button type="button" aria-label={`Delete executable ${executable.artifactId}`} onClick={() => void remove(executable)}><Trash2 size={13} /> Delete</button>
+                    )}
+                  </span>
+                </div>
+                {expanded ? (
+                  <div className="wf-executable-references">
+                    <ExecutableReferenceList references={references} ariaLabel={`References of ${executable.artifactId}`} />
+                  </div>
                 ) : null}
-              </span>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </>
@@ -232,7 +332,7 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
       setLastRun({ artifactId: artifact.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
       setStatus(`Started ${artifact.artifactId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatExecutableRunError(e));
     }
   };
 
@@ -243,6 +343,22 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
       setError("");
       setLastRun(null);
       setStatus(`Sent ${artifact.artifactId} to Weaver`);
+    }
+  };
+
+  // This panel is definition-scoped, so the delete is too: only THIS definition's references are
+  // retired. A behaviorally identical artifact shared with another definition stays runnable there.
+  const remove = async (artifact: WorkflowExecutableSummary) => {
+    if (!(await getDialogs().confirm({ message: `Delete executable ${artifact.artifactId} for this workflow? This retires this definition's references to it.`, confirmLabel: "Delete", tone: "danger" }))) return;
+    setStatus("");
+    setLastRun(null);
+    setError("");
+    try {
+      await deleteExecutable(context, artifact.artifactId, definitionId);
+      setStatus(`Deleted ${artifact.artifactId}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -270,7 +386,7 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
         <button type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</button>
         <button type="button" onClick={openExecutablePage}>Open list</button>
       </div>
-      {state === "failed" ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
+      {state === "failed" || error ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
       {state === "loading" ? <p className="wf-muted">Loading artifacts...</p> : null}
       {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
@@ -300,8 +416,10 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
                 <div><dt>Root</dt><dd>{formatExecutableRoot(artifact)}</dd></div>
               </dl>
               <div className="wf-row-actions">
+                <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
                 <button type="button" onClick={() => void run(artifact)}><Play size={13} /> Run</button>
                 {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
+                <button type="button" aria-label={`Delete executable ${artifact.artifactId} for this workflow`} onClick={() => void remove(artifact)}><Trash2 size={13} /> Delete</button>
               </div>
             </article>
           ))}

@@ -41,6 +41,7 @@ import { useWorkflowPersistence } from "./useWorkflowPersistence";
 import { useWorkflowEditorData } from "./useWorkflowEditorData";
 import { useDefinitionMetadata } from "./useDefinitionMetadata";
 import { useWorkflowOperations } from "./useWorkflowOperations";
+import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
@@ -408,7 +409,9 @@ export function WorkflowEditor({
   }, [catalogByVersion, editDraft]);
 
   // Navigates the designer to the activity that owns an invalid scoped variable reference so the
-  // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027).
+  // author can deliberately re-pick a variable in its scope. We never auto-retarget (ADR-0027). The
+  // path follows planSlotNavigation's breadcrumb conventions, so landing here reads exactly like
+  // having navigated through slot entry.
   const repairVariableReference = useCallback((nodeId: string | null) => {
     if (!nodeId) return;
     const currentRoot = draft?.state.rootActivity;
@@ -435,6 +438,14 @@ export function WorkflowEditor({
     });
   };
 
+  const renderedTestRun = draft && testRun?.draftSignature === getDraftSignature(draft)
+    ? testRun.view
+    : null;
+  // ADR 0040's equivalence signal: a test run resolving to a published artifact id proves the current
+  // draft is behaviorally identical to that published version. Above the loading return — hooks must
+  // run on every render.
+  const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
+
   if (!details || !draft) {
     return <div className="wf-empty">{error || "Loading workflow editor..."}</div>;
   }
@@ -447,9 +458,6 @@ export function WorkflowEditor({
       ?? (inspectedCatalogItem ? getActivityDisplay(inspectedCatalogItem) : inspectedNode.nodeId))
     : "";
 
-  const renderedTestRun = testRun?.draftSignature === getDraftSignature(draft)
-    ? testRun.view
-    : null;
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
   const openWorkflowRun = (workflowExecutionId: string) => {
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
@@ -524,7 +532,7 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} onOpenRun={openWorkflowRun} />
+      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} />
     },
     {
       id: "artifacts",

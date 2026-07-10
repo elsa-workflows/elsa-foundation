@@ -1,5 +1,5 @@
 import { AlertCircle, Check, Wrench } from "lucide-react";
-import type { WorkflowDraft, WorkflowTestRunView } from "../workflowTypes";
+import type { WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import { collectVariableRepairItems } from "../validationDiagnostics";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
@@ -64,8 +64,9 @@ export function TestRunStatus({
   );
 }
 
-export function WorkflowRuntimePanel({ testRun, onOpenRun }: {
+export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }: {
   testRun: WorkflowTestRunView | null;
+  publishedEquivalent?: WorkflowExecutableSummary | null;
   onOpenRun(workflowExecutionId: string): void;
 }) {
   if (!testRun) {
@@ -78,6 +79,12 @@ export function WorkflowRuntimePanel({ testRun, onOpenRun }: {
 
   const rejected = isRejectedTestRun(testRun);
   const workflowExecutionId = testRun.workflowExecutionId;
+  // The equivalence signal resolves asynchronously; re-check the artifact id so a match computed for an
+  // earlier test run never captions a newer one. A rejected dispatch can still mint a valid artifact id,
+  // but pairing a green "identical" banner with a rejection reason reads as contradictory — suppress it.
+  const equivalent = !rejected && publishedEquivalent && publishedEquivalent.artifactId === testRun.artifactId
+    ? publishedEquivalent
+    : null;
   return (
     <div className="wf-runtime-panel">
       <section className="wf-runtime-card" data-state={rejected ? "rejected" : "accepted"}>
@@ -90,6 +97,11 @@ export function WorkflowRuntimePanel({ testRun, onOpenRun }: {
         </header>
         <p>Ephemeral - not saved, promoted, or published.</p>
         {rejected && testRun.reason ? <div className="wf-runtime-reason"><AlertCircle size={14} /> {testRun.reason}</div> : null}
+        {equivalent ? (
+          <div className="wf-runtime-equivalence">
+            <Check size={14} /> Current draft is behaviorally identical to published v{equivalent.artifactVersion}.
+          </div>
+        ) : null}
         <dl className="wf-runtime-meta">
           <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus ?? testRun.status}>{testRun.commandDispatchStatus ?? testRun.status}</dd></div>
           <div><dt>Test Run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
