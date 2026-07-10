@@ -320,7 +320,6 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -343,7 +342,6 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

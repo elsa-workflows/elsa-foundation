@@ -39,6 +39,13 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
         {
             ThrowError(e, 400);
         }
+        catch (WorkflowExecutableReferenceRejectedException e)
+        {
+            // Reference gate refusal (ADR 0040): the artifact exists but is not dispatchable under the required
+            // scope (retired, unpublished, or expired test run). 409 mirrors the Rejected dispatch-status mapping
+            // above — a state conflict, not a bad request.
+            ThrowError(e, 409);
+        }
         catch (ArgumentException e)
         {
             ThrowError(e, 400);

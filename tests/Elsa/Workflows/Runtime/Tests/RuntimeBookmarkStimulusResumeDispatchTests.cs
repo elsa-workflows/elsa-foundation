@@ -301,7 +301,6 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: _now.AddMinutes(-10),
-            publishedAt: _now.AddMinutes(-9),
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewNode(string nodeId)

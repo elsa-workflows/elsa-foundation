@@ -250,7 +250,6 @@ public sealed class DurableTimerRestartCrashTests
             rootActivity: root,
             resumeTargets: resumeTargets,
             createdAt: T0,
-            publishedAt: T0,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

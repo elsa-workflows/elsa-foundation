@@ -133,7 +133,6 @@ public sealed class WorkflowTriggerIndexerTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            publishedAt: DateTimeOffset.UnixEpoch,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static WorkflowTriggerBinding StaleBinding(string artifactId, string nodeId) =>

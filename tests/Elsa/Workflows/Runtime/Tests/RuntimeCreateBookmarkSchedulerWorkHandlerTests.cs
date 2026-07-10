@@ -405,7 +405,6 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
             rootActivity: NewNode("node-wait", document.RootElement),
             resumeTargets: resumeTargets,
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

@@ -369,7 +369,6 @@ public sealed class WorkflowVariableSuspendResumeWriteBackTests
                     Metadata: new Dictionary<string, string>())
             },
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

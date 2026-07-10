@@ -21,9 +21,11 @@ public sealed class WorkflowsPublishingApiFeatureTests
         // TS-1 (§2.23.1): registration presence, not implementation-type pinning, so swapping an equivalent
         // implementation no longer breaks this test.
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
+        // ADR 0040: the transient store is retired; the test-run flow appends an expiring TestRun source reference
+        // into the single content-addressed store, so the source-reference store is part of the publishing surface.
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableCompiler));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowTestRunStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITransientWorkflowExecutableStore));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TimeProvider));
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IRequestHandler));
     }

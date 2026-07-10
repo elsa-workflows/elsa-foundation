@@ -4,6 +4,7 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -39,6 +40,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         var assembly = GetType().Assembly;
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
+        // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
+        services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         // W30b (#418): WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
@@ -47,8 +52,10 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
+        // Read-only projection of the artifact + reference stores into the executables list/detail views the
+        // Studio Executable Inspector consumes (#598 P1). Self-contained: depends only on the two runtime stores.
+        services.TryAddScoped<WorkflowExecutableInspector>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
-        services.TryAddSingleton<ITransientWorkflowExecutableStore, InMemoryTransientWorkflowExecutableStore>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
     }

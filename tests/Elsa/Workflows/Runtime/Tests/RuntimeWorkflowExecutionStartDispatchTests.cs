@@ -75,35 +75,69 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
-    public async Task DispatchAsync_RejectsTransientTestRunArtifactBeforeAgentActivation()
+    public async Task DispatchAsync_DispatchesArtifactWithNoReferencesUnchanged()
     {
+        // Backward-compat seam (ADR 0040): an artifact saved directly into the single store with no source reference —
+        // the direct/seeded runtime path — is dispatched unchanged. The reference gate engages only once references exist.
         var store = new InMemoryWorkflowExecutableStore();
-        await store.SaveAsync(NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30)));
+        await store.SaveAsync(NewExecutable());
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test")).AsTask());
+        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
-        Assert.Empty(agentProvider.ActivationRequests);
-        Assert.Empty(agentProvider.Agent.Envelopes);
-        Assert.Empty(await store.ListAsync());
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+        Assert.Single(agentProvider.Agent.Envelopes);
     }
 
     [Fact]
-    public async Task DispatchTransientAsync_AllowsTransientTestRunArtifact()
+    public async Task DispatchAsync_DispatchesArtifactWithLivePublishedReference()
     {
         var store = new InMemoryWorkflowExecutableStore();
-        var executable = NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30));
+        await store.SaveAsync(NewExecutable());
+        var referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await referenceStore.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.Published));
         var agentProvider = new RecordingAgentProvider();
-        var dispatcher = NewDispatcher(store, agentProvider);
+        var dispatcher = NewDispatcher(store, agentProvider, referenceStore);
 
-        var result = await dispatcher.DispatchTransientAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "designer-test"), executable);
+        var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
 
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
-        Assert.Single(agentProvider.ActivationRequests);
         Assert.Single(agentProvider.Agent.Envelopes);
-        Assert.Empty(await store.ListAsync());
-        Assert.NotNull(await store.FindAsync("artifact-1"));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_RejectsPublishedDispatchOfArtifactWithOnlyTestRunReference()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await referenceStore.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.TestRun, expiresAt: _now.AddMinutes(30)));
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider, referenceStore);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
+            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test")).AsTask());
+
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.NoLiveReference, exception.Reason);
+        Assert.Empty(agentProvider.Agent.Envelopes);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_RejectsWithExpiryReasonWhenOnlyMatchingReferenceExpired()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await referenceStore.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.TestRun, expiresAt: _now.AddMinutes(-1)));
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider, referenceStore);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
+            dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "test-run"), WorkflowExecutableReferenceScope.TestRun).AsTask());
+
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.Expired, exception.Reason);
+        Assert.Empty(agentProvider.Agent.Envelopes);
     }
 
     [Fact]
@@ -161,7 +195,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         var dispatcher = NewDispatcher(store, agentProvider);
         var options = new WorkflowExecutionCommandDispatchOptions();
 
-        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"), options);
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"), dispatchOptions: options);
 
         Assert.Same(options, Assert.Single(agentProvider.Agent.DispatchOptions));
     }
@@ -185,25 +219,41 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
 
     private WorkflowStartDispatcher NewDispatcher(
         InMemoryWorkflowExecutableStore store,
-        RecordingAgentProvider agentProvider) =>
+        RecordingAgentProvider agentProvider,
+        InMemoryWorkflowExecutableSourceReferenceStore? referenceStore = null) =>
         new(
             store,
+            referenceStore ?? new InMemoryWorkflowExecutableSourceReferenceStore(),
             agentProvider,
             new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
-    private static WorkflowExecutable NewExecutable(
-        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
+    private WorkflowExecutableSourceReference Reference(
+        string sourceReferenceId,
+        string artifactId,
+        WorkflowExecutableReferenceScope scope,
         DateTimeOffset? expiresAt = null) =>
+        new(
+            SourceReferenceId: sourceReferenceId,
+            ArtifactId: artifactId,
+            SourceKind: "WorkflowDefinitionVersion",
+            SourceId: "version-1",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-1",
+            DefinitionVersionId: "version-1",
+            ArtifactVersion: "1.0.0",
+            CreatedAt: _now,
+            PublishedAt: scope == WorkflowExecutableReferenceScope.Published ? _now : null,
+            Scope: scope,
+            ExpiresAt: expiresAt);
+
+    private static WorkflowExecutable NewExecutable() =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>(),
-            scope: scope,
-            expiresAt: expiresAt);
+            compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewNode(string nodeId) =>
         new(
