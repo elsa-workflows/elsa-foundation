@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -26,7 +27,6 @@ public sealed class PublishWorkflowRequestHandler(
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
-    private const string DefinitionVersionSourceKind = "WorkflowDefinitionVersion";
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
@@ -75,7 +75,7 @@ public sealed class PublishWorkflowRequestHandler(
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
-            SourceKind: DefinitionVersionSourceKind,
+            SourceKind: WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
             SourceId: identity.DefinitionVersionId,
             SourceVersion: identity.ArtifactVersion,
             DefinitionId: identity.DefinitionId,
@@ -84,21 +84,6 @@ public sealed class PublishWorkflowRequestHandler(
             CreatedAt: now,
             PublishedAt: now,
             Scope: WorkflowExecutableReferenceScope.Published,
-            Layout: ToLayoutSidecar(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
     }
-
-    // Verbatim copy of the definition version's layout into the reference sidecar (ADR 0039). The design records
-    // are mapped 1:1 into the runtime-owned layout type; AdditionalProperties travels opaquely (ADR 0035).
-    private static IReadOnlyList<WorkflowExecutableLayoutRecord> ToLayoutSidecar(WorkflowDefinitionVersionLayout? layout) =>
-        layout is null
-            ? []
-            : layout.Records
-                .Select(record => new WorkflowExecutableLayoutRecord(
-                    record.NodeId,
-                    record.X,
-                    record.Y,
-                    record.Width,
-                    record.Height,
-                    record.AdditionalProperties))
-                .ToArray();
 }

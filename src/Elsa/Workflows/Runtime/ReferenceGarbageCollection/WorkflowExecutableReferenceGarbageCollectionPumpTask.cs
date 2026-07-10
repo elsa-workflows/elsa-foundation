@@ -54,7 +54,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : IRecu
         {
             throw;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
         {
             var failures = Interlocked.Increment(ref _consecutiveSweepFailures);
             _logger.LogError(

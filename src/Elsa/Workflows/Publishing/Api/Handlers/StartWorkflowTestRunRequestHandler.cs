@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -38,8 +39,6 @@ public sealed class StartWorkflowTestRunRequestHandler(
     // Unified with publish (ADR 0040): scope lives on the reference, not the artifact id, so a test run of a draft
     // behaviorally identical to a published version resolves to the SAME artifact id — the free equivalence signal.
     private const string ArtifactPrefix = "artifact-";
-    private const string DefinitionVersionSourceKind = "WorkflowDefinitionVersion";
-    private const string DraftSnapshotSourceKind = "WorkflowDraftSnapshot";
     private const string DraftArtifactVersion = "draft";
 
     public StartWorkflowTestRunRequestHandler(
@@ -101,7 +100,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     DefinitionVersionId: sourceDefinitionVersionId,
                     ArtifactVersion: artifactVersion,
                     State: request.State,
-                    SourceKind: DraftSnapshotSourceKind,
+                    SourceKind: WorkflowExecutableSourceKinds.WorkflowDraftSnapshot,
                     SourceId: request.SnapshotId,
                     SourceVersion: artifactVersion)
             },
@@ -251,7 +250,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return new WorkflowExecutableSourceReference(
             SourceReferenceId: ShortIdentityGenerator.Generate(now),
             ArtifactId: identity.ArtifactId,
-            SourceKind: source?.SourceKind ?? DefinitionVersionSourceKind,
+            SourceKind: source?.SourceKind ?? WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
             SourceId: source?.SourceId ?? identity.DefinitionVersionId,
             SourceVersion: source?.SourceVersion ?? identity.ArtifactVersion,
             DefinitionId: identity.DefinitionId,
@@ -261,23 +260,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             Scope: WorkflowExecutableReferenceScope.TestRun,
             ExpiresAt: expiresAt,
-            Layout: ToLayoutSidecar(layout));
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
     }
-
-    // Verbatim copy of the definition version's layout into the reference sidecar (ADR 0039), mirroring the publish
-    // flow; AdditionalProperties travels opaquely (ADR 0035).
-    private static IReadOnlyList<WorkflowExecutableLayoutRecord> ToLayoutSidecar(WorkflowDefinitionVersionLayout? layout) =>
-        layout is null
-            ? []
-            : layout.Records
-                .Select(record => new WorkflowExecutableLayoutRecord(
-                    record.NodeId,
-                    record.X,
-                    record.Y,
-                    record.Width,
-                    record.Height,
-                    record.AdditionalProperties))
-                .ToArray();
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the
     // compiled executable), inputs have no artifact-side default, so an empty channel leaves `input.*` empty.

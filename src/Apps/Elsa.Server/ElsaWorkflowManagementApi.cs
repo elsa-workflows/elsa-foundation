@@ -26,6 +26,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -300,14 +301,17 @@ internal static class ElsaWorkflowManagementApi
         return WorkflowExecutableListScope.Published;
     }
 
-    private static Task<IResult> DeleteExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
+    private static Task<IResult> DeleteExecutableAsync(IShellRegistry shellRegistry, string artifactId, string? definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
             // Deleting an executable = retiring its references (ADR 0040); the artifact follows by GC (worker W3).
+            // Content addressing lets behaviorally identical definitions share one artifact, so an optional
+            // ?definitionId= scopes the retire to that definition's references; without it the operation targets the
+            // artifact as a whole (every definition's references).
             var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
-            var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+            var references = ScopeToDefinition(await referenceStore.ListByArtifactAsync(artifactId, cancellationToken), definitionId);
             if (references.Count == 0)
-                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found{DefinitionScopeSuffix(definitionId)}."));
 
             var now = DateTimeOffset.UtcNow;
             foreach (var reference in references.Where(reference => reference.DeletedAt is null))
@@ -316,15 +320,16 @@ internal static class ElsaWorkflowManagementApi
             return Results.NoContent();
         }, cancellationToken);
 
-    private static Task<IResult> RestoreExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
+    private static Task<IResult> RestoreExecutableAsync(IShellRegistry shellRegistry, string artifactId, string? definitionId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            // Restore un-retires the artifact's references (the inverse of DeleteExecutableAsync). Reference-driven
-            // restore semantics are refined in worker W3's slice; the bridge keeps its current wire behaviour.
+            // Restore un-retires references (the inverse of DeleteExecutableAsync), honoring the same optional
+            // ?definitionId= scope so restoring one definition's executable never resurrects another definition's
+            // retired references on a shared artifact.
             var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
-            var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+            var references = ScopeToDefinition(await referenceStore.ListByArtifactAsync(artifactId, cancellationToken), definitionId);
             if (references.Count == 0)
-                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found{DefinitionScopeSuffix(definitionId)}."));
 
             foreach (var reference in references.Where(reference => reference.DeletedAt is not null))
                 await referenceStore.SaveAsync(reference with { DeletedAt = null, DeletedReason = null }, cancellationToken);
@@ -335,6 +340,17 @@ internal static class ElsaWorkflowManagementApi
     private static Task<IResult> DeleteExecutablePermanentlyAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
+            // Permanent delete is artifact-level by nature (the artifact is shared by every definition referencing
+            // it). Retire the references first so none is left dangling at a missing artifact — the GC sweep purges
+            // the retired records.
+            var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            var now = DateTimeOffset.UtcNow;
+            foreach (var reference in await referenceStore.ListByArtifactAsync(artifactId, cancellationToken))
+            {
+                if (reference.DeletedAt is null)
+                    await referenceStore.RetireAsync(reference.SourceReferenceId, now, cancellationToken: cancellationToken);
+            }
+
             var store = services.GetRequiredService<IWorkflowExecutableStore>();
             return await store.DeleteAsync(artifactId, cancellationToken)
                 ? Results.NoContent()
@@ -345,9 +361,32 @@ internal static class ElsaWorkflowManagementApi
         WithShellAsync(shellRegistry, async services =>
         {
             var sender = services.GetRequiredService<IRequestSender>();
-            var dispatch = await sender.Send(new ExecuteWorkflow(artifactId), cancellationToken);
-            return Results.Ok(dispatch);
+            try
+            {
+                var dispatch = await sender.Send(new ExecuteWorkflow(artifactId), cancellationToken);
+                return Results.Ok(dispatch);
+            }
+            catch (WorkflowExecutableNotFoundException)
+            {
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+            }
+            catch (WorkflowExecutableReferenceRejectedException e)
+            {
+                // Reference gate refusal (ADR 0040): the artifact exists but has no live Published reference
+                // (retired, or an expired test run). Surface the structured reason instead of a 500.
+                return Results.Conflict(new WorkflowManagementErrorResponse(e.Message));
+            }
         }, cancellationToken);
+
+    private static IReadOnlyList<WorkflowExecutableSourceReference> ScopeToDefinition(
+        IReadOnlyCollection<WorkflowExecutableSourceReference> references,
+        string? definitionId) =>
+        string.IsNullOrWhiteSpace(definitionId)
+            ? references.ToArray()
+            : references.Where(reference => string.Equals(reference.DefinitionId, definitionId, StringComparison.Ordinal)).ToArray();
+
+    private static string DefinitionScopeSuffix(string? definitionId) =>
+        string.IsNullOrWhiteSpace(definitionId) ? "" : $" for definition '{definitionId}'";
 
     private static Task<IResult> ListActivitiesAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
