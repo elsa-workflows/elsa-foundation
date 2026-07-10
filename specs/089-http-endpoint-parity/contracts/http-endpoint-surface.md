@@ -16,11 +16,11 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 | Ambiguous match (>1 distinct workflow per (template, method)) [B — live] | 409 Conflict | exactly `{ "error": "ambiguous-endpoint" }` — deliberately minimal, no other fields (anti-disclosure, #592 item 10: never echoes the method/template); no instance started |
 | Authorize failed (or handler absent — fail closed) [C — live] | 401 Unauthorized | — (evaluated before the body is read) |
 | Body exceeds the per-endpoint RequestSizeLimit (or global MaxRequestBodyBytes) [C — live] | 413 Content Too Large | — |
-| Dispatch exceeded the per-endpoint RequestTimeout [C — live; E extends to sync runs] | 408 Request Timeout | via fault handler (inline fallback when absent) |
+| Dispatch exceeded the per-endpoint RequestTimeout [C — live; E: live for sync runs — the timeout bounds the inline wait] | 408 Request Timeout | via fault handler (inline fallback when absent) |
 | Bad-request classified fault (HttpBadRequestException) [C — live] | 400 Bad Request | via fault handler (inline fallback) |
-| Other dispatch fault [C — live; E extends to sync runs] | 500 Internal Server Error | via fault handler (inline fallback) |
-| Sync mode, workflow wrote response [E] | workflow-authored | workflow-authored status/headers/body |
-| Sync mode, suspended before response / non-local execution [E] | 202 Accepted | `{ "started": [...] }` degrade |
+| Other dispatch fault [C — live; E: live for sync runs] | 500 Internal Server Error | via fault handler (inline fallback) |
+| Sync mode, workflow wrote response [E — live] | workflow-authored | workflow-authored status/headers/body (via `WriteHttpResponse` inline write; the durable `HttpResponseInstruction` artifact is still recorded) |
+| Sync mode, suspended before response / no `WriteHttpResponse` / non-local execution [E — live] | 202 Accepted | `{ "started": [...], "resumed": [...] }` degrade (the same 202 writer as async mode; one path, no locality inspection) |
 
 ## HttpEndpoint activity surface (authoring contract)
 
@@ -32,7 +32,7 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 | Authorize / Policy | inputs | C — live | non-identity binding metadata; literal-at-publish; fail-closed enforcement |
 | RequestTimeout / RequestSizeLimit | inputs | C — live | non-identity binding metadata; timeout bounds dispatch (408), size limit overrides the global cap (413) |
 | ParsedContent | output | C — live | content-type-parsed body as wire-safe JSON; null for empty/unknown/non-HTTP starts |
-| ResponseMode | input (Sync/Async) | E | default Async (preserves baseline) |
+| ResponseMode | input (literal, Sync/Async) | E — live | default **Async** (preserves the 202 baseline bit-for-bit); non-identity binding/bookmark metadata (`http:responseMode`, omit-when-Async), never enters the stimulus hash; literal-at-publish (member name or defined numeric), non-literal/undefined fails the publish |
 | Result: HttpRequestModel | output | A — live | live request from stimulus input |
 | RouteData | output | B — live | extracted template parameters |
 
