@@ -56,6 +56,44 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     }
 
     [Fact]
+    public async Task ForwardingActor_DropsDispatchOptions_SoAmbientServicesNeverCrossProcess()
+    {
+        // Spec 089 E-D4 / FR-021 (never-cross-process guarantee): the forwarding actor's options overload delegates to
+        // the single-arg overload, so request-affine ambient services are dropped by construction at the transport
+        // boundary. The command is durably enqueued for the owning node carrying only the envelope — no service
+        // provider is (or structurally could be) persisted.
+        var store = new InMemoryExecutionPlacementStore();
+        var transport = new InMemoryExecutionCommandTransport();
+        var clock = new MutableTimeProvider(_now);
+
+        // Node A owns placement; node B resolves a forwarding actor for the same execution.
+        var providerA = NewProvider(store, transport, clock, NodeA, new RecordingCommandExecutor());
+        await providerA.GetAgentAsync(Activation());
+        var providerB = NewProvider(store, transport, clock, NodeB, new RecordingCommandExecutor());
+        var forwardingActor = await providerB.GetAgentAsync(Activation());
+
+        // Dispatch WITH ambient services through the options overload — the path a sync-mode HTTP endpoint takes.
+        var ambientServices = new RecordingServiceProvider();
+        var result = await forwardingActor.EnqueueAsync(
+            Envelope("env-1"),
+            new WorkflowExecutionCommandDispatchOptions(ambientServices));
+
+        // Deferred: no live write happened on this node — the middleware degrades to 202 without a locality check.
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, result.Status);
+        Assert.False(ambientServices.WasResolvedFrom, "The forwarding actor must not touch ambient services.");
+
+        // The durably enqueued item carries only the envelope; nothing on it (or its command) exposes a service provider.
+        var leased = await transport.LeaseAsync(ExecutionId, NodeA, _now, TimeSpan.FromSeconds(30), maxItems: 10);
+        var item = Assert.Single(leased);
+        Assert.DoesNotContain(
+            item.Envelope.GetType().GetProperties(),
+            property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
+        Assert.DoesNotContain(
+            item.Envelope.Command.GetType().GetProperties(),
+            property => typeof(IServiceProvider).IsAssignableFrom(property.PropertyType));
+    }
+
+    [Fact]
     public async Task Passivate_ReleasesPlacement_SoAnotherNodeCanClaim()
     {
         var store = new InMemoryExecutionPlacementStore();
@@ -111,6 +149,17 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
         boundary: WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary,
         requestedAt: DateTimeOffset.UtcNow,
         reason: "test");
+
+    private sealed class RecordingServiceProvider : IServiceProvider
+    {
+        public bool WasResolvedFrom { get; private set; }
+
+        public object? GetService(Type serviceType)
+        {
+            WasResolvedFrom = true;
+            return null;
+        }
+    }
 
     private WorkflowExecutionCommandEnvelope Envelope(string envelopeId)
     {
