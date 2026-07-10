@@ -3506,6 +3506,12 @@ button.wf-reference-select {
   padding-left: 8px;
 }
 
+.wf-executable-equivalent {
+  border-left-color: var(--studio-success);
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  color: var(--studio-success-fg);
+}
+
 .wf-executable-bindings > div {
   min-width: 0;
 }

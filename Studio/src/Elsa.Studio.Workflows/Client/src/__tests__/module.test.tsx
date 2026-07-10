@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
+import { createDraftSnapshotId } from "../workflow-editor/editorHelpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -1273,9 +1274,23 @@ describe("workflows module", () => {
     });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "stale-test-run-ref",
+            definitionVersionId: "draft:draft-1-stalehash",
+            publishedAt: null,
+            scope: "TestRun"
+          })
+        ]
+      }));
       if (url.includes("/activities")) return response({ activities: [] });
-      if (url.includes("/definitions/definition-1")) return response({ definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }), draft: null, versions: [] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }),
+        draft: workflowDraft(),
+        versions: []
+      });
       return response(null, 404);
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
@@ -1284,6 +1299,46 @@ describe("workflows module", () => {
 
     expect(container.textContent).toContain("published from version 2.0.0");
     expect((buttonByText(container, "Open source definition") as HTMLButtonElement).disabled).toBe(false);
+
+    await unmount();
+  });
+
+  it("replaces source drift with draft equivalence when the current draft test run produced the inspected artifact", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const draft = workflowDraft();
+    const currentDraftVersionId = `draft:${createDraftSnapshotId(draft)}`;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "test-run-ref",
+            definitionVersionId: currentDraftVersionId,
+            publishedAt: null,
+            scope: "TestRun"
+          })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }),
+        draft,
+        versions: []
+      });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Current draft is behaviorally identical to this artifact");
+
+    expect(container.querySelector(".wf-executable-equivalent")?.textContent)
+      .toContain("Current draft is behaviorally identical to this artifact");
+    expect(container.textContent).not.toContain("the definition's latest is 9.0.0");
 
     await unmount();
   });

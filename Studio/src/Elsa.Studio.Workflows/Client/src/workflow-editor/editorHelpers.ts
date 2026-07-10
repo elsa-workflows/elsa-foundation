@@ -222,22 +222,22 @@ export function getExecutableReferenceStatus(reference: WorkflowExecutableRefere
   return "live";
 }
 
-// How the inspected reference's source relates to its definition in THIS environment. "absent" is the
-// promotion case (the artifact traveled without its definition); "behind" drives the drift caption.
-//
-// This is a pure VERSION comparison for now. The behavioral-equivalence upgrade (plan §3 / studio#262:
-// a draft test run resolving to this same artifact id proves the draft is behaviorally identical)
-// slots in here as a third input once the test-run equivalence signal ships.
+// How the inspected artifact relates to its source definition in this environment: absent when the
+// definition did not travel with it, current/behind by source version, or behaviorally equivalent when
+// the exact current-draft test-run signal resolves to this artifact.
 export type ExecutableSourceDrift =
   | { kind: "absent" }
   | { kind: "current" }
+  | { kind: "equivalent" }
   | { kind: "behind"; referenceVersion: string | null; latestVersion: string | null };
 
 export function computeExecutableSourceDrift(
   reference: WorkflowExecutableReference,
-  definition: WorkflowDefinitionSummary | null
+  definition: WorkflowDefinitionSummary | null,
+  hasDraftEquivalence = false
 ): ExecutableSourceDrift {
   if (!definition) return { kind: "absent" };
+  if (hasDraftEquivalence) return { kind: "equivalent" };
   if (!definition.latestVersionId || definition.latestVersionId === reference.definitionVersionId) return { kind: "current" };
   return {
     kind: "behind",
