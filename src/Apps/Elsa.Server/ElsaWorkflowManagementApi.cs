@@ -21,7 +21,9 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -63,6 +65,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/versions/{versionId}", GetVersionAsync);
         group.MapPost("/versions/{versionId}/publish", PublishVersionAsync);
         group.MapGet("/executables", ListExecutablesAsync);
+        group.MapGet("/executables/{artifactId}", GetExecutableAsync);
         group.MapDelete("/executables/{artifactId}", DeleteExecutableAsync);
         group.MapPost("/executables/{artifactId}/restore", RestoreExecutableAsync);
         group.MapDelete("/executables/{artifactId}/permanent", DeleteExecutablePermanentlyAsync);
@@ -249,43 +252,53 @@ internal static class ElsaWorkflowManagementApi
             return Results.Ok(published);
         }, cancellationToken);
 
-    private static Task<IResult> ListExecutablesAsync(IShellRegistry shellRegistry, string? state, CancellationToken cancellationToken) =>
+    // Executables list (#598 P1): artifact rows with nested references. `scope` = published | test-runs | all
+    // (default published); `includeRetired=true` surfaces retired references. The legacy `state` param is still
+    // honored for backward compatibility (deleted ⇒ retired-only, all ⇒ all scopes incl. retired) so the current
+    // Studio table keeps working until it moves to the scope filter.
+    private static Task<IResult> ListExecutablesAsync(IShellRegistry shellRegistry, string? scope, bool? includeRetired, string? state, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var store = services.GetRequiredService<IWorkflowExecutableStore>();
-            var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
-            var listState = NormalizeDefinitionListState(state);
-            var executables = await store.ListAsync(cancellationToken);
-            var now = DateTimeOffset.UtcNow;
-
-            var rows = new List<WorkflowExecutableSummaryResponse>();
-            foreach (var executable in executables)
-            {
-                var references = await referenceStore.ListByArtifactAsync(executable.Identity.ArtifactId, cancellationToken);
-                // The artifact's deletion state is derived (ADR 0040): live while any live reference points at it.
-                var newest = references
-                    .OrderByDescending(reference => reference.PublishedAt ?? reference.CreatedAt)
-                    .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
-                    .FirstOrDefault();
-                var isDeleted = references.Count > 0 && references.All(reference => !reference.IsLive(now));
-
-                var include = listState switch
-                {
-                    WorkflowDefinitionListStates.Deleted => isDeleted,
-                    WorkflowDefinitionListStates.All => true,
-                    _ => !isDeleted
-                };
-                if (include)
-                    rows.Add(WorkflowExecutableSummaryResponse.FromExecutable(executable, newest, isDeleted));
-            }
-
-            var response = rows
-                .OrderByDescending(x => listState == WorkflowDefinitionListStates.Deleted ? x.DeletedAt : (x.PublishedAt ?? x.CreatedAt))
-                .ThenBy(x => x.ArtifactId)
-                .ToArray();
-
-            return Results.Ok(new WorkflowExecutablesResponse(response));
+            var inspector = services.GetRequiredService<WorkflowExecutableInspector>();
+            var (listScope, retired) = ResolveExecutableListFilter(scope, includeRetired, state);
+            var view = await inspector.ListAsync(listScope, retired, cancellationToken);
+            return Results.Ok(view);
         }, cancellationToken);
+
+    // Executable detail (#598 P1): identity block + Execution Material node tree + chosen reference's layout +
+    // full reference list. Self-contained — no workflow-definition table is consulted. 404 for unknown artifact.
+    private static Task<IResult> GetExecutableAsync(IShellRegistry shellRegistry, string artifactId, string? @ref, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, async services =>
+        {
+            var inspector = services.GetRequiredService<WorkflowExecutableInspector>();
+            var view = await inspector.GetAsync(artifactId, @ref, cancellationToken);
+            return view is null
+                ? Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."))
+                : Results.Ok(view);
+        }, cancellationToken);
+
+    private static (WorkflowExecutableListScope Scope, bool IncludeRetired) ResolveExecutableListFilter(string? scope, bool? includeRetired, string? legacyState)
+    {
+        // New scope param wins when supplied; otherwise map the legacy state param onto the scope/retired axes.
+        if (!string.IsNullOrWhiteSpace(scope))
+            return (NormalizeExecutableScope(scope), includeRetired ?? false);
+
+        if (string.Equals(legacyState, WorkflowDefinitionListStates.Deleted, StringComparison.OrdinalIgnoreCase))
+            return (WorkflowExecutableListScope.All, true);
+        if (string.Equals(legacyState, WorkflowDefinitionListStates.All, StringComparison.OrdinalIgnoreCase))
+            return (WorkflowExecutableListScope.All, includeRetired ?? true);
+
+        return (WorkflowExecutableListScope.Published, includeRetired ?? false);
+    }
+
+    private static WorkflowExecutableListScope NormalizeExecutableScope(string? scope)
+    {
+        if (string.Equals(scope, "test-runs", StringComparison.OrdinalIgnoreCase) || string.Equals(scope, "testruns", StringComparison.OrdinalIgnoreCase))
+            return WorkflowExecutableListScope.TestRuns;
+        if (string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase))
+            return WorkflowExecutableListScope.All;
+        return WorkflowExecutableListScope.Published;
+    }
 
     private static Task<IResult> DeleteExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
@@ -905,46 +918,8 @@ internal static class WorkflowDefinitionListStates
 
 internal sealed record WorkflowDefinitionsResponse(IReadOnlyList<WorkflowDefinitionSummaryResponse> Definitions);
 
-internal sealed record WorkflowExecutablesResponse(IReadOnlyList<WorkflowExecutableSummaryResponse> Executables);
-
-internal sealed record WorkflowExecutableSummaryResponse(
-    string ArtifactId,
-    string ArtifactVersion,
-    string ArtifactHash,
-    string DefinitionId,
-    string DefinitionVersionId,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? PublishedAt,
-    DateTimeOffset? DeletedAt,
-    string? SourceKind,
-    string? SourceId,
-    string? SourceVersion,
-    string RootActivityType,
-    string RootActivityVersion,
-    int NodeCount,
-    int ResumeTargetCount)
-{
-    public static WorkflowExecutableSummaryResponse FromExecutable(
-        WorkflowExecutable executable,
-        WorkflowExecutableSourceReference? newestReference,
-        bool isDeleted) =>
-        new(
-            executable.Identity.ArtifactId,
-            newestReference?.ArtifactVersion ?? executable.Identity.ArtifactVersion,
-            executable.Identity.ArtifactHash,
-            newestReference?.DefinitionId ?? executable.Identity.DefinitionId,
-            newestReference?.DefinitionVersionId ?? executable.Identity.DefinitionVersionId,
-            executable.CreatedAt,
-            newestReference?.PublishedAt,
-            isDeleted ? newestReference?.DeletedAt : null,
-            newestReference?.SourceKind,
-            newestReference?.SourceId,
-            newestReference?.SourceVersion,
-            executable.RootActivity.ActivityType,
-            executable.RootActivity.ActivityTypeVersion,
-            executable.Nodes.Count,
-            executable.ResumeTargets.Count);
-}
+// The executables list/detail wire shapes now live with the other Publishing view models
+// (WorkflowExecutableInspectionViews) and are projected by WorkflowExecutableInspector.
 
 internal sealed record WorkflowDefinitionSummaryResponse(
     string Id,
