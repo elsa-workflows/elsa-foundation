@@ -94,6 +94,46 @@ public sealed class WorkflowExecutableCompilerGoldenTests
             Assert.True(entry.Value == 1, $"Node '{entry.Key}' had ProjectChildren called {entry.Value} times; expected exactly 1."));
     }
 
+    [Fact]
+    public async Task ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash()
+    {
+        // ADR 0038: the ArtifactHash covers Execution Material only. The same authored tree published under
+        // two different source identities (definition version / artifact version / source reference version)
+        // must resolve to the SAME hash — that is what makes executables content-addressed.
+        var definition = Corpus["literal-input"];
+        var compiler = definition.BuildCompiler(_activityStructureService);
+
+        var firstSource = definition.SourceWith(definitionVersionId: "version-A", artifactVersion: "1.0.0", sourceVersion: "1.0.0");
+        var secondSource = definition.SourceWith(definitionVersionId: "version-B", artifactVersion: "7.4.2", sourceVersion: "7.4.2");
+
+        var first = await compiler.CompileAsync(definition.RequestWith(firstSource));
+        var second = await compiler.CompileAsync(definition.RequestWith(secondSource));
+
+        Assert.Equal(first.Identity.ArtifactHash, second.Identity.ArtifactHash);
+        Assert.Equal(first.Identity.ArtifactId, second.Identity.ArtifactId);
+        // Source identity still travels on the artifact even though it no longer feeds the hash.
+        Assert.NotEqual(first.Identity.DefinitionVersionId, second.Identity.DefinitionVersionId);
+        Assert.NotEqual(first.Identity.ArtifactVersion, second.Identity.ArtifactVersion);
+    }
+
+    [Fact]
+    public async Task ArtifactHashIsBehavioralOnly_ChangingAnInputBindingLiteralYieldsDifferentHash()
+    {
+        // Behavioral counter-check: a change to Execution Material (here an input-binding literal) must move
+        // the hash, even when the source identity is held constant.
+        var source = Corpus["literal-input"];
+        var changed = Standard(WorkflowVersion(Node("write-one", Text("Goodbye World!"))), source.Activities);
+
+        var sourceCompiler = source.BuildCompiler(_activityStructureService);
+        var changedCompiler = changed.BuildCompiler(_activityStructureService);
+
+        var sourceExecutable = await sourceCompiler.CompileAsync(source.Request);
+        var changedExecutable = await changedCompiler.CompileAsync(changed.Request);
+
+        Assert.NotEqual(sourceExecutable.Identity.ArtifactHash, changedExecutable.Identity.ArtifactHash);
+        Assert.NotEqual(sourceExecutable.Identity.ArtifactId, changedExecutable.Identity.ArtifactId);
+    }
+
     private static string Normalize(string json) => json.Replace("\r\n", "\n").TrimEnd('\n');
 
     // Resolves the source-tree Fixtures/CompilerGoldens directory (not the bin output copy), so a first-run
@@ -123,26 +163,18 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         var model = new
         {
+            // ADR 0038: the artifact is pure behavior. Source identity (definition/version, artifact-version label)
+            // is still carried on Identity as the runtime pinned-snapshot carrier, but scope/publishedAt/expiresAt
+            // and the embedded source-reference object have left the artifact document — they are reference facts.
             identity = new
             {
                 artifactId = executable.Identity.ArtifactId,
                 definitionId = executable.Identity.DefinitionId,
                 definitionVersionId = executable.Identity.DefinitionVersionId,
                 artifactVersion = executable.Identity.ArtifactVersion,
-                artifactHash = executable.Identity.ArtifactHash,
-                source = executable.Identity.Source is null
-                    ? null
-                    : new
-                    {
-                        sourceKind = executable.Identity.Source.SourceKind,
-                        sourceId = executable.Identity.Source.SourceId,
-                        sourceVersion = executable.Identity.Source.SourceVersion
-                    }
+                artifactHash = executable.Identity.ArtifactHash
             },
-            scope = executable.Scope.ToString(),
             createdAt = executable.CreatedAt,
-            publishedAt = executable.PublishedAt,
-            expiresAt = executable.ExpiresAt,
             compatibilityMetadata = Ordered(executable.CompatibilityMetadata),
             resumeTargets = executable.ResumeTargets
                 .OrderBy(t => t.Key, StringComparer.Ordinal)
@@ -283,11 +315,24 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         public WorkflowExecutableCompileRequest Request => new(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: Now,
             PublishedAt: Now,
             ExpiresAt: null,
             ArtifactIdPrefix: "artifact-");
+
+        public WorkflowExecutableCompileRequest RequestWith(WorkflowExecutableCompileSource source) =>
+            Request with { Source = source };
+
+        public WorkflowExecutableCompileSource SourceWith(string definitionVersionId, string artifactVersion, string sourceVersion) =>
+            new(
+                DefinitionId: Version.DefinitionId,
+                DefinitionVersionId: definitionVersionId,
+                ArtifactVersion: artifactVersion,
+                State: Version.State!,
+                SourceKind: "WorkflowDefinitionVersion",
+                SourceId: definitionVersionId,
+                SourceVersion: sourceVersion);
 
         public WorkflowExecutableCompiler BuildCompiler(IActivityStructureService structureService)
         {

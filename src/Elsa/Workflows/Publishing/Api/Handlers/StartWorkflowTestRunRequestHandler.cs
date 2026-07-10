@@ -1,8 +1,11 @@
 using System.Text.Json;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Identity;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -11,9 +14,19 @@ using Elsa.Workflows.Runtime.Core.Services;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
+/// <summary>
+/// Test run (ADR 0040) = compile → idempotent save to the SINGLE content-addressed artifact store → append an
+/// expiring <see cref="WorkflowExecutableReferenceScope.TestRun"/> Source Reference (source: the definition version
+/// or draft snapshot; expiry = the retention window; layout copied from the definition-version layout store when a
+/// version id exists, else empty) → dispatch gated on that reference. There is no transient store: a behaviorally
+/// identical draft resolves to the SAME artifact id as the published version (the equivalence signal), which is why
+/// the artifact prefix is unified with publish.
+/// </summary>
 public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowExecutableCompiler compiler,
-    ITransientWorkflowExecutableStore transientExecutableStore,
+    IWorkflowExecutableStore executableStore,
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+    IWorkflowDefinitionVersionLayoutStore layoutStore,
     IWorkflowTestRunStore testRunStore,
     IWorkflowStartDispatcher startDispatcher,
     TimeProvider timeProvider)
@@ -23,16 +36,19 @@ public sealed class StartWorkflowTestRunRequestHandler(
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     private static readonly RuntimeVariableScopeFactory ScopeFactory = new();
-    private const string TestArtifactPrefix = "test-artifact-";
-    private const string DraftSnapshotSourceKind = "WorkflowDraftSnapshot";
+    // Unified with publish (ADR 0040): scope lives on the reference, not the artifact id, so a test run of a draft
+    // behaviorally identical to a published version resolves to the SAME artifact id — the free equivalence signal.
+    private const string ArtifactPrefix = "artifact-";
     private const string DraftArtifactVersion = "draft";
 
     public StartWorkflowTestRunRequestHandler(
         IWorkflowExecutableCompiler compiler,
-        ITransientWorkflowExecutableStore transientExecutableStore,
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowDefinitionVersionLayoutStore layoutStore,
         IWorkflowTestRunStore testRunStore,
         IWorkflowStartDispatcher startDispatcher)
-        : this(compiler, transientExecutableStore, testRunStore, startDispatcher, TimeProvider.System)
+        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, TimeProvider.System)
     {
     }
 
@@ -45,11 +61,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
                 request.VersionId,
-                WorkflowExecutableScope.TransientTestRun,
+                WorkflowExecutableReferenceScope.TestRun,
                 now,
                 PublishedAt: null,
                 expiresAt,
-                TestArtifactPrefix,
+                ArtifactPrefix,
                 TestRunCompatibilityMetadata(testRunId)),
             testRunId,
             fallbackDefinitionId: request.VersionId,
@@ -72,11 +88,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
                 sourceDefinitionVersionId,
-                WorkflowExecutableScope.TransientTestRun,
+                WorkflowExecutableReferenceScope.TestRun,
                 now,
                 PublishedAt: null,
                 expiresAt,
-                TestArtifactPrefix,
+                ArtifactPrefix,
                 TestRunCompatibilityMetadata(testRunId))
             {
                 Source = new WorkflowExecutableCompileSource(
@@ -84,7 +100,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     DefinitionVersionId: sourceDefinitionVersionId,
                     ArtifactVersion: artifactVersion,
                     State: request.State,
-                    SourceReference: new WorkflowExecutableSourceReference(DraftSnapshotSourceKind, request.SnapshotId, artifactVersion))
+                    SourceKind: WorkflowExecutableSourceKinds.WorkflowDraftSnapshot,
+                    SourceId: request.SnapshotId,
+                    SourceVersion: artifactVersion)
             },
             testRunId,
             fallbackDefinitionId: request.DefinitionId,
@@ -120,42 +138,28 @@ public sealed class StartWorkflowTestRunRequestHandler(
         }
         catch (WorkflowExecutableCompilationException exception)
         {
-            var rejected = new WorkflowTestRun(
-                TestRunId: testRunId,
-                DefinitionId: exception.DefinitionId ?? fallbackDefinitionId,
-                DefinitionVersionId: exception.DefinitionVersionId ?? fallbackDefinitionVersionId,
-                ArtifactId: null,
-                WorkflowExecutionId: null,
-                Status: WorkflowTestRunStatus.Rejected,
-                RequestedBy: RequestedBy,
-                RequestedAt: now,
-                ExpiresAt: expiresAt,
-                Reason: exception.Message,
-                Metadata: new Dictionary<string, string>());
-
-            await testRunStore.SaveAsync(rejected, cancellationToken);
-            return WorkflowTestRunView.From(rejected);
+            return await RejectAsync(
+                testRunId,
+                exception.DefinitionId ?? fallbackDefinitionId,
+                exception.DefinitionVersionId ?? fallbackDefinitionVersionId,
+                now,
+                expiresAt,
+                exception.Message,
+                cancellationToken);
         }
         catch (ArgumentException exception)
         {
-            var rejected = new WorkflowTestRun(
-                TestRunId: testRunId,
-                DefinitionId: fallbackDefinitionId,
-                DefinitionVersionId: fallbackDefinitionVersionId,
-                ArtifactId: null,
-                WorkflowExecutionId: null,
-                Status: WorkflowTestRunStatus.Rejected,
-                RequestedBy: RequestedBy,
-                RequestedAt: now,
-                ExpiresAt: expiresAt,
-                Reason: exception.Message,
-                Metadata: new Dictionary<string, string>());
-
-            await testRunStore.SaveAsync(rejected, cancellationToken);
-            return WorkflowTestRunView.From(rejected);
+            return await RejectAsync(testRunId, fallbackDefinitionId, fallbackDefinitionVersionId, now, expiresAt, exception.Message, cancellationToken);
         }
 
-        await transientExecutableStore.SaveAsync(executable, cancellationToken);
+        // Idempotent save into the single content-addressed store (ADR 0038/0040): a behaviorally identical publish
+        // or prior test run already put this artifact there and it is left untouched.
+        await executableStore.SaveAsync(executable, cancellationToken);
+
+        // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
+        var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, cancellationToken);
+        await sourceReferenceStore.SaveAsync(reference, cancellationToken);
+
         if (draftSnapshot is not null)
             await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);
 
@@ -164,7 +168,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         // production runtime-API start path.
         var variables = ScopeFactory.ProjectDeclaredVariableDefaultsByName(executable.RootActivity);
 
-        var dispatch = await startDispatcher.DispatchTransientAsync(
+        var dispatch = await startDispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(
                 executable.Identity.ArtifactId,
                 RequestedBy,
@@ -172,13 +176,14 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 {
                     ["runtime.scope"] = "test-run",
                     ["runtime.testRunId"] = testRunId,
+                    ["runtime.sourceReferenceId"] = reference.SourceReferenceId,
                     ["runtime.sourceDefinitionId"] = executable.Identity.DefinitionId,
                     ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
                 },
                 variables: variables,
                 inputs: inputs),
-            executable,
-            cancellationToken);
+            WorkflowExecutableReferenceScope.TestRun,
+            cancellationToken: cancellationToken);
 
         var status = MapStatus(dispatch.CommandDispatch.Status);
         var testRun = new WorkflowTestRun(
@@ -194,11 +199,68 @@ public sealed class StartWorkflowTestRunRequestHandler(
             Reason: dispatch.CommandDispatch.Reason,
             Metadata: new Dictionary<string, string>
             {
-                ["runtime.artifactHash"] = executable.Identity.ArtifactHash
+                ["runtime.artifactHash"] = executable.Identity.ArtifactHash,
+                ["runtime.sourceReferenceId"] = reference.SourceReferenceId
             });
 
         await testRunStore.SaveAsync(testRun, cancellationToken);
         return WorkflowTestRunView.From(testRun, dispatch.CommandDispatch.Status);
+    }
+
+    private async Task<WorkflowTestRunView> RejectAsync(
+        string testRunId,
+        string definitionId,
+        string definitionVersionId,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var rejected = new WorkflowTestRun(
+            TestRunId: testRunId,
+            DefinitionId: definitionId,
+            DefinitionVersionId: definitionVersionId,
+            ArtifactId: null,
+            WorkflowExecutionId: null,
+            Status: WorkflowTestRunStatus.Rejected,
+            RequestedBy: RequestedBy,
+            RequestedAt: now,
+            ExpiresAt: expiresAt,
+            Reason: reason,
+            Metadata: new Dictionary<string, string>());
+
+        await testRunStore.SaveAsync(rejected, cancellationToken);
+        return WorkflowTestRunView.From(rejected);
+    }
+
+    // Builds the expiring TestRun reference. Source identity comes from the compile source when present (draft
+    // snapshot), else from the compiled identity (durable definition version). The layout sidecar is copied verbatim
+    // from the definition-version layout store when a version id resolves one, else empty (ADR 0039) — a draft
+    // snapshot with no persisted layout carries an empty sidecar.
+    private async Task<WorkflowExecutableSourceReference> BuildTestRunReferenceAsync(
+        WorkflowExecutable executable,
+        WorkflowExecutableCompileSource? source,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
+        var identity = executable.Identity;
+        var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+
+        return new WorkflowExecutableSourceReference(
+            SourceReferenceId: ShortIdentityGenerator.Generate(now),
+            ArtifactId: identity.ArtifactId,
+            SourceKind: source?.SourceKind ?? WorkflowExecutableSourceKinds.WorkflowDefinitionVersion,
+            SourceId: source?.SourceId ?? identity.DefinitionVersionId,
+            SourceVersion: source?.SourceVersion ?? identity.ArtifactVersion,
+            DefinitionId: identity.DefinitionId,
+            DefinitionVersionId: identity.DefinitionVersionId,
+            ArtifactVersion: identity.ArtifactVersion,
+            CreatedAt: now,
+            PublishedAt: null,
+            Scope: WorkflowExecutableReferenceScope.TestRun,
+            ExpiresAt: expiresAt,
+            Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout));
     }
 
     // Caller-supplied workflow inputs (#286): unlike variables (which carry authored defaults projected off the

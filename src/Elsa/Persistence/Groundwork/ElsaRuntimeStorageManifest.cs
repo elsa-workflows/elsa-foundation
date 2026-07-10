@@ -61,6 +61,19 @@ public static class ElsaRuntimeStorageManifest
     /// </summary>
     public const string WorkflowExecutableCollection = "workflowExecutable";
 
+    // Per-publish source references into the content-addressed artifact store (ADR 0038/0039/0040). One document
+    // per reference; carries source identity, scope/expiry, retirement facts and the embedded layout sidecar.
+    public const string WorkflowExecutableSourceReferenceDocumentKind = "workflowExecutableSourceReference";
+
+    /// <summary>Index used by <c>IWorkflowExecutableSourceReferenceStore.ListAsync()</c> to enumerate every reference.</summary>
+    public const string WorkflowExecutableSourceReferenceByCollection = ByCollectionIndex;
+
+    /// <summary>Index used by <c>IWorkflowExecutableSourceReferenceStore.ListByArtifactAsync</c> and the GC unreferenced-artifact sweep.</summary>
+    public const string WorkflowExecutableSourceReferenceByArtifact = ByArtifactIndex;
+
+    /// <summary>Constant partition value stamped on every source-reference document so the unfiltered list/expiry sweep can use a keyword equality index.</summary>
+    public const string WorkflowExecutableSourceReferenceCollection = "workflowExecutableSourceReference";
+
     public const string ActivityExecutionStateDocumentKind = "activityExecutionState";
 
     /// <summary>
@@ -150,6 +163,17 @@ public static class ElsaRuntimeStorageManifest
                 "Workflow executable",
                 [Keyword(ByCollectionIndex, CollectionField)],
                 [Query("list-all", ByCollectionIndex)]),
+            Unit(
+                WorkflowExecutableSourceReferenceDocumentKind,
+                "Workflow executable source reference",
+                [
+                    Keyword(ByCollectionIndex, CollectionField),
+                    Keyword(ByArtifactIndex, ArtifactIdField)
+                ],
+                [
+                    Query("list-all", ByCollectionIndex),
+                    Query("list-by-artifact", ByArtifactIndex)
+                ]),
             Unit(
                 ActivityExecutionStateDocumentKind,
                 "Activity execution state",

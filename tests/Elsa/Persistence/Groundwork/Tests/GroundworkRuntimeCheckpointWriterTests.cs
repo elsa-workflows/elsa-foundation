@@ -130,7 +130,7 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
 
     private static WorkflowExecutionState WorkflowState(string workflowExecutionId) => new(
         workflowExecutionId,
-        new WorkflowExecutableIdentity($"artifact-{workflowExecutionId}", "definition-1", "version-1", "1", $"hash-{workflowExecutionId}", null),
+        new WorkflowExecutableIdentity($"artifact-{workflowExecutionId}", "definition-1", "version-1", "1", $"hash-{workflowExecutionId}"),
         WorkflowExecutionStatus.Running,
         SubStatus: null,
         CreatedAt: DateTimeOffset.UnixEpoch,

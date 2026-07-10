@@ -28,7 +28,6 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Equal("artifact-1", found!.Identity.ArtifactId);
         Assert.Equal("definition-1", found.Identity.DefinitionId);
         Assert.Equal("hash-artifact-1", found.Identity.ArtifactHash);
-        Assert.Equal("WorkflowDefinitionVersion", found.Identity.Source!.SourceKind);
 
         // Nested tree survives: root + child slot + child node.
         Assert.Equal("root", found.RootActivity.ExecutableNodeId);
@@ -60,8 +59,10 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task Save_Replaces_Existing_Executable(string provider)
+    public async Task Save_Is_Idempotent_By_ArtifactId(string provider)
     {
+        // ADR 0038: artifacts are content-addressed and immutable. A second save under the same artifact id (a
+        // behaviorally identical republish) leaves the existing artifact untouched rather than overwriting it.
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
@@ -69,7 +70,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         await store.SaveAsync(Executable("artifact-1", artifactVersion: "2"));
 
         var found = await store.FindAsync("artifact-1");
-        Assert.Equal("2", found!.Identity.ArtifactVersion);
+        Assert.Equal("1", found!.Identity.ArtifactVersion);
         Assert.Single(await store.ListAsync());
     }
 
@@ -88,20 +89,72 @@ public sealed class GroundworkWorkflowExecutableStoreTests
     [Theory]
     [InlineData("sqlite")]
     [InlineData("memory")]
-    public async Task List_Excludes_Transient_Test_Run_Executables_And_Delete_Removes_Them(string provider)
+    public async Task Delete_Removes_Artifact(string provider)
     {
         await using var fixture = CreateStore(provider);
         IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
 
         await store.SaveAsync(Executable("artifact-1"));
-        await store.SaveAsync(Executable("test-artifact-1", scope: WorkflowExecutableScope.TransientTestRun, expiresAt: DateTimeOffset.UtcNow.AddMinutes(30)));
+        Assert.True(await store.DeleteAsync("artifact-1"));
+        Assert.Null(await store.FindAsync("artifact-1"));
+        Assert.Empty(await store.ListAsync());
+        Assert.False(await store.DeleteAsync("artifact-1"));
+    }
 
-        var all = await store.ListAsync();
-        Assert.Equal("artifact-1", Assert.Single(all).Identity.ArtifactId);
-        Assert.NotNull(await store.FindAsync("test-artifact-1"));
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SourceReferenceStore_RoundTrips_And_Filters(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
-        Assert.True(await store.DeleteAsync("test-artifact-1"));
-        Assert.Null(await store.FindAsync("test-artifact-1"));
+        await store.SaveAsync(Reference("ref-1", "artifact-1", WorkflowExecutableReferenceScope.Published, publishedAt: now));
+        await store.SaveAsync(Reference("ref-2", "artifact-1", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(30)));
+        await store.SaveAsync(Reference("ref-3", "artifact-2", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(-1)));
+
+        var byArtifact = await store.ListByArtifactAsync("artifact-1");
+        Assert.Equal(new[] { "ref-1", "ref-2" }, byArtifact.Select(r => r.SourceReferenceId).OrderBy(x => x));
+
+        var live = await store.ListAsync(liveOnly: true, now: now);
+        Assert.Equal(new[] { "ref-1", "ref-2" }, live.Select(r => r.SourceReferenceId).OrderBy(x => x));
+
+        var published = await store.ListAsync(scope: WorkflowExecutableReferenceScope.Published, now: now);
+        Assert.Equal("ref-1", Assert.Single(published).SourceReferenceId);
+
+        // Layout sidecar survives the round-trip.
+        var reloaded = await store.FindAsync("ref-1");
+        Assert.Equal("node-a", Assert.Single(reloaded!.Layout).NodeId);
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task SourceReferenceStore_Retire_Expiry_And_Unreferenced_Primitives(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableSourceReferenceStore store =
+            new GroundworkWorkflowExecutableSourceReferenceStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Reference("ref-live", "artifact-1", WorkflowExecutableReferenceScope.Published, publishedAt: now));
+        await store.SaveAsync(Reference("ref-expired", "artifact-2", WorkflowExecutableReferenceScope.TestRun, expiresAt: now.AddMinutes(-1)));
+        await store.SaveAsync(Reference("ref-to-retire", "artifact-3", WorkflowExecutableReferenceScope.Published, publishedAt: now));
+
+        Assert.True(await store.RetireAsync("ref-to-retire", now, "manual"));
+        var retired = await store.FindAsync("ref-to-retire");
+        Assert.Equal(now, retired!.DeletedAt);
+        Assert.Equal("manual", retired.DeletedReason);
+
+        var swept = await store.DeleteExpiredOrRetiredAsync(now);
+        Assert.Equal(new[] { "ref-expired", "ref-to-retire" }, swept.OrderBy(x => x));
+        Assert.Null(await store.FindAsync("ref-expired"));
+
+        var unreferenced = await store.ListUnreferencedArtifactIdsAsync(["artifact-1", "artifact-2", "artifact-3"], now);
+        // artifact-1 still has a live reference; 2 and 3 lost theirs to the sweep.
+        Assert.Equal(new[] { "artifact-2", "artifact-3" }, unreferenced.OrderBy(x => x));
     }
 
     [Fact]
@@ -153,11 +206,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         }
     }
 
-    private static WorkflowExecutable Executable(
-        string artifactId,
-        string artifactVersion = "1",
-        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
-        DateTimeOffset? expiresAt = null)
+    private static WorkflowExecutable Executable(string artifactId, string artifactVersion = "1")
     {
         var child = new ExecutableNode(
             executableNodeId: "child",
@@ -194,19 +243,36 @@ public sealed class GroundworkWorkflowExecutableStoreTests
                 DefinitionId: "definition-1",
                 DefinitionVersionId: "version-1",
                 ArtifactVersion: artifactVersion,
-                ArtifactHash: $"hash-{artifactId}",
-                Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", artifactVersion)),
+                ArtifactHash: $"hash-{artifactId}"),
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>
             {
                 ["resume-1"] = new("resume-1", "node-child", "Bookmark", new Dictionary<string, string> { ["stimulus"] = "Http" })
             },
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" },
-            scope: scope,
-            expiresAt: expiresAt);
+            compatibilityMetadata: new Dictionary<string, string> { ["slice"] = "slice-1" });
     }
+
+    private static WorkflowExecutableSourceReference Reference(
+        string sourceReferenceId,
+        string artifactId,
+        WorkflowExecutableReferenceScope scope,
+        DateTimeOffset? publishedAt = null,
+        DateTimeOffset? expiresAt = null) =>
+        new(
+            SourceReferenceId: sourceReferenceId,
+            ArtifactId: artifactId,
+            SourceKind: "WorkflowDefinitionVersion",
+            SourceId: "version-1",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-1",
+            DefinitionVersionId: "version-1",
+            ArtifactVersion: "1.0.0",
+            CreatedAt: publishedAt ?? DateTimeOffset.UnixEpoch,
+            PublishedAt: publishedAt,
+            Scope: scope,
+            ExpiresAt: expiresAt,
+            Layout: [new WorkflowExecutableLayoutRecord("node-a", 1, 2, 3, 4, Json("""{ "k": "v" }"""))]);
 
     private static JsonElement Json(string json)
     {

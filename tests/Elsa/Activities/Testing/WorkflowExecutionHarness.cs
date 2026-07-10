@@ -216,7 +216,6 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             rootActivity: rootActivity,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            publishedAt: Now,
             compatibilityMetadata: new Dictionary<string, string>());
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>

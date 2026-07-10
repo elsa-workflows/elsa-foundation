@@ -6,6 +6,8 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Entities;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Mapping;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
@@ -13,14 +15,21 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
 /// <summary>
 /// Durable <see cref="IOpenTelemetryStore"/> backed by EF Core. Writes enqueue onto a bounded channel so
 /// anonymous OTLP collector requests do not wait on database I/O; a single background drain loop persists
-/// batches and prunes each high-volume signal table to the configured retention capacity.
+/// batches and prunes each high-volume signal table to the configured retention capacity. On graceful
+/// shutdown the shell provider disposes the store via <see cref="DisposeAsync"/>, which drains the channel
+/// before cancelling so buffered telemetry is not discarded (issue #606).
 /// </summary>
-public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
+public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable, IAsyncDisposable
 {
     private const int BatchSize = 64;
-    private const int MaxBatchRetries = 5;
+    // Exponential backoff (issue #607, parity with EfCoreStructuredLogStore): the old fixed 1s x 5 was both
+    // too slow for transient lock contention and too eager to give up under sustained reader load.
+    private const int MaxBatchRetries = 8;
     private const int DefaultPruneInterval = 500;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private const long ShedLogIntervalMs = 30_000;
+    private static readonly TimeSpan DefaultBaseRetryDelay = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IDbContextFactory<OpenTelemetryDbContext> _dbContextFactory;
     private readonly IOpenTelemetrySourceRegistry _sourceRegistry;
@@ -34,27 +43,46 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private readonly int _pruneInterval;
     private readonly Channel<OpenTelemetryBatch> _channel;
     private readonly CancellationTokenSource _cts = new();
-    private int _draining;
+    private readonly ILogger<EfCoreOpenTelemetryStore> _logger;
+    private readonly TimeSpan _baseRetryDelay;
+    private readonly TimeSpan _shutdownDrainTimeout;
+    private readonly object _drainStartLock = new();
     private int _insertedSincePrune;
     private Task? _drainLoop;
     private int _disposed;
-
-    public EfCoreOpenTelemetryStore(
-        IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
-        IOptions<OpenTelemetryDiagnosticsOptions> options,
-        IOpenTelemetrySourceRegistry sourceRegistry)
-        : this(dbContextFactory, options, sourceRegistry, DefaultPruneInterval)
-    {
-    }
+    private long _droppedTraces;
+    private long _droppedSpans;
+    private long _droppedMetricPoints;
+    private long _droppedLogRecords;
+    private long _shedBatches;
+    private long _lastShedLogTicks;
 
     public EfCoreOpenTelemetryStore(
         IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
         IOptions<OpenTelemetryDiagnosticsOptions> options,
         IOpenTelemetrySourceRegistry sourceRegistry,
-        int pruneInterval)
+        ILogger<EfCoreOpenTelemetryStore>? logger = null)
+        : this(dbContextFactory, options, sourceRegistry, DefaultPruneInterval, logger)
+    {
+    }
+
+    /// <summary>
+    /// Constructor with explicit tuning, primarily for tests. <paramref name="baseRetryDelay"/> overrides
+    /// the first backoff delay (subsequent retries double it up to a fixed ceiling) so retry-exhaustion
+    /// tests do not have to wait out the production backoff schedule.
+    /// </summary>
+    public EfCoreOpenTelemetryStore(
+        IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
+        IOptions<OpenTelemetryDiagnosticsOptions> options,
+        IOpenTelemetrySourceRegistry sourceRegistry,
+        int pruneInterval,
+        ILogger<EfCoreOpenTelemetryStore>? logger = null,
+        TimeSpan? baseRetryDelay = null)
     {
         _dbContextFactory = dbContextFactory;
         _sourceRegistry = sourceRegistry;
+        _logger = logger ?? NullLogger<EfCoreOpenTelemetryStore>.Instance;
+        _baseRetryDelay = baseRetryDelay ?? DefaultBaseRetryDelay;
         _options = options.Value;
         _traceCapacity = ClampCapacity(_options.TraceCapacity);
         _spanCapacity = ClampCapacity(_options.SpanCapacity);
@@ -62,6 +90,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         _logRecordCapacity = ClampCapacity(_options.LogRecordCapacity);
         _resourceCapacity = ClampCapacity(_options.ResourceCapacity);
         _maxQuerySize = ClampCapacity(_options.MaxQuerySize);
+        _shutdownDrainTimeout = _options.ShutdownDrainTimeout < TimeSpan.Zero ? TimeSpan.Zero : _options.ShutdownDrainTimeout;
         _pruneInterval = Math.Max(1, pruneInterval);
         var capacity = Math.Max(BatchSize, _options.SubscriberChannelCapacity) * 4;
         _channel = Channel.CreateBounded<OpenTelemetryBatch>(new BoundedChannelOptions(capacity)
@@ -69,7 +98,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = false,
-        });
+        }, OnBatchShed);
     }
 
     public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
@@ -77,19 +106,54 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
         ArgumentNullException.ThrowIfNull(batch);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // A false TryWrite means the writer was completed (store stopping/stopped): drop the batch without
+        // marking its resources seen. This only covers the completed-writer path — under overflow, DropOldest
+        // accepts the write and silently evicts the oldest queued batch, whose already-marked resources never
+        // persist.
+        if (!_channel.Writer.TryWrite(batch))
+            return ValueTask.CompletedTask;
+
         foreach (var resource in batch.Resources)
             _sourceRegistry.MarkSeen(resource);
 
-        _channel.Writer.TryWrite(batch);
         return ValueTask.CompletedTask;
     }
 
     public void StartDraining()
     {
-        if (Interlocked.Exchange(ref _draining, 1) == 1)
+        if (Volatile.Read(ref _drainLoop) is not null)
             return;
 
-        _drainLoop = Task.Run(() => RunDrainLoopAsync(_cts.Token));
+        lock (_drainStartLock)
+        {
+            // _drainLoop is the single "draining started" signal: it is only ever assigned here, fully
+            // constructed, so a concurrent DisposeAsync/CompleteDrainingAsync either sees null (drain never
+            // started) or the live loop task — never a started-but-unpublished in-between that would make
+            // shutdown skip the graceful drain (#606 follow-up).
+            _drainLoop ??= Task.Run(() => RunDrainLoopAsync(_cts.Token));
+        }
+    }
+
+    /// <summary>
+    /// Stops accepting writes, waits for the drain loop to finish attempting persistence of every batch
+    /// already enqueued (bounded retries; a persistently failing batch is dropped), then applies retention
+    /// pruning once more on the same best-effort basis. Awaiting this is a completion signal rather than a
+    /// timing guess. Throws <see cref="InvalidOperationException"/> when draining was never started and
+    /// <see cref="TimeoutException"/> when the loop fails to finish within a generous ceiling.
+    /// </summary>
+    public async Task CompleteDrainingAsync(CancellationToken cancellationToken = default)
+    {
+        if (Volatile.Read(ref _drainLoop) is not { } drainLoop)
+            throw new InvalidOperationException($"{nameof(StartDraining)} must be called before {nameof(CompleteDrainingAsync)}.");
+
+        _channel.Writer.TryComplete();
+        await drainLoop.WaitAsync(DrainCompletionTimeout, cancellationToken);
+
+        // Apply retention once more so completion implies the capacities hold even when the tail of inserts
+        // never reached the prune interval. This runs here rather than in the drain loop so the Dispose path
+        // (which cancels instead of draining) does no post-completion database work.
+        if (_insertedSincePrune > 0)
+            await PruneWithRetryAsync(cancellationToken);
     }
 
     public async ValueTask<OpenTelemetryResourceResult> QueryResourcesAsync(OpenTelemetryResourceFilter filter, CancellationToken cancellationToken = default)
@@ -278,10 +342,10 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             await db.MetricInstruments.CountAsync(cancellationToken),
             await db.MetricPoints.CountAsync(cancellationToken),
             await db.OtlpLogRecords.CountAsync(cancellationToken),
-            0,
-            0,
-            0,
-            0);
+            Interlocked.Read(ref _droppedTraces),
+            Interlocked.Read(ref _droppedSpans),
+            Interlocked.Read(ref _droppedMetricPoints),
+            Interlocked.Read(ref _droppedLogRecords));
     }
 
     private async Task RunDrainLoopAsync(CancellationToken cancellationToken)
@@ -339,12 +403,21 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                await Task.Delay(RetryDelay, cancellationToken);
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure persisting a telemetry batch (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
+                CountDropped(batches);
+                _logger.LogError(ex, "Dropping a telemetry batch after {MaxAttempts} failed persistence attempts: {TraceCount} traces, {SpanCount} spans, {MetricPointCount} metric points, {LogRecordCount} log records lost.",
+                    MaxBatchRetries + 1,
+                    batches.Sum(x => x.Traces.Count),
+                    batches.Sum(x => x.Spans.Count),
+                    batches.Sum(x => x.MetricPoints.Count),
+                    batches.Sum(x => x.Logs.Count));
                 return 0;
             }
         }
@@ -391,9 +464,12 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private async Task MaybePruneAsync(int inserted, CancellationToken cancellationToken)
     {
         _insertedSincePrune += inserted;
-        if (_insertedSincePrune < _pruneInterval)
-            return;
+        if (_insertedSincePrune >= _pruneInterval)
+            await PruneWithRetryAsync(cancellationToken);
+    }
 
+    private async Task PruneWithRetryAsync(CancellationToken cancellationToken)
+    {
         for (var attempt = 0; ; attempt++)
         {
             try
@@ -411,14 +487,17 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                await Task.Delay(RetryDelay, cancellationToken);
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure pruning telemetry retention (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort retention: a transient prune failure must not stop the drain loop. Keep the
                 // counter armed so the next persisted batch retries pruning.
+                _logger.LogWarning(ex, "Giving up pruning telemetry retention after {MaxAttempts} attempts; the next persisted batch retries.", MaxBatchRetries + 1);
                 return;
             }
         }
@@ -489,6 +568,39 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
+    private TimeSpan GetRetryDelay(int attempt)
+    {
+        var delay = _baseRetryDelay * Math.Pow(2, attempt);
+        return delay < MaxRetryDelay ? delay : MaxRetryDelay;
+    }
+
+    /// <summary>
+    /// Invoked by the bounded channel when it evicts the oldest queued batch to make room (issue #607):
+    /// the drain writer is not keeping up with ingest. Counted per signal and logged rate-limited so a
+    /// sustained overload does not flood the log with one warning per shed batch.
+    /// </summary>
+    private void OnBatchShed(OpenTelemetryBatch batch)
+    {
+        CountDropped([batch]);
+        var shed = Interlocked.Increment(ref _shedBatches);
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastShedLogTicks);
+        if (last != 0 && now - last < ShedLogIntervalMs)
+            return;
+        if (Interlocked.CompareExchange(ref _lastShedLogTicks, now, last) != last)
+            return;
+
+        _logger.LogWarning("Telemetry drain channel is full; shedding the oldest queued batch ({ShedBatchCount} batches shed since startup). The database writer is not keeping up with ingest.", shed);
+    }
+
+    private void CountDropped(IReadOnlyCollection<OpenTelemetryBatch> batches)
+    {
+        Interlocked.Add(ref _droppedTraces, batches.Sum(x => x.Traces.Count));
+        Interlocked.Add(ref _droppedSpans, batches.Sum(x => x.Spans.Count));
+        Interlocked.Add(ref _droppedMetricPoints, batches.Sum(x => x.MetricPoints.Count));
+        Interlocked.Add(ref _droppedLogRecords, batches.Sum(x => x.Logs.Count));
+    }
+
     private int ClampTake(int? take) => Math.Clamp(take ?? _maxQuerySize, 0, _maxQuerySize);
 
     private static int ClampCapacity(int capacity) => Math.Max(1, capacity);
@@ -496,12 +608,48 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private static bool Matches(string? candidate, string? search) =>
         !string.IsNullOrEmpty(candidate) && !string.IsNullOrEmpty(search) && candidate.Contains(search, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Hard-stop for synchronous disposal contexts only: completes the writer and immediately cancels the
+    /// drain loop, discarding whatever is still queued in the channel. Best-effort by design — a graceful
+    /// host shutdown goes through <see cref="DisposeAsync"/> instead, which drains before cancelling.
+    /// </summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
         _channel.Writer.TryComplete();
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    /// <summary>
+    /// Graceful shutdown path (issue #606): completes the writer and gives the drain loop a bounded window
+    /// (<see cref="OpenTelemetryDiagnosticsOptions.ShutdownDrainTimeout"/>) to persist what is still
+    /// buffered before the hard cancel. The shell provider is disposed asynchronously on host shutdown, so
+    /// this — not <see cref="Dispose"/> — is the path a graceful shutdown takes; loss past the window is
+    /// accepted rather than stalling shutdown indefinitely (async disposal carries no cancellation token,
+    /// so the configured window is the only bound).
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        _channel.Writer.TryComplete();
+
+        if (Volatile.Read(ref _drainLoop) is { } drainLoop)
+        {
+            try
+            {
+                await drainLoop.WaitAsync(_shutdownDrainTimeout);
+            }
+            catch (TimeoutException)
+            {
+                // The shutdown window elapsed; fall through to the hard cancel and accept the loss.
+            }
+        }
+
         _cts.Cancel();
         _cts.Dispose();
     }

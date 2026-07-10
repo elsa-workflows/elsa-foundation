@@ -122,7 +122,6 @@ public sealed class DelayExecutionTests
             rootActivity: root,
             resumeTargets: resumeTargets,
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

@@ -9,9 +9,13 @@ public sealed record PublishedWorkflowView(
     string ArtifactVersion,
     string ArtifactHash,
     string RootActivityId,
-    int NodeCount)
+    int NodeCount,
+    string? SourceReferenceId = null)
 {
     public static PublishedWorkflowView From(WorkflowExecutable executable) =>
+        From(executable, reference: null);
+
+    public static PublishedWorkflowView From(WorkflowExecutable executable, WorkflowExecutableSourceReference? reference) =>
         new(
             executable.Identity.ArtifactId,
             executable.Identity.DefinitionId,
@@ -19,5 +23,6 @@ public sealed record PublishedWorkflowView(
             executable.Identity.ArtifactVersion,
             executable.Identity.ArtifactHash,
             executable.RootActivity.ExecutableNodeId,
-            executable.Nodes.Count);
+            executable.Nodes.Count,
+            reference?.SourceReferenceId);
 }

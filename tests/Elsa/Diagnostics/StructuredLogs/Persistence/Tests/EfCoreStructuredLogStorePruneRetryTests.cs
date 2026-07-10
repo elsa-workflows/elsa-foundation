@@ -32,7 +32,7 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
         // Drain-loop creates: #1 persists the batch, #2 is the first prune attempt — fail it once.
         _factory.FailAsyncCreateWhen = n => n == 2;
 
-        var store = new EfCoreStructuredLogStore(_factory, Options.Create(new StructuredLogsOptions()), maxRetainedEntries: 2, pruneInterval: 1);
+        var store = new EfCoreStructuredLogStore(_factory, Options.Create(new StructuredLogsOptions()), maxRetainedEntries: 2, pruneInterval: 1, baseRetryDelay: TimeSpan.FromMilliseconds(1));
 
         // Enqueue everything before draining so the loop reads one deterministic batch of 10.
         for (var i = 1; i <= 10; i++)
@@ -40,12 +40,13 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
 
         store.StartDraining();
 
-        // Old behavior: the counter was already reset and there is no retry, so the failed prune is
-        // abandoned permanently and all 10 rows survive. Fixed behavior: the prune retries and the
-        // table shrinks to the retention cap.
-        var pruned = await WaitForConditionAsync(() => CountRows() == 2, timeoutMs: 15_000);
+        // Deterministic: completion waits out the in-loop prune retry (create #3) before the loop exits,
+        // and the successful retry reset the insert counter, so no completion-time prune runs. Old
+        // behavior pinned here: the counter was already reset and there was no retry, so the failed prune
+        // was abandoned permanently and all 10 rows survived.
+        await store.CompleteDrainingAsync();
 
-        Assert.True(pruned, $"Expected the table to be pruned to 2 rows, found {CountRows()}.");
+        Assert.Equal(2, CountRows());
         Assert.Equal(new[] { 9L, 10L }, RowSequences());
 
         store.Dispose();
@@ -54,11 +55,11 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
     [Fact]
     public async Task ExhaustedPruneRetriesKeepTheCounterArmedForTheNextBatch()
     {
-        // Creates #2..#7 cover the full retry budget of the first prune cycle (initial attempt + 5
+        // Creates #2..#10 cover the full retry budget of the first prune cycle (initial attempt + 8
         // retries) — exhaust it. Everything else succeeds.
-        _factory.FailAsyncCreateWhen = n => n is >= 2 and <= 7;
+        _factory.FailAsyncCreateWhen = n => n is >= 2 and <= 10;
 
-        var store = new EfCoreStructuredLogStore(_factory, Options.Create(new StructuredLogsOptions()), maxRetainedEntries: 2, pruneInterval: 2);
+        var store = new EfCoreStructuredLogStore(_factory, Options.Create(new StructuredLogsOptions()), maxRetainedEntries: 2, pruneInterval: 2, baseRetryDelay: TimeSpan.FromMilliseconds(1));
 
         for (var i = 1; i <= 3; i++)
             store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
@@ -93,39 +94,6 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
         return db.StructuredLogEntries.OrderBy(x => x.Sequence).Select(x => x.Sequence).ToArray();
     }
 
-    private static async Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs)
-    {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (probe())
-                return true;
-            await Task.Delay(25);
-        }
-
-        return probe();
-    }
-
-    /// <summary>
-    /// Delegates to <see cref="StructuredLogsTestHost"/> but can fail designated *async* creates (the
-    /// drain/prune path); the store's synchronous query creates and the test's own probes are untouched.
-    /// </summary>
-    private sealed class FaultInjectingFactory(StructuredLogsTestHost host) : IDbContextFactory<StructuredLogsDbContext>
-    {
-        private int _asyncCreates;
-
-        public Func<int, bool>? FailAsyncCreateWhen { get; set; }
-
-        public StructuredLogsDbContext CreateDbContext() => host.CreateDbContext();
-
-        public Task<StructuredLogsDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default)
-        {
-            var ordinal = Interlocked.Increment(ref _asyncCreates);
-
-            if (FailAsyncCreateWhen?.Invoke(ordinal) == true)
-                throw new InvalidOperationException($"Injected transient failure on async create #{ordinal}.");
-
-            return Task.FromResult(host.CreateDbContext());
-        }
-    }
+    private static Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs) =>
+        TestWait.ForConditionAsync(probe, timeoutMs);
 }

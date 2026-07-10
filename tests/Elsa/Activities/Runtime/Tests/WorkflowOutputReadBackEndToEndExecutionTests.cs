@@ -196,7 +196,6 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: _now,
-            publishedAt: _now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

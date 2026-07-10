@@ -1,36 +1,31 @@
 using System.Security.Cryptography;
 using System.Text;
-using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
 /// <summary>
 /// Computes the content-addressable identity of a compiled workflow executable: the deterministic SHA-256
-/// <c>ArtifactHash</c> over the source identity plus a canonical rendering of the executable node tree, and the
-/// derived <c>ArtifactId</c>. Extracted from <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so hashing
-/// and artifact-id formatting can change independently of activity-tree compilation.
+/// <c>ArtifactHash</c> over a canonical rendering of the executable node tree, and the derived
+/// <c>ArtifactId</c>. Extracted from <see cref="WorkflowExecutableCompiler"/> (W30b, #418) so hashing and
+/// artifact-id formatting can change independently of activity-tree compilation.
 /// </summary>
 /// <remarks>
 /// The canonical payload shape is wire-significant: any change here changes every artifact hash and id. The
-/// characterization goldens pin both across the W30b decomposition.
+/// characterization goldens pin both. Per ADR 0038 the payload is <b>behavioral-only</b>: it covers the
+/// canonical node tree (root node id plus the flattened, ordinally-ordered node renderings) and carries no
+/// source identity, so equal hash ⇔ equal behavior in both directions and executables are content-addressed.
 /// </remarks>
 public sealed class WorkflowExecutableHasher
 {
     private const string ArtifactHashPrefix = "sha256:";
     private const int ArtifactIdHashLength = 12;
 
-    public string ComputeHash(WorkflowExecutableCompileSource source, ExecutableNode rootActivity)
+    public string ComputeHash(ExecutableNode rootActivity)
     {
         var nodes = FlattenExecutableActivities(rootActivity).ToArray();
         var payload = string.Join(
             '\n',
-            source.SourceReference.SourceKind,
-            source.SourceReference.SourceId,
-            source.SourceReference.SourceVersion,
-            source.DefinitionId,
-            source.DefinitionVersionId,
-            source.ArtifactVersion,
             rootActivity.ExecutableNodeId,
             string.Join('|', nodes.OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal)
                 .Select(FormatNode)));

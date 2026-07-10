@@ -140,10 +140,10 @@ public sealed class EfCoreStructuredLogStoreTests
         for (var i = 1; i <= 40; i++)
             store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
 
+        // Deterministic (deflake of the former poll-based variant): once the drain completes, every queued
+        // entry is persisted and the final retention prune has run, so the exact cap can be asserted.
         await store.CompleteDrainingAsync();
 
-        // In-loop prunes fire once every prune interval and completion prunes any sub-interval tail,
-        // so the durable table holds exactly the retention cap.
         using var db = host.CreateDbContext();
         Assert.Equal(5, db.StructuredLogEntries.Count());
 
@@ -175,13 +175,54 @@ public sealed class EfCoreStructuredLogStoreTests
         store.Dispose();
     }
 
+    [Fact]
+    public async Task CompleteDrainingAsyncThrowsWhenDrainingWasNeverStarted()
+    {
+        using var host = StructuredLogsTestHost.Create();
+        using var store = NewStore(host);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CompleteDrainingAsync());
+    }
+
+    [Fact]
+    public async Task DisposeAsyncPersistsBufferedEntriesBeforeCancelling()
+    {
+        // The issue #606 shutdown scenario: entries are still queued in the channel when the shell
+        // provider disposes the store. The async path must drain them instead of cancelling mid-batch.
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host);
+        store.StartDraining();
+
+        for (var i = 1; i <= 10; i++)
+            store.Append(TestEntries.Create(sequence: i, message: $"m{i}"));
+
+        await store.DisposeAsync();
+
+        using var db = host.CreateDbContext();
+        Assert.Equal(10, db.StructuredLogEntries.Count());
+    }
+
+    [Fact]
+    public async Task DisposeAsyncClampsNegativeShutdownDrainTimeout()
+    {
+        // A negative configured window must clamp to zero (immediate hard stop), not surface an
+        // ArgumentOutOfRangeException from WaitAsync in the middle of host shutdown.
+        using var host = StructuredLogsTestHost.Create();
+        var store = NewStore(host, o => o.ShutdownDrainTimeout = TimeSpan.FromSeconds(-1));
+        store.StartDraining();
+        store.Append(TestEntries.Create(sequence: 1, message: "m1"));
+
+        await store.DisposeAsync();
+    }
+
     /// <summary>
     /// Covers the dispose-guard half of issue #403: a second Dispose() call must be a no-op (parity with
     /// EfCoreOpenTelemetryStore) instead of throwing ObjectDisposedException from the already-disposed
-    /// CancellationTokenSource.
+    /// CancellationTokenSource. The sync and async paths share the guard, so any later call in either
+    /// direction is equally a no-op.
     /// </summary>
     [Fact]
-    public void DisposeIsIdempotent()
+    public async Task DisposeIsIdempotentAcrossSyncAndAsyncPaths()
     {
         using var host = StructuredLogsTestHost.Create();
         var store = NewStore(host);
@@ -189,5 +230,6 @@ public sealed class EfCoreStructuredLogStoreTests
 
         store.Dispose();
         store.Dispose();
+        await store.DisposeAsync();
     }
 }

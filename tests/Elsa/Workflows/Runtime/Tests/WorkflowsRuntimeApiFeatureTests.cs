@@ -821,7 +821,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
 
     private sealed class CustomBookmarkResumeDispatcher : IBookmarkResumeDispatcher
     {
-        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default) =>
             new(new BookmarkResumeDispatchResult(
                 BookmarkResumeDispatchStatus.NotFound,
                 request.WorkflowExecutionId,

@@ -247,6 +247,35 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Fact]
+    public async Task MidFlow_StampsResponseModeSync_OnBookmarkMetadata()
+    {
+        // Spec 089 E-D1: an authored ResponseMode = Sync rides the bookmark metadata for free — the activity's
+        // ReadOptions folds it into HttpEndpointStimulus.Describe, exactly as for a trigger binding — so the
+        // middleware reads the mode off a resume-only match (scenario 5.5).
+        await using var harness = NewHarness();
+        var node = NewEndpointExecutableWithResponseMode("callbacks/{id}", ResponseMode.Sync);
+
+        var run = await harness.RunAsync(node, JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
+
+        Assert.False(CompletedEndpoint(run));
+        var bookmark = Assert.Single(await BookmarksAsync(harness));
+        Assert.Equal("Sync", bookmark.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
+    }
+
+    [Fact]
+    public async Task MidFlow_ResponseModeAsync_IsOmittedFromBookmarkMetadata()
+    {
+        await using var harness = NewHarness();
+        var node = NewEndpointExecutableWithResponseMode("callbacks/{id}", ResponseMode.Async);
+
+        var run = await harness.RunAsync(node, JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
+
+        Assert.False(CompletedEndpoint(run));
+        var bookmark = Assert.Single(await BookmarksAsync(harness));
+        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, bookmark.Metadata.Keys);
+    }
+
+    [Fact]
     public async Task DirectRun_CanStartTrue_Completes_ViaAuthoredRouteFallback()
     {
         // D-D1 exception: a start-capable endpoint on a direct run (no trigger identity) keeps A's authored-route
@@ -430,7 +459,6 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: node,
             resumeTargets: resumeTargets,
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -461,7 +489,36 @@ public sealed class HttpEndpointExecutionTests
             rootActivity: withOptions,
             resumeTargets: executable.ResumeTargets,
             createdAt: executable.CreatedAt,
-            publishedAt: executable.PublishedAt,
+            compatibilityMetadata: executable.CompatibilityMetadata);
+    }
+
+    private static WorkflowExecutable NewEndpointExecutableWithResponseMode(string path, ResponseMode mode)
+    {
+        var executable = NewEndpointExecutable(path, methods: ["GET"]);
+        var node = executable.RootActivity;
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>(node.InputBindings)
+        {
+            // The runtime input materializer deserializes the literal against the enum type via System.Text.Json;
+            // author the underlying numeric value so it materializes regardless of enum-converter registration.
+            ["ResponseMode"] = LiteralBinding("ResponseMode", JsonSerializer.SerializeToElement((int)mode), typeof(ResponseMode).FullName!)
+        };
+
+        var withMode = new ExecutableNode(
+            executableNodeId: node.ExecutableNodeId,
+            authoredActivityId: node.AuthoredActivityId,
+            activityType: node.ActivityType,
+            activityTypeVersion: node.ActivityTypeVersion,
+            descriptorType: node.DescriptorType,
+            descriptorPayload: node.DescriptorPayload,
+            inputBindings: inputBindings,
+            outputCaptures: node.OutputCaptures,
+            metadata: node.Metadata);
+
+        return new WorkflowExecutable(
+            identity: executable.Identity,
+            rootActivity: withMode,
+            resumeTargets: executable.ResumeTargets,
+            createdAt: executable.CreatedAt,
             compatibilityMetadata: executable.CompatibilityMetadata);
     }
 

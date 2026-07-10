@@ -18,8 +18,7 @@ public sealed class RuntimeContractTests
             DefinitionId: "orders",
             DefinitionVersionId: "version-7",
             ArtifactVersion: "7.0.0",
-            ArtifactHash: "sha256:abc",
-            Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-7", "7.0.0"));
+            ArtifactHash: "sha256:abc");
 
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: "wfexec-1",

@@ -181,10 +181,7 @@ public sealed class RuntimeScheduleActivityStateTests
     {
         var executable = NewExecutable();
         await _executableStore.SaveAsync(executable);
-        var pinned = executable.Identity with
-        {
-            Source = new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "version-1", "1.0.0")
-        };
+        var pinned = executable.Identity;
         var handler = NewHandler();
 
         await handler.HandleAsync(NewScheduleWorkItem(pinned));
@@ -368,7 +365,6 @@ public sealed class RuntimeScheduleActivityStateTests
             rootActivity: ToRootActivity(nodes),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

@@ -37,4 +37,13 @@ public sealed class StructuredLogsOptions
 
     /// <summary>The Server-Sent Events GET path for the live feed.</summary>
     public string StreamPath { get; set; } = "/_elsa/studio/diagnostics/structured-logs/stream";
+
+    /// <summary>
+    /// How long the EF Core store's async disposal waits for the background drain loop to persist buffered
+    /// log entries on graceful shutdown before hard-cancelling. <see cref="IAsyncDisposable.DisposeAsync"/>
+    /// carries no cancellation token, so this window is the only bound on shutdown drain time — size it
+    /// below the host's shutdown budget (e.g. the container termination grace period). Negative values are
+    /// clamped to zero; <see cref="TimeSpan.Zero"/> disables the graceful wait entirely.
+    /// </summary>
+    public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
 }

@@ -118,6 +118,12 @@
 			then auto-enables it whenever a durable persistence provider is composed (no shells.json entry needed).
 		-->
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+		<!--
+			Reference GC pump (ADR 0040). Opt-in like Resumption: its assembly is added to the CShells catalog so the
+			feature can be enabled (via shells.json) to periodically prune expired/retired references and unreferenced
+			artifacts. Scheduling is host policy — the runtime resolves the GC service regardless.
+		-->
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
