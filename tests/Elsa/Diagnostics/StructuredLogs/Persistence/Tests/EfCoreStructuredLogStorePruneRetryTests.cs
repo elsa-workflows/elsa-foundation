@@ -40,12 +40,13 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
 
         store.StartDraining();
 
-        // Old behavior: the counter was already reset and there is no retry, so the failed prune is
-        // abandoned permanently and all 10 rows survive. Fixed behavior: the prune retries and the
-        // table shrinks to the retention cap.
-        var pruned = await WaitForConditionAsync(() => CountRows() == 2, timeoutMs: 15_000);
+        // Deterministic: completion waits out the in-loop prune retry (create #3) before the loop exits,
+        // and the successful retry reset the insert counter, so no completion-time prune runs. Old
+        // behavior pinned here: the counter was already reset and there was no retry, so the failed prune
+        // was abandoned permanently and all 10 rows survived.
+        await store.CompleteDrainingAsync();
 
-        Assert.True(pruned, $"Expected the table to be pruned to 2 rows, found {CountRows()}.");
+        Assert.Equal(2, CountRows());
         Assert.Equal(new[] { 9L, 10L }, RowSequences());
 
         store.Dispose();
