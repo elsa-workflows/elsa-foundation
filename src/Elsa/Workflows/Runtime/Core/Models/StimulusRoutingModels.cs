@@ -35,7 +35,8 @@ public sealed class StimulusDispatchRequest
         string? idempotencyKey = null,
         string requestedBy = "runtime.stimulus",
         IReadOnlyDictionary<string, string>? metadata = null,
-        IReadOnlyCollection<WorkflowTriggerBinding>? matchedTriggerBindings = null)
+        IReadOnlyCollection<WorkflowTriggerBinding>? matchedTriggerBindings = null,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusHash);
@@ -56,6 +57,7 @@ public sealed class StimulusDispatchRequest
         RequestedBy = requestedBy;
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         MatchedTriggerBindings = matchedTriggerBindings;
+        DispatchOptions = dispatchOptions;
     }
 
     public string StimulusType { get; }
@@ -89,6 +91,25 @@ public sealed class StimulusDispatchRequest
     /// under-start.
     /// </summary>
     public IReadOnlyCollection<WorkflowTriggerBinding>? MatchedTriggerBindings { get; }
+
+    /// <summary>
+    /// Optional per-request dispatch options forwarded verbatim to <c>IWorkflowExecutionActor.EnqueueAsync</c> for
+    /// every start and resume this request fans out to (spec 089 sub-unit E / FR-019). It carries the ambient
+    /// request scope (<see cref="WorkflowExecutionCommandDispatchOptions.AmbientServices"/>) that the in-process
+    /// inline drain uses to build activity execution contexts — the mechanism the HTTP endpoint middleware relies on
+    /// to let a synchronous-mode endpoint author the live response on the caller's async flow.
+    /// </summary>
+    /// <remarks>
+    /// Unlike every other field on this request, the options object is a <b>plain live reference</b>: it is NOT
+    /// defensively cloned (<see cref="Input"/>) or snapshotted (<see cref="Metadata"/>) because it deliberately holds
+    /// request-affine live services that must not be copied, and it is <b>excluded from
+    /// <see cref="BuildDispatchMetadata"/></b> — that metadata flows into the durable
+    /// <c>WorkflowExecutionCommandEnvelope</c>, and the HARD spec-069 FR-001 / spec-089 FR-021 invariant is that
+    /// ambient services never serialize into any persisted state. The reference lives only for the synchronous span of
+    /// the dispatch and is dropped by construction at any process boundary (the distributed forwarding actor ignores
+    /// options). <c>null</c> ⇒ the dispatchers fall back to <see cref="WorkflowExecutionCommandDispatchOptions.Default"/>.
+    /// </remarks>
+    public WorkflowExecutionCommandDispatchOptions? DispatchOptions { get; }
 
     public IReadOnlyDictionary<string, string> BuildDispatchMetadata()
     {

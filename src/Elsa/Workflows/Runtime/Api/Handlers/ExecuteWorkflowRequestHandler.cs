@@ -34,7 +34,7 @@ public sealed class ExecuteWorkflowRequestHandler(
 
         var result = await startDispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables, inputs: inputs),
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }
 

@@ -216,7 +216,7 @@ public sealed class DurableTimerPumpTaskTests
         public BookmarkResumeDispatchResult Next { get; set; } = initial;
         public Exception? Throw { get; set; }
 
-        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
             if (Throw is not null)
