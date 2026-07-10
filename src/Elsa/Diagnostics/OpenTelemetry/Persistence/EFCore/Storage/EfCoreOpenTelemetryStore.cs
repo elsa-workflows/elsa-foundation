@@ -6,6 +6,8 @@ using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Entities;
 using Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Mapping;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
@@ -18,9 +20,13 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Storage;
 public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
 {
     private const int BatchSize = 64;
-    private const int MaxBatchRetries = 5;
+    // Exponential backoff (issue #607, parity with EfCoreStructuredLogStore): the old fixed 1s x 5 was both
+    // too slow for transient lock contention and too eager to give up under sustained reader load.
+    private const int MaxBatchRetries = 8;
     private const int DefaultPruneInterval = 500;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private const long ShedLogIntervalMs = 30_000;
+    private static readonly TimeSpan DefaultBaseRetryDelay = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
 
     private readonly IDbContextFactory<OpenTelemetryDbContext> _dbContextFactory;
     private readonly IOpenTelemetrySourceRegistry _sourceRegistry;
@@ -34,27 +40,45 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
     private readonly int _pruneInterval;
     private readonly Channel<OpenTelemetryBatch> _channel;
     private readonly CancellationTokenSource _cts = new();
+    private readonly ILogger<EfCoreOpenTelemetryStore> _logger;
+    private readonly TimeSpan _baseRetryDelay;
     private int _draining;
     private int _insertedSincePrune;
     private Task? _drainLoop;
     private int _disposed;
-
-    public EfCoreOpenTelemetryStore(
-        IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
-        IOptions<OpenTelemetryDiagnosticsOptions> options,
-        IOpenTelemetrySourceRegistry sourceRegistry)
-        : this(dbContextFactory, options, sourceRegistry, DefaultPruneInterval)
-    {
-    }
+    private long _droppedTraces;
+    private long _droppedSpans;
+    private long _droppedMetricPoints;
+    private long _droppedLogRecords;
+    private long _shedBatches;
+    private long _lastShedLogTicks;
 
     public EfCoreOpenTelemetryStore(
         IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
         IOptions<OpenTelemetryDiagnosticsOptions> options,
         IOpenTelemetrySourceRegistry sourceRegistry,
-        int pruneInterval)
+        ILogger<EfCoreOpenTelemetryStore>? logger = null)
+        : this(dbContextFactory, options, sourceRegistry, DefaultPruneInterval, logger)
+    {
+    }
+
+    /// <summary>
+    /// Constructor with explicit tuning, primarily for tests. <paramref name="baseRetryDelay"/> overrides
+    /// the first backoff delay (subsequent retries double it up to a fixed ceiling) so retry-exhaustion
+    /// tests do not have to wait out the production backoff schedule.
+    /// </summary>
+    public EfCoreOpenTelemetryStore(
+        IDbContextFactory<OpenTelemetryDbContext> dbContextFactory,
+        IOptions<OpenTelemetryDiagnosticsOptions> options,
+        IOpenTelemetrySourceRegistry sourceRegistry,
+        int pruneInterval,
+        ILogger<EfCoreOpenTelemetryStore>? logger = null,
+        TimeSpan? baseRetryDelay = null)
     {
         _dbContextFactory = dbContextFactory;
         _sourceRegistry = sourceRegistry;
+        _logger = logger ?? NullLogger<EfCoreOpenTelemetryStore>.Instance;
+        _baseRetryDelay = baseRetryDelay ?? DefaultBaseRetryDelay;
         _options = options.Value;
         _traceCapacity = ClampCapacity(_options.TraceCapacity);
         _spanCapacity = ClampCapacity(_options.SpanCapacity);
@@ -69,7 +93,7 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = false,
-        });
+        }, OnBatchShed);
     }
 
     public ValueTask WriteAsync(OpenTelemetryBatch batch, CancellationToken cancellationToken = default)
@@ -278,10 +302,10 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             await db.MetricInstruments.CountAsync(cancellationToken),
             await db.MetricPoints.CountAsync(cancellationToken),
             await db.OtlpLogRecords.CountAsync(cancellationToken),
-            0,
-            0,
-            0,
-            0);
+            Interlocked.Read(ref _droppedTraces),
+            Interlocked.Read(ref _droppedSpans),
+            Interlocked.Read(ref _droppedMetricPoints),
+            Interlocked.Read(ref _droppedLogRecords));
     }
 
     private async Task RunDrainLoopAsync(CancellationToken cancellationToken)
@@ -339,12 +363,21 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                await Task.Delay(RetryDelay, cancellationToken);
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure persisting a telemetry batch (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
+                CountDropped(batches);
+                _logger.LogError(ex, "Dropping a telemetry batch after {MaxAttempts} failed persistence attempts: {TraceCount} traces, {SpanCount} spans, {MetricPointCount} metric points, {LogRecordCount} log records lost.",
+                    MaxBatchRetries + 1,
+                    batches.Sum(x => x.Traces.Count),
+                    batches.Sum(x => x.Spans.Count),
+                    batches.Sum(x => x.MetricPoints.Count),
+                    batches.Sum(x => x.Logs.Count));
                 return 0;
             }
         }
@@ -411,14 +444,17 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                await Task.Delay(RetryDelay, cancellationToken);
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure pruning telemetry retention (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort retention: a transient prune failure must not stop the drain loop. Keep the
                 // counter armed so the next persisted batch retries pruning.
+                _logger.LogWarning(ex, "Giving up pruning telemetry retention after {MaxAttempts} attempts; the next persisted batch retries.", MaxBatchRetries + 1);
                 return;
             }
         }
@@ -487,6 +523,39 @@ public sealed class EfCoreOpenTelemetryStore : IOpenTelemetryStore, IDisposable
             .Where(x => string.Equals(x.ServiceName, serviceName, StringComparison.OrdinalIgnoreCase))
             .Select(x => x.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private TimeSpan GetRetryDelay(int attempt)
+    {
+        var delay = _baseRetryDelay * Math.Pow(2, attempt);
+        return delay < MaxRetryDelay ? delay : MaxRetryDelay;
+    }
+
+    /// <summary>
+    /// Invoked by the bounded channel when it evicts the oldest queued batch to make room (issue #607):
+    /// the drain writer is not keeping up with ingest. Counted per signal and logged rate-limited so a
+    /// sustained overload does not flood the log with one warning per shed batch.
+    /// </summary>
+    private void OnBatchShed(OpenTelemetryBatch batch)
+    {
+        CountDropped([batch]);
+        var shed = Interlocked.Increment(ref _shedBatches);
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastShedLogTicks);
+        if (last != 0 && now - last < ShedLogIntervalMs)
+            return;
+        if (Interlocked.CompareExchange(ref _lastShedLogTicks, now, last) != last)
+            return;
+
+        _logger.LogWarning("Telemetry drain channel is full; shedding the oldest queued batch ({ShedBatchCount} batches shed since startup). The database writer is not keeping up with ingest.", shed);
+    }
+
+    private void CountDropped(IReadOnlyCollection<OpenTelemetryBatch> batches)
+    {
+        Interlocked.Add(ref _droppedTraces, batches.Sum(x => x.Traces.Count));
+        Interlocked.Add(ref _droppedSpans, batches.Sum(x => x.Spans.Count));
+        Interlocked.Add(ref _droppedMetricPoints, batches.Sum(x => x.MetricPoints.Count));
+        Interlocked.Add(ref _droppedLogRecords, batches.Sum(x => x.Logs.Count));
     }
 
     private int ClampTake(int? take) => Math.Clamp(take ?? _maxQuerySize, 0, _maxQuerySize);
