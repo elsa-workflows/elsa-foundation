@@ -154,7 +154,7 @@ public sealed class StimulusRouter : IStimulusRouter
                 stimulusInput: request.Input,
                 triggerNodeId: binding.ExecutableNodeId);
 
-            var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken);
+            var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken: cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
         }
 

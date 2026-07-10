@@ -170,6 +170,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.TryAddSingleton<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
 
+        // Reference GC (ADR 0040): the two-query sweep that drops expired/retired references then unreferenced
+        // artifacts. Registered as the sweep service; a host schedules it periodically (see the sweeper feature).
+        services.TryAddSingleton<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+
         return services;
     }
 

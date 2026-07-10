@@ -56,6 +56,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     private static WorkflowStartDispatcher NewDispatcher(InMemoryWorkflowExecutableStore store) =>
         new(
             store,
+            new InMemoryWorkflowExecutableSourceReferenceStore(),
             new RecordingAgentProvider(),
             new FixedRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero)));

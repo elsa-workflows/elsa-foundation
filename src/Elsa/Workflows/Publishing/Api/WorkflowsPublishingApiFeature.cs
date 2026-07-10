@@ -53,7 +53,6 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
-        services.TryAddSingleton<ITransientWorkflowExecutableStore, InMemoryTransientWorkflowExecutableStore>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
     }

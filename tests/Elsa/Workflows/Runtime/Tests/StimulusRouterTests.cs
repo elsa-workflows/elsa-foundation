@@ -287,16 +287,13 @@ public sealed class StimulusRouterTests
         private int _counter;
         public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
 
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
             var executionId = $"wfexec-new-{++_counter}";
             onStart?.Invoke(executionId);
             return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId));
         }
-
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
 
         private static WorkflowExecutionStartDispatchResult Result(string artifactId, string executionId) =>
             new(

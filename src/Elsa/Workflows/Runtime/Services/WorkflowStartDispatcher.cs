@@ -8,30 +8,35 @@ namespace Elsa.Workflows.Runtime.Core.Services;
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     private readonly IWorkflowExecutableStore _executableStore;
+    private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
     private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator)
-        : this(executableStore, agentProvider, idGenerator, TimeProvider.System)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, TimeProvider.System)
     {
     }
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowExecutionActorProvider agentProvider,
         IRuntimeExecutionIdGenerator idGenerator,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
+        ArgumentNullException.ThrowIfNull(sourceReferenceStore);
         ArgumentNullException.ThrowIfNull(agentProvider);
         ArgumentNullException.ThrowIfNull(idGenerator);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _executableStore = executableStore;
+        _sourceReferenceStore = sourceReferenceStore;
         _agentProvider = agentProvider;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
@@ -39,6 +44,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -46,26 +52,45 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
-        // Scope and expiry are now reference facts (ADR 0040), not artifact facts. Reference-driven dispatch
-        // (resolving the reference to gate Published vs. TestRun and enforce expiry) is worker W3's slice; here the
-        // dispatcher simply dispatches a stored artifact.
+        // Reference gate (ADR 0040): scope and expiry are reference facts, so dispatch resolves the Source
+        // References for this artifact and gates on them. A published dispatch requires a live Published
+        // reference; a test-run dispatch requires a live TestRun reference and enforces its ExpiresAt. The
+        // rejection reason distinguishes "no live reference" from "reference expired".
+        await GateOnReferenceAsync(request.ArtifactId, requiredScope, cancellationToken);
+
         return await DispatchCoreAsync(request, executable, cancellationToken);
     }
 
-    public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchTransientAsync(
-        WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutable executable,
-        CancellationToken cancellationToken = default)
+    // Resolves the artifact's Source References and enforces the reference-derived scope/expiry gate.
+    //
+    // Backward-compatibility seam: an artifact with NO references at all is dispatched through unchanged. Lower-level
+    // callers (integration harnesses, direct runtime seeding) legitimately save an executable straight into the single
+    // artifact store without publishing a reference; gating those out would turn a storage primitive into a publish
+    // gate. The gate therefore engages only once at least one reference exists for the artifact — which is exactly the
+    // published and test-run flows this slice rewired to always append one.
+    private async ValueTask GateOnReferenceAsync(
+        string artifactId,
+        WorkflowExecutableReferenceScope requiredScope,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(executable);
+        var references = await _sourceReferenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+        if (references.Count == 0)
+            return;
 
-        if (!string.Equals(request.ArtifactId, executable.Identity.ArtifactId, StringComparison.Ordinal))
-            throw new ArgumentException("Transient dispatch request artifact ID must match the executable artifact ID.", nameof(request));
+        var now = _timeProvider.GetUtcNow();
+        var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
 
-        await _executableStore.SaveAsync(executable, cancellationToken);
+        if (scopedReferences.Any(reference => reference.IsLive(now)))
+            return;
 
-        return await DispatchCoreAsync(request, executable, cancellationToken);
+        // No live reference of the required scope. Distinguish the test-run-lapsed case (a non-retired reference
+        // that is present but past its expiry) from the absent/retired/wrong-scope case, so an expired test run is
+        // reported honestly rather than as an unpublished artifact.
+        var expired = scopedReferences.Any(reference => reference.DeletedAt is null && reference.IsExpired(now));
+        throw new WorkflowExecutableReferenceRejectedException(
+            artifactId,
+            requiredScope,
+            expired ? WorkflowExecutableReferenceRejectionReason.Expired : WorkflowExecutableReferenceRejectionReason.NoLiveReference);
     }
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
@@ -73,7 +98,6 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutable executable,
         CancellationToken cancellationToken)
     {
-        // Expiry moved to the source reference (ADR 0040); reference-driven expiry enforcement is worker W3's slice.
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
         var metadata = CreateDispatchMetadata(request, executable.Identity);
