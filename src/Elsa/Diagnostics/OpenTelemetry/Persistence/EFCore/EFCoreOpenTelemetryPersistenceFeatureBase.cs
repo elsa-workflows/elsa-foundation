@@ -31,6 +31,6 @@ public abstract class EFCoreOpenTelemetryPersistenceFeatureBase : EFCorePersiste
         services.AddSingleton<EfCoreOpenTelemetryStore>();
         services.AddSingleton<IOpenTelemetryStore>(sp => sp.GetRequiredService<EfCoreOpenTelemetryStore>());
         services.AddScoped<IStartupTask, StartOpenTelemetryDrainingStartupTask>();
-        services.AddShellTerminator<StopOpenTelemetryDrainingShellTerminator>();
+        services.AddShellTerminator<StopOpenTelemetryDrainingShellTerminator>(LifecyclePhase.Default, 0);
     }
 }

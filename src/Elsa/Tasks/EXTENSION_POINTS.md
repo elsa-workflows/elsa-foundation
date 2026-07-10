@@ -15,7 +15,10 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   `StopShellTasksTerminator` stops them at the mirrored `Start`-phase teardown point, before later
   terminators flush stores and before the shell provider is disposed. `TaskManager.DisposeAsync`
   awaits the same idempotent stop operation as a fallback.
-- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. Implement
+  `IStoppableTaskManager` as an additive capability when the replacement owns shell-lifetime work that
+  must stop before provider disposal; existing `ITaskManager` implementations remain compatible and
+  otherwise keep their previous DI-disposal behavior.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature).

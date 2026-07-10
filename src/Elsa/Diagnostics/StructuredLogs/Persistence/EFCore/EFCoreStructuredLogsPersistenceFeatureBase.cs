@@ -41,6 +41,6 @@ public abstract class EFCoreStructuredLogsPersistenceFeatureBase : EFCorePersist
         services.AddSingleton<EfCoreStructuredLogStore>();
         services.AddSingleton<IStructuredLogStore>(sp => sp.GetRequiredService<EfCoreStructuredLogStore>());
         services.AddScoped<IStartupTask, StartStructuredLogDrainingStartupTask>();
-        services.AddShellTerminator<StopStructuredLogDrainingShellTerminator>();
+        services.AddShellTerminator<StopStructuredLogDrainingShellTerminator>(LifecyclePhase.Default, 0);
     }
 }

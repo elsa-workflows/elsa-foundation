@@ -11,7 +11,7 @@ namespace Elsa.Tasks.Services;
 /// Manages the lifecycle of startup, background, and recurring tasks for tenants.
 /// Executes tasks in the proper sequence: startup tasks first, then background tasks, then recurring tasks.
 /// </summary>
-public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IAsyncDisposable
+public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IStoppableTaskManager, IAsyncDisposable
 {
     private readonly ILogger<TaskManager> logger = loggerFactory.CreateLogger<TaskManager>();
     private readonly CancellationTokenSource _shutdownCancellationTokenSource = new();

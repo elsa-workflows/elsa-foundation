@@ -8,5 +8,7 @@ public sealed class StopShellTasksTerminator(ITaskManager taskManager) : IShellT
 {
     /// <inheritdoc />
     public Task TerminateAsync(CancellationToken cancellationToken = default) =>
-        taskManager.StopExecutingRegisteredTasks(cancellationToken);
+        taskManager is IStoppableTaskManager stoppableTaskManager
+            ? stoppableTaskManager.StopExecutingRegisteredTasks(cancellationToken)
+            : Task.CompletedTask;
 }

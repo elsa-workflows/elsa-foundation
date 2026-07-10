@@ -60,7 +60,13 @@ public sealed class SqliteOpenTelemetryPersistenceFeatureTests
         Assert.Contains(services, d =>
             d.ServiceType == typeof(StopOpenTelemetryDrainingShellTerminator) &&
             d.Lifetime == ServiceLifetime.Transient);
-        Assert.Contains(services, d => d.ServiceType == typeof(IShellTerminator));
+        var registration = Assert.Single(services
+            .Where(d => d.ServiceType == typeof(ShellTerminatorRegistration))
+            .Select(d => d.ImplementationInstance)
+            .OfType<ShellTerminatorRegistration>(),
+            x => x.TerminatorType == typeof(StopOpenTelemetryDrainingShellTerminator));
+        Assert.Equal(LifecyclePhase.Default, registration.Phase);
+        Assert.Equal(0, registration.Order);
     }
 
     [Fact]
