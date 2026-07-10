@@ -6,6 +6,8 @@ using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Entities;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Mapping;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
@@ -22,10 +24,14 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
 public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable, IAsyncDisposable
 {
     private const int BatchSize = 200;
-    private const int MaxBatchRetries = 5;
+    // Exponential backoff (issue #607, parity with EfCoreOpenTelemetryStore): the old fixed 1s x 5 was both
+    // too slow for transient lock contention and too eager to give up under sustained reader load.
+    private const int MaxBatchRetries = 8;
     private const int DefaultMaxRetainedEntries = 100_000;
     private const int DefaultPruneInterval = 5_000;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+    private const long ShedLogIntervalMs = 30_000;
+    private static readonly TimeSpan DefaultBaseRetryDelay = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DrainCompletionTimeout = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan ShutdownDrainTimeout = TimeSpan.FromSeconds(10);
 
@@ -35,13 +41,20 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     private readonly int _pruneInterval;
     private readonly Channel<StructuredLogEntry> _channel;
     private readonly CancellationTokenSource _cts = new();
+    private readonly ILogger<EfCoreStructuredLogStore> _logger;
+    private readonly TimeSpan _baseRetryDelay;
     private int _draining;
     private int _insertedSincePrune;
     private int _disposed;
     private Task? _drainLoop;
+    private long _shedEntries;
+    private long _lastShedLogTicks;
 
-    public EfCoreStructuredLogStore(IDbContextFactory<StructuredLogsDbContext> dbContextFactory, IOptions<StructuredLogsOptions> options)
-        : this(dbContextFactory, options, DefaultMaxRetainedEntries, DefaultPruneInterval)
+    public EfCoreStructuredLogStore(
+        IDbContextFactory<StructuredLogsDbContext> dbContextFactory,
+        IOptions<StructuredLogsOptions> options,
+        ILogger<EfCoreStructuredLogStore>? logger = null)
+        : this(dbContextFactory, options, DefaultMaxRetainedEntries, DefaultPruneInterval, logger)
     {
     }
 
@@ -49,15 +62,21 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
     /// Constructor with explicit retention tuning, primarily for tests that want a small cap.
     /// <paramref name="maxRetainedEntries"/> bounds the durable table the same way the in-memory ring
     /// buffer bounds live history; <paramref name="pruneInterval"/> is how many inserts elapse between
-    /// prune sweeps.
+    /// prune sweeps. <paramref name="baseRetryDelay"/> overrides the first backoff delay (subsequent
+    /// retries double it up to a fixed ceiling) so retry-exhaustion tests do not have to wait out the
+    /// production backoff schedule.
     /// </summary>
     public EfCoreStructuredLogStore(
         IDbContextFactory<StructuredLogsDbContext> dbContextFactory,
         IOptions<StructuredLogsOptions> options,
         int maxRetainedEntries,
-        int pruneInterval)
+        int pruneInterval,
+        ILogger<EfCoreStructuredLogStore>? logger = null,
+        TimeSpan? baseRetryDelay = null)
     {
         _dbContextFactory = dbContextFactory;
+        _logger = logger ?? NullLogger<EfCoreStructuredLogStore>.Instance;
+        _baseRetryDelay = baseRetryDelay ?? DefaultBaseRetryDelay;
         var value = options.Value;
         _maxRecentQuerySize = Math.Max(1, value.MaxRecentQuerySize);
         _maxRetainedEntries = Math.Max(1, maxRetainedEntries);
@@ -68,7 +87,7 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = false,
-        });
+        }, OnEntryShed);
     }
 
     /// <inheritdoc />
@@ -252,15 +271,19 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                // Transient (e.g. the migration has not finished creating the table yet). Retry.
-                await Task.Delay(RetryDelay, cancellationToken);
+                // Transient (e.g. the migration has not finished creating the table yet, or SQLite lock
+                // contention). Retry with backoff.
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure persisting a structured log batch (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort: drop this batch rather than block the drain loop forever. Diagnostics
                 // persistence tolerates loss; the live feed and in-memory history are unaffected.
+                _logger.LogError(ex, "Dropping a structured log batch of {EntryCount} entries after {MaxAttempts} failed persistence attempts.", batch.Count, MaxBatchRetries + 1);
                 return;
             }
         }
@@ -304,18 +327,45 @@ public sealed class EfCoreStructuredLogStore : IStructuredLogStore, IDisposable,
             {
                 throw;
             }
-            catch when (attempt < MaxBatchRetries)
+            catch (Exception ex) when (attempt < MaxBatchRetries)
             {
-                // Transient (e.g. SQLite busy/lock contention). Retry.
-                await Task.Delay(RetryDelay, cancellationToken);
+                // Transient (e.g. SQLite busy/lock contention). Retry with backoff.
+                var delay = GetRetryDelay(attempt);
+                _logger.LogDebug(ex, "Transient failure pruning structured log retention (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", attempt + 1, MaxBatchRetries + 1, delay);
+                await Task.Delay(delay, cancellationToken);
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort retention: a failed prune must not break the drain loop. Keep the
                 // counter armed so the next persisted batch retries pruning.
+                _logger.LogWarning(ex, "Giving up pruning structured log retention after {MaxAttempts} attempts; the next persisted batch retries.", MaxBatchRetries + 1);
                 return;
             }
         }
+    }
+
+    private TimeSpan GetRetryDelay(int attempt)
+    {
+        var delay = _baseRetryDelay * Math.Pow(2, attempt);
+        return delay < MaxRetryDelay ? delay : MaxRetryDelay;
+    }
+
+    /// <summary>
+    /// Invoked by the bounded channel when it evicts the oldest queued entry to make room (issue #607):
+    /// the drain writer is not keeping up with capture. Logged rate-limited so a sustained overload does
+    /// not flood the log with one warning per shed entry.
+    /// </summary>
+    private void OnEntryShed(StructuredLogEntry entry)
+    {
+        var shed = Interlocked.Increment(ref _shedEntries);
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastShedLogTicks);
+        if (last != 0 && now - last < ShedLogIntervalMs)
+            return;
+        if (Interlocked.CompareExchange(ref _lastShedLogTicks, now, last) != last)
+            return;
+
+        _logger.LogWarning("Structured log drain channel is full; shedding the oldest queued entry ({ShedEntryCount} entries shed since startup). The database writer is not keeping up with capture.", shed);
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using Elsa.Persistence.EFCore.Extensions;
 using Elsa.Persistence.EFCore.Options;
 using Elsa.Persistence.EFCore.Sqlite.Constants;
+using Elsa.Persistence.EFCore.Sqlite.Interceptors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Reflection;
@@ -19,6 +20,7 @@ public static class DbContextOptionsBuilderExtensions
     {
         builder
             .UseElsaDbContextOptions(options)
+            .AddInterceptors(SqliteWalConnectionInterceptor.Instance)
             .UseSqlite(connectionString, builder =>
             {
                 builder

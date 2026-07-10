@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\Core\Elsa.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\EFCore\Elsa.Persistence.EFCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Elsa\Persistence\EFCore\Sqlite\Elsa.Persistence.EFCore.Sqlite.csproj" />
   </ItemGroup>
 
 </Project>
