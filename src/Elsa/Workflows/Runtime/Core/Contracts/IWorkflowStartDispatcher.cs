@@ -14,8 +14,14 @@ public interface IWorkflowStartDispatcher
     /// requires a live Published reference; a test-run dispatch requires a live TestRun reference and its ExpiresAt is
     /// enforced). An artifact with no references at all is dispatched unchanged (direct/seeded runtime path).
     /// </summary>
+    /// <param name="dispatchOptions">
+    /// Optional per-request dispatch options forwarded verbatim to the workflow execution agent (spec 089 FR-019).
+    /// It carries the ambient request scope the in-process inline drain uses to build activity execution contexts.
+    /// <c>null</c> ⇒ <see cref="WorkflowExecutionCommandDispatchOptions.Default"/> (identical to the pre-089 single-arg behavior).
+    /// </param>
     ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default);
 }

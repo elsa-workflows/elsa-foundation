@@ -184,7 +184,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 variables: variables,
                 inputs: inputs),
             WorkflowExecutableReferenceScope.TestRun,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         var status = MapStatus(dispatch.CommandDispatch.Status);
         var testRun = new WorkflowTestRun(

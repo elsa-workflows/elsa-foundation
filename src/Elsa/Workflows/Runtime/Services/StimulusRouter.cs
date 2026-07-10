@@ -154,7 +154,11 @@ public sealed class StimulusRouter : IStimulusRouter
                 stimulusInput: request.Input,
                 triggerNodeId: binding.ExecutableNodeId);
 
-            var result = await _startDispatcher.DispatchAsync(startRequest, cancellationToken: cancellationToken);
+            // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
+            // start can build activity execution contexts from the caller's ambient scope. Live reference only —
+            // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
+            // boundaries. Stimulus-triggered starts are published dispatches (default reference scope, ADR 0040).
+            var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
             outcomes.Add(StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
         }
 
@@ -180,7 +184,10 @@ public sealed class StimulusRouter : IStimulusRouter
                 requestedBy: request.RequestedBy,
                 metadata: dispatchMetadata);
 
-            var result = await _resumeDispatcher.DispatchAsync(resumeRequest, cancellationToken);
+            // Same request scope serves every outcome of one HTTP request (spec 089 FR-019 / scenario 5.5): a resume
+            // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write
+            // lands on the same exchange. Live reference only — never persisted, dropped across process boundaries.
+            var result = await _resumeDispatcher.DispatchAsync(resumeRequest, request.DispatchOptions, cancellationToken);
             outcomes.Add(new StimulusResumeOutcome(workflowExecutionId, result.Status, result.Reason));
         }
 

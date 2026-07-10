@@ -121,6 +121,48 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_ForwardsDispatchOptionsToAgentEnqueue()
+    {
+        // Spec 089 E-D4 (FR-019 / scenario 5.5): the resume dispatcher forwards the caller's dispatch options verbatim
+        // into the agent mailbox so a sync-authored endpoint's resume can author the live response on the caller's
+        // async flow using the ambient request scope.
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution());
+        await executableStore.SaveAsync(NewExecutable());
+        var options = new WorkflowExecutionCommandDispatchOptions();
+
+        await dispatcher.DispatchAsync(NewDispatchRequest(), options);
+
+        Assert.Same(options, Assert.Single(agentProvider.Agent.DispatchOptions));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_WithoutDispatchOptions_EnqueuesDefaultOptions()
+    {
+        // Absent options ⇒ the dispatcher enqueues WorkflowExecutionCommandDispatchOptions.Default, pinning the
+        // pre-089 single-arg behavior (no ambient services attached).
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var agentProvider = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("bookmark-1"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution());
+        await executableStore.SaveAsync(NewExecutable());
+
+        await dispatcher.DispatchAsync(NewDispatchRequest());
+
+        var options = Assert.Single(agentProvider.Agent.DispatchOptions);
+        Assert.Same(WorkflowExecutionCommandDispatchOptions.Default, options);
+        Assert.Null(options!.AmbientServices);
+    }
+
+    [Fact]
     public async Task DispatchAsync_DoesNotEnqueueWhenWorkflowStateIsMissing()
     {
         var store = new InMemoryBookmarkStateStore();
@@ -304,6 +346,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     private sealed class RecordingWorkflowExecutionActor : IWorkflowExecutionActor
     {
         public List<WorkflowExecutionCommandEnvelope> Envelopes { get; } = [];
+        public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
 
         public WorkflowExecutionActorDescriptor Descriptor { get; } = new(
             workflowExecutionId: "wfexec-1",
@@ -313,12 +356,19 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
             capabilities: WorkflowExecutionActorCapabilities.InProcessMailbox,
             activatedAt: DateTimeOffset.UnixEpoch);
 
-        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+            Record(envelope, null, cancellationToken);
+
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, WorkflowExecutionCommandDispatchOptions options, CancellationToken cancellationToken = default) =>
+            Record(envelope, options, cancellationToken);
+
+        private ValueTask<WorkflowExecutionCommandDispatchResult> Record(WorkflowExecutionCommandEnvelope envelope, WorkflowExecutionCommandDispatchOptions? options, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(envelope);
             cancellationToken.ThrowIfCancellationRequested();
 
             Envelopes.Add(envelope);
+            DispatchOptions.Add(options);
             return new(new WorkflowExecutionCommandDispatchResult(
                 envelopeId: envelope.EnvelopeId,
                 workflowExecutionId: envelope.WorkflowExecutionId,

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Http.Core;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
@@ -294,6 +296,238 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
 
+    // ---- Spec 089 sub-unit E (synchronous responses) publish helpers ----
+
+    /// <summary>
+    /// Publishes a synchronous (spec 089 E) endpoint workflow: a start-trigger <see cref="HttpEndpoint"/> on
+    /// <paramref name="path"/>/<paramref name="method"/> authored <see cref="ResponseMode.Sync"/>, sequenced before a
+    /// <see cref="WriteHttpResponse"/> authoring <paramref name="statusCode"/>/<paramref name="body"/>/
+    /// <paramref name="contentType"/> (and one custom header). An HTTP request runs the endpoint then the
+    /// WriteHttpResponse INLINE on the caller's flow, so the middleware returns the workflow-authored response in the
+    /// same exchange (scenario 5.1). Pass <paramref name="responseMode"/> = <see cref="ResponseMode.Async"/> for the
+    /// async baseline variant (scenario 5.4): the same graph, but the middleware never populates the sink, so the
+    /// response is the 202 baseline and the WriteHttpResponse only records the durable artifact.
+    /// </summary>
+    public Task PublishSyncEndpointWithWriteResponseWorkflowAsync(
+        string artifactId,
+        string path,
+        string method,
+        string resultValueId,
+        int statusCode,
+        string body,
+        string contentType,
+        (string Name, string Value)? header = null,
+        ResponseMode responseMode = ResponseMode.Sync)
+    {
+        var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            nodeId: "node-sync-endpoint", responseMode: responseMode);
+        var write = NewWriteHttpResponseNode("node-write-response", statusCode, body, contentType, header);
+        return PublishTriggerSequenceAsync(artifactId, endpoint, write);
+    }
+
+    /// <summary>
+    /// Publishes a synchronous (spec 089 E) endpoint that suspends BEFORE any WriteHttpResponse (scenario 5.2): a
+    /// start-trigger <see cref="HttpEndpoint"/> (Sync) sequenced before a mid-flow <see cref="HttpEndpoint"/>
+    /// (<see cref="HttpEndpoint.CanStartWorkflow"/> = false — it suspends) and then a <see cref="WriteHttpResponse"/>
+    /// that is never reached in the starting exchange. The starting request therefore writes no live response and the
+    /// middleware degrades to <c>202</c> with the started execution id.
+    /// </summary>
+    public Task PublishSyncSuspendBeforeResponseWorkflowAsync(
+        string artifactId,
+        string startPath,
+        string suspendPath,
+        string method,
+        string startResultValueId)
+    {
+        var start = NewHttpEndpointNode($"{artifactId}-start", startPath, startResultValueId, [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            nodeId: "node-sync-start", responseMode: ResponseMode.Sync);
+        var suspend = NewHttpEndpointNode($"{artifactId}-suspend", suspendPath, $"{startResultValueId}-suspend", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false,
+            nodeId: "node-sync-suspend");
+        var write = NewWriteHttpResponseNode("node-write-after-suspend", 200, "unreachable", "text/plain", header: null);
+
+        return PublishTriggerSequenceAsync(artifactId, start, suspend, write,
+            resumeTargetNodeId: suspend.ExecutableNodeId);
+    }
+
+    /// <summary>
+    /// Publishes a synchronous (spec 089 E) endpoint with a short per-endpoint <paramref name="requestTimeout"/> and a
+    /// <see cref="StallingActivity"/> that outlasts it (scenario 5.3): the inline drain stalls on the timeout token,
+    /// the stall throws <see cref="OperationCanceledException"/>, and the middleware maps it to <c>408</c>. A
+    /// <see cref="WriteHttpResponse"/> follows the stall but is never reached.
+    /// </summary>
+    public Task PublishSyncStallThenResponseWorkflowAsync(
+        string artifactId,
+        string path,
+        string method,
+        string resultValueId,
+        TimeSpan requestTimeout,
+        TimeSpan stallDuration)
+    {
+        var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            nodeId: "node-sync-stall-endpoint", responseMode: ResponseMode.Sync, requestTimeout: requestTimeout);
+        var stall = NewStallingNode("node-stall", stallDuration);
+        var write = NewWriteHttpResponseNode("node-write-after-stall", 200, "unreachable", "text/plain", header: null);
+        return PublishTriggerSequenceAsync(artifactId, endpoint, stall, write);
+    }
+
+    /// <summary>
+    /// Publishes a MID-FLOW synchronous (spec 089 E, scenario 5.5) endpoint workflow: a mid-flow
+    /// <see cref="HttpEndpoint"/> (<see cref="HttpEndpoint.CanStartWorkflow"/> = false, authored
+    /// <see cref="ResponseMode.Sync"/>) sequenced before a <see cref="WriteHttpResponse"/>. The run is started
+    /// directly and suspends at the endpoint; the RESUMING request drains the WriteHttpResponse inline on its own
+    /// fresh scope, so that request receives the workflow-authored response in the same exchange — the whole point of
+    /// the D+E composition. Because the node cannot start a workflow it is not a trigger and is not indexed; the run
+    /// is started via <see cref="StartWorkflowDirectlyAsync"/> and its bookmark route goes live for the resume.
+    /// </summary>
+    public async Task PublishMidFlowSyncWriteResponseWorkflowAsync(
+        string artifactId,
+        string path,
+        string method,
+        string resultValueId,
+        int statusCode,
+        string body,
+        string contentType)
+    {
+        var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false,
+            nodeId: "node-midflow-sync-endpoint", responseMode: ResponseMode.Sync);
+        var write = NewWriteHttpResponseNode("node-write-response", statusCode, body, contentType, header: null);
+        var sequence = NewSequenceNode("node-sequence", endpoint, write);
+
+        var executable = new WorkflowExecutable(
+            identity: NewIdentity(artifactId),
+            rootActivity: sequence,
+            resumeTargets: NewHttpEndpointResumeTargets(endpoint.ExecutableNodeId),
+            createdAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+
+        // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
+        // start is the only way in — the mid-flow route goes live off the bookmark-lifecycle notification.
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+    }
+
+    /// <summary>
+    /// Composes <paramref name="children"/> under a real <see cref="SequenceActivity"/> whose first child is the
+    /// start trigger, stores and indexes the executable so the start endpoint's (template, method) binding lands in
+    /// the route table. <paramref name="resumeTargetNodeId"/> (when set) declares the HttpEndpoint resume target for a
+    /// mid-flow child so a matching request can resume the suspended run.
+    /// </summary>
+    private async Task PublishTriggerSequenceAsync(
+        string artifactId,
+        ExecutableNode first,
+        ExecutableNode second,
+        ExecutableNode? third = null,
+        string? resumeTargetNodeId = null)
+    {
+        var children = third is null ? new[] { first, second } : [first, second, third];
+        var sequence = NewSequenceNode("node-sequence", children);
+
+        var executable = new WorkflowExecutable(
+            identity: NewIdentity(artifactId),
+            rootActivity: sequence,
+            resumeTargets: resumeTargetNodeId is null
+                ? new Dictionary<string, WorkflowExecutableResumeTarget>()
+                : NewHttpEndpointResumeTargets(resumeTargetNodeId),
+            createdAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>());
+
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        // Index so the START endpoint's (template, method) trigger binding lands in the route table.
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+    }
+
+    /// <summary>Builds a real <see cref="SequenceActivity"/> container node (child slot + ordered structure) over <paramref name="children"/>.</summary>
+    private ExecutableNode NewSequenceNode(string nodeId, params ExecutableNode[] children)
+    {
+        var serializer = Services.GetRequiredService<IPayloadSerializer>();
+
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(serializer, typeof(SequenceActivity)),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+    }
+
+    /// <summary>Builds a <see cref="WriteHttpResponse"/> node authoring the given status/body/content-type and an optional header.</summary>
+    private ExecutableNode NewWriteHttpResponseNode(string nodeId, int statusCode, string body, string contentType, (string Name, string Value)? header)
+    {
+        var serializer = Services.GetRequiredService<IPayloadSerializer>();
+
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>
+        {
+            [nameof(WriteHttpResponse.StatusCode)] = LiteralBinding(nameof(WriteHttpResponse.StatusCode), statusCode, "System.Int32"),
+            [nameof(WriteHttpResponse.Body)] = LiteralBinding(nameof(WriteHttpResponse.Body), body, "System.String"),
+            [nameof(WriteHttpResponse.ContentType)] = LiteralBinding(nameof(WriteHttpResponse.ContentType), contentType, "System.String")
+        };
+
+        if (header is { } h)
+            inputBindings[nameof(WriteHttpResponse.Headers)] = LiteralBinding(
+                nameof(WriteHttpResponse.Headers),
+                new Dictionary<string, string[]> { [h.Name] = [h.Value] },
+                "System.Collections.Generic.IDictionary`2[[System.String],[System.String[]]]");
+
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(WriteHttpResponse).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(serializer, typeof(WriteHttpResponse)),
+            inputBindings: inputBindings,
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+    }
+
+    /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (scenario 5.3 timeout).</summary>
+    private ExecutableNode NewStallingNode(string nodeId, TimeSpan duration)
+    {
+        var serializer = Services.GetRequiredService<IPayloadSerializer>();
+
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(StallingActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: ClrConstruction.DescriptorType,
+            descriptorPayload: ClrConstruction.Payload(serializer, typeof(StallingActivity)),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>
+            {
+                [nameof(StallingActivity.Duration)] = LiteralBinding(nameof(StallingActivity.Duration), duration.ToString("c"), "System.TimeSpan")
+            },
+            outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+            metadata: new Dictionary<string, string>());
+    }
+
+    /// <summary>
+    /// Reads the single durable <see cref="HttpResponseInstruction"/> artifact <see cref="WriteHttpResponse"/> records
+    /// under the well-known workflow-output name (keyed on the runtime output-name metadata, mirroring the activity's
+    /// own execution tests) — the durable proof the artifact was recorded regardless of sync/async delivery.
+    /// </summary>
+    public async Task<JsonElement> ReadHttpResponseArtifactAsync(string workflowExecutionId)
+    {
+        var durableValues = await Services.GetRequiredService<IDurableValueStateStore>().ListAsync(workflowExecutionId);
+        var artifact = Assert.Single(
+            durableValues,
+            value => value.Metadata.TryGetValue(RuntimeMetadataKeys.OutputName, out var name)
+                && name == HttpResponseInstruction.OutputName);
+        Assert.NotNull(artifact.InlineValue);
+        return artifact.InlineValue!.Value;
+    }
+
     /// <summary>
     /// Starts a run of a previously-published artifact directly through the runtime API — no HTTP stimulus, no
     /// trigger identity (spec 089 D US4 independent test). The in-process agent drains synchronously, so a mid-flow
@@ -337,6 +571,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The number of workflow executions the runtime has persisted — 0 proves nothing started (401/413 paths).</summary>
     public async Task<int> CountWorkflowExecutionsAsync() =>
         (await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync()).Count;
+
+    /// <summary>The single persisted workflow execution's state — asserts exactly one run exists.</summary>
+    public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
+        Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
@@ -393,7 +631,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         long? requestSizeLimit,
         bool? canStartWorkflow,
         bool isTriggerNode,
-        string? nodeId = null)
+        string? nodeId = null,
+        ResponseMode? responseMode = null,
+        TimeSpan? requestTimeout = null)
     {
         var serializer = Services.GetRequiredService<IPayloadSerializer>();
 
@@ -425,6 +665,20 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         if (requestSizeLimit is { } sizeLimit)
             inputBindings[nameof(HttpEndpoint.RequestSizeLimit)] =
                 LiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit, "System.Int64");
+
+        // Spec 089 E: the per-endpoint RequestTimeout literal (scenario 5.3 arms a short timeout so a stalling run
+        // trips 408). Authored as an ISO-8601 duration string, exactly the shape the trigger provider decodes.
+        if (requestTimeout is { } timeout)
+            inputBindings[nameof(HttpEndpoint.RequestTimeout)] =
+                LiteralBinding(nameof(HttpEndpoint.RequestTimeout), timeout.ToString("c"), "System.TimeSpan");
+
+        // Spec 089 E (E-D1): the ResponseMode literal. Authored as the underlying numeric value with the enum's CLR
+        // type name so it materializes at execution time (the activity's InputArgument<ResponseMode>) AND is decoded
+        // by the trigger provider's ReadLiteralEnum (which accepts a defined numeric) at publish/index time — one
+        // authoring shape serving both the start-trigger binding metadata and the mid-flow bookmark metadata.
+        if (responseMode is { } mode)
+            inputBindings[nameof(HttpEndpoint.ResponseMode)] =
+                LiteralBinding(nameof(HttpEndpoint.ResponseMode), (int)mode, typeof(ResponseMode).FullName!);
 
         var metadata = isTriggerNode
             ? new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType }

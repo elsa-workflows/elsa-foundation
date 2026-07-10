@@ -4,6 +4,7 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.Services;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -68,6 +69,12 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         // stimulus router; mounted into the shell pipeline by UseMiddleware below. CShells guarantees an
         // IMiddlewareFactory in the shell container, so only the middleware itself needs registering.
         services.AddScoped<HttpEndpointMiddleware>();
+
+        // The request-scoped sync-response sink (spec 089 sub-unit E, E-D2): the middleware populates the request
+        // scope's instance with the live HttpContext for a sync-mode dispatch, and WriteHttpResponse resolves it
+        // to decide between a live write and the artifact-only path. Scoped so a fresh internal scope (async mode)
+        // gets a distinct, unpopulated instance — the load-bearing discriminator (never IHttpContextAccessor).
+        services.AddScoped<SyncHttpResponseSink>();
     }
 
     /// <summary>

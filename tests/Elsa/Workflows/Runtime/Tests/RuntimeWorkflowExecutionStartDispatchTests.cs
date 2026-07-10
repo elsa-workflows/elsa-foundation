@@ -184,6 +184,39 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal("artifact-1", envelope.Command.Metadata["runtime.artifactId"]);
     }
 
+    [Fact]
+    public async Task DispatchAsync_ForwardsDispatchOptionsToAgentEnqueue()
+    {
+        // Spec 089 E-D4 (FR-019): the dispatcher forwards the caller's dispatch options verbatim into the agent
+        // mailbox so an in-process inline drain builds activity execution contexts from the ambient request scope.
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+        var options = new WorkflowExecutionCommandDispatchOptions();
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"), dispatchOptions: options);
+
+        Assert.Same(options, Assert.Single(agentProvider.Agent.DispatchOptions));
+    }
+
+    [Fact]
+    public async Task DispatchAsync_WithoutDispatchOptions_EnqueuesDefaultOptions()
+    {
+        // Absent options ⇒ the dispatcher enqueues WorkflowExecutionCommandDispatchOptions.Default, pinning the
+        // pre-089 single-arg behavior (no ambient services attached).
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
+
+        var options = Assert.Single(agentProvider.Agent.DispatchOptions);
+        Assert.Same(WorkflowExecutionCommandDispatchOptions.Default, options);
+        Assert.Null(options!.AmbientServices);
+    }
+
     private WorkflowStartDispatcher NewDispatcher(
         InMemoryWorkflowExecutableStore store,
         RecordingAgentProvider agentProvider,
@@ -257,6 +290,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
 
         public WorkflowExecutionActorDescriptor Descriptor { get; private set; } = NewDescriptor(workflowExecutionId);
         public List<WorkflowExecutionCommandEnvelope> Envelopes { get; } = [];
+        public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
 
         public void AssignWorkflowExecutionId(string workflowExecutionId)
         {
@@ -264,9 +298,16 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             Descriptor = NewDescriptor(workflowExecutionId);
         }
 
-        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+            Record(envelope, null);
+
+        public ValueTask<WorkflowExecutionCommandDispatchResult> EnqueueAsync(WorkflowExecutionCommandEnvelope envelope, WorkflowExecutionCommandDispatchOptions options, CancellationToken cancellationToken = default) =>
+            Record(envelope, options);
+
+        private ValueTask<WorkflowExecutionCommandDispatchResult> Record(WorkflowExecutionCommandEnvelope envelope, WorkflowExecutionCommandDispatchOptions? options)
         {
             Envelopes.Add(envelope);
+            DispatchOptions.Add(options);
             return ValueTask.FromResult(new WorkflowExecutionCommandDispatchResult(
                 envelopeId: envelope.EnvelopeId,
                 workflowExecutionId: _workflowExecutionId,

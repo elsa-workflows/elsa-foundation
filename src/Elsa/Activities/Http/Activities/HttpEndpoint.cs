@@ -134,6 +134,16 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     public InputArgument<long>? RequestSizeLimit { get; set; }
 
     /// <summary>
+    /// How the endpoint delivers the workflow-authored response (spec 089 sub-unit E). <see cref="ResponseMode.Sync"/>
+    /// holds the request open on the caller's async flow so a <see cref="WriteHttpResponse"/> the run reaches writes
+    /// the live response in the same exchange (degrading to <c>202</c> on suspend/no-write); <see cref="ResponseMode.Async"/>
+    /// (the default) is today's async/202 baseline. Authored literal, resolved at publish time like <see cref="Path"/>;
+    /// a non-literal or invalid mode string fails the publish. <b>Non-identity</b>: it never enters the endpoint
+    /// stimulus hash. Null/absent applies <see cref="ResponseMode.Async"/> (omitted from binding/bookmark metadata).
+    /// </summary>
+    public InputArgument<ResponseMode>? ResponseMode { get; set; }
+
+    /// <summary>
     /// Route parameters extracted from the matched template (e.g. <c>id = "42"</c> for <c>orders/{id}</c>);
     /// empty for direct runs or templates without parameters.
     /// </summary>
@@ -270,7 +280,8 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
             Authorize: Authorize is not null && context.Get(Authorize),
             Policy: Policy is not null ? context.Get(Policy) : null,
             RequestTimeout: RequestTimeout is not null ? context.Get(RequestTimeout) : null,
-            RequestSizeLimit: RequestSizeLimit is not null ? context.Get(RequestSizeLimit) : null);
+            RequestSizeLimit: RequestSizeLimit is not null ? context.Get(RequestSizeLimit) : null,
+            ResponseMode: ResponseMode is not null ? context.Get(ResponseMode) : Elsa.Http.Core.ResponseMode.Async);
 
     private bool CanStart(IActivityExecutionContext context) =>
         CanStartWorkflow is null || context.Get(CanStartWorkflow);

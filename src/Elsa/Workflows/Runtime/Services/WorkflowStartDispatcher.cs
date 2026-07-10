@@ -45,6 +45,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -58,7 +59,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // rejection reason distinguishes "no live reference" from "reference expired".
         await GateOnReferenceAsync(request.ArtifactId, requiredScope, cancellationToken);
 
-        return await DispatchCoreAsync(request, executable, cancellationToken);
+        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
     }
 
     // Resolves the artifact's Source References and enforces the reference-derived scope/expiry gate.
@@ -96,6 +97,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
@@ -135,7 +137,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             metadata: metadata);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
-        var dispatchResult = await agent.EnqueueAsync(envelope, cancellationToken);
+        var dispatchResult = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
 
         return new WorkflowExecutionStartDispatchResult(
             workflowExecutionId: workflowExecutionId,

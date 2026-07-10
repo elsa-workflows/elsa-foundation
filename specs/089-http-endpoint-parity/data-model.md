@@ -46,11 +46,11 @@ Reuses `src/Elsa/Http` `RouteTable`/`HttpRouteData`. Content = `http:template` v
 
 ## BookmarkState (as-built, D)
 
-Mid-flow `HttpEndpoint` bookmarks use the existing `BookmarkState` shape with no schema change: `StimulusType = HttpEndpointRouting.StimulusType` (`"HttpEndpoint"`), `StimulusHash = HttpEndpointStimulus.Hash(template, method)`, `ExpiresAt = null`. **One bookmark per supported method** (`bookmarkId = "http-endpoint:{activityExecutionId}:{method}"`), each carrying the SAME `Metadata` payload the trigger provider stamps on bindings — `http:template` + `http:method` + the non-identity endpoint options (`http:authorize`/`http:policy`/`http:requestTimeout`/`http:requestSizeLimit`) via `HttpEndpointStimulusOptions.ToMetadata()`. The metadata is what the route-table resolver reads (template) and the middleware reads for options on a resume-only match (D-D5). Expiry is enforced only in the `IGlobalBookmarkStimulusLookup` layer; the raw `IBookmarkStimulusIndex` type scan is unfiltered.
+Mid-flow `HttpEndpoint` bookmarks use the existing `BookmarkState` shape with no schema change: `StimulusType = HttpEndpointRouting.StimulusType` (`"HttpEndpoint"`), `StimulusHash = HttpEndpointStimulus.Hash(template, method)`, `ExpiresAt = null`. **One bookmark per supported method** (`bookmarkId = "http-endpoint:{activityExecutionId}:{method}"`), each carrying the SAME `Metadata` payload the trigger provider stamps on bindings — `http:template` + `http:method` + the non-identity endpoint options (`http:authorize`/`http:policy`/`http:requestTimeout`/`http:requestSizeLimit`/`http:responseMode`) via `HttpEndpointStimulusOptions.ToMetadata()` (so a mid-flow resume reads its authored `ResponseMode` back — scenario 5.5). The metadata is what the route-table resolver reads (template) and the middleware reads for options on a resume-only match (D-D5). Expiry is enforced only in the `IGlobalBookmarkStimulusLookup` layer; the raw `IBookmarkStimulusIndex` type scan is unfiltered.
 
 ## HttpResponseInstruction (unchanged, E)
 
-Remains the durable artifact recorded under well-known output `HttpResponse`. Sub-unit E additionally writes the live response from the same instruction when a request-affine `HttpContext` is present; the artifact stays the observable record in all modes.
+Remains the durable artifact recorded under well-known output `HttpResponse`. Sub-unit E additionally writes the live response from the same instruction when the request-scoped `SyncHttpResponseSink` exposes a live `HttpContext` (the middleware populates it for sync-mode dispatches only — never `IHttpContextAccessor`, whose AsyncLocal would leak into async-mode inline drains); the artifact stays the observable record in all modes.
 
 ## State transitions (sync mode, E)
 

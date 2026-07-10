@@ -211,6 +211,58 @@ public sealed class StimulusRouterTests
         Assert.Equal(2, startDispatcher.Requests.Count);
     }
 
+    [Fact]
+    public async Task Route_ForwardsDispatchOptionsToStartDispatcher()
+    {
+        // Spec 089 E-D4 (FR-019): the router forwards the request's DispatchOptions verbatim to the start dispatcher,
+        // so an in-process inline drain of the started instance can build activity execution contexts from the
+        // caller's ambient scope. Same instance — never a copy.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+        var options = new WorkflowExecutionCommandDispatchOptions();
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, dispatchOptions: options));
+
+        Assert.Same(options, Assert.Single(startDispatcher.DispatchOptions));
+    }
+
+    [Fact]
+    public async Task Route_ForwardsDispatchOptionsToResumeDispatcher()
+    {
+        // Spec 089 E-D4 (FR-019 / scenario 5.5): the same request scope serves resumes too, so a sync-authored
+        // resume gets the caller's ambient services on its same-exchange reply. Same instance — never a copy.
+        var bookmarkStore = new InMemoryBookmarkStateStore();
+        await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));
+        var resumeDispatcher = new RecordingResumeDispatcher();
+        var router = Router(new InMemoryWorkflowTriggerBindingStore(), bookmarkStore, new RecordingStartDispatcher(), resumeDispatcher);
+        var options = new WorkflowExecutionCommandDispatchOptions();
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.ResumeOnly, dispatchOptions: options));
+
+        Assert.Same(options, Assert.Single(resumeDispatcher.DispatchOptions));
+    }
+
+    [Fact]
+    public async Task Route_WithoutDispatchOptions_ForwardsNullToBothDispatchers()
+    {
+        // Absent options ⇒ the router forwards null; each dispatcher then falls back to
+        // WorkflowExecutionCommandDispatchOptions.Default, pinning the pre-089 single-arg behavior.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var bookmarkStore = new InMemoryBookmarkStateStore();
+        await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var resumeDispatcher = new RecordingResumeDispatcher();
+        var router = Router(bindingStore, bookmarkStore, startDispatcher, resumeDispatcher);
+
+        await router.RouteAsync(Request());
+
+        Assert.Null(Assert.Single(startDispatcher.DispatchOptions));
+        Assert.Null(Assert.Single(resumeDispatcher.DispatchOptions));
+    }
+
     /// <summary>A binding store whose cross-artifact lookup throws — proves the router used the supplied match set.</summary>
     private sealed class ThrowingTriggerBindingStore : IWorkflowTriggerBindingStore
     {
@@ -245,8 +297,9 @@ public sealed class StimulusRouterTests
         StimulusRoutingMode mode = StimulusRoutingMode.StartAndResume,
         string? correlationId = null,
         string? idempotencyKey = null,
-        JsonElement? input = null) =>
-        new(StimulusType, StimulusHash, input: input, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey);
+        JsonElement? input = null,
+        WorkflowExecutionCommandDispatchOptions? dispatchOptions = null) =>
+        new(StimulusType, StimulusHash, input: input, mode: mode, correlationId: correlationId, idempotencyKey: idempotencyKey, dispatchOptions: dispatchOptions);
 
     private WorkflowTriggerBinding Binding(string artifactId, string nodeId) =>
         new(
@@ -286,10 +339,12 @@ public sealed class StimulusRouterTests
     {
         private int _counter;
         public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
+        public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
 
-        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, CancellationToken cancellationToken = default)
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            DispatchOptions.Add(dispatchOptions);
             var executionId = $"wfexec-new-{++_counter}";
             onStart?.Invoke(executionId);
             return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId));
@@ -316,10 +371,12 @@ public sealed class StimulusRouterTests
     private sealed class RecordingResumeDispatcher : IBookmarkResumeDispatcher
     {
         public List<BookmarkResumeDispatchRequest> Requests { get; } = [];
+        public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
 
-        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, CancellationToken cancellationToken = default)
+        public ValueTask<BookmarkResumeDispatchResult> DispatchAsync(BookmarkResumeDispatchRequest request, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
+            DispatchOptions.Add(dispatchOptions);
             var bookmark = new BookmarkState(
                 BookmarkId: $"bk-{request.WorkflowExecutionId}",
                 WorkflowExecutionId: request.WorkflowExecutionId,
