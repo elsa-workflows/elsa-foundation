@@ -76,9 +76,12 @@ export function useWorkflowScope({
   const inspectedSupportsScopedVariables = inspectedNode
     ? supportsScopedVariables(inspectedNode, catalogByVersion.get(inspectedNode.activityVersionId))
     : false;
-  // Scope-aware variable visibility + shadowing for the inspected activity (ADR-0027). Backed by a
-  // pending design endpoint; degrades to status "unavailable" until it ships.
-  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, inspectedNode?.nodeId ?? null, catalogByVersion);
+  // Scope-aware variable visibility + shadowing for the SELECTED activity (ADR-0027). Deliberately
+  // NOT keyed to the inspected owner: the owner changes with every scope navigation, so keying the
+  // fetch to it would re-fire the analyze request per navigation. Owner inspection degrades to the
+  // hook's no-selection behaviour; revisit when the analyze endpoint ships (elsa-foundation#285).
+  // Backed by a pending design endpoint; degrades to status "unavailable" until it ships.
+  const scopedVariableAnalysis = useScopedVariableAnalysis(context, draft?.state, selectedNode?.nodeId ?? null, catalogByVersion);
   // Flowchart editing (free connections, empty-canvas add button) is driven by the RESOLVED slot's mode,
   // not the owner's primary-slot mode: with the new scope-frame semantics a container's non-primary slot
   // (e.g. a flowchart-mode branch of a multi-slot activity) can be viewed directly, and it should behave

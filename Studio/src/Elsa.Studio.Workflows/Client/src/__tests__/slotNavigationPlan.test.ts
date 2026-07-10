@@ -6,120 +6,20 @@ import {
   resolveScope,
   type ScopeFrame
 } from "../workflowAdapter";
-import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
-
-// Facets mirroring the real backend attributes:
-// ForEach:   [ActivityStructure("elsa.foreach.structure", "1.0.0")] => mode "generic"
-//            [ActivityChildSlot("ForEach.Body", "body", "Body", Single)]
-// Flowchart: [ActivityStructure("elsa.flowchart.structure", "1.0.0", Mode = "flowchart")]
-//            [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", Many)]
-// Sequence:  [ActivityStructure("elsa.sequence.structure", "1.0.0", Mode = "sequence")]
-//            [ActivityChildSlot("Sequence.Activities", "activities", "Activities", Many)]
-
-const writeLine: ActivityCatalogItem = {
-  activityVersionId: "wl-v1",
-  activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-  version: "1.0.0",
-  category: "Primitives",
-  displayName: "Write Line",
-  description: null,
-  executionType: "Action",
-  inputs: [],
-  outputs: [],
-  designFacets: []
-};
-
-const flowchartActivity: ActivityCatalogItem = {
-  ...writeLine,
-  activityVersionId: "fc-v1",
-  activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
-  displayName: "Flowchart",
-  designFacets: [{
-    kind: "elsa.flowchart.structure",
-    schemaVersion: "1.0.0",
-    payload: {
-      mode: "flowchart",
-      supportsScopedVariables: true,
-      slots: [{ name: "Flowchart.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
-      initialPayload: { activities: [], connections: [], startNodeId: null, nodeMetadata: {}, connectionMetadata: {} }
-    }
-  }]
-};
-
-const sequenceActivity: ActivityCatalogItem = {
-  ...writeLine,
-  activityVersionId: "seq-v1",
-  activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence",
-  displayName: "Sequence",
-  designFacets: [{
-    kind: "elsa.sequence.structure",
-    schemaVersion: "1.0.0",
-    payload: {
-      mode: "sequence",
-      supportsScopedVariables: true,
-      slots: [{ name: "Sequence.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
-      initialPayload: { activities: [] }
-    }
-  }]
-};
-
-const forEachActivity: ActivityCatalogItem = {
-  ...writeLine,
-  activityVersionId: "fe-v1",
-  activityTypeKey: "Elsa.Activities.ForEach.Activities.ForEach",
-  displayName: "For Each",
-  designFacets: [{
-    kind: "elsa.foreach.structure",
-    schemaVersion: "1.0.0",
-    payload: {
-      mode: "generic",
-      supportsScopedVariables: true,
-      slots: [{ name: "ForEach.Body", property: "body", displayName: "Body", cardinality: "single" }],
-      initialPayload: { body: null }
-    }
-  }]
-};
+import type { ActivityNode } from "../workflowTypes";
+import {
+  flowchartActivity,
+  flowchartNode,
+  forEachActivity,
+  forEachNode,
+  leafNode,
+  sequenceActivity,
+  sequenceNode,
+  writeLine
+} from "./fixtures";
 
 const catalog = [writeLine, flowchartActivity, sequenceActivity, forEachActivity];
 const catalogByVersion = new Map(catalog.map(a => [a.activityVersionId, a]));
-
-function leafNode(nodeId: string): ActivityNode {
-  return { nodeId, activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] };
-}
-
-function flowchartNode(nodeId: string, activities: ActivityNode[]): ActivityNode {
-  return {
-    nodeId,
-    activityVersionId: flowchartActivity.activityVersionId,
-    inputs: [],
-    outputs: [],
-    structure: {
-      kind: "elsa.flowchart.structure",
-      schemaVersion: "1.0.0",
-      payload: { activities, connections: [], startNodeId: null, nodeMetadata: {}, connectionMetadata: {} }
-    }
-  };
-}
-
-function sequenceNode(nodeId: string, activities: ActivityNode[]): ActivityNode {
-  return {
-    nodeId,
-    activityVersionId: sequenceActivity.activityVersionId,
-    inputs: [],
-    outputs: [],
-    structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities } }
-  };
-}
-
-function forEachNode(nodeId: string, body: ActivityNode | null): ActivityNode {
-  return {
-    nodeId,
-    activityVersionId: forEachActivity.activityVersionId,
-    inputs: [],
-    outputs: [],
-    structure: { kind: "elsa.foreach.structure", schemaVersion: "1.0.0", payload: { body } }
-  };
-}
 
 const bodySlotOf = (foreach: ActivityNode) => getChildSlots(foreach, catalogByVersion)[0];
 

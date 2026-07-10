@@ -11020,7 +11020,7 @@ function PN({
   ), N = ue(
     () => b ? l({ activityVersionId: b.activityVersionId, activityTypeKey: u.get(b.activityVersionId)?.activityTypeKey }) : null,
     [l, u, b]
-  ), j = b ? $e(b, u) : [], S = b ? th(b, u.get(b.activityVersionId)) : !1, I = mh(e, t?.state, b?.nodeId ?? null, u), _ = !h && m?.slot.mode === "flowchart";
+  ), j = b ? $e(b, u) : [], S = b ? th(b, u.get(b.activityVersionId)) : !1, I = mh(e, t?.state, v?.nodeId ?? null, u), _ = !h && m?.slot.mode === "flowchart";
   return {
     catalogByVersion: u,
     availabilityLookup: l,
