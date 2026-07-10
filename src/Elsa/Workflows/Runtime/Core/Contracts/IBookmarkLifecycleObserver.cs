@@ -13,9 +13,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <remarks>
 /// <para>
 /// This is a contribution (fan-in) seam: register implementations with
-/// <c>services.TryAddEnumerable(ServiceDescriptor.Scoped&lt;IBookmarkLifecycleObserver, MyObserver&gt;())</c>;
+/// <c>services.TryAddEnumerable(ServiceDescriptor.Singleton&lt;IBookmarkLifecycleObserver, MyObserver&gt;())</c>;
 /// the runtime resolves them as <c>IEnumerable&lt;IBookmarkLifecycleObserver&gt;</c>. There is no default
-/// implementation — an unobserved bookmark lifecycle is valid.
+/// implementation — an unobserved bookmark lifecycle is valid. Register observers as <b>singleton</b>: the
+/// notifier that fans into them is a singleton capturing <c>IEnumerable&lt;IBookmarkLifecycleObserver&gt;</c>, so a
+/// scoped observer would be a captive dependency — resolve any scoped services from a fresh scope opened per
+/// notification instead (as <c>RouteTableBookmarkObserver</c> does via the route-table synchronizer).
 /// </para>
 /// <para>
 /// <b>Failure policy (deliberately different from <see cref="IWorkflowTriggerIndexObserver"/>):</b> this seam

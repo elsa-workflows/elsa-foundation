@@ -13,7 +13,7 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 |---|---|---|
 | Matched, async mode (and A baseline) | 202 Accepted | `{ "started": [executionIds], "resumed": [executionIds] }` [resumed live from D — dispatched resumes only; started/resumed coexist per StartAndResume] |
 | No matching trigger/bookmark (no start AND no dispatched resume) [D — live] | 404 Not Found | — |
-| Ambiguous match (>1 distinct workflow per (template, method)) [B — live] | 409 Conflict | `{ "error": "ambiguous-endpoint", ... }`; no instance started |
+| Ambiguous match (>1 distinct workflow per (template, method)) [B — live] | 409 Conflict | exactly `{ "error": "ambiguous-endpoint" }` — deliberately minimal, no other fields (anti-disclosure, #592 item 10: never echoes the method/template); no instance started |
 | Authorize failed (or handler absent — fail closed) [C — live] | 401 Unauthorized | — (evaluated before the body is read) |
 | Body exceeds the per-endpoint RequestSizeLimit (or global MaxRequestBodyBytes) [C — live] | 413 Content Too Large | — |
 | Dispatch exceeded the per-endpoint RequestTimeout [C — live; E extends to sync runs] | 408 Request Timeout | via fault handler (inline fallback when absent) |
