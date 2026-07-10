@@ -45,7 +45,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
                 request.VersionId,
-                WorkflowExecutableScope.TransientTestRun,
+                WorkflowExecutableReferenceScope.TestRun,
                 now,
                 PublishedAt: null,
                 expiresAt,
@@ -72,7 +72,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
         return await StartAsync(
             new WorkflowExecutableCompileRequest(
                 sourceDefinitionVersionId,
-                WorkflowExecutableScope.TransientTestRun,
+                WorkflowExecutableReferenceScope.TestRun,
                 now,
                 PublishedAt: null,
                 expiresAt,
@@ -84,7 +84,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     DefinitionVersionId: sourceDefinitionVersionId,
                     ArtifactVersion: artifactVersion,
                     State: request.State,
-                    SourceReference: new WorkflowExecutableSourceReference(DraftSnapshotSourceKind, request.SnapshotId, artifactVersion))
+                    SourceKind: DraftSnapshotSourceKind,
+                    SourceId: request.SnapshotId,
+                    SourceVersion: artifactVersion)
             },
             testRunId,
             fallbackDefinitionId: request.DefinitionId,
@@ -155,7 +157,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return WorkflowTestRunView.From(rejected);
         }
 
-        await transientExecutableStore.SaveAsync(executable, cancellationToken);
+        await transientExecutableStore.SaveAsync(executable, expiresAt, cancellationToken);
         if (draftSnapshot is not null)
             await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);
 

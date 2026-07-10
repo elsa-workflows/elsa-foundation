@@ -1,4 +1,7 @@
 using Elsa.Mediator.Core.Contracts;
+using Elsa.Primitives.Identity;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -8,13 +11,22 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Publishing.Api.Handlers;
 
+/// <summary>
+/// Publish = compile → hash → resolve-or-create the content-addressed artifact by ArtifactId (idempotent: an
+/// existing artifact is never overwritten) → ALWAYS append a new <see cref="WorkflowExecutableSourceReference"/>
+/// carrying the source identity, artifact-version label, publish time, Published scope and the layout sidecar
+/// copied verbatim from the definition version's layout store (ADR 0038/0039/0040).
+/// </summary>
 public sealed class PublishWorkflowRequestHandler(
     IWorkflowExecutableCompiler compiler,
     IWorkflowExecutableStore executableStore,
-    IWorkflowTriggerIndexer triggerIndexer)
+    IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+    IWorkflowTriggerIndexer triggerIndexer,
+    IWorkflowDefinitionVersionLayoutStore layoutStore)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
+    private const string DefinitionVersionSourceKind = "WorkflowDefinitionVersion";
 
     public async Task<PublishedWorkflowView> Handle(PublishWorkflow request, CancellationToken cancellationToken)
     {
@@ -26,7 +38,7 @@ public sealed class PublishWorkflowRequestHandler(
         var executable = await compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(
                 request.VersionId,
-                WorkflowExecutableScope.Published,
+                WorkflowExecutableReferenceScope.Published,
                 now,
                 now,
                 ExpiresAt: null,
@@ -37,13 +49,56 @@ public sealed class PublishWorkflowRequestHandler(
                 }),
             cancellationToken);
 
+        // Idempotent by artifact id: a behaviorally identical republish resolves to the existing artifact and
+        // leaves it untouched (ADR 0038). The reference below is appended unconditionally.
         await executableStore.SaveAsync(executable, cancellationToken);
+
+        var reference = await BuildSourceReferenceAsync(executable, now, cancellationToken);
+        await sourceReferenceStore.SaveAsync(reference, cancellationToken);
 
         // Index this artifact's start-triggers within the publish flow (W7, E3-1). A failure here propagates and
         // fails the publish by design: a silently unindexed published trigger — one that can never start a
         // workflow — is a worse outcome than a failed publish the caller can retry (indexing is idempotent).
         await triggerIndexer.IndexAsync(executable, cancellationToken);
 
-        return PublishedWorkflowView.From(executable);
+        return PublishedWorkflowView.From(executable, reference);
     }
+
+    private async Task<WorkflowExecutableSourceReference> BuildSourceReferenceAsync(
+        WorkflowExecutable executable,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var identity = executable.Identity;
+        var layout = await layoutStore.FindByVersionIdAsync(identity.DefinitionVersionId, cancellationToken);
+
+        return new WorkflowExecutableSourceReference(
+            SourceReferenceId: ShortIdentityGenerator.Generate(now),
+            ArtifactId: identity.ArtifactId,
+            SourceKind: DefinitionVersionSourceKind,
+            SourceId: identity.DefinitionVersionId,
+            SourceVersion: identity.ArtifactVersion,
+            DefinitionId: identity.DefinitionId,
+            DefinitionVersionId: identity.DefinitionVersionId,
+            ArtifactVersion: identity.ArtifactVersion,
+            CreatedAt: now,
+            PublishedAt: now,
+            Scope: WorkflowExecutableReferenceScope.Published,
+            Layout: ToLayoutSidecar(layout));
+    }
+
+    // Verbatim copy of the definition version's layout into the reference sidecar (ADR 0039). The design records
+    // are mapped 1:1 into the runtime-owned layout type; AdditionalProperties travels opaquely (ADR 0035).
+    private static IReadOnlyList<WorkflowExecutableLayoutRecord> ToLayoutSidecar(WorkflowDefinitionVersionLayout? layout) =>
+        layout is null
+            ? []
+            : layout.Records
+                .Select(record => new WorkflowExecutableLayoutRecord(
+                    record.NodeId,
+                    record.X,
+                    record.Y,
+                    record.Width,
+                    record.Height,
+                    record.AdditionalProperties))
+                .ToArray();
 }

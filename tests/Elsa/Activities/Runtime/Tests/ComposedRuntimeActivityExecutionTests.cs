@@ -210,7 +210,6 @@ public sealed class ComposedRuntimeActivityExecutionTests
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 
@@ -236,7 +235,6 @@ public sealed class ComposedRuntimeActivityExecutionTests
             rootActivity: parent,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: now,
-            publishedAt: now,
             compatibilityMetadata: new Dictionary<string, string>());
     }
 

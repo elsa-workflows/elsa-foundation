@@ -253,16 +253,33 @@ internal static class ElsaWorkflowManagementApi
         WithShellAsync(shellRegistry, async services =>
         {
             var store = services.GetRequiredService<IWorkflowExecutableStore>();
+            var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
             var listState = NormalizeDefinitionListState(state);
-            var executables = await store.ListAsync(includeDeleted: listState != WorkflowDefinitionListStates.Active, cancellationToken: cancellationToken);
-            var response = executables
-                .Where(executable => listState switch
+            var executables = await store.ListAsync(cancellationToken);
+            var now = DateTimeOffset.UtcNow;
+
+            var rows = new List<WorkflowExecutableSummaryResponse>();
+            foreach (var executable in executables)
+            {
+                var references = await referenceStore.ListByArtifactAsync(executable.Identity.ArtifactId, cancellationToken);
+                // The artifact's deletion state is derived (ADR 0040): live while any live reference points at it.
+                var newest = references
+                    .OrderByDescending(reference => reference.PublishedAt ?? reference.CreatedAt)
+                    .ThenBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                var isDeleted = references.Count > 0 && references.All(reference => !reference.IsLive(now));
+
+                var include = listState switch
                 {
-                    WorkflowDefinitionListStates.Deleted => executable.DeletedAt is not null,
+                    WorkflowDefinitionListStates.Deleted => isDeleted,
                     WorkflowDefinitionListStates.All => true,
-                    _ => executable.DeletedAt is null
-                })
-                .Select(WorkflowExecutableSummaryResponse.FromExecutable)
+                    _ => !isDeleted
+                };
+                if (include)
+                    rows.Add(WorkflowExecutableSummaryResponse.FromExecutable(executable, newest, isDeleted));
+            }
+
+            var response = rows
                 .OrderByDescending(x => listState == WorkflowDefinitionListStates.Deleted ? x.DeletedAt : (x.PublishedAt ?? x.CreatedAt))
                 .ThenBy(x => x.ArtifactId)
                 .ToArray();
@@ -273,19 +290,33 @@ internal static class ElsaWorkflowManagementApi
     private static Task<IResult> DeleteExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var store = services.GetRequiredService<IWorkflowExecutableStore>();
-            return await store.SoftDeleteAsync(artifactId, DateTimeOffset.UtcNow, cancellationToken: cancellationToken)
-                ? Results.NoContent()
-                : Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+            // Deleting an executable = retiring its references (ADR 0040); the artifact follows by GC (worker W3).
+            var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+            if (references.Count == 0)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var reference in references.Where(reference => reference.DeletedAt is null))
+                await referenceStore.RetireAsync(reference.SourceReferenceId, now, cancellationToken: cancellationToken);
+
+            return Results.NoContent();
         }, cancellationToken);
 
     private static Task<IResult> RestoreExecutableAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, async services =>
         {
-            var store = services.GetRequiredService<IWorkflowExecutableStore>();
-            return await store.RestoreAsync(artifactId, cancellationToken)
-                ? Results.NoContent()
-                : Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+            // Restore un-retires the artifact's references (the inverse of DeleteExecutableAsync). Reference-driven
+            // restore semantics are refined in worker W3's slice; the bridge keeps its current wire behaviour.
+            var referenceStore = services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+            var references = await referenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+            if (references.Count == 0)
+                return Results.NotFound(new WorkflowManagementErrorResponse($"Executable artifact '{artifactId}' was not found."));
+
+            foreach (var reference in references.Where(reference => reference.DeletedAt is not null))
+                await referenceStore.SaveAsync(reference with { DeletedAt = null, DeletedReason = null }, cancellationToken);
+
+            return Results.NoContent();
         }, cancellationToken);
 
     private static Task<IResult> DeleteExecutablePermanentlyAsync(IShellRegistry shellRegistry, string artifactId, CancellationToken cancellationToken) =>
@@ -893,19 +924,22 @@ internal sealed record WorkflowExecutableSummaryResponse(
     int NodeCount,
     int ResumeTargetCount)
 {
-    public static WorkflowExecutableSummaryResponse FromExecutable(WorkflowExecutable executable) =>
+    public static WorkflowExecutableSummaryResponse FromExecutable(
+        WorkflowExecutable executable,
+        WorkflowExecutableSourceReference? newestReference,
+        bool isDeleted) =>
         new(
             executable.Identity.ArtifactId,
-            executable.Identity.ArtifactVersion,
+            newestReference?.ArtifactVersion ?? executable.Identity.ArtifactVersion,
             executable.Identity.ArtifactHash,
-            executable.Identity.DefinitionId,
-            executable.Identity.DefinitionVersionId,
+            newestReference?.DefinitionId ?? executable.Identity.DefinitionId,
+            newestReference?.DefinitionVersionId ?? executable.Identity.DefinitionVersionId,
             executable.CreatedAt,
-            executable.PublishedAt,
-            executable.DeletedAt,
-            executable.Identity.Source?.SourceKind,
-            executable.Identity.Source?.SourceId,
-            executable.Identity.Source?.SourceVersion,
+            newestReference?.PublishedAt,
+            isDeleted ? newestReference?.DeletedAt : null,
+            newestReference?.SourceKind,
+            newestReference?.SourceId,
+            newestReference?.SourceVersion,
             executable.RootActivity.ActivityType,
             executable.RootActivity.ActivityTypeVersion,
             executable.Nodes.Count,

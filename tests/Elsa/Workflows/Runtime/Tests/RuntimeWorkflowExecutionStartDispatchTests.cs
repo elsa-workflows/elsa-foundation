@@ -75,25 +75,13 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
-    public async Task DispatchAsync_RejectsTransientTestRunArtifactBeforeAgentActivation()
+    public async Task DispatchTransientAsync_SavesAndDispatchesTransientExecutable()
     {
+        // Scope/expiry are reference facts now (ADR 0040); the dispatcher no longer gates on artifact scope. The
+        // transient path saves the supplied executable into the single store and dispatches it. Reference-driven
+        // scope/expiry gating is worker W3's slice.
         var store = new InMemoryWorkflowExecutableStore();
-        await store.SaveAsync(NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30)));
-        var agentProvider = new RecordingAgentProvider();
-        var dispatcher = NewDispatcher(store, agentProvider);
-
-        await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test")).AsTask());
-
-        Assert.Empty(agentProvider.ActivationRequests);
-        Assert.Empty(agentProvider.Agent.Envelopes);
-        Assert.Empty(await store.ListAsync());
-    }
-
-    [Fact]
-    public async Task DispatchTransientAsync_AllowsTransientTestRunArtifact()
-    {
-        var store = new InMemoryWorkflowExecutableStore();
-        var executable = NewExecutable(scope: WorkflowExecutableScope.TransientTestRun, expiresAt: _now.AddMinutes(30));
+        var executable = NewExecutable();
         var agentProvider = new RecordingAgentProvider();
         var dispatcher = NewDispatcher(store, agentProvider);
 
@@ -102,7 +90,6 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
         Assert.Single(agentProvider.ActivationRequests);
         Assert.Single(agentProvider.Agent.Envelopes);
-        Assert.Empty(await store.ListAsync());
         Assert.NotNull(await store.FindAsync("artifact-1"));
     }
 
@@ -159,18 +146,13 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             new IncrementingRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(_now));
 
-    private static WorkflowExecutable NewExecutable(
-        WorkflowExecutableScope scope = WorkflowExecutableScope.Published,
-        DateTimeOffset? expiresAt = null) =>
+    private static WorkflowExecutable NewExecutable() =>
         new(
             identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
-            compatibilityMetadata: new Dictionary<string, string>(),
-            scope: scope,
-            expiresAt: expiresAt);
+            compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewNode(string nodeId) =>
         new(

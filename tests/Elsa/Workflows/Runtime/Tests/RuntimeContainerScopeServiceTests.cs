@@ -340,7 +340,6 @@ public sealed class RuntimeContainerScopeServiceTests
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
-            publishedAt: DateTimeOffset.UnixEpoch,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode ContainerNode(string nodeId, IReadOnlyCollection<(string ReferenceKey, string Name)> variables) =>

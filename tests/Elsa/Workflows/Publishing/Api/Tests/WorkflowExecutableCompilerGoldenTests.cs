@@ -163,26 +163,18 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         var model = new
         {
+            // ADR 0038: the artifact is pure behavior. Source identity (definition/version, artifact-version label)
+            // is still carried on Identity as the runtime pinned-snapshot carrier, but scope/publishedAt/expiresAt
+            // and the embedded source-reference object have left the artifact document — they are reference facts.
             identity = new
             {
                 artifactId = executable.Identity.ArtifactId,
                 definitionId = executable.Identity.DefinitionId,
                 definitionVersionId = executable.Identity.DefinitionVersionId,
                 artifactVersion = executable.Identity.ArtifactVersion,
-                artifactHash = executable.Identity.ArtifactHash,
-                source = executable.Identity.Source is null
-                    ? null
-                    : new
-                    {
-                        sourceKind = executable.Identity.Source.SourceKind,
-                        sourceId = executable.Identity.Source.SourceId,
-                        sourceVersion = executable.Identity.Source.SourceVersion
-                    }
+                artifactHash = executable.Identity.ArtifactHash
             },
-            scope = executable.Scope.ToString(),
             createdAt = executable.CreatedAt,
-            publishedAt = executable.PublishedAt,
-            expiresAt = executable.ExpiresAt,
             compatibilityMetadata = Ordered(executable.CompatibilityMetadata),
             resumeTargets = executable.ResumeTargets
                 .OrderBy(t => t.Key, StringComparer.Ordinal)
@@ -323,7 +315,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         public WorkflowExecutableCompileRequest Request => new(
             VersionId: "version-1",
-            Scope: WorkflowExecutableScope.Published,
+            Scope: WorkflowExecutableReferenceScope.Published,
             CreatedAt: Now,
             PublishedAt: Now,
             ExpiresAt: null,
@@ -338,7 +330,9 @@ public sealed class WorkflowExecutableCompilerGoldenTests
                 DefinitionVersionId: definitionVersionId,
                 ArtifactVersion: artifactVersion,
                 State: Version.State!,
-                SourceReference: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", definitionVersionId, sourceVersion));
+                SourceKind: "WorkflowDefinitionVersion",
+                SourceId: definitionVersionId,
+                SourceVersion: sourceVersion);
 
         public WorkflowExecutableCompiler BuildCompiler(IActivityStructureService structureService)
         {

@@ -1,20 +1,13 @@
 {
   "compatibilityMetadata": [],
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
-  "expiresAt": null,
   "identity": {
     "artifactHash": "sha256:2aa52a05948fe524cf46da14a175179893e731763347f3f4d66b066e1846d86c",
     "artifactId": "artifact-2aa52a05948f",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
-    "definitionVersionId": "version-1",
-    "source": {
-      "sourceId": "version-1",
-      "sourceKind": "WorkflowDefinitionVersion",
-      "sourceVersion": "1.0.0"
-    }
+    "definitionVersionId": "version-1"
   },
-  "publishedAt": "2026-06-24T12:00:00\u002B00:00",
   "resumeTargets": [
     {
       "executableNodeId": "delay-1",
@@ -46,6 +39,5 @@
       }
     ],
     "structure": null
-  },
-  "scope": "Published"
+  }
 }

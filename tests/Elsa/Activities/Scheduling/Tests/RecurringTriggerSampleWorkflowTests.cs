@@ -109,7 +109,6 @@ public sealed class RecurringTriggerSampleWorkflowTests
             rootActivity: trigger,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
-            publishedAt: Now,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode TimerNode(string interval) =>

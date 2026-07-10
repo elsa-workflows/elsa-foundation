@@ -25,8 +25,7 @@ public sealed class RuntimeCheckpointCommitTests
             DefinitionId: "definition-1",
             DefinitionVersionId: "definition-version-1",
             ArtifactVersion: "1.0.0",
-            ArtifactHash: "sha256:artifact",
-            Source: new WorkflowExecutableSourceReference("WorkflowDefinitionVersion", "definition-version-1", "1.0.0"));
+            ArtifactHash: "sha256:artifact");
         _workflowState = new WorkflowExecutionState(
             WorkflowExecutionId: "wfexec-1",
             PinnedExecutable: _executableIdentity,

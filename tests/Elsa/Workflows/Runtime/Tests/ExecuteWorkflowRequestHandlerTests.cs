@@ -66,7 +66,6 @@ public sealed class ExecuteWorkflowRequestHandlerTests
             rootActivity: NewNode("node-root"),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
-            publishedAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewNode(string nodeId) =>
