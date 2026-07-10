@@ -6,6 +6,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { InspectorPanel } from "../workflow-editor/InspectorPanel";
 import type { ChildSlot } from "../workflowAdapter";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { writeLine } from "./fixtures";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
@@ -33,19 +34,6 @@ function rerender(ui: React.ReactElement) {
 function click(el: Element) {
   flushSync(() => el.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 40, clientY: 60 })));
 }
-
-const writeLine: ActivityCatalogItem = {
-  activityVersionId: "activity-write-line-v1",
-  activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
-  version: "1.0.0",
-  category: "Primitives",
-  displayName: "Write Line",
-  description: null,
-  executionType: "Action",
-  inputs: [],
-  outputs: [],
-  designFacets: []
-};
 
 const readLine: ActivityCatalogItem = {
   ...writeLine,
