@@ -51,6 +51,44 @@ public sealed record HttpEndpointStimulusOptions(
     }
 
     /// <summary>
+    /// Fail-closed merge of the endpoint options across every waiting bookmark that matches a resume-only
+    /// (template, method) — see <see cref="MergedHttpEndpointOptions"/> and spec 089 D, D-D5. Options are excluded
+    /// from the stimulus hash by design, so multiple waiting bookmarks on the same identity can carry <em>divergent</em>
+    /// options; enforcing the strictest of each field prevents one lax bookmark from defeating a strict sibling.
+    /// <list type="bullet">
+    /// <item><c>Authorize</c> is true if ANY bookmark requires it.</item>
+    /// <item><c>Policies</c> is the union of all distinct non-empty policies (each must pass — enforced by the caller).</item>
+    /// <item><c>RequestSizeLimit</c> is the MIN of the specified limits (an absent limit never relaxes a specified one).</item>
+    /// <item><c>RequestTimeout</c> is the MIN of the specified timeouts.</item>
+    /// </list>
+    /// An empty sequence (no waiting bookmark matched) yields <see cref="MergedHttpEndpointOptions.None"/>.
+    /// </summary>
+    public static MergedHttpEndpointOptions MergeForResume(IEnumerable<IReadOnlyDictionary<string, string>?> metadataPerBookmark)
+    {
+        var authorizeAny = false;
+        var policies = new HashSet<string>(StringComparer.Ordinal);
+        long? minSizeLimit = null;
+        TimeSpan? minTimeout = null;
+
+        foreach (var metadata in metadataPerBookmark)
+        {
+            var options = FromMetadata(metadata);
+            authorizeAny |= options.Authorize;
+
+            if (!string.IsNullOrWhiteSpace(options.Policy))
+                policies.Add(options.Policy);
+
+            if (options.RequestSizeLimit is { } sizeLimit)
+                minSizeLimit = minSizeLimit is { } current ? Math.Min(current, sizeLimit) : sizeLimit;
+
+            if (options.RequestTimeout is { } timeout)
+                minTimeout = minTimeout is { } current && current <= timeout ? current : timeout;
+        }
+
+        return new MergedHttpEndpointOptions(authorizeAny, policies, minSizeLimit, minTimeout);
+    }
+
+    /// <summary>
     /// Reads the options back from claimant-binding metadata, inverting <see cref="ToMetadata"/> (the middleware
     /// read side, #592 item 14). A null or empty metadata dictionary — and any absent, blank, or malformed key —
     /// yields the corresponding default, so <c>FromMetadata(ToMetadata())</c> is the identity on any well-formed
@@ -73,5 +111,42 @@ public sealed record HttpEndpointStimulusOptions(
                 && long.TryParse(sizeLimit, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSizeLimit)
                     ? parsedSizeLimit
                     : null);
+    }
+}
+
+/// <summary>
+/// The enforcement-side view of an HTTP endpoint's options once resolved for a request — either from the trigger
+/// claimant binding(s) or, for a resume-only match, from the fail-closed merge across all matching waiting bookmarks
+/// (<see cref="HttpEndpointStimulusOptions.MergeForResume"/>, spec 089 D, D-D5). It differs from
+/// <see cref="HttpEndpointStimulusOptions"/> in one load-bearing way: it carries a <em>set</em> of
+/// <see cref="Policies"/> rather than a single policy, because a resume-only match can span several waiting bookmarks
+/// each declaring a distinct policy and the middleware must require EVERY distinct policy to pass (fail closed).
+/// </summary>
+/// <param name="Authorize">Whether authorization must pass before disclosure/dispatch (true if any source requires it).</param>
+/// <param name="Policies">The distinct non-empty policies to enforce; empty means an authorize-only check (no named policy).</param>
+/// <param name="RequestSizeLimit">The strictest (minimum) per-endpoint body size limit, or null to fall back to the global default.</param>
+/// <param name="RequestTimeout">The strictest (minimum) per-endpoint request timeout, or null for no per-endpoint timeout.</param>
+public sealed record MergedHttpEndpointOptions(
+    bool Authorize,
+    IReadOnlyCollection<string> Policies,
+    long? RequestSizeLimit,
+    TimeSpan? RequestTimeout)
+{
+    /// <summary>A merged view with no options set — the resume-only default when no waiting bookmark matched.</summary>
+    public static readonly MergedHttpEndpointOptions None = new(false, [], null, null);
+
+    /// <summary>
+    /// Projects a single resolved <see cref="HttpEndpointStimulusOptions"/> (the trigger-claimant path) into the
+    /// merged enforcement view: a lone policy becomes a one-element <see cref="Policies"/> set, and
+    /// <paramref name="authorizeOverride"/> lets the caller substitute the strongest Authorize claim across sibling
+    /// claimants. The claimant path is otherwise unchanged (D-D5 claimant-wins).
+    /// </summary>
+    public static MergedHttpEndpointOptions FromClaimant(HttpEndpointStimulusOptions options, bool authorizeOverride)
+    {
+        var policies = string.IsNullOrWhiteSpace(options.Policy)
+            ? (IReadOnlyCollection<string>)[]
+            : [options.Policy];
+
+        return new MergedHttpEndpointOptions(authorizeOverride, policies, options.RequestSizeLimit, options.RequestTimeout);
     }
 }

@@ -601,6 +601,117 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Empty(router.Requests);
     }
 
+    // ---- D-D5 fail-closed merge: divergent options across multiple waiting bookmarks on one (template, method) ----
+
+    [Fact]
+    public async Task ResumeOnly_DivergentAuthorize_AcrossBookmarks_FailsClosed_AnonymousDenied()
+    {
+        // Two waiting bookmarks share (template, method) but diverge on authorize (one false, one true). Options are
+        // excluded from the hash, so both ride the same identity; the merge is fail-closed — ANY authorize=true
+        // protects the endpoint, so an anonymous caller is denied 401 even though a sibling bookmark left the flag off.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-lax", "secure", "POST", authorize: false),
+            WaitingBookmark("wf-strict", "secure", "POST", authorize: true));
+        var handler = new FakeAuthorizationHandler(authorize: false);
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "secure", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/secure", "POST", body: "{}",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.True(handler.WasInvoked);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_DivergentAuthorize_AcrossBookmarks_AuthenticatedCaller_Passes()
+    {
+        // The same divergent-authorize pair, but the (single, no named policy) authorize check passes → 202. Proves
+        // the merge does not spuriously deny once authorization succeeds.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-lax", "secure", "POST", authorize: false),
+            WaitingBookmark("wf-strict", "secure", "POST", authorize: true));
+        var handler = new FakeAuthorizationHandler(authorize: true);
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "secure", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/secure", "POST", body: "{}",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_DivergentSizeLimits_AcrossBookmarks_StrictestWins_413sInBetweenBody()
+    {
+        // Two waiting bookmarks on one (template, method) declare different size limits (16 and 128). The merge
+        // takes the MIN (16), so a 64-byte body — under the looser bookmark's limit — is still rejected 413.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-loose", "sized", "POST", requestSizeLimit: 128),
+            WaitingBookmark("wf-tight", "sized", "POST", requestSizeLimit: 16));
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "sized", maxBodyBytes: 256, bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/sized", "POST", body: new string('x', 64));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_TwoDistinctPolicies_AcrossBookmarks_BothEvaluated_OneFailing_Denies401()
+    {
+        // Two waiting bookmarks declare DISTINCT policies (admins, auditors) on one (template, method). The merge
+        // requires EVERY policy to pass; the handler denies "auditors", so the request is denied 401 — and both
+        // policies were evaluated (the handler saw each).
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-a", "secure", "POST", authorize: true, policy: "admins"),
+            WaitingBookmark("wf-b", "secure", "POST", authorize: true, policy: "auditors"));
+        var handler = FakeAuthorizationHandler.PerPolicy(policy => policy == "admins");
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "secure", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/secure", "POST", body: "{}",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status401Unauthorized, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.Contains("admins", handler.EvaluatedPolicies);
+        Assert.Contains("auditors", handler.EvaluatedPolicies);
+    }
+
+    [Fact]
+    public async Task ResumeOnly_TwoDistinctPolicies_AllPassing_Replies202()
+    {
+        // The same two distinct policies, both satisfied → the request dispatches (202). Proves the all-must-pass
+        // loop admits the request only once every distinct policy succeeds.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
+        var bookmarks = await BookmarkLookupWith(
+            WaitingBookmark("wf-a", "secure", "POST", authorize: true, policy: "admins"),
+            WaitingBookmark("wf-b", "secure", "POST", authorize: true, policy: "auditors"));
+        var handler = new FakeAuthorizationHandler(authorize: true);
+        var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "secure", bookmarkLookup: bookmarks);
+        var context = NewContext("/workflows/http/secure", "POST", body: "{}",
+            services: ServicesWith<IHttpEndpointAuthorizationHandler>(handler));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+        Assert.Equal(2, handler.EvaluatedPolicies.Count);
+    }
+
     // ---- #592 item 10: authorization is evaluated BEFORE route existence/ambiguity is disclosed ----
 
     [Fact]
