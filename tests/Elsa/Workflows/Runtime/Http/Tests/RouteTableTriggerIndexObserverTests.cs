@@ -28,12 +28,15 @@ public sealed class RouteTableTriggerIndexObserverTests
         services.Configure<WorkflowsRuntimeHttpFeatureOptions>(_ => { });
         services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
+        // The observer now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); wire the
+        // real one so the refresh path (and the FailNextRefresh propagation) still runs through it.
+        services.AddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
         _services = services.BuildServiceProvider();
         _observer = Observer();
     }
 
     private RouteTableTriggerIndexObserver Observer() =>
-        new(_services.GetRequiredService<IServiceScopeFactory>());
+        new(_services.GetRequiredService<IHttpEndpointRouteTableSynchronizer>());
 
     // One observer instance across a test's notifications so its known-non-HTTP artifact memory persists.
     private readonly RouteTableTriggerIndexObserver _observer;

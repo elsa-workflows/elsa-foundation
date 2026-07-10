@@ -3,7 +3,6 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
@@ -28,15 +27,15 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// The changed <paramref name="bookmark"/> is therefore not inspected beyond its stimulus type.
 /// </para>
 /// <para>
-/// <b>Lifetime + failure policy.</b> This is a singleton that opens a fresh scope per notification and resolves the
-/// scoped resolver and route table inside it (the route table's state lives in the shared memory cache, so any
-/// scope mutates the same table) — identical to the trigger-index observer. But unlike that observer, an exception
-/// here MUST NOT fault the run: the <see cref="IBookmarkLifecycleObserver"/> seam fires on the RUN path (the
-/// <see cref="BookmarkLifecycleNotifier"/> catches and logs observer throws). A refresh that fails leaves a stale
-/// route that deterministically 404s until the next successful refresh — tolerated per the seam's contract.
+/// <b>Lifetime + failure policy.</b> This is a singleton that delegates the read-then-swap to the shared
+/// <see cref="IHttpEndpointRouteTableSynchronizer"/>, which serializes every refresh (publish, run, startup) under one
+/// lock so a stale read can never clobber a newer swap (spec 089 D review fix). Unlike the trigger-index observer, an
+/// exception here MUST NOT fault the run: the <see cref="IBookmarkLifecycleObserver"/> seam fires on the RUN path (the
+/// <see cref="BookmarkLifecycleNotifier"/> catches and logs observer throws). A refresh that fails leaves a stale route
+/// that deterministically 404s until the next successful refresh — tolerated per the seam's contract.
 /// </para>
 /// </remarks>
-public sealed class RouteTableBookmarkObserver(IServiceScopeFactory scopeFactory) : IBookmarkLifecycleObserver
+public sealed class RouteTableBookmarkObserver(IHttpEndpointRouteTableSynchronizer synchronizer) : IBookmarkLifecycleObserver
 {
     public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
         RefreshIfHttpAsync(bookmark, cancellationToken);
@@ -44,18 +43,13 @@ public sealed class RouteTableBookmarkObserver(IServiceScopeFactory scopeFactory
     public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
         RefreshIfHttpAsync(bookmark, cancellationToken);
 
-    private async ValueTask RefreshIfHttpAsync(BookmarkState bookmark, CancellationToken cancellationToken)
+    private ValueTask RefreshIfHttpAsync(BookmarkState bookmark, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(bookmark);
 
         if (!StringComparer.Ordinal.Equals(bookmark.StimulusType, HttpEndpointRouting.StimulusType))
-            return;
+            return ValueTask.CompletedTask;
 
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
-        var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
-
-        var routes = await resolver.ResolveRoutesAsync(cancellationToken);
-        await routeTable.Refresh(routes);
+        return synchronizer.RefreshAsync(cancellationToken);
     }
 }

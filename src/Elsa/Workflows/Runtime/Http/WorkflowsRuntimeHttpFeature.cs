@@ -50,6 +50,11 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         RegisterAuthorizationHandler(services);
         RegisterRouteResolver(services);
 
+        // The single serialization point for every route-table refresh (startup + publish observer + bookmark
+        // observer): a singleton owning a SemaphoreSlim(1,1) that opens a fresh scope per refresh, so a stale read
+        // can never clobber a newer swap and drop a live route (spec 089 D review fix). TryAdd — a host may override.
+        services.TryAddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
+
         // Rebuild the route table from the durable trigger index at startup, so a fresh host (or a restart)
         // has every published HTTP endpoint's route before the middleware runs.
         services.AddScoped<IStartupTask, UpdateRouteTableStartupTask>();

@@ -111,6 +111,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
                     services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
                     services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
+                    // The single serialization point every route-table refresh (startup task + both observers)
+                    // delegates to (spec 089 D review fix) — the same singleton WorkflowsRuntimeHttpFeature contributes.
+                    services.TryAddSingleton<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRouteTableSynchronizer, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer>();
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
 

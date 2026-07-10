@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
 
@@ -148,6 +149,36 @@ internal static class Resolvers
             bindingStore,
             new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance);
+}
+
+internal static class Synchronizers
+{
+    /// <summary>
+    /// Builds a real <see cref="Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer"/> over the
+    /// given trigger-binding store, route table, and optional bookmark store — wiring a minimal service provider so
+    /// the synchronizer's per-refresh scope resolves the real resolver + route table. Keeps the synchronizer's
+    /// construction in one place for the tests whose call sites now delegate to it (startup task, observers).
+    /// </summary>
+    public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer Build(
+        Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
+        IRouteTable routeTable,
+        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null)
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(bindingStore);
+        services.AddSingleton(routeTable);
+        services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(
+            new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
+        services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver>(sp =>
+            new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver(
+                sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore>(),
+                sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance));
+
+        var provider = services.BuildServiceProvider();
+        return new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer(
+            provider.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>());
+    }
 }
 
 internal static class Bookmarks

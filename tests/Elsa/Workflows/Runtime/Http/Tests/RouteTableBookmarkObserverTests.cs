@@ -27,11 +27,14 @@ public sealed class RouteTableBookmarkObserverTests
         services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
         services.AddSingleton<IRouteTable>(_routeTable);
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
+        // The observer now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); wire the
+        // real one over the real resolver/route table so these tests still exercise the whole refresh path.
+        services.AddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
         _services = services.BuildServiceProvider();
     }
 
     private RouteTableBookmarkObserver Observer() =>
-        new(_services.GetRequiredService<IServiceScopeFactory>());
+        new(_services.GetRequiredService<IHttpEndpointRouteTableSynchronizer>());
 
     [Fact]
     public async Task Created_HttpBookmark_AddsRouteToTable()

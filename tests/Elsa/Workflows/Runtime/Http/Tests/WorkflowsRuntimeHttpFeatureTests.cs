@@ -62,5 +62,8 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume (spec 089 D).
         Assert.Contains(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));
+        // The single serialization point every refresh routes through — registered once as a singleton (review fix).
+        var synchronizer = Assert.Single(services, d => d.ServiceType == typeof(IHttpEndpointRouteTableSynchronizer));
+        Assert.Equal(ServiceLifetime.Singleton, synchronizer.Lifetime);
     }
 }
