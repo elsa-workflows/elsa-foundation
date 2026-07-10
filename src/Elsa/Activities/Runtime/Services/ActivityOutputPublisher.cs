@@ -48,19 +48,44 @@ internal static class ActivityOutputPublisher
         RuntimeInvokeActivityCommandPayload invokePayload,
         ExecutableNode executableNode,
         IReadOnlyCollection<RecordedActivityOutput> outputs,
+        DateTimeOffset capturedAt) =>
+        BuildDurableOutputChanges(workItem, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId, executableNode, outputs, capturedAt);
+
+    /// <summary>
+    /// Builds the durable-value upserts for an activity's <c>CaptureOnSuccessfulCompletion</c> outputs, keyed on the
+    /// activity-execution and node ids so both the invoke path (<see cref="RuntimeInvokeActivityCommandPayload"/>)
+    /// and the resume path (<see cref="Elsa.Workflows.Runtime.Core.Models.RuntimeResumeBookmarkCommandPayload"/>)
+    /// persist outputs identically — a resume target that sets outputs (e.g. the mid-flow <c>HttpEndpoint</c>,
+    /// spec 089 D) durably captures them exactly as a synchronous completion does.
+    /// </summary>
+    public static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildDurableOutputChanges(
+        RuntimeSchedulerWorkItem workItem,
+        string activityExecutionId,
+        string executableNodeId,
+        ExecutableNode executableNode,
+        IReadOnlyCollection<RecordedActivityOutput> outputs,
         DateTimeOffset capturedAt)
     {
         var outputByName = outputs.ToDictionary(output => output.OutputName, StringComparer.Ordinal);
         return executableNode.OutputCaptures.Values
             .Where(capture => capture.CaptureOnSuccessfulCompletion)
             .Where(capture => outputByName.ContainsKey(capture.OutputName))
-            .Select(capture => NewDurableValueChange(workItem, invokePayload, capture, outputByName[capture.OutputName], capturedAt))
+            .Select(capture => NewDurableValueChange(workItem, activityExecutionId, executableNodeId, capture, outputByName[capture.OutputName], capturedAt))
             .ToArray();
     }
 
     public static RuntimeStateChange<DurableValueState> NewDurableValueChange(
         RuntimeSchedulerWorkItem workItem,
         RuntimeInvokeActivityCommandPayload invokePayload,
+        RuntimeOutputCapture capture,
+        RecordedActivityOutput output,
+        DateTimeOffset capturedAt) =>
+        NewDurableValueChange(workItem, invokePayload.ActivityExecutionId, invokePayload.ExecutableNodeId, capture, output, capturedAt);
+
+    public static RuntimeStateChange<DurableValueState> NewDurableValueChange(
+        RuntimeSchedulerWorkItem workItem,
+        string activityExecutionId,
+        string executableNodeId,
         RuntimeOutputCapture capture,
         RecordedActivityOutput output,
         DateTimeOffset capturedAt)
@@ -72,8 +97,8 @@ internal static class ActivityOutputPublisher
         metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
         metadata[RuntimeMetadataKeys.CommandId] = workItem.CommandId;
         metadata[RuntimeMetadataKeys.OutputName] = capture.OutputName;
-        metadata[RuntimeMetadataKeys.ActivityExecutionId] = invokePayload.ActivityExecutionId;
-        metadata[RuntimeMetadataKeys.ExecutableNodeId] = invokePayload.ExecutableNodeId;
+        metadata[RuntimeMetadataKeys.ActivityExecutionId] = activityExecutionId;
+        metadata[RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId;
         var durableValueId = $"durable-{capture.ValueId}";
         var state = new DurableValueState(
             durableValueId: durableValueId,
@@ -84,7 +109,7 @@ internal static class ActivityOutputPublisher
             storage: capture.Storage,
             inlineValue: capture.Storage is DurableValueStorage.Inline or DurableValueStorage.Custom ? SerializeOutputValue(output.Value) : null,
             externalReference: null,
-            sourceActivityExecutionId: invokePayload.ActivityExecutionId,
+            sourceActivityExecutionId: activityExecutionId,
             capturedAt: capturedAt,
             metadata: metadata);
 

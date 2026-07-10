@@ -9,6 +9,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
 {
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+    private readonly BookmarkLifecycleNotifier? _bookmarkLifecycleNotifier;
     private readonly TimeProvider _timeProvider;
 
     public BookmarkConsumptionCheckpointService(RuntimeCheckpointCommitter checkpointCommitter)
@@ -33,13 +34,15 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
     public BookmarkConsumptionCheckpointService(
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier = null)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
+        _bookmarkLifecycleNotifier = bookmarkLifecycleNotifier;
         _timeProvider = timeProvider;
     }
 
@@ -129,6 +132,12 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
             Metadata: metadata);
 
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+
+        // Notify bookmark-lifecycle observers AFTER the durable commit deleted the bookmark (spec 089 D).
+        // Observer failures are caught and logged inside the notifier — they never fault this resumed run.
+        if (_bookmarkLifecycleNotifier is not null)
+            await _bookmarkLifecycleNotifier.NotifyConsumedAsync(request.Bookmark, cancellationToken);
+
         return new BookmarkConsumptionCheckpointResult(commitId, checkpointId, result);
     }
 

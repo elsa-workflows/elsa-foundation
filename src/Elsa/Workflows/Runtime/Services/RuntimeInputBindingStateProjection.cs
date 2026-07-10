@@ -45,6 +45,18 @@ public static class RuntimeInputBindingStateProjection
             .GetValueOrDefault(RuntimeWorkflowStateSeed.StimulusInputSlotName);
 
     /// <summary>
+    /// Projects the executable node id of the trigger that started this execution (spec 089 D) from its reserved
+    /// single-slot channel (<see cref="RuntimeMetadataKeys.TriggerNodeId"/>). Null when the execution was not
+    /// started by a trigger (a direct run) or was a resume-only path. Deliberately not part of the workflow-input
+    /// namespace. Unwrapped from the inline JSON string the seed persisted.
+    /// </summary>
+    public static string? ProjectTriggerNodeId(IEnumerable<DurableValueState> durableValues) =>
+        ProjectByMetadataKey(durableValues, RuntimeMetadataKeys.TriggerNodeId)
+            .GetValueOrDefault(RuntimeWorkflowStateSeed.TriggerNodeIdSlotName) is JsonElement { ValueKind: JsonValueKind.String } inline
+            ? inline.GetString()
+            : null;
+
+    /// <summary>
     /// Projects the workflow identity (correlation id / instance name), workflow-input, workflow-variable, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
@@ -63,7 +75,8 @@ public static class RuntimeInputBindingStateProjection
             ActivityOutputValues: ProjectActivityOutputValues(materialized),
             CorrelationId: identity.CorrelationId,
             InstanceName: identity.InstanceName,
-            StimulusInput: ProjectStimulusInput(materialized));
+            StimulusInput: ProjectStimulusInput(materialized),
+            TriggerNodeId: ProjectTriggerNodeId(materialized));
     }
 
     /// <summary>
@@ -100,7 +113,8 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
     IReadOnlyDictionary<string, object?> ActivityOutputValues,
     string? CorrelationId,
     string? InstanceName,
-    object? StimulusInput);
+    object? StimulusInput,
+    string? TriggerNodeId);
 
 /// <summary>
 /// Projects the workflow identity (correlation id / instance name) out of the durable values captured for a workflow

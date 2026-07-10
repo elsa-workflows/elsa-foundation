@@ -15,6 +15,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
     private readonly IActivityExecutionStateStore _activityExecutionStateStore;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+    private readonly BookmarkLifecycleNotifier? _bookmarkLifecycleNotifier;
     private readonly TimeProvider _timeProvider;
 
     public WorkflowCreateBookmarkSchedulerWorkHandler(
@@ -22,7 +23,8 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier = null)
     {
         ArgumentNullException.ThrowIfNull(workflowExecutableStore);
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -33,6 +35,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
         _activityExecutionStateStore = activityExecutionStateStore;
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
+        _bookmarkLifecycleNotifier = bookmarkLifecycleNotifier;
         _timeProvider = timeProvider;
     }
 
@@ -49,8 +52,27 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         var commit = await ExecuteAsync(workItem, cancellationToken);
-        if (commit is not null)
-            await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+        if (commit is null)
+            return;
+
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+
+        // Notify bookmark-lifecycle observers AFTER the durable commit (spec 089 D). Observer failures are caught
+        // and logged inside the notifier — they never fault this run. The created bookmark rides the commit's
+        // upsert state change, so we read it back rather than re-deriving it.
+        await NotifyBookmarksCreatedAsync(commit, cancellationToken);
+    }
+
+    private async ValueTask NotifyBookmarksCreatedAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken)
+    {
+        if (_bookmarkLifecycleNotifier is null)
+            return;
+
+        foreach (var change in commit.StateChanges.Bookmarks)
+        {
+            if (change is { Operation: RuntimeStateChangeOperation.Upsert, State: { } bookmark })
+                await _bookmarkLifecycleNotifier.NotifyCreatedAsync(bookmark, cancellationToken);
+        }
     }
 
     /// <summary>Pipeline dispatch (Move 2): run the handler in the Invoke slot and stage its commit for the Checkpoint slot.</summary>

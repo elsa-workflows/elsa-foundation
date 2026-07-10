@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -199,7 +200,110 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
         Assert.False(handler.CanHandle(NewCreateBookmarkWorkItem(commandKind: WorkflowExecutionCommandKind.Checkpoint)));
     }
 
-    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler() =>
+    [Fact]
+    public async Task HandleAsync_NotifiesLifecycleObservers_AfterTheDurableCommit()
+    {
+        // Spec 089 D (T005): a bookmark-lifecycle observer is invoked with the committed bookmark AFTER the commit.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var observer = new RecordingBookmarkLifecycleObserver();
+        var handler = NewHandler(new BookmarkLifecycleNotifier([observer]));
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        var created = Assert.Single(observer.Created);
+        Assert.Equal("bookmark-1", created.BookmarkId);
+        Assert.Equal("delivery-status", created.StimulusType);
+        Assert.Empty(observer.Consumed);
+        // The bookmark was durably committed before the observer saw it.
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task HandleAsync_ThrowingObserver_DoesNotFaultTheRun()
+    {
+        // The observer fires on the run path: a throw is caught and logged, the run still succeeds.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var handler = NewHandler(new BookmarkLifecycleNotifier([new ThrowingBookmarkLifecycleObserver()]));
+
+        await handler.HandleAsync(NewCreateBookmarkWorkItem());
+
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+        Assert.Equal(ActivityExecutionStatus.Suspended, (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.Status);
+    }
+
+    [Fact]
+    public async Task PipelineDispatch_FiresCreatedNotification_FromTheCheckpointSlot_AfterTheStagedCommit()
+    {
+        // Spec 089 D (bug fix): the drainer dispatches CreateBookmark through the ADR 0029 pipeline, where the handler
+        // only STAGES its commit (it does not commit inline), so the pipeline-aware HandleAsync must NOT notify. The
+        // bookmark-created lifecycle notification fires from the Checkpoint slot instead, after the staged commit lands
+        // — otherwise a mid-flow endpoint's route never refreshes and it can never be resumed.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _activityStateStore.SaveAsync(NewRunningState());
+        var observer = new RecordingBookmarkLifecycleObserver();
+        var notifier = new BookmarkLifecycleNotifier([observer]);
+        var handler = NewHandler(notifier);
+
+        // Invoke slot: the pipeline handler stages the commit and — critically — does not notify.
+        var context = new ActivityRuntimePipelineContext(NewCreateBookmarkWorkItem());
+        await handler.HandleAsync(context.WorkItem, context);
+        Assert.Empty(observer.Created);
+        var staged = Assert.Single(context.Workspace.PendingCheckpointCommits);
+        Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, staged.Checkpoint.Name);
+
+        // Checkpoint slot: commit the staged commit, then fire the created notification.
+        var middleware = new RuntimeActivityCheckpointMiddleware(
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter),
+            notifier);
+        await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
+
+        var created = Assert.Single(observer.Created);
+        Assert.Equal("bookmark-1", created.BookmarkId);
+        Assert.NotNull(await _bookmarkStateStore.FindAsync("wfexec-1", "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task CheckpointSlot_IgnoresNonBookmarkCreatedCommits()
+    {
+        // The Checkpoint slot only notifies for bookmark-created checkpoints — a staged commit of any other name is
+        // committed but never fires a spurious created notification.
+        var observer = new RecordingBookmarkLifecycleObserver();
+        var context = new ActivityRuntimePipelineContext(NewCreateBookmarkWorkItem());
+        context.Workspace.StageCheckpointCommit(NewUnrelatedCommit());
+
+        var middleware = new RuntimeActivityCheckpointMiddleware(
+            new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), _checkpointWriter),
+            new BookmarkLifecycleNotifier([observer]));
+        await middleware.InvokeAsync(context, _ => ValueTask.CompletedTask);
+
+        Assert.Empty(observer.Created);
+        Assert.Empty(observer.Consumed);
+    }
+
+    private RuntimeCheckpointCommit NewUnrelatedCommit() =>
+        new(
+            CommitId: "commit:unrelated",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: "checkpoint:unrelated",
+                Name: RuntimeCheckpointNames.ActivityCompleted,
+                WorkflowExecutionId: "wfexec-1",
+                OccurredAt: _now,
+                ActivityExecutionIds: ["actexec-1"],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
+
+    private WorkflowCreateBookmarkSchedulerWorkHandler NewHandler(BookmarkLifecycleNotifier? notifier = null) =>
         new(
             _executableStore,
             _activityStateStore,
@@ -207,7 +311,8 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 _checkpointWriter),
             new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-            new FixedTimeProvider(_now));
+            new FixedTimeProvider(_now),
+            notifier);
 
     private RuntimeSchedulerWorkItem NewCreateBookmarkWorkItem(
         WorkflowExecutionCommandKind commandKind = WorkflowExecutionCommandKind.CreateBookmark,

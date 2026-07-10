@@ -14,29 +14,40 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Http.Middleware;
 
 /// <summary>
-/// The request middleware that turns an inbound HTTP request into an <see cref="HttpEndpoint"/> start stimulus
-/// (async/202 baseline; spec 089 B routing). A request whose path is under
+/// The request middleware that turns an inbound HTTP request into an <see cref="HttpEndpoint"/> stimulus
+/// (async/202 baseline; spec 089 B routing, extended for mid-flow resume in D). A request whose path is under
 /// <see cref="HttpEndpointOptions.BasePath"/> (matched on a whole path segment, never a bare prefix) has its
 /// endpoint-relative path resolved against the per-shell <see cref="IRouteTable"/> via <see cref="IRouteMatcher"/>
 /// (ASP.NET route templates, e.g. <c>orders/{id}</c>); the matched template plus the request method form the
 /// stimulus identity (<see cref="HttpEndpointStimulus.Hash(string,string)"/>) dispatched through
-/// <see cref="IStimulusRouter"/> in <see cref="StimulusRoutingMode.StartOnly"/> mode. Unmatched templates or
-/// methods yield 404; a (template, method) claimed by more than one workflow definition yields 409 and starts
-/// nothing. Any other request passes through to the next middleware.
+/// <see cref="IStimulusRouter"/> in <see cref="StimulusRoutingMode.StartAndResume"/> mode — it both starts new
+/// instances from matching triggers and resumes waiting instances suspended on a mid-flow endpoint. Unmatched
+/// templates or methods yield 404; a (template, method) claimed by more than one workflow <em>definition</em>
+/// yields 409 and starts nothing. Any other request passes through to the next middleware.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Async/202.</b> The router's start path is asynchronous (it enqueues starts through the actor mailbox); the
-/// middleware does not wait for the workflow to run. When at least one trigger matched it replies
-/// <c>202 Accepted</c> with the started execution ids; when none matched it replies <c>404 Not Found</c>.
-/// Synchronous request/response correlation is spec 089 sub-unit E.
+/// <b>Async/202.</b> The router's start and resume paths are asynchronous (they enqueue work through the actor
+/// mailbox); the middleware does not wait for the workflow to run. When at least one instance was started OR
+/// resumed it replies <c>202 Accepted</c> with <c>{ started: [...], resumed: [...] }</c> (started/resumed
+/// execution ids); when neither happened it replies <c>404 Not Found</c>. Synchronous request/response
+/// correlation is spec 089 sub-unit E.
 /// </para>
 /// <para>
 /// <b>Live input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body) is serialized
-/// as the stimulus input; the router's start path carries it on the dedicated stimulus-input channel (spec 089
-/// sub-unit A), where <see cref="HttpEndpoint"/> surfaces it as its Result. Bodies larger than
-/// <see cref="HttpEndpointOptions.MaxRequestBodyBytes"/> are rejected with <c>413</c> before dispatch — the
-/// payload becomes durable state on the started instance, so the transport guards its size.
+/// as the stimulus input; the router carries it on the dedicated stimulus-input channel for starts and as the
+/// resume input for resumes (spec 089 sub-units A/D), where <see cref="HttpEndpoint"/> surfaces it as its Result.
+/// Bodies larger than <see cref="HttpEndpointOptions.MaxRequestBodyBytes"/> (or the per-endpoint override) are
+/// rejected with <c>413</c> before dispatch — the payload becomes durable state on the instance, so the transport
+/// guards its size.
+/// </para>
+/// <para>
+/// <b>Endpoint options for resume-only matches (D-D5).</b> The per-endpoint options (authorize/policy/timeout/size
+/// limit) normally ride the trigger claimant's binding metadata. When NO trigger claimant exists for the matched
+/// (template, method) — a purely mid-flow endpoint — they are read instead from a waiting bookmark's metadata via
+/// the expiry-aware <see cref="IGlobalBookmarkStimulusLookup"/>, filtered to the matched stimulus hash. When both a
+/// claimant and waiting bookmarks exist, the claimant wins (single deterministic source). The enforcement order
+/// (authorize → size limit → parse → timeout+faults) is unchanged and now applies to resume-only matches too.
 /// </para>
 /// <para>
 /// Registered as an <see cref="IMiddleware"/> (resolved from DI per request) so it can take the scoped
@@ -49,6 +60,7 @@ public sealed class HttpEndpointMiddleware(
     IRouteTable routeTable,
     IRouteMatcher routeMatcher,
     IWorkflowTriggerBindingStore triggerBindingStore,
+    IGlobalBookmarkStimulusLookup bookmarkStimulusLookup,
     IOptions<HttpEndpointOptions> options) : IMiddleware
 {
     private const string RequestedBy = "http-endpoint";
@@ -112,20 +124,28 @@ public sealed class HttpEndpointMiddleware(
 
         var stimulusHash = HttpEndpointStimulus.Hash(template, context.Request.Method);
 
-        // Fetch the claimants once (also the source of the endpoint options). The ambiguity guard below shares
-        // this fetch rather than re-querying.
+        // Fetch the trigger claimants once (also the source of the endpoint options when present). The ambiguity
+        // guard below shares this fetch rather than re-querying, and the router reuses it on the start path.
         var claimants = await triggerBindingStore.ListByStimulusAsync(HttpEndpointStimulus.StimulusType, stimulusHash, context.RequestAborted);
 
         // Endpoint options ride the claimant binding's non-identity metadata (spec 089 C, FR-012..FR-014). Sibling
         // claimants of one definition share options; on an ambiguous route (rejected below) any claimant's
         // Authorize flag is enough to know the endpoint is protected, so read the strongest: if ANY claimant
-        // authorizes, authorization must pass before we disclose anything else.
-        var endpointOptions = ResolveEndpointOptions(claimants);
+        // authorizes, authorization must pass before we disclose anything else. When there is NO trigger claimant
+        // (a purely mid-flow endpoint) the options come instead from a FAIL-CLOSED merge across ALL waiting bookmarks
+        // matching this stimulus hash via the expiry-aware lookup (spec 089 D, D-D5) — options are excluded from the
+        // hash, so divergent bookmarks on one (template, method) must not let a lax one defeat a strict one. The
+        // claimant wins when both exist, so the bookmark merge only runs when no claimant was found.
+        var endpointOptions = claimants.Count > 0
+            ? ResolveEndpointOptions(claimants)
+            : HttpEndpointStimulusOptions.MergeForResume(await ResolveWaitingBookmarkMetadataAsync(stimulusHash, context.RequestAborted));
 
         // Authorization runs before the body is read, before ambiguity/existence is disclosed, and before any
         // dispatch (FR-012, #592 item 10 — auth before disclosure). Fail closed: an Authorize endpoint with no
-        // handler composed (WorkflowsRuntimeHttp feature absent) denies. A configuration fault (missing scheme /
-        // unregistered policy) surfaces as 500, distinct from the 401 an anonymous caller gets (#592 item 11).
+        // handler composed (WorkflowsRuntimeHttp feature absent) denies. Every distinct merged policy must pass —
+        // a resume-only match can span waiting bookmarks with divergent policies (D-D5). A configuration fault
+        // (missing scheme / unregistered policy) surfaces as 500, distinct from the 401 an anonymous caller gets
+        // (#592 item 11).
         if (endpointOptions.Authorize)
         {
             bool authorized;
@@ -133,7 +153,7 @@ public sealed class HttpEndpointMiddleware(
             {
                 var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
                 authorized = authorizationHandler is not null
-                    && await authorizationHandler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, endpointOptions.Policy));
+                    && await AuthorizeAllPoliciesAsync(authorizationHandler, context, endpointOptions.Policies);
             }
             catch (HttpEndpointAuthorizationConfigurationException)
             {
@@ -152,7 +172,8 @@ public sealed class HttpEndpointMiddleware(
         // authoring error, not fan-out — reject before any dispatch so neither workflow starts. Evaluated only
         // after authorization, so an anonymous caller cannot distinguish an ambiguous route from a valid one. The
         // body is slimmed to a stable code — it must not echo the method/template to an (authorized) caller
-        // (#592 item 10).
+        // (#592 item 10). The guard stays trigger-claimant-only: bookmark resumes are instance-scoped and cannot
+        // be ambiguous across definitions (D-D5).
         if (claimants.Select(binding => binding.DefinitionId).Distinct(StringComparer.Ordinal).Count() > 1)
         {
             context.Response.StatusCode = StatusCodes.Status409Conflict;
@@ -175,11 +196,14 @@ public sealed class HttpEndpointMiddleware(
 
         // Reuse the claimant set already fetched for the ambiguity guard + options: the router's start path would
         // otherwise issue an identical ListByStimulusAsync(type, hash) for the same request (spec 089 efficiency #7).
+        // StartAndResume (spec 089 D): start new instances from matching triggers AND resume waiting instances
+        // suspended on this mid-flow endpoint. The router's snapshot-before-start guard prevents an instance
+        // started by THIS request from also resuming itself.
         var dispatch = new StimulusDispatchRequest(
             stimulusType: HttpEndpointStimulus.StimulusType,
             stimulusHash: stimulusHash,
             input: input,
-            mode: StimulusRoutingMode.StartOnly,
+            mode: StimulusRoutingMode.StartAndResume,
             requestedBy: RequestedBy,
             matchedTriggerBindings: claimants);
 
@@ -205,7 +229,9 @@ public sealed class HttpEndpointMiddleware(
             return;
         }
 
-        if (result.StartedCount == 0)
+        // Nothing matched: no trigger started AND no waiting instance was resumed (spec 089 D, D-D6). A resolved
+        // route whose only claim was a since-consumed bookmark deterministically lands here → 404.
+        if (result.StartedCount == 0 && result.ResumedCount == 0)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -216,9 +242,17 @@ public sealed class HttpEndpointMiddleware(
             .Select(start => start.WorkflowExecutionId!)
             .ToArray();
 
+        // Resumed = the execution ids of the DISPATCHED resumes only (a skipped/lost resume is not reported).
+        var resumedIds = result.Resumes
+            .Where(resume => resume.Status == BookmarkResumeDispatchStatus.Dispatched)
+            .Select(resume => resume.WorkflowExecutionId)
+            .ToArray();
+
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync(JsonSerializer.Serialize(new { started = startedIds }), context.RequestAborted);
+        await context.Response.WriteAsync(
+            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds }),
+            context.RequestAborted);
     }
 
     /// <summary>
@@ -226,9 +260,11 @@ public sealed class HttpEndpointMiddleware(
     /// one definition share options, so the first claimant's metadata drives timeout/size/policy. Authorization is
     /// treated as the strongest claim across claimants: if ANY claimant requires authorization the endpoint is
     /// protected, so authorization runs (and an anonymous caller is denied) before route ambiguity is disclosed on
-    /// an ambiguous route (#592 item 10). Empty claimants (unknown route already handled upstream) yield defaults.
+    /// an ambiguous route (#592 item 10). Empty claimants (a purely mid-flow endpoint) are handled by the caller
+    /// via <see cref="ResolveWaitingBookmarkMetadataAsync"/> + <see cref="HttpEndpointStimulusOptions.MergeForResume"/>
+    /// instead.
     /// </summary>
-    private static HttpEndpointStimulusOptions ResolveEndpointOptions(IEnumerable<WorkflowTriggerBinding> claimants)
+    private static MergedHttpEndpointOptions ResolveEndpointOptions(IEnumerable<WorkflowTriggerBinding> claimants)
     {
         HttpEndpointStimulusOptions? first = null;
         var authorizeAny = false;
@@ -240,7 +276,50 @@ public sealed class HttpEndpointMiddleware(
             authorizeAny |= options.Authorize;
         }
 
-        return (first ?? HttpEndpointStimulusOptions.None) with { Authorize = authorizeAny };
+        return MergedHttpEndpointOptions.FromClaimant(first ?? HttpEndpointStimulusOptions.None, authorizeAny);
+    }
+
+    /// <summary>
+    /// Runs the authorization handler once per distinct <paramref name="policies"/> and requires ALL to pass
+    /// (fail closed, D-D5): a resume-only match can span waiting bookmarks with divergent policies, so an
+    /// endpoint is authorized only when every declared policy is satisfied. When the set is empty the endpoint is
+    /// protected by an authorize-only check (a single call with a null policy), preserving the single-policy
+    /// (claimant) behavior. Short-circuits on the first denial.
+    /// </summary>
+    private static async ValueTask<bool> AuthorizeAllPoliciesAsync(
+        IHttpEndpointAuthorizationHandler handler,
+        HttpContext context,
+        IReadOnlyCollection<string> policies)
+    {
+        if (policies.Count == 0)
+            return await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, Policy: null));
+
+        foreach (var policy in policies)
+        {
+            if (!await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, policy)))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves the endpoint options metadata for a resume-only match (no trigger claimant) from EVERY waiting
+    /// bookmark matching this stimulus hash (spec 089 D, D-D5). Uses the expiry-aware lookup and filters to the
+    /// matched stimulus hash, so an expired or differently-hashed bookmark never supplies options. The caller merges
+    /// the returned metadata fail-closed via <see cref="HttpEndpointStimulusOptions.MergeForResume"/> — an empty
+    /// sequence (no waiting bookmark matched) merges to defaults (no authorize, global size limit, no timeout).
+    /// </summary>
+    private async ValueTask<IReadOnlyList<IReadOnlyDictionary<string, string>?>> ResolveWaitingBookmarkMetadataAsync(string stimulusHash, CancellationToken cancellationToken)
+    {
+        var waiting = await bookmarkStimulusLookup.FindWaitingByTypeAsync(
+            new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointStimulus.StimulusType, DateTimeOffset.UtcNow),
+            cancellationToken);
+
+        return waiting.Matches
+            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusHash, stimulusHash))
+            .Select(bookmark => (IReadOnlyDictionary<string, string>?)bookmark.Metadata)
+            .ToArray();
     }
 
     /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>

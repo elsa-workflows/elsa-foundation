@@ -87,7 +87,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             requestedArtifactId: request.ArtifactId,
             variables: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables),
             inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs),
-            stimulusInput: request.StimulusInput));
+            stimulusInput: request.StimulusInput,
+            triggerNodeId: request.TriggerNodeId));
 
         var command = new WorkflowExecutionCommand(
             CommandId: _idGenerator.NewWorkflowExecutionCommandId(),

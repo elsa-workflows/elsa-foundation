@@ -67,4 +67,23 @@ public sealed class GroundworkBookmarkStateStore(IDocumentStore store, IGroundwo
             .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
             .ToArray();
     }
+
+    public async ValueTask<IReadOnlyCollection<BookmarkState>> ListByStimulusTypeAsync(string stimulusType, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
+
+        // Type-scoped scan (spec 089 D). The cross-execution index is hash-keyed, so it cannot serve a type-only
+        // query; rather than add a new index (and its Condition-7 backfill), a full type-scoped scan is used —
+        // identical to the sibling GroundworkWorkflowTriggerBindingStore.ListByStimulusTypeAsync (spec 089 B). This
+        // feeds the route-table refresh/rebuild, not a hot per-request path. A clause-free PortableDocumentQuery
+        // matches every bookmark document; we narrow to the requested stimulus type in code. Raw snapshots (incl.
+        // Metadata) are returned; expiry filtering stays in the lookup layer per the index's documented contract.
+        // No new index means the persisted document shape and SchemaVersion are unchanged.
+        var result = await Store.QueryAsync(new PortableDocumentQuery(DocumentKind), cancellationToken);
+
+        return result.Documents
+            .Select(envelope => Serializer.Deserialize<BookmarkState>(envelope))
+            .Where(bookmark => StringComparer.Ordinal.Equals(bookmark.StimulusType, stimulusType))
+            .ToArray();
+    }
 }

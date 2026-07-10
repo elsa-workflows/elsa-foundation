@@ -85,6 +85,18 @@ public sealed class WorkflowTriggerBindingExtractorTests
         Assert.Contains("node-mystery", exception.Message);
     }
 
+    [Fact]
+    public void Extract_ProducesNoBindings_ForRecognizedNonStartNode_WithoutThrowing()
+    {
+        // Spec 089 D: a recognized node that declares itself a non-start (CanStartWorkflow = false → zero
+        // descriptors) must yield no trigger bindings and must NOT trip the zero-descriptor publish guard, which
+        // only fires for a node NO provider recognizes.
+        var extractor = new WorkflowTriggerBindingExtractor([new NonStartProvider("Elsa.HttpEndpoint")]);
+        var executable = Executable(TriggerNode("node-midflow", "Elsa.HttpEndpoint"));
+
+        Assert.Empty(extractor.Extract(executable));
+    }
+
     private WorkflowExecutable Executable(ExecutableNode root) =>
         new(
             identity: _identity,
@@ -123,16 +135,27 @@ public sealed class WorkflowTriggerBindingExtractorTests
     private sealed class FakeProvider(string activityType, string stimulusType, string stimulusHash, string? correlationScope = null)
         : IActivityTriggerStimulusProvider
     {
-        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
-                ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash, correlationScope)]
-                : [];
+                ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash, correlationScope)])
+                : ActivityTriggerStimulusResult.NotRecognized;
     }
 
     private sealed class MultiDescriptorProvider(string activityType, params TriggerStimulusDescriptor[] descriptors)
         : IActivityTriggerStimulusProvider
     {
-        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
-            StringComparer.Ordinal.Equals(node.ActivityType, activityType) ? descriptors : [];
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
+            StringComparer.Ordinal.Equals(node.ActivityType, activityType)
+                ? ActivityTriggerStimulusResult.Recognized(descriptors)
+                : ActivityTriggerStimulusResult.NotRecognized;
+    }
+
+    /// <summary>A provider that recognizes its type but declares a non-start (zero descriptors, no publish failure).</summary>
+    private sealed class NonStartProvider(string activityType) : IActivityTriggerStimulusProvider
+    {
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
+            StringComparer.Ordinal.Equals(node.ActivityType, activityType)
+                ? ActivityTriggerStimulusResult.Recognized([])
+                : ActivityTriggerStimulusResult.NotRecognized;
     }
 }

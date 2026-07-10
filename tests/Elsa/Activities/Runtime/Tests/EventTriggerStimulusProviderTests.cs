@@ -14,7 +14,7 @@ public sealed class EventTriggerStimulusProviderTests
     {
         var node = EventNode(eventName: "order-shipped");
 
-        var descriptor = Assert.Single(_provider.Describe(node));
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
         Assert.Equal("Event", descriptor.StimulusType);
         Assert.Equal(EventStimulus.Hash("order-shipped"), descriptor.StimulusHash);
@@ -26,7 +26,7 @@ public sealed class EventTriggerStimulusProviderTests
     {
         var node = EventNode(eventName: "order-shipped", correlationId: "order-7");
 
-        var descriptor = Assert.Single(_provider.Describe(node));
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
         Assert.Equal("order-7", descriptor.CorrelationScope);
     }
@@ -36,7 +36,7 @@ public sealed class EventTriggerStimulusProviderTests
     {
         var node = EventNode(eventName: "order-shipped", activityType: "Elsa.WriteLine");
 
-        Assert.Empty(_provider.Describe(node));
+        Assert.False(_provider.Describe(node).IsRecognized);
     }
 
     [Fact]

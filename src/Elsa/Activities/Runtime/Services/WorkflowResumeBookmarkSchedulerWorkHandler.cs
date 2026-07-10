@@ -201,7 +201,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // Previously the resume context was built with none of these, so a resume callback that evaluated
             // JavaScript/Liquid saw empty getWorkflowInstanceId()/getInput()/getVariable()/getOutput() and had no
             // scope to write variables into. Populated identically to the invoke path via the shared helper.
-            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable);
+            // Stash the resume dispatch's stimulus input onto the carrier (spec 089 D) so a context-shaped
+            // [ResumeTarget] can read the resuming request's payload via IExecutionExpressionState.ResumeInput while
+            // keeping full Set/output access to the context. It is a live per-invocation value, never durable state,
+            // so the invoke/start/parent-completion paths (which call Create without it) leave it null.
+            var carrier = RuntimeExecutionExpressionCarrier.Create(projections, resumePayload.PinnedExecutable, resumePayload.Input);
             context = SimpleActivityExecutionContext.ForExecution(
                 serviceProvider,
                 activity,
@@ -251,9 +255,19 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             return;
         }
 
-        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, context.GetRecordedOutputs(), _timeProvider.GetUtcNow()));
+        var recordedOutputs = context.GetRecordedOutputs();
+        valueSnapshots.AddRange(BuildOutputValueSnapshots(payloadCapturePolicy, workItem, resumePayload, executableNode, recordedOutputs, _timeProvider.GetUtcNow()));
+
+        // Durably persist the resume target's CaptureOnSuccessfulCompletion outputs, mirroring the invoke path: a
+        // resume callback that sets outputs (e.g. the mid-flow HttpEndpoint's Result/RouteData/ParsedContent, spec
+        // 089 D) captures them to durable values, not just inspection snapshots. Folded into the consumption
+        // checkpoint alongside the workflow-scope variable write-back so it commits atomically with the consumption.
+        var durableOutputChanges = ActivityOutputPublisher.BuildDurableOutputChanges(
+            workItem, resumePayload.ActivityExecutionId, resumePayload.ExecutableNodeId, executableNode, recordedOutputs, _timeProvider.GetUtcNow());
+        var durableValueChanges = workflowVariableWriteBackChanges.Concat(durableOutputChanges).ToArray();
+
         var completedState = CompleteActivity(workItem, resumePayload, state, SchedulerWorkHandlerHelpers.NormalizeOutcomeNames(context.GetOutcomes(), defaultToDone: true));
-        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, workflowVariableWriteBackChanges), cancellationToken);
+        await bookmarkConsumptionCheckpointService.CommitAsync(new BookmarkConsumptionCheckpointRequest(workItem, resumePayload, bookmark, completedState, NewCompletionWorkItem(workItem, resumePayload, completedState), valueSnapshots, durableValueChanges), cancellationToken);
     }
 
     private RuntimeSchedulerWorkItem NewCompletionWorkItem(

@@ -23,18 +23,25 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
 {
     private const string PathInput = nameof(HttpEndpoint.Path);
     private const string MethodsInput = nameof(HttpEndpoint.SupportedMethods);
+    private const string CanStartWorkflowInput = nameof(HttpEndpoint.CanStartWorkflow);
     private const string AuthorizeInput = nameof(HttpEndpoint.Authorize);
     private const string PolicyInput = nameof(HttpEndpoint.Policy);
     private const string RequestTimeoutInput = nameof(HttpEndpoint.RequestTimeout);
     private const string RequestSizeLimitInput = nameof(HttpEndpoint.RequestSizeLimit);
     private static readonly string[] DefaultMethods = ["GET"];
 
-    public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node)
+    public ActivityTriggerStimulusResult Describe(ExecutableNode node)
     {
         ArgumentNullException.ThrowIfNull(node);
 
         if (!StringComparer.Ordinal.Equals(node.ActivityType, HttpEndpoint.ActivityType))
-            return [];
+            return ActivityTriggerStimulusResult.NotRecognized;
+
+        // A mid-flow endpoint (CanStartWorkflow = false) is recognized but declares itself a non-start: no trigger
+        // bindings, and — because the result is Recognized rather than NotRecognized — no publish failure (spec 089 D).
+        // The default (unauthored) is true, preserving the sub-unit A–C start behavior. Read as a literal like Path.
+        if (ReadLiteralBool(node, CanStartWorkflowInput) is false)
+            return ActivityTriggerStimulusResult.Recognized([]);
 
         var path = ReadLiteralString(node, PathInput)
             ?? throw new ArgumentException(
@@ -50,7 +57,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             RequestTimeout: ReadLiteralTimeSpan(node, RequestTimeoutInput),
             RequestSizeLimit: ReadLiteralLong(node, RequestSizeLimitInput));
 
-        return HttpEndpointStimulus.Describe(path, effectiveMethods, options);
+        return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path, effectiveMethods, options));
     }
 
     /// <summary>

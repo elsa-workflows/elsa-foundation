@@ -40,6 +40,29 @@ public sealed class GlobalBookmarkStimulusLookup : IGlobalBookmarkStimulusLookup
         return new GlobalBookmarkStimulusLookupResult(matches);
     }
 
+    public async ValueTask<GlobalBookmarkStimulusLookupResult> FindWaitingByTypeAsync(
+        GlobalBookmarkStimulusTypeLookupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var candidates = await _bookmarkStimulusIndex.ListByStimulusTypeAsync(request.StimulusType, cancellationToken);
+
+        // Expiry filtering stays in the lookup layer (the raw index scan is deliberately unfiltered). No
+        // correlation scoping: mid-flow bookmark resumes are instance-scoped. Deterministic ordering matches the
+        // hash-scoped path so consumers see a stable fan-in order.
+        var matches = candidates
+            .Where(bookmark =>
+                StringComparer.Ordinal.Equals(bookmark.StimulusType, request.StimulusType) &&
+                (bookmark.ExpiresAt is null || bookmark.ExpiresAt > request.EvaluatedAt))
+            .OrderBy(bookmark => bookmark.CreatedAt)
+            .ThenBy(bookmark => bookmark.WorkflowExecutionId, StringComparer.Ordinal)
+            .ThenBy(bookmark => bookmark.BookmarkId, StringComparer.Ordinal)
+            .ToArray();
+
+        return new GlobalBookmarkStimulusLookupResult(matches);
+    }
+
     private static bool Matches(BookmarkState bookmark, GlobalBookmarkStimulusLookupRequest request) =>
         StringComparer.Ordinal.Equals(bookmark.StimulusType, request.StimulusType) &&
         StringComparer.Ordinal.Equals(bookmark.StimulusHash, request.StimulusHash) &&

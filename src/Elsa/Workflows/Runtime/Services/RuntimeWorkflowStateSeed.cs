@@ -37,6 +37,12 @@ public static class RuntimeWorkflowStateSeed
     public const string StimulusValueIdPrefix = "stimulus:";
     public const string StimulusInputSlotName = "input";
 
+    // Reserved durable-value-id namespace for the trigger-node identity (spec 089 D). A single reserved slot:
+    // the run has at most one trigger node, and — like the stimulus input above — it deliberately does NOT share
+    // the input:* namespace so it can never collide with (or be spoofed through) author-declared workflow inputs.
+    public const string TriggerNodeValueIdPrefix = "trigger:";
+    public const string TriggerNodeIdSlotName = "nodeId";
+
     // Reserved durable-value-id namespace for the workflow-identity projection (correlation id / instance name).
     // The identity slot name is the suffix (e.g. "identity:correlationId"); it doubles as the IdentityName tag
     // value the read-side projection filters on. Kept distinct from the variable/input/output namespaces above.
@@ -54,7 +60,8 @@ public static class RuntimeWorkflowStateSeed
         IReadOnlyDictionary<string, object?>? variables,
         IReadOnlyDictionary<string, object?>? inputs,
         DateTimeOffset capturedAt,
-        JsonElement? stimulusInput = null)
+        JsonElement? stimulusInput = null,
+        string? triggerNodeId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -69,6 +76,10 @@ public static class RuntimeWorkflowStateSeed
         // The start stimulus payload rides its own reserved channel (spec 089 A): never the input:* namespace.
         if (stimulusInput is { } stimulus)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.StimulusInputName, StimulusValueIdPrefix, StimulusInputSlotName, stimulus, capturedAt));
+
+        // The trigger-node identity rides its own reserved channel (spec 089 D): never the input:* namespace.
+        if (!string.IsNullOrWhiteSpace(triggerNodeId))
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.TriggerNodeId, TriggerNodeValueIdPrefix, TriggerNodeIdSlotName, triggerNodeId, capturedAt));
 
         return changes;
     }

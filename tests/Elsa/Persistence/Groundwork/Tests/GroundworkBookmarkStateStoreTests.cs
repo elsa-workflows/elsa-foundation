@@ -88,7 +88,28 @@ public sealed class GroundworkBookmarkStateStoreTests
         Assert.Empty(await store.ListAsync("missing"));
     }
 
-    private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId, string stimulus, object? payload = null)
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task ListByStimulusType_ReturnsEveryBookmarkOfType_AcrossExecutionsAndHashes(string provider)
+    {
+        // Spec 089 D (T004a): the Groundwork type-scoped scan returns every bookmark of a stimulus type regardless
+        // of hash/execution, narrowing out other types — mirroring the sibling trigger-binding-store by-type scan.
+        await using var fixture = CreateStore(provider);
+        IBookmarkStimulusIndex index = new GroundworkBookmarkStateStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var store = (IBookmarkStateStore)index;
+
+        await store.SaveAsync(Bookmark("wf-1", "bm-a", stimulus: "HttpEndpoint", stimulusHash: "h1"));
+        await store.SaveAsync(Bookmark("wf-2", "bm-b", stimulus: "HttpEndpoint", stimulusHash: "h2"));
+        await store.SaveAsync(Bookmark("wf-3", "bm-c", stimulus: "Event", stimulusHash: "h3"));
+
+        var http = await index.ListByStimulusTypeAsync("HttpEndpoint");
+        Assert.Equal(new[] { "bm-a", "bm-b" }, http.Select(b => b.BookmarkId).OrderBy(x => x));
+
+        Assert.Empty(await index.ListByStimulusTypeAsync("Signal"));
+    }
+
+    private static BookmarkState Bookmark(string workflowExecutionId, string bookmarkId, string stimulus, object? payload = null, string stimulusHash = "hash-1")
     {
         JsonElement? payloadElement = payload is null ? null : JsonSerializer.SerializeToElement(payload);
         return new BookmarkState(
@@ -98,7 +119,7 @@ public sealed class GroundworkBookmarkStateStoreTests
             ExecutableNodeId: "node-1",
             ResumeTargetId: "resume-1",
             StimulusType: stimulus,
-            StimulusHash: "hash-1",
+            StimulusHash: stimulusHash,
             Payload: payloadElement,
             Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
             CreatedAt: DateTimeOffset.UtcNow,

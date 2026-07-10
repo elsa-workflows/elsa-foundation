@@ -53,24 +53,43 @@ internal sealed class FakeAuthorizationHandler : IHttpEndpointAuthorizationHandl
 {
     private readonly bool _authorize;
     private readonly Exception? _throws;
+    private readonly Func<string?, bool>? _decidePerPolicy;
 
     public FakeAuthorizationHandler(bool authorize) => _authorize = authorize;
 
     private FakeAuthorizationHandler(Exception throws) => _throws = throws;
 
+    private FakeAuthorizationHandler(Func<string?, bool> decidePerPolicy) => _decidePerPolicy = decidePerPolicy;
+
     /// <summary>A handler that throws <paramref name="exception"/> instead of returning a decision.</summary>
     public static FakeAuthorizationHandler Throwing(Exception exception) => new(exception);
 
+    /// <summary>
+    /// A handler whose decision depends on the policy being evaluated — used to prove that when several distinct
+    /// policies are merged from divergent waiting bookmarks (D-D5), EVERY one is evaluated and any single failure
+    /// denies the request.
+    /// </summary>
+    public static FakeAuthorizationHandler PerPolicy(Func<string?, bool> decide) => new(decide);
+
+    /// <summary>The most recent context (retained for existing single-policy assertions).</summary>
     public AuthorizeHttpEndpointContext? LastContext { get; private set; }
 
+    /// <summary>Every context handed to the handler, in call order (one per evaluated policy).</summary>
+    public List<AuthorizeHttpEndpointContext> Contexts { get; } = new();
+
     public bool WasInvoked => LastContext is not null;
+
+    /// <summary>The distinct, non-null policy strings the handler was asked to evaluate.</summary>
+    public IReadOnlyCollection<string> EvaluatedPolicies =>
+        Contexts.Select(context => context.Policy).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
 
     public ValueTask<bool> AuthorizeAsync(AuthorizeHttpEndpointContext context)
     {
         LastContext = context;
+        Contexts.Add(context);
         if (_throws is not null)
             throw _throws;
-        return ValueTask.FromResult(_authorize);
+        return ValueTask.FromResult(_decidePerPolicy?.Invoke(context.Policy) ?? _authorize);
     }
 }
 

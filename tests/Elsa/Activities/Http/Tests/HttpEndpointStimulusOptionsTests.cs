@@ -79,4 +79,82 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestTimeoutMetadataKey));
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey));
     }
+
+    // ---- D-D5 fail-closed merge across divergent waiting bookmarks ----
+
+    [Fact]
+    public void MergeForResume_Empty_YieldsDefaults()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume([]);
+
+        Assert.False(merged.Authorize);
+        Assert.Empty(merged.Policies);
+        Assert.Null(merged.RequestSizeLimit);
+        Assert.Null(merged.RequestTimeout);
+    }
+
+    [Fact]
+    public void MergeForResume_Authorize_TrueIfAnyBookmarkRequiresIt()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(Authorize: false).ToMetadata(),
+            new HttpEndpointStimulusOptions(Authorize: true).ToMetadata()
+        ]);
+
+        Assert.True(merged.Authorize);
+    }
+
+    [Fact]
+    public void MergeForResume_Policies_AreTheDistinctNonEmptyUnion()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(Authorize: true, Policy: "admins").ToMetadata(),
+            new HttpEndpointStimulusOptions(Authorize: true, Policy: "auditors").ToMetadata(),
+            new HttpEndpointStimulusOptions(Authorize: true, Policy: "admins").ToMetadata(), // duplicate
+            new HttpEndpointStimulusOptions(Authorize: true).ToMetadata() // no policy — contributes nothing
+        ]);
+
+        Assert.Equal(new[] { "admins", "auditors" }, merged.Policies.OrderBy(p => p, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void MergeForResume_SizeLimit_IsMinOfSpecified_AbsentDoesNotRelax()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(RequestSizeLimit: 128).ToMetadata(),
+            new HttpEndpointStimulusOptions().ToMetadata(), // absent limit
+            new HttpEndpointStimulusOptions(RequestSizeLimit: 16).ToMetadata()
+        ]);
+
+        Assert.Equal(16, merged.RequestSizeLimit);
+    }
+
+    [Fact]
+    public void MergeForResume_Timeout_IsMinOfSpecified()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(RequestTimeout: TimeSpan.FromSeconds(30)).ToMetadata(),
+            new HttpEndpointStimulusOptions(RequestTimeout: TimeSpan.FromSeconds(5)).ToMetadata()
+        ]);
+
+        Assert.Equal(TimeSpan.FromSeconds(5), merged.RequestTimeout);
+    }
+
+    [Fact]
+    public void MergeForResume_SingleBookmark_MatchesItsOptions()
+    {
+        var merged = HttpEndpointStimulusOptions.MergeForResume(
+        [
+            new HttpEndpointStimulusOptions(Authorize: true, Policy: "admins", RequestSizeLimit: 64, RequestTimeout: TimeSpan.FromSeconds(10)).ToMetadata()
+        ]);
+
+        Assert.True(merged.Authorize);
+        Assert.Equal(new[] { "admins" }, merged.Policies);
+        Assert.Equal(64, merged.RequestSizeLimit);
+        Assert.Equal(TimeSpan.FromSeconds(10), merged.RequestTimeout);
+    }
 }

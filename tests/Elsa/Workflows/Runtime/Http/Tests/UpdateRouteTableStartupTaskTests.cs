@@ -1,7 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Services;
-using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
@@ -11,8 +9,10 @@ public sealed class UpdateRouteTableStartupTaskTests
     private readonly InMemoryWorkflowTriggerBindingStore _store = new();
     private readonly FakeRouteTable _routeTable = new();
 
+    // The startup task now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); build the
+    // real synchronizer over the real resolver + route table so the task still populates the table end-to-end.
     private UpdateRouteTableStartupTask Task() =>
-        new(new HttpEndpointRoutesResolver(_store, NullLogger<HttpEndpointRoutesResolver>.Instance), _routeTable);
+        new(Synchronizers.Build(_store, _routeTable));
 
     [Fact]
     public async Task PopulatesRouteTable_FromBindings()

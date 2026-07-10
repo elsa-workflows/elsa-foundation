@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http.Tests;
 
@@ -132,4 +133,97 @@ internal static class Bindings
             CorrelationScope: null,
             Metadata: metadata,
             CreatedAt: DateTimeOffset.UnixEpoch);
+}
+
+internal static class Resolvers
+{
+    /// <summary>
+    /// Builds a real <see cref="HttpEndpointRoutesResolver"/> over the given trigger-binding store and an
+    /// optional bookmark store (empty by default), wiring the production expiry-aware lookup and a null logger.
+    /// Keeps the resolver's construction in one place so tests that don't care about bookmarks stay terse.
+    /// </summary>
+    public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver Build(
+        Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
+        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null) =>
+        new(
+            bindingStore,
+            new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance);
+}
+
+internal static class Synchronizers
+{
+    /// <summary>
+    /// Builds a real <see cref="Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer"/> over the
+    /// given trigger-binding store, route table, and optional bookmark store — wiring a minimal service provider so
+    /// the synchronizer's per-refresh scope resolves the real resolver + route table. Keeps the synchronizer's
+    /// construction in one place for the tests whose call sites now delegate to it (startup task, observers).
+    /// </summary>
+    public static Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer Build(
+        Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore bindingStore,
+        IRouteTable routeTable,
+        Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore? bookmarks = null)
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(bindingStore);
+        services.AddSingleton(routeTable);
+        services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(
+            new Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup(bookmarks ?? new()));
+        services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver>(sp =>
+            new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver(
+                sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore>(),
+                sp.GetRequiredService<Elsa.Workflows.Runtime.Core.Contracts.IGlobalBookmarkStimulusLookup>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>.Instance));
+
+        var provider = services.BuildServiceProvider();
+        return new Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer(
+            provider.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>());
+    }
+}
+
+internal static class Bookmarks
+{
+    /// <summary>Builds a waiting HTTP-endpoint bookmark carrying the standard routing metadata (mid-flow suspension).</summary>
+    public static BookmarkState HttpEndpoint(
+        string workflowExecutionId,
+        string template,
+        string method,
+        DateTimeOffset? expiresAt = null,
+        IReadOnlyDictionary<string, string>? extraMetadata = null)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [Elsa.Http.Core.HttpEndpointRouting.TemplateMetadataKey] = template,
+            [Elsa.Http.Core.HttpEndpointRouting.MethodMetadataKey] = method.ToLowerInvariant(),
+        };
+
+        if (extraMetadata is not null)
+            foreach (var (key, value) in extraMetadata)
+                metadata[key] = value;
+
+        return Build(workflowExecutionId, Elsa.Http.Core.HttpEndpointRouting.StimulusType, $"sha256:{template}:{method}", metadata, expiresAt);
+    }
+
+    /// <summary>Builds a non-HTTP bookmark (used to prove the resolver/observer ignore other stimulus types).</summary>
+    public static BookmarkState Other(string workflowExecutionId, string stimulusType = "Event") =>
+        Build(workflowExecutionId, stimulusType, $"sha256:{stimulusType}:{workflowExecutionId}", new Dictionary<string, string>(StringComparer.Ordinal));
+
+    public static BookmarkState Build(
+        string workflowExecutionId,
+        string stimulusType,
+        string stimulusHash,
+        IReadOnlyDictionary<string, string> metadata,
+        DateTimeOffset? expiresAt = null) =>
+        new(
+            BookmarkId: $"http-endpoint:{workflowExecutionId}:{stimulusHash}",
+            WorkflowExecutionId: workflowExecutionId,
+            ActivityExecutionId: $"ae-{workflowExecutionId}",
+            ExecutableNodeId: $"node-{workflowExecutionId}",
+            ResumeTargetId: "OnResume",
+            StimulusType: stimulusType,
+            StimulusHash: stimulusHash,
+            Payload: null,
+            Metadata: metadata,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            ExpiresAt: expiresAt);
 }

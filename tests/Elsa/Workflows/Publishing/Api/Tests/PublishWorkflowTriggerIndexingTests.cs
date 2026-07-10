@@ -107,10 +107,10 @@ public sealed class PublishWorkflowTriggerIndexingTests
 
     private sealed class StubTriggerProvider(string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {
-        public IReadOnlyCollection<TriggerStimulusDescriptor> Describe(ExecutableNode node) =>
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             node.ActivityType == TriggerActivityTypeKey
-                ? [new TriggerStimulusDescriptor(stimulusType, stimulusHash)]
-                : [];
+                ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(stimulusType, stimulusHash)])
+                : ActivityTriggerStimulusResult.NotRecognized;
     }
 
     private static IActivityStructureService BuildStructureService()

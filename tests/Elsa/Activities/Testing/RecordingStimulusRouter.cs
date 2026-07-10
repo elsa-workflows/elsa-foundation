@@ -11,12 +11,33 @@ namespace Elsa.Activities.Testing;
 public sealed class RecordingStimulusRouter : IStimulusRouter
 {
     private readonly StimulusStartOutcome[] _starts;
+    private readonly StimulusResumeOutcome[] _resumes;
 
     /// <summary>Routes nothing (no matches). This is the constructor DI activates.</summary>
-    public RecordingStimulusRouter() => _starts = Array.Empty<StimulusStartOutcome>();
+    public RecordingStimulusRouter()
+    {
+        _starts = Array.Empty<StimulusStartOutcome>();
+        _resumes = Array.Empty<StimulusResumeOutcome>();
+    }
 
-    /// <summary>Routes the given start outcomes on every call.</summary>
-    public RecordingStimulusRouter(params StimulusStartOutcome[] starts) => _starts = starts;
+    /// <summary>Routes the given start outcomes (and no resumes) on every call.</summary>
+    public RecordingStimulusRouter(params StimulusStartOutcome[] starts)
+    {
+        _starts = starts;
+        _resumes = Array.Empty<StimulusResumeOutcome>();
+    }
+
+    private RecordingStimulusRouter(StimulusStartOutcome[] starts, StimulusResumeOutcome[] resumes)
+    {
+        _starts = starts;
+        _resumes = resumes;
+    }
+
+    /// <summary>Routes the given start AND resume outcomes on every call (spec 089 D StartAndResume).</summary>
+    public static RecordingStimulusRouter WithOutcomes(
+        IEnumerable<StimulusStartOutcome>? starts = null,
+        IEnumerable<StimulusResumeOutcome>? resumes = null) =>
+        new(starts?.ToArray() ?? Array.Empty<StimulusStartOutcome>(), resumes?.ToArray() ?? Array.Empty<StimulusResumeOutcome>());
 
     /// <summary>The requests routed through this fake, in call order.</summary>
     public List<StimulusDispatchRequest> Requests { get; } = new();
@@ -27,6 +48,6 @@ public sealed class RecordingStimulusRouter : IStimulusRouter
     public ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
     {
         Requests.Add(request);
-        return ValueTask.FromResult(new StimulusRoutingResult(_starts, Array.Empty<StimulusResumeOutcome>()));
+        return ValueTask.FromResult(new StimulusRoutingResult(_starts, _resumes));
     }
 }

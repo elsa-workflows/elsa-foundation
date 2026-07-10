@@ -47,6 +47,10 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Core.Services.InMemoryWorkflowTriggerBindingStore>();
+        // The middleware also resolves waiting-bookmark options for resume-only matches (spec 089 D) via the
+        // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers; supplied here (empty store).
+        services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Core.Services.InMemoryBookmarkStateStore>();
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Core.Services.GlobalBookmarkStimulusLookup>();
         using var provider = services.BuildServiceProvider();
         await provider.GetRequiredService<Elsa.Http.Core.Contracts.IRouteTable>().Add("seam-probe");
 

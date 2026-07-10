@@ -87,6 +87,74 @@ public sealed class RuntimeResumeExecutionCarrierTests
         Assert.Equal("prior-value", ExecutionCarrierTestData.AsString(activity.ObservedOutput));
         // In-evaluation variable write-back lands in the visible scope (impossible before: no scope was passed).
         Assert.Equal("Hi", activity.ReadBackAfterWrite);
+        // Resume-only path: no resume input was dispatched, so ResumeInput is null (spec 089 D).
+        Assert.Null(activity.ObservedResumeInput);
+    }
+
+    [Fact]
+    public async Task ResumeCallback_ObservesResumeInputFromDispatch()
+    {
+        // Spec 089 D (T002): the resume dispatch's stimulus input is stashed onto the carrier so a context-shaped
+        // [ResumeTarget] reads the resuming request's payload via IExecutionExpressionState.ResumeInput while
+        // keeping full context (Set/output) access — the shape the mid-flow HttpEndpoint resume target relies on.
+        await _executableStore.SaveAsync(NewExecutable());
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await _activityStateStore.SaveAsync(NewRunningState(RootNodeId, "actexec-root", parentActivityExecutionId: null));
+        await _activityStateStore.SaveAsync(NewSuspendedWaitState());
+        await SaveBookmarkAsync();
+
+        var resumeInput = JsonSerializer.SerializeToElement(new { path = "/callbacks/1", method = "POST" });
+        var activity = new CarrierObservingResumeTargetActivity();
+        await using var provider = NewProvider(new RecordingActivityFactory(activity));
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem(resumeInput));
+
+        Assert.True(activity.ResumeInvoked);
+        Assert.NotNull(activity.ObservedResumeInput);
+        Assert.Equal("/callbacks/1", activity.ObservedResumeInput!.Value.GetProperty("path").GetString());
+        Assert.Equal("POST", activity.ObservedResumeInput!.Value.GetProperty("method").GetString());
+    }
+
+    [Fact]
+    public async Task ResumeConsumingTheBookmark_NotifiesLifecycleObservers_AfterTheCommit()
+    {
+        // Spec 089 D (T005): consuming a bookmark on the real resume path invokes the lifecycle observer with the
+        // committed-away bookmark AFTER the bookmark-consumed checkpoint commits (via BookmarkConsumptionCheckpointService).
+        await _executableStore.SaveAsync(NewExecutable());
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await _activityStateStore.SaveAsync(NewRunningState(RootNodeId, "actexec-root", parentActivityExecutionId: null));
+        await _activityStateStore.SaveAsync(NewSuspendedWaitState());
+        await SaveBookmarkAsync();
+
+        var observer = new RecordingBookmarkObserver();
+        await using var provider = NewProvider(new RecordingActivityFactory(new CarrierObservingResumeTargetActivity()), observer);
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        var consumed = Assert.Single(observer.Consumed);
+        Assert.Equal("bookmark-1", consumed.BookmarkId);
+        // The bookmark was durably deleted before the observer saw it.
+        Assert.Null(await _bookmarkStateStore.FindAsync(WorkflowExecutionId, "bookmark-1"));
+    }
+
+    [Fact]
+    public async Task ThrowingLifecycleObserverOnConsume_DoesNotFaultTheResume()
+    {
+        await _executableStore.SaveAsync(NewExecutable());
+        await _workflowStateStore.SaveAsync(ExecutionCarrierTestData.NewWorkflowState(_now));
+        await _activityStateStore.SaveAsync(NewRunningState(RootNodeId, "actexec-root", parentActivityExecutionId: null));
+        await _activityStateStore.SaveAsync(NewSuspendedWaitState());
+        await SaveBookmarkAsync();
+
+        await using var provider = NewProvider(new RecordingActivityFactory(new CarrierObservingResumeTargetActivity()), new ThrowingBookmarkObserver());
+        var handler = NewHandler(provider);
+
+        await handler.HandleAsync(NewResumeWorkItem());
+
+        // The run path swallows the observer throw: the bookmark is still consumed and the activity completed.
+        Assert.Null(await _bookmarkStateStore.FindAsync(WorkflowExecutionId, "bookmark-1"));
     }
 
     private WorkflowResumeBookmarkSchedulerWorkHandler NewHandler(ServiceProvider provider) =>
@@ -106,10 +174,12 @@ public sealed class RuntimeResumeExecutionCarrierTests
             CreatedAt: _now.AddMinutes(-1),
             ExpiresAt: null));
 
-    private ServiceProvider NewProvider(IActivityFactory factory)
+    private ServiceProvider NewProvider(IActivityFactory factory, IBookmarkLifecycleObserver? bookmarkObserver = null)
     {
         var services = new ServiceCollection();
         services.AddScoped(_ => factory);
+        if (bookmarkObserver is not null)
+            services.AddSingleton(bookmarkObserver);
         services.AddSingleton<IWorkflowExecutableStore>(_executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(_activityStateStore);
         services.AddSingleton<IBookmarkStateStore>(_bookmarkStateStore);
@@ -128,11 +198,16 @@ public sealed class RuntimeResumeExecutionCarrierTests
         services.AddSingleton<RuntimeCheckpointCommitter>();
         services.AddSingleton<ActivityFaultIncidentRecorder>();
         services.AddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
-        services.AddSingleton<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
+        services.AddSingleton(serviceProvider => new BookmarkLifecycleNotifier(serviceProvider.GetServices<IBookmarkLifecycleObserver>()));
+        services.AddSingleton<IBookmarkConsumptionCheckpointService>(serviceProvider => new BookmarkConsumptionCheckpointService(
+            serviceProvider.GetRequiredService<RuntimeCheckpointCommitter>(),
+            serviceProvider.GetRequiredService<IRuntimeActivityExecutionInspectionAccumulator>(),
+            new FixedTimeProvider(_now),
+            serviceProvider.GetRequiredService<BookmarkLifecycleNotifier>()));
         return services.BuildServiceProvider();
     }
 
-    private RuntimeSchedulerWorkItem NewResumeWorkItem() =>
+    private RuntimeSchedulerWorkItem NewResumeWorkItem(JsonElement? input = null) =>
         new(
             workItemId: "resume-work",
             workflowExecutionId: WorkflowExecutionId,
@@ -151,7 +226,7 @@ public sealed class RuntimeResumeExecutionCarrierTests
                 resumeTargetId: "resume-target:delivery",
                 stimulusType: "delivery-status",
                 stimulusHash: "sha256:delivery-status:order-1",
-                input: null,
+                input: input,
                 reason: RuntimeResumeBookmarkCommandPayload.StimulusMatchedReason)),
             commandMetadata: new Dictionary<string, string> { ["source"] = "test" },
             envelopeMetadata: new Dictionary<string, string> { ["transport"] = "in-process" });
@@ -255,12 +330,14 @@ public sealed class RuntimeResumeExecutionCarrierTests
         public object? ObservedVariable { get; private set; }
         public object? ObservedOutput { get; private set; }
         public object? ReadBackAfterWrite { get; private set; }
+        public JsonElement? ObservedResumeInput { get; private set; }
 
         [ResumeTarget("resume-target:delivery")]
         private void Resume(IActivityExecutionContext context)
         {
             ResumeInvoked = true;
             var state = (IExecutionExpressionState)context;
+            ObservedResumeInput = state.ResumeInput;
             ObservedWorkflowInstanceId = state.WorkflowInstanceId;
             ObservedCorrelationId = state.CorrelationId;
             ObservedWorkflowName = state.WorkflowName;
@@ -273,5 +350,32 @@ public sealed class RuntimeResumeExecutionCarrierTests
             context.ExpressionExecutionContext.SetVariable(VariableName, "Hi");
             ReadBackAfterWrite = ((IScopedVariableProvider)context).TryGetVariableValueByName(VariableName, out var written) ? written : null;
         }
+    }
+
+    private sealed class RecordingBookmarkObserver : IBookmarkLifecycleObserver
+    {
+        public List<BookmarkState> Created { get; } = [];
+        public List<BookmarkState> Consumed { get; } = [];
+
+        public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default)
+        {
+            Created.Add(bookmark);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default)
+        {
+            Consumed.Add(bookmark);
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingBookmarkObserver : IBookmarkLifecycleObserver
+    {
+        public ValueTask OnBookmarkCreatedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("observer boom (created)");
+
+        public ValueTask OnBookmarkConsumedAsync(BookmarkState bookmark, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("observer boom (consumed)");
     }
 }

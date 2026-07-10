@@ -4,7 +4,6 @@ using Elsa.Http.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Http.Services;
 
@@ -35,9 +34,9 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// only gates <em>whether</em> to refresh, never <em>what</em> the refreshed table contains.
 /// </para>
 /// <para>
-/// <b>Lifetime.</b> The indexer is a shell singleton, but the resolver and route table are scoped (the route
-/// table's state lives in the shared memory cache, so any scope mutates the same table). This observer is a
-/// singleton that opens a fresh scope per notification and resolves the scoped services inside it. An exception
+/// <b>Lifetime.</b> The indexer is a shell singleton. This observer is a singleton that delegates the read-then-swap
+/// to the shared <see cref="IHttpEndpointRouteTableSynchronizer"/>, which serializes every refresh (publish, run,
+/// startup) under one lock so a stale read can never clobber a newer swap (spec 089 D review fix). An exception
 /// propagates and fails the publish, matching the indexer's failure policy — and the known-non-HTTP set is
 /// mutated only <em>after</em> a successful refresh, so a failed refresh leaves no memory that could make the
 /// retried publish skip. The set is purely a skip hint: losing it on restart costs one extra refresh per
@@ -45,7 +44,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// shell start regardless.
 /// </para>
 /// </remarks>
-public sealed class RouteTableTriggerIndexObserver(IServiceScopeFactory scopeFactory) : IWorkflowTriggerIndexObserver
+public sealed class RouteTableTriggerIndexObserver(IHttpEndpointRouteTableSynchronizer synchronizer) : IWorkflowTriggerIndexObserver
 {
     // Artifacts POSITIVELY known (in this process) to contribute no HTTP routes: a successful refresh already ran
     // for their latest no-HTTP publish, so a repeat no-HTTP publish has nothing to reconcile and can skip.
@@ -66,12 +65,9 @@ public sealed class RouteTableTriggerIndexObserver(IServiceScopeFactory scopeFac
         if (!declaresHttp && _knownNonHttpArtifacts.ContainsKey(snapshot.ArtifactId))
             return;
 
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var resolver = scope.ServiceProvider.GetRequiredService<IHttpEndpointRoutesResolver>();
-        var routeTable = scope.ServiceProvider.GetRequiredService<IRouteTable>();
-
-        var routes = await resolver.ResolveRoutesAsync(cancellationToken);
-        await routeTable.Refresh(routes);
+        // Serialized read-then-swap via the shared synchronizer; a throw here fails the publish (matches the
+        // indexer's failure policy) and leaves the known-non-HTTP set untouched below.
+        await synchronizer.RefreshAsync(cancellationToken);
 
         // Record the outcome only after the refresh succeeded — a throw above fails the publish and must leave the
         // memory untouched so the retried publish refreshes again.

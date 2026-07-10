@@ -21,15 +21,22 @@ public sealed class RouteTableTriggerIndexObserverTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowTriggerBindingStore>(_store);
         services.AddSingleton<IRouteTable>(_routeTable);
+        // The resolver unions waiting-bookmark templates via the expiry-aware lookup (spec 089 D); an empty
+        // in-memory bookmark store keeps these trigger-index observer tests focused on the trigger path.
+        services.AddSingleton<IBookmarkStimulusIndex>(new InMemoryBookmarkStateStore());
+        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
         services.Configure<WorkflowsRuntimeHttpFeatureOptions>(_ => { });
         services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
+        // The observer now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); wire the
+        // real one so the refresh path (and the FailNextRefresh propagation) still runs through it.
+        services.AddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
         _services = services.BuildServiceProvider();
         _observer = Observer();
     }
 
     private RouteTableTriggerIndexObserver Observer() =>
-        new(_services.GetRequiredService<IServiceScopeFactory>());
+        new(_services.GetRequiredService<IHttpEndpointRouteTableSynchronizer>());
 
     // One observer instance across a test's notifications so its known-non-HTTP artifact memory persists.
     private readonly RouteTableTriggerIndexObserver _observer;

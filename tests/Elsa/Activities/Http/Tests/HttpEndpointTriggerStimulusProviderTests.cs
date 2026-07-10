@@ -22,7 +22,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     {
         var node = EndpointNode(path: "orders/webhook");
 
-        var descriptor = Assert.Single(_provider.Describe(node));
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
         Assert.Equal(HttpEndpointRouting.StimulusType, descriptor.StimulusType);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
@@ -35,7 +35,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     {
         var node = EndpointNode(path: "orders/{id}", methods: ["GET", "DELETE"]);
 
-        var descriptors = _provider.Describe(node);
+        var descriptors = _provider.Describe(node).Descriptors;
 
         Assert.Equal(2, descriptors.Count);
         Assert.Collection(
@@ -66,7 +66,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.RequestSizeLimit)] = LiteralJsonBinding(nameof(HttpEndpoint.RequestSizeLimit), "1048576")
         };
 
-        var descriptors = _provider.Describe(NodeWith(bindings));
+        var descriptors = _provider.Describe(NodeWith(bindings)).Descriptors;
 
         Assert.Equal(2, descriptors.Count);
         foreach (var descriptor in descriptors)
@@ -83,7 +83,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     {
         var node = EndpointNode(path: "orders/webhook");
 
-        var descriptor = Assert.Single(_provider.Describe(node));
+        var descriptor = Assert.Single(_provider.Describe(node).Descriptors);
 
         Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
         Assert.DoesNotContain(HttpEndpointRouting.PolicyMetadataKey, descriptor.Metadata.Keys);
@@ -102,7 +102,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.Authorize)] = LiteralJsonBinding(nameof(HttpEndpoint.Authorize), "false")
         };
 
-        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)));
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)).Descriptors);
 
         Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
     }
@@ -156,11 +156,58 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
-    public void Describe_ReturnsEmpty_ForNonHttpEndpointActivityType()
+    public void Describe_ReturnsNotRecognized_ForNonHttpEndpointActivityType()
     {
         var node = EndpointNode(path: "orders/webhook", activityType: "Elsa.WriteLine");
 
-        Assert.Empty(_provider.Describe(node));
+        Assert.False(_provider.Describe(node).IsRecognized);
+    }
+
+    [Fact]
+    public void Describe_CanStartWorkflowFalse_IsRecognizedButYieldsNoDescriptors()
+    {
+        // Spec 089 D (T006): a mid-flow endpoint declares itself a non-start — the provider recognizes it (so the
+        // extractor does NOT fail the publish) but produces zero descriptors (so no trigger bindings are indexed).
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "false")
+        };
+
+        var result = _provider.Describe(NodeWith(bindings));
+
+        Assert.True(result.IsRecognized);
+        Assert.Empty(result.Descriptors);
+    }
+
+    [Fact]
+    public void Describe_CanStartWorkflowTrue_IsStartCapable_AndHashUnaffectedByTheFlag()
+    {
+        // The flag is non-identity: an explicit CanStartWorkflow = true yields the same bindings and the same
+        // (template, method) hash as the unauthored default.
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true")
+        };
+
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)).Descriptors);
+
+        Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        // No routing metadata leaks the flag.
+        Assert.DoesNotContain(descriptor.Metadata.Keys, key => key.Contains("canStart", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenCanStartWorkflowNonLiteral()
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = ExpressionBinding(nameof(HttpEndpoint.CanStartWorkflow))
+        };
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
     }
 
     [Fact]
