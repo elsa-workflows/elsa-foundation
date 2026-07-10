@@ -52,6 +52,9 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
+        // Read-only projection of the artifact + reference stores into the executables list/detail views the
+        // Studio Executable Inspector consumes (#598 P1). Self-contained: depends only on the two runtime stores.
+        services.TryAddScoped<WorkflowExecutableInspector>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton<ITransientWorkflowExecutableStore, InMemoryTransientWorkflowExecutableStore>();
         services.TryAddSingleton(TimeProvider.System);
