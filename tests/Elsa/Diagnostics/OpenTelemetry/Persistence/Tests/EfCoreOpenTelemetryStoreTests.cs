@@ -150,6 +150,8 @@ public sealed class EfCoreOpenTelemetryStoreTests
                 [context.Log($"log-{i}", resource.Id, trace.TraceId)]));
         }
 
+        // Deterministic (deflake of the former poll-based variant): once the drain completes, every queued
+        // batch is persisted and the final retention prune has run, so exact capacities can be asserted.
         await context.Store.CompleteDrainingAsync();
 
         var diagnostics = await context.Store.GetDiagnosticsAsync();
@@ -161,5 +163,30 @@ public sealed class EfCoreOpenTelemetryStoreTests
 
         var traces = await context.Store.QueryTracesAsync(new OpenTelemetryTraceFilter { Take = 10 });
         Assert.Equal(["trace-5", "trace-6"], traces.Items.Select(x => x.TraceId));
+    }
+
+    [Fact]
+    public async Task CompleteDrainingAsync_WhenDrainingWasNeverStarted_Throws()
+    {
+        using var context = new OpenTelemetryPersistenceTestContext(startDraining: false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => context.Store.CompleteDrainingAsync());
+    }
+
+    [Fact]
+    public async Task DisposeAsync_PersistsBufferedBatchesBeforeCancelling()
+    {
+        // The issue #606 shutdown scenario: batches are still queued in the channel when the shell
+        // provider disposes the store. The async path must drain them instead of cancelling mid-batch.
+        using var context = new OpenTelemetryPersistenceTestContext(new OpenTelemetryDiagnosticsOptions { MaxQuerySize = 10 });
+        var resource = context.Resource("resource-api", "api");
+        for (var i = 1; i <= 6; i++)
+            await context.Store.WriteAsync(new OpenTelemetryBatch(i == 1 ? [resource] : [], [context.Trace($"trace-{i}", resource.Id, context.Now.AddSeconds(i))], [], [], [], []));
+
+        await context.Store.DisposeAsync();
+
+        // Queries only depend on the DbContext factory, so they stay valid after the store is disposed.
+        var diagnostics = await context.Store.GetDiagnosticsAsync();
+        Assert.Equal(6, diagnostics.TraceCount);
     }
 }
