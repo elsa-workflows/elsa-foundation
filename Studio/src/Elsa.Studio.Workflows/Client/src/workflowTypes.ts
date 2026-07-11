@@ -332,6 +332,10 @@ export interface ScopedVariableAnalysisResponse {
   shadowingWarnings: ScopedVariableShadowingWarning[];
 }
 
+export interface WorkflowManagementCapabilities {
+  scopedVariableAnalysis?: boolean;
+}
+
 // Workflow inputs carry the argument-definition field set plus binding metadata. Collection-ness lives
 // on `type.collectionKind` (the legacy `isArray` boolean is gone). `referenceKey` is the stable identity
 // (a required positional on the backend InputDefinition). The backend InputDefinition has no default
@@ -374,21 +378,9 @@ export interface VariableTypeDescriptor {
   description?: string | null;
 }
 
-export interface StorageDriverDescriptor {
-  typeName: string;
-  displayName?: string | null;
-  deprecated?: boolean;
-  priority?: number;
-}
-
 export interface VariableTypeDescriptorsResponse {
   items?: VariableTypeDescriptor[];
   descriptors?: VariableTypeDescriptor[];
-}
-
-export interface StorageDriverDescriptorsResponse {
-  items?: StorageDriverDescriptor[];
-  descriptors?: StorageDriverDescriptor[];
 }
 
 export interface CreateDefinitionRequest {

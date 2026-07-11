@@ -160,10 +160,6 @@ export function friendlyTypeLabel(displayName: string | null | undefined, alias:
   return shortenTypeName(displayName || alias);
 }
 
-export function friendlyDriverLabel(displayName: string | null | undefined, typeName: string): string {
-  return friendlyTypeLabel(displayName, typeName).replace(/StorageDriver$/, "");
-}
-
 // --- field reading ---------------------------------------------------------
 
 export function isPlainRecord(value: unknown): value is Record<string, unknown> {

@@ -17,8 +17,6 @@ import type {
   ExpressionDescriptor,
   ExpressionDescriptorsResponse,
   ScopedVariableAnalysisResponse,
-  StorageDriverDescriptor,
-  StorageDriverDescriptorsResponse,
   VariableTypeDescriptor,
   VariableTypeDescriptorsResponse,
   PromoteDraftResponse,
@@ -30,6 +28,7 @@ import type {
   WorkflowDefinitionState,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary,
+  WorkflowManagementCapabilities,
   WorkflowExecutableDetails,
   WorkflowExecutableListScope,
   WorkflowExecutableRunResponse,
@@ -196,16 +195,18 @@ export async function getDefinition(context: StudioEndpointContext, definitionId
 
 // Scoped-variable design analysis (elsa-foundation#285): visible variables for the selected activity
 // (nearest-scope first) plus non-blocking shadowing warnings. Sends the live, canonicalized state so
-// unsaved declarations are reflected. The endpoint is a pending backend dependency; callers degrade
-// gracefully (status "unavailable") until it ships — they never fall back to client-side computation.
+// unsaved declarations are reflected. Callers reach this function only after the backend explicitly
+// advertises support; they never infer visibility on the client.
 export async function analyzeScopedVariables(
   context: StudioEndpointContext,
   state: WorkflowDefinitionState,
-  nodeId: string | null
+  nodeId: string,
+  signal?: AbortSignal
 ): Promise<ScopedVariableAnalysisResponse> {
   const response = await context.http.postJson<ScopedVariableAnalysisResponse>(
     `${basePath}/design/scoped-variables/analyze`,
-    { state: canonicalizeStateForWire(state), nodeId });
+    { state: canonicalizeStateForWire(state), nodeId },
+    { signal });
   return {
     visibleVariables: Array.isArray(response?.visibleVariables) ? response.visibleVariables : [],
     shadowingWarnings: Array.isArray(response?.shadowingWarnings) ? response.shadowingWarnings : []
@@ -221,10 +222,17 @@ export interface ScopedVariableAnalysis extends ScopedVariableAnalysisResponse {
 const emptyAnalysis = (status: ScopedVariableAnalysisStatus): ScopedVariableAnalysis =>
   ({ visibleVariables: [], shadowingWarnings: [], status });
 
+export async function getWorkflowManagementCapabilities(
+  context: StudioEndpointContext,
+  signal?: AbortSignal
+): Promise<WorkflowManagementCapabilities> {
+  return context.http.getJson<WorkflowManagementCapabilities>(`${basePath}/capabilities`, { signal });
+}
+
 // Re-runs only when the selected node or a visibility-affecting declaration/structure change occurs
 // (see scopedVariableSignature), not on every keystroke. Uses the imperative load pattern the
-// workflow designer relies on (no QueryClientProvider in that tree). A failed/absent endpoint surfaces
-// as "unavailable" with empty results — callers never fall back to client-side computation.
+// workflow designer relies on (no QueryClientProvider in that tree). Capability discovery fails
+// closed, and request failures surface as "unavailable" — never as client-side inferred visibility.
 export function useScopedVariableAnalysis(
   context: StudioEndpointContext,
   state: WorkflowDefinitionState | null | undefined,
@@ -233,25 +241,61 @@ export function useScopedVariableAnalysis(
 ): ScopedVariableAnalysis {
   const signature = useMemo(() => scopedVariableSignature(state, catalog), [catalog, state]);
   const [result, setResult] = useState<ScopedVariableAnalysis>(() => emptyAnalysis("loading"));
+  const [capability, setCapability] = useState<{ context: StudioEndpointContext; supported: boolean } | null>(null);
+  const supportsAnalysis = capability?.context === context ? capability.supported : null;
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    getWorkflowManagementCapabilities(context, controller.signal).then(
+      capabilities => { if (active) setCapability({ context, supported: capabilities?.scopedVariableAnalysis === true }); },
+      () => { if (active) setCapability({ context, supported: false }); }
+    );
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [context]);
+
+  useEffect(() => {
+    if (supportsAnalysis === null) {
+      setResult(emptyAnalysis("loading"));
+      return;
+    }
+
     if (!state) {
       setResult(emptyAnalysis("unavailable"));
       return;
     }
 
-    let cancelled = false;
+    if (!supportsAnalysis) {
+      setResult(emptyAnalysis("unavailable"));
+      return;
+    }
+
+    if (nodeId === null) {
+      setResult(emptyAnalysis("ready"));
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
     setResult(previous => ({ ...previous, status: "loading" }));
-    analyzeScopedVariables(context, state, nodeId).then(
-      data => { if (!cancelled) setResult({ ...data, status: "ready" }); },
-      () => { if (!cancelled) setResult(emptyAnalysis("unavailable")); }
+    analyzeScopedVariables(context, state, nodeId, controller.signal).then(
+      data => { if (active) setResult({ ...data, status: "ready" }); },
+      () => { if (active) setResult(emptyAnalysis("unavailable")); }
     );
 
-    return () => { cancelled = true; };
+    return () => {
+      active = false;
+      controller.abort();
+    };
     // `signature` captures the visibility-relevant parts of `state`; re-running on the full object
     // would refetch on every unrelated edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, nodeId, signature]);
+  }, [context, nodeId, signature, supportsAnalysis]);
 
   return result;
 }
@@ -502,20 +546,6 @@ function isSelectableDescriptor(value: unknown): value is VariableTypeDescriptor
   const alias = typeof descriptor.alias === "string" && descriptor.alias.length > 0;
   const typeName = typeof descriptor.typeName === "string" && descriptor.typeName.length > 0;
   return alias || typeName;
-}
-
-// Storage driver descriptors populate the Storage picker. Same proxy/fallback contract as above.
-export async function listStorageDriverDescriptors(context: StudioEndpointContext): Promise<StorageDriverDescriptor[]> {
-  const response = await getFirstAvailable<StorageDriverDescriptorsResponse | StorageDriverDescriptor[]>(context, [
-    `${basePath}/descriptors/storage-drivers`,
-    "/descriptors/storage-drivers"
-  ]);
-  const descriptors = Array.isArray(response) ? response : response.items ?? response.descriptors ?? [];
-  return descriptors.filter((descriptor): descriptor is StorageDriverDescriptor => isNonEmptyTypeName(descriptor));
-}
-
-function isNonEmptyTypeName(value: unknown): value is { typeName: string } {
-  return !!value && typeof value === "object" && typeof (value as { typeName?: unknown }).typeName === "string" && (value as { typeName: string }).typeName.length > 0;
 }
 
 async function getFirstAvailable<T>(context: StudioEndpointContext, paths: string[]) {

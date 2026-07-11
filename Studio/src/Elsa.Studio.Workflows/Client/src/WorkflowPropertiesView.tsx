@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { listStorageDriverDescriptors, listVariableTypeDescriptors } from "./api/workflows";
+import { listVariableTypeDescriptors } from "./api/workflows";
 import { formatDate } from "./workflowFormatting";
 import {
   argumentNameKeys,
@@ -9,7 +9,6 @@ import {
   createOutput,
   createVariable,
   descriptorAlias,
-  friendlyDriverLabel,
   friendlyTypeLabel,
   generateUniqueName,
   isPlainRecord,
@@ -27,7 +26,6 @@ import {
 import { collectionKinds } from "./workflowTypes";
 import type {
   CollectionKind,
-  StorageDriverDescriptor,
   VariableDefinition,
   VariableTypeDescriptor,
   WorkflowDefinitionDetails,
@@ -45,21 +43,22 @@ interface PickerOption {
   group?: string;
 }
 
-// Loads the Type/Storage picker descriptors once per editor mount. A failed fetch resolves to
-// an empty list, which makes the pickers fall back to free-text inputs (no invented endpoint).
-export function useDescriptorOptions(context: StudioEndpointContext) {
+interface DescriptorOptions {
+  typeOptions: PickerOption[] | null;
+  storageOptions: PickerOption[] | null;
+  editorForAlias: EditorForAlias;
+}
+
+// Loads type descriptors once per editor mount. Storage remains the Foundation compatibility
+// free-text field because Foundation intentionally has no live storage-driver catalog contract.
+export function useDescriptorOptions(context: StudioEndpointContext): DescriptorOptions {
   const [variableTypes, setVariableTypes] = useState<VariableTypeDescriptor[] | null>(null);
-  const [storageDrivers, setStorageDrivers] = useState<StorageDriverDescriptor[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     listVariableTypeDescriptors(context).then(
       descriptors => { if (!cancelled) setVariableTypes(descriptors); },
       () => { if (!cancelled) setVariableTypes([]); }
-    );
-    listStorageDriverDescriptors(context).then(
-      descriptors => { if (!cancelled) setStorageDrivers(descriptors); },
-      () => { if (!cancelled) setStorageDrivers([]); }
     );
     return () => { cancelled = true; };
   }, [context]);
@@ -77,18 +76,6 @@ export function useDescriptorOptions(context: StudioEndpointContext) {
       : null,
     [variableTypes]
   );
-  const storageOptions = useMemo<PickerOption[] | null>(
-    () => storageDrivers && storageDrivers.length > 0
-      ? storageDrivers
-          .filter(descriptor => !descriptor.deprecated)
-          .map(descriptor => ({
-            value: descriptor.typeName,
-            label: friendlyDriverLabel(descriptor.displayName, descriptor.typeName)
-          }))
-      : null,
-    [storageDrivers]
-  );
-
   // Resolves a selected alias to its default-value editor hint (text/number/checkbox/date/none) in O(1)
   // via a prebuilt map, so per-row lookups don't rescan the descriptor list on every render.
   const editorForAlias = useMemo<EditorForAlias>(() => {
@@ -101,7 +88,8 @@ export function useDescriptorOptions(context: StudioEndpointContext) {
     return alias => editors.get(alias) ?? "text";
   }, [variableTypes]);
 
-  return { typeOptions, storageOptions, editorForAlias };
+  // `null` is the PickerOrText contract for a free-text field, not a pending descriptor request.
+  return { typeOptions, storageOptions: null, editorForAlias };
 }
 
 export type EditorForAlias = (alias: string) => string;

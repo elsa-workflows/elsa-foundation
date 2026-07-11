@@ -167,6 +167,18 @@ describe("properties view", () => {
     expect(container.querySelector("select[aria-label='Output storage driver']")).toBeNull();
   });
 
+  it("requests only descriptors exposed by the Foundation workflow-management API", () => {
+    const getJson = vi.fn().mockResolvedValue({ descriptors: [] });
+    const context = { baseUrl: "", http: { getJson } } as never;
+
+    render(
+      <WorkflowPropertiesView details={details()} draft={draft()} context={context} onStateChange={vi.fn()} onDefinitionMetaChange={vi.fn()} />
+    );
+
+    expect(getJson).toHaveBeenCalledTimes(1);
+    expect(getJson).toHaveBeenCalledWith("/_elsa/workflow-management/descriptors/variables");
+  });
+
   it("commits a name edit through the metadata handler on blur", () => {
     const onDefinitionMetaChange = vi.fn();
     const container = render(

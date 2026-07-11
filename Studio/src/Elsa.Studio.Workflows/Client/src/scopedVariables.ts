@@ -92,7 +92,7 @@ export function scopedVariableSignature(state: WorkflowDefinitionState | null | 
   const visit = (node: ActivityNode) => {
     const slots = getChildSlots(node, catalog);
     const childIds = slots.flatMap(slot => slot.activities.map(activity => activity.nodeId));
-    parts.push(`${node.nodeId}:${declarationSignature(readContainerVariables(node))}>${childIds.join(",")}`);
+    parts.push(`${node.nodeId}@${node.activityVersionId}:${node.structure?.kind ?? "leaf"}@${node.structure?.schemaVersion ?? 1}:${declarationSignature(readContainerVariables(node))}>${childIds.join(",")}`);
     slots.forEach(slot => slot.activities.forEach(visit));
   };
   if (state.rootActivity) visit(state.rootActivity);

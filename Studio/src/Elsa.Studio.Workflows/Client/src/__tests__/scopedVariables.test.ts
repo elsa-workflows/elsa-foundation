@@ -141,6 +141,16 @@ describe("scopedVariableSignature", () => {
     expect(scopedVariableSignature(moved)).not.toBe(scopedVariableSignature(base));
   });
 
+  it("changes when a node's structure contract changes", () => {
+    const changedRoot = { ...base.rootActivity!, activityVersionId: "sequence-v2", structure: { ...base.rootActivity!.structure!, kind: "custom.structure" } };
+    expect(scopedVariableSignature({ ...base, rootActivity: changedRoot })).not.toBe(scopedVariableSignature(base));
+  });
+
+  it("changes when a node's structure schema version changes", () => {
+    const changedRoot = { ...base.rootActivity!, structure: { ...base.rootActivity!.structure!, schemaVersion: "2" } };
+    expect(scopedVariableSignature({ ...base, rootActivity: changedRoot })).not.toBe(scopedVariableSignature(base));
+  });
+
   it("uses catalog facets when computing child tree shape", () => {
     const empty: WorkflowDefinitionState = { variables: [], rootActivity: forEach("foreach", null) };
     const withBody: WorkflowDefinitionState = { variables: [], rootActivity: forEach("foreach", leaf("body")) };
