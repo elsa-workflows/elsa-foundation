@@ -19,7 +19,8 @@ public sealed class HttpEndpointMetadataTests
     public void Input_HasExpectedCategoryAndOrder(string propertyName, string category, float order)
     {
         var property = typeof(HttpEndpoint).GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
-        var metadata = Assert.IsType<ActivityInputAttribute>(property?.GetCustomAttribute<ActivityInputAttribute>());
+        Assert.NotNull(property);
+        var metadata = Assert.IsType<ActivityInputAttribute>(property.GetCustomAttribute<ActivityInputAttribute>());
 
         Assert.Equal(category, metadata.Category);
         Assert.Equal(order, metadata.Order);
