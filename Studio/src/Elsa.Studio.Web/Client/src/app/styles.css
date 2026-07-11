@@ -106,6 +106,69 @@ button {
   cursor: pointer;
 }
 
+/* Host-owned boolean activity property editor. Its stable contribution id is also used by
+   workflow inspectors to place expression syntax chrome beside this compact control. */
+.studio-property-switch {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  color: var(--studio-text);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+}
+
+.studio-property-switch input {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--studio-text-muted) 68%, var(--studio-surface-muted));
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+
+.studio-property-switch input::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--studio-surface-raised);
+  transition: transform 120ms ease;
+}
+
+.studio-property-switch input:checked {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent);
+}
+
+.studio-property-switch input:checked::before {
+  background: var(--studio-accent-text);
+  transform: translateX(14px);
+}
+
+.studio-property-switch input:focus-visible {
+  outline: 3px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.studio-property-switch input:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.studio-property-switch:has(input:disabled) {
+  color: var(--studio-text-muted);
+  cursor: not-allowed;
+}
+
 a {
   color: inherit;
   text-decoration: none;

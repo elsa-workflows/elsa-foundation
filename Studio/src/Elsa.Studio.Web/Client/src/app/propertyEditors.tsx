@@ -143,16 +143,21 @@ function MultilineEditor({ value, disabled, onChange }: StudioActivityPropertyEd
   );
 }
 
-function CheckboxEditor({ value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+function CheckboxEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+  const checked = value === true;
+  const label = descriptor.displayName?.trim() || descriptor.name;
+
   return (
-    <label className="studio-property-checkbox">
+    <label className="studio-property-switch">
       <input
         type="checkbox"
-        checked={value === true}
+        role="switch"
+        aria-label={label}
+        checked={checked}
         disabled={disabled}
         onChange={event => onChange(event.target.checked)}
       />
-      <span>{value === true ? "Enabled" : "Disabled"}</span>
+      <span className="studio-property-switch-state">{checked ? "Enabled" : "Disabled"}</span>
     </label>
   );
 }

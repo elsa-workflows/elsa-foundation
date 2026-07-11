@@ -419,6 +419,17 @@ export interface StudioActivityPortDescriptor {
   isBrowsable?: boolean | null;
 }
 
+/** Optional activity-type metadata that labels and orders property categories in the inspector. */
+export interface StudioActivityPropertyGroupDescriptor {
+  category: string;
+  label?: string;
+  order?: number;
+}
+
+export interface StudioActivityCustomProperties extends Record<string, unknown> {
+  propertyGroups?: StudioActivityPropertyGroupDescriptor[];
+}
+
 export interface StudioActivityDescriptor {
   typeName: string;
   namespace?: string;
@@ -434,7 +445,7 @@ export interface StudioActivityDescriptor {
   inputs: StudioActivityInputDescriptor[];
   outputs: StudioActivityOutputDescriptor[];
   ports: StudioActivityPortDescriptor[];
-  customProperties?: Record<string, unknown>;
+  customProperties?: StudioActivityCustomProperties;
   constructionProperties?: Record<string, unknown>;
   isContainer?: boolean;
   isBrowsable?: boolean;
