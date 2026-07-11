@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -16,6 +17,12 @@ namespace Elsa.Activities.Http.Tests;
 public sealed class HttpEndpointTriggerStimulusProviderTests
 {
     private readonly HttpEndpointTriggerStimulusProvider _provider = new();
+
+    [Fact]
+    public void ProviderId_IsExplicitAndStable()
+    {
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
+    }
 
     [Fact]
     public void Describe_UnauthoredCanStartWorkflow_IsRecognizedButYieldsNoDescriptors()
@@ -81,6 +88,19 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
                 Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), second.StimulusHash);
                 Assert.Equal("get", second.Metadata[HttpEndpointRouting.MethodMetadataKey]);
             });
+    }
+
+    [Fact]
+    public void Describe_DuplicateAndCaseVariantMethods_YieldOneBindingPerNormalizedMethod()
+    {
+        var node = EndpointNode(path: "orders/{id}", methods: ["GET", "get", "POST", "post"]);
+
+        var descriptors = _provider.Describe(node).Descriptors;
+
+        Assert.Equal(2, descriptors.Count);
+        Assert.Equal(
+            [HttpEndpointStimulus.Hash("orders/{id}", "GET"), HttpEndpointStimulus.Hash("orders/{id}", "POST")],
+            descriptors.Select(x => x.StimulusHash));
     }
 
     [Fact]

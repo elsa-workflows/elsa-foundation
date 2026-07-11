@@ -11,6 +11,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </summary>
 public sealed class CronTriggerStimulusProvider : IActivityTriggerStimulusProvider
 {
+    public string ProviderId => "Elsa.Cron";
     private const string ExpressionInput = nameof(Cron.Expression);
 
     public ActivityTriggerStimulusResult Describe(ExecutableNode node)

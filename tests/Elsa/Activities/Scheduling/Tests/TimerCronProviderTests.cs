@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Scheduling.Activities;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 using Timer = Elsa.Activities.Scheduling.Activities.Timer;
@@ -18,6 +19,13 @@ public sealed class TimerCronProviderTests
     private readonly TimerRecurringScheduleProvider _timerSchedule = new();
     private readonly CronTriggerStimulusProvider _cronTrigger = new();
     private readonly CronRecurringScheduleProvider _cronSchedule = new();
+
+    [Fact]
+    public void TriggerProviderIds_AreExplicitAndStable()
+    {
+        Assert.Equal("Elsa.Timer", ((IActivityTriggerStimulusProvider)_timerTrigger).ProviderId);
+        Assert.Equal("Elsa.Cron", ((IActivityTriggerStimulusProvider)_cronTrigger).ProviderId);
+    }
 
     [Fact]
     public void Timer_TriggerAndSchedule_ShareStimulusIdentity()
@@ -73,6 +81,44 @@ public sealed class TimerCronProviderTests
         Assert.Throws<ArgumentException>(() => _cronSchedule.Describe(cronNode));
     }
 
+    [Theory]
+    [InlineData(Timer.ActivityType, nameof(Timer.Interval), "   ")]
+    [InlineData(Cron.ActivityType, nameof(Cron.Expression), "   ")]
+    public void TriggerAndScheduleProviders_Throw_WhenLiteralIsBlank(string activityType, string inputName, string literal)
+    {
+        var node = Node(activityType, inputName, literal);
+
+        if (activityType == Timer.ActivityType)
+        {
+            Assert.Throws<ArgumentException>(() => _timerTrigger.Describe(node));
+            Assert.Throws<ArgumentException>(() => _timerSchedule.Describe(node));
+        }
+        else
+        {
+            Assert.Throws<ArgumentException>(() => _cronTrigger.Describe(node));
+            Assert.Throws<ArgumentException>(() => _cronSchedule.Describe(node));
+        }
+    }
+
+    [Theory]
+    [InlineData(Timer.ActivityType, nameof(Timer.Interval))]
+    [InlineData(Cron.ActivityType, nameof(Cron.Expression))]
+    public void TriggerAndScheduleProviders_Throw_WhenInputIsNonLiteral(string activityType, string inputName)
+    {
+        var node = Node(activityType, inputName, literal: null, inputBinding: ExpressionBinding(inputName));
+
+        if (activityType == Timer.ActivityType)
+        {
+            Assert.Throws<ArgumentException>(() => _timerTrigger.Describe(node));
+            Assert.Throws<ArgumentException>(() => _timerSchedule.Describe(node));
+        }
+        else
+        {
+            Assert.Throws<ArgumentException>(() => _cronTrigger.Describe(node));
+            Assert.Throws<ArgumentException>(() => _cronSchedule.Describe(node));
+        }
+    }
+
     [Fact]
     public void TimerHash_IsDeterministic_TrimInsensitive_AndPrefixed()
     {
@@ -89,11 +135,13 @@ public sealed class TimerCronProviderTests
         Assert.StartsWith("sha256:", CronStimulus.Hash("0 * * * *"));
     }
 
-    private static ExecutableNode Node(string activityType, string inputName, string? literal)
+    private static ExecutableNode Node(string activityType, string inputName, string? literal, RuntimeInputBinding? inputBinding = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        if (literal is not null)
+        if (inputBinding is not null)
+            bindings[inputName] = inputBinding;
+        else if (literal is not null)
         {
             using var value = JsonDocument.Parse(JsonSerializer.Serialize(literal));
             bindings[inputName] = new RuntimeInputBinding(inputName, RuntimeInputBindingSource.Literal, literalValue: value.RootElement.Clone());
@@ -110,4 +158,7 @@ public sealed class TimerCronProviderTests
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
+
+    private static RuntimeInputBinding ExpressionBinding(string name) =>
+        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.value"));
 }

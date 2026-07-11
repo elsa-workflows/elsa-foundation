@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -8,6 +9,12 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class EventTriggerStimulusProviderTests
 {
     private readonly EventTriggerStimulusProvider _provider = new();
+
+    [Fact]
+    public void ProviderId_IsExplicitAndStable()
+    {
+        Assert.Equal("Elsa.Event", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
+    }
 
     [Fact]
     public void Describe_ReturnsEventStimulus_ForEventNodeWithLiteralName()
@@ -48,6 +55,22 @@ public sealed class EventTriggerStimulusProviderTests
     }
 
     [Fact]
+    public void Describe_Throws_WhenEventNameIsBlank()
+    {
+        var node = EventNode(eventName: "   ");
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(node));
+    }
+
+    [Fact]
+    public void Describe_Throws_WhenEventNameIsNonLiteral()
+    {
+        var node = EventNode(eventName: null, eventNameBinding: ExpressionBinding(nameof(Event.EventName)));
+
+        Assert.Throws<ArgumentException>(() => _provider.Describe(node));
+    }
+
+    [Fact]
     public void Hash_IsDeterministicAndPrefixed()
     {
         Assert.Equal(EventStimulus.Hash("order-shipped"), EventStimulus.Hash("order-shipped"));
@@ -55,11 +78,17 @@ public sealed class EventTriggerStimulusProviderTests
         Assert.StartsWith("sha256:", EventStimulus.Hash("order-shipped"));
     }
 
-    private static ExecutableNode EventNode(string? eventName, string? correlationId = null, string activityType = "Elsa.Event")
+    private static ExecutableNode EventNode(
+        string? eventName,
+        string? correlationId = null,
+        string activityType = "Elsa.Event",
+        RuntimeInputBinding? eventNameBinding = null)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
-        if (eventName is not null)
+        if (eventNameBinding is not null)
+            bindings[nameof(Event.EventName)] = eventNameBinding;
+        else if (eventName is not null)
             bindings[nameof(Event.EventName)] = LiteralBinding(nameof(Event.EventName), eventName);
         if (correlationId is not null)
             bindings[nameof(Event.CorrelationId)] = LiteralBinding(nameof(Event.CorrelationId), correlationId);
@@ -81,4 +110,7 @@ public sealed class EventTriggerStimulusProviderTests
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(value));
         return new RuntimeInputBinding(name, RuntimeInputBindingSource.Literal, literalValue: document.RootElement.Clone());
     }
+
+    private static RuntimeInputBinding ExpressionBinding(string name) =>
+        new(name, RuntimeInputBindingSource.Expression, expression: new RuntimeExpressionBinding("JavaScript", "input.eventName"));
 }

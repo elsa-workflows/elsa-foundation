@@ -10,6 +10,42 @@
 
 Record baseline and final focused/full-suite counts here during implementation. Record any pre-existing failure before source edits so the unit does not silently absorb it.
 
+### US1/MVP baseline (2026-07-11, before source edits)
+
+All focused commands from sections 1–3 passed with zero failures and zero skipped tests:
+
+| Focus | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Runtime extractor/indexer | 13 | 0 | 0 |
+| Event provider | 5 | 0 | 0 |
+| Timer/Cron providers | 6 | 0 | 0 |
+| HttpEndpoint provider | 32 | 0 | 0 |
+| Recurring schedule indexer | 5 | 0 | 0 |
+| Publishing.Api trigger indexing | 3 | 0 | 0 |
+| **Total** | **64** | **0** | **0** |
+
+No pre-existing focused failure was observed.
+
+### US1/MVP final focused gate (2026-07-11)
+
+All section 1–3 commands passed after implementation:
+
+| Focus | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Runtime extractor/indexer | 27 | 0 | 0 |
+| Event provider | 8 | 0 | 0 |
+| Timer/Cron providers | 11 | 0 | 0 |
+| HttpEndpoint provider | 34 | 0 | 0 |
+| Recurring schedule indexer | 7 | 0 | 0 |
+| Publishing.Api trigger indexing | 11 | 0 | 0 |
+| **Total** | **98** | **0** | **0** |
+
+RED evidence was confirmed before production edits: Runtime exact-one/preflight cases failed 9 of 27; recurring ordering/exhaustion cases failed 3 of 7; first-party provider-id assertions failed against the CLR fallback; and all four invalid Publishing.Api family rows failed because raw provider exceptions escaped. The approved exhausted-Cron objective correction is now covered by a real seeded-store test: no-future-occurrence fails with `WorkflowTriggerPreflightException` before either bindings or schedules mutate.
+
+### Map freshness note
+
+`docs/maps/manifest.json` reports no relevant inputs were dirty when its snapshot was generated, but its authoritative input fingerprint predates the current spec 090 inputs. The relevant map is therefore treated as stale for this work. Because the implementation changes Runtime extension-point contracts, the narrow post-implementation refresh is `bash tools/maps/generate-extension-point-map.sh`; execution remains assigned to T036 outside the US1/MVP checkpoint.
+
 ## 1. Shared provider and index contract
 
 ```bash

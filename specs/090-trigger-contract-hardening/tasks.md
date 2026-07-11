@@ -17,8 +17,8 @@
 
 **Purpose**: Confirm the handoff baseline and preserve evidence before changing the contract.
 
-- [ ] T001 Run the focused baseline commands in `specs/090-trigger-contract-hardening/quickstart.md` and record pass counts plus any pre-existing failures in that file's implementation-evidence section before editing source
-- [ ] T002 Verify `docs/maps/manifest.json` freshness for Runtime Core/Scheduling inputs and record which narrow generator must run after implementation in `specs/090-trigger-contract-hardening/quickstart.md`
+- [X] T001 Run the focused baseline commands in `specs/090-trigger-contract-hardening/quickstart.md` and record pass counts plus any pre-existing failures in that file's implementation-evidence section before editing source
+- [X] T002 Verify `docs/maps/manifest.json` freshness for Runtime Core/Scheduling inputs and record which narrow generator must run after implementation in `specs/090-trigger-contract-hardening/quickstart.md`
 
 ---
 
@@ -28,10 +28,10 @@
 
 **⚠️ CRITICAL**: Complete this phase before any story implementation.
 
-- [ ] T003 Write failing provider-id, outcome invariant, and contextual exception tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
-- [ ] T004 [P] Add immutable preflight outcome/status models in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowTriggerPreflightOutcome.cs`
-- [ ] T005 [P] Add the typed artifact/node/provider-aware failure in `src/Elsa/Workflows/Runtime/Core/Exceptions/WorkflowTriggerPreflightException.cs`
-- [ ] T006 Add the source/binary-compatible stable `ProviderId` default and additive preflight evaluation surface, classify the provider collection as an exact-one Strategy set, and document all public typed failures with XML `<exception>` declarations in `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerIndexer.cs`
+- [X] T003 Write failing provider-id, outcome invariant, and contextual exception tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
+- [X] T004 [P] Add immutable preflight outcome/status models in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowTriggerPreflightOutcome.cs`
+- [X] T005 [P] Add the typed artifact/node/provider-aware failure in `src/Elsa/Workflows/Runtime/Core/Exceptions/WorkflowTriggerPreflightException.cs`
+- [X] T006 Add the source/binary-compatible stable `ProviderId` default and additive preflight evaluation surface, classify the provider collection as an exact-one Strategy set, and document all public typed failures with XML `<exception>` declarations in `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerIndexer.cs`
 
 **Checkpoint**: Core vocabulary compiles, remains non-persisted, and existing provider/extractor signatures still compile.
 
@@ -45,23 +45,23 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Write failing zero-provider, multiple-provider, blank-provider-id, duplicate-resulting-binding-id, mixed-valid/invalid-node, and provider-called-once-per-node preflight tests—while pinning distinct binding ids as valid fan-out—in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
-- [ ] T008 [P] [US1] Write failing all-or-nothing validator/index mutation tests using seeded prior bindings in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerIndexerTests.cs`
-- [ ] T009 [P] [US1] Replace the exhausted-Cron skip expectation with fail-before-inner/store-mutation tests; add invalid-later-node, inner-failure, and successful replacement ordering cases in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
-- [ ] T010 [P] [US1] Add first-party valid/invalid contract-matrix assertions for Event in `tests/Elsa/Activities/Runtime/Tests/EventTriggerStimulusProviderTests.cs`
-- [ ] T011 [P] [US1] Add first-party valid/invalid and trigger/schedule identity-parity assertions for Timer/Cron in `tests/Elsa/Activities/Scheduling/Tests/TimerCronProviderTests.cs`
-- [ ] T012 [P] [US1] Add first-party multi-binding, invalid-routing-identity, and provider-id assertions for HttpEndpoint in `tests/Elsa/Activities/Http/Tests/HttpEndpointTriggerStimulusProviderTests.cs`
+- [X] T007 [P] [US1] Write failing zero-provider, multiple-provider, blank-provider-id, duplicate-resulting-binding-id, mixed-valid/invalid-node, and provider-called-once-per-node preflight tests—while pinning distinct binding ids as valid fan-out—in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
+- [X] T008 [P] [US1] Write failing all-or-nothing validator/index mutation tests using seeded prior bindings in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerIndexerTests.cs`
+- [X] T009 [P] [US1] Replace the exhausted-Cron skip expectation with fail-before-inner/store-mutation tests; add invalid-later-node, inner-failure, and successful replacement ordering cases in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
+- [X] T010 [P] [US1] Add first-party valid/invalid contract-matrix assertions for Event in `tests/Elsa/Activities/Runtime/Tests/EventTriggerStimulusProviderTests.cs`
+- [X] T011 [P] [US1] Add first-party valid/invalid and trigger/schedule identity-parity assertions for Timer/Cron in `tests/Elsa/Activities/Scheduling/Tests/TimerCronProviderTests.cs`
+- [X] T012 [P] [US1] Add first-party multi-binding, invalid-routing-identity, and provider-id assertions for HttpEndpoint in `tests/Elsa/Activities/Http/Tests/HttpEndpointTriggerStimulusProviderTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement all-provider evaluation, exact-one claim enforcement, provider-id validation, descriptor duplicate validation, and complete preflight outcomes in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
-- [ ] T014 [US1] Make `WorkflowTriggerIndexer` validate and apply the completed preflight binding set without changing delete/save/observer semantics in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerIndexer.cs`
-- [ ] T015 [US1] Pre-materialize the complete Timer/Cron schedule set before the inner indexer; wrap calculator/parser failures in contextual typed failures while preserving `InnerException`, reject exhausted schedules, and persist only prepared schedules in `src/Elsa/Workflows/Runtime/Scheduling/RecurringTriggerScheduleIndexer.cs`
-- [ ] T016 [P] [US1] Add explicit stable provider ids to Event in `src/Elsa/Activities/Primitives/Activities/EventTriggerStimulusProvider.cs`
-- [ ] T017 [P] [US1] Add explicit stable provider ids to Timer and Cron in `src/Elsa/Activities/Scheduling/Activities/TimerTriggerStimulusProvider.cs` and `src/Elsa/Activities/Scheduling/Activities/CronTriggerStimulusProvider.cs`
-- [ ] T018 [P] [US1] Add the explicit stable provider id to HttpEndpoint in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
-- [ ] T019 [US1] Add real publish-level completeness and preservation proofs: exhausted Cron with the recurring decorator preserves seeded bindings/schedules in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`, while a matrix-driven Event/Timer/Cron/HttpEndpoint set proves valid publications produce complete expected bindings (with companion Timer/Cron schedules asserted by the scheduling test) and invalid publications preserve prior registrations in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
-- [ ] T020 [US1] Run every P1 focused command from sections 1–3 of `specs/090-trigger-contract-hardening/quickstart.md`, including the Publishing.Api matrix added by T019, and confirm every new test first failed then passes
+- [X] T013 [US1] Implement all-provider evaluation, exact-one claim enforcement, provider-id validation, descriptor duplicate validation, and complete preflight outcomes in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
+- [X] T014 [US1] Make `WorkflowTriggerIndexer` validate and apply the completed preflight binding set without changing delete/save/observer semantics in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerIndexer.cs`
+- [X] T015 [US1] Pre-materialize the complete Timer/Cron schedule set before the inner indexer; wrap calculator/parser failures in contextual typed failures while preserving `InnerException`, reject exhausted schedules, and persist only prepared schedules in `src/Elsa/Workflows/Runtime/Scheduling/RecurringTriggerScheduleIndexer.cs`
+- [X] T016 [P] [US1] Add explicit stable provider ids to Event in `src/Elsa/Activities/Primitives/Activities/EventTriggerStimulusProvider.cs`
+- [X] T017 [P] [US1] Add explicit stable provider ids to Timer and Cron in `src/Elsa/Activities/Scheduling/Activities/TimerTriggerStimulusProvider.cs` and `src/Elsa/Activities/Scheduling/Activities/CronTriggerStimulusProvider.cs`
+- [X] T018 [P] [US1] Add the explicit stable provider id to HttpEndpoint in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
+- [X] T019 [US1] Add real publish-level completeness and preservation proofs: exhausted Cron with the recurring decorator preserves seeded bindings/schedules in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`, while a matrix-driven Event/Timer/Cron/HttpEndpoint set proves valid publications produce complete expected bindings (with companion Timer/Cron schedules asserted by the scheduling test) and invalid publications preserve prior registrations in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
+- [X] T020 [US1] Run every P1 focused command from sections 1–3 of `specs/090-trigger-contract-hardening/quickstart.md`, including the Publishing.Api matrix added by T019, and confirm every new test first failed then passes
 
 **Checkpoint**: Invalid/unmaterializable first-party start triggers fail before trigger/schedule mutation; valid triggers still register completely.
 

@@ -22,6 +22,7 @@ namespace Elsa.Activities.Http.Activities;
 /// </remarks>
 public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimulusProvider
 {
+    public string ProviderId => "Elsa.HttpEndpoint";
     private const string PathInput = nameof(HttpEndpoint.Path);
     private const string MethodsInput = nameof(HttpEndpoint.SupportedMethods);
     private const string CanStartWorkflowInput = nameof(HttpEndpoint.CanStartWorkflow);
