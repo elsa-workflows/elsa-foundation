@@ -6,11 +6,11 @@ namespace Elsa.Workflows.Design.Api.Services;
 /// Forces construction of the provider registry during shell startup so duplicate keys fail composition
 /// before the first options request.
 /// </summary>
-public sealed class ValidateActivityInputOptionsProvidersStartupTask(IActivityInputOptionsProviderResolver resolver) : IStartupTask
+public sealed class ValidateActivityInputOptionsProvidersStartupTask : IStartupTask
 {
-    public Task ExecuteAsync(CancellationToken cancellationToken)
+    public ValidateActivityInputOptionsProvidersStartupTask(IActivityInputOptionsProviderResolver _)
     {
-        _ = resolver;
-        return Task.CompletedTask;
     }
+
+    public Task ExecuteAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

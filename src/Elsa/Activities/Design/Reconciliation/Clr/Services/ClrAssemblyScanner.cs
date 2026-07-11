@@ -139,7 +139,7 @@ public sealed class ClrAssemblyScanner(
                     Category: metadata.Category,
                     Order: metadata.Order,
                     UiHint: metadata.UiHint,
-                    UISpecifications: metadata.UISpecifications,
+                    UISpecifications: metadata.UiSpecifications,
                     IsRequired: HasRequired(property),
                     DefaultValue: metadata.DefaultValue,
                     DefaultSyntax: metadata.DefaultSyntax));
@@ -632,7 +632,7 @@ public sealed class ClrAssemblyScanner(
         JsonElement? DefaultValue,
         string? DefaultSyntax,
         string? UiHint,
-        JsonElement? UISpecifications);
+        JsonElement? UiSpecifications);
 
     private sealed record ActivityInputOptionSpecification(string Label, JsonElement Value);
 
