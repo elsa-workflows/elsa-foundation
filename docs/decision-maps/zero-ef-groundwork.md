@@ -248,6 +248,6 @@ Pending. The audit must verify the complete build/test graph and reference hosts
 
 Domain: provider-neutral persistence, physical storage, and Elsa persistence adoption.
 
-Consult: the repository's Speckit flow for implementation slices; Critical Constitution Review for gate changes; source-driven development for third-party Identity/OpenIddict contract research.
+Consult: the repository's Speckit flow for implementation slices; [Critical Constitution Review](../reports/zero-ef-constitution-review.md) for gate changes; source-driven development for third-party Identity/OpenIddict contract research.
 
 Standing preferences: this task is the control room; fresh workers claim one unblocked ticket by setting it `in-progress`; Groundwork and Elsa changes land through separate versioned repository workflows; architecture decisions precede PRDs and implementation issues.

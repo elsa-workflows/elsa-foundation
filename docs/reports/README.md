@@ -16,6 +16,7 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Maps v2 findings](maps-v2-findings.md)
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)
 - [Skills stabilization audit](skills-stabilization-audit.md)
+- [Zero-EF constitution review](zero-ef-constitution-review.md) - targeted review of the Elsa persistence-provider boundary and the eventual §E2.5 amendment surface.
 - [CShells composition evidence](cshells-composition-evidence.md)
 - [Runtime execution pre-spec handoff](runtime-execution-pre-spec-handoff.md)
 - [Elsa Core runtime broken windows brainstorm](elsa-core-runtime-broken-windows-brainstorm.md)
