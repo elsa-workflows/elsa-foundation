@@ -4,7 +4,7 @@ Status: proposed findings for decision-PR review (2026-07-12).
 
 Program goals: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Constitution Readiness](../program-goals/constitution-readiness.md).
 
-Target: Elsa constitution §E2.5, with adjacent §E2.4 and framework §§2.9 and 2.20 checked for consistency.
+Target: Elsa constitution §E2.5, with adjacent §E2.4, the §E1 domain/package inventory, §E2.2.1 Design package list, the EF-specific implementation wording in §E2.9.7, the §E5 minimum-project-size example, and framework §§2.9 and 2.20 checked for consistency.
 
 ## Findings
 
@@ -58,11 +58,24 @@ No released EF data needs conversion. That does not remove the need for provider
 
 Classification: scope boundary between gate and implementation plan.
 
+### F9 — EF-specific inventory and worked examples must change with the gate
+
+The constitution contains four additional EF-specific surfaces that would remain stale even if §E2.5 alone were replaced:
+
+- the §E1 `Elsa.Persistence` domain row names `Elsa.Persistence.EFCore{,.Sqlite}`;
+- §E2.2.1 lists `Elsa.Workflows.Design.Persistence.EFCore` and `.EFCore.Sqlite` as the Design persistence implementation;
+- provisional §E2.9.7 normatively describes `EFCoreReadStore<TDbContext, TEntity>` and tracked `DbContext` behavior inside draft commands;
+- §E5 uses `Elsa.Persistence.EFCore.Sqlite` as a current minimum-project-size worked example.
+
+The first, second, and fourth surfaces are inventory/example drift and should be updated when the projects disappear. The §E2.9.7 sentence is more important: retain the named-read-port and unit-of-work intent while removing EF-specific implementation mechanics, or move those mechanics to a worked reference if they still provide historical value.
+
+Classification: amendment/removal checklist required alongside §E2.5; §E2.9.7 needs targeted meaning-preserving review rather than mechanical renaming.
+
 ## Proposed Revision Path
 
 1. Review and accept [ADR 0042](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md) in a decision-only PR. Keep the ADR `proposed` until that review is complete.
 2. Resolve the decision-map tickets that can change the meaning of the boundary, especially framework-store coverage and specialized diagnostics storage. Implementation mechanics need not all be complete before wording is proposed.
-3. Prepare a narrow Elsa-constitution amendment that replaces §E2.5 rather than layering exceptions onto its EF-specific text. Preserve the old text in constitution history/amendment records according to existing governance.
+3. Prepare a narrow Elsa-constitution amendment that replaces §E2.5 rather than layering exceptions onto its EF-specific text. In the same compliance change, update the §E1 persistence inventory, §E2.2.1 Design implementation list, §E5 worked example, and the EF-specific implementation sentence in provisional §E2.9.7 while preserving its named-read-port and mutation-unit-of-work intent. Preserve superseded text in constitution history/amendment records according to existing governance.
 4. Proposed gate shape for review, not direct insertion:
 
    - Core modules own provider-neutral persistence contracts, models, and invariants and MUST NOT depend on Groundwork or another concrete provider.

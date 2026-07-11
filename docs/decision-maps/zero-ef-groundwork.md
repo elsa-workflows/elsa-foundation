@@ -32,7 +32,7 @@ How should Groundwork represent portable, partitioned, and query-optimized docum
 
 ### Answer
 
-Support shared documents plus linked index tables, document-type-specific tables with a common envelope-and-JSON schema, and entity-type-specific tables that combine canonical JSON with native projected columns. JSON remains authoritative. Static types default to dedicated document tables; stable performance-relevant query fields justify entity tables; dynamic types use the shared form. A provider-neutral `PhysicalTableDefinition` describes physical shape. The host controls logical names through `feature default -> host policy -> explicit per-unit override`, followed by provider normalization.
+Support shared documents plus linked index tables, document-type-specific tables with a common envelope-and-JSON schema, and entity-type-specific tables that combine canonical JSON with native projected columns. JSON remains authoritative. Static types default to dedicated document tables; stable performance-relevant query fields justify entity tables; dynamic types use the shared form. A provider-neutral `PhysicalTableDefinition` describes physical shape. The host controls logical names through `feature default -> host policy -> explicit per-unit override`, followed by provider normalization. The canonical decision is Groundwork [ADR 0003 / PR #26](https://github.com/valence-works/Groundwork/pull/26); this answer records only Elsa's dependency on it.
 
 ## query-and-capabilities: What Query Surface Must Elsa Depend On?
 
@@ -46,7 +46,7 @@ Must Groundwork reproduce EF Core's query surface, and may callers select physic
 
 ### Answer
 
-Expose one bounded provider-neutral query contract; the provider planner selects shared indexes, dedicated tables, or entity tables. Do not expose general `IQueryable` or arbitrary LINQ. Production validation rejects unsupported scale-bearing queries and unbounded client evaluation. Capability claims come from executable handlers and conformance tests. Generic map/reduce is deferred until a concrete workload proves it is needed.
+Expose one bounded provider-neutral query contract; the provider planner selects shared indexes, dedicated tables, or entity tables. Do not expose general `IQueryable` or arbitrary LINQ. Production validation rejects unsupported scale-bearing queries and unbounded client evaluation. Capability claims come from executable handlers and conformance tests. Generic map/reduce is deferred until a concrete workload proves it is needed. Groundwork [ADR 0003 / PR #26](https://github.com/valence-works/Groundwork/pull/26) is canonical for the upstream query and capability design.
 
 ## schema-operations: How Is Schema Evolution Operated?
 
@@ -60,7 +60,7 @@ How can features evolve physical storage without recreating provider-specific mi
 
 ### Answer
 
-Groundwork diffs resolved manifests into provider-neutral additive, backfill, index, and explicitly authorized destructive operations. Providers translate the same plan. Development may auto-apply safe changes; production startup validates by default; deployment jobs apply under a provider migration lock. A .NET CLI provides `plan`, `validate`, `status`, and safe/authorized `apply`, with deterministic machine-readable output.
+Groundwork diffs resolved manifests into provider-neutral additive, backfill, index, and explicitly authorized destructive operations. Providers translate the same plan. Development may auto-apply safe changes; production startup validates by default; deployment jobs apply under a provider migration lock. A .NET CLI provides `plan`, `validate`, `status`, and safe/authorized `apply`, with deterministic machine-readable output. Groundwork [ADR 0003 / PR #26](https://github.com/valence-works/Groundwork/pull/26) is canonical for these upstream mechanics.
 
 ## performance-policy: What Evidence Gates EF Removal?
 
@@ -218,7 +218,7 @@ Pending.
 
 ## elsa-store-migration: In What Vertical Order Do Elsa Stores Move?
 
-Blocked by: identity-openiddict, diagnostic-storage, provider-conformance, performance-harness, migration-cli
+Blocked by: identity-openiddict, diagnostic-storage
 Status: open
 Type: Grilling
 
@@ -228,11 +228,11 @@ What dependency-ordered Elsa slices migrate design, runtime, IAM, diagnostics, I
 
 ### Answer
 
-Pending. Resolve into the Elsa PRD and independently grabbable issues after upstream readiness is evidenced.
+Pending. Resolve each store family into independently grabbable issues with only its specific released upstream dependencies. Design, runtime, IAM, diagnostics, Identity, and OpenIddict may migrate independently while EF remains a temporary oracle.
 
 ## ef-removal: When May The EF Implementation Family Be Deleted?
 
-Blocked by: elsa-store-migration
+Blocked by: elsa-store-migration, provider-conformance, performance-harness, migration-cli
 Status: open
 Type: Prototype
 

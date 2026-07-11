@@ -19,7 +19,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Replace scale-bearing in-memory query fallbacks with bounded, server-side Groundwork queries.
 - Add Groundwork implementations for structured logs, OpenTelemetry, ASP.NET Core Identity, and OpenIddict persistence.
 - Validate SQLite, SQL Server, PostgreSQL, and MongoDB against the Elsa-used contracts, including tenancy, concurrency, restart, and migration behavior.
-- Compare EF Core with Groundwork physical entity tables using the agreed correctness and performance gates while EF remains available as a temporary oracle.
+- Compare EF Core with all three Groundwork physical forms using the agreed correctness and performance gates while EF remains available as a temporary oracle, and require physical entity tables to demonstrate a repeatable benefit over the shared and dedicated-document forms for workloads that select them.
 - Switch reference hosts to Groundwork and remove EF projects, migrations, registrations, package references, tests, and transitive dependencies.
 - Add an architecture guard that prevents EF Core from returning to this repository.
 
