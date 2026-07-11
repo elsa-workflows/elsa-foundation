@@ -40,6 +40,20 @@ public sealed class ScopedVariableAuthoringContractTests
     }
 
     [Fact]
+    public void Null_node_selection_has_no_visible_variables_but_preserves_state_wide_shadowing_warnings()
+    {
+        var inner = Node("inner", childActivities: [Node("leaf")], containerVariables: [Variable("var-inner", "Counter")]);
+        var state = State(activities: [inner], variables: [Variable("var-wf", "Counter")]);
+        var authoring = Authoring();
+
+        var visible = authoring.GetVisibleVariables(state, null);
+        var warnings = authoring.GetShadowingWarnings(state);
+
+        Assert.Empty(visible);
+        Assert.Single(warnings);
+    }
+
+    [Fact]
     public void Shadowing_produces_a_non_blocking_warning_but_not_a_validation_error()
     {
         // Inner container declares "Counter", shadowing the workflow-scoped "Counter".

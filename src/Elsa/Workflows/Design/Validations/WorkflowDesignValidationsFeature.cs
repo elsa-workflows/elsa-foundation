@@ -2,7 +2,7 @@ using CShells.Features;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
-using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Extensions;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Events;
@@ -10,7 +10,6 @@ using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Internal;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Design.Validations;
 
@@ -50,13 +49,10 @@ public class WorkflowDesignValidationsFeature : IShellFeature
 
         services.AddEventHandler<OnDraftValidating, ExecuteValidations>();
 
-        services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
+        services.AddScopedVariableAuthoring();
         services.AddScoped<ActivityTreeWalker>();
         services.AddScoped<CatalogVersionResolver>();
-        services.AddScoped<ScopedVariableResolver>();
-        services.AddScoped<ScopedVariablePicker>();
         services.AddScoped<ScopedVariableReferenceRemapper>();
-        services.AddScoped<ScopedVariableAuthoringContract>();
         services.AddScoped<IDraftValidator, UnknownActivityVersionValidator>();
         services.AddScoped<IDraftValidator, StartActivityValidator>();
         services.AddScoped<IDraftValidator, VariableUniquenessValidator>();
