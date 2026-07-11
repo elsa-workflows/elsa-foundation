@@ -218,7 +218,7 @@ Pending.
 
 ## elsa-store-migration: In What Vertical Order Do Elsa Stores Move?
 
-Blocked by: identity-openiddict, diagnostic-storage
+Blocked by: none
 Status: open
 Type: Grilling
 
