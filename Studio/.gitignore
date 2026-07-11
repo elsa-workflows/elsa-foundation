@@ -4,6 +4,7 @@ node_modules/
 dist/
 build/
 coverage/
+src/*/wwwroot/
 .DS_Store
 *.log
 .env*

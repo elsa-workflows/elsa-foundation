@@ -1,1 +1,0 @@
-.dashboard-sample-card{--dashboard-sample-border: color-mix(in srgb, var(--studio-accent, var(--primary, #2563eb)) 40%, var(--studio-border, var(--border, #d9e2ec)));border-color:var(--dashboard-sample-border)}.dashboard-sample-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.dashboard-sample-list{margin-top:4px}
