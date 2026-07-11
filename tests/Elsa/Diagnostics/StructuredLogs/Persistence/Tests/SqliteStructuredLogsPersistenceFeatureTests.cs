@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.DbContext;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
@@ -7,6 +8,7 @@ using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Tasks.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Diagnostics.StructuredLogs.Persistence.Tests;
@@ -30,6 +32,25 @@ public sealed class SqliteStructuredLogsPersistenceFeatureTests
         var storeDescriptor = Assert.Single(services, d => d.ServiceType == typeof(IStructuredLogStore));
         Assert.Equal(ServiceLifetime.Singleton, storeDescriptor.Lifetime);
         Assert.NotNull(storeDescriptor.ImplementationFactory);
+    }
+
+    [Fact]
+    public async Task PersistentStoreResolvesWhenStructuredLogCaptureIsEnabled()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new StructuredLogsFeature().ConfigureServices(services);
+        new SqliteStructuredLogsPersistenceShellFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var resolution = Task.Run(() =>
+        {
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger("External.Component").LogInformation("captured");
+            return provider.GetRequiredService<IStructuredLogStore>();
+        });
+        var store = await resolution.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.IsType<EfCoreStructuredLogStore>(store);
     }
 
     [Fact]

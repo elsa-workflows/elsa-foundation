@@ -19,6 +19,12 @@ public sealed class StructuredLogCaptureProviderTests
         public void Emit(StructuredLogEntry entry) => throw new InvalidOperationException("sink failed");
     }
 
+    private sealed class DeferredSink(Func<IStructuredLogSink> sinkFactory) : IStructuredLogSink
+    {
+        private readonly Lazy<IStructuredLogSink> _sink = new(sinkFactory);
+        public void Emit(StructuredLogEntry entry) => _sink.Value.Emit(entry);
+    }
+
     private sealed class FixedSourceProvider : IStructuredLogSourceProvider
     {
         private readonly LogSource _source = new() { Id = "test-source", DisplayName = "Test" };
@@ -105,6 +111,25 @@ public sealed class StructuredLogCaptureProviderTests
         logger.LogError("should be ignored");
 
         Assert.Empty(sink.Entries);
+    }
+
+    [Fact]
+    public void IgnoresOwnCategoryWithoutResolvingTheSink()
+    {
+        var sinkResolved = false;
+        var provider = new StructuredLogCaptureProvider(
+            new DeferredSink(() =>
+            {
+                sinkResolved = true;
+                return new CollectingSink();
+            }),
+            new FixedSourceProvider(),
+            TestOptions.Create());
+
+        var logger = provider.CreateLogger("Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage.EfCoreStructuredLogStore");
+        logger.LogError("should be ignored");
+
+        Assert.False(sinkResolved);
     }
 
     [Fact]
