@@ -3,9 +3,11 @@ using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Lifecycle;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
+using Elsa.Server.Readiness;
 using Elsa.Activities.Composition.Design;
 using Elsa.Activities.Composition.Runtime;
 using Elsa.Activities.Design.Api;
@@ -112,6 +114,14 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddNuplaneAdmin();
 builder.Services.Configure<ActivityAvailabilityOptions>(configuration.GetSection(ActivityAvailabilityOptions.SectionName));
+builder.Services
+    .AddOptions<ShellReadinessOptions>()
+    .Bind(configuration.GetSection(ShellReadinessOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.DefaultShellName), "A non-empty default shell name is required.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
+builder.Services.AddSingleton<DefaultShellWarmup>();
+builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
 
 // ExtensionBuilder is a root-hosted subsystem (root singletons + a background build worker + management
 // endpoints mapped on the root route builder below), not a shell feature — its process-global state and
@@ -256,6 +266,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithWebRouting(options =>
         {
             options.EnablePathRouting = true;
+            options.ExcludePaths = ["/health/live", "/health/ready"];
         })
         .ConfigureAllShells(shell => shell
             .WithFeature<ModularityApiFeature>()
@@ -276,6 +287,30 @@ var app = builder.Build();
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
+app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
+app.MapGet("/health/ready", (IShellRegistry registry, ShellReadinessState state, Microsoft.Extensions.Options.IOptions<ShellReadinessOptions> options) =>
+{
+    var shellName = options.Value.DefaultShellName;
+    var active = registry.GetActive(shellName);
+    if (active?.State == ShellLifecycleState.Active)
+    {
+        return Results.Json(new
+        {
+            status = "ready",
+            shell = shellName,
+            generation = active.Descriptor.Generation,
+            durationMs = state.Snapshot.Duration?.TotalMilliseconds
+        });
+    }
+
+    var snapshot = state.Snapshot;
+    return Results.Json(new
+    {
+        status = snapshot.Status.ToString().ToLowerInvariant(),
+        shell = shellName,
+        code = snapshot.Code
+    }, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();
