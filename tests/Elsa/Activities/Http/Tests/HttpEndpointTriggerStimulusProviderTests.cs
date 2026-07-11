@@ -386,8 +386,9 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         string activityType = "Elsa.HttpEndpoint",
         bool authorCanStartWorkflow = true)
     {
-        if (authorCanStartWorkflow && !bindings.ContainsKey(nameof(HttpEndpoint.CanStartWorkflow)))
-            bindings[nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true");
+        var effectiveBindings = new Dictionary<string, RuntimeInputBinding>(bindings, StringComparer.OrdinalIgnoreCase);
+        if (authorCanStartWorkflow && !effectiveBindings.ContainsKey(nameof(HttpEndpoint.CanStartWorkflow)))
+            effectiveBindings[nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true");
 
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new ExecutableNode(
@@ -397,7 +398,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
-            inputBindings: bindings,
+            inputBindings: effectiveBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }
