@@ -66,7 +66,7 @@
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Add shell-level contract cases for help, unknown arguments, invalid boot counts, missing tools/files, occupied ports, and budget failure in `tests/tools/measure-server-cold-start.bats` or the repository's existing Bash-test convention
+- [ ] T014 [P] [US2] Add shell-level contract cases for help, unknown arguments, invalid boot counts, missing tools/files, occupied ports, and budget failure in `tools/performance/tests/measure-server-cold-start-tests.sh`
 
 ### Implementation for User Story 2
 
@@ -108,19 +108,23 @@
 
 **Independent Test**: Against identical pre-materialized data, the first initialization materializes, the second exact-history initialization performs no index backfill, changed/absent history and the repair setting rematerialize, and the 20-boot after lane improves shell-ready p95 by at least 30% while all durability/HTTP suites stay green.
 
+### Baseline for User Story 4
+
+- [ ] T026 [US4] Run and preserve the 20-boot pre-change lane with `tools/performance/measure-server-cold-start.sh`, including phase telemetry and matching frozen-data provenance, before implementing the fast path
+
 ### Tests for User Story 4
 
-- [ ] T026 [P] [US4] Add exact-history hit, absent-table, changed-manifest/provider, force-rematerialize, concurrency, and usable-store tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before the fast path
-- [ ] T027 [P] [US4] Add shell-feature setting/registration tests for `RematerializeOnStartup` in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkRuntimePersistenceShellFeatureTests.cs`
+- [ ] T027 [P] [US4] Add exact-history hit, absent-table, changed-manifest/provider, force-rematerialize, concurrency, and usable-store tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before the fast path
+- [ ] T028 [P] [US4] Add shell-feature inheritability plus setting/registration tests for `RematerializeOnStartup` in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkRuntimePersistenceShellFeatureTests.cs`
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] Implement exact schema-history inspection and direct store opening with full-factory fallback in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
-- [ ] T029 [US4] Thread the force-rematerialize option through `src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs`
-- [ ] T030 [US4] Expose and document `RematerializeOnStartup` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
-- [ ] T031 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
-- [ ] T032 [US4] Build a warning-free Release server and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
-- [ ] T033 [US4] Record raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
+- [ ] T029 [US4] Implement exact schema-history inspection and direct store opening with full-factory fallback in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
+- [ ] T030 [US4] Thread the force-rematerialize option through `src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs`
+- [ ] T031 [US4] Make the touched feature inheritable and expose/document `RematerializeOnStartup` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
+- [ ] T032 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
+- [ ] T033 [US4] Build a warning-free Release server and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
+- [ ] T034 [US4] Record raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
 
 **Checkpoint**: The measured dominant activation phase is reduced and the client-visible first/warm behavior satisfies the declared budgets.
 
@@ -130,11 +134,11 @@
 
 **Purpose**: Complete documentation, broad verification, self-review, and delivery tracking.
 
-- [ ] T034 [P] Update relevant feature/operator documentation for startup tasks, readiness, and SQLite rematerialization in the owning README/extension-point surfaces identified during implementation
-- [ ] T035 Run the full `Elsa.Server.slnx` build and all affected solution test lanes with zero unexpected warnings or failures
-- [ ] T036 Run up to five self-review/fix iterations across the implementation files listed in `specs/091-lazy-shell-activation/plan.md`, covering correctness, cancellation, lifecycle races, metric cardinality, data safety, shell isolation, script cleanup, and acceptance completeness
-- [ ] T037 Update every completed checkbox in `specs/091-lazy-shell-activation/tasks.md`, re-run `speckit-analyze`, and resolve all critical/high findings
-- [ ] T038 Push `codex/624-shell-readiness`, open a PR with `Closes #624`, link validation/evidence, converge required automated reviews and CI, then merge without bypassing protections
+- [ ] T035 [P] Update startup-task extension documentation and operator diagnostics in `src/Elsa/Tasks/EXTENSION_POINTS.md` and `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
+- [ ] T036 Run the full `Elsa.Server.slnx` build and all affected solution test lanes with zero unexpected warnings or failures
+- [ ] T037 Run up to five self-review/fix iterations across the implementation files listed in `specs/091-lazy-shell-activation/plan.md`, covering correctness, cancellation, lifecycle races, metric cardinality, data safety, shell isolation, script cleanup, and acceptance completeness
+- [ ] T038 Update every completed checkbox in `specs/091-lazy-shell-activation/tasks.md`, re-run `speckit-analyze`, and resolve all critical/high findings
+- [ ] T039 Push `codex/624-shell-readiness`, open a PR with `Closes #624`, link validation/evidence, converge required automated reviews and CI, then merge without bypassing protections
 
 ---
 
@@ -162,8 +166,8 @@
 - T003-T005 can run independently.
 - T006-T008 can be authored in parallel before T009-T012.
 - T018-T020 can be authored in parallel before T021-T024.
-- T026 and T027 can be authored in parallel.
-- T034 documentation can proceed while T035 broad verification runs.
+- T027 and T028 can be authored in parallel after the T026 baseline is preserved.
+- T035 documentation can proceed while T036 broad verification runs.
 
 ---
 
