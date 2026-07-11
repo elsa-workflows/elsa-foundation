@@ -111,6 +111,7 @@ public sealed class ClrAssemblyScanner(
     {
         var version = versionResolver.Resolve(type, assembly);
         var category = categoryResolver.Resolve(type, assembly);
+        var attributes = type.GetCustomAttributesData().ToArray();
 
         var inputs = new List<InputDefinition>();
         var outputs = new List<OutputDefinition>();
@@ -156,12 +157,15 @@ public sealed class ClrAssemblyScanner(
             Descriptor: new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(type)),
             Inputs: inputs,
             Outputs: outputs,
-            DesignFacets: BuildDesignFacets(type));
+            DesignFacets: BuildDesignFacets(attributes),
+            // Keep CLR catalog content stable for already-reconciled activity versions. Runtime trigger
+            // classification is derived from the CLR descriptor by ExecutableNodeCompiler instead; changing
+            // this value in place would invalidate persisted same-version hashes during an upgrade.
+            ExecutionType: ActivityExecutionType.Action);
     }
 
-    private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(Type type)
+    private static IReadOnlyCollection<ActivityDesignFacet> BuildDesignFacets(IReadOnlyCollection<CustomAttributeData> attributes)
     {
-        var attributes = type.GetCustomAttributesData();
         var structureAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == ActivityStructureAttributeFullName);
         if (structureAttribute is null)
             return [];

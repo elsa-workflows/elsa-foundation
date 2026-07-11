@@ -64,6 +64,7 @@ namespace Elsa.Activities.Http.Activities;
 /// JSON <c>null</c> body surfaces as a present <see cref="JsonElement"/> of <see cref="JsonValueKind.Null"/>.
 /// </para>
 /// </remarks>
+[TriggerActivity]
 public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
 {
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>

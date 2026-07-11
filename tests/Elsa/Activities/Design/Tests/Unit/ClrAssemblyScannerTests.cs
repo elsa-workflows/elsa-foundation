@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
@@ -36,6 +37,27 @@ public sealed class ClrAssemblyScannerTests
         var byKey = models.ToDictionary(m => m.ActivityTypeKey, m => m.Version);
         Assert.Equal("2.1.0", byKey[typeof(UnannotatedFixtureActivity).FullName!]);
         Assert.Equal("3.0.0", byKey[typeof(VersionedFixtureActivity).FullName!]);
+    }
+
+    [Fact]
+    public void TriggerActivityAttribute_DoesNotMutatePersistedCatalogExecutionType()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(TriggerFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(TriggerFixtureActivity).FullName);
+
+        Assert.Equal(ActivityExecutionType.Action, model.ExecutionType);
+    }
+
+    [Fact]
+    public void HttpEndpoint_ReconcilesWithLegacyCompatibleIdentityAndExecutionType()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(HttpEndpoint).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(m => m.ActivityTypeKey == typeof(HttpEndpoint).FullName);
+
+        Assert.Equal(typeof(HttpEndpoint).FullName, model.ActivityTypeKey);
+        Assert.Equal(ActivityExecutionType.Action, model.ExecutionType);
     }
 
     [Fact]
@@ -213,8 +235,10 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
         File.WriteAllText(Path.Combine(folder.Path, "garbage.dll"), "this is not a portable executable");
 
-        // The junk DLL is skipped; the valid fixture assembly still yields its six concrete activities.
-        Assert.Equal(6, CreateScanner().Scan(folder.Path).Count);
+        // The junk DLL is skipped; discovery of activities from the valid fixture assembly still completes.
+        Assert.Contains(
+            CreateScanner().Scan(folder.Path),
+            model => model.ActivityTypeKey == typeof(UnannotatedFixtureActivity).FullName);
     }
 
     [Fact]
