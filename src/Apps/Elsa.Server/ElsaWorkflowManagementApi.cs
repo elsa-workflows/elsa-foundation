@@ -106,8 +106,13 @@ internal static class ElsaWorkflowManagementApi
         if (request.NodeId is not null && string.IsNullOrWhiteSpace(request.NodeId))
             return Results.BadRequest(new WorkflowManagementErrorResponse("The selected activity node id cannot be empty."));
 
+        var authoring = services.GetService<ScopedVariableAuthoringContract>();
+        if (authoring is null)
+            return Results.Json(
+                new WorkflowManagementErrorResponse("Scoped-variable analysis is not available for the active shell."),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+
         var state = request.State.ToState();
-        var authoring = services.GetRequiredService<ScopedVariableAuthoringContract>();
         return Results.Ok(new ScopedVariableAnalysisResponse(
             authoring.GetVisibleVariables(state, request.NodeId),
             authoring.GetShadowingWarnings(state)));

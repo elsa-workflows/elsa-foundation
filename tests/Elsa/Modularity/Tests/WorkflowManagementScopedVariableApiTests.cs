@@ -119,6 +119,20 @@ public sealed class WorkflowManagementScopedVariableApiTests
     }
 
     [Fact]
+    public async Task Analysis_reports_service_unavailable_when_the_active_shell_does_not_support_it()
+    {
+        var result = ElsaWorkflowManagementApi.AnalyzeScopedVariables(
+            new ServiceCollection().BuildServiceProvider(),
+            new AnalyzeScopedVariablesRequest(new WorkflowDefinitionStateView(), null));
+
+        var response = await ExecuteResultAsync(result);
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, response.StatusCode);
+        using var document = JsonDocument.Parse(response.Body);
+        Assert.Equal("Scoped-variable analysis is not available for the active shell.", document.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task Capabilities_reflect_whether_the_active_shell_registered_analysis()
     {
         var supported = await ExecuteResultAsync(ElsaWorkflowManagementApi.GetCapabilities(BuildServices()));
