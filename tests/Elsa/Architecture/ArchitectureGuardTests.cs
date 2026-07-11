@@ -532,7 +532,7 @@ public sealed class ArchitectureGuardTests
         if (Path.IsPathRooted(fileName) || !StringComparer.Ordinal.Equals(Path.GetFileName(fileName), fileName))
             throw new ArgumentException("The server configuration name must be a relative file name.", nameof(fileName));
 
-        return Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName);
+        return Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", fileName);
     }
 
     private static string StripCommentsAndStringLiterals(string text)
