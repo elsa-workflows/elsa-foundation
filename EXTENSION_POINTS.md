@@ -130,7 +130,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Workflows design — model, mutation events, commands, diff engine | [`src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) |
+| Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Api/EXTENSION_POINTS.md) |
 | Workflows design — draft validators | [`src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Validations/EXTENSION_POINTS.md) |
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |

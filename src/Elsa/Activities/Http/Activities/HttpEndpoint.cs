@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -97,7 +98,11 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// The HTTP methods this endpoint accepts (spec 089 B: routing-significant — one trigger binding / bookmark per
     /// (template, method)). Authored literal; unauthored defaults to <c>GET</c> (elsa-core parity).
     /// </summary>
-    [ActivityInput(Category = "Simple", Order = 20)]
+    [ActivityInput(
+        Category = "Simple",
+        Order = 20,
+        UIHint = ActivityInputUIHints.CheckList,
+        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"])]
     public InputArgument<ICollection<string>>? SupportedMethods { get; set; }
 
     /// <summary>

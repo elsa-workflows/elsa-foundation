@@ -40,7 +40,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\Elsa\Activities\Http\Elsa.Activities.Http.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />

@@ -19,4 +19,16 @@ public sealed class ActivityInputAttribute : Attribute
 
     /// <summary>The expression syntax to use when the input has no authored value.</summary>
     public string? DefaultSyntax { get; init; }
+
+    /// <summary>The design-time editor hint used to present this input.</summary>
+    public string? UIHint { get; init; }
+
+    /// <summary>Ordered string options. Each value is used as both label and authored value.</summary>
+    public string[]? Options { get; init; }
+
+    /// <summary>The case-sensitive key of a design-side dynamic options provider.</summary>
+    public string? OptionsProvider { get; init; }
+
+    /// <summary>Sibling inputs whose changes invalidate dynamically provided options.</summary>
+    public string[]? OptionsProviderDependencies { get; init; }
 }
