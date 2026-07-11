@@ -3,7 +3,6 @@ using ConsoleLogStreaming.Core.DependencyInjection;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
-using CShells.Lifecycle;
 using CShells.Management.Api;
 using Elsa.Api.FastEndpoints;
 using Elsa.Server;
@@ -287,30 +286,7 @@ var app = builder.Build();
 app.UseCors(studioCorsPolicy);
 
 app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-server" }));
-app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
-app.MapGet("/health/ready", (IShellRegistry registry, ShellReadinessState state, Microsoft.Extensions.Options.IOptions<ShellReadinessOptions> options) =>
-{
-    var shellName = options.Value.DefaultShellName;
-    var active = registry.GetActive(shellName);
-    if (active?.State == ShellLifecycleState.Active)
-    {
-        return Results.Json(new
-        {
-            status = "ready",
-            shell = shellName,
-            generation = active.Descriptor.Generation,
-            durationMs = state.Snapshot.Duration?.TotalMilliseconds
-        });
-    }
-
-    var snapshot = state.Snapshot;
-    return Results.Json(new
-    {
-        status = snapshot.Status.ToString().ToLowerInvariant(),
-        shell = shellName,
-        code = snapshot.Code
-    }, statusCode: StatusCodes.Status503ServiceUnavailable);
-});
+app.MapShellReadiness();
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();

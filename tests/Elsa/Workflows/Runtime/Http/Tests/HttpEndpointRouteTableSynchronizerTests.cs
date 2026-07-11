@@ -211,8 +211,8 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
             var measurement = Assert.Single(_measurements);
             Assert.True(measurement.Value >= 0);
             Assert.Equal(outcome, measurement.Tag(OutcomeTag));
-            Assert.Equal(expectedRouteCount, measurement.Tag(RouteCountTag));
-            Assert.All(measurement.Tags, tag => Assert.Contains(tag.Key, new[] { OutcomeTag, RouteCountTag }));
+            Assert.Null(measurement.Tag(RouteCountTag));
+            Assert.Equal(new[] { OutcomeTag }, measurement.Tags.Select(tag => tag.Key));
         }
 
         public void Dispose()

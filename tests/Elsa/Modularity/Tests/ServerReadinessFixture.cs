@@ -89,7 +89,7 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
                 })));
 
         var app = builder.Build();
-        MapHealthEndpoints(app);
+        app.MapShellReadiness();
         app.MapShells();
         await app.StartAsync();
 
@@ -146,34 +146,6 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         await _app.DisposeAsync();
     }
 
-    private static void MapHealthEndpoints(WebApplication app)
-    {
-        app.MapGet(LivePath, () => Results.Ok(new HealthResponse("live")));
-        app.MapGet(ReadyPath, (IShellRegistry registry, ShellReadinessState state, IOptions<ShellReadinessOptions> options) =>
-        {
-            var active = registry.GetActive(options.Value.DefaultShellName);
-            if (active?.State == ShellLifecycleState.Active)
-            {
-                var snapshot = state.Snapshot;
-                return Results.Json(
-                    new HealthResponse(
-                        "ready",
-                        options.Value.DefaultShellName,
-                        active.Descriptor.Generation,
-                        snapshot.Duration?.TotalMilliseconds),
-                    statusCode: StatusCodes.Status200OK);
-            }
-
-            var unavailable = state.Snapshot;
-            return Results.Json(
-                new HealthResponse(
-                    unavailable.Status.ToString().ToLowerInvariant(),
-                    options.Value.DefaultShellName,
-                    Code: unavailable.Code),
-                statusCode: StatusCodes.Status503ServiceUnavailable);
-        });
-    }
-
     public sealed record HealthResponse(
         string Status,
         string? Shell = null,
@@ -218,6 +190,12 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
                 return _gates.TryGetValue(shellName, out var gate)
                     ? gate
                     : _gates[shellName] = new Gate();
+        }
+
+        public Gate PrepareNext(string shellName)
+        {
+            lock (_syncRoot)
+                return _gates[shellName] = new Gate();
         }
 
         public void ReleaseAll()

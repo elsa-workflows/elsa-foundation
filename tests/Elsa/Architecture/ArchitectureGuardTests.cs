@@ -196,15 +196,23 @@ public sealed class ArchitectureGuardTests
     public void Server_exposes_distinct_root_liveness_and_readiness_paths()
     {
         var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+        var endpoints = File.ReadAllText(Path.Combine(
+            RepoRoot,
+            "src",
+            "Apps",
+            "Elsa.Server",
+            "Readiness",
+            "ShellReadinessEndpointExtensions.cs"));
 
-        var live = program.IndexOf("MapGet(\"/health/live\"", StringComparison.Ordinal);
-        var ready = program.IndexOf("MapGet(\"/health/ready\"", StringComparison.Ordinal);
+        var live = endpoints.IndexOf("MapGet(\"/health/live\"", StringComparison.Ordinal);
+        var ready = endpoints.IndexOf("MapGet(\"/health/ready\"", StringComparison.Ordinal);
+        var health = program.IndexOf("MapShellReadiness()", StringComparison.Ordinal);
         var shells = program.IndexOf("MapShells()", StringComparison.Ordinal);
 
         Assert.True(live >= 0, "The reference server must expose GET /health/live at the process root.");
         Assert.True(ready >= 0, "The reference server must expose GET /health/ready at the process root.");
         Assert.NotEqual(live, ready);
-        Assert.True(live < shells && ready < shells, "Health endpoints must be root-mapped independently of shell endpoints.");
+        Assert.True(health >= 0 && health < shells, "Health endpoints must be root-mapped independently of shell endpoints.");
     }
 
     [Fact]

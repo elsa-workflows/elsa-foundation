@@ -129,4 +129,30 @@ public sealed class ServerReadinessTests
         Assert.Equal(shell.Descriptor.Generation, ready.Body.Generation);
         Assert.Equal(ShellReadinessStatus.Disabled, fixture.ReadinessState.Snapshot.Status);
     }
+
+    [Fact]
+    public async Task ReadinessKeepsServingTheActiveGenerationUntilReloadPromotion()
+    {
+        await using var fixture = await ServerReadinessFixture.StartAsync();
+        var initialGate = fixture.RouteInitialization.For(ServerReadinessFixture.DefaultShellName);
+        await fixture.WaitForDefaultRouteInitializationAsync();
+        initialGate.Release();
+        await fixture.WaitUntilReadyAsync();
+        var initialGeneration = fixture.Registry.GetActive(ServerReadinessFixture.DefaultShellName)!.Descriptor.Generation;
+
+        var reloadGate = fixture.RouteInitialization.PrepareNext(ServerReadinessFixture.DefaultShellName);
+        var reload = fixture.Registry.ReloadAsync(ServerReadinessFixture.DefaultShellName);
+        await reloadGate.WaitUntilEnteredAsync();
+
+        var duringReload = await fixture.ReadReadyAsync();
+        Assert.Equal(HttpStatusCode.OK, duringReload.StatusCode);
+        Assert.Equal(initialGeneration, duringReload.Body.Generation);
+
+        reloadGate.Release();
+        await reload;
+        var afterReload = await fixture.ReadReadyAsync();
+        Assert.Equal(HttpStatusCode.OK, afterReload.StatusCode);
+        Assert.True(afterReload.Body.Generation > initialGeneration);
+        Assert.Null(afterReload.Body.DurationMs);
+    }
 }

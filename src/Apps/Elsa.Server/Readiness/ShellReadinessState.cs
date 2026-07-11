@@ -40,6 +40,29 @@ public sealed class ShellReadinessState(TimeProvider timeProvider)
         code,
         generation: null);
 
+    public void MarkCancelled(string shellName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(shellName);
+
+        lock (_syncRoot)
+        {
+            if (_snapshot.Status == ShellReadinessStatus.Starting)
+            {
+                CompleteUnderLock(ShellReadinessStatus.Failed, "shell_activation_cancelled", generation: null);
+                return;
+            }
+
+            if (_snapshot.Status != ShellReadinessStatus.NotStarted)
+                return;
+
+            Volatile.Write(ref _snapshot, new ShellReadinessSnapshot(
+                ShellReadinessStatus.Failed,
+                "shell_activation_cancelled",
+                shellName,
+                CompletedAt: timeProvider.GetUtcNow()));
+        }
+    }
+
     public void MarkDisabled(string shellName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(shellName);
@@ -63,15 +86,17 @@ public sealed class ShellReadinessState(TimeProvider timeProvider)
             if (_snapshot.Status != ShellReadinessStatus.Starting)
                 return;
 
-            var completedAt = timeProvider.GetUtcNow();
-            Volatile.Write(ref _snapshot, _snapshot with
-            {
-                Status = status,
-                Code = code,
-                Generation = generation,
-                CompletedAt = completedAt,
-                Duration = timeProvider.GetElapsedTime(_startedTimestamp)
-            });
+            CompleteUnderLock(status, code, generation);
         }
     }
+
+    private void CompleteUnderLock(ShellReadinessStatus status, string code, int? generation) =>
+        Volatile.Write(ref _snapshot, _snapshot with
+        {
+            Status = status,
+            Code = code,
+            Generation = generation,
+            CompletedAt = timeProvider.GetUtcNow(),
+            Duration = timeProvider.GetElapsedTime(_startedTimestamp)
+        });
 }

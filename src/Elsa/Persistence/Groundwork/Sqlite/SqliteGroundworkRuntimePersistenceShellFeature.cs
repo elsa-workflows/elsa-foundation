@@ -40,7 +40,7 @@ public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
         Category = "Persistence")]
     public bool RematerializeOnStartup { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
 

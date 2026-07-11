@@ -85,11 +85,13 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             activity?.SetStatus(ActivityStatusCode.Error);
             throw;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             outcome = SqliteGroundworkTelemetry.FailedOutcome;
             activity?.SetStatus(ActivityStatusCode.Error);
-            throw;
+            throw new SqliteGroundworkInitializationException(
+                "The SQLite Groundwork document store could not be initialized.",
+                exception);
         }
         finally
         {
@@ -122,12 +124,14 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
 
             await using var historyCommand = connection.CreateCommand();
             historyCommand.CommandText = """
-                SELECT 1
+                SELECT CASE
+                    WHEN manifest_id = $manifestId
+                     AND manifest_version = $manifestVersion
+                     AND provider_name = $providerName
+                     AND provider_version = $providerVersion
+                    THEN 1 ELSE 0 END
                 FROM groundwork_schema_history
-                WHERE manifest_id = $manifestId
-                  AND manifest_version = $manifestVersion
-                  AND provider_name = $providerName
-                  AND provider_version = $providerVersion
+                ORDER BY applied_utc DESC, rowid DESC
                 LIMIT 1;
                 """;
             historyCommand.Parameters.AddWithValue("$manifestId", manifest.Identity.Value);
@@ -135,7 +139,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             historyCommand.Parameters.AddWithValue("$providerName", provider.Name);
             historyCommand.Parameters.AddWithValue("$providerVersion", provider.Version);
 
-            if (await historyCommand.ExecuteScalarAsync(cancellationToken) is null)
+            if (Convert.ToInt64(await historyCommand.ExecuteScalarAsync(cancellationToken)) != 1)
             {
                 await connection.DisposeAsync();
                 return null;

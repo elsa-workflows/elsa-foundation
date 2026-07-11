@@ -83,7 +83,7 @@ public sealed class DefaultShellWarmup(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            readinessState.MarkFailed("shell_activation_cancelled");
+            readinessState.MarkCancelled(options.Value.DefaultShellName);
             logger.LogInformation("Default shell preparation was cancelled");
         }
         catch (Exception exception)

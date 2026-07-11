@@ -11,6 +11,9 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
     public void FeatureType_IsInheritable()
     {
         Assert.False(typeof(SqliteGroundworkRuntimePersistenceShellFeature).IsSealed);
+        Assert.True(typeof(SqliteGroundworkRuntimePersistenceShellFeature)
+            .GetMethod(nameof(SqliteGroundworkRuntimePersistenceShellFeature.ConfigureServices))!
+            .IsVirtual);
     }
 
     [Fact]

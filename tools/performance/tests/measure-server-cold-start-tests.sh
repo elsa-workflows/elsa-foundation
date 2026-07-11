@@ -82,7 +82,9 @@ import os
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health/ready":
-            body = b'{"status":"ready","shell":"default","generation":1,"durationMs":1}'
+            body = os.environ.get(
+                "FAKE_READY_BODY",
+                '{"status":"ready","shell":"default","generation":1,"durationMs":1}').encode()
             content_type = "application/json"
             status = 200
         elif self.path == "/workflows/http/hello-world":
@@ -194,6 +196,24 @@ kill "$occupied_port_pid" 2>/dev/null || true
 wait "$occupied_port_pid" 2>/dev/null || true
 occupied_port_pid=""
 
+run_case "artifacts overlap baseline" 2 '(overlap|must not overlap)' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$baseline_dir/results" --base-url "http://127.0.0.1:$(free_port)" \
+  --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
+  --expected-status 200 --expected-body 'Hello World!' --boots 1
+if [[ -e "$baseline_dir/results" ]]; then
+  printf 'FAIL: overlap validation mutated the frozen baseline.\n' >&2
+  failures=$((failures + 1))
+fi
+
+existing_artifacts="$temporary_directory/existing-artifacts"
+mkdir "$existing_artifacts"
+run_case "existing artifacts directory" 2 'already exists|choose a new path' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$existing_artifacts" --base-url "http://127.0.0.1:$(free_port)" \
+  --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
+  --expected-status 200 --expected-body 'Hello World!' --boots 1
+
 export PATH="$fake_bin:$PATH"
 export FAKE_SERVER_SCRIPT="$fake_server"
 export FAKE_SERVER_PORT="$(free_port)"
@@ -204,6 +224,34 @@ run_case "ready budget failure" 1 'p95.*exceeds.*budget|budget.*failed' \
   --boots 1 --enforce-ready-p95-ms 0 \
   --output-json "$temporary_directory/result.json" \
   --output-markdown "$temporary_directory/result.md"
+
+export FAKE_READY_BODY='{"status":"starting","shell":"default","code":"shell_activation_pending"}'
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "malformed readiness body" 1 'malformed or unexpected readiness' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" --readiness-path /health/ready \
+  --workflow-path /workflows/http/hello-world --expected-status 200 --expected-body 'Hello World!' --boots 1 \
+  --output-json "$temporary_directory/readiness-failure.json" \
+  --output-markdown "$temporary_directory/readiness-failure.md"
+unset FAKE_READY_BODY
+
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "trailing newline body mismatch" 1 'workflow validation failed' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" --readiness-path /health/ready \
+  --workflow-path /workflows/http/hello-world --expected-status 200 --expected-body $'Hello World!\n' --boots 1 \
+  --output-json "$temporary_directory/failure.json" --output-markdown "$temporary_directory/failure.md"
+if ! python3 - "$temporary_directory/failure.json" <<'PY'
+import json, pathlib, sys
+report = json.loads(pathlib.Path(sys.argv[1]).read_text())
+sample = report["boots"][0]
+assert sample["status"] == "workflow_validation_failed"
+assert pathlib.Path(sample["logPath"]).is_file()
+PY
+then
+  printf 'FAIL: forced failure report did not retain the stable status and log path.\n' >&2
+  failures=$((failures + 1))
+fi
 
 if ((failures > 0)); then
   printf 'FAILED: %s cold-start CLI contract case(s) failed.\n' "$failures" >&2

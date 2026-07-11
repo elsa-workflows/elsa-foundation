@@ -132,6 +132,20 @@ public sealed class ShellReadinessTests
         Assert.Null(harness.Registry.GetActive(ServerReadinessFixture.DefaultShellName));
     }
 
+    [Fact]
+    public async Task StopBeforeApplicationStartedPublishesCancelledState()
+    {
+        await using var harness = WarmupHarness.Create();
+        await harness.Warmup.StartAsync(CancellationToken.None);
+
+        await harness.Warmup.StopAsync(CancellationToken.None);
+
+        Assert.Equal(ShellReadinessStatus.Failed, harness.State.Snapshot.Status);
+        Assert.Equal("shell_activation_cancelled", harness.State.Snapshot.Code);
+        Assert.Equal(ServerReadinessFixture.DefaultShellName, harness.State.Snapshot.ShellName);
+        Assert.Equal(0, harness.Gate.Attempts);
+    }
+
     private static async Task WaitForStatusAsync(ShellReadinessState state, ShellReadinessStatus expected)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));

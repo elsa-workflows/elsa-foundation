@@ -75,7 +75,6 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
             activity?.SetTag(HttpRouteTableTelemetry.OutcomeTag, outcome);
             if (routeCount is not null)
             {
-                tags.Add(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
                 activity?.SetTag(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
             }
 

@@ -7,6 +7,7 @@ using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
 using Groundwork.Documents.Store;
+using Groundwork.Sqlite.Documents;
 using Microsoft.Data.Sqlite;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Tests;
@@ -74,9 +75,11 @@ public sealed class SqliteGroundworkInitializationTests
             holder);
         using var telemetry = new TelemetryCapture();
 
-        await Assert.ThrowsAnyAsync<Exception>(() => initializer.InitializeAsync());
+        var exception = await Assert.ThrowsAsync<SqliteGroundworkInitializationException>(() => initializer.InitializeAsync());
 
         Assert.False(holder.IsInitialized);
+        Assert.NotNull(exception.InnerException);
+        Assert.DoesNotContain("connection", exception.Message, StringComparison.OrdinalIgnoreCase);
         telemetry.AssertSingle(SqliteGroundworkTelemetry.FailedOutcome);
     }
 
@@ -132,6 +135,17 @@ public sealed class SqliteGroundworkInitializationTests
         await ExecuteSqlAsync(databasePath, "DELETE FROM groundwork_document_indexes;");
 
         await InitializeAndAssertProjectionAsync(databasePath, ProbeManifest(), new ProviderIdentity("groundwork-sqlite", "2.0.0"));
+    }
+
+    [Fact]
+    public async Task HistoricalMatchingTuple_DoesNotBypassTheLatestMaterializedState()
+    {
+        var databasePath = NewDatabasePath();
+        await MaterializeBaselineAsync(databasePath);
+        await MaterializeAsync(databasePath, ProbeManifest("2.0.0"), Provider);
+        await ExecuteSqlAsync(databasePath, "DELETE FROM groundwork_document_indexes;");
+
+        await InitializeAndAssertProjectionAsync(databasePath, ProbeManifest(), Provider);
     }
 
     [Fact]
@@ -239,6 +253,14 @@ public sealed class SqliteGroundworkInitializationTests
         {
             await holder.DisposeAsync();
         }
+    }
+
+    private static async Task MaterializeAsync(string databasePath, StorageManifest manifest, ProviderIdentity provider)
+    {
+        await using var handle = await SqliteDocumentStoreFactory.CreateAsync(
+            $"Data Source={databasePath}",
+            manifest,
+            provider);
     }
 
     private static async Task InitializeAndAssertProjectionAsync(string databasePath, StorageManifest manifest, ProviderIdentity provider)
