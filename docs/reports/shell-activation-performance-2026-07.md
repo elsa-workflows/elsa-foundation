@@ -74,3 +74,34 @@ The current Groundwork SQLite factory creates a materialization plan on every pr
 - Subsequent warm workflow p95: no more than 50 ms.
 
 Wall-clock budgets are enforced only by the controlled measurement commands. Deterministic CI gates readiness semantics, shell isolation, materialization selection, route initialization, durability, and response correctness.
+
+## Optimized 20-boot result
+
+The exact-history fast path was measured at committed revision `072a5662` against the same frozen content/data hash and machine as the repeated pre-change lane.
+
+| Milestone | Before p95 | After p95 | Change |
+|---|---:|---:|---:|
+| Listening | 2,102.955 ms | 1,022.705 ms | −51.4% |
+| SQLite-backed shell activation | 15,134.934 ms | 7,319.983 ms | −51.6% |
+| Shell ready from launch | 16,716.020 ms | 8,206.186 ms | −50.9% |
+| First workflow request after ready | 3,071.259 ms | 942.694 ms | −69.3% |
+| First success from launch | 19,787.279 ms | 9,381.591 ms | −52.6% |
+
+The shell-ready result clears both acceptance thresholds: it is below 30 seconds and improves by more than 30%. All 20 boots returned the exact expected workflow response. After-build provenance:
+
+- Release server SHA-256: `4bf6d9c1c798fdee5191d9bd78dd54cc1ecfee2dcb79b212e9fe8b242e6167e3`
+- Frozen content/data SHA-256: `aa453949e67d95aabe9316654cb88d8dae904ff53f77bd5c4288efc89a19dbe6`
+- Raw retained report: `/tmp/elsa-624-after-20-072a5662/report.json` on the reference machine
+
+## Warm-lane residual and follow-up
+
+The optimized Production lane's 200 measured requests produced warm p95 `359.953 ms`, above the existing 50 ms budget. A diagnostic run with `RematerializeOnStartup=true` produced warm p95 `35.645 ms`; a vacuumed copy produced `31.999 ms`. This demonstrates that full index-projection rebuild/physical compaction can mask the repeated post-readiness lookup/materialization cost, while exact-history startup deliberately leaves existing data pages untouched.
+
+This residual is not hidden as a successful acceptance result. Issue #625 owns the immutable workflow-executable cache needed to remove repeated executable loading without restoring multi-second startup backfills. Until that follow-up lands, operators with a fragmented or suspect SQLite projection can set `RematerializeOnStartup=true` for one startup and then return it to `false`.
+
+## Operator knobs and rollback
+
+- `Elsa:Readiness:WarmDefaultShell=false` restores request-triggered lazy activation; readiness stays observational and returns unavailable until another request activates the shell.
+- `Elsa:Readiness:DefaultShellName` selects the single shell observed and prepared by the root host. Other shells remain lazy and isolated.
+- `GroundworkRuntimePersistenceSqlite:RematerializeOnStartup=true` forces the prior full materialization/backfill path for repair or verification. The default `false` trusts an exact manifest/provider history tuple and opens the existing store directly.
+- Missing schema history, or a changed manifest/provider identity or version, always falls back to full materialization regardless of the repair setting.

@@ -71,7 +71,7 @@
 ### Implementation for User Story 2
 
 - [x] T015 [US2] Implement isolated boot orchestration, SQLite snapshot copying, process cleanup, response validation, provenance, percentiles, and JSON/Markdown output in `tools/performance/measure-server-cold-start.sh`
-- [ ] T016 [US2] Validate `bash -n`, command help/error paths, a forced-failure retained log, and a five-boot smoke lane using `tools/performance/measure-server-cold-start.sh`
+- [x] T016 [US2] Validate `bash -n`, command help/error paths, a forced-failure retained log, and a five-boot smoke lane using `tools/performance/measure-server-cold-start.sh`
 - [x] T017 [US2] Update reproducible commands and expected report fields in `specs/091-lazy-shell-activation/quickstart.md`
 
 **Checkpoint**: Cold-start evidence is reproducible without modifying ordinary CI or source databases.
@@ -122,9 +122,9 @@
 - [x] T029 [US4] Implement exact schema-history inspection and direct store opening with full-factory fallback in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
 - [x] T030 [US4] Thread the force-rematerialize option through `src/Elsa/Persistence/Groundwork/Sqlite/DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs`
 - [x] T031 [US4] Make the touched feature inheritable and expose/document `RematerializeOnStartup` in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkRuntimePersistenceShellFeature.cs` and reference server shell configuration
-- [ ] T032 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
-- [ ] T033 [US4] Build a warning-free Release server and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
-- [ ] T034 [US4] Record raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T032 [US4] Run the Groundwork SQLite, Groundwork recovery, Activities HTTP integration, shell lifecycle/isolation, and Architecture regression commands recorded in `specs/091-lazy-shell-activation/quickstart.md`
+- [x] T033 [US4] Build a warning-free Release server and run the 20-boot optimized lane plus the existing 200-request warm lane using `tools/performance/measure-server-cold-start.sh` and `tools/performance/measure-http-workflow.sh`
+- [x] T034 [US4] Record raw report provenance, before/after p50/p95, phase attribution, budgets, operator knobs, rollback, and residual costs in `docs/reports/shell-activation-performance-2026-07.md`
 
 **Checkpoint**: The measured dominant activation phase is reduced and the client-visible first/warm behavior satisfies the declared budgets.
 
@@ -134,7 +134,7 @@
 
 **Purpose**: Complete documentation, broad verification, self-review, and delivery tracking.
 
-- [ ] T035 [P] Update startup-task extension documentation and operator diagnostics in `src/Elsa/Tasks/EXTENSION_POINTS.md` and `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
+- [x] T035 [P] Update startup-task extension documentation and operator diagnostics in `src/Elsa/Tasks/EXTENSION_POINTS.md` and `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
 - [ ] T036 Run the full `Elsa.Server.slnx` build and all affected solution test lanes with zero unexpected warnings or failures
 - [ ] T037 Run up to five self-review/fix iterations across the implementation files listed in `specs/091-lazy-shell-activation/plan.md`, covering correctness, cancellation, lifecycle races, metric cardinality, data safety, shell isolation, script cleanup, and acceptance completeness
 - [ ] T038 Update every completed checkbox in `specs/091-lazy-shell-activation/tasks.md`, re-run `speckit-analyze`, and resolve all critical/high findings
