@@ -1,4 +1,4 @@
-import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioActivityInputOption, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 
 export interface WorkflowDefinitionsResponse {
   definitions: WorkflowDefinitionSummary[];
@@ -120,6 +120,10 @@ export interface ActivityCatalogItem {
 
 export type ActivityDescriptor = StudioActivityDescriptor;
 export type ExpressionDescriptor = StudioExpressionDescriptor;
+
+export interface ActivityInputOptionsResponse {
+  options: StudioActivityInputOption[];
+}
 
 // Activity availability policy stack (mirrors Elsa.Activities.Design.Core.Models).
 // Enum-valued fields arrive as either the numeric or string form depending on backend JSON config,

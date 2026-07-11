@@ -1,9 +1,10 @@
-import type {
-  ElsaStudioModuleApi,
-  StudioActivityInputDescriptor,
-  StudioActivityPropertyEditorContext,
-  StudioActivityPropertyEditorContribution,
-  StudioActivityPropertyEditorProps
+import {
+  readActivityInputOptionsProvider,
+  type ElsaStudioModuleApi,
+  type StudioActivityInputDescriptor,
+  type StudioActivityPropertyEditorContext,
+  type StudioActivityPropertyEditorContribution,
+  type StudioActivityPropertyEditorProps
 } from "../sdk";
 
 const textLikeTypes = new Set(["string", "system.string", "text"]);
@@ -18,15 +19,15 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.multiselect",
     order: 90,
-    // Collection-scoped: owns the whole collection as a checklist when the input declares a fixed
-    // option set (so an enum/option collection prevents duplicates instead of repeating dropdowns).
-    supports: (descriptor, context) => isCollectionScope(context) && getOptions(descriptor).length > 0,
+    // Collection-scoped: owns the whole collection as a checklist when the input declares an option
+    // source (so an enum/provider collection prevents duplicates instead of repeating dropdowns).
+    supports: (descriptor, context) => isCollectionScope(context) && !hasUiHint(descriptor, "dropdown") && (hasUiHint(descriptor, "checklist") || hasOptionSource(descriptor)),
     component: MultiSelectEditor
   },
   {
     id: "studio.property.dropdown",
     order: 100,
-    supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "dropdown") || getOptions(descriptor).length > 0),
+    supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "dropdown") || hasOptionSource(descriptor)),
     component: DropdownEditor
   },
   {
@@ -67,6 +68,7 @@ function isElementScope(context: StudioActivityPropertyEditorContext) {
 function MultiSelectEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
   const options = getOptions(descriptor);
   const selected = toValueArray(value);
+  const renderedOptions = withUnavailableOptions(options, selected);
   const toggle = (optionValue: unknown, checked: boolean) => {
     const next = checked
       ? [...selected.filter(item => !sameOptionValue(item, optionValue)), optionValue]
@@ -74,21 +76,22 @@ function MultiSelectEditor({ descriptor, value, disabled, onChange }: StudioActi
     onChange(next);
   };
 
-  if (options.length === 0) {
+  if (renderedOptions.length === 0) {
+    if (readActivityInputOptionsProvider(descriptor)) return null;
     return <p className="studio-property-multiselect-empty">No options available.</p>;
   }
 
   return (
     <div className="studio-property-multiselect" role="group">
-      {options.map(option => (
-        <label key={String(option.value)} className="studio-property-multiselect-option">
+      {renderedOptions.map(option => (
+        <label key={optionKey(option.value)} className={option.unavailable ? "studio-property-multiselect-option unavailable" : "studio-property-multiselect-option"}>
           <input
             type="checkbox"
             checked={selected.some(item => sameOptionValue(item, option.value))}
             disabled={disabled}
             onChange={event => toggle(option.value, event.target.checked)}
           />
-          <span>{option.label}</span>
+          <span>{option.unavailable ? `${option.label} (unavailable)` : option.label}</span>
         </label>
       ))}
     </div>
@@ -117,7 +120,7 @@ function toValueArray(value: unknown): unknown[] {
 }
 
 function sameOptionValue(left: unknown, right: unknown) {
-  return left === right || String(left) === String(right);
+  return optionKey(left) === optionKey(right);
 }
 
 function SinglelineEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
@@ -166,15 +169,16 @@ function CheckboxEditor({ descriptor, value, disabled, onChange }: StudioActivit
 
 function DropdownEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
   const options = getOptions(descriptor);
+  const renderedOptions = withUnavailableOptions(options, value == null || value === "" ? [] : [value]);
   return (
-    <select value={value == null ? "" : String(value)} disabled={disabled} onChange={event => {
-      const option = options.find(candidate => String(candidate.value) === event.target.value);
+    <select value={value == null || value === "" ? "" : optionKey(value)} disabled={disabled} onChange={event => {
+      const option = renderedOptions.find(candidate => optionKey(candidate.value) === event.target.value);
       onChange(option ? option.value : event.target.value);
     }}>
       <option value="">Select...</option>
-      {options.map(option => (
-        <option key={String(option.value)} value={String(option.value)}>
-          {option.label}
+      {renderedOptions.map(option => (
+        <option key={optionKey(option.value)} value={optionKey(option.value)}>
+          {option.unavailable ? `${option.label} (unavailable)` : option.label}
         </option>
       ))}
     </select>
@@ -188,6 +192,30 @@ function getOptions(descriptor: StudioActivityInputDescriptor): Array<{ label: s
 
   const direct = descriptor as StudioActivityInputDescriptor & { options?: unknown };
   return readOptionList(direct.options) ?? [];
+}
+
+function hasOptionSource(descriptor: StudioActivityInputDescriptor) {
+  return getOptions(descriptor).length > 0 || !!readActivityInputOptionsProvider(descriptor);
+}
+
+function withUnavailableOptions(
+  options: Array<{ label: string; value: unknown }>,
+  selected: unknown[]
+): Array<{ label: string; value: unknown; unavailable?: boolean }> {
+  const result: Array<{ label: string; value: unknown; unavailable?: boolean }> = [...options];
+  for (const value of selected) {
+    if (result.some(option => sameOptionValue(option.value, value))) continue;
+    result.push({ label: String(value), value, unavailable: true });
+  }
+  return result;
+}
+
+function optionKey(value: unknown) {
+  if (value === null) return "null:null";
+  if (typeof value === "object") {
+    try { return `object:${JSON.stringify(value)}`; } catch { return `object:${String(value)}`; }
+  }
+  return `${typeof value}:${String(value)}`;
 }
 
 function readOptionList(value: unknown): Array<{ label: string; value: unknown }> | null {

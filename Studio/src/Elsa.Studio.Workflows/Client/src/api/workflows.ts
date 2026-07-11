@@ -9,6 +9,7 @@ import type {
   ActivityAvailabilitySettings,
   ActivityCatalogResponse,
   ActivityExecutionInspection,
+  ActivityInputOptionsResponse,
   ActivityDescriptor,
   ActivityDescriptorsResponse,
   CreateDefinitionRequest,
@@ -448,6 +449,27 @@ export async function listActivityDescriptors(context: StudioEndpointContext): P
   ]);
   if (Array.isArray(response)) return normalizeActivityDescriptors(response);
   return normalizeActivityDescriptors(response.items ?? response.activities ?? response.descriptors ?? []);
+}
+
+export async function getActivityInputOptions(
+  context: StudioEndpointContext,
+  activityVersionId: string,
+  inputName: string,
+  nodeId: string,
+  workflowState: WorkflowDefinitionState,
+  signal: AbortSignal
+) {
+  const response = await context.http.postJson<ActivityInputOptionsResponse>(
+    `${basePath}/descriptors/activities/${encodeURIComponent(activityVersionId)}/inputs/${encodeURIComponent(inputName)}/options`,
+    { nodeId, workflowState: canonicalizeStateForWire(workflowState) },
+    { signal }
+  );
+  return Array.isArray(response?.options)
+    ? response.options.filter(option =>
+      !!option &&
+      typeof option.label === "string" && option.label.trim().length > 0 &&
+      (typeof option.value === "string" || typeof option.value === "number" || typeof option.value === "boolean"))
+    : [];
 }
 
 export async function listExpressionDescriptors(context: StudioEndpointContext): Promise<ExpressionDescriptor[]> {

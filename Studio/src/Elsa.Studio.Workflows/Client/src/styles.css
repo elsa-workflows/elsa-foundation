@@ -3995,10 +3995,47 @@ button.wf-reference-select {
   accent-color: var(--wf-accent);
 }
 
+.studio-property-multiselect-option.unavailable {
+  color: var(--wf-muted-text);
+  font-style: italic;
+}
+
 .studio-property-multiselect-empty {
   margin: 0;
   color: var(--wf-muted-text);
   font-size: 12px;
+}
+
+.wf-property-options-status {
+  color: var(--wf-muted-text);
+}
+
+.wf-property-options-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--wf-danger);
+  border-radius: var(--wf-radius-sm);
+  color: var(--wf-danger);
+  font-size: 12px;
+  padding: 7px 8px;
+}
+
+.wf-property-options-error button {
+  border: 1px solid currentColor;
+  border-radius: var(--wf-radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 3px 7px;
+}
+
+.wf-property-options-error button:hover,
+.wf-property-options-error button:focus-visible {
+  background: color-mix(in srgb, var(--wf-danger) 12%, transparent);
+  outline: none;
 }
 
 /* Repeater for collection-typed literal inputs. */

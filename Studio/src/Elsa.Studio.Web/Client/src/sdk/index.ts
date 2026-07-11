@@ -399,6 +399,24 @@ export interface StudioActivityPropertyDescriptor {
   isSynthetic?: boolean;
 }
 
+export type StudioActivityInputOptionValue = string | number | boolean;
+
+export interface StudioActivityInputOption {
+  label: string;
+  value: StudioActivityInputOptionValue;
+}
+
+export interface StudioActivityInputOptionsProviderDescriptor {
+  key: string;
+  dependsOn: string[];
+}
+
+/** Known input-editor metadata plus an open bag for module-specific specifications. */
+export interface StudioActivityInputUISpecifications extends Record<string, unknown> {
+  options?: StudioActivityInputOption[];
+  optionsProvider?: StudioActivityInputOptionsProviderDescriptor;
+}
+
 export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
   isWrapped?: boolean;
   uiHint?: string | null;
@@ -406,7 +424,18 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   defaultSyntax?: string | null;
   isReadOnly?: boolean | null;
   storageDriverType?: string | null;
-  uiSpecifications?: Record<string, unknown> | null;
+  uiSpecifications?: StudioActivityInputUISpecifications | null;
+}
+
+export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {
+  const value = input.uiSpecifications?.optionsProvider;
+  if (!value || typeof value !== "object") return null;
+  const record = value as unknown as Record<string, unknown>;
+  if (typeof record.key !== "string" || record.key.trim().length === 0) return null;
+  return {
+    key: record.key,
+    dependsOn: Array.isArray(record.dependsOn) ? record.dependsOn.filter((item): item is string => typeof item === "string") : []
+  };
 }
 
 export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {

@@ -12,7 +12,8 @@ import type {
   StudioExpressionEditorDiagnostic,
   StudioExpressionDescriptor
 } from "@elsa-workflows/studio-sdk";
-import type { ActivityNode, VariableReference, VisibleVariableView } from "./workflowTypes";
+import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import { makeVariableReference, readVariableReference, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import {
@@ -30,6 +31,7 @@ import {
   withSyntax,
   writeInputValue
 } from "./activityProperties";
+import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
@@ -39,6 +41,8 @@ const inlineSyntaxEditorIds = new Set([
 const variableSyntax = "Variable";
 
 export interface ActivityPropertiesPanelProps {
+  context?: StudioEndpointContext;
+  workflowState?: WorkflowDefinitionState;
   activity: ActivityNode;
   descriptor: StudioActivityDescriptor | null;
   editors: StudioActivityPropertyEditorContribution[];
@@ -53,6 +57,8 @@ export interface ActivityPropertiesPanelProps {
 }
 
 export function ActivityPropertiesPanel({
+  context = unavailableEndpointContext,
+  workflowState = {},
   activity,
   descriptor,
   editors,
@@ -90,6 +96,9 @@ export function ActivityPropertiesPanel({
             <PropertyRow
               key={input.name}
               activity={activity}
+              activityDescriptor={descriptor}
+              endpointContext={context}
+              workflowState={workflowState}
               input={input}
               editors={editors}
               expressionEditors={expressionEditors}
@@ -105,8 +114,13 @@ export function ActivityPropertiesPanel({
   );
 }
 
+const unavailableEndpointContext = {} as StudioEndpointContext;
+
 function PropertyRow({
   activity,
+  activityDescriptor,
+  endpointContext,
+  workflowState,
   input,
   editors,
   expressionEditors,
@@ -116,6 +130,9 @@ function PropertyRow({
   onChange
 }: {
   activity: ActivityNode;
+  activityDescriptor: StudioActivityDescriptor;
+  endpointContext: StudioEndpointContext;
+  workflowState: WorkflowDefinitionState;
   input: StudioActivityInputDescriptor;
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -125,8 +142,15 @@ function PropertyRow({
   onChange(activity: ActivityNode): void;
 }) {
   const readOnly = input.isReadOnly === true;
-  const context: StudioActivityPropertyEditorContext = { activity, expressionDescriptors, readOnly };
-  const editor = resolveEditor(editors, input, context);
+  const dynamicOptions = useActivityInputOptions(endpointContext, workflowState, activity, activityDescriptor, input);
+  const provider = readOptionsProvider(input);
+  const effectiveInput = provider ? {
+    ...input,
+    uiSpecifications: { ...input.uiSpecifications, options: dynamicOptions.options }
+  } : input;
+  const editorDisabled = readOnly || (!!provider && dynamicOptions.status !== "ready");
+  const context: StudioActivityPropertyEditorContext = { activity, expressionDescriptors, readOnly: editorDisabled };
+  const editor = resolveEditor(editors, effectiveInput, context);
   const EditorComponent = editor?.component;
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? "Literal";
@@ -142,7 +166,7 @@ function PropertyRow({
     ? describeCollectionType(input.typeName)
     : null;
   const collectionScopedEditor = collectionType
-    ? resolveEditor(editors, input, { ...context, scope: "collection" })
+    ? resolveEditor(editors, effectiveInput, { ...context, scope: "collection" })
     : undefined;
   const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped ? {
     activity,
@@ -181,15 +205,15 @@ function PropertyRow({
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
   const collectionEditor = collectionType
     ? collectionScopedEditor
-      ? renderEditor(collectionScopedEditor.component, input, value, readOnly, { ...context, scope: "collection" }, setRaw)
+      ? renderEditor(collectionScopedEditor.component, effectiveInput, value, editorDisabled, { ...context, scope: "collection" }, setRaw)
       : (
         <CollectionLiteralEditor
-          input={input}
+          input={effectiveInput}
           elementTypeName={collectionType.elementTypeName}
           value={value}
           editors={editors}
           context={context}
-          disabled={readOnly}
+          disabled={editorDisabled}
           onChange={setRaw}
         />
       )
@@ -211,7 +235,7 @@ function PropertyRow({
       context={inlineExpressionContext}
       onChange={setRaw}
     />
-  ) : renderEditor(EditorComponent, input, value, readOnly, context, setRaw));
+  ) : renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw));
 
   return (
     <div className="wf-property-row">
@@ -270,6 +294,18 @@ function PropertyRow({
         >
           <Maximize2 size={13} /> Open expanded editor
         </button>
+      ) : null}
+      {provider && dynamicOptions.status === "loading" ? (
+        <p className="wf-property-options-status" role="status">Loading options...</p>
+      ) : null}
+      {provider && dynamicOptions.status === "error" ? (
+        <div className="wf-property-options-error" role="alert">
+          <span>Options are unavailable.</span>
+          <button type="button" onClick={dynamicOptions.retry}>Retry</button>
+        </div>
+      ) : null}
+      {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
+        <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
       {expanded ? (
         <ExpandedPropertyEditor

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, Repeat2 } from "lucide-react";
 import type { StudioActivityDescriptor, StudioActivityPropertyEditorContribution, StudioEndpointContext, StudioExpressionDescriptor, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
-import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition } from "../workflowTypes";
+import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, VariableDefinition, WorkflowDefinitionState } from "../workflowTypes";
 import type { ScopedVariableAnalysis } from "../api/workflows";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -24,6 +24,7 @@ interface SlotPickerState {
 
 interface InspectorPanelProps {
   context: StudioEndpointContext;
+  workflowState?: WorkflowDefinitionState;
   selectedNode: ActivityNode | null;
   selectedNodeLabel: string;
   selectedActivityType: string;
@@ -51,6 +52,7 @@ interface InspectorPanelProps {
 // container-variable editor, and embedded-slot navigation. Pure view driven by the resolved selection.
 export function InspectorPanel({
   context,
+  workflowState = {},
   selectedNode,
   selectedNodeLabel,
   selectedActivityType,
@@ -103,6 +105,8 @@ export function InspectorPanel({
         </div>
       ) : null}
       <ActivityPropertiesPanel
+        context={context}
+        workflowState={workflowState}
         activity={selectedNode}
         descriptor={selectedDescriptor}
         editors={propertyEditors}

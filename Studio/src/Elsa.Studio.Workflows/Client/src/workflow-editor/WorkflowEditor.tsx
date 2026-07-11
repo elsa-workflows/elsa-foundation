@@ -506,6 +506,7 @@ export function WorkflowEditor({
       render: () => (
         <InspectorPanel
           context={context}
+          workflowState={draft.state}
           selectedNode={inspectedNode}
           selectedNodeLabel={inspectedLabel}
           selectedActivityType={inspectedNode ? (inspectedDescriptor?.typeName ?? catalogByVersion.get(inspectedNode.activityVersionId)?.activityTypeKey ?? "Unknown") : ""}

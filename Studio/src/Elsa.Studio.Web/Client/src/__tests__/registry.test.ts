@@ -205,8 +205,15 @@ describe("studio registry", () => {
     const collectionContext: StudioActivityPropertyEditorContext = { ...context, scope: "collection" };
     const optionInput = input({ typeName: "System.Collections.Generic.ICollection`1", uiSpecifications: { options: ["a", "b"] } });
     expect(resolveEditor(api.propertyEditors.list(), optionInput, collectionContext)?.id).toBe("studio.property.multiselect");
+    expect(resolveEditor(api.propertyEditors.list(), { ...optionInput, uiHint: "checklist" }, collectionContext)?.id).toBe("studio.property.multiselect");
+    expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1", uiHint: "checklist" }), collectionContext)?.id).toBe("studio.property.multiselect");
+    expect(resolveEditor(api.propertyEditors.list(), { ...optionInput, uiHint: "dropdown" }, collectionContext)).toBeUndefined();
     expect(resolveEditor(api.propertyEditors.list(), input({ typeName: "System.Collections.Generic.ICollection`1" }), collectionContext)).toBeUndefined();
     expect(resolveEditor(api.propertyEditors.list(), optionInput, context)?.id).toBe("studio.property.dropdown");
+    expect(resolveEditor(api.propertyEditors.list(), input({
+      typeName: "System.String",
+      uiSpecifications: { optionsProvider: { key: "catalog.fields", dependsOn: ["Entity"] } }
+    }), context)?.id).toBe("studio.property.dropdown");
   });
 
   it("tracks expression editor contributions through the public SDK registry", () => {
