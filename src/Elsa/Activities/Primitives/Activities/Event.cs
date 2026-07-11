@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
@@ -24,6 +25,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// cross-execution fan-in resume path (E3-5) is exercised through the stimulus router against waiting bookmarks.
 /// </para>
 /// </remarks>
+[TriggerActivity]
 public sealed class Event : CodeActivity<string>
 {
     /// <summary>The stable activity type key the trigger extractor's provider matches on.</summary>

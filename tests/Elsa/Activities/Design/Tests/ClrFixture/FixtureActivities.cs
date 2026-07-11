@@ -105,3 +105,14 @@ public sealed class ComplexInputFixtureActivity : ActivityBase
 [ActivityChildSlot("Fixture.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityChildSlot("Fixture.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 public sealed class StructuredFixtureActivity : ActivityBase;
+
+/// <summary>A trigger fixture that declares both its execution shape and stable catalog key.</summary>
+[TriggerActivity]
+public sealed class TriggerFixtureActivity : ActivityBase
+{
+    public const string ActivityType = "Elsa.Fixture.Trigger";
+
+    public TriggerFixtureActivity() : base(ActivityType)
+    {
+    }
+}

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -22,6 +23,8 @@ public sealed class ExecutableNodeCompiler(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     RuntimeInputBindingCompiler inputBindingCompiler)
 {
+    private static readonly JsonSerializerOptions DescriptorSerializerOptions = new(JsonSerializerDefaults.Web);
+
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,
@@ -47,8 +50,15 @@ public sealed class ExecutableNodeCompiler(
             inputBindings[inputDefinition.Name] = inputBindingCompiler.Compile(activity.NodeId, inputDefinition, inputState.Value);
         }
 
-        var activityType = activityVersion.Definition?.ActivityTypeKey
+        var catalogActivityType = activityVersion.Definition?.ActivityTypeKey
             ?? throw new ArgumentException($"Activity version '{activity.ActivityVersionId}' did not include its activity definition.");
+        var clrActivityType = ResolveClrActivityType(activityVersion.DescriptorType, activityVersion.DescriptorPayload);
+        var activityType = clrActivityType is null
+            ? catalogActivityType
+            : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
+        var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
+            ? TriggerNodeMetadata.TriggerExecutionType
+            : activityVersion.ExecutionType.ToString();
 
         return new ExecutableNode(
             executableNodeId: activity.NodeId,
@@ -62,7 +72,7 @@ public sealed class ExecutableNodeCompiler(
             metadata: new Dictionary<string, string>
             {
                 ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = activityVersion.ExecutionType.ToString()
+                [TriggerNodeMetadata.ExecutionTypeKey] = executionType
             },
             childSlots: childSlots,
             structure: CompileStructure(activityStructureService.CompileExecutableStructure(activity)));
@@ -96,7 +106,12 @@ public sealed class ExecutableNodeCompiler(
 
         foreach (var node in FlattenExecutableNodes(root))
         {
-            if (!wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var activityType) || activityType is null || activityType == typeof(object))
+            var activityType = ResolveClrActivityType(node.DescriptorType, node.DescriptorPayload);
+            if (activityType is null &&
+                wellKnownTypeRegistry.TryGetTypeOrDefault(node.ActivityType, out var registeredActivityType) &&
+                registeredActivityType != typeof(object))
+                activityType = registeredActivityType;
+            if (activityType is null)
                 continue;
 
             foreach (var method in activityType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
@@ -121,6 +136,19 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return resumeTargets;
+    }
+
+    private Type? ResolveClrActivityType(string descriptorType, JsonElement descriptorPayload)
+    {
+        if (!StringComparer.Ordinal.Equals(descriptorType, typeof(ClrActivityDescriptor).FullName))
+            return null;
+
+        var descriptor = descriptorPayload.Deserialize<ClrActivityDescriptor>(DescriptorSerializerOptions);
+        return descriptor is not null &&
+               wellKnownTypeRegistry.TryGetTypeOrDefault(descriptor.TypeAlias, out var activityType) &&
+               activityType != typeof(object)
+            ? activityType
+            : null;
     }
 
     private static void ValidateResumeTargetSignature(Type activityType, MethodInfo method)

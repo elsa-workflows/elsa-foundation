@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Testing;
 using Elsa.Http;
 using Elsa.Http.Core.Contracts;
+using Elsa.Activities.Http.Options;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,6 +16,7 @@ using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -28,6 +30,17 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 public sealed class ActivitiesHttpFeatureTests
 {
+    [Fact]
+    public void ConfigureServices_AppliesTheFeatureBasePathToEndpointMiddlewareOptions()
+    {
+        var services = new ServiceCollection();
+
+        new ActivitiesHttpFeature { BasePath = "/workflows" }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.BasePath);
+    }
+
     [Fact]
     public void ConfigureServices_RegistersHttpClientFactory_AndNoActivityConstructor()
     {
@@ -176,6 +189,7 @@ public sealed class ActivitiesHttpFeatureTests
         var sp = scope.ServiceProvider;
 
         Assert.NotNull(sp.GetRequiredService<IRouteTable>());
+        Assert.NotNull(sp.GetRequiredService<IRouteMatcher>());
         Assert.NotNull(sp.GetRequiredService<IHttpEndpointRoutesResolver>());
         Assert.Contains(sp.GetServices<IStartupTask>(), t => t is UpdateRouteTableStartupTask);
     }
