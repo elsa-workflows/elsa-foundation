@@ -116,11 +116,11 @@
 
 **Purpose**: Finish the approved unit without absorbing Unit B or Unit C.
 
-- [ ] T034 [P] Relocate the canonical Runtime extension-point catalog from `src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md` to `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, update `EXTENSION_POINTS.md` to link to the composition-root catalog, classify trigger providers as an exact-one Strategy set, and document provider identity, XML failure contracts, and recurring pre-materialization
-- [ ] T035 [P] Reconcile as-built behavior and task completion notes in `specs/090-trigger-contract-hardening/{spec.md,plan.md,research.md,data-model.md,contracts/trigger-publication-contract.md,contracts/trigger-contract-matrix.md,quickstart.md,tasks.md`
-- [ ] T036 Run `bash tools/maps/generate-extension-point-map.sh`, review the generated findings report, and include only expected snapshots under `docs/maps/` and `docs/reports/`
-- [ ] T037 Run `dotnet build Elsa.Server.slnx` and `dotnet test Elsa.Server.slnx`; record exact results in the implementation handoff/PR and investigate any regression before completion
-- [ ] T038 Perform a final scope audit against `specs/090-trigger-contract-hardening/spec.md`: no diagnostics API/status persistence, CShells/startup-health changes, Studio work, route-table invalidation, router/actor redesign, or publication-wide transactionality
+- [X] T034 [P] Relocate the canonical Runtime extension-point catalog from `src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md` to `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, update `EXTENSION_POINTS.md` to link to the composition-root catalog, classify trigger providers as an exact-one Strategy set, and document provider identity, XML failure contracts, and recurring pre-materialization
+- [X] T035 [P] Reconcile as-built behavior and task completion notes in `specs/090-trigger-contract-hardening/{spec.md,plan.md,research.md,data-model.md,contracts/trigger-publication-contract.md,contracts/trigger-contract-matrix.md,quickstart.md,tasks.md`
+- [X] T036 Run `bash tools/maps/generate-extension-point-map.sh`, review the generated findings report, and include only expected snapshots under `docs/maps/` and `docs/reports/`
+- [X] T037 Run `dotnet build Elsa.Server.slnx` and `dotnet test Elsa.Server.slnx`; record exact results in the implementation handoff/PR and investigate any regression before completion
+- [X] T038 Perform a final scope audit against `specs/090-trigger-contract-hardening/spec.md`: no diagnostics API/status persistence, CShells/startup-health changes, Studio work, route-table invalidation, router/actor redesign, or publication-wide transactionality
 
 ---
 

@@ -31,7 +31,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 
 ## Cross-references
 
-- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor` — see [`../Core/EXTENSION_POINTS.md`](../Core/EXTENSION_POINTS.md).
+- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor` — see [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
 - Durable queue bridge: `GroundworkWorkflowSchedulerWorkQueue` (`Elsa.Persistence.Groundwork`).
 - Worked reference: [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md).
 - Repo-wide index: [`../../../EXTENSION_POINTS.md`](../../../EXTENSION_POINTS.md).

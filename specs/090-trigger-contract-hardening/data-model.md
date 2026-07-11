@@ -66,3 +66,9 @@ Timer/Cron registered candidates
 - Executable schema and behavioral hashing inputs: unchanged.
 - Trigger-binding and recurring-schedule schemas: unchanged.
 - Groundwork document versions and golden fixtures: unchanged unless implementation departs from this design.
+
+## As-built confirmation
+
+The delivered implementation uses these non-persisted outcome types and leaves every listed durable
+shape unchanged. Golden and Groundwork fixture verification is recorded in [quickstart.md](quickstart.md);
+no schema version, upcaster, or migration was added.

@@ -1,5 +1,9 @@
 # Trigger Publication Contract
 
+**Status:** Implemented. Verification evidence is recorded in [../quickstart.md](../quickstart.md), and
+the canonical extension seam is documented in the
+[Runtime catalog](../../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
+
 ## Scope
 
 This contract governs publication-time assessment and registration of first-party Event, Timer, Cron, and HttpEndpoint start triggers. It does not define diagnostics APIs, host health, request/schedule dispatch, or publication-wide transactionality.

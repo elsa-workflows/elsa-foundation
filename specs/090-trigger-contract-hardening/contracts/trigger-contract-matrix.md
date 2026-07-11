@@ -1,5 +1,8 @@
 # First-Party Trigger Contract Matrix
 
+**Status:** Implemented and covered by the focused provider, publication, recurring-schedule, and
+compatibility gates recorded in [../quickstart.md](../quickstart.md).
+
 | Trigger | Authored capability / intent | Executable classification | Recognizing provider | Binding cardinality | Required publication projection | Invalid preflight examples | Intentional non-start |
 |---|---|---|---|---|---|---|---|
 | Event | Trigger-capable activity with literal event name | Trigger marker in executable metadata | Event provider | Exactly 1 | None | Missing/blank/non-literal event name; ambiguous provider claim | Not supported by current Event contract |

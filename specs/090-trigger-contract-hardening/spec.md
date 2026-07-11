@@ -4,9 +4,9 @@
 
 **Created**: 2026-07-11
 
-**Status**: Draft
+**Status**: Implemented (local branch; pending integration)
 
-**Input**: User description: "Establish the canonical first-party trigger publication contract and preflight validation for Event, Timer, Cron, and HttpEndpoint. Preserve intentional non-start behavior and upgrade compatibility. Do not add diagnostics, composition changes, or implementation yet."
+**Input**: Approved Unit A boundary: establish the canonical first-party trigger publication contract and preflight validation for Event, Timer, Cron, and HttpEndpoint; preserve intentional non-start behavior and upgrade compatibility; exclude Units B/C concerns.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -119,3 +119,10 @@ An operator upgrading an existing installation can start the application and rep
 - The recurring schedule is a required publication projection for Timer and Cron start triggers.
 - Detailed publication diagnostics and shell-provider availability are separately owned by Units B and C.
 - Existing databases may contain legacy activity catalog rows and executable artifacts; compatibility is proven without mutating their same-version authored content.
+
+## Delivery evidence
+
+All three user stories are implemented. The focused, compatibility, architecture, build, and full-suite
+evidence is recorded in [quickstart.md](quickstart.md). The canonical runtime seam documentation is
+[the Runtime extension-point catalog](../../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md). No durable
+schema or executable-shape migration was required.

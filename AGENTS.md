@@ -159,7 +159,7 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/090-trigger-contract-hardening/plan.md
+Active work unit: none. The latest completed unit is
+`specs/090-trigger-contract-hardening` (implemented and verified locally; pending integration).
+Pick and approve the next unit before starting new Speckit work.
 <!-- SPECKIT END -->

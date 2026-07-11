@@ -7,7 +7,7 @@
 > program (findings **PS-2** and **RT-3**).
 > **Knowledge role:** worked reference. Canonical short definitions live in
 > [`docs/glossary/elsa.md`](glossary/elsa.md); the extension-point contracts live in
-> [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md)
+> [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md)
 > and [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md).
 
 ## Durable storage is not durable resumption
@@ -285,5 +285,5 @@ behavior-preserving.
 
 - Program-goal bucket: [`docs/program-goals/elsa-4-review-remediation.md`](program-goals/elsa-4-review-remediation.md).
 - Roadmap W2 brief: [`docs/reports/elsa-4-architecture-review-2026-07/roadmap.md`](reports/elsa-4-architecture-review-2026-07/roadmap.md).
-- Runtime extension points: [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md).
+- Runtime extension points: [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
 - Resumption feature surface: [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md).

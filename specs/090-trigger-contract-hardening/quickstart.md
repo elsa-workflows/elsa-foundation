@@ -72,7 +72,23 @@ Legacy extractor bindings that reference no executable node now fail preflight i
 
 ### Map freshness note
 
-`docs/maps/manifest.json` reports no relevant inputs were dirty when its snapshot was generated, but its authoritative input fingerprint predates the current spec 090 inputs. The relevant map is therefore treated as stale for this work. Because the implementation changes Runtime extension-point contracts, the narrow post-implementation refresh is `bash tools/maps/generate-extension-point-map.sh`; execution remains assigned to T036 outside the US1/MVP checkpoint.
+The narrow post-implementation refresh `bash tools/maps/generate-extension-point-map.sh` completed.
+The generated map reports 52 source catalogs discovered, 51 root-indexed, one pre-existing unindexed
+Runtime Distributed Groundwork provider catalog, and zero root-indexed catalogs missing on disk. No unsafe
+drift was found. This narrow generator does not by itself establish whole-manifest freshness.
+
+### US2 intentional non-start evidence (2026-07-11)
+
+The T026 focused gate completed with zero failures and zero skipped tests:
+
+| Focus | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Runtime extractor (`WorkflowTriggerBindingExtractorTests`) | 24 | 0 | 0 |
+| HTTP provider + direct/mid-flow execution (`HttpEndpointTriggerStimulusProviderTests\|HttpEndpointExecutionTests`) | 53 | 0 | 0 |
+| **Total** | **77** | **0** | **0** |
+
+The extractor outcome retained the HTTP provider id for `Recognized([])`, and the activity execution
+coverage preserved direct-run and mid-flow suspension behavior without creating start bindings.
 
 ### US3 compatibility evidence (2026-07-11)
 
@@ -104,6 +120,23 @@ Legacy extractor bindings that reference no executable node now fail preflight i
   stale Runtime.Http observer fixture whose legacy binding referenced a node absent from its fake executable;
   the fixture now uses the executable's real root-node id, and its focused observer suite passes 8/8 without
   weakening the US1 executable-identity invariant.
+
+### Finalization gate (2026-07-11)
+
+- `dotnet build Elsa.Server.slnx`: succeeded with 0 warnings and 0 errors.
+- `dotnet test Elsa.Server.slnx`: 3,626 passed, 2 failed, 0 skipped across 52 test projects.
+- The two failures match the recorded pre-change architecture baseline exactly: duplicate project references
+  in `Elsa.Server` / `Elsa.Diagnostics.StructuredLogs.Persistence.Tests`, and the missing
+  `ActivitiesHttpFeature` server-catalog assertion. Neither failure is in the spec 090 change surface.
+
+### Final scope audit
+
+The complete diff from the approved planning baseline was inspected. It adds only trigger preflight/runtime
+contracts and models, first-party provider identities, recurring pre-materialization, tests, compatibility
+evidence, and documentation/maps. It adds no diagnostics API or persisted publication status, CShells or
+startup-health behavior, Studio work, route-table invalidation behavior, stimulus-router/actor redesign,
+durable schema change, or publication-wide transactionality. The sole route-table test-file change corrects
+a stale fixture to reference its executable's real root-node id; it does not alter invalidation behavior.
 
 ## 1. Shared provider and index contract
 
@@ -166,6 +199,9 @@ dotnet build Elsa.Server.slnx
 dotnet test Elsa.Server.slnx
 ```
 
-Expected: no Runtime → Design dependency, no warnings or errors, and all existing tests remain green. If implementation changes a Groundwork-persisted record despite the plan, stop and amend the spec/plan/tasks for explicit migration approval before changing schema versions, upcasters, or fixtures.
+Expected: no Runtime → Design dependency, no build warnings or errors, and no regression from the recorded
+test baseline. The known architecture baseline failures remain documented above. If implementation changes a
+Groundwork-persisted record despite the plan, stop and amend the spec/plan/tasks for explicit migration
+approval before changing schema versions, upcasters, or fixtures.
 
 Also verify the Runtime Core public API change is classified as MINOR-compatible, the canonical extension-point catalog resides at `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, and the repository root `EXTENSION_POINTS.md` links to it.

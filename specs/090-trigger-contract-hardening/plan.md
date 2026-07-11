@@ -6,7 +6,7 @@
 
 ## Summary
 
-Harden the existing first-party trigger publication path without redesigning routing or persistence. The runtime will evaluate every configured stimulus provider for each executable trigger node, require exactly one claim, record a stable provider identity in a non-persisted preflight outcome, and preserve recognized-empty non-start behavior. The recurring scheduling decorator will fully materialize Timer/Cron schedules before invoking the trigger indexer, so invalid or exhausted schedules fail before either binding or schedule replacement. Existing index/store contracts, durable document shapes, executable shapes, catalog identities, and publication response models remain unchanged.
+The delivered implementation hardens the existing first-party trigger publication path without redesigning routing or persistence. The runtime evaluates every configured stimulus provider for each executable trigger node, requires exactly one claim, records a stable provider identity in a non-persisted preflight outcome, and preserves recognized-empty non-start behavior. The recurring scheduling decorator fully materializes Timer/Cron schedules before invoking the trigger indexer, so invalid or exhausted schedules fail before either binding or schedule replacement. Existing index/store contracts, durable document shapes, executable shapes, catalog identities, and publication response models remain unchanged.
 
 ## Technical Context
 
@@ -16,7 +16,7 @@ Harden the existing first-party trigger publication path without redesigning rou
 
 **Storage**: Existing `IWorkflowTriggerBindingStore` and `IRecurringTriggerScheduleStore` implementations (in-memory and Groundwork); no new document kind or persisted field
 
-**Testing**: xUnit 2.9, focused runtime/scheduling/activity/publishing tests, Groundwork compatibility fixtures when persistence shape is touched (expected not to be needed)
+**Testing**: xUnit 2.9, focused runtime/scheduling/activity/publishing tests, and unchanged Groundwork compatibility fixtures
 
 **Target Platform**: Cross-platform .NET server/runtime hosts
 
@@ -42,7 +42,7 @@ Harden the existing first-party trigger publication path without redesigning rou
 | Elsa §E2.6 executable-always-runs / artifact-only runtime | PASS | Existing executable shapes remain readable; corrected classification is produced on republish, and runtime execution reads only the artifact. |
 | Elsa §E2.8 catalog hash immutability | PASS | Same-version catalog `ExecutionType` remains untouched; CLR trigger capability continues to be projected at compilation. This section is provisional, so PR #621 and compatibility tests remain supporting evidence. |
 | Elsa §E6 naming | PASS | Proposed names stay within the component budget and use established `Provider`, `Outcome`, `Validator`, and `Exception` roles. |
-| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` are unchanged. If implementation discovers durable shape drift, stop and obtain an amended spec/plan/tasks approval before touching schema versions, upcasters, or fixtures. |
+| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` are unchanged. Implementation found no durable shape drift; schema versions, upcasters, and fixtures were not changed. |
 
 ### Post-design re-check
 
@@ -116,7 +116,7 @@ No architectural exception is required. One existing test objective changes unde
 |---|---|---|
 | Exhausted Cron start triggers fail publication before mutation | Approved as part of the Unit A boundary on 2026-07-11 and explicitly re-approved after `speckit-analyze`. A start trigger with no future occurrence is unroutable and violates the unit's no-silent-success outcome. | The existing warning-and-skip test is intentionally replaced; preserving it would preserve the defect this unit was approved to correct. |
 
-The Runtime extension-point catalog currently lives under Runtime Core despite the framework §2.22.1 composition-root rule. Because this unit changes those extension points, implementation must relocate the canonical catalog to `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, update the repo-wide index, and leave redirects only where needed for discoverability.
+The Runtime extension-point catalog was relocated from Runtime Core to the composition root at `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md` and the repo-wide index now points to that single canonical catalog.
 
 ## Phase 0: Research
 
@@ -142,3 +142,12 @@ This repository does not assign package versions in `Elsa.Workflows.Runtime.Core
 `env.base_version` and stable builds from the GitHub release tag. The required release action is therefore to
 advance `env.base_version` from `4.0.0` to `4.1.0` for preview packages and publish the stable release from a
 `v4.1.0`/`4.1.0` GitHub release tag when this API ships; a project-local `<Version>` must not be introduced.
+
+## As-built reconciliation
+
+The implementation follows this plan without a durable-model, executable-model, host-composition, or
+public publication-response change. `WorkflowTriggerBindingExtractor.Evaluate` produces the complete
+non-persisted outcome; `Extract` remains the compatibility projection. The recurring decorator prepares
+all schedules before invoking the inner indexer, then preserves the existing binding-before-schedule
+replacement order after semantic validation succeeds. The canonical seam catalog was relocated to the
+Runtime composition root. Exact verification results are maintained in [quickstart.md](quickstart.md).

@@ -14,4 +14,4 @@ This feature implements contributor interfaces from other domains:
   - Catalog: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../../../Expressions/JavaScript/EXTENSION_POINTS.md)
 
 - **`IActivityCompletionHandler`** *(Core — `Elsa.Activities.Runtime.Core`)* — `ActivityCompletionHandler` (test support implementation for JS-context activity completion in unit tests).
-  - Catalog: [`Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md`](../Core/EXTENSION_POINTS.md)
+  - Catalog: [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../EXTENSION_POINTS.md)

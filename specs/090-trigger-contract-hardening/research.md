@@ -65,3 +65,9 @@ Descriptor duplicate validation uses the deterministic result identity: two cand
 **Rationale**: Current stores expose delete and per-item save operations without a shared transaction/CAS boundary. A truthful semantic guarantee is reviewable; a simulated rollback would be concurrency-unsafe.
 
 **Alternatives considered**: Batch replace on both stores (rejected: still not atomic across stores); snapshot and restore (rejected: races with concurrent republish); publication-wide transaction (explicitly outside approved scope).
+
+## As-built confirmation
+
+D1–D8 were implemented without reopening a decision. Compatibility tests confirmed unchanged durable
+and executable shapes; provider/extractor compatibility confirmed the additive Runtime Core surface; and
+the full verification evidence is recorded in [quickstart.md](quickstart.md).
