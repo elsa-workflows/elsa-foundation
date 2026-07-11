@@ -10,8 +10,8 @@
 
 **Purpose**: Prepare durable HTTP integration and measurement surfaces.
 
-- [ ] T001 Add Groundwork document and SQLite project references to `tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj`
-- [ ] T002 [P] Create the executable measurement-script skeleton and argument contract in `tools/performance/measure-http-workflow.sh`
+- [x] T001 Add Groundwork document and SQLite project references to `tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj`
+- [x] T002 [P] Create the executable measurement-script skeleton and argument contract in `tools/performance/measure-http-workflow.sh`
 
 ---
 
@@ -37,13 +37,13 @@
 
 ### Tests for User Story 1
 
-- [ ] T008 [US1] Write a failing Groundwork SQLite immediate-versus-coalesced HTTP integration test in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
+- [x] T008 [US1] Write a failing Groundwork SQLite immediate-versus-coalesced HTTP integration test in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Extend `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointHostFixture.cs` with isolated runtime-provider, policy, cap, and physical-commit query support
-- [ ] T010 [US1] Complete response, terminal-state, durable-artifact, exact coalesced-commit, and ≥75% reduction assertions in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
-- [ ] T011 [US1] Run `dotnet test tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj` and record the verified physical commit counts in `specs/090-runtime-http-performance/quickstart.md`
+- [x] T009 [US1] Extend `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointHostFixture.cs` with isolated runtime-provider, policy, cap, and physical-commit query support
+- [x] T010 [US1] Complete response, terminal-state, durable-artifact, exact coalesced-commit, and ≥75% reduction assertions in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
+- [x] T011 [US1] Run `dotnet test tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj` and record the verified physical commit counts in `specs/090-runtime-http-performance/quickstart.md`
 
 **Checkpoint**: The optimized policy is proven on the exact durable HTTP workflow and remains independently testable.
 
@@ -57,13 +57,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T012 [US2] Write failing architecture/configuration assertions for the default server checkpoint policy in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`
+- [x] T012 [US2] Write failing architecture/configuration assertions for the default server checkpoint policy in `tests/Elsa/Architecture/ArchitectureGuardTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Enable coalesced checkpoint persistence with cap 50 in `src/Apps/Elsa.Server/shells.json`
-- [ ] T014 [P] [US2] Keep the baseline shell snapshot aligned in `src/Apps/Elsa.Server/shells.baseline.json`
-- [ ] T015 [US2] Run `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` and verify the server configuration rollback example in `specs/090-runtime-http-performance/quickstart.md`
+- [x] T013 [P] [US2] Enable coalesced checkpoint persistence with cap 50 in `src/Apps/Elsa.Server/shells.json`
+- [x] T014 [P] [US2] Keep the baseline shell snapshot aligned in `src/Apps/Elsa.Server/shells.baseline.json`
+- [x] T015 [US2] Run `dotnet test tests/Elsa/Architecture/Elsa.Architecture.Tests.csproj` and verify the server configuration rollback example in `specs/090-runtime-http-performance/quickstart.md`
 
 **Checkpoint**: The reference server uses the measured low-latency policy, while other hosts retain Immediate unless configured.
 
@@ -77,14 +77,14 @@
 
 ### Tests for User Story 3
 
-- [ ] T016 [US3] Write a failing long-segment cap-overflow test for caps 1, 5, and 50 in `tests/Elsa/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`
-- [ ] T017 [P] [US3] Add shell-level response validation, SQLite marker counting, percentile calculation, environment metadata, JSON/Markdown output, and optional p95 enforcement to `tools/performance/measure-http-workflow.sh`
+- [x] T016 [US3] Write a failing long-segment cap-overflow test for caps 1, 5, and 50 in `tests/Elsa/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`
+- [x] T017 [P] [US3] Add shell-level response validation, SQLite marker counting, percentile calculation, environment metadata, JSON/Markdown output, and optional p95 enforcement to `tools/performance/measure-http-workflow.sh`
 
 ### Implementation for User Story 3
 
-- [ ] T018 [US3] Make the cap-overflow test pass with existing coalescing behavior or the smallest required correction in `src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs`
-- [ ] T019 [US3] Run the existing two-generation crash, mandatory-boundary, fencing, and cap suites in `tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj` and `tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`
-- [ ] T020 [US3] Run the measurement command against the reference server, save the reproducible result in `docs/reports/runtime-http-performance-2026-07.md`, and continue measured optimization if p95 exceeds 50 ms
+- [x] T018 [US3] Make the cap-overflow test pass with existing coalescing behavior or the smallest required correction in `src/Elsa/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs`
+- [x] T019 [US3] Run the existing two-generation crash, mandatory-boundary, fencing, and cap suites in `tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj` and `tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`
+- [x] T020 [US3] Run the measurement command against the reference server, save the reproducible result in `docs/reports/runtime-http-performance-2026-07.md`, and continue measured optimization if p95 exceeds 50 ms
 
 **Checkpoint**: Maintainers have deterministic safety gates plus reproducible user-visible latency evidence.
 
@@ -92,9 +92,9 @@
 
 ## Phase 6: Polish and Cross-Cutting Validation
 
-- [ ] T021 Update checkpoint policy settings and performance trade-offs in `docs/runtime-durable-resumption.md` and `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`
-- [ ] T022 Run the quickstart commands in `specs/090-runtime-http-performance/quickstart.md` and update every task in `specs/090-runtime-http-performance/tasks.md` to `[x]`
-- [ ] T023 Run `dotnet build Elsa.slnx`, inspect `git diff --check`, review all changed files for secrets/unrelated edits, and make a local commit with the completed work unit
+- [x] T021 Update checkpoint policy settings and performance trade-offs in `docs/runtime-durable-resumption.md` and `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`
+- [x] T022 Run the quickstart commands in `specs/090-runtime-http-performance/quickstart.md` and update every task in `specs/090-runtime-http-performance/tasks.md` to `[x]`
+- [x] T023 Run `dotnet build Elsa.Server.slnx`, inspect `git diff --check`, review all changed files for secrets/unrelated edits, and make a local commit with the completed work unit
 
 ---
 

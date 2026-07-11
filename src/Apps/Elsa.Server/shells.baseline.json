@@ -35,6 +35,10 @@
           "ActivitiesCompositionDesign": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Coalesced",
+            "MaxSegmentCheckpoints": 50
+          },
           "WorkflowsRuntimeTriggers": {},
           "GroundworkRuntimePersistenceSqlite": {},
           "FoundationAgentAbstractions": {},

@@ -21,6 +21,14 @@ order. Nothing in this package is intended as a direct extension surface except 
   without the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only API/endpoint
   concerns. See `docs/runtime-durable-resumption.md` for the lifetime story.
 
+## `WorkflowsRuntimeCheckpointPersistenceFeature`
+
+- **Kind:** Shell-scoped policy selector and post-provider decorator.
+- **Usage:** Configure `Mode` as `Immediate` (default/pass-through) or `Coalesced`, with a positive
+  `MaxSegmentCheckpoints` (default 50). The feature implements `IPostConfigureShellServices` so provider packages
+  first replace the runtime stores and coalescing then wraps the selected implementations. Duplicate composition is
+  idempotent. See `docs/runtime-durable-resumption.md` for the latency, replay, and cap trade-offs.
+
 ## Documented ADR 0033 deviations hosted here
 
 Two contract-shaped surfaces live in this package rather than `.Core`, deliberately:

@@ -16,6 +16,10 @@ Expected outcomes:
 - Coalesced uses at least 75% fewer physical checkpoint commits;
 - cap, mandatory-boundary, fencing, and crash-convergence tests pass.
 
+The committed SQLite HTTP acceptance records 13 physical checkpoint commits in `Immediate` mode and 1 in
+`Coalesced` mode for the same completed synchronous workflow: a 92.3% reduction with identical response and
+durable response artifact.
+
 ## 2. Start the reference server
 
 The committed `src/Apps/Elsa.Server/shells.json` enables:
@@ -47,6 +51,10 @@ bash tools/performance/measure-http-workflow.sh \
 ```
 
 The report separates the first measured request from warmed samples and records environment metadata. Remove `--enforce-p95-ms` for an informational run on an uncontrolled machine.
+
+Reference result on 2026-07-11 (Darwin arm64, .NET 10.0.300, Groundwork SQLite): warm p50 22.040 ms,
+p95 38.529 ms, and p99 49.155 ms over 200 measured requests. The same-build Immediate control recorded p95
+466.924 ms and 13 commits/request. See `docs/reports/runtime-http-performance-2026-07.md`.
 
 ## 4. Roll back to Immediate
 

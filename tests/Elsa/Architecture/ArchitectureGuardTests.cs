@@ -168,6 +168,18 @@ public sealed class ArchitectureGuardTests
             $"{fileName} must enable ActivitiesHttp so a clean server checkout can publish and serve HTTP-triggered workflows.");
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_coalesced_checkpoint_persistence(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName));
+        var settings = Assert.IsType<JsonObject>(features["WorkflowsRuntimeCheckpointPersistence"]);
+
+        Assert.Equal("Coalesced", settings["Mode"]?.GetValue<string>());
+        Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
+    }
+
     [Fact]
     public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
     {
