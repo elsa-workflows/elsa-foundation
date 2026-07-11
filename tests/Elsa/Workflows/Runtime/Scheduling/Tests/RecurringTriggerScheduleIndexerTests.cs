@@ -174,6 +174,29 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.False(inner.Called);
     }
 
+    [Fact]
+    public async Task Index_MultipleProvidersRecognizeSameNode_FailsBeforeScheduleCalculationOrMutation()
+    {
+        var events = new List<string>();
+        var inner = new FakeInner(() => events.Add("inner"));
+        var store = new RecordingScheduleStore(events);
+        var calculator = new RecordingCalculator(events);
+        var indexer = CreateIndexer(
+            inner,
+            store,
+            calculator,
+            new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash-1", "PT5M", providerId: "test.timer.1"),
+            new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash-2", "PT10M", providerId: "test.timer.2"));
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+            await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer"))));
+
+        Assert.Equal("ProviderRecognition", exception.Facet);
+        Assert.Equal(["test.timer.1", "test.timer.2"], exception.ProviderIds);
+        Assert.Empty(events);
+        Assert.False(inner.Called);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

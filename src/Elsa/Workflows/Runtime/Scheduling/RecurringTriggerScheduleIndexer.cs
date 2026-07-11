@@ -118,6 +118,8 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
 
     private (string ProviderId, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
     {
+        var claims = new List<(string ProviderId, RecurringScheduleDescriptor Descriptor)>();
+
         foreach (var provider in _providers)
         {
             var providerId = provider.ProviderId;
@@ -157,11 +159,21 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                         "ProviderIdentity",
                         $"Recurring trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
 
-                return (providerId, descriptor);
+                claims.Add((providerId, descriptor));
             }
         }
 
-        return null;
+        return claims.Count switch
+        {
+            0 => null,
+            1 => claims[0],
+            _ => throw Failure(
+                artifactId,
+                node,
+                claims.Select(x => x.ProviderId).ToArray(),
+                "ProviderRecognition",
+                $"Multiple recurring trigger providers recognize node '{node.ExecutableNodeId}'.")
+        };
     }
 
     private static bool IsTrigger(ExecutableNode node) =>
