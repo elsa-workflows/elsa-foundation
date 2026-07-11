@@ -2,7 +2,7 @@ namespace Elsa.Activities.Http.Options;
 
 /// <summary>
 /// Configuration for the HTTP endpoint request middleware (<c>HttpEndpointMiddleware</c>). Default-constructable
-/// (init-only properties) so the standard options pipeline can materialize it and hosts can override it via
+/// so the standard options pipeline can materialize it and hosts can override it via
 /// <c>services.Configure&lt;HttpEndpointOptions&gt;(...)</c>.
 /// </summary>
 public record HttpEndpointOptions
@@ -15,7 +15,7 @@ public record HttpEndpointOptions
     /// entirely (everything passes through): workflow endpoints require a dedicated base path so they can never
     /// shadow the rest of the host.
     /// </summary>
-    public string BasePath { get; init; } = "/workflows/http";
+    public string BasePath { get; set; } = "/workflows/http";
 
     /// <summary>
     /// The maximum request body size, in bytes, the middleware will read and forward as stimulus input. Bodies

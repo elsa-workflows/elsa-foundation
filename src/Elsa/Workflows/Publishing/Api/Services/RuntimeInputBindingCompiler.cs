@@ -20,6 +20,7 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnownTypeRegistry)
 {
     private const string LiteralExpressionType = "Literal";
+    private const string ObjectExpressionType = "Object";
     private const string VariableExpressionType = "Variable";
     private const string InputTypeMetadataKey = "typeName";
     private const string ReferenceKeyMetadataKey = "referenceKey";
@@ -28,6 +29,13 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
     {
         if (string.Equals(value.ExpressionType, LiteralExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileLiteralInput(nodeId, inputDefinition, value);
+
+        // Studio's object editor serializes arrays and objects as JSON under the "Object" syntax. The value is
+        // authored data, not an executable expression, so preserve it as a durable literal. This is particularly
+        // important for publish-time trigger metadata such as HttpEndpoint.SupportedMethods, which must be known
+        // before a workflow instance exists.
+        if (string.Equals(value.ExpressionType, ObjectExpressionType, StringComparison.OrdinalIgnoreCase))
+            return CompileObjectInput(nodeId, inputDefinition, value);
 
         if (string.Equals(value.ExpressionType, VariableExpressionType, StringComparison.OrdinalIgnoreCase))
             return CompileVariableInput(nodeId, inputDefinition, value);
@@ -88,6 +96,34 @@ public sealed class RuntimeInputBindingCompiler(IWellKnownTypeRegistry wellKnown
             source: RuntimeInputBindingSource.Literal,
             literalValue: literal,
             metadata: BuildInputMetadata(inputType, inputDefinition));
+    }
+
+    private RuntimeInputBinding CompileObjectInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)
+    {
+        var inputType = ResolveInputType(inputDefinition);
+        try
+        {
+            var authored = value.Value is JsonElement jsonElement
+                ? jsonElement
+                : JsonSerializer.SerializeToElement(value.Value);
+            var structured = authored.ValueKind == JsonValueKind.String
+                ? JsonSerializer.Deserialize<JsonElement>(authored.GetString()!)
+                : authored;
+            var converted = structured.Deserialize(inputType);
+            var literal = JsonSerializer.SerializeToElement(converted, inputType);
+
+            return new RuntimeInputBinding(
+                inputName: inputDefinition.Name,
+                source: RuntimeInputBindingSource.Literal,
+                literalValue: literal,
+                metadata: BuildInputMetadata(inputType, inputDefinition));
+        }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
+        {
+            throw new ArgumentException(
+                $"Activity node '{nodeId}' input '{inputDefinition.ReferenceKey}' object value cannot be converted to '{GetRuntimeTypeName(inputType)}'.",
+                exception);
+        }
     }
 
     private RuntimeInputBinding CompileExpressionInput(string nodeId, InputDefinition inputDefinition, ArgumentValue value)

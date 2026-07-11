@@ -31,6 +31,22 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     }
 
     [Fact]
+    public void Describe_StableActivityIdentity_RecognizesOnlyHttpEndpoint()
+    {
+        var activity = new HttpEndpoint();
+        var endpointNode = EndpointNode(path: "hello-world", activityType: activity.Type);
+        var otherClrNode = EndpointNode(path: "hello-world", activityType: typeof(WriteHttpResponse).FullName!);
+
+        var result = _provider.Describe(endpointNode);
+
+        Assert.Equal("Elsa.HttpEndpoint", HttpEndpoint.ActivityType);
+        Assert.Equal(HttpEndpoint.ActivityType, activity.Type);
+        Assert.True(result.IsRecognized);
+        Assert.Single(result.Descriptors);
+        Assert.False(_provider.Describe(otherClrNode).IsRecognized);
+    }
+
+    [Fact]
     public void Describe_AuthoredMethods_YieldsOneDescriptorPerMethod()
     {
         var node = EndpointNode(path: "orders/{id}", methods: ["GET", "DELETE"]);
@@ -357,7 +373,10 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
     }
 
-    private static ExecutableNode EndpointNode(string? path, IReadOnlyCollection<string>? methods = null, string activityType = "Elsa.HttpEndpoint")
+    private static ExecutableNode EndpointNode(
+        string? path,
+        IReadOnlyCollection<string>? methods = null,
+        string activityType = HttpEndpoint.ActivityType)
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         if (path is not null)
@@ -368,7 +387,9 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         return NodeWith(bindings, activityType);
     }
 
-    private static ExecutableNode NodeWith(Dictionary<string, RuntimeInputBinding> bindings, string activityType = "Elsa.HttpEndpoint")
+    private static ExecutableNode NodeWith(
+        Dictionary<string, RuntimeInputBinding> bindings,
+        string activityType = HttpEndpoint.ActivityType)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new ExecutableNode(

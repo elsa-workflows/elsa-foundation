@@ -1,4 +1,5 @@
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 
@@ -28,6 +29,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// named follow-up shared with the other start triggers ("activity trigger start-input delivery").
 /// </para>
 /// </remarks>
+[TriggerActivity]
 public sealed class Timer : CodeActivity<string>
 {
     /// <summary>The stable activity type key the trigger/schedule providers match on.</summary>

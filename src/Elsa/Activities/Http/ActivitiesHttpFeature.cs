@@ -44,8 +44,13 @@ namespace Elsa.Activities.Http;
 )]
 public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeature
 {
+    [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow endpoints.", Category = "Routing")]
+    public string BasePath { get; set; } = "/workflows/http";
+
     public void ConfigureServices(IServiceCollection services)
     {
+        services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
+
         services.AddHttpClient(HttpActivityConstants.HttpClientName)
             .ConfigurePrimaryHttpMessageHandler(sp =>
             {

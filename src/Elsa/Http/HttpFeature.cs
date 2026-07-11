@@ -73,6 +73,7 @@ public class HttpFeature : IShellFeature
         services
             .AddHttpContextAccessor()
             .AddScoped<IRouteTable, RouteTable>()
+            .AddSingleton<IRouteMatcher, RouteMatcher>()
 
             .AddSingleton<IHttpContentParser, JsonHttpContentParser>()
             .AddSingleton<IHttpContentParser, XmlHttpContentParser>()

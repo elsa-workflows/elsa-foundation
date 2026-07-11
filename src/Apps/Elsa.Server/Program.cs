@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
+using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
@@ -50,6 +51,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Nuplane;
@@ -177,6 +179,12 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ActivitiesPrimitivesFeature).Assembly,
             typeof(ActivitiesSequenceFeature).Assembly,
             typeof(ActivitiesFlowchartFeature).Assembly,
+            // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
+            // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
+            // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
+            // absent from a clean host deployment discoverable.
+            typeof(ActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeHttpFeature).Assembly,
             typeof(ActivitiesCompositionRuntimeFeature).Assembly,
 
             // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which

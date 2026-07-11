@@ -3,7 +3,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Elsa.Workflows.Runtime.Http.Contracts;
-using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -25,7 +24,6 @@ public sealed class RouteTableTriggerIndexObserverTests
         // in-memory bookmark store keeps these trigger-index observer tests focused on the trigger path.
         services.AddSingleton<IBookmarkStimulusIndex>(new InMemoryBookmarkStateStore());
         services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
-        services.Configure<WorkflowsRuntimeHttpFeatureOptions>(_ => { });
         services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
         // The observer now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); wire the

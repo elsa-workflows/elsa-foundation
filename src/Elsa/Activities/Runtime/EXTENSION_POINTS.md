@@ -24,6 +24,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** declares a stable runtime resume target ID. Workflow compile/publish can copy the ID into a runtime executable artifact's resume-target table. Durable bookmarks store this ID, not the C# method name.
 - **Related runtime seam:** `IBookmarkResumeResolver` in `Elsa.Workflows.Runtime.Core`.
 
+### `TriggerActivityAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[TriggerActivity]` on an activity class that can start a workflow from an external stimulus.
+- **Usage:** CLR reconciliation records the activity version as `Trigger`; publish-time compilation also reads the marker from the CLR construction descriptor so legacy catalog rows authored before the marker was persisted still compile into routable trigger nodes.
+- **Related runtime seam:** `IActivityTriggerStimulusProvider` in `Elsa.Workflows.Runtime.Core`; a marked activity must have a provider contributed by its owning feature.
+
 ### `IActivityConstructor<TDescriptor>` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Contribution (one constructor per descriptor type).
 - **Signature:** `string DescriptorType { get; }`; `ValueTask<IActivity> Construct(TDescriptor descriptor, IDictionary<string, InputArgument>?, IDictionary<string, OutputArgument>?, CancellationToken)` (with the non-generic `IActivityConstructor` bridge that owns `payload.Deserialize<TDescriptor>()`).

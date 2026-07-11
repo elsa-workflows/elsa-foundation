@@ -5,7 +5,6 @@ using Elsa.Primitives.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Http.Contracts;
-using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Services;
 using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,9 +26,6 @@ namespace Elsa.Workflows.Runtime.Http;
 )]
 public class WorkflowsRuntimeHttpFeature : IShellFeature
 {
-    [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow runtime endpoints.", Category = "Routing")]
-    public string BasePath { get; set; } = string.Empty;
-
     [ManifestSetting(DisplayName = "Fault handler type", Description = "CLR type name of the HTTP endpoint fault handler implementation.", Category = "Services", Advanced = true)]
     public string FaultHandlerType { get; set; } = typeof(HttpEndpointFaultHandler).GetSimpleAssemblyQualifiedName();
 
@@ -41,11 +37,6 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.Configure<WorkflowsRuntimeHttpFeatureOptions>(o =>
-        {
-            o.BasePath = BasePath;
-        });
-
         RegisterFaultHandler(services);
         RegisterAuthorizationHandler(services);
         RegisterRouteResolver(services);

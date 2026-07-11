@@ -156,6 +156,31 @@ public sealed class ArchitectureGuardTests
             $"{fileName} must enable ActivitiesFlowchart so Flowchart root activities can resolve runtime services.");
     }
 
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_http_endpoint_activity_feature(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName));
+
+        Assert.True(
+            features.ContainsKey("ActivitiesHttp"),
+            $"{fileName} must enable ActivitiesHttp so a clean server checkout can publish and serve HTTP-triggered workflows.");
+    }
+
+    [Fact]
+    public void Server_catalogs_http_endpoint_feature_and_its_runtime_dependency()
+    {
+        var server = ProjectFiles().Single(project => project.Name == "Elsa.Server");
+        var references = ProjectReferences(server).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var program = File.ReadAllText(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "Program.cs"));
+
+        Assert.Contains("Elsa.Activities.Http", references);
+        Assert.Contains("Elsa.Workflows.Runtime.Http", references);
+        Assert.Contains("typeof(ActivitiesHttpFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains("typeof(WorkflowsRuntimeHttpFeature).Assembly", program, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Workflows_runtime_core_does_not_use_authored_workflow_models()
     {
