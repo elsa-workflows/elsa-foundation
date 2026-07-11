@@ -13,6 +13,7 @@ using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Flowchart;
+using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
@@ -50,6 +51,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Nuplane;
@@ -143,6 +145,109 @@ builder.Services.AddCShellsAspNetCore(shells =>
         // request time, so each shell's Identity composition (schemes, permission policies) is honored
         // by the root UseAuthentication/UseAuthorization middleware.
         .WithAuthenticationAndAuthorization()
+
+        .WithAssemblies(
+            typeof(PrimitivesFeature).Assembly,
+            typeof(FileSystemLockingFeature).Assembly,
+            typeof(SerializationFeature).Assembly,
+            typeof(NewtonsoftSerializationFeature).Assembly,
+            typeof(TasksFeature).Assembly,
+            typeof(MemoryCacheFeature).Assembly,
+            typeof(MediatorFeature).Assembly,
+            typeof(EventsFeature).Assembly,
+            typeof(ExpressionsFeature).Assembly,
+
+            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
+            // and enablable via shell configuration.
+            typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Libraries.JavaScriptLibrariesFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
+            typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
+
+            typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(WorkflowsDesignApiFeature).Assembly,
+            typeof(ActivitiesDesignApiFeature).Assembly,
+
+            // Construction seam (Runtime side): the dispatch factory + registry, the CLR kind, and the
+            // Workflow kind. These populate the constructor registry the bridge dispatches through.
+            typeof(ActivitiesRuntimeFeature).Assembly,
+            typeof(ActivitiesPrimitivesFeature).Assembly,
+            typeof(ActivitiesSequenceFeature).Assembly,
+            typeof(ActivitiesFlowchartFeature).Assembly,
+            // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
+            // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
+            // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
+            // absent from a clean host deployment discoverable.
+            typeof(ActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeHttpFeature).Assembly,
+            typeof(ActivitiesCompositionRuntimeFeature).Assembly,
+
+            // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
+            // populate the catalog with WriteLine + WorkflowDefinitionActivity as CLR rows at startup.
+            typeof(ActivitiesDesignReconciliationFeature).Assembly,
+            typeof(ClrActivityReconciliationFeature).Assembly,
+            // Workflow kind (Design side): catalogs usable-as-activity workflow versions as WorkflowIdentity rows.
+            typeof(ActivitiesCompositionDesignFeature).Assembly,
+
+            // The bridge: publishing endpoints that construct a live activity from a catalog row.
+            typeof(WorkflowsPublishingApiFeature).Assembly,
+
+            // Runtime vertical slice: execute published WorkflowExecutable artifacts.
+            typeof(WorkflowsRuntimeApiFeature).Assembly,
+
+            // Durable-resumption pump. Every Groundwork persistence provider DependsOn this feature, so
+            // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
+            // composed; without it the shell fails to activate with a FeatureNotFoundException.
+            typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+
+            // Reference GC pump (ADR 0040). Opt-in like resumption; its assembly is in the catalog so the feature can
+            // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
+            typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
+
+            // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
+            typeof(FoundationAgentAbstractionsFeature).Assembly,
+            typeof(FoundationAgentApiFeature).Assembly,
+            typeof(FoundationWorkflowsAgentFeature).Assembly,
+            typeof(GitHubCopilotAgentFeature).Assembly,
+
+            // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
+            // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
+            // registers the external JWT bearer scheme, and — now that Workstream D is landed — the
+            // first-party token stack: the identity API endpoints (login/session/token exchange), the
+            // ASP.NET Core Identity substrate (cookie sign-in, EF stores, dev seeding), and the OpenIddict
+            // token service (JWT issuance + local bearer validation). Together their composite scheme
+            // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
+            // rejected with 401. All of these are enabled in the default shell (see shells.json) with
+            // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
+            // The per-shell ApiSecurity feature is the only way to opt a shell out of endpoint security,
+            // and it is never enabled here (and is neutralized in Production regardless — see below).
+            //
+            // W18 note (resolved): the earlier guard kept the token-issuance endpoints out of the default
+            // shell because enabling them without an ITokenService would fault endpoint registration. The
+            // OpenIddict module now supplies that service, so the fault condition no longer exists and the
+            // features are enabled.
+            typeof(FoundationIdentityAbstractionsFeature).Assembly,
+            typeof(FoundationIdentityApiFeature).Assembly,
+            typeof(OidcAuthenticationFeature).Assembly,
+            typeof(AspNetCoreIdentityFeature).Assembly,
+
+            // The EF Core-backed ASP.NET Core Identity substrate (durable stores, SignInManager cookie
+            // sign-in, login endpoints/page, dev seeding), enabled in the default shell via shells.json.
+            typeof(AspNetCoreIdentityEntityFrameworkCoreFeature).Assembly,
+
+            typeof(OpenIddictIdentityFeature).Assembly,
+            typeof(ApiSecurityFeature).Assembly,
+
+            typeof(ModularityApiFeature).Assembly,
+            typeof(StructuredLogsFeature).Assembly,
+            typeof(SqliteStructuredLogsPersistenceShellFeature).Assembly,
+            typeof(OpenTelemetryFeature).Assembly
+        )
 
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>
