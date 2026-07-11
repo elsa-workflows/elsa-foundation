@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Elsa\Diagnostics\StructuredLogs\Persistence\EFCore\Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj" />
