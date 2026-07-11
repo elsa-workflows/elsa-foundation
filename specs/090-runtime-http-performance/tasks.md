@@ -19,11 +19,11 @@
 
 **Purpose**: Provide the shell-scoped policy selection required by every user story.
 
-- [ ] T003 Write failing metadata, default-mode, configured-cap, invalid-setting, provider-capture, and duplicate-composition tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowsRuntimeCheckpointPersistenceFeatureTests.cs`
-- [ ] T004 Add `CheckpointPersistenceMode` in `src/Elsa/Workflows/Runtime/Api/Coalescing/CheckpointPersistenceMode.cs`
-- [ ] T005 Implement post-provider policy composition and validation in `src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs`
-- [ ] T006 Guard the coalescing decorator registration against duplicate application in `src/Elsa/Workflows/Runtime/Api/Coalescing/CoalescingRuntimeCheckpointPersistenceExtensions.cs`
-- [ ] T007 Run `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj` and refactor duplicated test setup while preserving green behavior
+- [x] T003 Write failing metadata, default-mode, configured-cap, invalid-setting, provider-capture, and duplicate-composition tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowsRuntimeCheckpointPersistenceFeatureTests.cs`
+- [x] T004 Add `CheckpointPersistenceMode` in `src/Elsa/Workflows/Runtime/Api/Coalescing/CheckpointPersistenceMode.cs`
+- [x] T005 Implement post-provider policy composition and validation in `src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs`
+- [x] T006 Guard the coalescing decorator registration against duplicate application in `src/Elsa/Workflows/Runtime/Api/Coalescing/CoalescingRuntimeCheckpointPersistenceExtensions.cs`
+- [x] T007 Run `dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj` and refactor duplicated test setup while preserving green behavior
 
 **Checkpoint**: A fresh shell can select Immediate or Coalesced after its provider has registered stores, and invalid configuration fails before provider build.
 

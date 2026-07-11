@@ -24,6 +24,9 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(CoalescingRegistrationMarker)))
+            return services;
+
         var options = new CoalescingRuntimeCheckpointPersistenceOptions();
         configureOptions?.Invoke(options);
 
@@ -49,6 +52,7 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
 
         // The drain scope factory presence is what makes the coordinator select its coalescing constructor.
         services.TryAddSingleton<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
+        services.AddSingleton<CoalescingRegistrationMarker>();
 
         return services;
     }
@@ -87,4 +91,6 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
 
         return ActivatorUtilities.CreateInstance(serviceProvider, descriptor.ImplementationType!);
     }
+
+    private sealed class CoalescingRegistrationMarker;
 }
