@@ -252,7 +252,7 @@ public sealed class WorkflowTriggerBindingExtractorTests
 
         Assert.Equal("artifact-1", exception.ArtifactId);
         Assert.Equal("node-missing", exception.ExecutableNodeId);
-        Assert.Contains(exception.Facet, new[] { "BindingIdentity", "ExecutableIdentity" });
+        Assert.Equal("ExecutableIdentity", exception.Facet);
     }
 
     [Fact]
