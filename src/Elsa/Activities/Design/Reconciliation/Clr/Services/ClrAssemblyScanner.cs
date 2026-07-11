@@ -127,7 +127,7 @@ public sealed class ClrAssemblyScanner(
                     Type: ToTypeReference(valueType),
                     StorageDriverType: null,
                     DisplayName: property.Name,
-                    Category: null,
+                    Category: metadata.Category,
                     Order: metadata.Order,
                     IsRequired: HasRequired(property),
                     DefaultValue: metadata.DefaultValue,
@@ -256,14 +256,16 @@ public sealed class ClrAssemblyScanner(
     {
         var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName);
         if (attribute is null)
-            return new ActivityInputMetadata(0, null, null);
+            return new ActivityInputMetadata(0, null, null, null);
 
         var order = ReadNamedSingleArgument(attribute, nameof(ActivityInputAttribute.Order)) ?? 0;
+        var category = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Category));
         var defaultValue = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultValue));
         var defaultSyntax = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
 
         return new ActivityInputMetadata(
             order,
+            string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
             string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
             defaultSyntax);
     }
@@ -311,7 +313,7 @@ public sealed class ClrAssemblyScanner(
         return JsonSerializer.SerializeToElement(value);
     }
 
-    private sealed record ActivityInputMetadata(float Order, JsonElement? DefaultValue, string? DefaultSyntax);
+    private sealed record ActivityInputMetadata(float Order, string? Category, JsonElement? DefaultValue, string? DefaultSyntax);
 
     private static bool DerivesFrom(Type? type, string fullName)
     {

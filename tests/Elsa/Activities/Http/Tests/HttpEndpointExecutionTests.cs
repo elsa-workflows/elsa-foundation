@@ -292,6 +292,18 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Fact]
+    public async Task DirectRun_UnauthoredCanStart_AlwaysSuspends()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null));
+
+        Assert.False(CompletedEndpoint(run));
+        Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        Assert.Single(await BookmarksAsync(harness));
+    }
+
+    [Fact]
     public async Task DirectRun_CanStartFalse_AlwaysSuspends()
     {
         // D-D1: a CanStartWorkflow = false endpoint ALWAYS suspends, even on a direct run (the US4 independent test
@@ -402,7 +414,7 @@ public sealed class HttpEndpointExecutionTests
     private static WorkflowExecutable NewEndpointExecutable(
         string path,
         IReadOnlyCollection<string>? methods = null,
-        bool? canStartWorkflow = null)
+        bool? canStartWorkflow = true)
     {
         var inputBindings = new Dictionary<string, RuntimeInputBinding>
         {

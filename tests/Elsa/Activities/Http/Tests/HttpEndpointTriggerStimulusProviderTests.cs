@@ -18,6 +18,20 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     private readonly HttpEndpointTriggerStimulusProvider _provider = new();
 
     [Fact]
+    public void Describe_UnauthoredCanStartWorkflow_IsRecognizedButYieldsNoDescriptors()
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook")
+        };
+
+        var result = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: false));
+
+        Assert.True(result.IsRecognized);
+        Assert.Empty(result.Descriptors);
+    }
+
+    [Fact]
     public void Describe_UnauthoredMethods_YieldsSingleGetDescriptor()
     {
         var node = EndpointNode(path: "orders/webhook");
@@ -260,8 +274,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_CanStartWorkflowTrue_IsStartCapable_AndHashUnaffectedByTheFlag()
     {
-        // The flag is non-identity: an explicit CanStartWorkflow = true yields the same bindings and the same
-        // (template, method) hash as the unauthored default.
+        // The flag is non-identity: an explicit CanStartWorkflow = true yields the normal (template, method) hash.
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
@@ -368,8 +381,14 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         return NodeWith(bindings, activityType);
     }
 
-    private static ExecutableNode NodeWith(Dictionary<string, RuntimeInputBinding> bindings, string activityType = "Elsa.HttpEndpoint")
+    private static ExecutableNode NodeWith(
+        Dictionary<string, RuntimeInputBinding> bindings,
+        string activityType = "Elsa.HttpEndpoint",
+        bool authorCanStartWorkflow = true)
     {
+        if (authorCanStartWorkflow && !bindings.ContainsKey(nameof(HttpEndpoint.CanStartWorkflow)))
+            bindings[nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true");
+
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new ExecutableNode(
             executableNodeId: "node-http-endpoint",

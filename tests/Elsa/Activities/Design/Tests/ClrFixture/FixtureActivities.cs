@@ -47,7 +47,7 @@ public sealed class InheritedVersionFixtureActivity : VersionedBaseActivity;
 public abstract class RequiredInputBaseActivity : ActivityBase
 {
     [Required]
-    [ActivityInput(Order = 42, DefaultValue = "inherited-default", DefaultSyntax = "Literal")]
+    [ActivityInput(Order = 42, Category = "Advanced", DefaultValue = "inherited-default", DefaultSyntax = "Literal")]
     public virtual InputArgument<string> InheritedRequired { get; set; } = null!;
 }
 
@@ -87,7 +87,7 @@ public sealed class ComplexInputFixtureActivity : ActivityBase
     [ActivityInput(Order = 20)]
     public InputArgument<FixturePayload> Payload { get; set; } = null!;
 
-    [ActivityInput(Order = 10, DefaultValue = "Auto", DefaultSyntax = "Literal")]
+    [ActivityInput(Order = 10, Category = "Simple", DefaultValue = "Auto", DefaultSyntax = "Literal")]
     public InputArgument<FixtureMode> Mode { get; set; } = null!;
 
     [ActivityInput(Order = 30)]
