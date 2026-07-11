@@ -282,6 +282,45 @@ textarea:focus {
   pointer-events: none;
 }
 
+.studio-auth-card--error {
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  width: min(480px, 100%);
+  border-color: color-mix(in srgb, var(--studio-danger) 48%, transparent);
+}
+
+.studio-auth-card--error .studio-auth-copy span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.studio-auth-card--error .studio-auth-copy strong {
+  color: var(--studio-danger-fg);
+}
+
+.studio-auth-retry {
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 52%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--studio-danger) 14%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 var(--spacing-md);
+  cursor: pointer;
+}
+
+.studio-auth-retry:hover {
+  background: color-mix(in srgb, var(--studio-danger) 24%, transparent);
+}
+
+.studio-auth-retry:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
 .studio-auth-brand-mark {
   display: inline-grid;
   place-items: center;

@@ -55,6 +55,38 @@ describe("studio auth mounting", () => {
     await unmount();
   });
 
+  it("shows a retryable error when the authentication backend is unavailable", async () => {
+    const manager = stubManager(() => ({ status: "unknown", roles: [], permissions: [] }));
+    manager.initialize = vi.fn(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    manager.login = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { container, flush, unmount } = renderBoundary(manager);
+
+    await flush();
+    await flush();
+
+    expect(container.textContent).toContain("Unable to sign in");
+    expect(container.textContent).toContain("authentication service may be unavailable");
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+
+    const retryButton = Array.from(container.querySelectorAll("button"))
+      .find(button => button.textContent === "Try again");
+    expect(retryButton).toBeDefined();
+
+    flushSync(() => retryButton?.click());
+    await flush();
+
+    expect(manager.login).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Signing in");
+
+    await unmount();
+  });
+
   it("attaches a bearer token and never sends a management-key header on backend requests (#248)", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
     const manager = stubManager(() => ({ status: "authenticated", roles: [], permissions: [] }));

@@ -7,6 +7,7 @@ export { useAuthCapabilities } from "./useAuthCapabilities";
 export { useAuthContext } from "./AuthContext";
 export { AuthGuard } from "./guards/AuthGuard";
 export { RequireAuth } from "./guards/RequireAuth";
+export type { RequireAuthErrorFallbackProps, RequireAuthProps } from "./guards/RequireAuth";
 export { createRedirectAuthAdapter, AuthAdapterError } from "./adapters/redirect";
 export { createOidcAuthAdapter } from "./adapters/oidc";
 export { createAuthenticatedHttpClient } from "./transport/http";
