@@ -46,7 +46,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]> { ["q"] = ["1"] },
             Body: """{"id":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -71,7 +71,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: """{"orderId":7}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -92,7 +92,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: "null");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
         run.AssertWorkflowCompleted();
 
         var parsed = await ParsedContentAsync(harness);
@@ -111,7 +111,7 @@ public sealed class HttpEndpointExecutionTests
             Query: new Dictionary<string, string[]>(),
             Body: null);
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest));
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest));
         run.AssertWorkflowCompleted();
 
         // CLR null captured inline: the durable value is either absent or a JSON null token — the distinguishing
@@ -128,7 +128,7 @@ public sealed class HttpEndpointExecutionTests
     {
         await using var harness = NewHarness();
 
-        var run = await harness.RunAsync(NewEndpointExecutable("Orders/Webhook/"));
+        var run = await harness.RunAsync(NewEndpointExecutable("Orders/Webhook/", canStartWorkflow: true));
 
         run.AssertWorkflowCompleted();
 
@@ -148,7 +148,7 @@ public sealed class HttpEndpointExecutionTests
         await using var harness = NewHarness();
         using var document = JsonDocument.Parse(foreignPayload);
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), document.RootElement.Clone());
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), document.RootElement.Clone());
 
         run.AssertWorkflowCompleted();
 
@@ -170,7 +170,7 @@ public sealed class HttpEndpointExecutionTests
             ["stimulusInput"] = JsonSerializer.SerializeToElement(forged)
         };
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), inputs);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), inputs);
 
         run.AssertWorkflowCompleted();
 
@@ -187,7 +187,7 @@ public sealed class HttpEndpointExecutionTests
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel("orders/webhook", "POST", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), """{"id":9}""");
 
-        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook"), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
+        var run = await harness.RunAsync(NewEndpointExecutable("orders/webhook", canStartWorkflow: true), JsonSerializer.SerializeToElement(liveRequest), triggerNodeId: NodeId);
 
         run.AssertCompleted(NodeId);
         run.AssertWorkflowCompleted();
@@ -208,7 +208,7 @@ public sealed class HttpEndpointExecutionTests
         var stimulus = JsonSerializer.SerializeToElement(new HttpRequestModel("callbacks/{id}", "GET", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), null));
 
         var run = await harness.RunAsync(
-            NewEndpointExecutable("callbacks/{id}", methods: ["GET", "POST"]),
+            NewEndpointExecutable("callbacks/{id}", methods: ["GET", "POST"], canStartWorkflow: null),
             stimulus,
             triggerNodeId: "some-other-node");
 
@@ -292,6 +292,18 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Fact]
+    public async Task DirectRun_UnauthoredCanStart_AlwaysSuspends()
+    {
+        await using var harness = NewHarness();
+
+        var run = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null));
+
+        Assert.False(CompletedEndpoint(run));
+        Assert.NotEqual(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        Assert.Single(await BookmarksAsync(harness));
+    }
+
+    [Fact]
     public async Task DirectRun_CanStartFalse_AlwaysSuspends()
     {
         // D-D1: a CanStartWorkflow = false endpoint ALWAYS suspends, even on a direct run (the US4 independent test
@@ -312,7 +324,7 @@ public sealed class HttpEndpointExecutionTests
         // T008 (D-D3): suspend at a mid-flow endpoint, then resume it with a matching request on the resume-input
         // channel — the [ResumeTarget] reads the request and sets Result/RouteData/ParsedContent.
         await using var harness = NewHarness();
-        var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"]), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
+        var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
         Assert.False(CompletedEndpoint(mid));
 
         // ParsedContent is derived at the activity from Body + the Content-Type header (spec 089 #9), not carried
@@ -347,7 +359,7 @@ public sealed class HttpEndpointExecutionTests
         // D-D7: the resume input is produced by our own middleware, so a missing/malformed payload is a defensive
         // path — the resume target falls back to the authored-route model rather than faulting.
         await using var harness = NewHarness();
-        var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"]), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
+        var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
         Assert.False(CompletedEndpoint(mid));
 
         // A foreign JSON object (no Path/Method) is not a request model → fallback.
@@ -464,7 +476,7 @@ public sealed class HttpEndpointExecutionTests
 
     private static WorkflowExecutable NewEndpointExecutableWithOptions(string path, bool authorize, string policy, long sizeLimit)
     {
-        var executable = NewEndpointExecutable(path, methods: ["GET"]);
+        var executable = NewEndpointExecutable(path, methods: ["GET"], canStartWorkflow: null);
         var node = executable.RootActivity;
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(node.InputBindings)
         {
@@ -494,7 +506,7 @@ public sealed class HttpEndpointExecutionTests
 
     private static WorkflowExecutable NewEndpointExecutableWithResponseMode(string path, ResponseMode mode)
     {
-        var executable = NewEndpointExecutable(path, methods: ["GET"]);
+        var executable = NewEndpointExecutable(path, methods: ["GET"], canStartWorkflow: null);
         var node = executable.RootActivity;
         var inputBindings = new Dictionary<string, RuntimeInputBinding>(node.InputBindings)
         {

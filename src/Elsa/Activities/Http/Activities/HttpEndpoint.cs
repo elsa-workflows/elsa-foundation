@@ -14,13 +14,13 @@ namespace Elsa.Activities.Http.Activities;
 /// An HTTP endpoint activity (W16, on the W7 <c>IActivityTriggerStimulusProvider</c> seam). It plays two roles
 /// depending on where it sits in a workflow and how it is authored:
 /// <list type="bullet">
-/// <item><description><b>Start trigger.</b> With <see cref="CanStartWorkflow"/> = true (the default) the
+/// <item><description><b>Start trigger.</b> With <see cref="CanStartWorkflow"/> explicitly set to true the
 /// publish-time trigger extractor reads its <see cref="Path"/> and <see cref="SupportedMethods"/> and records a
 /// durable trigger binding per <c>(template, method)</c> (via <see cref="HttpEndpointTriggerStimulusProvider"/>);
 /// the request middleware starts a new instance when a matching request arrives.</description></item>
 /// <item><description><b>Mid-flow resume point.</b> When the activity runs as a step inside an already-running
 /// workflow (not the node that triggered the run), it suspends and waits for a matching request to resume it
-/// (spec 089 D). Setting <see cref="CanStartWorkflow"/> = false additionally opts the node out of the start role
+/// (spec 089 D). Leaving <see cref="CanStartWorkflow"/> false or unauthored keeps the node out of the start role,
 /// so it produces no trigger bindings at publish time.</description></item>
 /// </list>
 /// </summary>
@@ -31,16 +31,17 @@ namespace Elsa.Activities.Http.Activities;
 /// <list type="table">
 /// <item><term><c>TriggerNodeId</c> == this node's id</term><description><b>Start path</b> — completes with the
 /// live request from the stimulus channel (falls back to the authored route on a foreign/malformed payload).</description></item>
-/// <item><term><c>TriggerNodeId</c> == null (direct run) and <see cref="CanStartWorkflow"/> == true</term>
+/// <item><term><c>TriggerNodeId</c> == null (direct run) and <see cref="CanStartWorkflow"/> is explicitly authored
+/// as true</term>
 /// <description><b>Completes</b> via the authored-route fallback — preserves sub-unit A's direct-run behavior for a
 /// start-capable endpoint executed with no HTTP stimulus.</description></item>
 /// <item><term>every other case (another node triggered the run; a mid-flow node; or
-/// <see cref="CanStartWorkflow"/> == false on any run)</term><description><b>Suspends</b> — creates one bookmark
+/// <see cref="CanStartWorkflow"/> is false or unauthored)</term><description><b>Suspends</b> — creates one bookmark
 /// per supported method and waits for a matching request to resume it.</description></item>
 /// </list>
-/// A <see cref="CanStartWorkflow"/> = false node therefore always suspends, even on a direct run (the spec 089 D
-/// independent test starts a workflow directly and must suspend at the mid-flow endpoint). The default of true is
-/// a deliberate deviation from elsa-core's default-false: it preserves every sub-unit A–C behavior.
+/// A <see cref="CanStartWorkflow"/> = false or unauthored node therefore always suspends, even on a direct run (the
+/// spec 089 D independent test starts a workflow directly and must suspend at the mid-flow endpoint). Requiring an
+/// explicit true keeps the authored toggle and the runtime behavior aligned with elsa-core's default-false contract.
 /// </para>
 /// <para>
 /// <b>Response model.</b> This is the <c>async/202</c> baseline: the endpoint replies <c>202 Accepted</c> the
@@ -89,21 +90,24 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// The endpoint-relative route template that starts (or resumes) the workflow (e.g. <c>orders/{id}</c>). Drives
     /// the stimulus hash together with each supported method. Required, authored literal.
     /// </summary>
+    [ActivityInput(Category = "Simple", Order = 10)]
     public InputArgument<string> Path { get; set; } = null!;
 
     /// <summary>
     /// The HTTP methods this endpoint accepts (spec 089 B: routing-significant — one trigger binding / bookmark per
     /// (template, method)). Authored literal; unauthored defaults to <c>GET</c> (elsa-core parity).
     /// </summary>
+    [ActivityInput(Category = "Simple", Order = 20)]
     public InputArgument<ICollection<string>>? SupportedMethods { get; set; }
 
     /// <summary>
-    /// Whether this endpoint may start a new workflow. When true (the default) the publish-time extractor records
-    /// trigger bindings and the request middleware can start a fresh instance. When false the node produces NO
-    /// trigger bindings and always runs as a mid-flow suspension point (spec 089 D). Authored literal, resolved at
-    /// publish time like <see cref="Path"/>; a non-literal fails the publish. <b>Non-identity</b>: it never enters
-    /// the endpoint stimulus hash.
+    /// Whether this endpoint may start a new workflow. Defaults to false: only an explicitly authored true causes
+    /// the publish-time extractor to record trigger bindings and lets the request middleware start a fresh instance.
+    /// False or unauthored nodes produce NO trigger bindings and always run as mid-flow suspension points (spec 089 D).
+    /// Authored literal, resolved at publish time like <see cref="Path"/>; a non-literal fails the publish.
+    /// <b>Non-identity</b>: it never enters the endpoint stimulus hash.
     /// </summary>
+    [ActivityInput(Category = "Simple", Order = 0)]
     public InputArgument<bool>? CanStartWorkflow { get; set; }
 
     /// <summary>
@@ -112,12 +116,14 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// literal, resolved at publish time like <see cref="Path"/>; a non-literal fails the publish. Defaults to
     /// false (unauthored → omitted from binding/bookmark metadata).
     /// </summary>
+    [ActivityInput(Category = "Advanced", Order = 100)]
     public InputArgument<bool>? Authorize { get; set; }
 
     /// <summary>
     /// The authorization policy name evaluated for this endpoint when <see cref="Authorize"/> is true. Authored
     /// literal, resolved at publish time; a non-literal fails the publish. Null/absent applies no named policy.
     /// </summary>
+    [ActivityInput(Category = "Advanced", Order = 110)]
     public InputArgument<string>? Policy { get; set; }
 
     /// <summary>
@@ -125,6 +131,7 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// Authored literal, resolved at publish time; a non-literal fails the publish. Null/absent applies no
     /// per-endpoint timeout.
     /// </summary>
+    [ActivityInput(Category = "Advanced", Order = 120)]
     public InputArgument<TimeSpan>? RequestTimeout { get; set; }
 
     /// <summary>
@@ -132,6 +139,7 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// an oversized body 413s). Authored literal, resolved at publish time; a non-literal fails the publish.
     /// Null/absent applies the global limit.
     /// </summary>
+    [ActivityInput(Category = "Advanced", Order = 130)]
     public InputArgument<long>? RequestSizeLimit { get; set; }
 
     /// <summary>
@@ -142,6 +150,7 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
     /// a non-literal or invalid mode string fails the publish. <b>Non-identity</b>: it never enters the endpoint
     /// stimulus hash. Null/absent applies <see cref="ResponseMode.Async"/> (omitted from binding/bookmark metadata).
     /// </summary>
+    [ActivityInput(Category = "Simple", Order = 30)]
     public InputArgument<ResponseMode>? ResponseMode { get; set; }
 
     /// <summary>
@@ -285,7 +294,7 @@ public sealed class HttpEndpoint : CodeActivity<HttpRequestModel>
             ResponseMode: ResponseMode is not null ? context.Get(ResponseMode) : Elsa.Http.Core.ResponseMode.Async);
 
     private bool CanStart(IActivityExecutionContext context) =>
-        CanStartWorkflow is null || context.Get(CanStartWorkflow);
+        CanStartWorkflow is not null && context.Get(CanStartWorkflow);
 
     /// <summary>
     /// Resolves the live request model from the dedicated stimulus-input channel (start path). Returns null when

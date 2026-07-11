@@ -39,10 +39,10 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         if (!StringComparer.Ordinal.Equals(node.ActivityType, HttpEndpoint.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
-        // A mid-flow endpoint (CanStartWorkflow = false) is recognized but declares itself a non-start: no trigger
-        // bindings, and — because the result is Recognized rather than NotRecognized — no publish failure (spec 089 D).
-        // The default (unauthored) is true, preserving the sub-unit A–C start behavior. Read as a literal like Path.
-        if (ReadLiteralBool(node, CanStartWorkflowInput) is false)
+        // A mid-flow endpoint (CanStartWorkflow = false or unauthored) is recognized but declares itself a non-start:
+        // no bindings, and — because the result is Recognized rather than NotRecognized — no publish failure (spec 089 D).
+        // Starting is opt-in: only an explicit true proceeds to validate and describe the routing literals.
+        if (ReadLiteralBool(node, CanStartWorkflowInput) is not true)
             return ActivityTriggerStimulusResult.Recognized([]);
 
         var path = ReadLiteralString(node, PathInput)

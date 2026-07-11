@@ -96,9 +96,11 @@ public sealed class ClrAssemblyScannerTests
         var inputs = model.Inputs.ToDictionary(i => i.Name, StringComparer.Ordinal);
 
         Assert.Equal(10, inputs[nameof(ComplexInputFixtureActivity.Mode)].Order);
+        Assert.Equal("Simple", inputs[nameof(ComplexInputFixtureActivity.Mode)].Category);
         Assert.Equal("Auto", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultValue?.GetString());
         Assert.Equal("Literal", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultSyntax);
         Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
+        Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Payload)].Category);
         Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
     }
 
@@ -125,6 +127,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.All(inputs, input =>
         {
             Assert.Equal(42, input.Order);
+            Assert.Equal("Advanced", input.Category);
             Assert.Equal("inherited-default", input.DefaultValue?.GetString());
             Assert.Equal("Literal", input.DefaultSyntax);
         });

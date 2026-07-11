@@ -18,6 +18,20 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     private readonly HttpEndpointTriggerStimulusProvider _provider = new();
 
     [Fact]
+    public void Describe_UnauthoredCanStartWorkflow_IsRecognizedButYieldsNoDescriptors()
+    {
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook")
+        };
+
+        var result = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: false));
+
+        Assert.True(result.IsRecognized);
+        Assert.Empty(result.Descriptors);
+    }
+
+    [Fact]
     public void Describe_UnauthoredMethods_YieldsSingleGetDescriptor()
     {
         var node = EndpointNode(path: "orders/webhook");
@@ -82,7 +96,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.RequestSizeLimit)] = LiteralJsonBinding(nameof(HttpEndpoint.RequestSizeLimit), "1048576")
         };
 
-        var descriptors = _provider.Describe(NodeWith(bindings)).Descriptors;
+        var descriptors = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors;
 
         Assert.Equal(2, descriptors.Count);
         foreach (var descriptor in descriptors)
@@ -118,7 +132,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.Authorize)] = LiteralJsonBinding(nameof(HttpEndpoint.Authorize), "false")
         };
 
-        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)).Descriptors);
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
 
         Assert.DoesNotContain(HttpEndpointRouting.AuthorizeMetadataKey, descriptor.Metadata.Keys);
     }
@@ -136,7 +150,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [optionInput] = ExpressionBinding(optionInput)
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Theory]
@@ -152,7 +166,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.RequestTimeout)] = LiteralBinding(nameof(HttpEndpoint.RequestTimeout), timeout)
         };
 
-        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
         Assert.Contains("non-positive", exception.Message);
     }
 
@@ -167,7 +181,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.RequestSizeLimit)] = LiteralJsonBinding(nameof(HttpEndpoint.RequestSizeLimit), sizeLimit)
         };
 
-        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        var exception = Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
         Assert.Contains("non-positive", exception.Message);
     }
 
@@ -183,7 +197,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.ResponseMode)] = LiteralBinding(nameof(HttpEndpoint.ResponseMode), "Sync")
         };
 
-        var descriptors = _provider.Describe(NodeWith(bindings)).Descriptors;
+        var descriptors = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors;
 
         Assert.Equal(2, descriptors.Count);
         foreach (var descriptor in descriptors)
@@ -206,7 +220,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.ResponseMode)] = LiteralBinding(nameof(HttpEndpoint.ResponseMode), "Async")
         };
 
-        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings)).Descriptors);
+        var descriptor = Assert.Single(_provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)).Descriptors);
 
         Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, descriptor.Metadata.Keys);
     }
@@ -230,7 +244,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.ResponseMode)] = ExpressionBinding(nameof(HttpEndpoint.ResponseMode))
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Theory]
@@ -245,7 +259,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.ResponseMode)] = RawLiteralBinding(nameof(HttpEndpoint.ResponseMode), rawJson)
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -276,8 +290,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_CanStartWorkflowTrue_IsStartCapable_AndHashUnaffectedByTheFlag()
     {
-        // The flag is non-identity: an explicit CanStartWorkflow = true yields the same bindings and the same
-        // (template, method) hash as the unauthored default.
+        // The flag is non-identity: an explicit CanStartWorkflow = true yields the normal (template, method) hash.
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
@@ -300,7 +313,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.CanStartWorkflow)] = ExpressionBinding(nameof(HttpEndpoint.CanStartWorkflow))
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -319,7 +332,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.Path)] = ExpressionBinding(nameof(HttpEndpoint.Path))
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -331,7 +344,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.SupportedMethods)] = ExpressionBinding(nameof(HttpEndpoint.SupportedMethods))
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -345,7 +358,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), "[5, true]")
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -358,7 +371,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.SupportedMethods)] = RawLiteralBinding(nameof(HttpEndpoint.SupportedMethods), """["GET", {}]""")
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     [Fact]
@@ -370,7 +383,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             [nameof(HttpEndpoint.Path)] = RawLiteralBinding(nameof(HttpEndpoint.Path), "42")
         };
 
-        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings)));
+        Assert.Throws<ArgumentException>(() => _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: true)));
     }
 
     private static ExecutableNode EndpointNode(
@@ -384,13 +397,18 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
         if (methods is not null)
             bindings[nameof(HttpEndpoint.SupportedMethods)] = LiteralCollectionBinding(nameof(HttpEndpoint.SupportedMethods), methods);
 
-        return NodeWith(bindings, activityType);
+        return NodeWith(bindings, activityType, authorCanStartWorkflow: true);
     }
 
     private static ExecutableNode NodeWith(
         Dictionary<string, RuntimeInputBinding> bindings,
-        string activityType = HttpEndpoint.ActivityType)
+        string activityType = HttpEndpoint.ActivityType,
+        bool authorCanStartWorkflow = false)
     {
+        var effectiveBindings = new Dictionary<string, RuntimeInputBinding>(bindings, StringComparer.OrdinalIgnoreCase);
+        if (authorCanStartWorkflow && !effectiveBindings.ContainsKey(nameof(HttpEndpoint.CanStartWorkflow)))
+            effectiveBindings[nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true");
+
         using var document = JsonDocument.Parse("""{"type":"test"}""");
         return new ExecutableNode(
             executableNodeId: "node-http-endpoint",
@@ -399,7 +417,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
             activityTypeVersion: "1.0.0",
             descriptorType: "test",
             descriptorPayload: document.RootElement.Clone(),
-            inputBindings: bindings,
+            inputBindings: effectiveBindings,
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: new Dictionary<string, string>());
     }

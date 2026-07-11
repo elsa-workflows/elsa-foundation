@@ -28,7 +28,7 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 |---|---|---|---|
 | Path | input (literal, required) | exists | route template from B (`orders/{id}`) |
 | SupportedMethods | input | exists | routing-significant from B; N bindings for N methods |
-| CanStartWorkflow | input (literal, bool) | D — live | default **true** (deviation from elsa-core default-false; preserves A–C); non-identity; `false` → no trigger bindings, node always suspends (mid-flow only). Governs the D-D1 start-vs-suspend decision with `TriggerNodeId` |
+| CanStartWorkflow | input (literal, bool) | D — live | default **false** (elsa-core parity); only explicit `true` creates trigger bindings. False/unauthored → no trigger bindings, node always suspends (mid-flow only). Non-identity. Governs the D-D1 start-vs-suspend decision with `TriggerNodeId` |
 | Authorize / Policy | inputs | C — live | non-identity binding metadata; literal-at-publish; fail-closed enforcement |
 | RequestTimeout / RequestSizeLimit | inputs | C — live | non-identity binding metadata; timeout bounds dispatch (408), size limit overrides the global cap (413) |
 | ParsedContent | output | C — live | content-type-parsed body as wire-safe JSON; null for empty/unknown/non-HTTP starts |

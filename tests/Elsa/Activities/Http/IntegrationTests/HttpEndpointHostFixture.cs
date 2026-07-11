@@ -256,7 +256,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // (CanStartWorkflow = false, not a trigger — it suspends). The extractor flattens the whole tree and keys
         // off each node's own trigger marker, so the marker rides the start CHILD, never the Sequence root.
         var startNode = NewHttpEndpointNode($"{artifactId}-start", startPath, startResultValueId, [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
             nodeId: "node-start-endpoint");
         var callbackNode = NewHttpEndpointNode($"{artifactId}-callback", callbackPath, callbackResultValueId, [method],
             authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false,
@@ -320,7 +320,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         ResponseMode responseMode = ResponseMode.Sync)
     {
         var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
             nodeId: "node-sync-endpoint", responseMode: responseMode);
         var write = NewWriteHttpResponseNode("node-write-response", statusCode, body, contentType, header);
         return PublishTriggerSequenceAsync(artifactId, endpoint, write);
@@ -341,7 +341,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string startResultValueId)
     {
         var start = NewHttpEndpointNode($"{artifactId}-start", startPath, startResultValueId, [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
             nodeId: "node-sync-start", responseMode: ResponseMode.Sync);
         var suspend = NewHttpEndpointNode($"{artifactId}-suspend", suspendPath, $"{startResultValueId}-suspend", [method],
             authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false,
@@ -367,7 +367,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         TimeSpan stallDuration)
     {
         var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: null, isTriggerNode: true,
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
             nodeId: "node-sync-stall-endpoint", responseMode: ResponseMode.Sync, requestTimeout: requestTimeout);
         var stall = NewStallingNode("node-stall", stallDuration);
         var write = NewWriteHttpResponseNode("node-write-after-stall", 200, "unreachable", "text/plain", header: null);
@@ -605,7 +605,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         long? requestSizeLimit = null)
     {
         var node = NewHttpEndpointNode(artifactId, path, resultOutputName, methods, authorize, policy, requestSizeLimit,
-            canStartWorkflow: null, isTriggerNode: true);
+            canStartWorkflow: true, isTriggerNode: true);
 
         return new WorkflowExecutable(
             identity: NewIdentity(artifactId),
@@ -619,7 +619,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// Builds one HttpEndpoint executable node. <paramref name="isTriggerNode"/> stamps the trigger execution-type
     /// metadata (so a standalone start-trigger endpoint is indexed as a start node); a mid-flow endpoint inside a
     /// composite leaves it off (the composite root carries the trigger marker instead).
-    /// <paramref name="canStartWorkflow"/> authors the D-D1 literal (null = leave default true).
+    /// <paramref name="canStartWorkflow"/> authors the D-D1 literal (null = leave the default false unauthored).
     /// </summary>
     private ExecutableNode NewHttpEndpointNode(
         string artifactId,
