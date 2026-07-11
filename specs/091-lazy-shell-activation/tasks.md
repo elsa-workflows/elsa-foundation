@@ -110,7 +110,7 @@
 
 ### Baseline for User Story 4
 
-- [ ] T026 [US4] Run and preserve the 20-boot pre-change lane with `tools/performance/measure-server-cold-start.sh`, including phase telemetry and matching frozen-data provenance, before implementing the fast path
+- [x] T026 [US4] Run and preserve the 20-boot pre-change lane with `tools/performance/measure-server-cold-start.sh`, including phase telemetry and matching frozen-data provenance, before implementing the fast path
 
 ### Tests for User Story 4
 
