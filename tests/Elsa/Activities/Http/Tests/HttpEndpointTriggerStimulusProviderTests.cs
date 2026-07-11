@@ -34,6 +34,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         var result = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: false));
 
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
         Assert.True(result.IsRecognized);
         Assert.Empty(result.Descriptors);
     }
@@ -303,6 +304,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         var result = _provider.Describe(NodeWith(bindings));
 
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
         Assert.True(result.IsRecognized);
         Assert.Empty(result.Descriptors);
     }

@@ -341,6 +341,25 @@ public sealed class WorkflowTriggerBindingExtractorTests
         Assert.Empty(extractor.Extract(executable));
     }
 
+    [Fact]
+    public void Evaluate_MapsRecognizedEmptyResultToProviderOwnedIntentionallyNonStartingOutcome()
+    {
+        const string providerId = "Elsa.HttpEndpoint";
+        IWorkflowTriggerBindingExtractor extractor = new WorkflowTriggerBindingExtractor([
+            new NonStartProvider("Elsa.HttpEndpoint", providerId)
+        ]);
+        var executable = Executable(TriggerNode("node-midflow", "Elsa.HttpEndpoint"));
+
+        var outcome = extractor.Evaluate(executable);
+
+        Assert.Empty(outcome.Bindings);
+        var nodeOutcome = Assert.Single(outcome.NodeOutcomes);
+        Assert.Equal("node-midflow", nodeOutcome.ExecutableNodeId);
+        Assert.Equal(providerId, nodeOutcome.ProviderId);
+        Assert.Equal(WorkflowTriggerPreflightStatus.IntentionallyNonStarting, nodeOutcome.Status);
+        Assert.Empty(nodeOutcome.Bindings);
+    }
+
     private WorkflowExecutable Executable(ExecutableNode root) =>
         new(
             identity: _identity,
@@ -448,8 +467,10 @@ public sealed class WorkflowTriggerBindingExtractorTests
     }
 
     /// <summary>A provider that recognizes its type but declares a non-start (zero descriptors, no publish failure).</summary>
-    private sealed class NonStartProvider(string activityType) : IActivityTriggerStimulusProvider
+    private sealed class NonStartProvider(string activityType, string? providerId = null) : IActivityTriggerStimulusProvider
     {
+        public string ProviderId => providerId ?? GetType().FullName!;
+
         public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
                 ? ActivityTriggerStimulusResult.Recognized([])

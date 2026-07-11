@@ -75,15 +75,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T021 [P] [US2] Write failing recognized-empty outcome/provider-id tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
-- [ ] T022 [P] [US2] Extend unauthored/false `CanStartWorkflow` coverage to assert provider identity and zero descriptors in `tests/Elsa/Activities/Http/Tests/HttpEndpointTriggerStimulusProviderTests.cs`
-- [ ] T023 [P] [US2] Preserve direct-run/mid-flow suspension regression coverage in `tests/Elsa/Activities/Http/Tests/HttpEndpointExecutionTests.cs`
+- [X] T021 [P] [US2] Write failing recognized-empty outcome/provider-id tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
+- [X] T022 [P] [US2] Extend unauthored/false `CanStartWorkflow` coverage to assert provider identity and zero descriptors in `tests/Elsa/Activities/Http/Tests/HttpEndpointTriggerStimulusProviderTests.cs`
+- [X] T023 [P] [US2] Preserve direct-run/mid-flow suspension regression coverage in `tests/Elsa/Activities/Http/Tests/HttpEndpointExecutionTests.cs`
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Map a single provider's recognized-empty result to `IntentionallyNonStarting` without emitting bindings or failing preflight in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
-- [ ] T025 [US2] Verify the HttpEndpoint provider keeps absent/false activation as `Recognized([])` while reporting its stable id in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
-- [ ] T026 [US2] Run the P2 focused Runtime and Activities.Http test filters from `specs/090-trigger-contract-hardening/quickstart.md`
+- [X] T024 [US2] Map a single provider's recognized-empty result to `IntentionallyNonStarting` without emitting bindings or failing preflight in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
+- [X] T025 [US2] Verify the HttpEndpoint provider keeps absent/false activation as `Recognized([])` while reporting its stable id in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
+- [X] T026 [US2] Run the P2 focused Runtime and Activities.Http test filters from `specs/090-trigger-contract-hardening/quickstart.md`
 
 **Checkpoint**: Intentional non-start remains distinct from unrecognized/invalid and creates no start registration.
 
