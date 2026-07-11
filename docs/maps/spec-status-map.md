@@ -113,4 +113,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Draft | - | 9 | 0 | deferred, out of scope |
 | [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | - |
 | [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Draft | - | 23 | 0 | - |
-| [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (local branch; pending integration) | - | 38 | 0 | - |
+| [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | - |

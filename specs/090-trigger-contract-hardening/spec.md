@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-11
 
-**Status**: Implemented (local branch; pending integration)
+**Status**: Implemented (merged 2026-07-11 in PR #628)
 
 **Input**: Approved Unit A boundary: establish the canonical first-party trigger publication contract and preflight validation for Event, Timer, Cron, and HttpEndpoint; preserve intentional non-start behavior and upgrade compatibility; exclude Units B/C concerns.
 
