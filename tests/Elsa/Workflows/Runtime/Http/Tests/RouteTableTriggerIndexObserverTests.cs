@@ -69,12 +69,13 @@ public sealed class RouteTableTriggerIndexObserverTests
         Assert.Equal(2, _routeTable.RouteTemplates.Count);
 
         // Republish a1 through the indexer's delete-and-resave: its route changes orders/{id} -> customers.
+        var executable = FakeExecutable("a1");
         var indexer = new WorkflowTriggerIndexer(
-            new StaticExtractor(Bindings.HttpEndpoint("a1", "n1", "customers", "GET")),
+            new StaticExtractor(Bindings.HttpEndpoint("a1", executable.RootActivity.ExecutableNodeId, "customers", "GET")),
             _store,
             [Observer()]);
 
-        await indexer.IndexAsync(FakeExecutable("a1"));
+        await indexer.IndexAsync(executable);
 
         // The observer's full refresh drops the superseded orders/{id} and keeps products + the new customers.
         Assert.Equal(

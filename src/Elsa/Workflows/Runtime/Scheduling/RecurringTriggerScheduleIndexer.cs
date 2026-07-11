@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -7,20 +8,19 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 
 /// <summary>
 /// Decorates the publish-time <see cref="IWorkflowTriggerIndexer"/> to also populate the recurring-trigger
-/// schedule store (W16). When an artifact is (re)published, the inner indexer first replaces the artifact's
-/// trigger bindings (and fails the publish on an unroutable trigger); this decorator then replaces the
-/// artifact's recurring schedules from the same pinned executable — walking its nodes, asking each
+/// schedule store (W16). When an artifact is (re)published, this decorator first materializes the complete
+/// recurring schedule set from the pinned executable — walking its nodes, asking each
 /// <see cref="IRecurringTriggerScheduleProvider"/> to describe the Timer/Cron trigger nodes, and seeding each
 /// schedule's initial <see cref="RecurringTriggerSchedule.NextOccurrence"/> through the
 /// <see cref="IRecurringScheduleCalculator"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Populating here — rather than in the runtime core or the publishing pipeline — keeps the recurring-trigger
+/// Materializing here — rather than in the runtime core or the publishing pipeline — keeps the recurring-trigger
 /// feature self-contained: it composes over the existing indexer service without modifying the publish handler
-/// or the trigger core. The inner indexer runs first so a publish that must fail (unroutable trigger) fails
-/// before any schedule is written; schedule population mirrors the indexer's delete-by-artifact-then-write so a
-/// republished version's schedules fully supersede the previous version's.
+/// or the trigger core. All schedule calculation finishes before the inner indexer runs, so invalid or exhausted
+/// recurring starts fail before bindings or schedules mutate. After preflight, schedule population mirrors the
+/// indexer's delete-by-artifact-then-write replacement semantics.
 /// </para>
 /// <para>
 /// Only nodes the compiler marked as start-triggers are considered, exactly as the trigger extractor does, so a
@@ -63,41 +63,38 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
     {
         ArgumentNullException.ThrowIfNull(executable);
 
-        // Trigger bindings first: this validates + persists them and throws on an unroutable trigger, so a bad
-        // publish fails before any schedule is touched.
-        var bindings = await _inner.IndexAsync(executable, cancellationToken);
-
         // No recurring-trigger providers composed → nothing to do (and no store need be present).
         if (_providers.Count == 0)
-            return bindings;
+            return await _inner.IndexAsync(executable, cancellationToken);
 
         var artifactId = executable.Identity.ArtifactId;
         var now = _timeProvider.GetUtcNow();
+        var schedules = new List<RecurringTriggerSchedule>();
 
-        // Replace-on-republish: drop the prior version's schedules, then write the current set.
-        await _store.DeleteByArtifactAsync(artifactId, cancellationToken);
-
+        // Fully materialize every provider-owned recurring projection before either index is mutated.
         foreach (var node in Flatten(executable.RootActivity))
         {
             if (!IsTrigger(node))
                 continue;
 
-            var descriptor = Describe(node);
-            if (descriptor is null)
+            var selection = Describe(artifactId, node);
+            if (selection is null)
                 continue;
+            var (providerId, descriptor) = selection.Value;
 
-            var next = _calculator.ComputeNext(descriptor.Kind, descriptor.Expression, now);
-            if (next is null)
+            DateTimeOffset? next;
+            try
             {
-                // A cron with no future occurrence (e.g. a fixed past year) is authored-but-dead: skip it rather
-                // than persist a schedule that can never fire.
-                _logger.LogWarning(
-                    "Recurring trigger node '{NodeId}' in artifact '{ArtifactId}' has no future occurrence for expression '{Expression}'; not scheduled.",
-                    node.ExecutableNodeId, artifactId, descriptor.Expression);
-                continue;
+                next = _calculator.ComputeNext(descriptor.Kind, descriptor.Expression, now);
             }
+            catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+            {
+                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
+            }
+            if (next is null)
+                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
 
-            var schedule = new RecurringTriggerSchedule(
+            schedules.Add(new RecurringTriggerSchedule(
                 ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId),
                 ArtifactId: artifactId,
                 StimulusType: descriptor.StimulusType,
@@ -105,24 +102,78 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                 Kind: descriptor.Kind,
                 Expression: descriptor.Expression,
                 NextOccurrence: next.Value,
-                CreatedAt: now);
-
-            await _store.SaveAsync(schedule, cancellationToken);
+                CreatedAt: now));
         }
+
+        var bindings = await _inner.IndexAsync(executable, cancellationToken);
+        await _store.DeleteByArtifactAsync(artifactId, cancellationToken);
+        foreach (var schedule in schedules)
+            await _store.SaveAsync(schedule, cancellationToken);
 
         return bindings;
     }
 
-    private RecurringScheduleDescriptor? Describe(ExecutableNode node)
+    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, IReadOnlyCollection<string> providerIds, string facet, string message, Exception? innerException = null) =>
+        new(artifactId, node.ExecutableNodeId, node.ActivityType, providerIds, facet, message, innerException);
+
+    private (string ProviderId, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
     {
+        var claims = new List<(string ProviderId, RecurringScheduleDescriptor Descriptor)>();
+
         foreach (var provider in _providers)
         {
-            var descriptor = provider.Describe(node);
+            var providerId = provider.ProviderId;
+            var providerType = provider.GetType().FullName ?? provider.GetType().Name;
+            RecurringScheduleDescriptor? descriptor;
+            try
+            {
+                descriptor = provider.Describe(node);
+            }
+            catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+            {
+                if (string.IsNullOrWhiteSpace(providerId))
+                    throw Failure(
+                        artifactId,
+                        node,
+                        [],
+                        "ProviderIdentity",
+                        $"Recurring trigger provider type '{providerType}' has a blank provider id and failed while describing node '{node.ExecutableNodeId}'.",
+                        exception);
+
+                throw Failure(
+                    artifactId,
+                    node,
+                    [providerId],
+                    "RecurringSchedule",
+                    $"The recurring schedule descriptor is invalid: {exception.Message}",
+                    exception);
+            }
+
             if (descriptor is not null)
-                return descriptor;
+            {
+                if (string.IsNullOrWhiteSpace(providerId))
+                    throw Failure(
+                        artifactId,
+                        node,
+                        [],
+                        "ProviderIdentity",
+                        $"Recurring trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
+
+                claims.Add((providerId, descriptor));
+            }
         }
 
-        return null;
+        return claims.Count switch
+        {
+            0 => null,
+            1 => claims[0],
+            _ => throw Failure(
+                artifactId,
+                node,
+                claims.Select(x => x.ProviderId).ToArray(),
+                "ProviderRecognition",
+                $"Multiple recurring trigger providers recognize node '{node.ExecutableNodeId}'.")
+        };
     }
 
     private static bool IsTrigger(ExecutableNode node) =>

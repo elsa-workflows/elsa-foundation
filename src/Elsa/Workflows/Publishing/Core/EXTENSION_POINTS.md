@@ -4,7 +4,7 @@ The per-domain catalog (framework §2.22.1) of everything you can override in th
 
 Per three-layer rule (framework §2.1): contracts in `.Core`, defaults + composition in the `.Api` feature. Every contract below is on the **override** axis (framework §2.22.1) — one implementation wins; register your own and the built-in steps aside.
 
-> **Depends on Workflows.Runtime.** The publish flow compiles a `WorkflowExecutable` (a Runtime.Core model), persists it through the runtime's durable `IWorkflowExecutableStore`, and indexes its start-triggers through the runtime's `IWorkflowTriggerIndexer` (W7). Those seams belong to the runtime catalog: [`../Runtime/Core/EXTENSION_POINTS.md`](../Runtime/Core/EXTENSION_POINTS.md).
+> **Depends on Workflows.Runtime.** The publish flow compiles a `WorkflowExecutable` (a Runtime.Core model), persists it through the runtime's durable `IWorkflowExecutableStore`, and indexes its start-triggers through the runtime's `IWorkflowTriggerIndexer` (W7). Those seams belong to the runtime catalog: [`../../Runtime/EXTENSION_POINTS.md`](../../Runtime/EXTENSION_POINTS.md).
 
 ---
 
@@ -35,6 +35,6 @@ Per three-layer rule (framework §2.1): contracts in `.Core`, defaults + composi
 
 ## Cross-references
 
-- Durable published-artifact store + trigger indexing (the runtime seams the publish flow consumes): [`../Runtime/Core/EXTENSION_POINTS.md`](../Runtime/Core/EXTENSION_POINTS.md).
+- Durable published-artifact store + trigger indexing (the runtime seams the publish flow consumes): [`../../Runtime/EXTENSION_POINTS.md`](../../Runtime/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.1 (three-layer) + §2.22.1 (override axis).

@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Persistence.Core;
@@ -23,6 +26,9 @@ using Xunit;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using CronActivity = Elsa.Activities.Scheduling.Activities.Cron;
+using EventActivity = Elsa.Activities.Primitives.Activities.Event;
+using TimerActivity = Elsa.Activities.Scheduling.Activities.Timer;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -66,6 +72,34 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "artifact-"));
 
         Assert.Equal(LegacyTriggerActivity.ActivityType, executable.RootActivity.ActivityType);
+        Assert.Equal("Trigger", executable.RootActivity.Metadata[TriggerNodeMetadata.ExecutionTypeKey]);
+    }
+
+    public static TheoryData<Type, string> FirstPartyClrTriggers => new()
+    {
+        { typeof(EventActivity), EventActivity.ActivityType },
+        { typeof(TimerActivity), TimerActivity.ActivityType },
+        { typeof(CronActivity), CronActivity.ActivityType },
+        { typeof(HttpEndpoint), HttpEndpoint.ActivityType }
+    };
+
+    [Theory]
+    [MemberData(nameof(FirstPartyClrTriggers))]
+    public async Task LegacyFirstPartyClrTriggerCatalogRow_CompilesWithTriggerProjection(Type activityType, string declaredActivityType)
+    {
+        var activityVersion = LegacyTriggerActivityVersion(activityType);
+        var workflowVersion = WorkflowVersion(new ActivityNode("legacy-trigger", activityVersion.Id, [], []));
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
+        var compiler = TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(declaredActivityType, executable.RootActivity.ActivityType);
         Assert.Equal("Trigger", executable.RootActivity.Metadata[TriggerNodeMetadata.ExecutionTypeKey]);
     }
 
@@ -511,18 +545,21 @@ public sealed class WorkflowExecutableCompilerTests
         };
 
     private static ActivityDefinitionVersion LegacyTriggerActivityVersion() =>
+        LegacyTriggerActivityVersion(typeof(LegacyTriggerActivity));
+
+    private static ActivityDefinitionVersion LegacyTriggerActivityVersion(Type activityType) =>
         new("1.0.0", "legacy-trigger-definition")
         {
             Id = "activity-legacy-trigger",
             Definition = new ActivityDefinition
             {
                 Id = "legacy-trigger-definition",
-                ActivityTypeKey = typeof(LegacyTriggerActivity).FullName!,
+                ActivityTypeKey = activityType.FullName!,
                 Category = "Test"
             },
             DescriptorType = typeof(ClrActivityDescriptor).FullName!,
             DescriptorPayload = JsonSerializer.SerializeToElement(
-                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity))),
+                new ClrActivityDescriptor(TypeAliasConvention.CanonicalAlias(activityType)),
                 new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             ExecutionType = ActivityExecutionType.Action,
             Inputs = []

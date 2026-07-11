@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Core.Contracts;
@@ -15,5 +16,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public interface IWorkflowTriggerIndexer
 {
     /// <summary>Replaces the artifact's trigger bindings with the ones extracted from <paramref name="executable"/>.</summary>
+    /// <exception cref="ArgumentNullException"><paramref name="executable"/> is <see langword="null"/>.</exception>
+    /// <exception cref="WorkflowTriggerPreflightException">Trigger preflight fails before index mutation.</exception>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
 }
