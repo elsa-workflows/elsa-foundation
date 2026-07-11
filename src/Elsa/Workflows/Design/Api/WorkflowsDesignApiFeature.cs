@@ -4,6 +4,9 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Events.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Api.Services;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -27,5 +30,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.AddEventHandlersFrom(assembly);
         services.AddCommandHandlersFrom(assembly);
         services.AddRequestHandlersFrom(assembly);
+        services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
+        services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
     }
 }

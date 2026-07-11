@@ -46,6 +46,18 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
 
+### `IActivityInputOptionsProvider` *(Core — `Elsa.Workflows.Design.Core`)*
+
+- **Kind:** Keyed Source (add-don't-replace). Each provider contributes allowable design-time values under one stable, case-sensitive `Key`.
+- **Contract:** `Elsa.Workflows.Design.Core.Contracts.IActivityInputOptionsProvider`.
+- **Input:** `ActivityInputOptionsContext` containing the current authored `WorkflowDefinitionState`, selected `ActivityNode`, and cataloged activity `InputDefinition`.
+- **Output:** An ordered list of `ActivityInputOption` values. Labels are nonblank and values are JSON strings, numbers, booleans, or enum names.
+- **Aggregation:** `ActivityInputOptionsProviderResolver` resolves the one provider named by the cataloged input metadata. Duplicate keys fail shell startup; the client cannot choose a provider key in its request.
+- **Registration:** Register the provider as `IActivityInputOptionsProvider` from a design-side module. Runtime activity libraries declare only the stable key through `ActivityInputAttribute.OptionsProvider`, preserving the Runtime → Design boundary.
+- **Authoring contract:** [`specs/090-activity-input-editor-options/contracts/activity-input-authoring.md`](../../../../../specs/090-activity-input-editor-options/contracts/activity-input-authoring.md).
+
+Known implementations: none in the foundation host; feature modules opt in by registering providers.
+
 ### `IActivityStructureHandler` *(Core — `Elsa.Workflows.Design.Core`)*
 
 - **Kind:** Contributor (add-don't-replace, keyed by structure `Kind`). One handler per composite/container activity structure kind; generic design and publishing code dispatch to the matching handler without interpreting activity-specific structure payloads.

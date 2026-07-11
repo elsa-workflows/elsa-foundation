@@ -177,8 +177,7 @@ public sealed class ArchitectureGuardTests
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
-        Assert.Contains("typeof(ActivitiesHttpFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("typeof(WorkflowsRuntimeHttpFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
     }
 
     [Fact]

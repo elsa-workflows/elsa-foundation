@@ -34,6 +34,34 @@ public sealed class WorkflowManagementDescriptorProjectionTests
         Assert.Equal(1, defaultValue.GetInt32());
     }
 
+    [Fact]
+    public void InputDescriptorProjection_PreservesAuthoredUiHintAndSpecifications()
+    {
+        var specifications = JsonSerializer.SerializeToElement(new
+        {
+            options = new[]
+            {
+                new { label = "GET", value = "GET" },
+                new { label = "POST", value = "POST" }
+            }
+        });
+        var input = new InputDefinition(
+            ReferenceKey: "Methods",
+            Name: "Methods",
+            Type: new TypeReference("String", CollectionKind.List),
+            StorageDriverType: null,
+            DisplayName: "Methods",
+            Category: null,
+            UiHint: "checklist",
+            UISpecifications: specifications);
+
+        var response = InvokeToInputDescriptorResponse(input);
+
+        Assert.Equal("checklist", Read<string>(response, "UiHint"));
+        var projected = Assert.IsType<JsonElement>(Read<object>(response, "UiSpecifications"));
+        Assert.Equal(specifications.GetRawText(), projected.GetRawText());
+    }
+
     private static object InvokeToInputDescriptorResponse(InputDefinition input)
     {
         var method = typeof(ElsaWorkflowManagementApi).GetMethod("ToInputDescriptorResponse", BindingFlags.NonPublic | BindingFlags.Static)
