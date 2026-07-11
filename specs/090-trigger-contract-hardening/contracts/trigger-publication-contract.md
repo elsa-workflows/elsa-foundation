@@ -18,12 +18,14 @@ Runtime does not read activity catalog or workflow-definition state during steps
 
 ## Provider identity and claiming
 
+- The provider seam is a Strategy set selected by executable-node context. It is not a data-contribution fan-in or a §2.6.5 sync contributor.
 - Every provider has a stable, nonblank `ProviderId`.
 - First-party ids are explicit constants; a compatibility default derives a deterministic id from a provider's public CLR identity.
 - Renaming a fallback-identified provider changes its identity and is a compatibility-affecting provider change.
 - Zero claims is an unrecognized-trigger failure.
 - More than one claim is an ambiguous-trigger failure listing provider ids in ordinal order.
 - Registration order never selects a winner.
+- Descriptors are duplicate only when they produce the same deterministic trigger-binding id for the artifact/node; distinct ids remain valid multi-binding fan-out.
 
 ## Recognition outcomes
 
@@ -54,7 +56,7 @@ A trigger preflight failure names, when available:
 - recognizing or conflicting provider ids;
 - failed descriptor/projection facet.
 
-The failure is typed in Runtime vocabulary. Raw parser or scheduling-library exceptions do not escape the boundary unwrapped.
+The failure is typed in Runtime vocabulary. Public preflight/index entry points document the typed failures through XML `<exception>` declarations. Raw parser or scheduling-library exceptions do not escape the boundary unwrapped.
 
 ## Compatibility contract
 
@@ -63,3 +65,8 @@ The failure is typed in Runtime vocabulary. Raw parser or scheduling-library exc
 - Same-version activity catalog content is never rewritten to correct classification.
 - Corrected classification takes effect on republish.
 - `Recognized([])` remains behaviorally unchanged.
+
+## Contract and catalog governance
+
+- Additive default interface members are classified as a Runtime Core MINOR-compatible expansion and verified against existing implementors.
+- The canonical Runtime extension-point catalog lives at the Runtime composition root (`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`), with the repository root index linking to it.

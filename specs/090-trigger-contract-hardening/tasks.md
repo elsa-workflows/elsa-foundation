@@ -17,7 +17,7 @@
 
 **Purpose**: Confirm the handoff baseline and preserve evidence before changing the contract.
 
-- [ ] T001 Run the focused baseline commands in `specs/090-trigger-contract-hardening/quickstart.md` and record pass counts plus any pre-existing failures in the implementation PR/work log before editing source
+- [ ] T001 Run the focused baseline commands in `specs/090-trigger-contract-hardening/quickstart.md` and record pass counts plus any pre-existing failures in that file's implementation-evidence section before editing source
 - [ ] T002 Verify `docs/maps/manifest.json` freshness for Runtime Core/Scheduling inputs and record which narrow generator must run after implementation in `specs/090-trigger-contract-hardening/quickstart.md`
 
 ---
@@ -31,7 +31,7 @@
 - [ ] T003 Write failing provider-id, outcome invariant, and contextual exception tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
 - [ ] T004 [P] Add immutable preflight outcome/status models in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowTriggerPreflightOutcome.cs`
 - [ ] T005 [P] Add the typed artifact/node/provider-aware failure in `src/Elsa/Workflows/Runtime/Core/Exceptions/WorkflowTriggerPreflightException.cs`
-- [ ] T006 Add the source/binary-compatible stable `ProviderId` default and additive preflight evaluation surface in `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs` and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`
+- [ ] T006 Add the source/binary-compatible stable `ProviderId` default and additive preflight evaluation surface, classify the provider collection as an exact-one Strategy set, and document all public typed failures with XML `<exception>` declarations in `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerIndexer.cs`
 
 **Checkpoint**: Core vocabulary compiles, remains non-persisted, and existing provider/extractor signatures still compile.
 
@@ -45,7 +45,7 @@
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] Write failing zero-provider, multiple-provider, blank-provider-id, duplicate-descriptor, and mixed-valid/invalid-node preflight tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
+- [ ] T007 [P] [US1] Write failing zero-provider, multiple-provider, blank-provider-id, duplicate-resulting-binding-id, mixed-valid/invalid-node, and provider-called-once-per-node preflight tests—while pinning distinct binding ids as valid fan-out—in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs`
 - [ ] T008 [P] [US1] Write failing all-or-nothing validator/index mutation tests using seeded prior bindings in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerIndexerTests.cs`
 - [ ] T009 [P] [US1] Replace the exhausted-Cron skip expectation with fail-before-inner/store-mutation tests; add invalid-later-node, inner-failure, and successful replacement ordering cases in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
 - [ ] T010 [P] [US1] Add first-party valid/invalid contract-matrix assertions for Event in `tests/Elsa/Activities/Runtime/Tests/EventTriggerStimulusProviderTests.cs`
@@ -56,12 +56,12 @@
 
 - [ ] T013 [US1] Implement all-provider evaluation, exact-one claim enforcement, provider-id validation, descriptor duplicate validation, and complete preflight outcomes in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerBindingExtractor.cs`
 - [ ] T014 [US1] Make `WorkflowTriggerIndexer` validate and apply the completed preflight binding set without changing delete/save/observer semantics in `src/Elsa/Workflows/Runtime/Services/WorkflowTriggerIndexer.cs`
-- [ ] T015 [US1] Pre-materialize the complete Timer/Cron schedule set before the inner indexer; throw contextual typed failures for invalid/exhausted schedules and persist only prepared schedules in `src/Elsa/Workflows/Runtime/Scheduling/RecurringTriggerScheduleIndexer.cs`
+- [ ] T015 [US1] Pre-materialize the complete Timer/Cron schedule set before the inner indexer; wrap calculator/parser failures in contextual typed failures while preserving `InnerException`, reject exhausted schedules, and persist only prepared schedules in `src/Elsa/Workflows/Runtime/Scheduling/RecurringTriggerScheduleIndexer.cs`
 - [ ] T016 [P] [US1] Add explicit stable provider ids to Event in `src/Elsa/Activities/Primitives/Activities/EventTriggerStimulusProvider.cs`
 - [ ] T017 [P] [US1] Add explicit stable provider ids to Timer and Cron in `src/Elsa/Activities/Scheduling/Activities/TimerTriggerStimulusProvider.cs` and `src/Elsa/Activities/Scheduling/Activities/CronTriggerStimulusProvider.cs`
 - [ ] T018 [P] [US1] Add the explicit stable provider id to HttpEndpoint in `src/Elsa/Activities/Http/Activities/HttpEndpointTriggerStimulusProvider.cs`
-- [ ] T019 [US1] Add a real inner-indexer integration test proving exhausted Cron preserves seeded trigger bindings and schedules in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
-- [ ] T020 [US1] Run the P1 focused projects from sections 1–3 of `specs/090-trigger-contract-hardening/quickstart.md` and confirm every new test first failed then passes
+- [ ] T019 [US1] Add real publish-level completeness and preservation proofs: exhausted Cron with the recurring decorator preserves seeded bindings/schedules in `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`, while a matrix-driven Event/Timer/Cron/HttpEndpoint set proves valid publications produce complete expected bindings (with companion Timer/Cron schedules asserted by the scheduling test) and invalid publications preserve prior registrations in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
+- [ ] T020 [US1] Run every P1 focused command from sections 1–3 of `specs/090-trigger-contract-hardening/quickstart.md`, including the Publishing.Api matrix added by T019, and confirm every new test first failed then passes
 
 **Checkpoint**: Invalid/unmaterializable first-party start triggers fail before trigger/schedule mutation; valid triggers still register completely.
 
@@ -104,8 +104,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Keep compile-time CLR trigger projection and legacy catalog fallback behavior unchanged while adapting call sites to the preflight contract in `src/Elsa/Workflows/Publishing/Api/Services/ExecutableNodeCompiler.cs` and `src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs`
-- [ ] T032 [US3] If and only if T030 detects an unavoidable durable shape change, bump the affected kind in `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`, add its upcaster under `src/Elsa/Persistence/Groundwork/Serialization/Upcasting/`, and retain/add fixtures under `tests/Elsa/Persistence/Groundwork/Tests/Fixtures/`; otherwise record that no migration was needed in `specs/090-trigger-contract-hardening/quickstart.md`
+- [ ] T031 [US3] Verify the additive default interface members are source/binary compatible with existing provider/extractor implementors, record the Runtime Core MINOR classification and required release-version action under the repository's packaging mechanism, and confirm publishing/compiler entry-point signatures remain unchanged in `specs/090-trigger-contract-hardening/plan.md`, `src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj`, `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`
+- [ ] T032 [US3] If T030 detects any durable shape drift, STOP implementation and amend `specs/090-trigger-contract-hardening/spec.md`, `specs/090-trigger-contract-hardening/plan.md`, and `specs/090-trigger-contract-hardening/tasks.md` for explicit migration approval before touching `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`; otherwise record that no migration was needed in `specs/090-trigger-contract-hardening/quickstart.md`
 - [ ] T033 [US3] Run the compatibility and boundary commands from sections 4–5 of `specs/090-trigger-contract-hardening/quickstart.md`
 
 **Checkpoint**: Historical shapes remain readable, catalog hashes remain stable, and republish produces the hardened contract without runtime Design dependencies.
@@ -116,7 +116,7 @@
 
 **Purpose**: Finish the approved unit without absorbing Unit B or Unit C.
 
-- [ ] T034 [P] Update provider identity, exact-one preflight, failure semantics, and recurring pre-materialization entries in `src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`
+- [ ] T034 [P] Relocate the canonical Runtime extension-point catalog from `src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md` to `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, update `EXTENSION_POINTS.md` to link to the composition-root catalog, classify trigger providers as an exact-one Strategy set, and document provider identity, XML failure contracts, and recurring pre-materialization
 - [ ] T035 [P] Reconcile as-built behavior and task completion notes in `specs/090-trigger-contract-hardening/{spec.md,plan.md,research.md,data-model.md,contracts/trigger-publication-contract.md,contracts/trigger-contract-matrix.md,quickstart.md,tasks.md`
 - [ ] T036 Run `bash tools/maps/generate-extension-point-map.sh`, review the generated findings report, and include only expected snapshots under `docs/maps/` and `docs/reports/`
 - [ ] T037 Run `dotnet build Elsa.Server.slnx` and `dotnet test Elsa.Server.slnx`; record exact results in the implementation handoff/PR and investigate any regression before completion
@@ -196,5 +196,5 @@ Integrator: T008 + T014 + T020 — indexer all-or-nothing validation and focused
 
 - `[P]` means different files or independently reviewable provider packages; shared Core files remain serialized.
 - No task authorizes implementation of Unit B diagnostics or Unit C composition/startup health.
-- T032 is conditional and must not create a migration when T030 proves persisted shapes are unchanged.
+- T032 is a mandatory stop gate, not authorization to create a migration inside Unit A.
 - Publication-wide transactional repair remains a separately approved future unit.

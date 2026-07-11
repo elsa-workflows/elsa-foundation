@@ -35,14 +35,14 @@ Harden the existing first-party trigger publication path without redesigning rou
 | Gate | Result | Evidence / design consequence |
 |---|---|---|
 | Framework §2.1 three-layer separation | PASS | Runtime contracts/models remain in `Elsa.Workflows.Runtime.Core`; logic remains in existing runtime and scheduling implementations. No new project. |
-| Framework §2.6 / §2.24 sanctioned composition | PASS | The existing provider and decorator seams are retained. No new provider-neutral projection framework or ad-hoc cross-feature event is introduced. |
+| Framework §2.6 / §2.24 sanctioned composition | PASS | `IActivityTriggerStimulusProvider` is explicitly classified as a Strategy set: multiple algorithms are registered, the executable node supplies selection context, and exact-one ownership is required. It is not a data-contribution fan-in and does not claim the rare §2.6.5 sync-contributor exception. The scheduling decorator remains local; no generic projection framework or ad-hoc event is introduced. |
 | Framework §2.21 / §2.23 test discipline | PASS | Existing extractor/indexer/scheduling/provider tests are preserved and expanded branch-by-branch; feature registration remains unchanged. |
 | Framework §4.2 Core compatibility | PASS | Existing extractor/indexer signatures and durable models remain. Stable provider identity is additive with a default compatibility path; any Core API addition is minor-compatible. |
 | Elsa §E2.2 Design/Runtime split | PASS | Preflight consumes `WorkflowExecutable` and runtime providers only. No Runtime → Design reference. |
 | Elsa §E2.6 executable-always-runs / artifact-only runtime | PASS | Existing executable shapes remain readable; corrected classification is produced on republish, and runtime execution reads only the artifact. |
 | Elsa §E2.8 catalog hash immutability | PASS | Same-version catalog `ExecutionType` remains untouched; CLR trigger capability continues to be projected at compilation. This section is provisional, so PR #621 and compatibility tests remain supporting evidence. |
 | Elsa §E6 naming | PASS | Proposed names stay within the component budget and use established `Provider`, `Outcome`, `Validator`, and `Exception` roles. |
-| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` are unchanged. If implementation discovers a durable shape change is unavoidable, stop and add version bump, upcaster, and golden fixtures before proceeding. |
+| Groundwork schema evolution | PASS | `WorkflowTriggerBinding` and `RecurringTriggerSchedule` are unchanged. If implementation discovers durable shape drift, stop and obtain an amended spec/plan/tasks approval before touching schema versions, upcasters, or fixtures. |
 
 ### Post-design re-check
 
@@ -73,14 +73,17 @@ specs/090-trigger-contract-hardening/
 src/Elsa/Workflows/Runtime/Core/
 ├── Contracts/IActivityTriggerStimulusProvider.cs
 ├── Contracts/IWorkflowTriggerBindingExtractor.cs
+├── Contracts/IWorkflowTriggerIndexer.cs
 ├── Exceptions/WorkflowTriggerPreflightException.cs
 └── Models/
     ├── ActivityTriggerStimulusResult.cs
     └── WorkflowTriggerPreflightOutcome.cs
 
-src/Elsa/Workflows/Runtime/Services/
-├── WorkflowTriggerBindingExtractor.cs
-└── WorkflowTriggerIndexer.cs
+src/Elsa/Workflows/Runtime/
+├── EXTENSION_POINTS.md (canonical Runtime-domain catalog; relocated here if needed)
+└── Services/
+    ├── WorkflowTriggerBindingExtractor.cs
+    └── WorkflowTriggerIndexer.cs
 
 src/Elsa/Workflows/Runtime/Scheduling/
 └── RecurringTriggerScheduleIndexer.cs
@@ -107,7 +110,13 @@ tests/Elsa/Workflows/Publishing/Api/Tests/
 
 ## Complexity Tracking
 
-No constitutional violations or exceptions are required.
+No architectural exception is required. One existing test objective changes under explicit architect/user approval:
+
+| Approved behavior correction | Approval and rationale | Superseded expectation |
+|---|---|---|
+| Exhausted Cron start triggers fail publication before mutation | Approved as part of the Unit A boundary on 2026-07-11 and explicitly re-approved after `speckit-analyze`. A start trigger with no future occurrence is unroutable and violates the unit's no-silent-success outcome. | The existing warning-and-skip test is intentionally replaced; preserving it would preserve the defect this unit was approved to correct. |
+
+The Runtime extension-point catalog currently lives under Runtime Core despite the framework §2.22.1 composition-root rule. Because this unit changes those extension points, implementation must relocate the canonical catalog to `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, update the repo-wide index, and leave redirects only where needed for discoverability.
 
 ## Phase 0: Research
 

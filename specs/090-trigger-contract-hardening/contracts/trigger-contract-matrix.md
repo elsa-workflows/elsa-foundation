@@ -10,6 +10,7 @@
 ## Matrix invariants
 
 - Every active first-party start trigger produces at least one usable binding.
+- Trigger providers are an exact-one Strategy set selected by executable-node context; they do not aggregate contributions.
 - Timer and Cron additionally produce a materialized future schedule.
 - Only an explicit provider-recognized empty result represents non-start behavior.
 - Shared stimulus identity may fan out for Event/Timer/Cron; HTTP template+method uniqueness remains HTTP-owned.

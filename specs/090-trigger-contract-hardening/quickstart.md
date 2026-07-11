@@ -6,6 +6,10 @@
 - Repository dependencies restored.
 - Feature implemented according to [plan.md](plan.md).
 
+## Implementation evidence
+
+Record baseline and final focused/full-suite counts here during implementation. Record any pre-existing failure before source edits so the unit does not silently absorb it.
+
 ## 1. Shared provider and index contract
 
 ```bash
@@ -15,6 +19,7 @@ dotnet test tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.cspr
 Expected:
 
 - zero-provider and multiple-provider claims fail with contextual preflight errors;
+- each strategy is evaluated at most once per executable trigger node;
 - one provider id is recorded for registered and intentionally non-starting outcomes;
 - one invalid node preserves all prior bindings;
 - `Recognized([])` succeeds with no binding.
@@ -33,6 +38,7 @@ Expected: each provider satisfies its row in [trigger-contract-matrix.md](contra
 
 ```bash
 dotnet test tests/Elsa/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj --filter "FullyQualifiedName~RecurringTriggerScheduleIndexerTests"
+dotnet test tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj --filter "FullyQualifiedName~PublishWorkflowTriggerIndexingTests"
 ```
 
 Expected:
@@ -41,11 +47,12 @@ Expected:
 - exhausted Cron and invalid Timer/Cron inputs fail before prior bindings or schedules change;
 - successful republish still replaces old schedules;
 - an inner indexing failure leaves schedules unchanged.
+- the publish-level Event/Timer/Cron/HttpEndpoint matrix produces complete expected bindings for valid cases and preserves prior registrations for invalid cases.
 
 ## 4. Publication and compatibility
 
 ```bash
-dotnet test tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj --filter "FullyQualifiedName~PublishWorkflowTriggerIndexingTests|FullyQualifiedName~WorkflowExecutableCompilerTests"
+dotnet test tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj --filter "FullyQualifiedName~WorkflowExecutableCompilerTests"
 dotnet test tests/Elsa/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj --filter "FullyQualifiedName~ClrAssemblyScannerTests"
 ```
 
@@ -64,4 +71,6 @@ dotnet build Elsa.Server.slnx
 dotnet test Elsa.Server.slnx
 ```
 
-Expected: no Runtime → Design dependency, no warnings or errors, and all existing tests remain green. If implementation changes a Groundwork-persisted record despite the plan, stop and add a schema version, upcaster, and historical/current golden fixtures before accepting the result.
+Expected: no Runtime → Design dependency, no warnings or errors, and all existing tests remain green. If implementation changes a Groundwork-persisted record despite the plan, stop and amend the spec/plan/tasks for explicit migration approval before changing schema versions, upcasters, or fixtures.
+
+Also verify the Runtime Core public API change is classified as MINOR-compatible, the canonical extension-point catalog resides at `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`, and the repository root `EXTENSION_POINTS.md` links to it.

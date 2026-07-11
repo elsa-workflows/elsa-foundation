@@ -10,11 +10,11 @@
 
 ## D2 — Every classified node has exactly one recognizing provider
 
-**Decision**: Evaluate all configured `IActivityTriggerStimulusProvider` instances for each executable trigger node. Zero claims fail as unrecognized; more than one claim fails as ambiguous with sorted provider identities; one claim succeeds even when it returns zero descriptors.
+**Decision**: Classify `IActivityTriggerStimulusProvider` as a sanctioned Strategy set selected by executable-node context, not as a data-contribution fan-in. Evaluate all configured strategies for each executable trigger node. Zero claims fail as unrecognized; more than one claim fails as ambiguous with sorted provider identities; one claim succeeds even when it returns zero descriptors.
 
 **Rationale**: Current first-provider-wins behavior makes correctness registration-order-dependent and cannot explain which provider owned the node. Exact-one recognition converts a hidden DI ordering rule into an explicit contract.
 
-**Alternatives considered**: Keep first-provider-wins (rejected: silent ambiguity); introduce provider priorities (rejected: encodes conflict resolution instead of detecting an invalid ownership graph); require global uniqueness of stimulus hashes (rejected: valid fan-out is provider-specific).
+**Alternatives considered**: Keep first-provider-wins (rejected: silent ambiguity); model providers as §2.6.1 data contributors (rejected: the consumer selects exactly one algorithm by node context rather than aggregating contributed data); claim the rare §2.6.5 sync-contributor exception (rejected: providers return data, so the behavior-not-data criterion fails); introduce provider priorities (rejected: encodes conflict resolution instead of detecting an invalid ownership graph); require global uniqueness of stimulus hashes (rejected: valid fan-out is provider-specific).
 
 ## D3 — Stable provider identity is additive and non-persisted
 
@@ -31,6 +31,8 @@
 **Rationale**: The outcome is needed for exact provider ownership and intentional non-start visibility, but neither the durable binding document nor the public publication response should change in Unit A.
 
 **Alternatives considered**: Change `Extract` return type (rejected: major source/binary break); add a new persisted publication-status document (rejected: duplicates current registered reality); return diagnostics from `PublishedWorkflowView` (deferred to Unit B).
+
+Descriptor duplicate validation uses the deterministic result identity: two candidates are duplicates only when `WorkflowTriggerBinding.BuildId(artifactId, executableNodeId, stimulusHash)` is equal. Different nodes or distinct stimulus hashes remain valid, preserving provider-owned multi-binding and cross-artifact fan-out.
 
 ## D5 — Pre-materialize recurring schedules locally
 

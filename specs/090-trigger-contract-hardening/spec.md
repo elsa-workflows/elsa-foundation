@@ -61,7 +61,7 @@ An operator upgrading an existing installation can start the application and rep
 
 ### Edge Cases
 
-- A provider recognizes a node but returns duplicate or blank stimulus descriptors.
+- A provider recognizes a node but returns blank stimulus identity or two descriptors that produce the same deterministic trigger-binding id; descriptors with distinct resulting binding ids remain valid fan-out.
 - Multiple providers claim the same executable activity type.
 - A trigger-capable CLR type cannot be resolved from its executable construction descriptor.
 - A first-party provider produces several descriptors and only one is invalid.
@@ -78,9 +78,9 @@ An operator upgrading an existing installation can start the application and rep
 - **FR-002**: Runtime trigger publication MUST use only the runnable artifact and configured runtime providers; it MUST NOT read Design-owned state.
 - **FR-003**: Every trigger node in the runnable artifact MUST receive exactly one terminal recognition outcome: recognized with one or more materializable bindings, recognized as intentionally non-starting, or rejected.
 - **FR-004**: A recognizing provider MUST expose a stable, non-secret provider identifier in the preflight outcome.
-- **FR-005**: A trigger node claimed by more than one provider MUST be rejected as an ambiguous contract instead of relying on registration order.
+- **FR-005**: Trigger providers MUST be treated as a context-selected Strategy set, not as data contributors: a trigger node claimed by more than one strategy MUST be rejected as an ambiguous contract instead of relying on registration order.
 - **FR-006**: A classified trigger recognized by no provider MUST fail publication with artifact and executable-node context.
-- **FR-007**: Every produced stimulus descriptor MUST be validated for required identity and provider-owned publication requirements before any trigger or schedule registration for the artifact is deleted or saved.
+- **FR-007**: Every produced stimulus descriptor MUST be validated for required identity and provider-owned publication requirements before any trigger or schedule registration for the artifact is deleted or saved. Two descriptors are duplicates only when they produce the same deterministic trigger-binding id; distinct binding ids remain valid provider-owned fan-out.
 - **FR-008**: Validation MUST be all-or-nothing for the artifact: one invalid node or descriptor prevents mutation for every trigger in that publication attempt.
 - **FR-009**: A provider-recognized empty binding result MUST remain a valid intentionally non-starting outcome and MUST NOT be treated as provider absence.
 - **FR-010**: Event, Timer, Cron, and HttpEndpoint MUST each have a contract-matrix row covering authored intent, executable classification, provider recognition, binding cardinality, provider-owned projection, invalid identity, and intentional non-start behavior.
@@ -97,7 +97,7 @@ An operator upgrading an existing installation can start the application and rep
 - **Trigger Preflight Outcome**: The complete, immutable assessment of every trigger-capable executable node before registration mutation; contains artifact identity and per-node outcomes.
 - **Trigger Node Outcome**: Associates one executable node with its classification, recognizing provider identifier, recognition status, produced bindings, and any required provider-owned projection.
 - **Trigger Binding Candidate**: A validated, not-yet-persisted normalized stimulus binding derived from one executable node.
-- **Provider-Owned Projection Candidate**: A validated, not-yet-persisted provider-specific registration required to make a binding invocable, such as a recurring schedule.
+- **Recurring Schedule Candidate**: A validated, not-yet-persisted Timer/Cron schedule materialized locally by the scheduling module before registration mutation.
 - **Trigger Contract Matrix**: The verification table defining expected behavior for Event, Timer, Cron, and HttpEndpoint.
 
 ## Success Criteria *(mandatory)*

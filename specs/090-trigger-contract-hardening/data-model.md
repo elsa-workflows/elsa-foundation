@@ -20,7 +20,7 @@ The outcome exists only for the duration of publication. It is not part of `Work
 | Activity type | Runtime activity identity | Required |
 | Provider id | Stable identity of the single recognizing provider | Required, nonblank |
 | Status | `Registered` or `IntentionallyNonStarting` | Exactly one terminal status |
-| Bindings | Zero or more normalized binding candidates | Empty only for `IntentionallyNonStarting`; non-empty for `Registered` |
+| Bindings | Zero or more normalized binding candidates | Empty only for `IntentionallyNonStarting`; non-empty for `Registered`; unique by deterministic trigger-binding id |
 
 Rejected nodes do not produce a completed outcome; preflight throws a typed failure carrying the available artifact/node/provider context.
 
@@ -33,6 +33,8 @@ Existing per-provider recognition result. Semantics remain:
 - `Recognized([])`: provider owns the type but the authored node is intentionally non-starting.
 
 Provider identity belongs to the provider seam/preflight wrapper rather than persisted descriptor metadata.
+
+`IActivityTriggerStimulusProvider` instances form an exact-one Strategy set. They are not a contribution collection: the consumer selects one owner using the executable node as context, then consumes only that strategy's result.
 
 ## WorkflowTriggerBinding
 
