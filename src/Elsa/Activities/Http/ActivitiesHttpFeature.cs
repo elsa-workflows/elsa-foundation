@@ -35,7 +35,7 @@ namespace Elsa.Activities.Http;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Runtime")]
-[ManifestFeatureCategory("HTTP")]
+[ManifestFeatureCategory("Http")]
 [ShellFeature(
     name: "ActivitiesHttp",
     DisplayName = "Activities HTTP",

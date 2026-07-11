@@ -31,6 +31,9 @@
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
           "FoundationIdentityApi": {},
           "FoundationIdentityAspNetCoreIdentity": {
             "IsDefault": true,
@@ -46,9 +49,6 @@
             "SeedAdminEmail": "admin@elsa.local",
             "SeedAdminRoleName": "administrator"
           },
-          "FoundationIdentityOidc": {
-            "IsDefault": false
-          },
           "FoundationIdentityOpenIddict": {
             "IsDevelopmentOrDemo": true
           },
@@ -60,7 +60,6 @@
             "BaseDirectory": ".elsa/copilot"
           },
           "GroundworkRuntimePersistenceSqlite": {},
-          "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
           "JavaScriptEndpoints": {},
