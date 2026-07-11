@@ -15,9 +15,9 @@ public interface IWorkflowTriggerBindingExtractor
     /// <summary>
     /// Evaluates the complete non-persisted trigger preflight outcome for <paramref name="executable"/>.
     /// Existing extractor implementations receive a binding-only compatibility projection. Its activity identity
-    /// is resolved from the binding's executable node id, with an explicit unresolved marker when a legacy binding
-    /// references no node in the executable. Implementations that can observe provider recognition should override
-    /// this member to return complete node outcomes.
+    /// is resolved from the binding's executable node id; a legacy binding that references no executable node is
+    /// rejected as an executable-identity preflight failure. Implementations that can observe provider recognition
+    /// should override this member to return complete node outcomes.
     /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="executable"/> is <see langword="null"/>.</exception>
     /// <exception cref="WorkflowTriggerPreflightException">A classified trigger cannot be safely materialized.</exception>
@@ -30,12 +30,18 @@ public interface IWorkflowTriggerBindingExtractor
             .GroupBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
             .Select(group =>
             {
-                var activityType = executable.NodesById.TryGetValue(group.Key, out var node)
-                    ? node.ActivityType
-                    : $"<unresolved:{group.Key}>";
+                if (!executable.NodesById.TryGetValue(group.Key, out var node))
+                    throw new WorkflowTriggerPreflightException(
+                        executable.Identity.ArtifactId,
+                        group.Key,
+                        "<unresolved>",
+                        [providerId],
+                        "ExecutableIdentity",
+                        $"Legacy trigger binding node '{group.Key}' does not exist in executable artifact '{executable.Identity.ArtifactId}'.");
+
                 return new WorkflowTriggerNodePreflightOutcome(
                     group.Key,
-                    activityType,
+                    node.ActivityType,
                     providerId,
                     WorkflowTriggerPreflightStatus.Registered,
                     group.ToArray());

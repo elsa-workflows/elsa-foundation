@@ -20,7 +20,8 @@ public interface IRecurringTriggerScheduleProvider
 {
     /// <summary>
     /// Gets the stable, non-secret identity used to attribute recurring preflight outcomes and failures.
-    /// Existing providers receive a deterministic fallback derived from their public CLR type identity.
+    /// Existing providers receive a deterministic fallback derived from their public CLR type identity. An
+    /// override must be nonblank whenever the provider recognizes a node or fails while describing one.
     /// </summary>
     string ProviderId => GetType().FullName ?? GetType().Name;
 

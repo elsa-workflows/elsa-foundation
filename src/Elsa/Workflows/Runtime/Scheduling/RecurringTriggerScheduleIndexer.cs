@@ -80,7 +80,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             var selection = Describe(artifactId, node);
             if (selection is null)
                 continue;
-            var (provider, descriptor) = selection.Value;
+            var (providerId, descriptor) = selection.Value;
 
             DateTimeOffset? next;
             try
@@ -89,10 +89,10 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
             {
-                throw Failure(artifactId, node, provider.ProviderId, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
+                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
             }
             if (next is null)
-                throw Failure(artifactId, node, provider.ProviderId, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
+                throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
 
             schedules.Add(new RecurringTriggerSchedule(
                 ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId),
@@ -113,13 +113,15 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         return bindings;
     }
 
-    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, string providerId, string facet, string message, Exception? innerException = null) =>
-        new(artifactId, node.ExecutableNodeId, node.ActivityType, [providerId], facet, message, innerException);
+    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, IReadOnlyCollection<string> providerIds, string facet, string message, Exception? innerException = null) =>
+        new(artifactId, node.ExecutableNodeId, node.ActivityType, providerIds, facet, message, innerException);
 
-    private (IRecurringTriggerScheduleProvider Provider, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
+    private (string ProviderId, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
     {
         foreach (var provider in _providers)
         {
+            var providerId = provider.ProviderId;
+            var providerType = provider.GetType().FullName ?? provider.GetType().Name;
             RecurringScheduleDescriptor? descriptor;
             try
             {
@@ -127,17 +129,36 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
             {
+                if (string.IsNullOrWhiteSpace(providerId))
+                    throw Failure(
+                        artifactId,
+                        node,
+                        [],
+                        "ProviderIdentity",
+                        $"Recurring trigger provider type '{providerType}' has a blank provider id and failed while describing node '{node.ExecutableNodeId}'.",
+                        exception);
+
                 throw Failure(
                     artifactId,
                     node,
-                    provider.ProviderId,
+                    [providerId],
                     "RecurringSchedule",
                     $"The recurring schedule descriptor is invalid: {exception.Message}",
                     exception);
             }
 
             if (descriptor is not null)
-                return (provider, descriptor);
+            {
+                if (string.IsNullOrWhiteSpace(providerId))
+                    throw Failure(
+                        artifactId,
+                        node,
+                        [],
+                        "ProviderIdentity",
+                        $"Recurring trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
+
+                return (providerId, descriptor);
+            }
         }
 
         return null;

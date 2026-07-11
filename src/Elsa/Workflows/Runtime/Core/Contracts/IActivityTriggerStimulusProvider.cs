@@ -28,6 +28,7 @@ public interface IActivityTriggerStimulusProvider
     /// <summary>
     /// Gets the stable, non-secret identity of this strategy. Existing providers receive a deterministic fallback
     /// derived from their public CLR type identity; first-party providers should override it with an explicit id.
+    /// An override must be nonblank whenever the provider recognizes a node or fails while describing one.
     /// </summary>
     string ProviderId => GetType().FullName ?? GetType().Name;
 

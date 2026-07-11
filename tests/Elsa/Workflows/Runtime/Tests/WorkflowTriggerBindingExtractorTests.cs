@@ -129,6 +129,28 @@ public sealed class WorkflowTriggerBindingExtractorTests
         Assert.Equal("ProviderIdentity", exception.Facet);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Evaluate_RejectsThrowingProviderWithBlankProviderId_AsProviderIdentityFailure(string? providerId)
+    {
+        var innerException = new FormatException("invalid authored trigger input");
+        IWorkflowTriggerBindingExtractor extractor = new WorkflowTriggerBindingExtractor([
+            new ThrowingProvider(providerId, "Elsa.Event", innerException)
+        ]);
+        var executable = Executable(TriggerNode("node-event", "Elsa.Event"));
+
+        var exception = Assert.Throws<WorkflowTriggerPreflightException>(() => extractor.Evaluate(executable));
+
+        Assert.Equal("artifact-1", exception.ArtifactId);
+        Assert.Equal("node-event", exception.ExecutableNodeId);
+        Assert.Equal("Elsa.Event", exception.ActivityType);
+        Assert.Empty(exception.ProviderIds);
+        Assert.Equal("ProviderIdentity", exception.Facet);
+        Assert.Same(innerException, exception.InnerException);
+    }
+
     [Fact]
     public void Evaluate_RejectsDescriptorsThatProduceTheSameBindingId()
     {
@@ -218,6 +240,19 @@ public sealed class WorkflowTriggerBindingExtractorTests
         var nodeOutcome = Assert.Single(outcome.NodeOutcomes);
         Assert.Equal("Event", Assert.Single(nodeOutcome.Bindings).StimulusType);
         Assert.Equal("Elsa.Event", nodeOutcome.ActivityType);
+    }
+
+    [Fact]
+    public void Evaluate_LegacyExtractorRejectsBindingForMissingExecutableNode()
+    {
+        IWorkflowTriggerBindingExtractor extractor = new LegacyExtractor([Binding("node-missing", "sha256:event:hello")]);
+        var executable = Executable(TriggerNode("node-event", "Elsa.Event"));
+
+        var exception = Assert.Throws<WorkflowTriggerPreflightException>(() => extractor.Evaluate(executable));
+
+        Assert.Equal("artifact-1", exception.ArtifactId);
+        Assert.Equal("node-missing", exception.ExecutableNodeId);
+        Assert.Contains(exception.Facet, new[] { "BindingIdentity", "ExecutableIdentity" });
     }
 
     [Fact]
@@ -394,6 +429,17 @@ public sealed class WorkflowTriggerBindingExtractorTests
                 ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(activityType, stimulusHash)])
                 : ActivityTriggerStimulusResult.NotRecognized;
         }
+    }
+
+    private sealed class ThrowingProvider(string? providerId, string activityType, Exception exception)
+        : IActivityTriggerStimulusProvider
+    {
+        public string ProviderId => providerId!;
+
+        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
+            StringComparer.Ordinal.Equals(node.ActivityType, activityType)
+                ? throw exception
+                : ActivityTriggerStimulusResult.NotRecognized;
     }
 
     private sealed class LegacyExtractor(IReadOnlyCollection<WorkflowTriggerBinding> bindings) : IWorkflowTriggerBindingExtractor

@@ -56,6 +56,20 @@ The T019 publication matrix now invokes the real Event, Timer, Cron, and HttpEnd
 | Publishing.Api trigger indexing | 11 | 0 | 0 |
 | **Total** | **101** | **0** | **0** |
 
+### US1/MVP second QA follow-up focused gate (2026-07-11)
+
+Legacy extractor bindings that reference no executable node now fail preflight instead of producing a registered outcome with a synthetic activity type. Activity and recurring providers with null, empty, or whitespace ids are rejected safely when they claim a node or throw while describing it; failures use the `ProviderIdentity` facet, retain artifact/node context, and never pass the invalid id into the typed failure's provider-id collection.
+
+| Focus | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Runtime extractor/indexer | 32 | 0 | 0 |
+| Event provider | 8 | 0 | 0 |
+| Timer/Cron providers | 11 | 0 | 0 |
+| HttpEndpoint provider | 34 | 0 | 0 |
+| Recurring schedule indexer | 15 | 0 | 0 |
+| Publishing.Api trigger indexing | 11 | 0 | 0 |
+| **Total** | **111** | **0** | **0** |
+
 ### Map freshness note
 
 `docs/maps/manifest.json` reports no relevant inputs were dirty when its snapshot was generated, but its authoritative input fingerprint predates the current spec 090 inputs. The relevant map is therefore treated as stale for this work. Because the implementation changes Runtime extension-point contracts, the narrow post-implementation refresh is `bash tools/maps/generate-extension-point-map.sh`; execution remains assigned to T036 outside the US1/MVP checkpoint.

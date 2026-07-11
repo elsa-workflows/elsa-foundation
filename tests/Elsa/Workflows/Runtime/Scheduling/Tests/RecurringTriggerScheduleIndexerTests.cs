@@ -148,6 +148,59 @@ public sealed class RecurringTriggerScheduleIndexerTests
         Assert.Same(expected, exception.InnerException);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Index_ClaimingProviderWithInvalidIdentity_FailsBeforeScheduleCalculationOrMutation(string? providerId)
+    {
+        var events = new List<string>();
+        var inner = new FakeInner(() => events.Add("inner"));
+        var store = new RecordingScheduleStore(events);
+        var calculator = new RecordingCalculator(events);
+        var provider = new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash", "PT5M", providerId: providerId);
+        var indexer = CreateIndexer(inner, store, calculator, provider);
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+            await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Timer"))));
+
+        Assert.Equal("artifact-1", exception.ArtifactId);
+        Assert.Equal("node-1", exception.ExecutableNodeId);
+        Assert.Equal("Elsa.Timer", exception.ActivityType);
+        Assert.Equal("ProviderIdentity", exception.Facet);
+        Assert.Empty(exception.ProviderIds);
+        Assert.Contains("provider id", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(events);
+        Assert.False(inner.Called);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public async Task Index_ThrowingProviderWithInvalidIdentity_FailsSafelyBeforeMutation(string? providerId)
+    {
+        var expected = new InvalidOperationException("descriptor failed");
+        var events = new List<string>();
+        var inner = new FakeInner(() => events.Add("inner"));
+        var store = new RecordingScheduleStore(events);
+        var provider = new ThrowingScheduleProvider("Elsa.Cron", providerId, expected);
+        var indexer = CreateIndexer(inner, store, provider);
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+            await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron"))));
+
+        Assert.Equal("artifact-1", exception.ArtifactId);
+        Assert.Equal("node-1", exception.ExecutableNodeId);
+        Assert.Equal("Elsa.Cron", exception.ActivityType);
+        Assert.Equal("ProviderIdentity", exception.Facet);
+        Assert.Empty(exception.ProviderIds);
+        Assert.Contains("provider id", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Same(expected, exception.InnerException);
+        Assert.Empty(events);
+        Assert.False(inner.Called);
+    }
+
     [Fact]
     public async Task Index_InnerFailure_LeavesSchedulesUnchanged()
     {
@@ -307,9 +360,9 @@ public sealed class RecurringTriggerScheduleIndexerTests
         string stimulusHash,
         string expression,
         RecurringScheduleKind kind = RecurringScheduleKind.Interval,
-        string providerId = "test.recurring") : IRecurringTriggerScheduleProvider
+        string? providerId = "test.recurring") : IRecurringTriggerScheduleProvider
     {
-        public string ProviderId => providerId;
+        public string ProviderId => providerId!;
 
         public RecurringScheduleDescriptor? Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
@@ -317,9 +370,9 @@ public sealed class RecurringTriggerScheduleIndexerTests
                 : null;
     }
 
-    private sealed class ThrowingScheduleProvider(string activityType, string providerId, Exception exception) : IRecurringTriggerScheduleProvider
+    private sealed class ThrowingScheduleProvider(string activityType, string? providerId, Exception exception) : IRecurringTriggerScheduleProvider
     {
-        public string ProviderId => providerId;
+        public string ProviderId => providerId!;
 
         public RecurringScheduleDescriptor? Describe(ExecutableNode node)
         {

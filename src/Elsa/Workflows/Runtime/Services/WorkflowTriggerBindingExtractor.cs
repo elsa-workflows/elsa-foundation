@@ -56,9 +56,11 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
             if (!IsTrigger(node))
                 continue;
 
-            var claims = new List<(IActivityTriggerStimulusProvider Provider, ActivityTriggerStimulusResult Result)>();
+            var claims = new List<(string ProviderId, ActivityTriggerStimulusResult Result)>();
             foreach (var provider in _providers)
             {
+                var providerId = provider.ProviderId;
+                var providerType = provider.GetType().FullName ?? provider.GetType().Name;
                 ActivityTriggerStimulusResult describedResult;
                 try
                 {
@@ -66,27 +68,34 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                 }
                 catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
                 {
-                    throw Failure(identity.ArtifactId, node, [provider.ProviderId], "ProviderRecognition",
-                        $"Trigger provider '{provider.ProviderId}' could not describe node '{node.ExecutableNodeId}'.", exception);
+                    if (string.IsNullOrWhiteSpace(providerId))
+                        throw Failure(identity.ArtifactId, node, [], "ProviderIdentity",
+                            $"Trigger provider type '{providerType}' has a blank provider id and failed while describing node '{node.ExecutableNodeId}'.", exception);
+
+                    throw Failure(identity.ArtifactId, node, [providerId], "ProviderRecognition",
+                        $"Trigger provider '{providerId}' could not describe node '{node.ExecutableNodeId}'.", exception);
                 }
 
                 if (describedResult.IsRecognized)
-                    claims.Add((provider, describedResult));
+                {
+                    if (string.IsNullOrWhiteSpace(providerId))
+                        throw Failure(identity.ArtifactId, node, [], "ProviderIdentity",
+                            $"Trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
+
+                    claims.Add((providerId, describedResult));
+                }
             }
 
             if (claims.Count == 0)
                 throw Failure(identity.ArtifactId, node, [], "ProviderRecognition",
                     $"No trigger stimulus provider recognizes node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}').");
 
-            var providerIds = claims.Select(x => x.Provider.ProviderId).Order(StringComparer.Ordinal).ToArray();
-            if (providerIds.Any(string.IsNullOrWhiteSpace))
-                throw Failure(identity.ArtifactId, node, providerIds, "ProviderIdentity",
-                    $"A trigger stimulus provider recognizing node '{node.ExecutableNodeId}' has a blank provider id.");
+            var providerIds = claims.Select(x => x.ProviderId).Order(StringComparer.Ordinal).ToArray();
             if (claims.Count != 1)
                 throw Failure(identity.ArtifactId, node, providerIds, "ProviderRecognition",
                     $"Several trigger stimulus providers recognize node '{node.ExecutableNodeId}': {string.Join(", ", providerIds)}.");
 
-            var (recognizingProvider, claimResult) = claims[0];
+            var (recognizingProviderId, claimResult) = claims[0];
             var bindings = claimResult.Descriptors.Select(descriptor =>
                 new WorkflowTriggerBinding(
                     TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId, descriptor.StimulusHash),
@@ -103,13 +112,13 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
 
             var duplicateBindingId = bindings.GroupBy(x => x.TriggerBindingId, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1)?.Key;
             if (duplicateBindingId is not null)
-                throw Failure(identity.ArtifactId, node, [recognizingProvider.ProviderId], "BindingIdentity",
-                    $"Trigger provider '{recognizingProvider.ProviderId}' produced duplicate binding id '{duplicateBindingId}'.");
+                throw Failure(identity.ArtifactId, node, [recognizingProviderId], "BindingIdentity",
+                    $"Trigger provider '{recognizingProviderId}' produced duplicate binding id '{duplicateBindingId}'.");
 
             var status = bindings.Length == 0
                 ? WorkflowTriggerPreflightStatus.IntentionallyNonStarting
                 : WorkflowTriggerPreflightStatus.Registered;
-            outcomes.Add(new WorkflowTriggerNodePreflightOutcome(node.ExecutableNodeId, node.ActivityType, recognizingProvider.ProviderId, status, bindings));
+            outcomes.Add(new WorkflowTriggerNodePreflightOutcome(node.ExecutableNodeId, node.ActivityType, recognizingProviderId, status, bindings));
         }
 
         return new WorkflowTriggerPreflightOutcome(identity, outcomes);
