@@ -18,6 +18,7 @@ public interface IWorkflowTriggerBindingExtractor
     /// is resolved from the binding's executable node id; a legacy binding that references no executable node is
     /// rejected as an executable-identity preflight failure. Implementations that can observe provider recognition
     /// should override this member to return complete node outcomes.
+    /// The default body preserves source and binary compatibility for extractors compiled before this member existed.
     /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="executable"/> is <see langword="null"/>.</exception>
     /// <exception cref="WorkflowTriggerPreflightException">A classified trigger cannot be safely materialized.</exception>

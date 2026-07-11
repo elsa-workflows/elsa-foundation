@@ -74,6 +74,37 @@ Legacy extractor bindings that reference no executable node now fail preflight i
 
 `docs/maps/manifest.json` reports no relevant inputs were dirty when its snapshot was generated, but its authoritative input fingerprint predates the current spec 090 inputs. The relevant map is therefore treated as stale for this work. Because the implementation changes Runtime extension-point contracts, the narrow post-implementation refresh is `bash tools/maps/generate-extension-point-map.sh`; execution remains assigned to T036 outside the US1/MVP checkpoint.
 
+### US3 compatibility evidence (2026-07-11)
+
+- RED/sensitivity before compatibility assertions were finalized: all four legacy CLR catalog rows produced
+  executable `Trigger` metadata against a temporary `Action` sentinel, and both catalog-hash pins rejected
+  placeholder values. No production or planning files had been edited.
+- Legacy `Action` catalog compile/republish matrix: 8 passed, 0 failed, 0 skipped across Event, Timer, Cron,
+  and HttpEndpoint; invalid republish preserved the seeded bindings and recurring schedule where applicable.
+- Same-version CLR catalog compatibility: 2 passed, 0 failed, 0 skipped. Trigger fixture and HttpEndpoint remain
+  `Action` rows with pinned hashes `59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03` and
+  `504691EF9BED6726DFEADB1ADAD22E8F30A987A9DFCC3F47E86024ADBE460986` respectively.
+- Executable compiler goldens: 10 passed, 0 failed, 0 skipped.
+- Groundwork runtime document fixtures: 34 passed, 0 failed, 0 skipped with `GROUNDWORK_FIXTURE_REGEN` unset.
+- No executable, trigger-binding, recurring-schedule, golden-fixture, or Groundwork schema-version drift was
+  detected. T032 therefore requires no migration; `ElsaRuntimeDocumentVersions` was not changed.
+- A provider and extractor compiled against pre-change commit `317caf8c` loaded against the current Runtime Core
+  assembly and dispatched both additive default interface members. The compiler and publish-handler entry-point
+  files are unchanged from that baseline. Runtime Core is MINOR-compatible; CI injects package versions through
+  `.github/workflows/packages.yml`, so release owners must advance `env.base_version` from `4.0.0` to `4.1.0`
+  and use a `v4.1.0`/`4.1.0` release tag rather than adding a project-local version.
+- Section 4 final filters: `WorkflowExecutableCompilerTests` 21 passed and `ClrAssemblyScannerTests` 21 passed;
+  both had 0 failed and 0 skipped.
+- Section 5 architecture gate: 50 passed, 2 failed, 0 skipped. The failures match the pre-US3 baseline exactly:
+  duplicate project references in `Elsa.Server` / `Elsa.Diagnostics.StructuredLogs.Persistence.Tests`, and the
+  missing `ActivitiesHttpFeature` server-catalog assertion. No Runtime-to-Design boundary failure was reported.
+- `dotnet build Elsa.Server.slnx`: succeeded with 0 warnings and 0 errors.
+- Final post-fix `dotnet test Elsa.Server.slnx`: 3,626 passed, 2 failed, 0 skipped across 52 test projects. The
+  only failures are the same two architecture baseline items above. The first full-suite pass also exposed a
+  stale Runtime.Http observer fixture whose legacy binding referenced a node absent from its fake executable;
+  the fixture now uses the executable's real root-node id, and its focused observer suite passes 8/8 without
+  weakening the US1 executable-identity invariant.
+
 ## 1. Shared provider and index contract
 
 ```bash

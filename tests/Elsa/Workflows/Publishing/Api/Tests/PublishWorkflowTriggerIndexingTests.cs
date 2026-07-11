@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -126,6 +127,61 @@ public sealed class PublishWorkflowTriggerIndexingTests
             await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(seededView.ArtifactId, "trigger-node")));
     }
 
+    [Theory]
+    [MemberData(nameof(FirstPartyScenarios))]
+    public async Task LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure(
+        FirstPartyScenario scenario)
+    {
+        var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs, legacyActionCatalog: true)
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        Assert.Equal(scenario.ExpectedBindingCount, (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).Count);
+
+        var invalidExecutable = await FirstPartyCompiler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
+            .CompileAsync(new WorkflowExecutableCompileRequest(
+                "version-1",
+                WorkflowExecutableReferenceScope.Published,
+                DateTimeOffset.UnixEpoch,
+                DateTimeOffset.UnixEpoch,
+                null,
+                "artifact-"));
+        var seededBinding = new WorkflowTriggerBinding(
+            WorkflowTriggerBinding.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node", "seeded-stimulus"),
+            invalidExecutable.Identity.ArtifactId,
+            invalidExecutable.Identity.DefinitionId,
+            invalidExecutable.Identity.ArtifactVersion,
+            invalidExecutable.Identity.ArtifactHash,
+            "trigger-node",
+            scenario.StimulusType,
+            "seeded-stimulus",
+            null,
+            new Dictionary<string, string> { ["seed"] = "legacy" },
+            DateTimeOffset.UnixEpoch);
+        await _bindingStore.SaveAsync(seededBinding);
+        RecurringTriggerSchedule? seededSchedule = null;
+        if (scenario.IsRecurring)
+        {
+            seededSchedule = new RecurringTriggerSchedule(
+                RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node"),
+                invalidExecutable.Identity.ArtifactId,
+                scenario.StimulusType,
+                "seeded-stimulus",
+                RecurringScheduleKind.Interval,
+                "PT1H",
+                DateTimeOffset.UnixEpoch,
+                DateTimeOffset.UnixEpoch);
+            await _scheduleStore.SaveAsync(seededSchedule);
+        }
+
+        await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
+            FirstPartyHandler(scenario, scenario.InvalidInputs, legacyActionCatalog: true)
+                .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.Equal(seededBinding, Assert.Single(await _bindingStore.ListByArtifactAsync(invalidExecutable.Identity.ArtifactId)));
+        Assert.Equal(
+            seededSchedule,
+            await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(invalidExecutable.Identity.ArtifactId, "trigger-node")));
+    }
+
     public static TheoryData<FirstPartyScenario> FirstPartyScenarios =>
     [
         new(
@@ -137,7 +193,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             [Input(nameof(Event.EventName), "")],
             [Definition(nameof(Event.EventName), "String")],
             new EventTriggerStimulusProvider(),
-            []),
+            [],
+            typeof(Event)),
         new(
             Timer.ActivityType,
             "Timer",
@@ -147,7 +204,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             [Input(nameof(Timer.Interval), "not-an-interval")],
             [Definition(nameof(Timer.Interval), "String")],
             new TimerTriggerStimulusProvider(),
-            [new TimerRecurringScheduleProvider()]),
+            [new TimerRecurringScheduleProvider()],
+            typeof(Timer)),
         new(
             Cron.ActivityType,
             "Cron",
@@ -157,7 +215,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             [Input(nameof(Cron.Expression), "not-a-cron")],
             [Definition(nameof(Cron.Expression), "String")],
             new CronTriggerStimulusProvider(),
-            [new CronRecurringScheduleProvider()]),
+            [new CronRecurringScheduleProvider()],
+            typeof(Cron)),
         new(
             HttpEndpoint.ActivityType,
             "HttpEndpoint",
@@ -179,7 +238,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 Definition(nameof(HttpEndpoint.CanStartWorkflow), "Boolean")
             ],
             new HttpEndpointTriggerStimulusProvider(),
-            [])
+            [],
+            typeof(HttpEndpoint))
     ];
 
     private PublishWorkflowRequestHandler Handler(params IActivityTriggerStimulusProvider[] providers)
@@ -192,10 +252,13 @@ public sealed class PublishWorkflowTriggerIndexingTests
         return Handler(workflowVersion, triggerActivity, new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore));
     }
 
-    private PublishWorkflowRequestHandler FirstPartyHandler(FirstPartyScenario scenario, IReadOnlyCollection<WorkflowArgumentState> inputs)
+    private PublishWorkflowRequestHandler FirstPartyHandler(
+        FirstPartyScenario scenario,
+        IReadOnlyCollection<WorkflowArgumentState> inputs,
+        bool legacyActionCatalog = false)
     {
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", inputs));
-        var triggerActivity = TriggerActivityVersion(scenario.ActivityType, scenario.InputDefinitions);
+        var triggerActivity = FirstPartyActivityVersion(scenario, legacyActionCatalog);
         IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([scenario.TriggerProvider]), _bindingStore);
         indexer = new RecurringTriggerScheduleIndexer(
             indexer,
@@ -204,24 +267,54 @@ public sealed class PublishWorkflowTriggerIndexingTests
             new RecurringScheduleCalculator(),
             TimeProvider.System,
             NullLogger<RecurringTriggerScheduleIndexer>.Instance);
-        return Handler(workflowVersion, triggerActivity, indexer);
+        return Handler(workflowVersion, triggerActivity, indexer, scenario.ClrType);
     }
+
+    private WorkflowExecutableCompiler FirstPartyCompiler(
+        FirstPartyScenario scenario,
+        IReadOnlyCollection<WorkflowArgumentState> inputs,
+        bool legacyActionCatalog)
+    {
+        var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", inputs));
+        var triggerActivity = FirstPartyActivityVersion(scenario, legacyActionCatalog);
+        return Compiler(workflowVersion, triggerActivity, scenario.ClrType);
+    }
+
+    private static ActivityDefinitionVersion FirstPartyActivityVersion(FirstPartyScenario scenario, bool legacyActionCatalog) =>
+        TriggerActivityVersion(
+            scenario.ActivityType,
+            scenario.InputDefinitions,
+            legacyActionCatalog ? ActivityExecutionType.Action : ActivityExecutionType.Trigger,
+            legacyActionCatalog ? scenario.ClrType : null);
 
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         ActivityDefinitionVersion triggerActivity,
-        IWorkflowTriggerIndexer indexer)
+        IWorkflowTriggerIndexer indexer,
+        Type? clrType = null)
     {
         return new PublishWorkflowRequestHandler(
-            TestCompiler.Create(
-                new FakeVersionStore(workflowVersion),
-                new FakeActivityVersionStore([triggerActivity]),
-                BuildStructureService(),
-                TestWellKnownTypeRegistry.Create()),
+            Compiler(workflowVersion, triggerActivity, clrType),
             _executableStore,
             _referenceStore,
             indexer,
             new NullLayoutStore());
+    }
+
+    private static WorkflowExecutableCompiler Compiler(
+        WorkflowDefinitionVersion workflowVersion,
+        ActivityDefinitionVersion triggerActivity,
+        Type? clrType)
+    {
+        var registry = TestWellKnownTypeRegistry.Create();
+        if (clrType is not null)
+            registry.RegisterType(clrType, TypeAliasConvention.CanonicalAlias(clrType));
+
+        return TestCompiler.Create(
+            new FakeVersionStore(workflowVersion),
+            new FakeActivityVersionStore([triggerActivity]),
+            BuildStructureService(),
+            registry);
     }
 
     private sealed class NullLayoutStore : IWorkflowDefinitionVersionLayoutStore
@@ -246,11 +339,13 @@ public sealed class PublishWorkflowTriggerIndexingTests
 
     private static ActivityDefinitionVersion TriggerActivityVersion(
         string activityType = TriggerActivityTypeKey,
-        IReadOnlyCollection<InputDefinition>? inputs = null) =>
+        IReadOnlyCollection<InputDefinition>? inputs = null,
+        ActivityExecutionType executionType = ActivityExecutionType.Trigger,
+        Type? clrType = null) =>
         new("1.0.0", "activity-definition-1")
         {
             Id = "activity-trigger",
-            ExecutionType = ActivityExecutionType.Trigger,
+            ExecutionType = executionType,
             Definition = new ActivityDefinition
             {
                 Id = "activity-definition-1",
@@ -258,7 +353,9 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 Category = "Test"
             },
             DescriptorType = typeof(ClrActivityDescriptor).FullName!,
-            DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
+            DescriptorPayload = JsonSerializer.SerializeToElement(
+                new ClrActivityDescriptor(clrType is null ? "Object" : TypeAliasConvention.CanonicalAlias(clrType)),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             Inputs = inputs ?? [Definition("EventName", "String")]
         };
 
@@ -288,7 +385,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
         IReadOnlyCollection<WorkflowArgumentState> InvalidInputs,
         IReadOnlyCollection<InputDefinition> InputDefinitions,
         IActivityTriggerStimulusProvider TriggerProvider,
-        IReadOnlyCollection<IRecurringTriggerScheduleProvider> ScheduleProviders)
+        IReadOnlyCollection<IRecurringTriggerScheduleProvider> ScheduleProviders,
+        Type ClrType)
     {
         public override string ToString() => ActivityType;
     }

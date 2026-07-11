@@ -97,16 +97,16 @@
 
 ### Tests for User Story 3
 
-- [ ] T027 [P] [US3] Expand legacy CLR trigger compilation/republication coverage across the approved first-party classification contract in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`
-- [ ] T028 [P] [US3] Add publish-path compatibility and seeded-prior-binding preservation cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
-- [ ] T029 [P] [US3] Pin same-version CLR catalog Action/hash compatibility for trigger annotations in `tests/Elsa/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`
-- [ ] T030 [P] [US3] Confirm executable and trigger-binding serialized shapes remain unchanged using existing goldens in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs`
+- [X] T027 [P] [US3] Expand legacy CLR trigger compilation/republication coverage across the approved first-party classification contract in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs`
+- [X] T028 [P] [US3] Add publish-path compatibility and seeded-prior-binding preservation cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowTriggerIndexingTests.cs`
+- [X] T029 [P] [US3] Pin same-version CLR catalog Action/hash compatibility for trigger annotations in `tests/Elsa/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`
+- [X] T030 [P] [US3] Confirm executable and trigger-binding serialized shapes remain unchanged using existing goldens in `tests/Elsa/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerGoldenTests.cs` and `tests/Elsa/Persistence/Groundwork/Tests/GroundworkRuntimeDocumentFixtureTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Verify the additive default interface members are source/binary compatible with existing provider/extractor implementors, record the Runtime Core MINOR classification and required release-version action under the repository's packaging mechanism, and confirm publishing/compiler entry-point signatures remain unchanged in `specs/090-trigger-contract-hardening/plan.md`, `src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj`, `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`
-- [ ] T032 [US3] If T030 detects any durable shape drift, STOP implementation and amend `specs/090-trigger-contract-hardening/spec.md`, `specs/090-trigger-contract-hardening/plan.md`, and `specs/090-trigger-contract-hardening/tasks.md` for explicit migration approval before touching `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`; otherwise record that no migration was needed in `specs/090-trigger-contract-hardening/quickstart.md`
-- [ ] T033 [US3] Run the compatibility and boundary commands from sections 4–5 of `specs/090-trigger-contract-hardening/quickstart.md`
+- [X] T031 [US3] Verify the additive default interface members are source/binary compatible with existing provider/extractor implementors, record the Runtime Core MINOR classification and required release-version action under the repository's packaging mechanism, and confirm publishing/compiler entry-point signatures remain unchanged in `specs/090-trigger-contract-hardening/plan.md`, `src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj`, `src/Elsa/Workflows/Runtime/Core/Contracts/IActivityTriggerStimulusProvider.cs`, and `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowTriggerBindingExtractor.cs`
+- [X] T032 [US3] If T030 detects any durable shape drift, STOP implementation and amend `specs/090-trigger-contract-hardening/spec.md`, `specs/090-trigger-contract-hardening/plan.md`, and `specs/090-trigger-contract-hardening/tasks.md` for explicit migration approval before touching `src/Elsa/Persistence/Groundwork/Serialization/ElsaRuntimeDocumentVersions.cs`; otherwise record that no migration was needed in `specs/090-trigger-contract-hardening/quickstart.md`
+- [X] T033 [US3] Run the compatibility and boundary commands from sections 4–5 of `specs/090-trigger-contract-hardening/quickstart.md`
 
 **Checkpoint**: Historical shapes remain readable, catalog hashes remain stable, and republish produces the hardened contract without runtime Design dependencies.
 

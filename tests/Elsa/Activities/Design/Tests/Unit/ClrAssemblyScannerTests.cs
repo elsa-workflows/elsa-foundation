@@ -5,9 +5,11 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Primitives.Models;
+using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -58,6 +60,43 @@ public sealed class ClrAssemblyScannerTests
 
         Assert.Equal(typeof(HttpEndpoint).FullName, model.ActivityTypeKey);
         Assert.Equal(ActivityExecutionType.Action, model.ExecutionType);
+    }
+
+    public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
+    {
+        { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
+        { typeof(HttpEndpoint), "504691EF9BED6726DFEADB1ADAD22E8F30A987A9DFCC3F47E86024ADBE460986" }
+    };
+
+    [Theory]
+    [MemberData(nameof(StableTriggerCatalogHashes))]
+    public void TriggerAnnotation_PreservesSameVersionActionCatalogHash(Type activityType, string expectedHash)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+        var identityGenerator = new GuidIdentityGenerator();
+        var definition = new ActivityDefinitionFactory(identityGenerator).Create(
+            model.ActivityTypeKey,
+            model.Category ?? string.Empty,
+            model.DisplayName,
+            model.Description,
+            "stable-definition-id");
+        var descriptorPayload = JsonSerializer.SerializeToElement(model.Descriptor, model.Descriptor.GetType());
+        var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
+            definition,
+            model.Version,
+            model.DescriptorType,
+            descriptorPayload,
+            "CLR",
+            activityType.Assembly.GetName().Name!,
+            model.Inputs,
+            model.Outputs,
+            model.DesignFacets,
+            model.ExecutionType,
+            "stable-version-id");
+
+        Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
+        Assert.Equal(expectedHash, version.Hash);
     }
 
     [Fact]

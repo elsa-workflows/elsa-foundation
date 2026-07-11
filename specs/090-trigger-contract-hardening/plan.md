@@ -128,3 +128,17 @@ Research decisions are recorded in [research.md](research.md). All technical unk
 - [trigger-publication-contract.md](contracts/trigger-publication-contract.md) defines provider claiming, validation order, failure semantics, and compatibility.
 - [trigger-contract-matrix.md](contracts/trigger-contract-matrix.md) pins Event, Timer, Cron, and HttpEndpoint behavior.
 - [quickstart.md](quickstart.md) describes focused validation and compatibility proof.
+
+## Runtime Core compatibility and release action
+
+The `ProviderId` and `Evaluate` additions are default interface members, so the Runtime Core surface is a
+source- and binary-compatible **MINOR** expansion. US3 verified this with provider/extractor implementors compiled
+against pre-change commit `317caf8c` and then loaded against the current Runtime Core assembly; both new defaults
+dispatched successfully. Existing `WorkflowExecutableCompiler.CompileAsync` and
+`PublishWorkflowRequestHandler.Handle` entry-point signatures are unchanged from that baseline.
+
+This repository does not assign package versions in `Elsa.Workflows.Runtime.Core.csproj`.
+`.github/workflows/packages.yml` injects `/p:Version=${VERSION}` globally, deriving preview builds from
+`env.base_version` and stable builds from the GitHub release tag. The required release action is therefore to
+advance `env.base_version` from `4.0.0` to `4.1.0` for preview packages and publish the stable release from a
+`v4.1.0`/`4.1.0` GitHub release tag when this API ships; a project-local `<Version>` must not be introduced.
