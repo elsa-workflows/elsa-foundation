@@ -27,8 +27,8 @@
 **Purpose**: Establish shared bounded diagnostic vocabulary and test utilities used across stories.
 
 - [ ] T003 [P] Add shared host-test startup/activation gates and response readers in `tests/Elsa/Modularity/Tests/ServerReadinessFixture.cs`
-- [ ] T004 [P] Add bounded activity/metric names and outcome constants in `src/Elsa/Tasks/Diagnostics/StartupTaskTelemetry.cs`
-- [ ] T005 [P] Add the provider-initialization activity/metric names and outcomes in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkTelemetry.cs`
+- [x] T004 [P] Add bounded activity/metric names and outcome constants in `src/Elsa/Tasks/Diagnostics/StartupTaskTelemetry.cs`
+- [x] T005 [P] Add the provider-initialization activity/metric names and outcomes in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkTelemetry.cs`
 
 **Checkpoint**: Shared vocabulary and test scaffolding compile; story tests can now be written independently.
 
