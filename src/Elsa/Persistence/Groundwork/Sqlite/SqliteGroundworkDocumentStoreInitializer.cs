@@ -3,6 +3,7 @@ using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Sqlite.Documents;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
@@ -23,8 +24,11 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
     StorageManifest manifest,
     ProviderIdentity provider,
-    GroundworkDocumentStoreHolder holder) : IHostedService, IShellInitializer
+    GroundworkDocumentStoreHolder holder,
+    bool rematerializeOnStartup = false) : IHostedService, IShellInitializer
 {
+    private readonly SemaphoreSlim _initializationGate = new(1, 1);
+
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
 
     public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
@@ -41,11 +45,39 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
 
         try
         {
-            if (holder.IsInitialized)
-                return;
+            await _initializationGate.WaitAsync(cancellationToken);
+            try
+            {
+                if (holder.IsInitialized)
+                {
+                    outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
+                    return;
+                }
 
-            var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, manifest, provider, cancellationToken: cancellationToken);
-            holder.Set(handle.Store, handle);
+                SqliteDocumentStoreHandle? handle = null;
+                if (!rematerializeOnStartup)
+                    handle = await TryOpenFromExactHistoryAsync(cancellationToken);
+
+                if (handle is not null)
+                {
+                    outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
+                }
+                else
+                {
+                    handle = await SqliteDocumentStoreFactory.CreateAsync(
+                        connectionString,
+                        manifest,
+                        provider,
+                        cancellationToken: cancellationToken);
+                    outcome = SqliteGroundworkTelemetry.MaterializedOutcome;
+                }
+
+                holder.Set(handle.Store, handle);
+            }
+            finally
+            {
+                _initializationGate.Release();
+            }
         }
         catch (OperationCanceledException)
         {
@@ -65,6 +97,57 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             SqliteGroundworkTelemetry.Duration.Record(
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds,
                 new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome));
+        }
+    }
+
+    private async Task<SqliteDocumentStoreHandle?> TryOpenFromExactHistoryAsync(CancellationToken cancellationToken)
+    {
+        var connection = new SqliteConnection(connectionString);
+        try
+        {
+            await connection.OpenAsync(cancellationToken);
+
+            await using var tableCommand = connection.CreateCommand();
+            tableCommand.CommandText = """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'groundwork_schema_history'
+                LIMIT 1;
+                """;
+            if (await tableCommand.ExecuteScalarAsync(cancellationToken) is null)
+            {
+                await connection.DisposeAsync();
+                return null;
+            }
+
+            await using var historyCommand = connection.CreateCommand();
+            historyCommand.CommandText = """
+                SELECT 1
+                FROM groundwork_schema_history
+                WHERE manifest_id = $manifestId
+                  AND manifest_version = $manifestVersion
+                  AND provider_name = $providerName
+                  AND provider_version = $providerVersion
+                LIMIT 1;
+                """;
+            historyCommand.Parameters.AddWithValue("$manifestId", manifest.Identity.Value);
+            historyCommand.Parameters.AddWithValue("$manifestVersion", manifest.Version.Value);
+            historyCommand.Parameters.AddWithValue("$providerName", provider.Name);
+            historyCommand.Parameters.AddWithValue("$providerVersion", provider.Version);
+
+            if (await historyCommand.ExecuteScalarAsync(cancellationToken) is null)
+            {
+                await connection.DisposeAsync();
+                return null;
+            }
+
+            var store = new SqliteDocumentStore(connection, manifest);
+            return new SqliteDocumentStoreHandle(connection, store);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
         }
     }
 }

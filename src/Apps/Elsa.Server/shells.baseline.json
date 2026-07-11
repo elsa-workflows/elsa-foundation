@@ -40,7 +40,9 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkRuntimePersistenceSqlite": {
+            "RematerializeOnStartup": false
+          },
           "FoundationAgentAbstractions": {},
           "FoundationAgentApi": {},
           "FoundationWorkflowsAgent": {},

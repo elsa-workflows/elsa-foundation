@@ -22,7 +22,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
         this IServiceCollection services,
         string connectionString,
         StorageManifest manifest,
-        ProviderIdentity provider)
+        ProviderIdentity provider,
+        bool rematerializeOnStartup = false)
     {
         services.RemoveAll<IDocumentStore>();
         services.AddSingleton<GroundworkDocumentStoreHolder>();
@@ -30,7 +31,8 @@ public static class SqliteGroundworkDocumentStoreRegistration
             connectionString,
             manifest,
             provider,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            rematerializeOnStartup));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(

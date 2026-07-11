@@ -59,7 +59,9 @@
             "Model": "auto",
             "BaseDirectory": ".elsa/copilot"
           },
-          "GroundworkRuntimePersistenceSqlite": {},
+          "GroundworkRuntimePersistenceSqlite": {
+            "RematerializeOnStartup": false
+          },
           "Http": {},
           "HttpJavaScript": {},
           "JavaScriptActivities": {},
