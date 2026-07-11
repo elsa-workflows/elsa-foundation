@@ -54,11 +54,12 @@ describe("built-in boolean activity property editor", () => {
     expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("Disabled");
   });
 
-  it("renders only the literal true value as on", () => {
+  it("renders Boolean and persisted string true values as on", () => {
     expect(renderBooleanEditor({ value: true }).checked).toBe(true);
     expect(container.querySelector(".studio-property-switch-state")?.textContent).toBe("Enabled");
 
-    expect(renderBooleanEditor({ value: "true" }).checked).toBe(false);
+    expect(renderBooleanEditor({ value: "true" }).checked).toBe(true);
+    expect(renderBooleanEditor({ value: "false" }).checked).toBe(false);
   });
 
   it("emits boolean values when toggled", () => {

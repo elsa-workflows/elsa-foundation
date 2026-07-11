@@ -144,7 +144,9 @@ function MultilineEditor({ value, disabled, onChange }: StudioActivityPropertyEd
 }
 
 function CheckboxEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
-  const checked = value === true;
+  // Scalar literals are serialized as strings on the backend wire and come back that way after
+  // autosave. Treat the canonical persisted value as on so reconciliation does not reset the switch.
+  const checked = value === true || (typeof value === "string" && value.trim().toLowerCase() === "true");
   const label = descriptor.displayName?.trim() || descriptor.name;
 
   return (
