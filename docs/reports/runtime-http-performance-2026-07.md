@@ -14,8 +14,8 @@ every request.
 
 The 221 counted requests are one separately recorded sample, 20 warm-ups, and 200 measured warm requests. The
 Immediate database added 2,873 `checkpointCommit` documents; Coalesced added 221. A deterministic TestServer
-acceptance independently asserts the same 13-versus-1 shape and verifies identical HTTP response, completed workflow
-state, and durable response artifact.
+acceptance independently enforces the specified ≥75% reduction and verifies identical HTTP response, completed
+workflow state, and durable response artifact; the table above records the observed 13-versus-1 result.
 
 ## Why the endpoint was slow
 

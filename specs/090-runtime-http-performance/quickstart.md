@@ -45,6 +45,7 @@ bash tools/performance/measure-http-workflow.sh \
   --segment-cap 50 \
   --provider GroundworkSqlite \
   --groundwork-db src/Apps/Elsa.Server/elsa-groundwork-runtime.db \
+  --insecure \
   --output-json /tmp/elsa-http-performance.json \
   --output-markdown /tmp/elsa-http-performance.md \
   --enforce-p95-ms 50

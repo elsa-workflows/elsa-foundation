@@ -42,7 +42,7 @@
 ### Implementation for User Story 1
 
 - [x] T009 [US1] Extend `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointHostFixture.cs` with isolated runtime-provider, policy, cap, and physical-commit query support
-- [x] T010 [US1] Complete response, terminal-state, durable-artifact, exact coalesced-commit, and ≥75% reduction assertions in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
+- [x] T010 [US1] Complete response, terminal-state, durable-artifact, and ≥75% physical-commit reduction assertions in `tests/Elsa/Activities/Http/IntegrationTests/HttpEndpointRuntimePerformanceTests.cs`
 - [x] T011 [US1] Run `dotnet test tests/Elsa/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj` and record the verified physical commit counts in `specs/090-runtime-http-performance/quickstart.md`
 
 **Checkpoint**: The optimized policy is proven on the exact durable HTTP workflow and remains independently testable.

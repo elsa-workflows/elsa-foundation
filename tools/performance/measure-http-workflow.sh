@@ -24,6 +24,7 @@ Options:
   --output-json PATH          Optional JSON report path.
   --output-markdown PATH      Optional Markdown report path.
   --enforce-p95-ms NUMBER     Fail when warm p95 exceeds this budget.
+  --insecure                  Disable TLS certificate verification (local development only).
   --help                      Show this help.
 EOF
 }
@@ -40,6 +41,7 @@ groundwork_db=""
 output_json=""
 output_markdown=""
 enforce_p95_ms=""
+insecure=false
 
 while (($# > 0)); do
   case "$1" in
@@ -55,6 +57,7 @@ while (($# > 0)); do
     --output-json) output_json="${2:?--output-json requires a value}"; shift 2 ;;
     --output-markdown) output_markdown="${2:?--output-markdown requires a value}"; shift 2 ;;
     --enforce-p95-ms) enforce_p95_ms="${2:?--enforce-p95-ms requires a value}"; shift 2 ;;
+    --insecure) insecure=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -109,7 +112,11 @@ printf '%s' "$expected_body" > "$expected_file"
 measure_request() {
   local destination="${1:-}"
   local measurement status seconds milliseconds
-  measurement="$(curl --insecure --silent --show-error --output "$body_file" --write-out '%{http_code} %{time_total}' "$url")"
+  local curl_options=(--silent --show-error --output "$body_file" --write-out '%{http_code} %{time_total}')
+  if [[ "$insecure" == true ]]; then
+    curl_options+=(--insecure)
+  fi
+  measurement="$(curl "${curl_options[@]}" "$url")"
   status="${measurement%% *}"
   seconds="${measurement#* }"
 
@@ -187,6 +194,7 @@ json_report="$(jq -n \
   --arg gitRevision "$git_revision" \
   --arg dotnetVersion "$dotnet_version" \
   --arg machine "$machine" \
+  --argjson insecure "$insecure" \
   --argjson expectedStatus "$expected_status" \
   --argjson warmup "$warmup" \
   --argjson requests "$requests" \
@@ -200,10 +208,10 @@ json_report="$(jq -n \
   --arg commitsBefore "$commits_before" \
   --arg commitsAfter "$commits_after" \
   --arg commitDelta "$commit_delta" \
-  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
+  '{timestampUtc: $timestampUtc, endpoint: {url: $url, expectedStatus: $expectedStatus, tlsVerification: (if $insecure then "disabled" else "enabled" end)}, configuration: {policy: $policy, segmentCap: (if $segmentCap == "" then null else ($segmentCap | tonumber) end), provider: $provider}, samples: {warmup: $warmup, measured: $requests}, latencyMs: {cold: $coldMs, min: $minimumMs, mean: $averageMs, p50: $p50Ms, p95: $p95Ms, p99: $p99Ms, max: $maximumMs}, physicalCheckpointCommits: (if $commitDelta == "" then null else {before: ($commitsBefore | tonumber), after: ($commitsAfter | tonumber), delta: ($commitDelta | tonumber)} end), environment: {gitRevision: $gitRevision, dotnetVersion: $dotnetVersion, machine: $machine}}')"
 
-markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s`\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
-  "$timestamp_utc" "$url" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$requests" \
+markdown_report="$(printf '# Elsa HTTP workflow performance\n\n- Timestamp (UTC): `%s`\n- Endpoint: `%s` (TLS verification: `%s`)\n- Policy: `%s` (segment cap: `%s`)\n- Provider: `%s`\n- Samples: 1 cold, %s warm-up, %s measured\n- Latency (ms): cold `%s`, min `%s`, mean `%s`, p50 `%s`, p95 `%s`, p99 `%s`, max `%s`\n- Physical checkpoint commits: `%s`\n- Environment: `%s`, .NET `%s`, git `%s`\n' \
+  "$timestamp_utc" "$url" "$(if [[ "$insecure" == true ]]; then printf disabled; else printf enabled; fi)" "$policy" "${segment_cap:-n/a}" "$provider" "$warmup" "$requests" \
   "$cold_ms" "$minimum_ms" "$average_ms" "$p50_ms" "$p95_ms" "$p99_ms" "$maximum_ms" \
   "${commit_delta:-not measured}" "$machine" "$dotnet_version" "$git_revision")"
 

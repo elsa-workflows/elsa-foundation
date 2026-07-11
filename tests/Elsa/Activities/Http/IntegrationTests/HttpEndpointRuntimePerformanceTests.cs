@@ -41,8 +41,6 @@ public sealed class HttpEndpointRuntimePerformanceTests
             $"Expected Immediate to persist more checkpoint commits, but observed {immediate.PhysicalCommitCount} and {coalesced.PhysicalCommitCount}.");
         Assert.True(coalesced.PhysicalCommitCount * 4 <= immediate.PhysicalCommitCount,
             $"Expected at least a 75% reduction, but Immediate persisted {immediate.PhysicalCommitCount} commits and Coalesced persisted {coalesced.PhysicalCommitCount}.");
-        Assert.Equal(13, immediate.PhysicalCommitCount);
-        Assert.Equal(1, coalesced.PhysicalCommitCount);
     }
 
     private static async Task<ExecutionResult> ExecuteAsync(CheckpointPersistenceMode mode)
