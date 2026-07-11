@@ -161,5 +161,6 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/091-lazy-shell-activation/plan.md`.
+`specs/092-workflow-executable-cache/plan.md`. This cache work is the measured warm-path
+prerequisite for completing and delivering spec 091 on the same branch.
 <!-- SPECKIT END -->
