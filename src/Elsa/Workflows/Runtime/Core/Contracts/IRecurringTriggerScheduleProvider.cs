@@ -19,6 +19,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public interface IRecurringTriggerScheduleProvider
 {
     /// <summary>
+    /// Gets the stable, non-secret identity used to attribute recurring preflight outcomes and failures.
+    /// Existing providers receive a deterministic fallback derived from their public CLR type identity.
+    /// </summary>
+    string ProviderId => GetType().FullName ?? GetType().Name;
+
+    /// <summary>
     /// Returns the recurring-start schedule for <paramref name="node"/> if this provider recognizes its activity
     /// type; otherwise <c>null</c>.
     /// </summary>

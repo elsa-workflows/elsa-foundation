@@ -77,17 +77,10 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             if (!IsTrigger(node))
                 continue;
 
-            RecurringScheduleDescriptor? descriptor;
-            try
-            {
-                descriptor = Describe(node);
-            }
-            catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
-            {
-                throw Failure(artifactId, node, "RecurringSchedule", "The recurring schedule descriptor is invalid.", exception);
-            }
-            if (descriptor is null)
+            var selection = Describe(artifactId, node);
+            if (selection is null)
                 continue;
+            var (provider, descriptor) = selection.Value;
 
             DateTimeOffset? next;
             try
@@ -96,10 +89,10 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
             }
             catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
             {
-                throw Failure(artifactId, node, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
+                throw Failure(artifactId, node, provider.ProviderId, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' could not be materialized.", exception);
             }
             if (next is null)
-                throw Failure(artifactId, node, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
+                throw Failure(artifactId, node, provider.ProviderId, "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
 
             schedules.Add(new RecurringTriggerSchedule(
                 ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId),
@@ -120,16 +113,31 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
         return bindings;
     }
 
-    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, string facet, string message, Exception? innerException = null) =>
-        new(artifactId, node.ExecutableNodeId, node.ActivityType, [], facet, message, innerException);
+    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, string providerId, string facet, string message, Exception? innerException = null) =>
+        new(artifactId, node.ExecutableNodeId, node.ActivityType, [providerId], facet, message, innerException);
 
-    private RecurringScheduleDescriptor? Describe(ExecutableNode node)
+    private (IRecurringTriggerScheduleProvider Provider, RecurringScheduleDescriptor Descriptor)? Describe(string artifactId, ExecutableNode node)
     {
         foreach (var provider in _providers)
         {
-            var descriptor = provider.Describe(node);
+            RecurringScheduleDescriptor? descriptor;
+            try
+            {
+                descriptor = provider.Describe(node);
+            }
+            catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+            {
+                throw Failure(
+                    artifactId,
+                    node,
+                    provider.ProviderId,
+                    "RecurringSchedule",
+                    $"The recurring schedule descriptor is invalid: {exception.Message}",
+                    exception);
+            }
+
             if (descriptor is not null)
-                return descriptor;
+                return (provider, descriptor);
         }
 
         return null;

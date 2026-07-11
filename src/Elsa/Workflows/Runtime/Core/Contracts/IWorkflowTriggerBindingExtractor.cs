@@ -14,8 +14,10 @@ public interface IWorkflowTriggerBindingExtractor
 {
     /// <summary>
     /// Evaluates the complete non-persisted trigger preflight outcome for <paramref name="executable"/>.
-    /// Existing extractor implementations receive a binding-only compatibility projection; implementations that
-    /// can observe provider recognition should override this member to return complete node outcomes.
+    /// Existing extractor implementations receive a binding-only compatibility projection. Its activity identity
+    /// is resolved from the binding's executable node id, with an explicit unresolved marker when a legacy binding
+    /// references no node in the executable. Implementations that can observe provider recognition should override
+    /// this member to return complete node outcomes.
     /// </summary>
     /// <exception cref="ArgumentNullException"><paramref name="executable"/> is <see langword="null"/>.</exception>
     /// <exception cref="WorkflowTriggerPreflightException">A classified trigger cannot be safely materialized.</exception>
@@ -26,12 +28,18 @@ public interface IWorkflowTriggerBindingExtractor
         var providerId = $"legacy-extractor:{GetType().FullName ?? GetType().Name}";
         var nodeOutcomes = bindings
             .GroupBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
-            .Select(group => new WorkflowTriggerNodePreflightOutcome(
-                group.Key,
-                group.First().StimulusType,
-                providerId,
-                WorkflowTriggerPreflightStatus.Registered,
-                group.ToArray()))
+            .Select(group =>
+            {
+                var activityType = executable.NodesById.TryGetValue(group.Key, out var node)
+                    ? node.ActivityType
+                    : $"<unresolved:{group.Key}>";
+                return new WorkflowTriggerNodePreflightOutcome(
+                    group.Key,
+                    activityType,
+                    providerId,
+                    WorkflowTriggerPreflightStatus.Registered,
+                    group.ToArray());
+            })
             .ToArray();
         return new WorkflowTriggerPreflightOutcome(executable.Identity, nodeOutcomes);
     }

@@ -73,13 +73,15 @@ public sealed class RecurringTriggerScheduleIndexerTests
         var priorSchedule = Schedule("artifact-1", "old-node", "old-hash");
         await scheduleStore.SaveAsync(priorSchedule);
         var indexer = CreateIndexer(inner, scheduleStore,
-            new FakeScheduleProvider("Elsa.Cron", "Cron", "hash-cron", "0 0 30 2 *", RecurringScheduleKind.Cron));
+            new FakeScheduleProvider("Elsa.Cron", "Cron", "hash-cron", "0 0 30 2 *", RecurringScheduleKind.Cron, "test.cron"));
 
         var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
             await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron"))));
 
         Assert.Equal("artifact-1", exception.ArtifactId);
         Assert.Equal("node-1", exception.ExecutableNodeId);
+        Assert.Equal(["test.cron"], exception.ProviderIds);
+        Assert.Contains("0 0 30 2 *", exception.Message, StringComparison.Ordinal);
         Assert.False(inner.Called);
         Assert.Equal([priorBinding], await bindingStore.ListByArtifactAsync("artifact-1"));
         Assert.Equal(priorSchedule, await scheduleStore.FindAsync(priorSchedule.ScheduleId));
@@ -94,17 +96,56 @@ public sealed class RecurringTriggerScheduleIndexerTests
         await store.SaveAsync(priorSchedule);
         var indexer = CreateIndexer(inner, store,
             new FakeScheduleProvider("Elsa.Timer", "Timer", "timer-hash", "PT5M"),
-            new FakeScheduleProvider("Elsa.Cron", "Cron", "cron-hash", "not-a-cron", RecurringScheduleKind.Cron));
+            new FakeScheduleProvider("Elsa.Cron", "Cron", "cron-hash", "not-a-cron", RecurringScheduleKind.Cron, "test.cron"));
         var root = PlainNode("root", "Elsa.Sequence",
             TriggerNode("invalid-later", "Elsa.Cron"),
             TriggerNode("valid-first", "Elsa.Timer"));
 
-        await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
             await indexer.IndexAsync(Executable("artifact-1", root)));
 
+        Assert.Equal(["test.cron"], exception.ProviderIds);
+        Assert.Contains("not-a-cron", exception.Message, StringComparison.Ordinal);
+        Assert.IsType<FormatException>(exception.InnerException);
         Assert.False(inner.Called);
         Assert.Equal(priorSchedule, await store.FindAsync(priorSchedule.ScheduleId));
         Assert.Null(await store.FindAsync(RecurringTriggerSchedule.BuildId("artifact-1", "valid-first")));
+    }
+
+    [Fact]
+    public async Task Index_DescriptorFailure_CarriesProviderAndPreservesExpressionContext()
+    {
+        const string expression = "descriptor-expression";
+        var expected = new ArgumentException($"Recurring expression '{expression}' is invalid.");
+        var provider = new ThrowingScheduleProvider("Elsa.Cron", "test.cron", expected);
+        var indexer = CreateIndexer(new FakeInner(), new InMemoryRecurringTriggerScheduleStore(), provider);
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+            await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron"))));
+
+        Assert.Equal(["test.cron"], exception.ProviderIds);
+        Assert.Same(expected, exception.InnerException);
+        Assert.Contains(expression, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Index_CalculatorFailure_CarriesProviderAndExpressionAndPreservesInnerException()
+    {
+        const string expression = "calculator-expression";
+        var expected = new InvalidOperationException("calculator failed");
+        var provider = new FakeScheduleProvider("Elsa.Cron", "Cron", "cron-hash", expression, RecurringScheduleKind.Cron, "test.cron");
+        var indexer = CreateIndexer(
+            new FakeInner(),
+            new InMemoryRecurringTriggerScheduleStore(),
+            new ThrowingCalculator(expected),
+            provider);
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(async () =>
+            await indexer.IndexAsync(Executable("artifact-1", TriggerNode("node-1", "Elsa.Cron"))));
+
+        Assert.Equal(["test.cron"], exception.ProviderIds);
+        Assert.Contains(expression, exception.Message, StringComparison.Ordinal);
+        Assert.Same(expected, exception.InnerException);
     }
 
     [Fact]
@@ -231,6 +272,12 @@ public sealed class RecurringTriggerScheduleIndexerTests
         }
     }
 
+    private sealed class ThrowingCalculator(Exception exception) : IRecurringScheduleCalculator
+    {
+        public DateTimeOffset? ComputeNext(RecurringScheduleKind kind, string expression, DateTimeOffset after) =>
+            throw exception;
+    }
+
     private sealed class RecordingScheduleStore(List<string> events) : IRecurringTriggerScheduleStore
     {
         private readonly InMemoryRecurringTriggerScheduleStore _inner = new();
@@ -259,12 +306,28 @@ public sealed class RecurringTriggerScheduleIndexerTests
         string stimulusType,
         string stimulusHash,
         string expression,
-        RecurringScheduleKind kind = RecurringScheduleKind.Interval) : IRecurringTriggerScheduleProvider
+        RecurringScheduleKind kind = RecurringScheduleKind.Interval,
+        string providerId = "test.recurring") : IRecurringTriggerScheduleProvider
     {
+        public string ProviderId => providerId;
+
         public RecurringScheduleDescriptor? Describe(ExecutableNode node) =>
             StringComparer.Ordinal.Equals(node.ActivityType, activityType)
                 ? new RecurringScheduleDescriptor(stimulusType, stimulusHash, kind, expression)
                 : null;
+    }
+
+    private sealed class ThrowingScheduleProvider(string activityType, string providerId, Exception exception) : IRecurringTriggerScheduleProvider
+    {
+        public string ProviderId => providerId;
+
+        public RecurringScheduleDescriptor? Describe(ExecutableNode node)
+        {
+            if (!StringComparer.Ordinal.Equals(node.ActivityType, activityType))
+                return null;
+
+            throw exception;
+        }
     }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider

@@ -1,4 +1,7 @@
 using System.Text.Json;
+using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Primitives.Activities;
+using Elsa.Activities.Scheduling.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -14,7 +17,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Scheduling;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Cron = Elsa.Activities.Scheduling.Activities.Cron;
+using Event = Elsa.Activities.Primitives.Activities.Event;
+using Timer = Elsa.Activities.Scheduling.Activities.Timer;
 using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
 using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 
@@ -30,6 +38,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
     private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
+    private readonly InMemoryRecurringTriggerScheduleStore _scheduleStore = new();
 
     [Fact]
     public async Task PublishingStartTrigger_IndexesBindingOverPublishedArtifact()
@@ -66,50 +75,112 @@ public sealed class PublishWorkflowTriggerIndexingTests
     }
 
     [Theory]
-    [InlineData("Elsa.Event", "Event", 1)]
-    [InlineData("Elsa.Timer", "Timer", 1)]
-    [InlineData("Elsa.Cron", "Cron", 1)]
-    [InlineData("Elsa.HttpEndpoint", "HttpEndpoint", 2)]
+    [MemberData(nameof(FirstPartyScenarios))]
     public async Task FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding(
-        string activityType,
-        string stimulusType,
-        int expectedBindingCount)
+        FirstPartyScenario scenario)
     {
-        var provider = MatrixProvider.Valid(activityType, stimulusType, expectedBindingCount);
-
-        var view = await Handler(activityType, provider).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var view = await FirstPartyHandler(scenario, scenario.ValidInputs)
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
 
         var bindings = await _bindingStore.ListByArtifactAsync(view.ArtifactId);
-        Assert.Equal(expectedBindingCount, bindings.Count);
-        Assert.Equal(provider.Descriptors.Select(x => x.StimulusHash).Order(), bindings.Select(x => x.StimulusHash).Order());
+        Assert.Equal(scenario.ExpectedBindingCount, bindings.Count);
         Assert.All(bindings, binding =>
         {
-            Assert.Equal(stimulusType, binding.StimulusType);
+            Assert.Equal(scenario.StimulusType, binding.StimulusType);
             Assert.Equal("trigger-node", binding.ExecutableNodeId);
             Assert.False(string.IsNullOrWhiteSpace(binding.TriggerBindingId));
+            Assert.False(string.IsNullOrWhiteSpace(binding.StimulusHash));
         });
+
+        var schedule = await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(view.ArtifactId, "trigger-node"));
+        if (scenario.IsRecurring)
+        {
+            Assert.NotNull(schedule);
+            Assert.Equal(scenario.StimulusType, schedule.StimulusType);
+            Assert.Equal(Assert.Single(bindings).StimulusHash, schedule.StimulusHash);
+        }
+        else
+            Assert.Null(schedule);
     }
 
     [Theory]
-    [InlineData("Elsa.Event", "Event")]
-    [InlineData("Elsa.Timer", "Timer")]
-    [InlineData("Elsa.Cron", "Cron")]
-    [InlineData("Elsa.HttpEndpoint", "HttpEndpoint")]
+    [MemberData(nameof(FirstPartyScenarios))]
     public async Task FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration(
-        string activityType,
-        string stimulusType)
+        FirstPartyScenario scenario)
     {
-        var seededView = await Handler(activityType, MatrixProvider.Valid(activityType, stimulusType, 1))
+        var seededView = await FirstPartyHandler(scenario, scenario.ValidInputs)
             .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
-        var seeded = Assert.Single(await _bindingStore.ListByArtifactAsync(seededView.ArtifactId));
+        var seededBindings = await _bindingStore.ListByArtifactAsync(seededView.ArtifactId);
+        var seededSchedule = await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(seededView.ArtifactId, "trigger-node"));
 
-        await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
-            Handler(activityType, new InvalidMatrixProvider(activityType, stimulusType))
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() =>
+            FirstPartyHandler(scenario, scenario.InvalidInputs)
                 .Handle(new PublishWorkflow("version-1"), CancellationToken.None));
 
-        var preserved = Assert.Single(await _bindingStore.ListByArtifactAsync(seededView.ArtifactId));
-        Assert.Equal(seeded, preserved);
+        Assert.Equal([scenario.ActivityType], exception.ProviderIds);
+        Assert.Equal(
+            seededBindings.OrderBy(x => x.TriggerBindingId),
+            (await _bindingStore.ListByArtifactAsync(seededView.ArtifactId)).OrderBy(x => x.TriggerBindingId));
+        Assert.Equal(
+            seededSchedule,
+            await _scheduleStore.FindAsync(RecurringTriggerSchedule.BuildId(seededView.ArtifactId, "trigger-node")));
     }
+
+    public static TheoryData<FirstPartyScenario> FirstPartyScenarios =>
+    [
+        new(
+            Event.ActivityType,
+            "Event",
+            1,
+            false,
+            [Input(nameof(Event.EventName), "order-shipped")],
+            [Input(nameof(Event.EventName), "")],
+            [Definition(nameof(Event.EventName), "String")],
+            new EventTriggerStimulusProvider(),
+            []),
+        new(
+            Timer.ActivityType,
+            "Timer",
+            1,
+            true,
+            [Input(nameof(Timer.Interval), "PT5M")],
+            [Input(nameof(Timer.Interval), "not-an-interval")],
+            [Definition(nameof(Timer.Interval), "String")],
+            new TimerTriggerStimulusProvider(),
+            [new TimerRecurringScheduleProvider()]),
+        new(
+            Cron.ActivityType,
+            "Cron",
+            1,
+            true,
+            [Input(nameof(Cron.Expression), "0 * * * *")],
+            [Input(nameof(Cron.Expression), "not-a-cron")],
+            [Definition(nameof(Cron.Expression), "String")],
+            new CronTriggerStimulusProvider(),
+            [new CronRecurringScheduleProvider()]),
+        new(
+            HttpEndpoint.ActivityType,
+            "HttpEndpoint",
+            2,
+            false,
+            [
+                Input(nameof(HttpEndpoint.Path), "orders/{id}"),
+                ObjectInput(nameof(HttpEndpoint.SupportedMethods), new[] { "GET", "POST" }),
+                ObjectInput(nameof(HttpEndpoint.CanStartWorkflow), true)
+            ],
+            [
+                Input(nameof(HttpEndpoint.Path), ""),
+                ObjectInput(nameof(HttpEndpoint.SupportedMethods), new[] { "GET", "POST" }),
+                ObjectInput(nameof(HttpEndpoint.CanStartWorkflow), true)
+            ],
+            [
+                Definition(nameof(HttpEndpoint.Path), "String"),
+                Definition(nameof(HttpEndpoint.SupportedMethods), "Object"),
+                Definition(nameof(HttpEndpoint.CanStartWorkflow), "Boolean")
+            ],
+            new HttpEndpointTriggerStimulusProvider(),
+            [])
+    ];
 
     private PublishWorkflowRequestHandler Handler(params IActivityTriggerStimulusProvider[] providers)
         => Handler(TriggerActivityTypeKey, providers);
@@ -118,6 +189,29 @@ public sealed class PublishWorkflowTriggerIndexingTests
     {
         var workflowVersion = WorkflowVersion(TriggerNode("trigger-node"));
         var triggerActivity = TriggerActivityVersion(activityType);
+        return Handler(workflowVersion, triggerActivity, new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore));
+    }
+
+    private PublishWorkflowRequestHandler FirstPartyHandler(FirstPartyScenario scenario, IReadOnlyCollection<WorkflowArgumentState> inputs)
+    {
+        var workflowVersion = WorkflowVersion(TriggerNode("trigger-node", inputs));
+        var triggerActivity = TriggerActivityVersion(scenario.ActivityType, scenario.InputDefinitions);
+        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor([scenario.TriggerProvider]), _bindingStore);
+        indexer = new RecurringTriggerScheduleIndexer(
+            indexer,
+            scenario.ScheduleProviders,
+            _scheduleStore,
+            new RecurringScheduleCalculator(),
+            TimeProvider.System,
+            NullLogger<RecurringTriggerScheduleIndexer>.Instance);
+        return Handler(workflowVersion, triggerActivity, indexer);
+    }
+
+    private PublishWorkflowRequestHandler Handler(
+        WorkflowDefinitionVersion workflowVersion,
+        ActivityDefinitionVersion triggerActivity,
+        IWorkflowTriggerIndexer indexer)
+    {
         return new PublishWorkflowRequestHandler(
             TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
@@ -126,7 +220,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 TestWellKnownTypeRegistry.Create()),
             _executableStore,
             _referenceStore,
-            new WorkflowTriggerIndexer(new WorkflowTriggerBindingExtractor(providers), _bindingStore),
+            indexer,
             new NullLayoutStore());
     }
 
@@ -145,9 +239,14 @@ public sealed class PublishWorkflowTriggerIndexingTests
         };
 
     private static ActivityNode TriggerNode(string nodeId) =>
-        new(nodeId, "activity-trigger", Inputs: [new WorkflowArgumentState("EventName", new ArgumentValue("order-shipped", "Literal"), null, null, null, null)], Outputs: [], Structure: null);
+        TriggerNode(nodeId, [Input("EventName", "order-shipped")]);
 
-    private static ActivityDefinitionVersion TriggerActivityVersion(string activityType = TriggerActivityTypeKey) =>
+    private static ActivityNode TriggerNode(string nodeId, IReadOnlyCollection<WorkflowArgumentState> inputs) =>
+        new(nodeId, "activity-trigger", Inputs: inputs, Outputs: [], Structure: null);
+
+    private static ActivityDefinitionVersion TriggerActivityVersion(
+        string activityType = TriggerActivityTypeKey,
+        IReadOnlyCollection<InputDefinition>? inputs = null) =>
         new("1.0.0", "activity-definition-1")
         {
             Id = "activity-trigger",
@@ -160,8 +259,17 @@ public sealed class PublishWorkflowTriggerIndexingTests
             },
             DescriptorType = typeof(ClrActivityDescriptor).FullName!,
             DescriptorPayload = JsonSerializer.SerializeToElement(new ClrActivityDescriptor("Object")),
-            Inputs = [new InputDefinition("EventName", "EventName", new TypeReference("String"), null, "EventName", null)]
+            Inputs = inputs ?? [Definition("EventName", "String")]
         };
+
+    private static WorkflowArgumentState Input(string name, string value) =>
+        new(name, new ArgumentValue(value, "Literal"), null, null, null, null);
+
+    private static WorkflowArgumentState ObjectInput(string name, object value) =>
+        new(name, new ArgumentValue(JsonSerializer.SerializeToElement(value), "Object"), null, null, null, null);
+
+    private static InputDefinition Definition(string name, string type) =>
+        new(name, name, new TypeReference(type), null, name, null);
 
     private sealed class StubTriggerProvider(string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
     {
@@ -171,45 +279,18 @@ public sealed class PublishWorkflowTriggerIndexingTests
                 : ActivityTriggerStimulusResult.NotRecognized;
     }
 
-    private sealed class MatrixProvider : IActivityTriggerStimulusProvider
+    public sealed record FirstPartyScenario(
+        string ActivityType,
+        string StimulusType,
+        int ExpectedBindingCount,
+        bool IsRecurring,
+        IReadOnlyCollection<WorkflowArgumentState> ValidInputs,
+        IReadOnlyCollection<WorkflowArgumentState> InvalidInputs,
+        IReadOnlyCollection<InputDefinition> InputDefinitions,
+        IActivityTriggerStimulusProvider TriggerProvider,
+        IReadOnlyCollection<IRecurringTriggerScheduleProvider> ScheduleProviders)
     {
-        private MatrixProvider(string activityType, string stimulusType, IReadOnlyCollection<TriggerStimulusDescriptor> descriptors)
-        {
-            ActivityType = activityType;
-            StimulusType = stimulusType;
-            Descriptors = descriptors;
-        }
-
-        private string ActivityType { get; }
-        private string StimulusType { get; }
-        public IReadOnlyCollection<TriggerStimulusDescriptor> Descriptors { get; }
-        public string ProviderId => $"first-party.{StimulusType.ToLowerInvariant()}";
-
-        public ActivityTriggerStimulusResult Describe(ExecutableNode node) =>
-            node.ActivityType == ActivityType
-                ? ActivityTriggerStimulusResult.Recognized(Descriptors)
-                : ActivityTriggerStimulusResult.NotRecognized;
-
-        public static MatrixProvider Valid(string activityType, string stimulusType, int bindingCount) =>
-            new(
-                activityType,
-                stimulusType,
-                Enumerable.Range(1, bindingCount)
-                    .Select(index => new TriggerStimulusDescriptor(stimulusType, $"sha256:{stimulusType.ToLowerInvariant()}:{index}"))
-                    .ToArray());
-    }
-
-    private sealed class InvalidMatrixProvider(string activityType, string stimulusType) : IActivityTriggerStimulusProvider
-    {
-        public string ProviderId => $"first-party.{stimulusType.ToLowerInvariant()}";
-
-        public ActivityTriggerStimulusResult Describe(ExecutableNode node)
-        {
-            if (node.ActivityType != activityType)
-                return ActivityTriggerStimulusResult.NotRecognized;
-
-            throw new ArgumentException($"Invalid {stimulusType} routing input.");
-        }
+        public override string ToString() => ActivityType;
     }
 
     private static IActivityStructureService BuildStructureService()

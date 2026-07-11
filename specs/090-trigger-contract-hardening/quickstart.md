@@ -42,6 +42,20 @@ All section 1–3 commands passed after implementation:
 
 RED evidence was confirmed before production edits: Runtime exact-one/preflight cases failed 9 of 27; recurring ordering/exhaustion cases failed 3 of 7; first-party provider-id assertions failed against the CLR fallback; and all four invalid Publishing.Api family rows failed because raw provider exceptions escaped. The approved exhausted-Cron objective correction is now covered by a real seeded-store test: no-future-occurrence fails with `WorkflowTriggerPreflightException` before either bindings or schedules mutate.
 
+### US1/MVP QA follow-up focused gate (2026-07-11)
+
+The T019 publication matrix now invokes the real Event, Timer, Cron, and HttpEndpoint providers with authored inputs. Timer and Cron also run through the real recurring providers, calculator, decorator, and in-memory schedule store. Recurring failures carry the selected provider id, expression context, and preserved parser/calculator inner exception; the default legacy extractor projection resolves activity type from the executable node.
+
+| Focus | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Runtime extractor/indexer | 28 | 0 | 0 |
+| Event provider | 8 | 0 | 0 |
+| Timer/Cron providers | 11 | 0 | 0 |
+| HttpEndpoint provider | 34 | 0 | 0 |
+| Recurring schedule indexer | 9 | 0 | 0 |
+| Publishing.Api trigger indexing | 11 | 0 | 0 |
+| **Total** | **101** | **0** | **0** |
+
 ### Map freshness note
 
 `docs/maps/manifest.json` reports no relevant inputs were dirty when its snapshot was generated, but its authoritative input fingerprint predates the current spec 090 inputs. The relevant map is therefore treated as stale for this work. Because the implementation changes Runtime extension-point contracts, the narrow post-implementation refresh is `bash tools/maps/generate-extension-point-map.sh`; execution remains assigned to T036 outside the US1/MVP checkpoint.

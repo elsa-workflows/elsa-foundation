@@ -208,6 +208,19 @@ public sealed class WorkflowTriggerBindingExtractorTests
     }
 
     [Fact]
+    public void Evaluate_LegacyExtractorReportsExecutableNodeActivityType()
+    {
+        IWorkflowTriggerBindingExtractor extractor = new LegacyExtractor([Binding("node-event", "sha256:event:hello")]);
+        var executable = Executable(TriggerNode("node-event", "Elsa.Event"));
+
+        var outcome = extractor.Evaluate(executable);
+
+        var nodeOutcome = Assert.Single(outcome.NodeOutcomes);
+        Assert.Equal("Event", Assert.Single(nodeOutcome.Bindings).StimulusType);
+        Assert.Equal("Elsa.Event", nodeOutcome.ActivityType);
+    }
+
+    [Fact]
     public void Extract_ReturnsBinding_ForTriggerNodeRecognizedByProvider()
     {
         var extractor = new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello", "order-7")]);
@@ -381,6 +394,11 @@ public sealed class WorkflowTriggerBindingExtractorTests
                 ? ActivityTriggerStimulusResult.Recognized([new TriggerStimulusDescriptor(activityType, stimulusHash)])
                 : ActivityTriggerStimulusResult.NotRecognized;
         }
+    }
+
+    private sealed class LegacyExtractor(IReadOnlyCollection<WorkflowTriggerBinding> bindings) : IWorkflowTriggerBindingExtractor
+    {
+        public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable) => bindings;
     }
 
     /// <summary>A provider that recognizes its type but declares a non-start (zero descriptors, no publish failure).</summary>
