@@ -47,6 +47,7 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 
 ## Linked Surfaces
 
+- [Zero-EF Persistence successor goal](zero-ef-persistence.md)
 - [Groundwork Persistence Foundation spec](../../specs/012-groundwork-persistence-foundation/spec.md)
 - [Groundwork Persistence Foundation plan](../../specs/012-groundwork-persistence-foundation/plan.md)
 - [Groundwork boundary contract](../../specs/012-groundwork-persistence-foundation/contracts/groundwork-boundary.md)
