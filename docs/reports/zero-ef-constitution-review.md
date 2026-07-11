@@ -1,6 +1,6 @@
 # Critical Constitution Review: Zero-EF Persistence Boundary
 
-Status: proposed findings for decision-PR review (2026-07-12).
+Status: accepted decision-review findings (2026-07-12); the constitution amendment remains pending consensus and compliance evidence.
 
 Program goals: [Zero-EF Persistence](../program-goals/zero-ef-persistence.md) and [Constitution Readiness](../program-goals/constitution-readiness.md).
 

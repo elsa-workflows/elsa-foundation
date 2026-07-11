@@ -1,6 +1,6 @@
 # Elsa Foundation Ships Only Groundwork Persistence Implementations
 
-Status: proposed (2026-07-12; direction agreed in a maintainer grilling session and pending decision-PR review; the targeted constitution amendment is tracked separately).
+Status: accepted (2026-07-12; ratified through the maintainer grilling and PR #630 review; the targeted constitution amendment remains separately pending consensus and compliance evidence).
 
 Tracking: [Elsa PRD #629](https://github.com/elsa-workflows/elsa-foundation/issues/629) and [Groundwork PRD #25](https://github.com/valence-works/Groundwork/issues/25).
 
