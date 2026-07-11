@@ -23,6 +23,7 @@ Reports and limits:
   --artifacts-dir PATH          Retained per-boot files and logs.
   --liveness-path PATH          Listening probe path (default: /health/live).
   --startup-timeout-seconds N   Per-milestone timeout (default: 120).
+  --retain-success-artifacts    Keep successful boot logs and mutable data copies.
   --enforce-ready-p95-ms N      Fail when shell-ready p95 exceeds this budget.
   --enforce-first-request-p95-ms N
                                 Fail when first-workflow-request p95 exceeds this budget.
@@ -55,6 +56,7 @@ liveness_path="/health/live"
 startup_timeout_seconds=120
 ready_budget_ms=""
 workflow_budget_ms=""
+retain_success_artifacts=false
 
 while (($# > 0)); do
   case "$1" in
@@ -73,6 +75,7 @@ while (($# > 0)); do
     --artifacts-dir) require_value "$@"; artifacts_dir="$2"; shift 2 ;;
     --liveness-path) require_value "$@"; liveness_path="$2"; shift 2 ;;
     --startup-timeout-seconds) require_value "$@"; startup_timeout_seconds="$2"; shift 2 ;;
+    --retain-success-artifacts) retain_success_artifacts=true; shift ;;
     --enforce-ready-p95-ms) require_value "$@"; ready_budget_ms="$2"; shift 2 ;;
     --enforce-first-request-p95-ms|--enforce-workflow-p95-ms)
       require_value "$@"; workflow_budget_ms="$2"; shift 2 ;;
@@ -102,6 +105,10 @@ for tool in dotnet curl python3; do
   command -v "$tool" >/dev/null 2>&1 || die_usage "Required tool not found: $tool"
 done
 
+content_root="$(cd "$content_root" && pwd)"
+baseline_dir="$(cd "$baseline_dir" && pwd)"
+server_dll="$(cd "$(dirname "$server_dll")" && pwd)/$(basename "$server_dll")"
+
 read -r url_host url_port < <(python3 - "$base_url" <<'PY'
 import sys
 from urllib.parse import urlparse
@@ -113,11 +120,12 @@ print(value.hostname, value.port)
 PY
 ) || die_usage "--base-url must be an explicit loopback URL with a port"
 
-if python3 - "$url_host" "$url_port" <<'PY'
+if ! python3 - "$url_host" "$url_port" <<'PY'
 import socket, sys
 try:
-    with socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=.25):
-        pass
+    family = socket.AF_INET6 if ':' in sys.argv[1] else socket.AF_INET
+    with socket.socket(family) as sock:
+        sock.bind((sys.argv[1], int(sys.argv[2])))
 except OSError:
     raise SystemExit(1)
 PY
@@ -127,11 +135,30 @@ fi
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 if [[ -z "$artifacts_dir" ]]; then
-  artifacts_dir="${TMPDIR:-/tmp}/elsa-cold-start-$timestamp"
+  artifacts_dir="$(mktemp -d "${TMPDIR:-/tmp}/elsa-cold-start-$timestamp-XXXXXX")"
+else
+  artifacts_dir="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$artifacts_dir")"
+  [[ ! -e "$artifacts_dir" ]] || die_usage "Artifacts directory already exists; choose a new path: $artifacts_dir"
+  mkdir "$artifacts_dir"
 fi
-mkdir -p "$artifacts_dir"
 output_json="${output_json:-$artifacts_dir/report.json}"
 output_markdown="${output_markdown:-$artifacts_dir/report.md}"
+output_json="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$output_json")"
+output_markdown="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$output_markdown")"
+if ! python3 - "$content_root" "$baseline_dir" "$artifacts_dir" "$output_json" "$output_markdown" <<'PY'
+import os, sys
+sources = [os.path.realpath(path) for path in sys.argv[1:3]]
+destinations = [os.path.realpath(path) for path in sys.argv[3:]]
+for source in sources:
+    for destination in destinations:
+        common = os.path.commonpath((source, destination))
+        if common in (source, destination):
+            print(f"source/destination paths overlap: {source} and {destination}", file=sys.stderr)
+            raise SystemExit(1)
+PY
+then
+  die_usage "Artifacts and reports must not overlap the frozen content or baseline directories"
+fi
 mkdir -p "$(dirname "$output_json")" "$(dirname "$output_markdown")"
 results_tsv="$artifacts_dir/boots.tsv"
 printf 'boot\tlistening_ms\tactivation_ms\tshell_ready_ms\tfirst_request_ms\tfirst_success_ms\tshutdown_ms\n' >"$results_tsv"
@@ -179,23 +206,60 @@ wait_for_status() {
   done
 }
 
-content_root="$(cd "$content_root" && pwd)"
-baseline_dir="$(cd "$baseline_dir" && pwd)"
-server_dll="$(cd "$(dirname "$server_dll")" && pwd)/$(basename "$server_dll")"
-dotnet_version="$(dotnet --version)"
-git_commit="$(git -C "$(dirname "${BASH_SOURCE[0]}")/../.." rev-parse HEAD 2>/dev/null || printf unknown)"
-baseline_hash="$(python3 - "$baseline_dir" <<'PY'
+wait_for_tcp() {
+  local deadline_ns="$1"
+  while :; do
+    if python3 - "$url_host" "$url_port" <<'PY'
+import socket, sys
+try:
+    with socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=.25):
+        pass
+except OSError:
+    raise SystemExit(1)
+PY
+    then
+      return 0
+    fi
+    if ! kill -0 "$server_pid" 2>/dev/null || (( $(now_ns) >= deadline_ns )); then
+      return 1
+    fi
+    sleep 0.05
+  done
+}
+
+hash_paths() {
+  python3 - "$@" <<'PY'
 import hashlib, pathlib, sys
-root = pathlib.Path(sys.argv[1])
 h = hashlib.sha256()
-for path in sorted(p for p in root.rglob('*') if p.is_file()):
-    h.update(str(path.relative_to(root)).encode())
-    with path.open('rb') as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-            h.update(chunk)
+for supplied in sys.argv[1:]:
+    root = pathlib.Path(supplied)
+    paths = sorted(p for p in (root.rglob('*') if root.is_dir() else [root]) if p.is_file())
+    for path in paths:
+        name = str(path.relative_to(root) if root.is_dir() else path.name).encode()
+        h.update(len(name).to_bytes(8, 'big'))
+        h.update(name)
+        h.update(path.stat().st_size.to_bytes(8, 'big'))
+        with path.open('rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                h.update(chunk)
 print(h.hexdigest())
 PY
-)"
+}
+
+dotnet_version="$(dotnet --version)"
+dotnet_runtimes="$(dotnet --list-runtimes | tr '\n' ';')"
+machine="$(uname -a)"
+git_commit="$(git -C "$(dirname "${BASH_SOURCE[0]}")/../.." rev-parse HEAD 2>/dev/null || printf unknown)"
+baseline_hash="$(hash_paths "$baseline_dir")"
+content_hash="$(hash_paths "$content_root")"
+server_hash_inputs=("$server_dll")
+server_stem="${server_dll%.dll}"
+for suffix in .deps.json .runtimeconfig.json; do
+  [[ -f "$server_stem$suffix" ]] && server_hash_inputs+=("$server_stem$suffix")
+done
+server_hash="$(hash_paths "${server_hash_inputs[@]}")"
+expected_body_file="$artifacts_dir/expected-body"
+printf '%s' "$expected_body" >"$expected_body_file"
 
 for ((boot=1; boot<=boots; boot++)); do
   run_dir="$artifacts_dir/boot-$(printf '%03d' "$boot")"
@@ -211,17 +275,22 @@ for ((boot=1; boot<=boots; boot++)); do
   started_ns="$(now_ns)"
   (
     cd "$work_dir"
-    ASPNETCORE_URLS="$base_url" DOTNET_ENVIRONMENT=Production \
-      dotnet "$server_dll"
+    exec env ASPNETCORE_URLS="$base_url" DOTNET_ENVIRONMENT=Production dotnet "$server_dll"
   ) >"$log_file" 2>&1 &
   server_pid=$!
   deadline_ns=$((started_ns + startup_timeout_seconds * 1000000000))
 
-  if ! wait_for_status "$base_url$liveness_path" 200 "$deadline_ns" "$live_body"; then
+  if ! wait_for_tcp "$deadline_ns"; then
     printf 'ERROR: boot %s did not begin listening; retained log: %s\n' "$boot" "$log_file" >&2
     exit 1
   fi
   listening_ns="$(now_ns)"
+  live_deadline_ns=$((listening_ns + startup_timeout_seconds * 1000000000))
+  if ! wait_for_status "$base_url$liveness_path" 200 "$live_deadline_ns" "$live_body"; then
+    printf 'ERROR: boot %s did not pass liveness validation; retained log: %s\n' "$boot" "$log_file" >&2
+    exit 1
+  fi
+  deadline_ns=$(( $(now_ns) + startup_timeout_seconds * 1000000000 ))
   if ! wait_for_status "$base_url$readiness_path" 200 "$deadline_ns" "$ready_body"; then
     printf 'ERROR: boot %s did not become ready; retained log: %s\n' "$boot" "$log_file" >&2
     exit 1
@@ -231,8 +300,7 @@ for ((boot=1; boot<=boots; boot++)); do
   workflow_status="$(curl --silent --show-error --max-time "$startup_timeout_seconds" \
     --output "$workflow_body" --write-out '%{http_code}' "$base_url$workflow_path" || true)"
   workflow_ns="$(now_ns)"
-  actual_body="$(cat "$workflow_body" 2>/dev/null || true)"
-  if [[ "$workflow_status" != "$expected_status" || "$actual_body" != "$expected_body" ]]; then
+  if [[ "$workflow_status" != "$expected_status" ]] || ! cmp -s "$expected_body_file" "$workflow_body"; then
     printf 'ERROR: boot %s workflow validation failed (status %s, expected %s); retained files: %s\n' \
       "$boot" "$workflow_status" "$expected_status" "$run_dir" >&2
     exit 1
@@ -257,13 +325,18 @@ for ((boot=1; boot<=boots; boot++)); do
     "$(elapsed_ms "$listening_ns" "$ready_ns")" "$(elapsed_ms "$started_ns" "$ready_ns")" \
     "$(elapsed_ms "$ready_ns" "$workflow_ns")" "$(elapsed_ms "$started_ns" "$workflow_ns")" \
     "$(elapsed_ms "$shutdown_started_ns" "$shutdown_ns")" >>"$results_tsv"
+
+  if [[ "$retain_success_artifacts" != true ]]; then
+    rm -rf "$run_dir"
+  fi
 done
 
 python3 - "$results_tsv" "$output_json" "$output_markdown" "$git_commit" "$dotnet_version" \
-  "$baseline_hash" "$base_url" "$readiness_path" "$workflow_path" "$ready_budget_ms" "$workflow_budget_ms" <<'PY'
-import csv, datetime, json, math, pathlib, statistics, sys
+  "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
+  "$base_url" "$readiness_path" "$workflow_path" "$ready_budget_ms" "$workflow_budget_ms" <<'PY'
+import csv, datetime, json, math, pathlib, sys
 
-tsv, json_path, markdown_path, commit, dotnet, baseline_hash, base_url, readiness_path, workflow_path, ready_budget, workflow_budget = sys.argv[1:]
+tsv, json_path, markdown_path, commit, dotnet, runtimes, machine, server_hash, content_hash, baseline_hash, base_url, readiness_path, workflow_path, ready_budget, workflow_budget = sys.argv[1:]
 with open(tsv, newline='') as stream:
     rows = [{k: (int(v) if k == 'boot' else float(v)) for k, v in row.items()} for row in csv.DictReader(stream, delimiter='\t')]
 
@@ -279,7 +352,7 @@ milestones = ("listening_ms", "activation_ms", "shell_ready_ms", "first_request_
 aggregates = {key: aggregate(key) for key in (*milestones, "shutdown_ms")}
 report = {
     "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "provenance": {"gitCommit": commit, "dotnetVersion": dotnet, "baselineSha256": baseline_hash},
+    "provenance": {"gitCommit": commit, "dotnetVersion": dotnet, "dotnetRuntimes": runtimes, "machine": machine, "serverSha256": server_hash, "contentSha256": content_hash, "baselineSha256": baseline_hash, "environment": "Production"},
     "request": {"baseUrl": base_url, "readinessPath": readiness_path, "workflowPath": workflow_path, "boots": len(rows)},
     "boots": rows,
     "aggregates": aggregates,
@@ -287,7 +360,7 @@ report = {
 pathlib.Path(json_path).write_text(json.dumps(report, indent=2) + "\n")
 lines = [
     "# Elsa server cold-start report", "",
-    f"- Boots: {len(rows)}", f"- Git commit: `{commit}`", f"- .NET SDK: `{dotnet}`", f"- Baseline SHA-256: `{baseline_hash}`", "",
+    f"- Boots: {len(rows)}", f"- Git commit: `{commit}`", f"- .NET SDK: `{dotnet}`", f"- Server SHA-256: `{server_hash}`", f"- Content SHA-256: `{content_hash}`", f"- Baseline SHA-256: `{baseline_hash}`", f"- Machine: `{machine}`", "",
     "| Milestone | p50 (ms) | p95 (ms) | min (ms) | max (ms) |", "|---|---:|---:|---:|---:|",
 ]
 for key, label in (("listening_ms", "Listening"), ("activation_ms", "Activation"), ("shell_ready_ms", "Shell ready"), ("first_request_ms", "First workflow request"), ("first_success_ms", "First success"), ("shutdown_ms", "Shutdown")):

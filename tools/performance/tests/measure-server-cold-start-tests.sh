@@ -115,6 +115,10 @@ if [[ "${1:-}" == "--version" ]]; then
   printf '10.0.100-test\n'
   exit 0
 fi
+if [[ "${1:-}" == "--list-runtimes" ]]; then
+  printf 'Microsoft.NETCore.App 10.0.0-test [/tmp/fake-dotnet]\n'
+  exit 0
+fi
 exec python3 "$FAKE_SERVER_SCRIPT"
 SH
 chmod +x "$fake_bin/dotnet"
