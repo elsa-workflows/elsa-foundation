@@ -54,6 +54,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Http;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
@@ -139,6 +140,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
 {
     shells
         .WithHostAssemblies()
+        .WithAssemblies(
+            typeof(ActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeHttpFeature).Assembly)
         .WithAssemblyProvider<NuplaneAssemblyProvider>()
 
         // Delegates authentication-scheme and authorization-policy resolution to the shell scope at

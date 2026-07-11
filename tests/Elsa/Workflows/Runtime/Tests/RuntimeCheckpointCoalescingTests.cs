@@ -156,6 +156,40 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    [InlineData(50)]
+    public async Task Coalescing_FlushesAndDeactivatesWhenLongSegmentExceedsConfiguredCap(int cap)
+    {
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            "wfexec-cap",
+            innerQueue,
+            new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = cap });
+        var accessor = new FixedCoalescingSessionAccessor(session);
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            accessor);
+
+        Assert.Same(session, accessor.Current);
+        Assert.True(session.AppliesTo("wfexec-cap"));
+
+        for (var checkpoint = 1; checkpoint <= cap; checkpoint++)
+            await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        Assert.Equal(cap, session.HopCount);
+        Assert.True(session.IsActive);
+        Assert.Empty(innerStore.ListCommits());
+
+        await store.CommitAsync(NewEmptyDeferredCommit(cap + 1), new(RuntimeCheckpointPersistenceMode.Deferred));
+
+        Assert.Equal(0, session.HopCount);
+        Assert.False(session.IsActive);
+        Assert.Single(innerStore.ListCommits());
+    }
+
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount)> DriveAsync(bool coalescing)
     {
         var services = new ServiceCollection();
@@ -225,6 +259,27 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             sequence: 1,
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
+
+    private static RuntimeCheckpointCommit NewEmptyDeferredCommit(int checkpoint) =>
+        new(
+            CommitId: $"commit-cap-{checkpoint}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: $"checkpoint-cap-{checkpoint}",
+                Name: "CapProbe",
+                WorkflowExecutionId: "wfexec-cap",
+                OccurredAt: Now.AddTicks(checkpoint),
+                ActivityExecutionIds: [],
+                Metadata: new Dictionary<string, string>()),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: []),
+            PostCommitIntents: [],
+            Metadata: new Dictionary<string, string>());
 
     private static WorkflowExecutionActorActivationRequest NewSchedulerWorkActivationRequest(string workflowExecutionId) =>
         new(
@@ -351,5 +406,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             RuntimePostCommitOutboxProcessRequest request,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Injected crash before quiescence flush.");
+    }
+
+    private sealed class FixedCoalescingSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor
+    {
+        public RuntimeCoalescingSession? Current => session;
+
+        public IDisposable Push(RuntimeCoalescingSession? pushedSession) =>
+            throw new NotSupportedException("The cap test provides a fixed ambient session.");
     }
 }

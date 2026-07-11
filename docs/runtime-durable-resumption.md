@@ -160,6 +160,22 @@ selectable exactly like Elsa 3's commit strategies. It folds a *drain segment* o
 checkpoints into **one atomic flush commit at quiescence**, matching Elsa 3's one-write-per-burst behaviour.
 The default runtime keeps Immediate, so nothing below applies unless coalescing is explicitly enabled.
 
+Hosts select the policy through the provider-neutral `WorkflowsRuntimeCheckpointPersistence` shell feature. It
+runs after persistence-provider registration, so it decorates whichever runtime stores the shell selected:
+
+```json
+"WorkflowsRuntimeCheckpointPersistence": {
+  "Mode": "Coalesced",
+  "MaxSegmentCheckpoints": 50
+}
+```
+
+`Mode` is `Immediate` by default and is the configuration-only rollback switch. `Coalesced` reduces physical
+checkpoint writes and request latency for straight-line synchronous workflows, at the cost of replaying up to one
+unflushed segment after a crash. `MaxSegmentCheckpoints` (default 50, positive values only) bounds that replay and
+memory window; lower values flush more frequently, while higher values favor write reduction. The Elsa.Server
+reference composition explicitly selects `Coalesced` with cap 50; other hosts remain `Immediate` unless configured.
+
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
 coalesced segment, intra-drain checkpoints are buffered in an ambient in-memory working set (an overlay over
 the real state stores, scheduler queue, and outbox). The segment-entry work item is **only** dequeued from the

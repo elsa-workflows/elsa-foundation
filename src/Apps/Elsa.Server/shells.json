@@ -146,6 +146,10 @@
           "WorkflowsDesignPersistenceEFCoreSqlite": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Coalesced",
+            "MaxSegmentCheckpoints": 50
+          },
           "WorkflowsRuntimeTriggers": {}
         },
         "Configuration": {
