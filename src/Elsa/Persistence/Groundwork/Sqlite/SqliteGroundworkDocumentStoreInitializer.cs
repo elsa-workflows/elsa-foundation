@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
@@ -32,10 +33,38 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
-        if (holder.IsInitialized)
-            return;
+        var started = Stopwatch.GetTimestamp();
+        var outcome = holder.IsInitialized
+            ? SqliteGroundworkTelemetry.HistoryHitOutcome
+            : SqliteGroundworkTelemetry.MaterializedOutcome;
+        using var activity = SqliteGroundworkTelemetry.ActivitySource.StartActivity(SqliteGroundworkTelemetry.ActivityName);
 
-        var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, manifest, provider, cancellationToken: cancellationToken);
-        holder.Set(handle.Store, handle);
+        try
+        {
+            if (holder.IsInitialized)
+                return;
+
+            var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, manifest, provider, cancellationToken: cancellationToken);
+            holder.Set(handle.Store, handle);
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = SqliteGroundworkTelemetry.CancelledOutcome;
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        catch (Exception)
+        {
+            outcome = SqliteGroundworkTelemetry.FailedOutcome;
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
+        finally
+        {
+            activity?.SetTag(SqliteGroundworkTelemetry.OutcomeTag, outcome);
+            SqliteGroundworkTelemetry.Duration.Record(
+                Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome));
+        }
     }
 }

@@ -71,13 +71,24 @@ The `GroundworkRuntimePersistenceSqlite` shell feature exposes:
 
 ## Telemetry
 
-Activities and metrics use stable source/meter names documented in the implementation. Required bounded tags:
+Activities and metrics use the following stable source/meter, activity, and histogram names:
+
+| Concern | Source / meter | Activity | Histogram |
+|---|---|---|---|
+| Default-shell preparation | `Elsa.Server.Readiness` | `elsa.shell.activation` | `elsa.shell.activation.duration` |
+| Startup tasks | `Elsa.Tasks.Startup` | `elsa.startup_task` | `elsa.startup_task.duration` |
+| Groundwork SQLite initialization | `Elsa.Persistence.Groundwork.Sqlite` | `elsa.groundwork.initialize` | `elsa.groundwork.initialization.duration` |
+| HTTP route-table refresh | `Elsa.Workflows.Runtime.Http` | `elsa.http.route_table.refresh` | `elsa.http.route_table.refresh.duration` |
+
+Required bounded tags:
 
 - `elsa.activation.phase`
 - `elsa.activation.outcome`
 - `elsa.task.type` only for the registered startup task type
 - `elsa.route.count` when route initialization completes
 - `elsa.groundwork.initialization` = `history_hit` or `materialized`
+
+Default-shell phase values are `overall`, `feature_discovery`, and `shell_activation`. Outcome values are bounded to `success`, `failed`, `cancelled`, and—where the operation supports it—`skipped`.
 
 No tenant, workflow, artifact, connection-string, exception-message, or arbitrary shell-name value is emitted as a metric dimension.
 

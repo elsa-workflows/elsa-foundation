@@ -26,7 +26,7 @@
 
 **Purpose**: Establish shared bounded diagnostic vocabulary and test utilities used across stories.
 
-- [ ] T003 [P] Add shared host-test startup/activation gates and response readers in `tests/Elsa/Modularity/Tests/ServerReadinessFixture.cs`
+- [x] T003 [P] Add shared host-test startup/activation gates and response readers in `tests/Elsa/Modularity/Tests/ServerReadinessFixture.cs`
 - [x] T004 [P] Add bounded activity/metric names and outcome constants in `src/Elsa/Tasks/Diagnostics/StartupTaskTelemetry.cs`
 - [x] T005 [P] Add the provider-initialization activity/metric names and outcomes in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkTelemetry.cs`
 
@@ -42,17 +42,17 @@
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] Add branch-complete state/options/warmup unit tests in `tests/Elsa/Modularity/Tests/ShellReadinessTests.cs` and confirm they fail before implementation
-- [ ] T007 [P] [US1] Add real Kestrel/CShells readiness integration tests for pending, success, failure, concurrency, and cross-shell isolation in `tests/Elsa/Modularity/Tests/ServerReadinessTests.cs` and confirm they fail before implementation
-- [ ] T008 [P] [US1] Add architecture guards for distinct health paths and CShells exclusions in `tests/Elsa/Architecture/ArchitectureGuardTests.cs` and confirm they fail before composition changes
+- [x] T006 [P] [US1] Add branch-complete state/options/warmup unit tests in `tests/Elsa/Modularity/Tests/ShellReadinessTests.cs` and confirm they fail before implementation
+- [x] T007 [P] [US1] Add real Kestrel/CShells readiness integration tests for pending, success, failure, concurrency, and cross-shell isolation in `tests/Elsa/Modularity/Tests/ServerReadinessTests.cs` and confirm they fail before implementation
+- [x] T008 [P] [US1] Add architecture guards for distinct health paths and CShells exclusions in `tests/Elsa/Architecture/ArchitectureGuardTests.cs` and confirm they fail before composition changes
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Implement immutable snapshot/options and atomic transitions in `src/Apps/Elsa.Server/Readiness/ShellReadinessSnapshot.cs`, `ShellReadinessOptions.cs`, and `ShellReadinessState.cs`
-- [ ] T010 [US1] Implement cancellation-aware post-`ApplicationStarted` activation with bounded diagnostics in `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs`
-- [ ] T011 [US1] Register readiness services, bind `Elsa:Readiness`, exclude both health paths from shell routing, and map immediate live/ready responses in `src/Apps/Elsa.Server/Program.cs`
-- [ ] T012 [US1] Add default host readiness configuration and operator descriptions in `src/Apps/Elsa.Server/appsettings.json`
-- [ ] T013 [US1] Run the focused Modularity and Architecture tests and mark T006-T012 complete in `specs/091-lazy-shell-activation/tasks.md`
+- [x] T009 [P] [US1] Implement immutable snapshot/options and atomic transitions in `src/Apps/Elsa.Server/Readiness/ShellReadinessSnapshot.cs`, `ShellReadinessOptions.cs`, and `ShellReadinessState.cs`
+- [x] T010 [US1] Implement cancellation-aware post-`ApplicationStarted` activation with bounded diagnostics in `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs`
+- [x] T011 [US1] Register readiness services, bind `Elsa:Readiness`, exclude both health paths from shell routing, and map immediate live/ready responses in `src/Apps/Elsa.Server/Program.cs`
+- [x] T012 [US1] Add default host readiness configuration and operator descriptions in `src/Apps/Elsa.Server/appsettings.json`
+- [x] T013 [US1] Run the focused Modularity and Architecture tests and mark T006-T012 complete in `specs/091-lazy-shell-activation/tasks.md`
 
 **Checkpoint**: Health probes are operationally honest and independently testable; first-request activation is moved to background preparation.
 
@@ -86,17 +86,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Add activity/metric tests for successful, skipped, cancelled, and failed startup tasks in `tests/Elsa/Tasks/Tests/StartupTaskTelemetryTests.cs` and confirm they fail before instrumentation
-- [ ] T019 [P] [US3] Add history-hit/materialized/failure provider telemetry tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before instrumentation
-- [ ] T020 [P] [US3] Extend route synchronizer tests with duration/outcome/route-count observations in `tests/Elsa/Workflows/Runtime/Http/Tests/HttpEndpointRouteTableSynchronizerTests.cs`
+- [x] T018 [P] [US3] Add activity/metric tests for successful, skipped, cancelled, and failed startup tasks in `tests/Elsa/Tasks/Tests/StartupTaskTelemetryTests.cs` and confirm they fail before instrumentation
+- [x] T019 [P] [US3] Add history-hit/materialized/failure provider telemetry tests in `tests/Elsa/Persistence/Groundwork/Sqlite/Tests/SqliteGroundworkInitializationTests.cs` and confirm they fail before instrumentation
+- [x] T020 [P] [US3] Extend route synchronizer tests with duration/outcome/route-count observations in `tests/Elsa/Workflows/Runtime/Http/Tests/HttpEndpointRouteTableSynchronizerTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] Instrument ordered startup-task execution and structured completion/failure logs in `src/Elsa/Tasks/Services/TaskManager.cs`
-- [ ] T022 [US3] Instrument Groundwork initialization outcome/duration in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
-- [ ] T023 [US3] Instrument route resolution/refresh duration and route count in `src/Elsa/Workflows/Runtime/Http/Services/HttpEndpointRouteTableSynchronizer.cs`
-- [ ] T024 [US3] Emit overall warmup, feature-discovery, and shell-activation activities/metrics from `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs`
-- [ ] T025 [US3] Run focused Tasks, Groundwork SQLite, Runtime HTTP, and Modularity tests and document the stable telemetry vocabulary in `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
+- [x] T021 [US3] Instrument startup-task execution at the executor seam (where single-node skips are observable) with structured completion/failure logs in `src/Elsa/Tasks/Services/TaskExecutor.cs`
+- [x] T022 [US3] Instrument Groundwork initialization outcome/duration in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
+- [x] T023 [US3] Instrument route resolution/refresh duration and route count in `src/Elsa/Workflows/Runtime/Http/Services/HttpEndpointRouteTableSynchronizer.cs`
+- [x] T024 [US3] Emit overall warmup, feature-discovery, and shell-activation activities/metrics from `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs`
+- [x] T025 [US3] Run focused Tasks, Groundwork SQLite, Runtime HTTP, and Modularity tests and document the stable telemetry vocabulary in `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
 
 **Checkpoint**: A cold activation is attributable through owned phases and failures without telemetry becoming a correctness dependency.
 

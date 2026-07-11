@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Workflows.Runtime.Http.Contracts;
@@ -15,6 +17,12 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 /// </summary>
 public sealed class HttpEndpointRouteTableSynchronizerTests
 {
+    private const string ActivitySourceName = "Elsa.Workflows.Runtime.Http";
+    private const string ActivityName = "elsa.http.route_table.refresh";
+    private const string DurationInstrumentName = "elsa.http.route_table.refresh.duration";
+    private const string OutcomeTag = "elsa.activation.outcome";
+    private const string RouteCountTag = "elsa.route.count";
+
     [Fact]
     public async Task RefreshAsync_SerializesConcurrentRefreshes_SecondWaitsForTheFirst()
     {
@@ -99,6 +107,46 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         Assert.Equal(2, calls);
     }
 
+    [Fact]
+    public async Task RefreshAsync_Success_EmitsDurationOutcomeAndRouteCount()
+    {
+        using var telemetry = new TelemetryCapture();
+        var synchronizer = Build(new StaticResolver(_ =>
+            ValueTask.FromResult<IReadOnlyCollection<HttpRouteData>>([new("one"), new("two")])));
+
+        await synchronizer.RefreshAsync();
+
+        telemetry.AssertSingle("success", expectedRouteCount: 2);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_Failure_EmitsFailedDurationWithoutRouteCount()
+    {
+        using var telemetry = new TelemetryCapture();
+        var synchronizer = Build(new StaticResolver(_ => throw new InvalidOperationException("route lookup failed")));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await synchronizer.RefreshAsync());
+
+        telemetry.AssertSingle("failed", expectedRouteCount: null);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_Cancellation_EmitsCancelledDurationWithoutRouteCount()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var telemetry = new TelemetryCapture();
+        var synchronizer = Build(new StaticResolver(token =>
+        {
+            cancellation.Cancel();
+            token.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<IReadOnlyCollection<HttpRouteData>>([]);
+        }));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await synchronizer.RefreshAsync(cancellation.Token));
+
+        telemetry.AssertSingle("cancelled", expectedRouteCount: null);
+    }
+
     private static HttpEndpointRouteTableSynchronizer Build(IHttpEndpointRoutesResolver resolver, IRouteTable? routeTable = null)
     {
         var services = new ServiceCollection();
@@ -115,6 +163,67 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         {
             await onResolve();
             return Array.Empty<HttpRouteData>();
+        }
+    }
+
+    private sealed class StaticResolver(Func<CancellationToken, ValueTask<IReadOnlyCollection<HttpRouteData>>> resolve) : IHttpEndpointRoutesResolver
+    {
+        public ValueTask<IReadOnlyCollection<HttpRouteData>> ResolveRoutesAsync(CancellationToken cancellationToken = default) =>
+            resolve(cancellationToken);
+    }
+
+    private sealed class TelemetryCapture : IDisposable
+    {
+        private readonly List<Activity> _activities = [];
+        private readonly List<Measurement> _measurements = [];
+        private readonly ActivityListener _activityListener;
+        private readonly MeterListener _meterListener;
+
+        public TelemetryCapture()
+        {
+            _activityListener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == ActivitySourceName,
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = activity => _activities.Add(activity)
+            };
+            ActivitySource.AddActivityListener(_activityListener);
+
+            _meterListener = new MeterListener
+            {
+                InstrumentPublished = (instrument, listener) =>
+                {
+                    if (instrument.Meter.Name == ActivitySourceName && instrument.Name == DurationInstrumentName)
+                        listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _meterListener.SetMeasurementEventCallback<double>((_, value, tags, _) => _measurements.Add(new(value, tags.ToArray())));
+            _meterListener.Start();
+        }
+
+        public void AssertSingle(string outcome, int? expectedRouteCount)
+        {
+            var activity = Assert.Single(_activities, activity => activity.OperationName == ActivityName);
+            Assert.Equal(outcome, activity.GetTagItem(OutcomeTag));
+            Assert.Equal(expectedRouteCount, activity.GetTagItem(RouteCountTag));
+            Assert.All(activity.TagObjects, tag => Assert.Contains(tag.Key, new[] { OutcomeTag, RouteCountTag }));
+
+            var measurement = Assert.Single(_measurements);
+            Assert.True(measurement.Value >= 0);
+            Assert.Equal(outcome, measurement.Tag(OutcomeTag));
+            Assert.Equal(expectedRouteCount, measurement.Tag(RouteCountTag));
+            Assert.All(measurement.Tags, tag => Assert.Contains(tag.Key, new[] { OutcomeTag, RouteCountTag }));
+        }
+
+        public void Dispose()
+        {
+            _meterListener.Dispose();
+            _activityListener.Dispose();
+        }
+
+        private sealed record Measurement(double Value, KeyValuePair<string, object?>[] Tags)
+        {
+            public object? Tag(string name) => Tags.SingleOrDefault(tag => tag.Key == name).Value;
         }
     }
 }
