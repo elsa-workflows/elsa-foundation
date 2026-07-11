@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - .NET 10 SDK
-- Bash, `curl`, `jq`, `sqlite3`, and a free loopback port
+- Bash, `curl`, Python 3, `sqlite3`, and a free loopback port
 - A stopped reference server and a published `/workflows/http/hello-world` endpoint in the frozen runtime database
 
 ## Deterministic validation
@@ -53,7 +53,7 @@ bash tools/performance/measure-server-cold-start.sh \
   --enforce-first-request-p95-ms 750
 ```
 
-The report must include every raw boot plus p50/p95 for listening, activation, shell-ready, first request, and first success. Compare before/after only with matching provenance.
+The report includes every raw boot plus nearest-rank p50/p95 for listening, activation, shell-ready, first request, and first success. Each boot runs from a fresh copy of the content and frozen baseline; the command retains per-boot logs and mutable data under `--artifacts-dir` (or a printed temporary default). Compare before/after only with matching Git, .NET, and baseline-hash provenance.
 
 ## Warm-request regression lane
 

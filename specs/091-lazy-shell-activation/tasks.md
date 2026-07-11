@@ -66,13 +66,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Add shell-level contract cases for help, unknown arguments, invalid boot counts, missing tools/files, occupied ports, and budget failure in `tools/performance/tests/measure-server-cold-start-tests.sh`
+- [x] T014 [P] [US2] Add shell-level contract cases for help, unknown arguments, invalid boot counts, missing tools/files, occupied ports, and budget failure in `tools/performance/tests/measure-server-cold-start-tests.sh`
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement isolated boot orchestration, SQLite snapshot copying, process cleanup, response validation, provenance, percentiles, and JSON/Markdown output in `tools/performance/measure-server-cold-start.sh`
+- [x] T015 [US2] Implement isolated boot orchestration, SQLite snapshot copying, process cleanup, response validation, provenance, percentiles, and JSON/Markdown output in `tools/performance/measure-server-cold-start.sh`
 - [ ] T016 [US2] Validate `bash -n`, command help/error paths, a forced-failure retained log, and a five-boot smoke lane using `tools/performance/measure-server-cold-start.sh`
-- [ ] T017 [US2] Update reproducible commands and expected report fields in `specs/091-lazy-shell-activation/quickstart.md`
+- [x] T017 [US2] Update reproducible commands and expected report fields in `specs/091-lazy-shell-activation/quickstart.md`
 
 **Checkpoint**: Cold-start evidence is reproducible without modifying ordinary CI or source databases.
 
