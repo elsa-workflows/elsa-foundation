@@ -481,6 +481,10 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Kind:** Composition root (host-agnostic runtime registration).
 - **Usage:** RT-4; renamed from `AddWorkflowRuntimeCore` when the composition root moved to the engine package (ADR 0033). Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store; the reference stores/handlers are process-global **singletons** by design (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
 
+### `WorkflowsRuntimeCheckpointPersistenceFeature` *(Runtime.Api — `Elsa.Workflows.Runtime.Api`)*
+- **Kind:** Shell-scoped policy selector and post-provider decorator.
+- **Usage:** Configure `Mode` as `Immediate` (default/pass-through) or `Coalesced`, with a positive `MaxSegmentCheckpoints` (default 50). The feature implements `IPostConfigureShellServices` so provider packages first replace the runtime stores and coalescing then wraps the selected implementations. Duplicate composition is idempotent. See `docs/runtime-durable-resumption.md` for the latency, replay, and cap trade-offs.
+
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.

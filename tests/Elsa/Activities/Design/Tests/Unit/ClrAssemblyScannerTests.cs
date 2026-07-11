@@ -7,7 +7,9 @@ using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
@@ -60,12 +62,22 @@ public sealed class ClrAssemblyScannerTests
 
         Assert.Equal(typeof(HttpEndpoint).FullName, model.ActivityTypeKey);
         Assert.Equal(ActivityExecutionType.Action, model.ExecutionType);
+
+        var supportedMethods = model.Inputs.Single(input => input.Name == nameof(HttpEndpoint.SupportedMethods));
+        Assert.Equal(ActivityInputUIHints.CheckList, supportedMethods.UiHint);
+        AssertOptions(
+            supportedMethods,
+            ("GET", "\"GET\""),
+            ("POST", "\"POST\""),
+            ("PUT", "\"PUT\""),
+            ("HEAD", "\"HEAD\""),
+            ("DELETE", "\"DELETE\""));
     }
 
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
-        { typeof(HttpEndpoint), "504691EF9BED6726DFEADB1ADAD22E8F30A987A9DFCC3F47E86024ADBE460986" }
+        { typeof(HttpEndpoint), "89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A" }
     };
 
     [Theory]
@@ -96,7 +108,7 @@ public sealed class ClrAssemblyScannerTests
             "stable-version-id");
 
         Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
-        Assert.Equal(expectedHash, version.Hash);
+        Assert.True(expectedHash == version.Hash, $"Expected hash '{expectedHash}', actual hash '{version.Hash}'.");
     }
 
     [Fact]
@@ -173,11 +185,189 @@ public sealed class ClrAssemblyScannerTests
         Assert.NotEmpty(inputs);
     }
 
+    [Fact]
+    public void ActivityInputOptions_MapStaticTypedEnumAndProviderMetadata()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InputOptionsFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        var color = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.Color));
+        Assert.Equal(ActivityInputUIHints.Dropdown, color.UiHint);
+        AssertOptions(color, ("red", "\"red\""), ("green", "\"green\""));
+
+        var priority = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.Priority));
+        AssertOptions(priority, ("Low", "1"), ("High", "10"));
+
+        var mode = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.Mode));
+        AssertOptions(mode, ("Automatic", "\"Auto\""), ("Disabled", "\"Off\""));
+
+        var enabled = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.Enabled));
+        AssertOptions(enabled, ("Enabled", "true"), ("Disabled", "false"));
+
+        var boundaries = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.JsSafeIntegerBoundary));
+        AssertOptions(
+            boundaries,
+            ("Minimum JS-safe integer", "-9007199254740991"),
+            ("Maximum JS-safe integer", "9007199254740991"));
+
+        var field = InputFor<InputOptionsFixtureActivity>(models, nameof(InputOptionsFixtureActivity.Field));
+        var provider = field.UISpecifications!.Value.GetProperty("optionsProvider");
+        Assert.Equal("fixture.fields", provider.GetProperty("key").GetString());
+        Assert.Equal([nameof(InputOptionsFixtureActivity.Entity)], provider.GetProperty("dependsOn").EnumerateArray().Select(x => x.GetString()));
+    }
+
+    [Fact]
+    public void ActivityInputOptions_InheritUntilNearestPropertyReplacesThem()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InputOptionsFixtureActivity).Assembly);
+        var models = CreateScanner().Scan(folder.Path);
+
+        AssertOptions(
+            InputFor<InheritedInputOptionsFixtureActivity>(models, nameof(InheritedInputOptionsFixtureActivity.Choice)),
+            ("base-a", "\"base-a\""),
+            ("base-b", "\"base-b\""));
+        AssertOptions(
+            InputFor<ReplacedInputOptionsFixtureActivity>(models, nameof(ReplacedInputOptionsFixtureActivity.Choice)),
+            ("Derived first", "2"),
+            ("Derived second", "3"));
+    }
+
+    [Theory]
+    [InlineData(typeof(ConflictingOptionsActivity), nameof(ConflictingOptionsActivity.Value), "conflicting")]
+    [InlineData(typeof(DuplicateOptionsActivity), nameof(DuplicateOptionsActivity.Value), "duplicate")]
+    [InlineData(typeof(BlankOptionActivity), nameof(BlankOptionActivity.Value), "blank")]
+    [InlineData(typeof(IncompatibleOptionActivity), nameof(IncompatibleOptionActivity.Value), "compatible")]
+    [InlineData(typeof(UnknownDependencyActivity), nameof(UnknownDependencyActivity.Value), "dependency")]
+    [InlineData(typeof(DependenciesWithoutProviderActivity), nameof(DependenciesWithoutProviderActivity.Value), "provider")]
+    [InlineData(typeof(UnsafePositiveIntegerOptionActivity), nameof(UnsafePositiveIntegerOptionActivity.Value), "safe integer")]
+    [InlineData(typeof(UnsafeNegativeIntegerOptionActivity), nameof(UnsafeNegativeIntegerOptionActivity.Value), "safe integer")]
+    [InlineData(typeof(NonFiniteOptionActivity), nameof(NonFiniteOptionActivity.Value), "finite")]
+    [InlineData(typeof(NumericDuplicateOptionsActivity), nameof(NumericDuplicateOptionsActivity.Value), "duplicate")]
+    public void InvalidActivityInputOptions_AreRejectedWithInputIdentity(Type activityType, string inputName, string expectedMessage)
+    {
+        var property = activityType.GetProperty(inputName)!;
+        var exception = Assert.Throws<InvalidOperationException>(() => InvokeReadActivityInputMetadata(property, property.PropertyType.GetGenericArguments()[0], activityType));
+
+        Assert.Contains(activityType.FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(inputName, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(expectedMessage, exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static InputDefinition InputFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
         models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Single(i => i.Name == inputName);
 
     private static IReadOnlyList<InputDefinition> InputsFor<TActivity>(IReadOnlyList<ActivityVersionReconciliationModel> models, string inputName) =>
         models.Single(m => m.ActivityTypeKey == typeof(TActivity).FullName).Inputs.Where(i => i.Name == inputName).ToList();
+
+    private static void AssertOptions(InputDefinition input, params (string Label, string RawValue)[] expected)
+    {
+        var options = input.UISpecifications!.Value.GetProperty("options").EnumerateArray().ToArray();
+        Assert.Equal(expected.Length, options.Length);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i].Label, options[i].GetProperty("label").GetString());
+            Assert.Equal(expected[i].RawValue, options[i].GetProperty("value").GetRawText());
+        }
+    }
+
+    private static object InvokeReadActivityInputMetadata(PropertyInfo property, Type valueType, Type activityType)
+    {
+        var method = typeof(ClrAssemblyScanner).GetMethod("ReadActivityInputMetadata", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new MissingMethodException(nameof(ClrAssemblyScanner), "ReadActivityInputMetadata");
+        var inputNames = activityType.GetProperties().Select(x => x.Name).ToHashSet(StringComparer.Ordinal);
+
+        try
+        {
+            return method.Invoke(null, [property, valueType, inputNames, activityType.FullName!])!;
+        }
+        catch (TargetInvocationException exception) when (exception.InnerException is not null)
+        {
+            throw exception.InnerException;
+        }
+    }
+
+    private abstract class ConflictingOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInput(Options = ["one"])]
+        [ActivityInputOption("Two", "two")]
+        public InputArgument<string> Value { get; set; } = null!;
+    }
+
+    private abstract class DuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("One", 1)]
+        [ActivityInputOption("Also one", 1)]
+        public InputArgument<int> Value { get; set; } = null!;
+    }
+
+    private abstract class BlankOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInput(Options = [""])]
+        public InputArgument<string> Value { get; set; } = null!;
+    }
+
+    private abstract class IncompatibleOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("Wrong", true)]
+        public InputArgument<int> Value { get; set; } = null!;
+    }
+
+    private abstract class UnknownDependencyActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInput(OptionsProvider = "fixture", OptionsProviderDependencies = ["Missing"])]
+        public InputArgument<string> Value { get; set; } = null!;
+    }
+
+    private abstract class DependenciesWithoutProviderActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInput(OptionsProviderDependencies = [nameof(Other)])]
+        public InputArgument<string> Value { get; set; } = null!;
+        public InputArgument<string> Other { get; set; } = null!;
+    }
+
+    private abstract class UnsafePositiveIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("Unsafe", 9007199254740992L)]
+        public InputArgument<long> Value { get; set; } = null!;
+    }
+
+    private abstract class UnsafeNegativeIntegerOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("Unsafe", -9007199254740992L)]
+        public InputArgument<long> Value { get; set; } = null!;
+    }
+
+    private abstract class NonFiniteOptionActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("Infinite", double.PositiveInfinity)]
+        public InputArgument<double> Value { get; set; } = null!;
+    }
+
+    private abstract class NumericDuplicateOptionsActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        [ActivityInputOption("Integer", 1)]
+        [ActivityInputOption("Floating point", 1.0)]
+        public InputArgument<double> Value { get; set; } = null!;
+    }
+
+    [Fact]
+    public void DecimalOption_MustRoundTripExactlyThroughDouble()
+    {
+        var method = typeof(ClrAssemblyScanner).GetMethod("ValidateNumericFidelity", BindingFlags.NonPublic | BindingFlags.Static)
+            ?? throw new MissingMethodException(nameof(ClrAssemblyScanner), "ValidateNumericFidelity");
+
+        var exception = Assert.Throws<TargetInvocationException>(() =>
+            method.Invoke(null, [0.1000000000000000000000000001m, typeof(decimal), typeof(DecimalFidelityActivity).FullName!, nameof(DecimalFidelityActivity.Value)]));
+
+        var error = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("round-trip", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(nameof(DecimalFidelityActivity.Value), error.Message, StringComparison.Ordinal);
+    }
+
+    private abstract class DecimalFidelityActivity : Elsa.Activities.Runtime.Core.Abstractions.ActivityBase
+    {
+        public InputArgument<decimal> Value { get; set; } = null!;
+    }
 
     [Fact]
     public void ApplicationOutputFolder_DiscoversPrimitiveActivities()

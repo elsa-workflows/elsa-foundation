@@ -9,10 +9,13 @@ using Elsa.Activities.Testing;
 using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Http.Core;
+using Elsa.Persistence.Groundwork;
+using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -26,6 +29,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Groundwork.Core.Queries;
+using Groundwork.Documents.Store;
 
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
@@ -67,14 +72,52 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public const string ParsedContentOutputName = "EndpointParsedContent";
 
     private readonly IHost _host;
+    private readonly string? _databaseDirectory;
 
-    private HttpEndpointHostFixture(IHost host) => _host = host;
+    private HttpEndpointHostFixture(IHost host, string? databaseDirectory = null)
+    {
+        _host = host;
+        _databaseDirectory = databaseDirectory;
+    }
 
     public HttpClient Client => _host.GetTestClient();
 
     public IServiceProvider Services => _host.Services;
 
-    public static async Task<HttpEndpointHostFixture> StartAsync()
+    public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+
+    /// <summary>
+    /// Starts the production HTTP runtime against an isolated Groundwork SQLite database and applies the requested
+    /// checkpoint persistence policy after the provider has replaced the in-memory runtime stores.
+    /// </summary>
+    public static Task<HttpEndpointHostFixture> StartGroundworkSqliteAsync(
+        CheckpointPersistenceMode checkpointPersistenceMode,
+        int maxSegmentCheckpoints)
+    {
+        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(databaseDirectory);
+        var databasePath = Path.Join(databaseDirectory, "runtime.db");
+
+        return StartAsync(
+            services =>
+            {
+                new SqliteGroundworkRuntimePersistenceShellFeature
+                {
+                    ConnectionString = $"Data Source={databasePath}"
+                }.ConfigureServices(services);
+
+                new WorkflowsRuntimeCheckpointPersistenceFeature
+                {
+                    Mode = checkpointPersistenceMode,
+                    MaxSegmentCheckpoints = maxSegmentCheckpoints
+                }.PostConfigureServices(services);
+            },
+            databaseDirectory);
+    }
+
+    private static async Task<HttpEndpointHostFixture> StartAsync(
+        Action<IServiceCollection>? configurePersistence,
+        string? databaseDirectory)
     {
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -146,6 +189,11 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddAuthentication(TestAuthHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
                     services.AddAuthorization();
+
+                    // Provider selection must happen after the runtime has registered its in-memory defaults, and
+                    // checkpoint decoration must happen after provider selection. This is the same ordering enforced
+                    // by IPostConfigureShellServices in a composed shell.
+                    configurePersistence?.Invoke(services);
                 });
                 webHost.Configure(app =>
                 {
@@ -172,7 +220,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         RunStartupTasks(host.Services);
 
-        return new HttpEndpointHostFixture(host);
+        return new HttpEndpointHostFixture(host, databaseDirectory);
     }
 
     /// <summary>
@@ -576,6 +624,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
 
+    /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
+    public async Task<int> CountPhysicalCheckpointCommitsAsync()
+    {
+        var result = await Services.GetRequiredService<IDocumentStore>()
+            .QueryAsync(new PortableDocumentQuery(ElsaRuntimeStorageManifest.CheckpointCommitDocumentKind));
+        return checked((int)result.TotalCount);
+    }
+
     /// <summary>The artifact's trigger bindings in the durable index — empty proves a failed publish wrote nothing.</summary>
     public async Task<IReadOnlyCollection<WorkflowTriggerBinding>> ListTriggerBindingsAsync(string artifactId) =>
         await Services.GetRequiredService<IWorkflowTriggerBindingStore>().ListByArtifactAsync(artifactId);
@@ -593,6 +649,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     {
         await _host.StopAsync();
         _host.Dispose();
+
+        if (_databaseDirectory is not null && Directory.Exists(_databaseDirectory))
+            Directory.Delete(_databaseDirectory, recursive: true);
     }
 
     private WorkflowExecutable NewHttpEndpointExecutable(

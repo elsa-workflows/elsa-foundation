@@ -149,7 +149,7 @@ public sealed class ArchitectureGuardTests
     [InlineData("shells.baseline.json")]
     public void Server_default_shell_enables_flowchart_runtime_feature(string fileName)
     {
-        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName));
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(
             features.ContainsKey("ActivitiesFlowchart"),
@@ -161,11 +161,23 @@ public sealed class ArchitectureGuardTests
     [InlineData("shells.baseline.json")]
     public void Server_default_shell_enables_http_endpoint_activity_feature(string fileName)
     {
-        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", fileName));
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
 
         Assert.True(
             features.ContainsKey("ActivitiesHttp"),
             $"{fileName} must enable ActivitiesHttp so a clean server checkout can publish and serve HTTP-triggered workflows.");
+    }
+
+    [Theory]
+    [InlineData("shells.json")]
+    [InlineData("shells.baseline.json")]
+    public void Server_default_shell_enables_coalesced_checkpoint_persistence(string fileName)
+    {
+        var features = ReadDefaultShellFeatures(ServerConfigurationPath(fileName));
+        var settings = Assert.IsType<JsonObject>(features["WorkflowsRuntimeCheckpointPersistence"]);
+
+        Assert.Equal("Coalesced", settings["Mode"]?.GetValue<string>());
+        Assert.Equal(50, settings["MaxSegmentCheckpoints"]?.GetValue<int>());
     }
 
     [Fact]
@@ -177,8 +189,7 @@ public sealed class ArchitectureGuardTests
 
         Assert.Contains("Elsa.Activities.Http", references);
         Assert.Contains("Elsa.Workflows.Runtime.Http", references);
-        Assert.Contains("typeof(ActivitiesHttpFeature).Assembly", program, StringComparison.Ordinal);
-        Assert.Contains("typeof(WorkflowsRuntimeHttpFeature).Assembly", program, StringComparison.Ordinal);
+        Assert.Contains(".WithHostAssemblies()", program, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -513,6 +524,15 @@ public sealed class ArchitectureGuardTests
 
         return document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject
             ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
+    }
+
+    private static string ServerConfigurationPath(string fileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        if (Path.IsPathRooted(fileName) || !StringComparer.Ordinal.Equals(Path.GetFileName(fileName), fileName))
+            throw new ArgumentException("The server configuration name must be a relative file name.", nameof(fileName));
+
+        return Path.Join(RepoRoot, "src", "Apps", "Elsa.Server", fileName);
     }
 
     private static string StripCommentsAndStringLiterals(string text)

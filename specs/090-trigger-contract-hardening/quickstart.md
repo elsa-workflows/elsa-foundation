@@ -100,6 +100,11 @@ coverage preserved direct-run and mid-flow suspension behavior without creating 
 - Same-version CLR catalog compatibility: 2 passed, 0 failed, 0 skipped. Trigger fixture and HttpEndpoint remain
   `Action` rows with pinned hashes `59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03` and
   `504691EF9BED6726DFEADB1ADAD22E8F30A987A9DFCC3F47E86024ADBE460986` respectively.
+- During pre-PR integration with `main`, the independently delivered activity-input editor work added cataloged
+  checklist UI metadata to `HttpEndpoint.SupportedMethods`. That intentional authored-contract change moved the
+  current HttpEndpoint hash to `89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A`; the
+  trigger fixture hash stayed unchanged, and the legacy Action-to-Trigger republish matrix continues to cover the
+  pre-change HttpEndpoint artifact shape.
 - Executable compiler goldens: 10 passed, 0 failed, 0 skipped.
 - Groundwork runtime document fixtures: 34 passed, 0 failed, 0 skipped with `GROUNDWORK_FIXTURE_REGEN` unset.
 - No executable, trigger-binding, recurring-schedule, golden-fixture, or Groundwork schema-version drift was

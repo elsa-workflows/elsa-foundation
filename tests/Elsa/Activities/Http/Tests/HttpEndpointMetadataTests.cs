@@ -1,5 +1,6 @@
 using System.Reflection;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Xunit;
 
@@ -24,5 +25,15 @@ public sealed class HttpEndpointMetadataTests
 
         Assert.Equal(category, metadata.Category);
         Assert.Equal(order, metadata.Order);
+    }
+
+    [Fact]
+    public void SupportedMethods_AdvertisesChecklistOptions()
+    {
+        var property = typeof(HttpEndpoint).GetProperty(nameof(HttpEndpoint.SupportedMethods), BindingFlags.Instance | BindingFlags.Public)!;
+        var metadata = Assert.IsType<ActivityInputAttribute>(property.GetCustomAttribute<ActivityInputAttribute>());
+
+        Assert.Equal(ActivityInputUIHints.CheckList, metadata.UIHint);
+        Assert.Equal(new[] { "GET", "POST", "PUT", "HEAD", "DELETE" }, metadata.Options);
     }
 }
