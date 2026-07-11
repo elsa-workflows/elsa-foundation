@@ -20,8 +20,12 @@ public sealed class ScopedVariableAuthoringContract(
     /// Returns the variables visible from <paramref name="nodeId"/>, nearest-scope first, as a
     /// serializable view for the authoring picker. Wraps <see cref="ScopedVariablePicker"/>.
     /// </summary>
-    public IReadOnlyList<VisibleVariableView> GetVisibleVariables(WorkflowDefinitionState state, string nodeId, int maxDepth = ScopedVariablePicker.DefaultMaxDepth)
+    public IReadOnlyList<VisibleVariableView> GetVisibleVariables(WorkflowDefinitionState state, string? nodeId, int maxDepth = ScopedVariablePicker.DefaultMaxDepth)
     {
+        ArgumentNullException.ThrowIfNull(state);
+        if (nodeId is null)
+            return [];
+
         return scopedVariablePicker
             .GetVisibleVariables(state, nodeId, maxDepth)
             .Select(visible => new VisibleVariableView(

@@ -14,6 +14,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -53,6 +54,7 @@ internal static class ElsaWorkflowManagementApi
     {
         var group = endpoints.MapGroup("/_elsa/workflow-management");
 
+        group.MapGet("/capabilities", GetCapabilitiesAsync);
         group.MapGet("/definitions", ListDefinitionsAsync);
         group.MapGet("/definitions/{definitionId}", GetDefinitionAsync);
         group.MapPost("/definitions", CreateDefinitionAsync);
@@ -78,8 +80,37 @@ internal static class ElsaWorkflowManagementApi
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
         group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
         group.MapGet("/descriptors/variables", ListVariableDescriptorsAsync);
+        group.MapPost("/design/scoped-variables/analyze", AnalyzeScopedVariablesAsync);
 
         return endpoints;
+    }
+
+    private static Task<IResult> GetCapabilitiesAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services => Task.FromResult(GetCapabilities(services)), cancellationToken);
+
+    internal static IResult GetCapabilities(IServiceProvider services) =>
+        Results.Ok(new WorkflowManagementCapabilitiesResponse(
+            ScopedVariableAnalysis: services.GetService<ScopedVariableAuthoringContract>() is not null));
+
+    private static Task<IResult> AnalyzeScopedVariablesAsync(
+        IShellRegistry shellRegistry,
+        AnalyzeScopedVariablesRequest request,
+        CancellationToken cancellationToken) =>
+        WithShellAsync(shellRegistry, services => Task.FromResult(AnalyzeScopedVariables(services, request)), cancellationToken);
+
+    internal static IResult AnalyzeScopedVariables(IServiceProvider services, AnalyzeScopedVariablesRequest request)
+    {
+        if (request.State is null)
+            return Results.BadRequest(new WorkflowManagementErrorResponse("A workflow definition state is required."));
+
+        if (request.NodeId is not null && string.IsNullOrWhiteSpace(request.NodeId))
+            return Results.BadRequest(new WorkflowManagementErrorResponse("The selected activity node id cannot be empty."));
+
+        var state = request.State.ToState();
+        var authoring = services.GetRequiredService<ScopedVariableAuthoringContract>();
+        return Results.Ok(new ScopedVariableAnalysisResponse(
+            authoring.GetVisibleVariables(state, request.NodeId),
+            authoring.GetShadowingWarnings(state)));
     }
 
     private static Task<IResult> ListDefinitionsAsync(IShellRegistry shellRegistry, string? search, string? state, CancellationToken cancellationToken) =>
@@ -998,6 +1029,14 @@ internal sealed record UpdateWorkflowDraftRequest(
 internal sealed record PromoteDraftResponse(string VersionId);
 
 internal sealed record WorkflowManagementErrorResponse(string Error);
+
+internal sealed record WorkflowManagementCapabilitiesResponse(bool ScopedVariableAnalysis);
+
+internal sealed record AnalyzeScopedVariablesRequest(WorkflowDefinitionStateView? State, string? NodeId);
+
+internal sealed record ScopedVariableAnalysisResponse(
+    IReadOnlyList<VisibleVariableView> VisibleVariables,
+    IReadOnlyList<ScopedVariableShadowingWarning> ShadowingWarnings);
 
 internal sealed record ActivityCatalogResponse(IReadOnlyList<ActivityCatalogItemResponse> Activities);
 
