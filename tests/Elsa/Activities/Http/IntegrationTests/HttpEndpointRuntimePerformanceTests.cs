@@ -62,9 +62,8 @@ public sealed class HttpEndpointRuntimePerformanceTests
             contentType: "text/plain");
 
         var commitsBeforeRequest = await fixture.CountPhysicalCheckpointCommitsAsync();
-        var response = await fixture.Client.PostAsync(
-            $"{BasePath}{path}",
-            new StringContent("{\"measurement\":true}", System.Text.Encoding.UTF8, "application/json"));
+        using var requestContent = new StringContent("{\"measurement\":true}", System.Text.Encoding.UTF8, "application/json");
+        var response = await fixture.Client.PostAsync($"{BasePath}{path}", requestContent);
         var workflow = await fixture.SingleWorkflowExecutionAsync();
         var artifact = await fixture.ReadHttpResponseArtifactAsync(workflow.WorkflowExecutionId);
         var commitsAfterRequest = await fixture.CountPhysicalCheckpointCommitsAsync();

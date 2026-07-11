@@ -94,9 +94,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         CheckpointPersistenceMode checkpointPersistenceMode,
         int maxSegmentCheckpoints)
     {
-        var databaseDirectory = Path.Combine(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
+        var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-performance-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
-        var databasePath = Path.Combine(databaseDirectory, "runtime.db");
+        var databasePath = Path.Join(databaseDirectory, "runtime.db");
 
         return StartAsync(
             services =>
