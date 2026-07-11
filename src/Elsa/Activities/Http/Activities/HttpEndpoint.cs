@@ -31,7 +31,8 @@ namespace Elsa.Activities.Http.Activities;
 /// <list type="table">
 /// <item><term><c>TriggerNodeId</c> == this node's id</term><description><b>Start path</b> — completes with the
 /// live request from the stimulus channel (falls back to the authored route on a foreign/malformed payload).</description></item>
-/// <item><term><c>TriggerNodeId</c> == null (direct run) and <see cref="CanStartWorkflow"/> == true</term>
+/// <item><term><c>TriggerNodeId</c> == null (direct run) and <see cref="CanStartWorkflow"/> is explicitly authored
+/// as true</term>
 /// <description><b>Completes</b> via the authored-route fallback — preserves sub-unit A's direct-run behavior for a
 /// start-capable endpoint executed with no HTTP stimulus.</description></item>
 /// <item><term>every other case (another node triggered the run; a mid-flow node; or
