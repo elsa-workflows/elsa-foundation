@@ -19,6 +19,7 @@ import {
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   buildCanvas,
+  buildSequenceEdges,
   buildUnsupportedActivityCanvas,
   createActivityNode,
   createWorkflowEdge,
@@ -42,6 +43,7 @@ import {
   clientPointFromEvent,
   createNodeId,
   isConnectEndOverExistingWorkflowNode,
+  insertSequenceNodeAfter,
   midpointBetween,
   resolveConnectEndSource,
   rightOf
@@ -132,6 +134,9 @@ export function useWorkflowCanvas({
   const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
   const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
+  const canCreateActivityFromPort = canAddActivitiesToCanvas
+    && !isUnsupportedDesigner
+    && (isFlowchartDesigner || scope?.slot.mode === "sequence");
 
   useEffect(() => {
     return () => {
@@ -588,7 +593,7 @@ export function useWorkflowCanvas({
   const onConnectEnd: OnConnectEnd = (event, connectionState) => {
     const source = resolveConnectEndSource(connectSourceRef.current, connectionState);
     connectSourceRef.current = null;
-    if (!source || !isFlowchartDesigner) return;
+    if (!source || !canCreateActivityFromPort) return;
     if (connectionState.toNode || connectionState.toHandle) return;
 
     if (isConnectEndOverExistingWorkflowNode(event)) return;
@@ -671,8 +676,12 @@ export function useWorkflowCanvas({
       const position = sourceNode ? rightOf(sourceNode) : fallbackPosition;
       const placed = createCanvasActivity(activity, position);
       const clearedNodes = nodes.map(node => node.selected ? { ...node, selected: false } : node);
-      const nextNodes = [...clearedNodes, placed.node];
-      const nextEdges = [...edges, createWorkflowEdge(menu.sourceNodeId, placed.node.id, menu.sourceHandleId ?? "Done")];
+      const nextNodes = scope?.slot.mode === "sequence"
+        ? insertSequenceNodeAfter(clearedNodes, menu.sourceNodeId, placed.node)
+        : [...clearedNodes, placed.node];
+      const nextEdges = scope?.slot.mode === "sequence"
+        ? buildSequenceEdges(nextNodes)
+        : [...edges, createWorkflowEdge(menu.sourceNodeId, placed.node.id, menu.sourceHandleId ?? "Done")];
       setNodes(nextNodes);
       setEdges(nextEdges);
       select(placed.node.id);
@@ -695,6 +704,7 @@ export function useWorkflowCanvas({
     edges,
     canvasRef,
     setReactFlowInstance,
+    canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
     edgeActions,

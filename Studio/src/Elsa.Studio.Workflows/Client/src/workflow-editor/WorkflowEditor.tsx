@@ -190,6 +190,7 @@ export function WorkflowEditor({
     edges,
     canvasRef,
     setReactFlowInstance,
+    canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
     edgeActions,
@@ -712,8 +713,8 @@ export function WorkflowEditor({
                 onNodesDelete={onNodesDelete}
                 onEdgesDelete={onEdgesDelete}
                 onConnect={onConnect}
-                onConnectStart={isFlowchartDesigner ? onConnectStart : undefined}
-                onConnectEnd={isFlowchartDesigner ? onConnectEnd : undefined}
+                onConnectStart={canCreateActivityFromPort ? onConnectStart : undefined}
+                onConnectEnd={canCreateActivityFromPort ? onConnectEnd : undefined}
                 onReconnect={isFlowchartDesigner ? onReconnect : undefined}
                 isValidConnection={isValidConnection}
                 onDragOver={onCanvasDragOver}
@@ -724,7 +725,7 @@ export function WorkflowEditor({
                 onNodeDragStop={isUnsupportedDesigner ? undefined : commitLayout}
                 minZoom={0.2}
                 maxZoom={1.8}
-                nodesConnectable={isFlowchartDesigner}
+                nodesConnectable={canCreateActivityFromPort}
                 nodesDraggable={!isUnsupportedDesigner}
                 selectionOnDrag
                 multiSelectionKeyCode={["Shift", "Meta", "Control"]}

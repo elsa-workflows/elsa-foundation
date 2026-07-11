@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
-import { createDraftSnapshotId } from "../workflow-editor/editorHelpers";
+import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,6 +40,24 @@ describe("workflows module", () => {
       fromNode: { id: "write-line-1" },
       fromHandle: { id: "Done" }
     })).toEqual({ nodeId: "write-line-1", handleId: "Done" });
+  });
+
+  it("inserts a picked Sequence activity immediately after the connection source", () => {
+    const nodes = [
+      { id: "a", position: { x: 40, y: 0 }, data: {} },
+      { id: "b", position: { x: 320, y: 0 }, data: {} },
+      { id: "c", position: { x: 600, y: 0 }, data: {} }
+    ];
+
+    const result = insertSequenceNodeAfter(nodes, "b", {
+      id: "new",
+      position: { x: 0, y: 0 },
+      data: {}
+    });
+
+    expect(result.map(node => node.id)).toEqual(["a", "b", "new", "c"]);
+    expect(result.map(node => node.position.x)).toEqual([40, 320, 600, 880]);
+    expect(nodes[2].position.x).toBe(600);
   });
 
   it("registers Runs navigation while preserving instance routes", () => {
@@ -494,6 +512,67 @@ describe("workflows module", () => {
     await flushPromises();
 
     expect(container.querySelector(".wf-node")?.textContent).toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("makes Sequence output handles available for drag-to-add gestures", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "sequence-v1",
+          activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence",
+          category: "Composition",
+          displayName: "Sequence",
+          designFacets: [{
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
+              mode: "sequence",
+              supportsScopedVariables: true,
+              slots: [{ name: "Sequence.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+              initialPayload: { activities: [] }
+            }
+          }]
+        }),
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: sequenceRoot([{
+              nodeId: "write-line-1",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: []
+            }]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ definitions: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+
+    const outputHandle = container.querySelector(".wf-canvas .react-flow__handle.source");
+    expect(outputHandle?.classList.contains("connectablestart")).toBe(true);
 
     await unmount();
   });
@@ -2607,6 +2686,20 @@ function flowchartRoot(activities: unknown[]) {
         nodeMetadata: {},
         connectionMetadata: {}
       }
+    }
+  };
+}
+
+function sequenceRoot(activities: unknown[]) {
+  return {
+    nodeId: "root",
+    activityVersionId: "sequence-v1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.sequence.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities }
     }
   };
 }

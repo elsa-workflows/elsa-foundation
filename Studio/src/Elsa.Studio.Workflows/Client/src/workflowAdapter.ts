@@ -907,16 +907,20 @@ function updateFlowchartConnections(structure: ActivityNodeStructure | null | un
 
 function buildEdges(slot: ChildSlot, nodes: Node<WorkflowNodeData>[]): Edge[] {
   if (slot.mode === "sequence") {
-    return nodes.slice(0, -1).map((node, index) => ({
-      id: `sequence-${node.id}-${nodes[index + 1].id}`,
-      source: node.id,
-      target: nodes[index + 1].id,
-      type: "smoothstep",
-      animated: false
-    }));
+    return buildSequenceEdges(nodes);
   }
 
   return [];
+}
+
+export function buildSequenceEdges(nodes: Node<WorkflowNodeData>[]): Edge[] {
+  return nodes.slice(0, -1).map((node, index) => ({
+    id: `sequence-${node.id}-${nodes[index + 1].id}`,
+    source: node.id,
+    target: nodes[index + 1].id,
+    type: "smoothstep",
+    animated: false
+  }));
 }
 
 export function flowchartEdges(owner: ActivityNode): Edge<WorkflowEdgeData>[] {

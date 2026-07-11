@@ -404,6 +404,26 @@ export function rightOf(node: Node) {
   return { x: node.position.x + 280, y: node.position.y };
 }
 
+export function insertSequenceNodeAfter<T extends Record<string, unknown>>(nodes: Node<T>[], sourceNodeId: string, node: Node<T>) {
+  const sourceIndex = nodes.findIndex(candidate => candidate.id === sourceNodeId);
+  if (sourceIndex < 0) return [...nodes, node];
+
+  const source = nodes[sourceIndex];
+  const position = rightOf(source);
+  // Sequence persistence sorts activities by x-position, so make room before inserting; otherwise a
+  // middle insertion would tie with its successor and be saved after that successor.
+  const horizontalSpacing = position.x - source.position.x;
+  const shiftedNodes = nodes.map((candidate, index) => index > sourceIndex
+    ? { ...candidate, position: { ...candidate.position, x: candidate.position.x + horizontalSpacing } }
+    : candidate);
+  const insertedNode = { ...node, position };
+  return [
+    ...shiftedNodes.slice(0, sourceIndex + 1),
+    insertedNode,
+    ...shiftedNodes.slice(sourceIndex + 1)
+  ];
+}
+
 export function midpointBetween(source: Node, target: Node) {
   return {
     x: Math.round((source.position.x + target.position.x) / 2),
