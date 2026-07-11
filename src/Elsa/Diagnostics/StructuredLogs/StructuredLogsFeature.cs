@@ -61,9 +61,11 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
         services.AddSingleton<IStructuredLogLiveFeed>(sp => sp.GetRequiredService<InMemoryStructuredLogLiveFeed>());
         services.AddSingleton<IStructuredLogLivePublisher>(sp => sp.GetRequiredService<InMemoryStructuredLogLiveFeed>());
 
-        services.AddSingleton<IStructuredLogSink>(sp => new StructuredLogSink(
+        services.AddSingleton(sp => new StructuredLogSink(
             sp.GetRequiredService<IStructuredLogStore>(),
             sp.GetRequiredService<IStructuredLogLivePublisher>()));
+        services.AddSingleton<IStructuredLogSink>(sp => new DeferredStructuredLogSink(
+            () => sp.GetRequiredService<StructuredLogSink>()));
 
         services.AddSingleton<IStructuredLogSourceProvider>(_ => new LocalStructuredLogSourceProvider(ServiceName, SourceDisplayName));
 
