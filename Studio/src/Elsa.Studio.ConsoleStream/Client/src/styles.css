@@ -12,6 +12,7 @@
   --cs-text: var(--studio-text, var(--foreground, #152024));
   --cs-text-muted: var(--studio-text-muted, var(--muted-foreground, #607078));
   --cs-accent: var(--studio-accent, var(--primary, #0f8a83));
+  --cs-accent-text: var(--studio-accent-text, var(--primary-foreground, #ffffff));
   --cs-accent-soft: var(--studio-accent-soft, color-mix(in srgb, var(--cs-accent) 10%, transparent));
   --cs-success: var(--studio-success, var(--success, #1b9a63));
   --cs-danger: var(--studio-danger, var(--danger, #c13e3a));
@@ -131,11 +132,16 @@
   padding: 0 28px 0 8px;
 }
 
-.console-stream-tools button:hover,
-.console-stream-tools button.active {
+.console-stream-tools button:not(.active):hover {
   border-color: var(--cs-accent);
   background: var(--cs-accent-soft);
   color: var(--cs-accent);
+}
+
+.console-stream-tools button.active[aria-pressed="true"] {
+  border-color: var(--cs-accent);
+  background: var(--cs-accent);
+  color: var(--cs-accent-text);
 }
 
 .console-stream-lines {
