@@ -10,9 +10,11 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Primitives.Exceptions;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
+using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -76,6 +78,7 @@ internal static class ElsaWorkflowManagementApi
         group.MapPut("/activities/availability/settings", SaveActivityAvailabilitySettingsAsync);
         group.MapGet("/activities/availability/diagnostics", ListActivityAvailabilityDiagnosticsAsync);
         group.MapGet("/descriptors/activities", ListActivityDescriptorsAsync);
+        group.MapPost("/descriptors/activities/{activityVersionId}/inputs/{inputName}/options", ResolveActivityInputOptionsRouteAsync);
         group.MapGet("/descriptors/expression-descriptors", ListExpressionDescriptorsAsync);
         group.MapGet("/descriptors/variables", ListVariableDescriptorsAsync);
 
@@ -500,6 +503,147 @@ internal static class ElsaWorkflowManagementApi
 
             return Results.Ok(new ActivityDescriptorsResponse(response));
         }, cancellationToken);
+
+    private static Task<IResult> ResolveActivityInputOptionsRouteAsync(
+        IShellRegistry shellRegistry,
+        string activityVersionId,
+        string inputName,
+        ActivityInputOptionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        return WithShellAsync(
+            shellRegistry,
+            services => ResolveActivityInputOptionsAsync(services, activityVersionId, inputName, request, cancellationToken),
+            cancellationToken);
+    }
+
+    internal static async Task<IResult> ResolveActivityInputOptionsAsync(
+        IServiceProvider services,
+        string activityVersionId,
+        string inputName,
+        ActivityInputOptionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await ResolveActivityInputOptionsCoreAsync(services, activityVersionId, inputName, request, cancellationToken);
+        return new NoStoreResult(result);
+    }
+
+    private static async Task<IResult> ResolveActivityInputOptionsCoreAsync(
+        IServiceProvider services,
+        string activityVersionId,
+        string inputName,
+        ActivityInputOptionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.NodeId) || request.WorkflowState is null)
+            return Results.BadRequest(new WorkflowManagementErrorResponse("A node id and workflow state are required."));
+
+        ActivityDefinitionVersion activityVersion;
+        try
+        {
+            activityVersion = await services.GetRequiredService<IActivityDefinitionVersionStore>().GetAsync(activityVersionId, cancellationToken);
+        }
+        catch (EntityNotFoundException)
+        {
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Activity version '{activityVersionId}' was not found."));
+        }
+
+        var input = activityVersion.Inputs.FirstOrDefault(x => string.Equals(x.Name, inputName, StringComparison.Ordinal));
+        if (input is null)
+            return Results.NotFound(new WorkflowManagementErrorResponse($"Input '{inputName}' was not found on activity version '{activityVersionId}'."));
+
+        if (!TryGetOptionsProviderKey(input.UISpecifications, out var providerKey))
+            return Results.Conflict(new WorkflowManagementErrorResponse($"Input '{inputName}' does not declare a dynamic options provider."));
+
+        var workflowState = request.WorkflowState.ToState();
+        var activity = FindActivityNode(
+            workflowState.RootActivity,
+            request.NodeId,
+            services.GetRequiredService<Elsa.Workflows.Design.Core.Contracts.IActivityStructureService>());
+        if (activity is null)
+            return Results.BadRequest(new WorkflowManagementErrorResponse($"Activity node '{request.NodeId}' was not found in the submitted workflow state."));
+
+        if (!string.Equals(activity.ActivityVersionId, activityVersionId, StringComparison.Ordinal))
+            return Results.Conflict(new WorkflowManagementErrorResponse(
+                $"Activity node '{request.NodeId}' does not use activity version '{activityVersionId}'."));
+
+        var resolver = services.GetRequiredService<IActivityInputOptionsProviderResolver>();
+        var provider = resolver.Find(providerKey);
+        if (provider is null)
+            return OptionsProviderUnavailable(inputName);
+
+        try
+        {
+            var context = new ActivityInputOptionsContext(workflowState, activity, input);
+            var options = await provider.GetOptionsAsync(context, cancellationToken);
+            return Results.Ok(new ActivityInputOptionsResponse(options));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(nameof(ElsaWorkflowManagementApi))
+                .LogError(exception, "Activity input options provider {ProviderKey} failed for input {InputName}", providerKey, inputName);
+            return OptionsProviderUnavailable(inputName);
+        }
+    }
+
+    private static IResult OptionsProviderUnavailable(string inputName) =>
+        Results.Json(
+            new WorkflowManagementCodedErrorResponse("OPTIONS_PROVIDER_UNAVAILABLE", $"Options for input '{inputName}' are temporarily unavailable."),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    private static bool TryGetOptionsProviderKey(JsonElement? uiSpecifications, out string key)
+    {
+        key = string.Empty;
+        if (uiSpecifications is not { ValueKind: JsonValueKind.Object } specifications ||
+            !specifications.TryGetProperty("optionsProvider", out var provider) ||
+            provider.ValueKind != JsonValueKind.Object ||
+            !provider.TryGetProperty("key", out var keyProperty) ||
+            keyProperty.ValueKind != JsonValueKind.String)
+            return false;
+
+        key = keyProperty.GetString() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(key);
+    }
+
+    private static ActivityNode? FindActivityNode(
+        ActivityNode? root,
+        string nodeId,
+        Elsa.Workflows.Design.Core.Contracts.IActivityStructureService structureService)
+    {
+        if (root is null)
+            return null;
+
+        var stack = new Stack<ActivityNode>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        stack.Push(root);
+
+        while (stack.TryPop(out var node))
+        {
+            if (!visited.Add(node.NodeId))
+                continue;
+            if (string.Equals(node.NodeId, nodeId, StringComparison.Ordinal))
+                return node;
+
+            foreach (var child in structureService.ProjectChildren(node).SelectMany(x => x.Activities))
+                stack.Push(child);
+        }
+
+        return null;
+    }
+
+    private sealed class NoStoreResult(IResult inner) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return inner.ExecuteAsync(httpContext);
+        }
+    }
 
     private static Task<IResult> ListExpressionDescriptorsAsync(IShellRegistry shellRegistry, CancellationToken cancellationToken) =>
         WithShellAsync(shellRegistry, services =>
@@ -998,6 +1142,12 @@ internal sealed record UpdateWorkflowDraftRequest(
 internal sealed record PromoteDraftResponse(string VersionId);
 
 internal sealed record WorkflowManagementErrorResponse(string Error);
+
+internal sealed record WorkflowManagementCodedErrorResponse(string Code, string Error);
+
+internal sealed record ActivityInputOptionsRequest(string? NodeId, WorkflowDefinitionStateView? WorkflowState);
+
+internal sealed record ActivityInputOptionsResponse(IReadOnlyList<ActivityInputOption> Options);
 
 internal sealed record ActivityCatalogResponse(IReadOnlyList<ActivityCatalogItemResponse> Activities);
 

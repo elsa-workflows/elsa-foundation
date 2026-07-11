@@ -97,6 +97,61 @@ public sealed class ComplexInputFixtureActivity : ActivityBase
     public InputArgument<int> Count { get; set; } = null!;
 }
 
+/// <summary>Valid option declarations used by the reflection-only scanner contract tests.</summary>
+public sealed class InputOptionsFixtureActivity : ActivityBase
+{
+    [ActivityInput(UIHint = "dropdown", Options = ["red", "green"])]
+    public InputArgument<string> Color { get; set; } = null!;
+
+    [ActivityInput(UIHint = "dropdown")]
+    [ActivityInputOption("Low", 1)]
+    [ActivityInputOption("High", 10)]
+    public InputArgument<int> Priority { get; set; } = null!;
+
+    [ActivityInput]
+    [ActivityInputOption("Automatic", FixtureMode.Auto)]
+    [ActivityInputOption("Disabled", FixtureMode.Off)]
+    public InputArgument<FixtureMode> Mode { get; set; } = null!;
+
+    [ActivityInputOption("Enabled", true)]
+    [ActivityInputOption("Disabled", false)]
+    public InputArgument<bool> Enabled { get; set; } = null!;
+
+    [ActivityInputOption("Minimum JS-safe integer", -9007199254740991L)]
+    [ActivityInputOption("Maximum JS-safe integer", 9007199254740991L)]
+    public InputArgument<long> JsSafeIntegerBoundary { get; set; } = null!;
+
+    [ActivityInput(OptionsProvider = "fixture.fields", OptionsProviderDependencies = [nameof(Entity)])]
+    public InputArgument<string> Field { get; set; } = null!;
+
+    public InputArgument<string> Entity { get; set; } = null!;
+}
+
+public abstract class InheritedInputOptionsBaseActivity : ActivityBase
+{
+    [ActivityInput(UIHint = "dropdown", Options = ["base-a", "base-b"])]
+    public virtual InputArgument<string> Choice { get; set; } = null!;
+}
+
+public sealed class InheritedInputOptionsFixtureActivity : InheritedInputOptionsBaseActivity
+{
+    public override InputArgument<string> Choice { get; set; } = null!;
+}
+
+public abstract class ReplacedInputOptionsBaseActivity : ActivityBase
+{
+    [ActivityInput(UIHint = "dropdown")]
+    [ActivityInputOption("Base", 1)]
+    public virtual InputArgument<int> Choice { get; set; } = null!;
+}
+
+public sealed class ReplacedInputOptionsFixtureActivity : ReplacedInputOptionsBaseActivity
+{
+    [ActivityInputOption("Derived first", 2)]
+    [ActivityInputOption("Derived second", 3)]
+    public override InputArgument<int> Choice { get; set; } = null!;
+}
+
 /// <summary>
 /// A composite fixture whose child-structure attributes must be projected into design facets by the
 /// reflection-only scanner.

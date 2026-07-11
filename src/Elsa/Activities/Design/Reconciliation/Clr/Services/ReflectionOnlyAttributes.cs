@@ -41,7 +41,7 @@ public static class ReflectionOnlyAttributes
     /// </summary>
     public static CustomAttributeData? FindAttributeUpPropertyChain(PropertyInfo property, string attributeFullName)
     {
-        for (var current = (PropertyInfo?)property; current is not null; current = FindBaseProperty(current))
+        foreach (var current in EnumeratePropertyChain(property))
         {
             var attribute = current.GetCustomAttributesData().FirstOrDefault(a => a.AttributeType.FullName == attributeFullName);
             if (attribute is not null)
@@ -49,6 +49,13 @@ public static class ReflectionOnlyAttributes
         }
 
         return null;
+    }
+
+    /// <summary>Enumerates a property followed by the same-named declarations on its base classes.</summary>
+    public static IEnumerable<PropertyInfo> EnumeratePropertyChain(PropertyInfo property)
+    {
+        for (var current = (PropertyInfo?)property; current is not null; current = FindBaseProperty(current))
+            yield return current;
     }
 
     /// <summary>

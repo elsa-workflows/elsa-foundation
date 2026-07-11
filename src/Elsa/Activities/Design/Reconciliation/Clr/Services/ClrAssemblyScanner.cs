@@ -31,11 +31,13 @@ public sealed class ClrAssemblyScanner(
     IActivityTypeCategoryResolver categoryResolver,
     ILogger<ClrAssemblyScanner> logger) : IClrAssemblyScanner
 {
+    private const long MaxJavaScriptSafeInteger = 9007199254740991L;
     private static readonly string ActivityInterfaceFullName = typeof(IActivity).FullName!;
     private static readonly string InputArgumentFullName = typeof(InputArgument).FullName!;
     private static readonly string OutputArgumentFullName = typeof(OutputArgument).FullName!;
     private static readonly string RequiredAttributeFullName = typeof(RequiredAttribute).FullName!;
     private static readonly string ActivityInputAttributeFullName = typeof(ActivityInputAttribute).FullName!;
+    private static readonly string ActivityInputOptionAttributeFullName = typeof(ActivityInputOptionAttribute).FullName!;
     private static readonly string ActivityStructureAttributeFullName = typeof(ActivityStructureAttribute).FullName!;
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -116,12 +118,18 @@ public sealed class ClrAssemblyScanner(
         var inputs = new List<InputDefinition>();
         var outputs = new List<OutputDefinition>();
 
-        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var inputNames = properties
+            .Where(property => DerivesFrom(property.PropertyType, InputArgumentFullName))
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var property in properties)
         {
             if (DerivesFrom(property.PropertyType, InputArgumentFullName))
             {
                 var valueType = GetArgumentValueType(property.PropertyType);
-                var metadata = ReadActivityInputMetadata(property, valueType);
+                var metadata = ReadActivityInputMetadata(property, valueType, inputNames, type.FullName!);
                 inputs.Add(new InputDefinition(
                     ReferenceKey: property.Name,
                     Name: property.Name,
@@ -130,6 +138,8 @@ public sealed class ClrAssemblyScanner(
                     DisplayName: property.Name,
                     Category: metadata.Category,
                     Order: metadata.Order,
+                    UiHint: metadata.UiHint,
+                    UISpecifications: metadata.UISpecifications,
                     IsRequired: HasRequired(property),
                     DefaultValue: metadata.DefaultValue,
                     DefaultSyntax: metadata.DefaultSyntax));
@@ -256,22 +266,321 @@ public sealed class ClrAssemblyScanner(
     private static bool HasRequired(PropertyInfo property) =>
         ReflectionOnlyAttributes.HasAttributeUpPropertyChain(property, RequiredAttributeFullName);
 
-    private static ActivityInputMetadata ReadActivityInputMetadata(PropertyInfo property, Type? valueType)
+    private static ActivityInputMetadata ReadActivityInputMetadata(
+        PropertyInfo property,
+        Type? valueType,
+        IReadOnlySet<string> inputNames,
+        string activityTypeName)
     {
         var attribute = ReflectionOnlyAttributes.FindAttributeUpPropertyChain(property, ActivityInputAttributeFullName);
-        if (attribute is null)
-            return new ActivityInputMetadata(0, null, null, null);
-
-        var order = ReadNamedSingleArgument(attribute, nameof(ActivityInputAttribute.Order)) ?? 0;
-        var category = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Category));
-        var defaultValue = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultValue));
-        var defaultSyntax = ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
+        var order = attribute is null ? 0 : ReadNamedSingleArgument(attribute, nameof(ActivityInputAttribute.Order)) ?? 0;
+        var category = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.Category));
+        var defaultValue = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultValue));
+        var defaultSyntax = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
+        var uiHint = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.UIHint));
+        var uiSpecifications = ReadOptionSpecifications(property, valueType, inputNames, activityTypeName);
 
         return new ActivityInputMetadata(
             order,
             string.IsNullOrWhiteSpace(category) ? null : category.Trim(),
             string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
-            defaultSyntax);
+            defaultSyntax,
+            string.IsNullOrWhiteSpace(uiHint) ? null : uiHint.Trim(),
+            uiSpecifications);
+    }
+
+    private static JsonElement? ReadOptionSpecifications(
+        PropertyInfo property,
+        Type? valueType,
+        IReadOnlySet<string> inputNames,
+        string activityTypeName)
+    {
+        foreach (var declaration in ReflectionOnlyAttributes.EnumeratePropertyChain(property))
+        {
+            var attributes = declaration.GetCustomAttributesData();
+            var inputAttribute = attributes.FirstOrDefault(x => x.AttributeType.FullName == ActivityInputAttributeFullName);
+            var typedOptions = attributes.Where(x => x.AttributeType.FullName == ActivityInputOptionAttributeFullName).ToArray();
+            var declaresOptions = inputAttribute is not null && HasNamedArgument(inputAttribute, nameof(ActivityInputAttribute.Options));
+            var declaresProvider = inputAttribute is not null && HasNamedArgument(inputAttribute, nameof(ActivityInputAttribute.OptionsProvider));
+            var declaresDependencies = inputAttribute is not null && HasNamedArgument(inputAttribute, nameof(ActivityInputAttribute.OptionsProviderDependencies));
+
+            if (!declaresOptions && !declaresProvider && !declaresDependencies && typedOptions.Length == 0)
+                continue;
+
+            return BuildOptionSpecifications(
+                property,
+                valueType,
+                inputNames,
+                activityTypeName,
+                inputAttribute,
+                typedOptions,
+                declaresOptions,
+                declaresProvider,
+                declaresDependencies);
+        }
+
+        return null;
+    }
+
+    private static JsonElement BuildOptionSpecifications(
+        PropertyInfo property,
+        Type? valueType,
+        IReadOnlySet<string> inputNames,
+        string activityTypeName,
+        CustomAttributeData? inputAttribute,
+        IReadOnlyCollection<CustomAttributeData> typedOptions,
+        bool declaresOptions,
+        bool declaresProvider,
+        bool declaresDependencies)
+    {
+        var provider = declaresProvider ? ReadNamedStringArgument(inputAttribute!, nameof(ActivityInputAttribute.OptionsProvider)) : null;
+        var dependencies = declaresDependencies
+            ? ReadNamedStringArrayArgument(inputAttribute!, nameof(ActivityInputAttribute.OptionsProviderDependencies))
+            : [];
+        var sourceCount = (declaresOptions ? 1 : 0) + (typedOptions.Count > 0 ? 1 : 0) + (declaresProvider ? 1 : 0);
+
+        if (sourceCount > 1)
+            throw InvalidInputMetadata(activityTypeName, property.Name, "Option metadata has conflicting static, typed, or provider sources.");
+        if (declaresDependencies && !declaresProvider)
+            throw InvalidInputMetadata(activityTypeName, property.Name, "Option provider dependencies require an options provider.");
+        if (declaresProvider && string.IsNullOrWhiteSpace(provider))
+            throw InvalidInputMetadata(activityTypeName, property.Name, "The options provider key cannot be blank.");
+
+        if (declaresProvider)
+        {
+            var seenDependencies = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var dependency in dependencies)
+            {
+                if (string.IsNullOrWhiteSpace(dependency))
+                    throw InvalidInputMetadata(activityTypeName, property.Name, "An options provider dependency cannot be blank.");
+                if (!seenDependencies.Add(dependency))
+                    throw InvalidInputMetadata(activityTypeName, property.Name, $"Option provider dependency '{dependency}' is duplicated.");
+                if (!inputNames.Contains(dependency))
+                    throw InvalidInputMetadata(activityTypeName, property.Name, $"Option provider dependency '{dependency}' does not identify a sibling input.");
+            }
+
+            return JsonSerializer.SerializeToElement(new
+            {
+                optionsProvider = new { key = provider!.Trim(), dependsOn = dependencies }
+            }, SerializerOptions);
+        }
+
+        var optionValueType = GetOptionValueType(valueType);
+        var options = declaresOptions
+            ? ReadNamedStringArrayArgument(inputAttribute!, nameof(ActivityInputAttribute.Options))
+                .Select(value => ToStringOption(value, optionValueType, activityTypeName, property.Name))
+                .ToArray()
+            : typedOptions
+                .Select(option => ToTypedOption(option, optionValueType, activityTypeName, property.Name))
+                .ToArray();
+
+        var duplicate = options
+            .GroupBy(option => GetOptionIdentity(option.Value), StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicate is not null)
+            throw InvalidInputMetadata(activityTypeName, property.Name, $"Option value '{duplicate.Key}' is duplicated.");
+
+        return JsonSerializer.SerializeToElement(new { options }, SerializerOptions);
+    }
+
+    private static ActivityInputOptionSpecification ToStringOption(string? value, Type? targetType, string activityTypeName, string inputName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw InvalidInputMetadata(activityTypeName, inputName, "A string option value cannot be blank.");
+        if (targetType?.FullName != typeof(string).FullName)
+            throw InvalidInputMetadata(activityTypeName, inputName, $"String option value '{value}' is not compatible with input type '{targetType?.FullName ?? "<unknown>"}'.");
+
+        return new ActivityInputOptionSpecification(value, JsonSerializer.SerializeToElement(value));
+    }
+
+    private static ActivityInputOptionSpecification ToTypedOption(CustomAttributeData attribute, Type? targetType, string activityTypeName, string inputName)
+    {
+        if (attribute.ConstructorArguments.Count < 2)
+            throw InvalidInputMetadata(activityTypeName, inputName, "A typed option requires a label and value.");
+
+        var label = attribute.ConstructorArguments[0].Value as string;
+        if (string.IsNullOrWhiteSpace(label))
+            throw InvalidInputMetadata(activityTypeName, inputName, "A typed option label cannot be blank.");
+
+        var valueArgument = UnwrapAttributeArgument(attribute.ConstructorArguments[1]);
+        if (valueArgument.Value is null)
+            throw InvalidInputMetadata(activityTypeName, inputName, "A typed option value cannot be null.");
+
+        return new ActivityInputOptionSpecification(label, ConvertOptionValue(valueArgument, targetType, activityTypeName, inputName));
+    }
+
+    private static CustomAttributeTypedArgument UnwrapAttributeArgument(CustomAttributeTypedArgument argument) =>
+        argument.Value is CustomAttributeTypedArgument nested ? nested : argument;
+
+    private static JsonElement ConvertOptionValue(CustomAttributeTypedArgument argument, Type? targetType, string activityTypeName, string inputName)
+    {
+        targetType = UnwrapNullable(targetType);
+        var sourceType = argument.ArgumentType;
+        var value = argument.Value!;
+
+        if (targetType is not null && targetType.IsEnum)
+        {
+            if (!sourceType.IsEnum || sourceType.FullName != targetType.FullName)
+                throw IncompatibleOption(activityTypeName, inputName, sourceType, targetType);
+
+            var enumName = sourceType.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(field => EqualsNumeric(field.GetRawConstantValue(), value))?.Name;
+            if (enumName is null)
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Enum option value '{value}' is not defined by '{targetType.FullName}'.");
+
+            return JsonSerializer.SerializeToElement(enumName);
+        }
+
+        if (targetType?.FullName == typeof(string).FullName && value is string stringValue)
+        {
+            if (string.IsNullOrWhiteSpace(stringValue))
+                throw InvalidInputMetadata(activityTypeName, inputName, "A typed string option value cannot be blank.");
+            return JsonSerializer.SerializeToElement(stringValue);
+        }
+
+        if (targetType?.FullName == typeof(bool).FullName && value is bool boolValue)
+            return JsonSerializer.SerializeToElement(boolValue);
+
+        if (targetType is not null && IsNumericType(targetType) && IsNumericType(sourceType))
+        {
+            try
+            {
+                var converted = Convert.ChangeType(value, targetType.FullName switch
+                {
+                    "System.Byte" => typeof(byte),
+                    "System.SByte" => typeof(sbyte),
+                    "System.Int16" => typeof(short),
+                    "System.UInt16" => typeof(ushort),
+                    "System.Int32" => typeof(int),
+                    "System.UInt32" => typeof(uint),
+                    "System.Int64" => typeof(long),
+                    "System.UInt64" => typeof(ulong),
+                    "System.Single" => typeof(float),
+                    "System.Double" => typeof(double),
+                    _ => typeof(decimal)
+                }, CultureInfo.InvariantCulture);
+                ValidateNumericFidelity(converted, targetType, activityTypeName, inputName);
+                return JsonSerializer.SerializeToElement(converted);
+            }
+            catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+            {
+                throw IncompatibleOption(activityTypeName, inputName, sourceType, targetType);
+            }
+        }
+
+        throw IncompatibleOption(activityTypeName, inputName, sourceType, targetType);
+    }
+
+    private static void ValidateNumericFidelity(object value, Type targetType, string activityTypeName, string inputName)
+    {
+        if (value is double doubleValue)
+        {
+            if (!double.IsFinite(doubleValue))
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Numeric option value '{doubleValue}' must be finite.");
+            if (Math.Truncate(doubleValue) == doubleValue && Math.Abs(doubleValue) > MaxJavaScriptSafeInteger)
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Integral option value '{doubleValue:R}' exceeds the JavaScript safe integer range ±{MaxJavaScriptSafeInteger}.");
+        }
+        else if (value is float singleValue)
+        {
+            if (!float.IsFinite(singleValue))
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Numeric option value '{singleValue}' must be finite.");
+            if (MathF.Truncate(singleValue) == singleValue && MathF.Abs(singleValue) > MaxJavaScriptSafeInteger)
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Integral option value '{singleValue:R}' exceeds the JavaScript safe integer range ±{MaxJavaScriptSafeInteger}.");
+        }
+        else
+        {
+            var decimalValue = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+            if (decimal.Truncate(decimalValue) == decimalValue && (decimalValue < -MaxJavaScriptSafeInteger || decimalValue > MaxJavaScriptSafeInteger))
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Integral option value '{decimalValue}' exceeds the JavaScript safe integer range ±{MaxJavaScriptSafeInteger}.");
+        }
+
+        if (targetType.FullName != typeof(decimal).FullName)
+            return;
+
+        var authoredDecimal = (decimal)value;
+        try
+        {
+            var asDouble = (double)authoredDecimal;
+            if (!double.IsFinite(asDouble) || (decimal)asDouble != authoredDecimal)
+                throw InvalidInputMetadata(activityTypeName, inputName, $"Decimal option value '{authoredDecimal}' cannot round-trip exactly through a double.");
+        }
+        catch (OverflowException)
+        {
+            throw InvalidInputMetadata(activityTypeName, inputName, $"Decimal option value '{authoredDecimal}' cannot round-trip exactly through a double.");
+        }
+    }
+
+    private static string GetOptionIdentity(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => $"string:{value.GetString()}",
+        JsonValueKind.True => "boolean:true",
+        JsonValueKind.False => "boolean:false",
+        JsonValueKind.Number when value.TryGetDecimal(out var decimalValue) => $"number:{decimalValue.ToString("G29", CultureInfo.InvariantCulture)}",
+        JsonValueKind.Number when value.TryGetDouble(out var doubleValue) => $"number:{doubleValue.ToString("R", CultureInfo.InvariantCulture)}",
+        _ => $"{value.ValueKind}:{value.GetRawText()}"
+    };
+
+    private static Type? GetOptionValueType(Type? valueType)
+    {
+        if (valueType is null)
+            return null;
+        if (valueType.IsArray)
+            return UnwrapNullable(valueType.GetElementType());
+        if (valueType.IsGenericType && valueType.GetGenericArguments() is [var element])
+        {
+            var definition = valueType.GetGenericTypeDefinition().FullName;
+            if (definition is "System.Collections.Generic.IEnumerable`1"
+                or "System.Collections.Generic.ICollection`1"
+                or "System.Collections.Generic.IReadOnlyCollection`1"
+                or "System.Collections.Generic.IList`1"
+                or "System.Collections.Generic.IReadOnlyList`1"
+                or "System.Collections.Generic.List`1"
+                or "System.Collections.Generic.HashSet`1")
+                return UnwrapNullable(element);
+        }
+
+        return UnwrapNullable(valueType);
+    }
+
+    private static Type? UnwrapNullable(Type? type) =>
+        type is { IsGenericType: true } && type.GetGenericTypeDefinition().FullName == "System.Nullable`1"
+            ? type.GetGenericArguments()[0]
+            : type;
+
+    private static bool IsNumericType(Type type) => type.FullName is
+        "System.Byte" or "System.SByte" or "System.Int16" or "System.UInt16" or "System.Int32" or "System.UInt32"
+        or "System.Int64" or "System.UInt64" or "System.Single" or "System.Double" or "System.Decimal";
+
+    private static bool EqualsNumeric(object? left, object? right)
+    {
+        if (left is null || right is null)
+            return false;
+
+        try
+        {
+            return Convert.ToDecimal(left, CultureInfo.InvariantCulture) == Convert.ToDecimal(right, CultureInfo.InvariantCulture);
+        }
+        catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+        {
+            return Equals(left, right);
+        }
+    }
+
+    private static InvalidOperationException IncompatibleOption(string activityTypeName, string inputName, Type sourceType, Type? targetType) =>
+        InvalidInputMetadata(activityTypeName, inputName, $"Option type '{sourceType.FullName}' is not compatible with input type '{targetType?.FullName ?? "<unknown>"}'.");
+
+    private static InvalidOperationException InvalidInputMetadata(string activityTypeName, string inputName, string message) =>
+        new($"Invalid activity input option metadata for '{activityTypeName}.{inputName}': {message}");
+
+    private static bool HasNamedArgument(CustomAttributeData attribute, string name) =>
+        attribute.NamedArguments.Any(argument => argument.MemberName == name);
+
+    private static string?[] ReadNamedStringArrayArgument(CustomAttributeData attribute, string name)
+    {
+        var value = attribute.NamedArguments.FirstOrDefault(argument => argument.MemberName == name).TypedValue.Value;
+        return value is IReadOnlyCollection<CustomAttributeTypedArgument> arguments
+            ? arguments.Select(argument => argument.Value as string).ToArray()
+            : [];
     }
 
     private static float? ReadNamedSingleArgument(CustomAttributeData attribute, string name)
@@ -317,7 +626,15 @@ public sealed class ClrAssemblyScanner(
         return JsonSerializer.SerializeToElement(value);
     }
 
-    private sealed record ActivityInputMetadata(float Order, string? Category, JsonElement? DefaultValue, string? DefaultSyntax);
+    private sealed record ActivityInputMetadata(
+        float Order,
+        string? Category,
+        JsonElement? DefaultValue,
+        string? DefaultSyntax,
+        string? UiHint,
+        JsonElement? UISpecifications);
+
+    private sealed record ActivityInputOptionSpecification(string Label, JsonElement Value);
 
     private static bool DerivesFrom(Type? type, string fullName)
     {
