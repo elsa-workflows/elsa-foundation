@@ -17,8 +17,8 @@
 
 **Purpose**: Freeze the baseline and prepare exact test/report locations.
 
-- [ ] T001 Record the current-main 43.500964 s activation and 0.610067 s first-success evidence, environment, and stale-snapshot failure in `docs/reports/shell-activation-performance-2026-07.md`
-- [ ] T002 Remove the duplicate `Elsa.Workflows.Runtime.Http` import warning in `src/Apps/Elsa.Server/Program.cs` so measured Release builds remain warning-free
+- [x] T001 Record the current-main 43.500964 s activation and 0.610067 s first-success evidence, environment, and stale-snapshot failure in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T002 Remove the duplicate `Elsa.Workflows.Runtime.Http` import warning in `src/Apps/Elsa.Server/Program.cs` so measured Release builds remain warning-free
 
 ---
 
