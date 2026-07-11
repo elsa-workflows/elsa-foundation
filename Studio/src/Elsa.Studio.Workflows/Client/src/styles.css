@@ -4129,6 +4129,7 @@ button.wf-reference-select {
   z-index: 1;
   display: grid;
   gap: 8px;
+  margin-top: 12px;
 }
 
 .wf-inspector-owner-hint {
