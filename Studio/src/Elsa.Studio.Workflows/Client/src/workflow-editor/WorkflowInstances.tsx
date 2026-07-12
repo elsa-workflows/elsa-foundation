@@ -749,10 +749,21 @@ function WorkflowActivityValueEvidence({
     );
   }
 
+  const captureModes = [...new Set(snapshots.map(snapshot => snapshot.captureMode))];
+  const captureModeLabel = captureModes.length === 1 ? formatCaptureMode(captureModes[0] ?? "Evidence") : "Mixed evidence";
+
   return (
     <section className="wf-instance-section">
-      <h4>{title}</h4>
-      <div className="wf-runtime-input-list">
+      <header className="wf-runtime-evidence-heading">
+        <h4>
+          {title}
+          <span className="wf-runtime-evidence-count" aria-label={`${snapshots.length} ${title.toLowerCase()}`}>
+            {snapshots.length}
+          </span>
+        </h4>
+        <span className="wf-runtime-capture-mode">{captureModeLabel}</span>
+      </header>
+      <div className="wf-runtime-input-list" role="list">
         {snapshots.map(snapshot => (
           <RuntimeValueEvidenceCard key={`${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}`} snapshot={snapshot} />
         ))}
@@ -767,21 +778,22 @@ function RuntimeValueEvidenceCard({ snapshot }: { snapshot: ActivityExecutionIns
   const hasPayload = snapshot.captureMode === "Payload" && snapshot.payload !== undefined;
 
   return (
-    <article className="wf-runtime-input">
+    <article className="wf-runtime-input" role="listitem">
       <header>
         <span>
           <strong>{snapshot.name}</strong>
           <small>{typeName}</small>
         </span>
-        <span className="wf-runtime-capture-mode">{formatCaptureMode(snapshot.captureMode)}</span>
       </header>
-      {isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
-        <DiagnosticSnapshotTree node={diagnosticSnapshot} />
-      ) : hasPayload ? (
-        <RuntimeInputPayload payload={snapshot.payload} />
-      ) : (
-        <p>{formatEvidenceMessage(snapshot)}</p>
-      )}
+      <div className="wf-runtime-input-content">
+        {isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
+          <DiagnosticSnapshotTree node={diagnosticSnapshot} />
+        ) : hasPayload ? (
+          <RuntimeInputPayload payload={snapshot.payload} />
+        ) : (
+          <p>{formatEvidenceMessage(snapshot)}</p>
+        )}
+      </div>
       {snapshot.isSensitive ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
     </article>
   );

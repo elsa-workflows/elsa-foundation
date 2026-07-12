@@ -195,6 +195,13 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).toContain("Result");
     expect(container.textContent).toContain("customer-1");
     expect(container.textContent).toContain("System.String");
+
+    const inputSection = [...container.querySelectorAll<HTMLElement>(".wf-instance-section")]
+      .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
+    expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
+    expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
+    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Diagnostic Snapshot");
+    expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
   it("shows the capture reason when input values were omitted by policy", async () => {
