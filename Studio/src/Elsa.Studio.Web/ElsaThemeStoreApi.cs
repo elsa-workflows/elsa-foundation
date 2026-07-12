@@ -23,6 +23,7 @@ internal static class ElsaThemeStoreApi
         "ceramic",
         "carbon",
         "brass-instrument",
+        "walnut-workshop",
         "harbor",
         "borealis",
         "hot-pink"

@@ -627,7 +627,69 @@ const brassLightTheme = createMaterialThemeColors({
   sidebarActive: oklchToVar(0.66, 0.07, 78),
 });
 
-export const materialThemeIds = ["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument"] as const;
+const walnutWorkshopTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.43, 0.06, 118),
+  primaryForeground: oklchToVar(0.96, 0.025, 82),
+  secondary: oklchToVar(0.68, 0.065, 72),
+  secondaryForeground: oklchToVar(0.23, 0.035, 62),
+  accent: oklchToVar(0.75, 0.085, 78),
+  accentForeground: oklchToVar(0.23, 0.035, 62),
+  success: oklchToVar(0.51, 0.11, 140),
+  warning: oklchToVar(0.65, 0.12, 72),
+  danger: oklchToVar(0.51, 0.13, 30),
+  background: oklchToVar(0.52, 0.065, 63),
+  foreground: oklchToVar(0.2, 0.03, 58),
+  card: oklchToVar(0.76, 0.065, 75),
+  muted: oklchToVar(0.67, 0.06, 70),
+  mutedForeground: oklchToVar(0.37, 0.04, 62),
+  border: oklchToVar(0.39, 0.055, 62),
+  input: oklchToVar(0.58, 0.06, 68),
+  sidebar: oklchToVar(0.53, 0.065, 64),
+  sidebarForeground: oklchToVar(0.22, 0.03, 58),
+  sidebarActive: oklchToVar(0.32, 0.035, 105),
+  sidebarActiveForeground: oklchToVar(0.91, 0.04, 82),
+  ring: oklchToVar(0.46, 0.075, 118),
+  chartColors: [
+    oklchToVar(0.43, 0.06, 118),
+    oklchToVar(0.5, 0.08, 68),
+    oklchToVar(0.51, 0.11, 140),
+    oklchToVar(0.65, 0.12, 72),
+    oklchToVar(0.51, 0.13, 30),
+  ],
+});
+
+const walnutWorkshopDarkTheme = createMaterialThemeColors({
+  primary: oklchToVar(0.72, 0.1, 118),
+  primaryForeground: oklchToVar(0.16, 0.025, 82),
+  secondary: oklchToVar(0.29, 0.04, 72),
+  secondaryForeground: oklchToVar(0.9, 0.035, 82),
+  accent: oklchToVar(0.42, 0.06, 78),
+  accentForeground: oklchToVar(0.92, 0.035, 82),
+  success: oklchToVar(0.7, 0.12, 140),
+  warning: oklchToVar(0.76, 0.13, 72),
+  danger: oklchToVar(0.68, 0.15, 30),
+  background: oklchToVar(0.16, 0.025, 63),
+  foreground: oklchToVar(0.9, 0.035, 82),
+  card: oklchToVar(0.23, 0.03, 70),
+  muted: oklchToVar(0.3, 0.03, 70),
+  mutedForeground: oklchToVar(0.7, 0.035, 75),
+  border: oklchToVar(0.43, 0.05, 68),
+  input: oklchToVar(0.27, 0.03, 68),
+  sidebar: oklchToVar(0.13, 0.02, 64),
+  sidebarForeground: oklchToVar(0.84, 0.035, 82),
+  sidebarActive: oklchToVar(0.32, 0.05, 105),
+  sidebarActiveForeground: oklchToVar(0.94, 0.03, 82),
+  ring: oklchToVar(0.72, 0.1, 118),
+  chartColors: [
+    oklchToVar(0.72, 0.1, 118),
+    oklchToVar(0.7, 0.11, 68),
+    oklchToVar(0.7, 0.12, 140),
+    oklchToVar(0.76, 0.13, 72),
+    oklchToVar(0.68, 0.15, 30),
+  ],
+});
+
+export const materialThemeIds = ["stone", "paper", "blueprint", "ceramic", "carbon", "brass-instrument", "walnut-workshop"] as const;
 
 export const isMaterialTheme = (themeId: string): boolean =>
   (materialThemeIds as readonly string[]).includes(themeId);
@@ -697,6 +759,14 @@ export const builtInThemeDefinitions: Theme[] = [
     { ...brassLightTheme, material: materialMode("champagne-brass", "/studio/assets/brass-champagne-tile.png", 0.42, 380) },
     { ...brassTheme, material: materialMode("brass-enamel", "/studio/assets/brass-enamel-tile.png", 0.78, 380) },
     ["dark"]
+  ),
+  createThemeDefinition(
+    "walnut-workshop",
+    "Walnut Workshop",
+    "Warm walnut panels, parchment work surfaces, and aged brass details.",
+    { ...walnutWorkshopTheme, material: materialMode("waxed-walnut", "/studio/assets/walnut-workshop-tile.png", 0.64, 720) },
+    { ...walnutWorkshopDarkTheme, material: materialMode("waxed-walnut", "/studio/assets/walnut-workshop-tile.png", 0.64, 720) },
+    ["light"]
   ),
   createThemeDefinition("harbor", "Harbor", "Crisp blue for operational dashboards.", createMode(oklchToVar(0.68, 0.16, 235), 235), createMode(oklchToVar(0.6, 0.16, 235), 235, { background: oklchToVar(0.18, 0.02, 250) })),
   createThemeDefinition("borealis", "Borealis", "Green-teal palette with a calm technical feel.", createMode(oklchToVar(0.72, 0.14, 168), 168), createMode(oklchToVar(0.62, 0.14, 168), 168, { background: oklchToVar(0.17, 0.02, 168) })),

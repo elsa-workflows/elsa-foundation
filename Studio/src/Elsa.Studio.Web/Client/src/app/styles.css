@@ -4679,6 +4679,42 @@ html[data-theme="brass-instrument"] .theme-dropdown {
     inset 0 0 0 1px color-mix(in srgb, #f1d992 12%, transparent);
 }
 
+html[data-theme="walnut-workshop"] .sidebar,
+html[data-theme="walnut-workshop"] .topbar,
+html[data-theme="walnut-workshop"] .bottom-panel,
+html[data-theme="walnut-workshop"] .studio-card,
+html[data-theme="walnut-workshop"] .admin-card,
+html[data-theme="walnut-workshop"] .theme-dropdown,
+html[data-theme="walnut-workshop"] .wf-palette,
+html[data-theme="walnut-workshop"] .wf-inspector {
+  outline: 1px solid color-mix(in srgb, #f2d49d 26%, transparent);
+  outline-offset: -3px;
+  text-shadow: 0 1px 0 color-mix(in srgb, #f4dbaa 18%, transparent);
+}
+
+html[data-theme="walnut-workshop"] .studio-card,
+html[data-theme="walnut-workshop"] .admin-card,
+html[data-theme="walnut-workshop"] .theme-dropdown,
+html[data-theme="walnut-workshop"] .wf-palette,
+html[data-theme="walnut-workshop"] .wf-inspector,
+html[data-theme="walnut-workshop"] .wf-node {
+  border-width: 2px;
+  border-color: var(--studio-material-edge-strong);
+}
+
+html[data-theme="walnut-workshop"] .nav-section a.active,
+html[data-theme="walnut-workshop"] .nav-section a.has-active-child {
+  color: var(--studio-accent-text);
+  text-shadow: 0 1px 0 color-mix(in srgb, black 54%, transparent);
+}
+
+html[data-theme="walnut-workshop"] .nav-section-header,
+html[data-theme="walnut-workshop"] .theme-dropdown-title,
+html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active {
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 /* ==========================================================================
    Shared UI kit — Package 5 primitives.
 
