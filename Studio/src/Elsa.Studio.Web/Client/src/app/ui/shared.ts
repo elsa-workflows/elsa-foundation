@@ -12,6 +12,7 @@
  */
 export * from "./data-grid/DataGrid";
 export * from "./feedback/FeedbackStates";
+export * from "./feedback/ActionNotice";
 export * from "./feedback/StatusChip";
 export * from "./feedback/StatusPill";
 export * from "./forms/Button";

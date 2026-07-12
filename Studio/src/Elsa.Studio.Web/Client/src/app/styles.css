@@ -5013,6 +5013,84 @@ html[data-theme="black-glass"] .studio-list-row.selected {
   color: var(--studio-accent);
 }
 
+/* Surface-local action feedback. Positioning belongs to the containing inspector or dialog. */
+.studio-action-notice {
+  display: flex;
+  width: min(100%, 420px);
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px 7px 12px;
+}
+
+.studio-action-notice-message {
+  min-width: 0;
+  flex: 1;
+  line-height: 1.4;
+}
+
+.studio-action-notice-action,
+.studio-action-notice-dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.studio-action-notice-action {
+  min-height: 28px;
+  border-radius: var(--studio-radius-sm);
+  padding: 0 7px;
+}
+
+.studio-action-notice-dismiss {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+
+.studio-action-notice-action:hover,
+.studio-action-notice-dismiss:hover {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-action-notice-action:focus-visible,
+.studio-action-notice-dismiss:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 1px;
+}
+
+html[data-theme-material] .studio-action-notice {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}
+
+html[data-theme="black-glass"] .studio-action-notice {
+  border-color: var(--studio-glass-edge-strong);
+  background: var(--studio-glass-bg-strong);
+  box-shadow: var(--studio-glass-glow-strong);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
 /* Stat / KPI tiles. Container uses the card surface so material themes slab it. */
 .studio-stat-tile {
   display: grid;

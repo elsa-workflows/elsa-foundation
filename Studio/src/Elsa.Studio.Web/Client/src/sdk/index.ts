@@ -411,8 +411,19 @@ export interface StudioActivityInputOptionsProviderDescriptor {
   dependsOn: string[];
 }
 
+export type StudioDictionaryKeyComparison = "ordinal" | "ordinalIgnoreCase";
+
+export interface StudioActivityInputDictionarySpecifications {
+  keyComparison?: StudioDictionaryKeyComparison;
+  keyLabel?: string;
+  valueLabel?: string;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
+}
+
 /** Known input-editor metadata plus an open bag for module-specific specifications. */
 export interface StudioActivityInputUISpecifications extends Record<string, unknown> {
+  dictionary?: StudioActivityInputDictionarySpecifications;
   options?: StudioActivityInputOption[];
   optionsProvider?: StudioActivityInputOptionsProviderDescriptor;
 }
