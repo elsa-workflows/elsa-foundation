@@ -145,10 +145,10 @@ As an Elsa product maintainer, I can update Foundation and Studio together so St
 - **FR-003**: The `ElsaWorkflowManagementApi` facade and the old `/_elsa/workflow-management` routes MUST be removed without a permanent compatibility adapter.
 - **FR-004**: Custom hosts MUST be able to expose the supported API by installing and configuring domain API modules, without copying code from `Elsa.Server`.
 - **FR-005**: Workflow definitions, drafts, immutable Design versions, scoped-variable analysis, and context-sensitive activity input-option resolution MUST be owned by Workflow Design API.
-- **FR-006**: The authoring activity catalog and activity availability diagnostics MUST be owned by Activity Design API.
+- **FR-006**: The authoring activity catalog plus activity availability settings and diagnostics MUST be owned by Activity Design API.
 - **FR-007**: Expression descriptors and variable-type descriptors MUST be owned by an Expressions API module.
 - **FR-008**: Publishing, publication slots and policies, publish/unpublish/restore operations, and test-run source-reference mutation MUST be owned by Publishing API.
-- **FR-009**: Executable artifacts, executable inspection and execution, workflow instances, and read-only source provenance MUST be owned by Runtime API.
+- **FR-009**: Executable artifacts, executable inspection and execution, workflow instances, runtime diagnostics settings, and read-only source provenance MUST be owned by Runtime API.
 - **FR-010**: A dedicated API Capabilities module MUST aggregate client-visible capabilities across the active shell.
 
 #### Capability Discovery
@@ -244,7 +244,7 @@ The following route stems are public contract allocations, not an exhaustive end
 | Authoring activity catalog and availability | Activity Design API | `/design/activities/...` |
 | Expression and variable-type descriptors | Expressions API | `/expressions/...` |
 | Publication slots, policy, preflight, test runs | Publishing API | `/publishing/...` |
-| Executables, provenance inspection, runs, instances | Runtime API | `/runtime/workflows/...` |
+| Executables, provenance inspection, runs, instances, runtime diagnostics | Runtime API | `/runtime/workflows/...` |
 
 ### Key Entities *(include if feature involves data)*
 
