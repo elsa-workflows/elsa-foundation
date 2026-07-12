@@ -110,30 +110,18 @@ describe("workflow Input reference Contribution", () => {
     }));
   });
 
-  it("preserves the current reference and disables selection while Inputs load", () => {
-    const { container, onChange } = renderPicker({ status: "loading", workflowInputs: [] });
+  it("derives Inputs from the live draft without exposing a transport Retry", () => {
+    const { container, onChange } = renderPicker({ workflowInputs: [] });
     const select = container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']")!;
 
-    expect(select.disabled).toBe(true);
+    expect(select.disabled).toBe(false);
     expect(select.value).toBe("count");
-    expect(container.textContent).toContain("Loading workflow inputs");
+    expect(container.textContent).toContain("No workflow inputs are available");
+    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Retry")).toBe(false);
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("preserves the current reference and retries a failed definition load without mutating the draft", () => {
-    const retry = vi.fn();
-    const { container, onChange } = renderPicker({ status: "error", workflowInputs: [], retry });
-
-    expect(container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']")?.value).toBe("count");
-    expect(container.textContent).toContain("Workflow inputs could not be loaded");
-    flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find(button => button.textContent === "Retry")?.click());
-    expect(retry).toHaveBeenCalledTimes(1);
-    expect(onChange).not.toHaveBeenCalled();
-  });
-
-  it("wires definition load failure and Retry through the production Inspector into the Input Contribution", () => {
-    const retry = vi.fn();
+  it("keeps production Input authoring on the current draft and has no definition-reload control", () => {
     const onChange = vi.fn();
     const container = render(
       <InspectorPanel
@@ -150,9 +138,9 @@ describe("workflow Input reference Contribution", () => {
         propertyEditors={[]}
         expressionEditors={[inputReferenceContribution]}
         expressionDescriptors={[{ type: "Input", displayName: "Input", editingMode: "reference" }]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
-        definitionStatus="error"
-        onRetryDefinition={retry}
+        onRetryExpressionDescriptors={() => undefined}
         scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "unavailable" }}
         onSelectedActivityChange={onChange}
         onEnterSlot={() => undefined}
@@ -160,10 +148,9 @@ describe("workflow Input reference Contribution", () => {
       />
     );
 
-    expect(container.textContent).toContain("Workflow inputs could not be loaded");
-    flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find(button => button.textContent === "Retry")?.click());
-    expect(retry).toHaveBeenCalledTimes(1);
+    expect(container.querySelector<HTMLSelectElement>("select[aria-label='Input reference']")?.disabled).toBe(false);
+    expect(container.textContent).toContain("Count");
+    expect([...container.querySelectorAll("button")].some(button => button.textContent === "Retry")).toBe(false);
     expect(onChange).not.toHaveBeenCalled();
   });
 });
@@ -172,9 +159,7 @@ function renderPicker(options: {
   syntax?: string;
   value?: unknown;
   typeName?: string;
-  status?: "loading" | "ready" | "error";
   workflowInputs?: WorkflowInput[];
-  retry?: () => void;
 } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -198,11 +183,10 @@ function renderPicker(options: {
           { type: "Literal", displayName: "Literal", editingMode: "literal" },
           { type: "Input", displayName: "Input", editingMode: "reference" }
         ]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
         visibleVariables={[]}
         scopeStatus="ready"
-        inputStatus={options.status ?? "ready"}
-        inputRetry={options.retry}
         onChange={next => {
           onChange(next);
           setCurrent(next);

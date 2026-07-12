@@ -63,6 +63,7 @@ function Fixture() {
           editors={[]}
           expressionEditors={[]}
           expressionDescriptors={expressionDescriptors}
+          expressionDescriptorStatus="ready"
           descriptorStatus="ready"
           visibleVariables={[]}
           scopeStatus="ready"

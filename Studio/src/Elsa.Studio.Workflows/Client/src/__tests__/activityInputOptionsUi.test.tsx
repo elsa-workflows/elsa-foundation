@@ -65,10 +65,11 @@ function renderPanel(context: StudioEndpointContext, node: ActivityNode, objectC
       descriptor={descriptor}
       editors={[editor]}
       expressionEditors={objectCollection ? [createObjectExpressionEditorContribution(() => [editor])] : []}
-      expressionDescriptors={objectCollection ? [
+      expressionDescriptors={[
         { type: "Literal", displayName: "Literal", editingMode: "literal" },
-        { type: "Object", displayName: "Object", editingMode: "structured" }
-      ] : []}
+        ...(objectCollection ? [{ type: "Object", displayName: "Object", editingMode: "structured" } as const] : [])
+      ]}
+      expressionDescriptorStatus="ready"
       descriptorStatus="ready"
       visibleVariables={[]}
       scopeStatus="ready"

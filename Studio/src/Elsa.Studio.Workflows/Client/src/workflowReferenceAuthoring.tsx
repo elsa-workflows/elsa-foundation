@@ -3,16 +3,12 @@ import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import { describeCollectionType, formatTypeName } from "./activityProperties";
 import type { ArgumentType, VisibleVariableView, WorkflowDefinitionState, WorkflowInput } from "./workflowTypes";
 
-export type WorkflowReferenceAuthoringStatus = "loading" | "ready" | "error";
-
 interface WorkflowReferenceAuthoringState {
   workflowState: WorkflowDefinitionState;
   workflowInputs: WorkflowInput[];
   visibleVariables: VisibleVariableView[];
   status: ScopedVariableAnalysisStatus;
   retry?: () => void;
-  inputStatus: WorkflowReferenceAuthoringStatus;
-  inputRetry?: () => void;
 }
 
 const WorkflowReferenceAuthoringContext = createContext<WorkflowReferenceAuthoringState | null>(null);
@@ -23,12 +19,10 @@ export function WorkflowReferenceAuthoringProvider({
   visibleVariables,
   status,
   retry,
-  inputStatus,
-  inputRetry,
   children
 }: WorkflowReferenceAuthoringState & { children: ReactNode }) {
   return (
-    <WorkflowReferenceAuthoringContext.Provider value={{ workflowState, workflowInputs, visibleVariables, status, retry, inputStatus, inputRetry }}>
+    <WorkflowReferenceAuthoringContext.Provider value={{ workflowState, workflowInputs, visibleVariables, status, retry }}>
       {children}
     </WorkflowReferenceAuthoringContext.Provider>
   );

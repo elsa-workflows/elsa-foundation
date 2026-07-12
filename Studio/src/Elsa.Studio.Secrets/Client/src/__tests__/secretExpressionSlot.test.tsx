@@ -77,6 +77,7 @@ function mountPanel(endpoint: StudioEndpointContext, contribution: StudioExpress
           { type: "Literal", displayName: "Literal", editingMode: "literal" },
           { type: "Secret", displayName: "Secret", editingMode: "reference" }
         ]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
         visibleVariables={[]}
         scopeStatus="ready"

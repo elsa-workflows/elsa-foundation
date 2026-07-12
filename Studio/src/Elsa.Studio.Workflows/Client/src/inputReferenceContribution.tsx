@@ -43,14 +43,13 @@ function InputReferenceEditor({ descriptor, value, disabled, onChange }: StudioE
   const current = readInputReference(value);
   const currentKey = current?.referenceKey ?? "";
   const currentIsAvailable = currentKey !== "" && options.some(option => option.input.referenceKey === currentKey);
-  const optionsUnavailable = authoring.inputStatus !== "ready";
 
   return (
     <div className="wf-variable-picker">
       <select
         aria-label="Input reference"
         value={currentKey}
-        disabled={disabled || optionsUnavailable}
+        disabled={disabled}
         onChange={event => {
           if (event.target.value) onChange({ referenceKey: event.target.value } satisfies InputReference);
         }}
@@ -70,14 +69,7 @@ function InputReferenceEditor({ descriptor, value, disabled, onChange }: StudioE
           </optgroup>
         ) : null}
       </select>
-      {authoring.inputStatus === "loading" ? (
-        <p className="wf-variable-picker-note" role="status">Loading workflow inputs… The current reference is preserved.</p>
-      ) : authoring.inputStatus === "error" ? (
-        <div className="wf-variable-picker-error" role="alert">
-          <span>Workflow inputs could not be loaded. The current reference is preserved.</span>
-          <button type="button" onClick={authoring.inputRetry}>Retry</button>
-        </div>
-      ) : options.length === 0 ? (
+      {options.length === 0 ? (
         <p className="wf-variable-picker-note">No workflow inputs are available. Add one in workflow properties.</p>
       ) : null}
     </div>

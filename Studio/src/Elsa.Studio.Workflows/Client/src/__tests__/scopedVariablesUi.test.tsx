@@ -103,6 +103,7 @@ describe("variable picker", () => {
         editors={[]}
         expressionEditors={[variableReferenceContribution]}
         expressionDescriptors={[{ type: "Variable", displayName: "Variable", editingMode: "reference" }]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
         visibleVariables={options.variables ?? [
           visibleVariables[0],
@@ -209,6 +210,7 @@ describe("variable picker", () => {
         editors={[]}
         expressionEditors={[]}
         expressionDescriptors={[]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
         visibleVariables={visibleVariables}
         scopeStatus="ready"

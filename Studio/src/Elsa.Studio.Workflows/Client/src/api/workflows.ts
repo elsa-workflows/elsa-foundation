@@ -537,8 +537,7 @@ export async function listExpressionDescriptors(context: StudioEndpointContext):
     "/descriptors/expression-descriptors"
   ]);
   if (Array.isArray(response)) return response;
-  const descriptors = response.items ?? response.descriptors ?? response.expressionDescriptors ?? [];
-  return descriptors.length > 0 ? descriptors : fallbackExpressionDescriptors;
+  return response.items ?? response.descriptors ?? response.expressionDescriptors ?? [];
 }
 
 // Variable type descriptors populate the Type picker in the Properties tab. The backend proxies
@@ -614,12 +613,3 @@ function parseTestRunView(value: unknown): WorkflowTestRunView | null {
     ? candidate as WorkflowTestRunView
     : null;
 }
-
-export const fallbackExpressionDescriptors: ExpressionDescriptor[] = [
-  { type: "Literal", displayName: "Literal", editingMode: "literal" },
-  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
-  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
-  { type: "Object", displayName: "Object", editingMode: "structured" },
-  { type: "Variable", displayName: "Variable", editingMode: "reference" },
-  { type: "Input", displayName: "Input", editingMode: "reference" }
-];

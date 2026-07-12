@@ -19,7 +19,6 @@ import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from 
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import {
-  defaultExpressionDescriptors,
   describeCollectionType,
   formatTypeName,
   getLiteralEditorValue,
@@ -34,8 +33,7 @@ import {
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 import {
   readWorkflowInputs,
-  WorkflowReferenceAuthoringProvider,
-  type WorkflowReferenceAuthoringStatus
+  WorkflowReferenceAuthoringProvider
 } from "./workflowReferenceAuthoring";
 import { CollectionValueEditor } from "./CollectionValueEditor";
 
@@ -52,14 +50,14 @@ export interface ActivityPropertiesPanelProps {
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
+  expressionDescriptorStatus: "loading" | "ready" | "failed";
+  onRetryDescriptors?: () => void;
   descriptorStatus: "loading" | "ready" | "failed";
   // Variables visible from this activity's scope (nearest-scope first) for the Variable picker, plus
   // the analysis status so the picker can explain an absent backend endpoint instead of showing empty.
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
-  inputStatus?: WorkflowReferenceAuthoringStatus;
-  inputRetry?: () => void;
   onChange(activity: ActivityNode): void;
 }
 
@@ -71,12 +69,12 @@ export function ActivityPropertiesPanel({
   editors,
   expressionEditors,
   expressionDescriptors,
+  expressionDescriptorStatus,
+  onRetryDescriptors,
   descriptorStatus,
   visibleVariables,
   scopeStatus,
   scopeRetry,
-  inputStatus = "ready",
-  inputRetry,
   onChange
 }: ActivityPropertiesPanelProps) {
   if (descriptorStatus === "loading") {
@@ -94,8 +92,6 @@ export function ActivityPropertiesPanel({
   }
 
   const groups = groupInputs(inputs, readPropertyGroupMetadata(descriptor.customProperties));
-  const syntaxDescriptors = expressionDescriptors.length > 0 ? expressionDescriptors : defaultExpressionDescriptors;
-
   return (
     <WorkflowReferenceAuthoringProvider
       workflowState={workflowState}
@@ -103,11 +99,14 @@ export function ActivityPropertiesPanel({
       visibleVariables={visibleVariables}
       status={scopeStatus}
       retry={scopeRetry}
-      inputStatus={inputStatus}
-      inputRetry={inputRetry}
     >
     <div className="wf-properties">
       <span className="wf-section-label">Properties</span>
+      <ExpressionDescriptorStatus
+        status={expressionDescriptorStatus}
+        hasSnapshot={expressionDescriptors.length > 0}
+        onRetry={onRetryDescriptors}
+      />
       {groups.map(group => (
         <section key={group.category} className="wf-property-group">
           {groups.length > 1 || group.configured || group.category !== "General" ? <h4>{group.label}</h4> : null}
@@ -121,7 +120,7 @@ export function ActivityPropertiesPanel({
               input={input}
               editors={editors}
               expressionEditors={expressionEditors}
-              expressionDescriptors={syntaxDescriptors}
+              expressionDescriptors={expressionDescriptors}
               onChange={onChange}
             />
           ))}
@@ -129,6 +128,34 @@ export function ActivityPropertiesPanel({
       ))}
     </div>
     </WorkflowReferenceAuthoringProvider>
+  );
+}
+
+function ExpressionDescriptorStatus({
+  status,
+  hasSnapshot,
+  onRetry
+}: {
+  status: "loading" | "ready" | "failed";
+  hasSnapshot: boolean;
+  onRetry?: () => void;
+}) {
+  if (status === "loading") {
+    return <p className="wf-muted" role="status">{hasSnapshot
+      ? "Refreshing expression types... Using the last loaded metadata."
+      : "Loading expression types..."}</p>;
+  }
+  if (status === "ready" && !hasSnapshot) {
+    return <p className="wf-muted" role="status">No expression types are available.</p>;
+  }
+  if (status !== "failed") return null;
+  return (
+    <div className="wf-property-options-error" role="alert">
+      <span>{hasSnapshot
+        ? "Expression types could not be refreshed. Using the last loaded metadata."
+        : "Expression types could not be loaded."}</span>
+      {onRetry ? <button type="button" className="wf-expression-descriptors-retry" onClick={onRetry}>Retry</button> : null}
+    </div>
   );
 }
 

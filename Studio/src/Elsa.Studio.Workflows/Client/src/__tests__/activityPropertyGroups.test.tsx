@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
@@ -14,6 +14,15 @@ import { createObjectExpressionEditorContribution } from "../objectExpressionEdi
 import type { ActivityNode } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
+
+const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
+  { type: "Literal", displayName: "Literal", editingMode: "literal" },
+  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
+  { type: "Object", displayName: "Object", editingMode: "structured" },
+  { type: "Variable", displayName: "Variable", editingMode: "reference" },
+  { type: "Input", displayName: "Input", editingMode: "reference" }
+];
 
 afterEach(() => {
   if (!active) return;
@@ -30,6 +39,8 @@ function renderPanel(
     editors?: StudioActivityPropertyEditorContribution[];
     expressionEditors?: StudioExpressionEditorContribution[];
     expressionDescriptors?: StudioExpressionDescriptor[];
+    expressionDescriptorStatus?: "loading" | "ready" | "failed";
+    onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
   } = {}
 ) {
@@ -57,7 +68,9 @@ function renderPanel(
         descriptor={descriptor}
         editors={options.editors ?? []}
         expressionEditors={options.expressionEditors ?? []}
-        expressionDescriptors={options.expressionDescriptors ?? []}
+        expressionDescriptors={options.expressionDescriptors ?? backendExpressionDescriptors}
+        expressionDescriptorStatus={options.expressionDescriptorStatus ?? "ready"}
+        onRetryDescriptors={options.onRetryDescriptors}
         descriptorStatus="ready"
         visibleVariables={[]}
         scopeStatus="ready"
@@ -90,6 +103,44 @@ function propertyLabels(container: HTMLElement) {
 }
 
 describe("activity property organization", () => {
+  it("does not invent expression types when the backend returns none", () => {
+    const container = renderPanel([
+      input("Message", { isWrapped: true, defaultSyntax: "Literal" })
+    ], {
+      expressionDescriptors: [],
+      activity: activity({
+        message: { typeName: "System.String", expression: { type: "Literal", value: "hello" } }
+      })
+    });
+
+    expect(container.textContent).toContain("No expression types are available.");
+    expect(container.textContent).toContain("No editor is available for Literal");
+    expect(container.textContent).not.toContain("JavaScript");
+    expect(container.textContent).not.toContain("Liquid");
+  });
+
+  it("reports loading and failed expression metadata without replacing a preserved backend snapshot", () => {
+    const retry = vi.fn();
+    const loading = renderPanel([input("Message", { isWrapped: true })], {
+      expressionDescriptorStatus: "loading",
+      expressionDescriptors: []
+    });
+    expect(loading.textContent).toContain("Loading expression types...");
+
+    flushSync(() => active!.root.unmount());
+    active!.container.remove();
+    active = null;
+
+    const failed = renderPanel([input("Message", { isWrapped: true })], {
+      expressionDescriptorStatus: "failed",
+      expressionDescriptors: [{ type: "Literal", displayName: "Literal", editingMode: "literal" }],
+      onRetryDescriptors: retry
+    });
+    expect(failed.textContent).toContain("Expression types could not be refreshed. Using the last loaded metadata.");
+    flushSync(() => failed.querySelector<HTMLButtonElement>("button.wf-expression-descriptors-retry")!.click());
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
   it("orders properties by input order, then name", () => {
     const container = renderPanel([
       input("Last", { order: 20 }),

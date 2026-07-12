@@ -15,15 +15,6 @@ export interface WrappedActivityInputValue {
   memoryReference?: unknown;
 }
 
-export const defaultExpressionDescriptors: StudioExpressionDescriptor[] = [
-  { type: "Literal", displayName: "Literal", editingMode: "literal" },
-  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
-  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
-  { type: "Object", displayName: "Object", editingMode: "structured" },
-  { type: "Variable", displayName: "Variable", editingMode: "reference" },
-  { type: "Input", displayName: "Input", editingMode: "reference" }
-];
-
 export function camelize(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : value;
