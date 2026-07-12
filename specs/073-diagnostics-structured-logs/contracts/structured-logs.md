@@ -69,7 +69,7 @@ Query parameters (optional, same shape as `recent` minus `take`): `minLevel`, `c
 **Response**: `Content-Type: text/event-stream`, chunked/streamed. Each captured entry is written as:
 
 ```text
-id: 1042
+id: <versioned opaque committed cursor>
 event: entry
 data: {"sequence":1042,"timestamp":"2026-06-18T10:31:22.114+00:00","level":"Warning", ... }
 
@@ -86,9 +86,12 @@ data: {"droppedCount":128,"since":"2026-06-18T10:32:00Z"}
 Periodic comment heartbeats (`: keep-alive\n\n`) keep intermediaries from closing idle connections.
 
 **Reconnection / resume**: the browser's native `EventSource` auto-reconnects and sends the last
-seen `id` in the `Last-Event-ID` request header; the endpoint resumes after that sequence from the
-in-memory buffer when still available, otherwise the client backfills via `recent` (Acceptance
-Scenario 1.2).
+seen opaque `id` in the `Last-Event-ID` request header. The endpoint subscribes before beginning a
+validated bounded durable read-after pages. The in-process feed only wakes the durable tail early; it never
+supplies authoritative SSE payloads, and periodic polling discovers commits from other processes.
+The cursor value is provider-neutral at the endpoint seam; its layout and provider-specific position are
+interpreted only by the store adapter that issued it. Invalid, expired/trimmed, wrong-scope, wrong-stream, and wrong-source values all return the same
+non-disclosing `409 Conflict`; clients then refresh from `recent`.
 
 **Authorization**: requires the `Diagnostics:StructuredLogs` policy (default-permissive;
 host-overridable). Note: native `EventSource` cannot send an `Authorization` header — hosts that

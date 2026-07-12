@@ -38,20 +38,19 @@ Live SSE fan-out is not a persistence concern. Its per-subscriber queues and in-
 
 | Operation | Caller-visible semantics |
 |---|---|
-| `Append(entry)` | Synchronous, non-blocking enqueue of an already-sequenced entry. Durable visibility is eventual. The durable EF queue drops its oldest queued entry on overload. |
-| `GetHighWaterMarkAsync()` | Highest retained logical `Sequence`, or zero when empty. `StructuredLogSink` blocks the first synchronous log emission on this async read and uses it to seed process sequencing after restart. |
+| `AppendAsync(entry)` | Non-blocking acceptance through a bounded adapter queue; the returned committed entry carries its authoritative opaque cursor and completes only after durable acknowledgement. |
+| `GetHighWaterMarkAsync()` | Lifetime maximum committed logical `Sequence`, or zero only for a never-written stream. Retention and restart do not rewind it. `StructuredLogSink` uses it to seed display sequencing after restart. |
 | `GetRecentAsync(filter)` | Filter by minimum level, category, and source; clamp `MaxCount` to `MaxRecentQuerySize`; select the newest window; return it oldest-to-newest. Category and source equality are ordinal and case-sensitive. |
-| `GetAfterAsync(sequence, filter)` | Return records whose logical sequence is greater than the supplied value, oldest-first. The EF implementation caps this at `MaxRecentQuerySize`; the in-memory implementation currently returns every buffered match. This is the durable replay behind SSE `Last-Event-ID`. |
+| `GetTailCursorAsync()` / `ReadAfterAsync(cursor, filter, maxCount)` | Capture a durable tail boundary, validate an optional source/scope/stream-bound opaque anchor, and return one bounded oldest-first snapshot page plus the next scanned cursor. Filtered-out records still advance the next cursor. Malformed, stale, trimmed, or wrong-binding anchors share one non-disclosing unavailable error. |
+| `TrimAsync(keepNewest)` | Retain exactly the newest committed records while lifetime cursor and logical high-water state survive, including `keepNewest = 0`. |
 
-The sink assigns one monotonically increasing process sequence and sends the same stamped entry to durable history and the live feed. The stream endpoint subscribes before it reads durable replay, then suppresses live entries at or below the last replayed sequence. That closes the query/subscribe gap without making the persistent store responsible for live delivery.
+The sink assigns display-only process sequence metadata, accepts appends without blocking capture, and emits process-local wake hints after commitment. The stream endpoint sends only records returned by durable read-after pages; the local feed shortens latency and bounded polling discovers remote commits. Persistent committed cursor order is therefore authoritative across processes.
 
-The EF implementation currently orders durable history by generated row `Id`, not timestamp, and uses logical `Sequence` only as a replay predicate and high-water mark. The generated row identity is therefore the actual durable tie-breaker even though it is absent from the public model.
+The temporary EF implementation orders durable history by generated row `Id`, not timestamp, and wraps that value with an adapter-private cursor codec. Reserved hidden rows in the existing table preserve lifetime logical high-water independently of replay retention without expanding EF schema or migrations. Normal appends reject the exact reserved shape; concurrent initializers may safely create equivalent state replicas, and later writes converge their maximum.
 
-The replay-size divergence is not portable behavior. The Groundwork-backed contract adopts a bounded first page capped by `MaxRecentQuerySize`, with continuation supplied by the durable cursor work in [#635](https://github.com/elsa-workflows/elsa-foundation/issues/635). The in-memory oracle must be aligned before it becomes a shared conformance fixture.
+Tail pagination is adapter-owned. Groundwork uses bounded snapshot continuation; EF pages by generated row id; the in-memory implementation snapshots its bounded ring. The public contract exposes only bounded pages, next opaque cursors, and a same-snapshot `HasMore` signal.
 
-The current `GetHighWaterMarkAsync` contract reports the highest retained sequence and returns zero after all records are trimmed. The Groundwork target changes this through #635 to the lifetime maximum committed logical sequence, returning zero only when the stream has never committed a value. EF/in-memory oracle fixtures must adopt that meaning before parity comparison; otherwise `KeepNewest = 0` permits sequence reuse after restart.
-
-`Sequence` is assigned in process and is not safe as a global multi-writer cursor. Two host processes sharing one storage scope can read the same high-water mark and emit overlapping values; the database index is intentionally non-unique. Groundwork's durable cursor fixes physical order, but Elsa cannot expose it through the current numeric `Last-Event-ID` contract without an adapter contract change. Until that change, a Structured Logs storage scope/source must have one active sequence writer.
+`Sequence` is assigned in process and remains non-unique display metadata. [Elsa #635](https://github.com/elsa-workflows/elsa-foundation/issues/635) resolves the multi-writer gap with a versioned, source-qualified opaque cursor around Groundwork's committed provider cursor. SSE `id`/`Last-Event-ID` and durable-tail ordering use that cursor exclusively; provider bytes remain opaque inside the adapter.
 
 ### OpenTelemetry
 
@@ -245,7 +244,7 @@ Run the same `IDiagnosticRecordStore` suite against real SQLite, SQL Server, Pos
 Run the same existing `IStructuredLogStore` and `IOpenTelemetryStore` behavior fixtures against each real Groundwork provider through Elsa's adapter, not against a mocked Groundwork interface. This suite proves:
 
 - exact filter/case/order/clamp semantics;
-- Structured Logs lifetime committed high-water and bounded `GetAfterAsync` replay;
+- Structured Logs lifetime committed high-water and snapshot-bound opaque-cursor replay;
 - latest trace summary and ordered trace detail;
 - resource/instrument catalog correlation;
 - exact storage diagnostics;
@@ -325,7 +324,7 @@ These can be delivered incrementally, but the Elsa diagnostic adapters should no
 4. Add storage-scope binding, conformance fixtures, restart/idempotency tests, and non-recursive failure instrumentation.
 5. Decide the missing OpenTelemetry logs endpoint and the unbounded instrument-catalog policy in Diagnostics Observability Readiness.
 6. Replace the first-log synchronous async high-water block with an explicit initialization/readiness path, or prove the bounded startup behavior.
-7. Replace the process-local numeric Structured Logs replay cursor with a durable/source-qualified cursor through [Elsa #635](https://github.com/elsa-workflows/elsa-foundation/issues/635); a single-active-writer rule is only a temporary constraint, not the scalable target.
+7. **Completed by [Elsa #635](https://github.com/elsa-workflows/elsa-foundation/issues/635):** Structured Logs uses a durable/source-qualified opaque cursor and no longer requires a single-active-writer replay constraint.
 8. Stop treating arbitrary Structured Logs read failures as an empty store. Schema absence belongs to Groundwork plan/validation readiness; operational read failures should be visible.
 
 ### Boundary with issue #420

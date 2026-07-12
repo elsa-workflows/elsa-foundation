@@ -85,13 +85,17 @@ public sealed class EfCoreStructuredLogStorePruneRetryTests : IDisposable
     private int CountRows()
     {
         using var db = _host.CreateDbContext();
-        return db.StructuredLogEntries.Count();
+        return db.StructuredLogEntries.Count(x => x.Message.StartsWith("m"));
     }
 
     private long[] RowSequences()
     {
         using var db = _host.CreateDbContext();
-        return db.StructuredLogEntries.OrderBy(x => x.Sequence).Select(x => x.Sequence).ToArray();
+        return db.StructuredLogEntries
+            .Where(x => x.Message.StartsWith("m"))
+            .OrderBy(x => x.Sequence)
+            .Select(x => x.Sequence)
+            .ToArray();
     }
 
     private static Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs) =>

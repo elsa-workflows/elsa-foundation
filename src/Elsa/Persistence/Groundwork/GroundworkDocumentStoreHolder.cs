@@ -11,8 +11,8 @@ namespace Elsa.Persistence.Groundwork;
 /// synchronous block on the resolving thread.
 /// </summary>
 /// <remarks>
-/// The holder owns the async-disposable store handle: DI disposes this singleton, which disposes the handle and
-/// so the underlying connection. Resolving <see cref="IDocumentStore"/> before the initializer has run throws a
+/// When a provider supplies an owning async-disposable handle, the holder owns it and DI disposal releases it.
+/// Stateless providers need no owning handle. Resolving <see cref="IDocumentStore"/> before the initializer has run throws a
 /// descriptive <see cref="InvalidOperationException"/> rather than silently blocking — a bare
 /// <see cref="IServiceProvider"/> with no host lifecycle must drive the initializer explicitly first.
 /// </remarks>
@@ -34,7 +34,7 @@ public sealed class GroundworkDocumentStoreHolder : IAsyncDisposable
     /// Populates the holder with the materialized store and its owning handle. Called once by the startup
     /// initializer; subsequent calls are ignored so re-running the hook (e.g. both lifecycle hooks) is safe.
     /// </summary>
-    public void Set(IDocumentStore store, IAsyncDisposable handle)
+    public void Set(IDocumentStore store, IAsyncDisposable? handle = null)
     {
         if (_store is not null)
             return;

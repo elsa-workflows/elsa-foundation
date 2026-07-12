@@ -14,7 +14,7 @@ public sealed class StructuredLogSseFormatter
     public StructuredLogSseFormatter(StructuredLogEntrySerializer serializer) => _serializer = serializer;
 
     /// <summary>
-    /// Formats a stream item into an SSE frame. Entries carry an <c>id</c> (their sequence) and the
+    /// Formats a stream item into an SSE frame. Entries carry an <c>id</c> (their committed cursor) and the
     /// <c>entry</c> event; drop signals carry the <c>dropped</c> event with no id.
     /// </summary>
     public string Format(StructuredLogStreamItem item)
@@ -33,8 +33,11 @@ public sealed class StructuredLogSseFormatter
     /// <summary>Formats a single entry as an <c>id</c>/<c>event: entry</c> SSE frame.</summary>
     public string FormatEntry(StructuredLogEntry entry)
     {
+        if (entry.ReplayCursor is not { IsValid: true } cursor)
+            throw new ArgumentException("Only committed structured log entries can be formatted as SSE events.", nameof(entry));
+
         var builder = new StringBuilder();
-        builder.Append("id: ").Append(entry.Sequence).Append('\n');
+        builder.Append("id: ").Append(cursor.Value).Append('\n');
         builder.Append("event: entry\n");
         builder.Append("data: ").Append(_serializer.Serialize(entry)).Append("\n\n");
         return builder.ToString();

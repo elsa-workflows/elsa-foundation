@@ -33,11 +33,14 @@ public class UnifiedGroundworkHostTests
     // a bare provider has no host lifecycle, so drive that startup step explicitly before resolving the store.
     private static async Task<ServiceProvider> BuildHostAsync()
     {
+        var database = new TemporarySqliteDatabase();
         var provider = new ServiceCollection()
+            .AddSingleton(_ => database)
             .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
             .AddSingleton<ISystemClock, FakeSystemClock>()
-            .AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:")
+            .AddGroundworkSqliteUnifiedPersistence(database.ConnectionString)
             .BuildServiceProvider();
+        _ = provider.GetRequiredService<TemporarySqliteDatabase>();
         await provider.InitializeGroundworkStoreAsync();
         return provider;
     }
@@ -159,4 +162,17 @@ public class UnifiedGroundworkHostTests
 
     private static Task SaveAsync(IDocumentStore store, string kind, string id, string collection) =>
         store.SaveAsync(new SaveDocumentRequest(kind, id, "1.0.0", $"{{\"collection\":\"{collection}\"}}"));
+
+    private sealed class TemporarySqliteDatabase : IAsyncDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-unified-{Guid.NewGuid():N}.db");
+
+        public string ConnectionString => $"Data Source={_path}";
+
+        public ValueTask DisposeAsync()
+        {
+            File.Delete(_path);
+            return ValueTask.CompletedTask;
+        }
+    }
 }
