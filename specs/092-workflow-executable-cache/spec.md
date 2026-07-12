@@ -77,7 +77,7 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **FR-005**: A caller cancelling its wait MUST NOT cancel or poison a shared provider load for other callers.
 - **FR-006**: Null, failed, and cancelled provider loads MUST NOT be retained as cache entries or permanent in-flight entries.
 - **FR-007**: The cache MUST enforce a configurable positive capacity using deterministic least-recently-used eviction and MUST have a documented bounded default.
-- **FR-008**: Successful save MUST refresh the cached value; successful delete MUST evict it. Failed mutations MUST NOT claim success through cache-only state.
+- **FR-008**: Successful save and delete operations MUST invalidate the cached value so the provider's idempotent-save result remains authoritative. Failed mutations MUST leave the prior cache state unchanged.
 - **FR-009**: List operations MUST delegate to the provider and MUST NOT implicitly populate the cache.
 - **FR-010**: Cache lifetime MUST be limited to the runtime service-provider/shell lifetime so restart and shell replacement begin empty.
 - **FR-011**: Durable-provider composition MUST allow caching to be enabled or disabled and capacity to be configured without replacing source-reference resolution.

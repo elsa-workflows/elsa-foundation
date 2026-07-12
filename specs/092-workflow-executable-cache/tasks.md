@@ -8,15 +8,15 @@
 
 ## Phase 1: Setup and Evidence
 
-- [ ] T001 Mark GitHub issue #625 in progress and link the spec 091 formal-review evidence that makes it a merge prerequisite
-- [ ] T002 Record the 200-request warm p95, first-after-ready p95, and rematerialization comparison in `docs/reports/shell-activation-performance-2026-07.md`
-- [ ] T003 Confirm the durable-store registration and all SQLite/PostgreSQL runtime/unified composition call sites
+- [x] T001 Mark GitHub issue #625 in progress and link the spec 091 formal-review evidence that makes it a merge prerequisite
+- [x] T002 Record the 200-request warm p95, first-after-ready p95, and rematerialization comparison in `docs/reports/shell-activation-performance-2026-07.md`
+- [x] T003 Confirm the durable-store registration and all SQLite/PostgreSQL runtime/unified composition call sites
 
 ## Phase 2: Foundational Tests
 
-- [ ] T004 [P] Add options validation/default tests in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
-- [ ] T005 [P] Add bounded telemetry contract tests for hit, miss, eviction, and provider-load outcomes in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
-- [ ] T006 Add a controllable counting executable-store fake supporting delayed, null, failed, and cancelled loads in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
+- [x] T004 [P] Add options validation/default tests in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
+- [x] T005 [P] Add bounded telemetry contract tests for hit, miss, eviction, and provider-load outcomes in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
+- [x] T006 Add a controllable counting executable-store fake supporting delayed, null, failed, and cancelled loads in `tests/Elsa/Workflows/Runtime/Tests/CachingWorkflowExecutableStoreTests.cs`
 
 ## Phase 3: User Story 1 - Reuse Immutable Executables (Priority: P1)
 
@@ -26,14 +26,14 @@
 
 ### Tests
 
-- [ ] T007 [US1] Add repeated-hit and different-key lookup tests and confirm they fail before implementation
-- [ ] T008 [US1] Add same-key concurrent miss, per-waiter cancellation, synchronous completion, null retry, and failure retry tests and confirm they fail before implementation
+- [x] T007 [US1] Add repeated-hit and different-key lookup tests and confirm they fail before implementation
+- [x] T008 [US1] Add same-key concurrent miss, per-waiter cancellation, synchronous completion, null retry, and failure retry tests and confirm they fail before implementation
 
 ### Implementation
 
-- [ ] T009 [US1] Add validated defaults in `src/Elsa/Workflows/Runtime/Core/Options/WorkflowExecutableCacheOptions.cs`
-- [ ] T010 [US1] Add bounded counters/histogram vocabulary in `src/Elsa/Workflows/Runtime/Core/Diagnostics/WorkflowExecutableCacheTelemetry.cs`
-- [ ] T011 [US1] Implement positive lookup reuse and same-key in-flight coalescing in `src/Elsa/Workflows/Runtime/Core/Services/CachingWorkflowExecutableStore.cs`
+- [x] T009 [US1] Add validated defaults in `src/Elsa/Workflows/Runtime/Core/Models/WorkflowExecutableCacheOptions.cs`
+- [x] T010 [US1] Add bounded counters/histogram vocabulary in `src/Elsa/Workflows/Runtime/Core/Diagnostics/WorkflowExecutableCacheTelemetry.cs`
+- [x] T011 [US1] Implement positive lookup reuse and same-key in-flight coalescing in `src/Elsa/Workflows/Runtime/Core/Services/CachingWorkflowExecutableStore.cs`
 
 ## Phase 4: User Story 2 - Bounded and Correct Lifecycle (Priority: P2)
 
@@ -43,15 +43,15 @@
 
 ### Tests
 
-- [ ] T012 [US2] Add deterministic LRU promotion/capacity-one eviction tests and confirm they fail before implementation
-- [ ] T013 [US2] Add successful/failed save and delete race tests plus list-does-not-populate tests and confirm they fail before implementation
-- [ ] T014 [US2] Add Groundwork DI wrapping, disabled-mode, and recreated-provider empty-cache tests and confirm they fail before registration changes
+- [x] T012 [US2] Add deterministic LRU promotion/capacity-one eviction tests and confirm they fail before implementation
+- [x] T013 [US2] Add provider-authoritative successful/failed save and delete race tests plus list-does-not-populate tests and confirm they fail before implementation
+- [x] T014 [US2] Add Groundwork DI wrapping, disabled-mode, and recreated-provider empty-cache tests and confirm they fail before registration changes
 
 ### Implementation
 
-- [ ] T015 [US2] Complete locked bounded LRU admission/promotion/eviction and mutation semantics in `CachingWorkflowExecutableStore.cs`
-- [ ] T016 [US2] Register the concrete Groundwork store and optional cache decorator in the shared Groundwork runtime-store registration
-- [ ] T017 [US2] Thread enabled/capacity settings through SQLite/PostgreSQL runtime and unified provider features without changing custom or in-memory stores
+- [x] T015 [US2] Complete locked bounded LRU admission/promotion/eviction and mutation semantics in `CachingWorkflowExecutableStore.cs`
+- [x] T016 [US2] Register the concrete Groundwork store and optional cache decorator in the shared Groundwork runtime-store registration
+- [x] T017 [US2] Thread enabled/capacity settings through SQLite/PostgreSQL runtime and unified provider features without changing custom or in-memory stores
 
 ## Phase 5: User Story 3 - Observable and Configurable Operation (Priority: P3)
 
@@ -59,9 +59,9 @@
 
 **Independent Test**: Settings select direct/decorated stores, invalid capacity fails, and every cache path emits only approved bounded dimensions.
 
-- [ ] T018 [US3] Complete telemetry emission and verify no high-cardinality dimensions
-- [ ] T019 [US3] Document knobs, defaults, provider scope, route-cache relationship, and rollback in `contracts/executable-cache.md` and the shared performance report
-- [ ] T020 [US3] Run focused Runtime and Groundwork behavior/registration tests with all required branches green
+- [x] T018 [US3] Complete telemetry emission and verify no high-cardinality dimensions
+- [x] T019 [US3] Document knobs, defaults, provider scope, route-cache relationship, and rollback in `contracts/executable-cache.md` and the shared performance report
+- [x] T020 [US3] Run focused Runtime and Groundwork behavior/registration tests with all required branches green
 
 ## Phase 6: Combined Performance and Delivery
 

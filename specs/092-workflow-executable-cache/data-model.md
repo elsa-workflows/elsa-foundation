@@ -21,7 +21,7 @@ No persistent data model is added.
 1. Resident entry count never exceeds configured capacity.
 2. Every resident dictionary entry has exactly one recency node and vice versa.
 3. A cache hit promotes that entry to most recently used.
-4. Only positive provider results and successful saves are admitted.
-5. Successful delete removes the resident entry.
+4. Only positive provider lookup results are admitted.
+5. Successful save and delete operations remove the resident entry; the next lookup re-reads provider-authoritative state.
 6. The cache never maps a mutable source reference to an artifact ID.
 7. Cache state does not survive service-provider/shell replacement.

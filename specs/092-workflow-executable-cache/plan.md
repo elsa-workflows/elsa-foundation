@@ -61,7 +61,7 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 
 `CachingWorkflowExecutableStore` implements the existing store contract and receives the selected concrete provider, options, and telemetry. It owns a capacity-bounded LRU and a concurrent in-flight-load map. Fast hits promote the entry under a short lock. Misses publish a shared provider task; its owner records duration/outcome, admits only a positive result, and removes the in-flight entry in a finally path.
 
-Save delegates first and then admits the supplied immutable executable. Delete delegates first and then evicts. A provider mutation failure leaves the prior cache entry intact because the durable authority did not confirm a state transition. List delegates directly.
+Save and delete delegate first and then invalidate the key. Save cannot safely admit the caller-supplied value because the provider contract is idempotent by artifact ID: a non-throwing save may be a no-op that retained an existing provider-authoritative object. A provider mutation failure leaves the prior cache entry intact because the durable authority did not confirm a state transition. List delegates directly.
 
 ### Composition and controls
 
@@ -85,7 +85,7 @@ specs/092-workflow-executable-cache/
 └── tasks.md
 
 src/Elsa/Workflows/Runtime/Core/
-├── Options/WorkflowExecutableCacheOptions.cs
+├── Models/WorkflowExecutableCacheOptions.cs
 ├── Services/CachingWorkflowExecutableStore.cs
 └── Diagnostics/WorkflowExecutableCacheTelemetry.cs
 

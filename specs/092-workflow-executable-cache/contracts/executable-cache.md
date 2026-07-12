@@ -5,8 +5,8 @@
 The decorator preserves `IWorkflowExecutableStore` behavior:
 
 - `FindAsync(id)`: return a resident positive result or coalesce one provider lookup. Do not retain not-found, failure, or cancellation.
-- `SaveAsync(executable)`: persist first; after success, admit/replace by artifact ID.
-- `DeleteAsync(id)`: delete first; after success, evict by artifact ID.
+- `SaveAsync(executable)`: persist first; after success, evict by artifact ID. The idempotent provider may retain an existing value, so the caller-supplied object is never admitted directly.
+- `DeleteAsync(id)`: delete first; after success, evict by artifact ID, including a non-throwing not-found result.
 - `ListAsync(...)`: delegate directly and do not populate the cache.
 
 Mutable workflow-definition and source-reference lookup remains outside this component and authoritative.
@@ -35,4 +35,4 @@ Workflow IDs, artifact IDs, source references, payloads, exception messages, and
 - One provider load may exist per artifact ID.
 - Cancelling one waiter cancels only that wait.
 - Completion removes the in-flight record even when the provider completes synchronously or throws.
-- Save/delete and cache-state changes are serialized sufficiently that a successful delete cannot be followed by serving the deleted resident value.
+- Save/delete advance a mutation generation and invalidate the key. A lookup already in flight may complete for its original caller, but it cannot re-admit a pre-mutation result into the cache.

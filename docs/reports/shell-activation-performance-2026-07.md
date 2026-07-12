@@ -97,11 +97,35 @@ The shell-ready result clears both acceptance thresholds: it is below 30 seconds
 
 The optimized Production lane's 200 measured requests produced warm p95 `359.953 ms`, above the existing 50 ms budget. A diagnostic run with `RematerializeOnStartup=true` produced warm p95 `35.645 ms`; a vacuumed copy produced `31.999 ms`. This demonstrates that full index-projection rebuild/physical compaction can mask the repeated post-readiness lookup/materialization cost, while exact-history startup deliberately leaves existing data pages untouched.
 
-This residual is not hidden as a successful acceptance result. Issue #625 owns the immutable workflow-executable cache needed to remove repeated executable loading without restoring multi-second startup backfills. Until that follow-up lands, operators with a fragmented or suspect SQLite projection can set `RematerializeOnStartup=true` for one startup and then return it to `false`.
+This residual is not hidden as a successful acceptance result. Issue #625 was pulled into the same delivery and now adds a bounded immutable workflow-executable cache at the runtime store seam. The final post-cache lanes below remain the merge gate. Operators with a fragmented or suspect SQLite projection can still set `RematerializeOnStartup=true` for one startup and then return it to `false`.
+
+## Cache scope and route lookup findings
+
+The executable cache is broader than HTTP workflows. It wraps the durable `IWorkflowExecutableStore`, so workflow starts, bookmark resumes, child-workflow invocation, and scheduler turns all reuse the same immutable artifact within one shell/provider lifetime. It deliberately does not cache mutable workflow source references: publication, retirement, scope, expiry, and artifact selection remain authoritative before an artifact ID is loaded.
+
+HTTP route lookup already has a separate in-memory projection. `RouteTable` stores an immutable per-shell snapshot in `IMemoryCache`, atomically replaces it on refresh, orders routes by specificity, and precompiles each `TemplateMatcher`; request-time matching does not parse templates or query persistence. There is therefore no missing route-cache layer in the measured path. The remaining lookup is a linear scan of the ordered in-memory snapshot; replacing it with a trie/DFA or method/path index should be considered only after a high-route-count benchmark shows it material.
+
+Cache behavior and safety:
+
+- positive artifacts are retained by content-addressed artifact ID; null, failure, and cancellation are retried;
+- concurrent misses for one ID share a provider load, while cancelling one waiter does not cancel the shared load;
+- deterministic least-recently-used eviction keeps resident entries within the configured capacity;
+- save/delete invalidate rather than admitting the caller's object, preserving the provider's idempotent-save authority;
+- cache state is shell/provider-local and starts empty after replacement or process restart;
+- metrics expose only bounded hit/miss, eviction-reason, and provider-load outcome/duration dimensions.
 
 ## Operator knobs and rollback
 
 - `Elsa:Readiness:WarmDefaultShell=false` restores request-triggered lazy activation; readiness stays observational and returns unavailable until another request activates the shell.
 - `Elsa:Readiness:DefaultShellName` selects the single shell observed and prepared by the root host. Other shells remain lazy and isolated.
 - `GroundworkRuntimePersistenceSqlite:RematerializeOnStartup=true` forces the prior full materialization/backfill path for repair or verification. The default `false` trusts an exact manifest/provider history tuple and opens the existing store directly.
+- Durable Groundwork runtime and unified SQLite/PostgreSQL features expose `CacheWorkflowExecutables` (default `true`) and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell/provider). Set the former to `false` for immediate rollback to direct provider reads; capacity must be positive only while enabled.
 - Missing schema history, or a changed manifest/provider identity or version, always falls back to full materialization regardless of the repair setting.
+
+## Subsequent recommendations
+
+1. Keep the final 20-boot first-after-ready and 200-request warm lanes as the merge gate; do not infer success from cache unit tests alone.
+2. Add weighted/byte-aware admission only if production heap evidence shows entry count is an inadequate bound. Executable graphs do not currently expose a trustworthy size estimate.
+3. Benchmark route matching at representative high route counts before replacing the current precompiled immutable snapshot. The existing route layer is already cached and persistence-free on requests.
+4. Keep the cache process-local. A distributed executable-object cache would reintroduce serialization and coordination without evidence of a cross-node bottleneck.
+5. Revisit negative caching only with an explicit short expiry and publication invalidation contract; retaining not-found results indefinitely would hide newly durable artifacts.

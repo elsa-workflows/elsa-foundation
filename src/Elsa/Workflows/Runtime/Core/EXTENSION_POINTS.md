@@ -427,9 +427,10 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IWorkflowExecutableStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns runtime executable artifact lookup for a runtime composition).
-- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
-- **Usage:** stores and retrieves runtime-owned `WorkflowExecutable` artifacts. Publishing writes artifacts through this contract; Runtime execution reads artifacts through this contract and does not load Design-owned workflow state.
-- **Default implementation:** `InMemoryWorkflowExecutableStore` *(intra-domain demo default for the vertical slice; durable persistence remains future provider work)*.
+- **Signature:** `SaveAsync(WorkflowExecutable executable, ...)`, `DeleteAsync(string artifactId, ...)`, `FindAsync(string artifactId, ...)`, `ListAsync(...)`.
+- **Usage:** stores and retrieves runtime-owned immutable `WorkflowExecutable` artifacts by content-addressed artifact ID. Publishing writes artifacts through this contract; runtime start, resume, and scheduler paths read them without loading Design-owned workflow state. Mutable source-reference publication, retirement, scope, and expiry checks remain outside this store and authoritative.
+- **Default implementation:** `InMemoryWorkflowExecutableStore` *(single-process default)*. Durable Groundwork compositions select `GroundworkWorkflowExecutableStore` behind a bounded `CachingWorkflowExecutableStore` by default. The cache coalesces same-ID misses, retains only positive provider results, invalidates on save/delete, and never populates from `ListAsync`; custom providers are not wrapped implicitly.
+- **Durable-provider controls:** `CacheWorkflowExecutables` defaults to `true`; `WorkflowExecutableCacheCapacity` defaults to `256` positive artifacts per shell/provider. Disable caching to restore direct durable reads. Telemetry reports bounded hit/miss, eviction reason, and provider-load outcome/duration dimensions without workflow or artifact IDs.
 
 ## Implementable contributor interfaces
 
