@@ -3,6 +3,7 @@ import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
 import { RuntimeDiagnosticsSettingsPage } from "./RuntimeDiagnosticsSettingsPage";
+import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
 import {
   WorkflowExecutableInspectorPage,
   WorkflowExecutablesPage,
@@ -23,6 +24,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
   registerVariableReferenceContribution(api.expressionEditors);
+  api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",

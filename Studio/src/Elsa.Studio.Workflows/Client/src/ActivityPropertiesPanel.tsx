@@ -1,5 +1,5 @@
-import { type DragEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Maximize2, Plus, Trash2, X } from "lucide-react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { Maximize2, X } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
@@ -19,24 +19,21 @@ import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from 
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import {
-  defaultCollectionItem,
   defaultExpressionDescriptors,
   describeCollectionType,
   formatTypeName,
   getLiteralEditorValue,
   getLiteralDefaultValue,
   isRepeaterOptOut,
-  makeCollectionElementDescriptor,
-  moveCollectionItem,
   planExpressionModeTransition,
   readWrappedInput,
-  toLiteralCollection,
   withLiteralValue,
   withExpression,
   writeInputValue
 } from "./activityProperties";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
 import { VariableReferenceAuthoringProvider } from "./variableReferenceContribution";
+import { CollectionValueEditor } from "./CollectionValueEditor";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
@@ -163,26 +160,12 @@ function PropertyRow({
   const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
   const editingMode = expressionDescriptor?.editingMode;
   const value = getLiteralEditorValue(activity, input);
-  // Collection-typed literals get structured authoring: a collection-scoped editor (e.g. a multi-select
-  // for option sets) owns the whole value when one claims it; otherwise a repeater of per-element editors.
-  // The repeater authors collection literals under both the "Literal" syntax (freshly added inputs) and
-  // the "Object" syntax — how they come back from the backend, which needs Object to JSON-deserialize the
-  // list into ICollection<T> (see toWireArgument in activityInputWire).
-  // Object is the one pre-contribution structured bridge retained for collection values. Other
-  // structured syntaxes remain owned by their expression module and require an inline contribution.
-  const usesStructuredPropertyEditor = editingMode === "literal" || (editingMode === "structured" && syntax === "Object");
-  const objectBridgeCollectionType = wrapped && !isRepeaterOptOut(input)
-    ? describeCollectionType(input.typeName)
+  const collectionType = wrapped && editingMode === "literal" && !isRepeaterOptOut(effectiveInput)
+    ? describeCollectionType(effectiveInput.typeName)
     : null;
-  const collectionType = wrapped && usesStructuredPropertyEditor && !isRepeaterOptOut(input)
-    ? objectBridgeCollectionType
-    : null;
-  const collectionScopedEditor = collectionType
-    ? resolveEditor(editors, effectiveInput, { ...context, scope: "collection" })
-    : undefined;
   const makeExpressionContext = (targetSyntax: string): StudioExpressionEditorContext => ({
     activity,
-    descriptor: input,
+    descriptor: effectiveInput,
     expressionDescriptors,
     readOnly,
     surface: "inline",
@@ -208,13 +191,18 @@ function PropertyRow({
   // it would stretch down the whole list and cover the per-row reorder controls. Such inputs still get a
   // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
   // gating on the collection itself (not the hint) is what keeps the two features from colliding.
-  const isCollectionEditor = collectionType != null;
+  const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
+    ? describeCollectionType(effectiveInput.typeName)
+    : null;
+  const isCollectionEditor = collectionType != null || structuredCollectionType != null;
   const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
-    editingMode === "text" || isSingleLineTextInput(input, editor?.id)
+    editingMode === "text" || editingMode === "structured" || isSingleLineTextInput(input, editor?.id)
   ));
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
   const canExpandEditor = Boolean(wrapped && (
-    editingMode === "text" || (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
+    editingMode === "text" ||
+    (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
+    (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
   ));
   const [expanded, setExpanded] = useState(false);
   const [focusRequested, setFocusRequested] = useState(false);
@@ -251,7 +239,6 @@ function PropertyRow({
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
     if (descriptor.editingMode === "literal" || descriptor.editingMode === "text") return null;
-    if (descriptor.type === "Object" && objectBridgeCollectionType) return null;
     const targetContext = makeExpressionContext(descriptor.type);
     const candidates = expressionEditors.filter(editor => editor.supports(targetContext));
     if (!candidates.some(editor => !!editor.surfaces.inline)) {
@@ -271,7 +258,6 @@ function PropertyRow({
       : resolveExpressionDefaultProvider(expressionEditors, targetContext);
     if (provider?.createDefaultValue) return provider.createDefaultValue(targetContext);
     if (descriptor.editingMode === "text") return "";
-    if (descriptor.type === "Object" && objectBridgeCollectionType) return [];
     return null;
   };
 
@@ -308,26 +294,24 @@ function PropertyRow({
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
   const collectionEditor = collectionType
-    ? collectionScopedEditor
-      ? renderEditor(collectionScopedEditor.component, effectiveInput, value, editorDisabled, { ...context, scope: "collection" }, setRaw)
-      : (
-        <CollectionLiteralEditor
-          input={effectiveInput}
-          elementTypeName={collectionType.elementTypeName}
-          value={value}
-          editors={editors}
-          context={context}
-          disabled={editorDisabled}
-          onChange={setRaw}
-        />
-      )
+    ? (
+      <CollectionValueEditor
+        input={effectiveInput}
+        elementTypeName={collectionType.elementTypeName}
+        value={value}
+        editors={editors}
+        context={context}
+        disabled={editorDisabled}
+        onChange={setRaw}
+      />
+    )
     : null;
   const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
     <InlineExpressionEditorComponent
-      descriptor={input}
+      descriptor={effectiveInput}
       syntax={syntax}
       value={value}
-      disabled={readOnly}
+      disabled={editingMode === "structured" ? editorDisabled : readOnly}
       initialFocus={focusRequested && !expanded}
       context={inlineExpressionContext}
       onChange={setRaw}
@@ -336,7 +320,7 @@ function PropertyRow({
   const valueEditor = editingMode === "text" && inlineExpressionContext ? (
     contributedExpressionEditor ?? (
       <GenericTextExpressionEditor
-        descriptor={input}
+        descriptor={effectiveInput}
         syntax={syntax}
         value={value}
         disabled={readOnly}
@@ -469,138 +453,6 @@ function PropertyRow({
           onClose={() => setExpanded(false)}
         />
       ) : null}
-    </div>
-  );
-}
-
-// Repeater for collection-typed literals: each row reuses the registered element editor (text, checkbox,
-// dropdown, …) resolved in "element" scope, with add / reorder / remove controls around it.
-function collectionItemClassName(index: number, dragIndex: number | null, overIndex: number | null) {
-  return [
-    "wf-collection-item",
-    dragIndex === index ? "dragging" : "",
-    dragIndex !== null && dragIndex !== index && overIndex === index ? "drop-target" : ""
-  ].filter(Boolean).join(" ");
-}
-
-function CollectionLiteralEditor({
-  input,
-  elementTypeName,
-  value,
-  editors,
-  context,
-  disabled,
-  onChange
-}: {
-  input: StudioActivityInputDescriptor;
-  elementTypeName: string | null;
-  value: unknown;
-  editors: StudioActivityPropertyEditorContribution[];
-  context: StudioActivityPropertyEditorContext;
-  disabled: boolean;
-  onChange(value: unknown): void;
-}) {
-  const items = toLiteralCollection(value);
-  const elementDescriptor = makeCollectionElementDescriptor(input, elementTypeName);
-  const elementContext: StudioActivityPropertyEditorContext = { ...context, scope: "element" };
-  const ElementComponent = resolveEditor(editors, elementDescriptor, elementContext)?.component;
-  const label = input.displayName || input.name;
-  const replaceAt = (index: number, next: unknown) =>
-    onChange(items.map((current, position) => (position === index ? next : current)));
-
-  // Drag-to-reorder. Only the grip handle is draggable (so it never competes with text selection in the
-  // row editors); the rows are drop zones. The list reorders atomically on drop via the shared
-  // moveCollectionItem helper — index keys stay valid because items don't shift mid-gesture.
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-  const resetDrag = () => {
-    setDragIndex(null);
-    setOverIndex(null);
-  };
-  const handleDragStart = (index: number) => (event: DragEvent) => {
-    setDragIndex(index);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(index));
-  };
-  const handleDragOver = (index: number) => (event: DragEvent) => {
-    if (dragIndex === null) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (overIndex !== index) setOverIndex(index);
-  };
-  const handleDrop = (index: number) => (event: DragEvent) => {
-    event.preventDefault();
-    if (dragIndex !== null && dragIndex !== index) onChange(moveCollectionItem(items, dragIndex, index));
-    resetDrag();
-  };
-
-  return (
-    <div className="wf-collection-editor">
-      {items.length === 0 ? (
-        <p className="wf-collection-empty">No items yet.</p>
-      ) : (
-        <ul className="wf-collection-items">
-          {items.map((item, index) => (
-            <li
-              key={index}
-              className={collectionItemClassName(index, dragIndex, overIndex)}
-              onDragOver={handleDragOver(index)}
-              onDrop={handleDrop(index)}
-            >
-              <span
-                className="wf-collection-item-handle"
-                draggable={!disabled}
-                aria-label={`Drag ${label} item ${index + 1} to reorder`}
-                title="Drag to reorder"
-                onDragStart={handleDragStart(index)}
-                onDragEnd={resetDrag}
-              >
-                <GripVertical size={13} aria-hidden="true" />
-              </span>
-              <div className="wf-collection-item-editor">
-                {renderEditor(ElementComponent, elementDescriptor, item, disabled, elementContext, next => replaceAt(index, next))}
-              </div>
-              <div className="wf-collection-item-actions">
-                <button
-                  type="button"
-                  className="wf-collection-item-button"
-                  aria-label={`Move ${label} item ${index + 1} up`}
-                  disabled={disabled || index === 0}
-                  onClick={() => onChange(moveCollectionItem(items, index, index - 1))}
-                >
-                  <ChevronUp size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="wf-collection-item-button"
-                  aria-label={`Move ${label} item ${index + 1} down`}
-                  disabled={disabled || index === items.length - 1}
-                  onClick={() => onChange(moveCollectionItem(items, index, index + 1))}
-                >
-                  <ChevronDown size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="wf-collection-item-button danger"
-                  aria-label={`Remove ${label} item ${index + 1}`}
-                  disabled={disabled}
-                  onClick={() => onChange(items.filter((_, position) => position !== index))}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button
-        type="button"
-        className="wf-collection-add"
-        disabled={disabled}
-        onClick={() => onChange([...items, defaultCollectionItem(elementTypeName)])}
-      >
-        <Plus size={13} /> Add item
-      </button>
     </div>
   );
 }

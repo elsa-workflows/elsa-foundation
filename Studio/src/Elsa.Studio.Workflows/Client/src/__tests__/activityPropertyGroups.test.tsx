@@ -10,6 +10,7 @@ import type {
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
 import type { ActivityNode } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -390,7 +391,7 @@ describe("activity property organization", () => {
     expect(variable?.textContent).toContain("inline editor Contribution");
   });
 
-  it("keeps the Object collection bridge selectable from text mode and defaults it after confirmation", () => {
+  it("keeps the Object collection Contribution selectable from text mode and defaults it after confirmation", () => {
     const changes: ActivityNode[] = [];
     const collectionType = "System.Collections.Generic.ICollection`1[System.String]";
     const container = renderPanel([input("Items", { typeName: collectionType, isWrapped: true })], {
@@ -399,6 +400,7 @@ describe("activity property organization", () => {
         { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
         { type: "Object", displayName: "Object", editingMode: "structured" }
       ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
       onChange: next => changes.push(next),
       activity: activity({
         items: { typeName: collectionType, expression: { type: "JavaScript", value: "input.items" } }
@@ -455,7 +457,7 @@ describe("activity property organization", () => {
     expect(container.querySelector("button[aria-label='Open expanded Items editor']")).not.toBeNull();
   });
 
-  it("requires an owning contribution for arbitrary structured syntaxes while retaining the Object collection bridge", () => {
+  it("requires an owning Contribution for arbitrary structured syntaxes while Object owns collection authoring", () => {
     const changes: ActivityNode[] = [];
     const collectionType = "System.Collections.Generic.ICollection`1[System.String]";
     const container = renderPanel([
@@ -467,6 +469,7 @@ describe("activity property organization", () => {
         { type: "Object", displayName: "Object", editingMode: "structured" },
         { type: "Record", displayName: "Record", editingMode: "structured" }
       ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
       onChange: next => changes.push(next),
       activity: activity({
         recordItems: { typeName: collectionType, expression: { type: "Record", value: ["one"] } },
@@ -487,6 +490,37 @@ describe("activity property organization", () => {
     expect(recordOption?.disabled).toBe(true);
     expect(changes).toHaveLength(0);
   });
+
+  it("shows a compact scalar Object summary and preserves invalid JSON across expanded-editor reopening", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Payload", { typeName: "System.Object", isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      expressionEditors: [createObjectExpressionEditorContribution(() => [])],
+      onChange: next => changes.push(next),
+      activity: activity({
+        payload: { typeName: "System.Object", expression: { type: "Object", value: { first: 1, second: 2 } } }
+      })
+    });
+
+    expect(container.querySelector(".wf-object-expression-summary")?.textContent).toContain("2 properties");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
+
+    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']");
+    expect(expanded?.value).toContain('"first": 1');
+    expect(container.querySelector("[role='dialog']")).not.toBeNull();
+
+    changeTextArea(expanded!, '{"first":');
+    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+    expect(changes).toHaveLength(0);
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Close Payload editor']")?.click());
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Payload editor']")?.click());
+
+    expect(container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload JSON value']")?.value).toBe('{"first":');
+    expect(container.querySelector(".studio-code-editor-diagnostics")?.textContent).toContain("Invalid JSON");
+  });
 });
 
 function TestReferenceEditor({ value, disabled, initialFocus }: React.ComponentProps<NonNullable<StudioExpressionEditorContribution["surfaces"]["inline"]>>) {
@@ -506,4 +540,11 @@ function openAndSelect(container: HTMLElement, label: string) {
 
 async function nextFrame() {
   await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+}
+
+function changeTextArea(input: HTMLTextAreaElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }

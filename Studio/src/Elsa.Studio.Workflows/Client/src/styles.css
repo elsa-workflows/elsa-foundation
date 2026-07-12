@@ -3998,6 +3998,73 @@ button.wf-reference-select {
   box-shadow: var(--wf-focus-ring);
 }
 
+.wf-object-expression-summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  padding: 7px 9px;
+}
+
+.wf-object-expression-summary:focus {
+  border-color: var(--wf-accent);
+  box-shadow: var(--wf-focus-ring);
+  outline: none;
+}
+
+.wf-object-expression-summary span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-object-expression-summary small {
+  color: var(--wf-muted-text);
+  font-size: 10px;
+}
+
+.wf-object-json-editor .studio-code-editor {
+  display: grid;
+  min-height: 0;
+  gap: 8px;
+}
+
+.wf-object-json-editor .studio-code-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--wf-muted-text);
+  font-size: 11px;
+}
+
+.wf-object-json-editor .studio-code-editor-header code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-object-json-editor .studio-code-editor-diagnostics {
+  display: grid;
+  gap: 4px;
+}
+
+.wf-object-json-editor .studio-code-editor-diagnostic {
+  margin: 0;
+  color: var(--wf-danger);
+  font-size: 11px;
+}
+
+.wf-object-json-editor .studio-code-editor-diagnostic span {
+  margin-right: 6px;
+  font-weight: 800;
+}
+
 .wf-syntax-picker-menu button {
   width: 100%;
   border: 0;

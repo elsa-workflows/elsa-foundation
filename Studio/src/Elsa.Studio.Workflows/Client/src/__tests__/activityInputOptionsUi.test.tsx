@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioActivityPropertyEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
+import { createObjectExpressionEditorContribution } from "../objectExpressionEditor";
 import { activityInputOptionsDescriptor } from "./fixtures/activityInputOptions";
 import type { ActivityNode, WorkflowDefinitionState } from "../workflowTypes";
 
@@ -49,9 +50,10 @@ function state(node: ActivityNode): WorkflowDefinitionState {
   return { variables: [], rootActivity: node, inputs: [], outputs: [] };
 }
 
-function renderPanel(context: StudioEndpointContext, node: ActivityNode) {
+function renderPanel(context: StudioEndpointContext, node: ActivityNode, objectCollection = false) {
   const descriptor = activityInputOptionsDescriptor({
     name: "Field",
+    typeName: objectCollection ? "System.Collections.Generic.ICollection`1[System.String]" : "System.String",
     uiSpecifications: { optionsProvider: { key: "catalog.fields", dependsOn: ["Entity"] } }
   });
   descriptor.inputs.unshift({ name: "Entity", typeName: "System.String", isWrapped: true });
@@ -62,8 +64,11 @@ function renderPanel(context: StudioEndpointContext, node: ActivityNode) {
       activity={node}
       descriptor={descriptor}
       editors={[editor]}
-      expressionEditors={[]}
-      expressionDescriptors={[]}
+      expressionEditors={objectCollection ? [createObjectExpressionEditorContribution(() => [editor])] : []}
+      expressionDescriptors={objectCollection ? [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ] : []}
       descriptorStatus="ready"
       visibleVariables={[]}
       scopeStatus="ready"
@@ -163,5 +168,24 @@ describe("dynamic activity input options", () => {
     await vi.waitFor(() => expect(container.querySelector<HTMLSelectElement>("select[aria-label='Field']")?.disabled).toBe(false));
     expect(postJson).toHaveBeenCalledTimes(2);
     expect(container.querySelector("[role='alert']")).toBeNull();
+  });
+
+  it("keeps an Object collection Contribution disabled while dynamic options load or fail", async () => {
+    const postJson = vi.fn(() => new Promise((_resolve, reject) => reject(new Error("provider failed"))));
+    const context = { http: { postJson } } as unknown as StudioEndpointContext;
+    const node = {
+      ...activity("Customer"),
+      field: {
+        typeName: "System.Collections.Generic.ICollection`1[System.String]",
+        expression: { type: "Object", value: ["existing"] }
+      }
+    };
+
+    renderPanel(context, node, true);
+    expect(container.querySelector<HTMLSelectElement>("select[aria-label='Field']")?.disabled).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(container.querySelector("[role='alert']")?.textContent).toContain("Options are unavailable"));
+    expect(container.querySelector<HTMLSelectElement>("select[aria-label='Field']")?.disabled).toBe(true);
   });
 });

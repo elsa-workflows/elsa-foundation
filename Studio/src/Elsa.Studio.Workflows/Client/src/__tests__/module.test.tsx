@@ -86,7 +86,8 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
     ]);
     expect(api.expressionEditors.list()).toEqual([
-      expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) })
+      expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) })
     ]);
   });
 
