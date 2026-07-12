@@ -36,6 +36,7 @@ import {
   writeInputValue
 } from "./activityProperties";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
+import { VariableReferenceAuthoringProvider } from "./variableReferenceContribution";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
@@ -55,6 +56,7 @@ export interface ActivityPropertiesPanelProps {
   // the analysis status so the picker can explain an absent backend endpoint instead of showing empty.
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
+  scopeRetry?: () => void;
   onChange(activity: ActivityNode): void;
 }
 
@@ -67,6 +69,9 @@ export function ActivityPropertiesPanel({
   expressionEditors,
   expressionDescriptors,
   descriptorStatus,
+  visibleVariables,
+  scopeStatus,
+  scopeRetry,
   onChange
 }: ActivityPropertiesPanelProps) {
   if (descriptorStatus === "loading") {
@@ -87,6 +92,12 @@ export function ActivityPropertiesPanel({
   const syntaxDescriptors = expressionDescriptors.length > 0 ? expressionDescriptors : defaultExpressionDescriptors;
 
   return (
+    <VariableReferenceAuthoringProvider
+      workflowState={workflowState}
+      visibleVariables={visibleVariables}
+      status={scopeStatus}
+      retry={scopeRetry}
+    >
     <div className="wf-properties">
       <span className="wf-section-label">Properties</span>
       {groups.map(group => (
@@ -109,6 +120,7 @@ export function ActivityPropertiesPanel({
         </section>
       ))}
     </div>
+    </VariableReferenceAuthoringProvider>
   );
 }
 

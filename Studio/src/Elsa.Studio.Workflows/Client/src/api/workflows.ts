@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
@@ -213,10 +213,11 @@ export async function analyzeScopedVariables(
   };
 }
 
-export type ScopedVariableAnalysisStatus = "loading" | "ready" | "unavailable";
+export type ScopedVariableAnalysisStatus = "loading" | "ready" | "unavailable" | "error";
 
 export interface ScopedVariableAnalysis extends ScopedVariableAnalysisResponse {
   status: ScopedVariableAnalysisStatus;
+  retry?: () => void;
 }
 
 const emptyAnalysis = (status: ScopedVariableAnalysisStatus): ScopedVariableAnalysis =>
@@ -231,8 +232,8 @@ export async function getWorkflowManagementCapabilities(
 
 // Re-runs only when the selected node or a visibility-affecting declaration/structure change occurs
 // (see scopedVariableSignature), not on every keystroke. Uses the imperative load pattern the
-// workflow designer relies on (no QueryClientProvider in that tree). Capability discovery fails
-// closed, and request failures surface as "unavailable" — never as client-side inferred visibility.
+// workflow designer relies on (no QueryClientProvider in that tree). Unsupported backends surface as
+// unavailable; transport failures remain distinguishable and retryable.
 export function useScopedVariableAnalysis(
   context: StudioEndpointContext,
   state: WorkflowDefinitionState | null | undefined,
@@ -241,27 +242,41 @@ export function useScopedVariableAnalysis(
 ): ScopedVariableAnalysis {
   const signature = useMemo(() => scopedVariableSignature(state, catalog), [catalog, state]);
   const [result, setResult] = useState<ScopedVariableAnalysis>(() => emptyAnalysis("loading"));
-  const [capability, setCapability] = useState<{ context: StudioEndpointContext; supported: boolean } | null>(null);
-  const supportsAnalysis = capability?.context === context ? capability.supported : null;
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [capability, setCapability] = useState<{
+    context: StudioEndpointContext;
+    status: "ready" | "error";
+    supported: boolean;
+  } | null>(null);
+  const retry = useCallback(() => {
+    setCapability(null);
+    setRetryVersion(version => version + 1);
+  }, []);
+  const currentCapability = capability?.context === context ? capability : null;
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
     getWorkflowManagementCapabilities(context, controller.signal).then(
-      capabilities => { if (active) setCapability({ context, supported: capabilities?.scopedVariableAnalysis === true }); },
-      () => { if (active) setCapability({ context, supported: false }); }
+      capabilities => { if (active) setCapability({ context, status: "ready", supported: capabilities?.scopedVariableAnalysis === true }); },
+      () => { if (active) setCapability({ context, status: "error", supported: false }); }
     );
 
     return () => {
       active = false;
       controller.abort();
     };
-  }, [context]);
+  }, [context, retryVersion]);
 
   useEffect(() => {
-    if (supportsAnalysis === null) {
-      setResult(emptyAnalysis("loading"));
+    if (currentCapability === null) {
+      setResult(previous => ({ ...previous, status: "loading" }));
+      return;
+    }
+
+    if (currentCapability.status === "error") {
+      setResult(previous => ({ ...previous, status: "error" }));
       return;
     }
 
@@ -270,7 +285,7 @@ export function useScopedVariableAnalysis(
       return;
     }
 
-    if (!supportsAnalysis) {
+    if (!currentCapability.supported) {
       setResult(emptyAnalysis("unavailable"));
       return;
     }
@@ -285,7 +300,7 @@ export function useScopedVariableAnalysis(
     setResult(previous => ({ ...previous, status: "loading" }));
     analyzeScopedVariables(context, state, nodeId, controller.signal).then(
       data => { if (active) setResult({ ...data, status: "ready" }); },
-      () => { if (active) setResult(emptyAnalysis("unavailable")); }
+      () => { if (active) setResult(previous => ({ ...previous, status: "error" })); }
     );
 
     return () => {
@@ -295,9 +310,9 @@ export function useScopedVariableAnalysis(
     // `signature` captures the visibility-relevant parts of `state`; re-running on the full object
     // would refetch on every unrelated edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, nodeId, signature, supportsAnalysis]);
+  }, [context, currentCapability, nodeId, signature]);
 
-  return result;
+  return { ...result, retry };
 }
 
 export async function getWorkflowDefinitionVersion(context: StudioEndpointContext, versionId: string) {

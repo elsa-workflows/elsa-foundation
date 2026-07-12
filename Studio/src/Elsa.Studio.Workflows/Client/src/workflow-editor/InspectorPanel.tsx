@@ -115,6 +115,7 @@ export function InspectorPanel({
         descriptorStatus={descriptorStatus}
         visibleVariables={scopedVariableAnalysis.visibleVariables}
         scopeStatus={scopedVariableAnalysis.status}
+        scopeRetry={scopedVariableAnalysis.retry}
         onChange={onSelectedActivityChange}
       />
       {selectedSupportsScopedVariables ? (

@@ -33,7 +33,7 @@ function state(name = "Counter"): WorkflowDefinitionState {
 
 function Probe({ context, value, nodeId }: { context: never; value: WorkflowDefinitionState | null; nodeId: string | null }) {
   const analysis = useScopedVariableAnalysis(context, value, nodeId);
-  return <output data-status={analysis.status}>{analysis.visibleVariables.map(x => x.name).join(",")}</output>;
+  return <><output data-status={analysis.status}>{analysis.visibleVariables.map(x => x.name).join(",")}</output><button onClick={analysis.retry}>Retry</button></>;
 }
 
 async function render(context: never, value: WorkflowDefinitionState | null, nodeId: string | null) {
@@ -86,8 +86,8 @@ describe("scoped-variable analysis capability gating", () => {
     expect(body.state.rootActivity).not.toHaveProperty("text");
   });
 
-  it("reports unavailable and never posts when support is false or capability discovery fails", async () => {
-    for (const api of [context({ capabilities: { scopedVariableAnalysis: false } }), context({ capabilityError: new Error("offline") })]) {
+  it("reports unavailable and never posts when support is false", async () => {
+    for (const api of [context({ capabilities: { scopedVariableAnalysis: false } })]) {
       const container = await render(api.value, state(), "root");
       await waitFor(() => expect(container.querySelector("output")?.dataset.status).toBe("unavailable"));
       expect(api.postJson).not.toHaveBeenCalled();
@@ -95,6 +95,18 @@ describe("scoped-variable analysis capability gating", () => {
       active!.container.remove();
       active = null;
     }
+  });
+
+  it("reports a retryable error when capability discovery fails", async () => {
+    const getJson = vi.fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ scopedVariableAnalysis: false });
+    const api = context({ get: getJson });
+    const container = await render(api.value, state(), "root");
+    await waitFor(() => expect(container.querySelector("output")?.dataset.status).toBe("error"));
+
+    flushSync(() => container.querySelector("button")?.click());
+    await waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
   });
 
   it("returns ready empty data without posting when no node is selected", async () => {
@@ -114,12 +126,23 @@ describe("scoped-variable analysis capability gating", () => {
     expect(api.postJson).not.toHaveBeenCalled();
   });
 
-  it("reports unavailable when a supported analysis request fails", async () => {
-    const api = context({ post: vi.fn().mockRejectedValue(new Error("failed")) });
+  it("preserves prior results and retries when a supported analysis request fails", async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ visibleVariables: [{ referenceKey: "var-1", name: "Counter", scopeId: "workflow", isWorkflowScope: true }], shadowingWarnings: [] })
+      .mockRejectedValueOnce(new Error("failed"))
+      .mockResolvedValueOnce({ visibleVariables: [{ referenceKey: "var-1", name: "Recovered", scopeId: "workflow", isWorkflowScope: true }], shadowingWarnings: [] });
+    const api = context({ post });
     const container = await render(api.value, state(), "root");
+    await waitFor(() => expect(container.querySelector("output")?.dataset.status).toBe("ready"));
 
-    await waitFor(() => expect(container.querySelector("output")?.dataset.status).toBe("unavailable"));
-    expect(container.querySelector("output")?.textContent).toBe("");
+    await rerender(api.value, state("Renamed"), "root");
+    await waitFor(() => expect(container.querySelector("output")?.dataset.status).toBe("error"));
+    expect(container.querySelector("output")?.textContent).toBe("Counter");
+
+    flushSync(() => container.querySelector("button")?.click());
+    await waitFor(() => expect(container.querySelector("output")?.textContent).toBe("Recovered"));
+
+    expect(post).toHaveBeenCalledTimes(3);
   });
 
   it("aborts obsolete work and ignores a stale response", async () => {

@@ -4688,6 +4688,15 @@ button.wf-reference-select {
   color: var(--wf-muted-fg, #6b7280);
 }
 
+.wf-variable-picker-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--wf-danger);
+}
+
 .wf-validation:has(.wf-validation-list) {
   flex-direction: column;
   align-items: stretch;

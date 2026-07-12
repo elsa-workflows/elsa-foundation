@@ -11,6 +11,7 @@ import {
   WorkflowManagementPage
 } from "./workflow-editor/pages";
 import "./styles.css";
+import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 
 // Re-exported for the test suite (src/__tests__/module.test.tsx), which imports these connect-end
 // helpers directly alongside register().
@@ -21,6 +22,7 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  registerVariableReferenceContribution(api.expressionEditors);
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",

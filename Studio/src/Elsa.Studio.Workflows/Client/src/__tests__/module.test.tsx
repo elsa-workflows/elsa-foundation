@@ -85,6 +85,9 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
     ]);
+    expect(api.expressionEditors.list()).toEqual([
+      expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) })
+    ]);
   });
 
   it("renders active definition actions and soft-deletes with confirmation", async () => {
@@ -2219,6 +2222,7 @@ function testApi(): ElsaStudioModuleApi {
     navigation,
     routes,
     propertyEditors: registry(),
+    expressionEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
