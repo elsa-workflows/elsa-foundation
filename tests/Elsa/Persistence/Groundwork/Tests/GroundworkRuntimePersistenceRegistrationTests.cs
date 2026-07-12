@@ -53,7 +53,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<CachingWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.NotNull(provider.GetRequiredService<GroundworkWorkflowExecutableStore>());
         Assert.IsType<GroundworkActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<GroundworkWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<GroundworkDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
@@ -119,7 +120,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
 
         Assert.IsType<SqliteDocumentStore>(provider.GetRequiredService<IDocumentStore>());
         Assert.IsType<GroundworkBookmarkStateStore>(provider.GetRequiredService<IBookmarkStateStore>());
-        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.IsType<CachingWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+        Assert.NotNull(provider.GetRequiredService<GroundworkWorkflowExecutableStore>());
         Assert.IsType<GroundworkRuntimeCheckpointWriter>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<GroundworkRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
         Assert.IsType<GroundworkWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());

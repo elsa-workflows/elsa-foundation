@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
@@ -21,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified;
     DisplayName = "Groundwork SQLite Unified Persistence",
     Description = "Backs the workflow runtime, workflows-design and activities-design persistence seams with a single Groundwork SQLite document store. Durable storage keeps runtime checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
+public class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
     public const string DefaultConnectionString = "Data Source=elsa-groundwork.db";
 
@@ -32,9 +33,24 @@ public sealed class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeatu
         Secret = true)]
     public string? ConnectionString { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded process-local cache of immutable workflow executable artifacts loaded from durable storage.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkSqliteUnifiedPersistence(connectionString);
+        services.AddGroundworkSqliteUnifiedPersistence(
+            connectionString,
+            CacheWorkflowExecutables,
+            WorkflowExecutableCacheCapacity);
     }
 }

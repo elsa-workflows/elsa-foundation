@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,11 @@ public static class GroundworkSqliteUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The SQLite connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString)
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        bool cacheWorkflowExecutables = true,
+        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
     {
         // One store, one database, one materialized union manifest — shared by every lane.
         services.AddSqliteGroundworkDocumentStore(
@@ -28,7 +33,7 @@ public static class GroundworkSqliteUnifiedRegistration
             GroundworkUnifiedManifest.Create(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"));
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(cacheWorkflowExecutables, workflowExecutableCacheCapacity);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 

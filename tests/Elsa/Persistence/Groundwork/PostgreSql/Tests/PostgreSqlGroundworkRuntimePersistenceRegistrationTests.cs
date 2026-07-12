@@ -16,6 +16,10 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Tests;
 /// </summary>
 public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
 {
+    private const string CacheEnabledProperty = "CacheWorkflowExecutables";
+    private const string CacheCapacityProperty = "WorkflowExecutableCacheCapacity";
+    private const string OptionsTypeName = "Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCacheOptions";
+
     private static ServiceCollection ConfiguredServices()
     {
         var services = new ServiceCollection();
@@ -75,11 +79,54 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         Assert.False(string.IsNullOrWhiteSpace(PostgreSqlGroundworkRuntimePersistenceShellFeature.DefaultConnectionString));
     }
 
+    [Fact]
+    public void Executable_cache_settings_are_public_manifest_settings_with_durable_defaults()
+    {
+        var feature = new PostgreSqlGroundworkRuntimePersistenceShellFeature();
+
+        AssertSetting(feature, CacheEnabledProperty, expectedDefault: true);
+        AssertSetting(feature, CacheCapacityProperty, expectedDefault: 256);
+    }
+
+    [Fact]
+    public void Configured_executable_cache_capacity_is_threaded_to_runtime_registration()
+    {
+        var feature = new PostgreSqlGroundworkRuntimePersistenceShellFeature();
+        SetSetting(feature, CacheEnabledProperty, true);
+        SetSetting(feature, CacheCapacityProperty, 19);
+        var services = new ServiceCollection();
+        feature.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var optionsType = typeof(IWorkflowExecutableStore).Assembly.GetType(OptionsTypeName);
+        Assert.NotNull(optionsType);
+        var options = provider.GetService(optionsType!);
+        Assert.NotNull(options);
+        var capacity = options!.GetType().GetProperty("Capacity");
+        Assert.NotNull(capacity);
+        Assert.Equal(19, capacity!.GetValue(options));
+    }
+
     private static void AssertBridge<TContract, TImplementation>(ServiceCollection services)
     {
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(TContract));
         Assert.True(
             descriptor.ImplementationType == typeof(TImplementation) || descriptor.ImplementationFactory is not null,
             $"Expected {typeof(TContract).Name} to resolve to {typeof(TImplementation).Name}.");
+    }
+
+    private static void AssertSetting(object feature, string propertyName, object expectedDefault)
+    {
+        var property = feature.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expectedDefault, property!.GetValue(feature));
+        Assert.Contains(property.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+    }
+
+    private static void SetSetting(object feature, string propertyName, object value)
+    {
+        var property = feature.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(feature, value);
     }
 }

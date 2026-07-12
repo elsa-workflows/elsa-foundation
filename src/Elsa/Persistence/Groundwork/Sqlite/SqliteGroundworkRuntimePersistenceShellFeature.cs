@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -40,6 +41,18 @@ public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
         Category = "Persistence")]
     public bool RematerializeOnStartup { get; set; }
 
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded process-local cache of immutable workflow executable artifacts loaded from durable storage.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
@@ -50,6 +63,6 @@ public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             RematerializeOnStartup);
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(CacheWorkflowExecutables, WorkflowExecutableCacheCapacity);
     }
 }

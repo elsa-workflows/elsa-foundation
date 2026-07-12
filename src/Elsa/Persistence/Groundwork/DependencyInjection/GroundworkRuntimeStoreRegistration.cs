@@ -1,6 +1,8 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,14 +15,41 @@ namespace Elsa.Persistence.Groundwork.DependencyInjection;
 /// </summary>
 public static class GroundworkRuntimeStoreRegistration
 {
-    public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services)
+    public static IServiceCollection AddGroundworkRuntimeStores(
+        this IServiceCollection services,
+        bool cacheWorkflowExecutables = true,
+        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
     {
+        var cacheOptions = new WorkflowExecutableCacheOptions
+        {
+            Enabled = cacheWorkflowExecutables,
+            Capacity = workflowExecutableCacheCapacity
+        };
+        cacheOptions.Validate();
+
         // Replace the in-memory defaults registered by the runtime API feature. RemoveAll guarantees
         // the bridge wins regardless of feature composition order.
         services.RemoveAll<IBookmarkStateStore>();
         services.AddSingleton<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
-        services.AddSingleton<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>();
+        services.RemoveAll<GroundworkWorkflowExecutableStore>();
+        services.RemoveAll<CachingWorkflowExecutableStore>();
+        services.RemoveAll<WorkflowExecutableCacheOptions>();
+        services.AddSingleton(cacheOptions);
+        services.AddSingleton<GroundworkWorkflowExecutableStore>();
+        if (cacheOptions.Enabled)
+        {
+            services.AddSingleton(serviceProvider => new CachingWorkflowExecutableStore(
+                serviceProvider.GetRequiredService<GroundworkWorkflowExecutableStore>(),
+                serviceProvider.GetRequiredService<WorkflowExecutableCacheOptions>()));
+            services.AddSingleton<IWorkflowExecutableStore>(serviceProvider =>
+                serviceProvider.GetRequiredService<CachingWorkflowExecutableStore>());
+        }
+        else
+        {
+            services.AddSingleton<IWorkflowExecutableStore>(serviceProvider =>
+                serviceProvider.GetRequiredService<GroundworkWorkflowExecutableStore>());
+        }
         services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();
         services.RemoveAll<IActivityExecutionStateStore>();

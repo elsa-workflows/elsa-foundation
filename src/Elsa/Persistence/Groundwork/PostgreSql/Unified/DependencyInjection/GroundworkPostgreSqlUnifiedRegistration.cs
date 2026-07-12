@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.PostgreSql.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,11 @@ public static class GroundworkPostgreSqlUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The PostgreSQL connection string the single document store opens.</param>
-    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(this IServiceCollection services, string connectionString)
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
+        this IServiceCollection services,
+        string connectionString,
+        bool cacheWorkflowExecutables = true,
+        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
     {
         // One store, one database, one materialized union manifest — shared by every lane.
         services.AddPostgreSqlGroundworkDocumentStore(
@@ -28,7 +33,7 @@ public static class GroundworkPostgreSqlUnifiedRegistration
             GroundworkUnifiedManifest.Create(),
             new ProviderIdentity("groundwork-postgresql", "1.0.0"));
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(cacheWorkflowExecutables, workflowExecutableCacheCapacity);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 

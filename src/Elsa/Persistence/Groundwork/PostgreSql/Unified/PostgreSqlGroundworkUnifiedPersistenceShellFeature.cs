@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Persistence.Groundwork.PostgreSql.Unified.DependencyInjection;
 using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
@@ -21,7 +22,7 @@ namespace Elsa.Persistence.Groundwork.PostgreSql.Unified;
     DisplayName = "Groundwork PostgreSQL Unified Persistence",
     Description = "Backs the workflow runtime, workflows-design and activities-design persistence seams with a single Groundwork PostgreSQL document store. Durable storage keeps runtime checkpoints, post-commit outbox items and queued scheduler work across a crash; compose alongside Workflows Runtime Resumption so a background pump re-drives that work after a restart.",
     DependsOn = new object[] { "WorkflowsRuntimeResumption" })]
-public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
+public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
 {
     public const string DefaultConnectionString = "Host=localhost;Port=5432;Database=elsa;Username=postgres;Password=postgres";
 
@@ -32,9 +33,24 @@ public sealed class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellF
         Secret = true)]
     public string? ConnectionString { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    [ManifestSetting(
+        DisplayName = "Cache workflow executables",
+        Description = "Retain a bounded process-local cache of immutable workflow executable artifacts loaded from durable storage.",
+        Category = "Performance")]
+    public bool CacheWorkflowExecutables { get; set; } = true;
+
+    [ManifestSetting(
+        DisplayName = "Workflow executable cache capacity",
+        Description = "Maximum number of immutable workflow executable artifacts retained by this shell. Must be positive when caching is enabled.",
+        Category = "Performance")]
+    public int WorkflowExecutableCacheCapacity { get; set; } = WorkflowExecutableCacheOptions.DefaultCapacity;
+
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
-        services.AddGroundworkPostgreSqlUnifiedPersistence(connectionString);
+        services.AddGroundworkPostgreSqlUnifiedPersistence(
+            connectionString,
+            CacheWorkflowExecutables,
+            WorkflowExecutableCacheCapacity);
     }
 }
