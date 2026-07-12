@@ -107,7 +107,7 @@ In progress as [Groundwork #27](https://github.com/valence-works/Groundwork/issu
 ## identity-openiddict: Which Framework Store Contracts Must Groundwork Implement?
 
 Blocked by: none
-Status: in-progress
+Status: resolved
 Type: Research
 
 ### Question
@@ -116,7 +116,7 @@ Which ASP.NET Core Identity and OpenIddict store contracts, indexes, concurrency
 
 ### Answer
 
-In progress as [Elsa #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). Produce an Elsa contract inventory and conformance matrix; do not couple core identity contracts to Groundwork.
+Implement the framework-facing stores in concrete foundation packages over Groundwork while keeping Elsa identity contracts Groundwork-free. ASP.NET Core Identity fits ordinary entity documents and units of work; the replacement implements only complete optional store capabilities and does not expose `IQueryableUserStore`, `IQueryableRoleStore`, or passkeys in the first slice. OpenIddict's application, authorization, scope, and token stores fit entity documents, but require compound/typed/multi-value indexes, range queries, bulk prune/revoke, storage-boundary tenancy, and four-provider UoW/OCC conformance. Its generic `IQueryable` delegate overloads are an explicit capability boundary: provide a bounded adapter translator or fail them immediately; never load all documents. The exact interfaces, queries, indexes, relationships, concurrency translations, seeding/normalization behavior, registration changes, and conformance suite are recorded in the [Identity/OpenIddict Groundwork contract inventory](../reports/identity-openiddict-groundwork-contract-inventory.md).
 
 ## diagnostic-storage: What Specialized Groundwork Primitive Fits Diagnostics?
 
