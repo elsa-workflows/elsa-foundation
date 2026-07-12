@@ -60,6 +60,10 @@
   <Folder Name="/src/Elsa/Api/">
     <Project Path="src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Api/Capabilities/">
+    <Project Path="src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Api/FastEndpoints/" />
   <Folder Name="/src/Elsa/Caching/">
     <Project Path="src/Elsa/Caching/Core/Elsa.Caching.Core.csproj" />
     <Project Path="src/Elsa/Caching/Memory/Elsa.Caching.Memory.csproj" />
@@ -95,6 +99,9 @@
     <Project Path="src/Elsa/Expressions/Core/Elsa.Expressions.Core.csproj" />
     <Project Path="src/Elsa/Expressions/Elsa.Expressions.csproj" />
     <Project Path="src/Elsa/Expressions/Liquid/Elsa.Expressions.Liquid.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Expressions/Api/">
+    <Project Path="src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Expressions/Core/" />
   <Folder Name="/src/Elsa/Expressions/JavaScript/">
@@ -290,6 +297,11 @@
   <Folder Name="/tests/Elsa/Agent/">
     <Project Path="tests/Elsa/Agent/Tests/Elsa.Agent.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Api/" />
+  <Folder Name="/tests/Elsa/Api/Capabilities/" />
+  <Folder Name="/tests/Elsa/Api/Capabilities/Tests/">
+    <Project Path="tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Api/FastEndpoints/">
     <Project Path="tests/Elsa/Api/FastEndpoints/Tests/Elsa.Api.FastEndpoints.Tests.csproj" />
   </Folder>
@@ -322,6 +334,7 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/">
     <Project Path="tests/Elsa/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/" />
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>
@@ -392,6 +405,7 @@
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/Persistence/" />
   <Folder Name="/tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Tests.csproj" />
   </Folder>
@@ -411,6 +425,11 @@
   <Folder Name="/tests/Elsa/Events/">
     <Project Path="tests/Elsa/Events/Tests/Elsa.Events.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Expressions/Api/" />
+  <Folder Name="/tests/Elsa/Expressions/Api/Tests/">
+    <Project Path="tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Expressions/JavaScript/" />
   <Folder Name="/tests/Elsa/Expressions/JavaScript/Jint/">
     <Project Path="tests/Elsa/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj" />
   </Folder>

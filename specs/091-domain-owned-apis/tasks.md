@@ -18,12 +18,12 @@
 
 **Purpose**: Establish the decision record, terminology, projects, and companion worktree before behavior changes.
 
-- [ ] T001 Amend executable-retention roots and GC concurrency in `docs/adr/0040-one-artifact-store-with-reference-derived-lifetime.md`
-- [ ] T002 [P] Add the publication-slot authority, policy precedence, trigger cardinality, CAS, and projection reconciliation ADR in `docs/adr/0043-publication-slots-define-start-authority.md`
-- [ ] T003 [P] Distinguish client-visible API capabilities from composition features in `docs/glossary/elsa.md`
-- [ ] T004 [P] Scaffold `src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj` and `tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj`, then add them to `Elsa.Server.slnx`
-- [ ] T005 [P] Scaffold `src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj` and `tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj`, then add them to `Elsa.Server.slnx`
-- [ ] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/091-domain-owned-apis` from current `origin/main`
+- [X] T001 Amend executable-retention roots and GC concurrency in `docs/adr/0040-one-artifact-store-with-reference-derived-lifetime.md`
+- [X] T002 [P] Add the publication-slot authority, policy precedence, trigger cardinality, CAS, and projection reconciliation ADR in `docs/adr/0043-publication-slots-define-start-authority.md`
+- [X] T003 [P] Distinguish client-visible API capabilities from composition features in `docs/glossary/elsa.md`
+- [X] T004 [P] Scaffold `src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj` and `tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj`, then add them to `Elsa.Server.slnx`
+- [X] T005 [P] Scaffold `src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj` and `tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj`, then add them to `Elsa.Server.slnx`
+- [X] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/091-domain-owned-apis` from current `origin/main`
 
 ---
 
