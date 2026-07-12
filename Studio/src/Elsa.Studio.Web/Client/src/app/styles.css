@@ -4687,25 +4687,34 @@ html[data-theme="walnut-workshop"] .admin-card,
 html[data-theme="walnut-workshop"] .theme-dropdown,
 html[data-theme="walnut-workshop"] .wf-palette,
 html[data-theme="walnut-workshop"] .wf-inspector {
-  outline: 1px solid color-mix(in srgb, #f2d49d 26%, transparent);
-  outline-offset: -3px;
-  text-shadow: 0 1px 0 color-mix(in srgb, #f4dbaa 18%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--studio-material-edge) 28%, transparent);
+  outline-offset: -1px;
 }
 
-html[data-theme="walnut-workshop"] .studio-card,
-html[data-theme="walnut-workshop"] .admin-card,
-html[data-theme="walnut-workshop"] .theme-dropdown,
-html[data-theme="walnut-workshop"] .wf-palette,
-html[data-theme="walnut-workshop"] .wf-inspector,
 html[data-theme="walnut-workshop"] .wf-node {
   border-width: 2px;
   border-color: var(--studio-material-edge-strong);
+  color: var(--studio-accent-text);
+  text-shadow: 0 1px 0 color-mix(in srgb, black 42%, transparent);
+}
+
+html[data-theme="walnut-workshop"] .wf-node small {
+  color: color-mix(in srgb, var(--studio-accent-text) 78%, transparent);
 }
 
 html[data-theme="walnut-workshop"] .nav-section a.active,
-html[data-theme="walnut-workshop"] .nav-section a.has-active-child {
+html[data-theme="walnut-workshop"] .nav-section a.has-active-child,
+html[data-theme="walnut-workshop"] .bottom-panel-tab-list button.active,
+html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active,
+html[data-theme="walnut-workshop"] .theme-item:hover,
+html[data-theme="walnut-workshop"] .theme-item[data-highlighted],
+html[data-theme="walnut-workshop"] .theme-item.active {
   color: var(--studio-accent-text);
   text-shadow: 0 1px 0 color-mix(in srgb, black 54%, transparent);
+}
+
+html[data-theme="walnut-workshop"] .wf-panel-tab-list button.active {
+  background: var(--studio-material-active-bg);
 }
 
 html[data-theme="walnut-workshop"] .nav-section-header,
