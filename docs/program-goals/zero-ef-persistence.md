@@ -48,6 +48,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - [Zero-EF provider-boundary ADR](../adr/0042-elsa-foundation-ships-only-groundwork-persistence-implementations.md)
 - [Zero-EF Groundwork decision map](../decision-maps/zero-ef-groundwork.md)
 - [Targeted §E2.5 constitution review](../reports/zero-ef-constitution-review.md)
+- [Identity/OpenIddict Groundwork contract inventory](../reports/identity-openiddict-groundwork-contract-inventory.md)
 - [Groundwork Persistence Readiness](groundwork-persistence-readiness.md)
 - [Constitution Readiness](constitution-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
@@ -56,6 +57,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 ## Current Roadmap Notes
 
 - Use this task as a lightweight control room; assign one bounded decision-map ticket or implementation issue to each fresh worker.
+- The Identity/OpenIddict inventory is resolved. Its upstream prerequisites are compound/typed/multi-value indexes, range and bounded bulk operations, storage-boundary tenancy, and four-provider UoW/OCC conformance; the OpenIddict generic-query boundary remains an explicit implementation capability decision rather than permission for client evaluation.
 - Groundwork work lands in its own repository and is consumed here through versioned releases; do not coordinate the repositories through one long-lived cross-repository branch.
 - Stop adding EF migrations. Existing EF implementations remain only until the corresponding Groundwork family passes parity and benchmark gates.
 - Diagnostics domain behavior remains owned by Diagnostics Observability Readiness; this bucket owns replacing its EF persistence implementation.
