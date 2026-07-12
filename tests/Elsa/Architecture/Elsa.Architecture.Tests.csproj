@@ -11,12 +11,14 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="YamlDotNet" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
@@ -25,6 +27,12 @@
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa3\Models\Elsa3.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\specs\091-domain-owned-apis\contracts\management-api.openapi.yaml"
+          Link="Contracts\management-api.openapi.yaml"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

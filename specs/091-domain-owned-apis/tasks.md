@@ -33,11 +33,11 @@
 
 **⚠️ CRITICAL**: Complete this phase before changing stored Runtime or Publishing records.
 
-- [ ] T007 Inventory current Groundwork document versions, fixtures, indexes, and upcasters affected by publication identity in `src/Elsa/Persistence/Groundwork/` and record the migration matrix in `specs/091-domain-owned-apis/migration-matrix.md`
-- [ ] T008 [P] Add OpenAPI route/schema parity tests for `specs/091-domain-owned-apis/contracts/management-api.openapi.yaml` in `tests/Elsa/Architecture/ManagementApiContractTests.cs`
-- [ ] T009 [P] Add shared domain API problem-response mapping without a server dependency in `src/Elsa/Api/FastEndpoints/` and cover it in `tests/Elsa/Api/FastEndpoints/Tests/`
-- [ ] T010 [P] Define and test canonical management permission names for Design, Activity Design, Expressions, Publishing, Runtime, and capability discovery in `src/Elsa/Api/FastEndpoints/Constants/PermissionNames.cs` and `tests/Elsa/Architecture/EndpointSecurityTests.cs`
-- [ ] T011 Add serializer golden fixtures/upcaster placeholders required by T007 in `tests/Elsa/Persistence/Groundwork/Tests/Fixtures/` before modifying stored record shapes
+- [X] T007 Inventory current Groundwork document versions, fixtures, indexes, and upcasters affected by publication identity in `src/Elsa/Persistence/Groundwork/` and record the migration matrix in `specs/091-domain-owned-apis/migration-matrix.md`
+- [X] T008 [P] Add OpenAPI route/schema parity tests for `specs/091-domain-owned-apis/contracts/management-api.openapi.yaml` in `tests/Elsa/Architecture/ManagementApiContractTests.cs`
+- [X] T009 [P] Verify canonical domain endpoints reuse the existing server-independent Problem Details mapping in `src/Elsa/Api/FastEndpoints/` and its integration coverage in `tests/Elsa/Api/FastEndpoints/Tests/`
+- [X] T010 [P] Define and test reusable action-scoped management permission names for Design, Activity Design, Expressions, Publishing, Runtime, and capability discovery, and sweep every currently implemented management-domain endpoint source for `ConfigurePermissions` without `AllowAnonymous`, in `src/Elsa/Api/FastEndpoints/Constants/PermissionNames.cs` and `tests/Elsa/Architecture/EndpointSecurityTests.cs`; applying the names to new endpoints remains with T062 and the final all-slice/capability sweep remains with T105
+- [X] T011 Record in `specs/091-domain-owned-apis/migration-matrix.md` that existing Runtime v1 fixtures are preserved and concrete version bumps/upcasters/current fixtures move with T034 while Publishing v1 fixtures move with implemented T042 store shapes; reject unsafe placeholder migration logic.
 
 **Checkpoint**: Stored-shape changes have an explicit migration path and every new endpoint can use common security/error conventions.
 
@@ -136,7 +136,7 @@
 - [ ] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
 - [ ] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints
 - [ ] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
-- [ ] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects
+- [ ] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
 - [ ] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
 - [ ] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
 
@@ -236,7 +236,7 @@
 - [ ] T102 [P] Refresh the narrowest affected domain, extension-point, architecture-reference, and feature-dependency maps using `tools/maps/generate-*.sh` and review `docs/maps/manifest.json`
 - [ ] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
 - [ ] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
-- [ ] T105 [P] Complete endpoint authorization sweeps and unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
+- [ ] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
 - [ ] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/091-domain-owned-apis/completion-audit.md`
 - [ ] T107 Run every Foundation and Studio command in `specs/091-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
 - [ ] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/091-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean
