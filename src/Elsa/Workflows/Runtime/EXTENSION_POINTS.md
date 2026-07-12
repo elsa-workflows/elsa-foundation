@@ -38,6 +38,24 @@ types (`*Service`, `*Handler`, `*Dispatcher`, `*Drainer`, `*Orchestrator`, `*Mat
 
 ## Overridable replacement contracts
 
+### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
+- **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution under the host's retention policy.
+- **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
+- **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as Groundwork replace it.
+
+### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
+- **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
+- **Usage:** an artifact is eligible only when it is outside creation/staging grace and absent from both root sets: live source references and retained workflow executions. Root writers acquire a provider-backed executable lease before committing either root. The collector first acquires a conditional deletion guard, then checks both root sets, and only that matching guard may delete; leases and guards use provider CAS so the check/delete boundary is safe across hosts. Root-query or guard failures retain the artifact for a later sweep.
+- **Default implementation:** `WorkflowExecutableReferenceGarbageCollector`; registered by the Runtime composition root. The opt-in `WorkflowsRuntimeReferenceGarbageCollection` feature schedules it and exposes cadence/grace policy.
+
+### `IWorkflowExecutableRootWriteLeaseManager` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Replacement (one coordinator scopes the provider-backed lease required to establish an executable-retention root).
+- **Signature:** `ExecuteAsync(artifactId, leaseId, write, ...)` runs the durable write while acquiring, renewing, and finally releasing its lease.
+- **Usage:** canonical publication, test-run, and workflow-execution checkpoint writers execute their durable root write through this coordinator. Persistence providers implement the underlying lease/guard transitions on `IWorkflowExecutableStore`; custom root writers must use the same coordinator. Lease loss cancels the write and is surfaced rather than silently reporting an unprotected root.
+- **Default implementation:** `WorkflowExecutableRootWriteLeaseManager`.
+
 ### `IRuntimeCheckpointPersistencePolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one policy decides how checkpoints flush in a runtime composition).
 - **Signature:** `DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)`.

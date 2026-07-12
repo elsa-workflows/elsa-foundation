@@ -28,4 +28,24 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
 
         return new(SnapshotAll());
     }
+
+    public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        IReadOnlyCollection<string> artifactIds = SnapshotAll()
+            .Select(x => x.PinnedExecutable.ArtifactId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return new(artifactIds);
+    }
+
+    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return new(Remove(workflowExecutionId));
+    }
 }

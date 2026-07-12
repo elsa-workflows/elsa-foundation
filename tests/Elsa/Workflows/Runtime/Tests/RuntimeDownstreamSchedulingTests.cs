@@ -216,7 +216,9 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var startedAt = _now.AddMinutes(-5);
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);
 
@@ -244,7 +246,9 @@ public sealed class RuntimeDownstreamSchedulingTests
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var startedAt = _now.AddMinutes(-5);
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue);

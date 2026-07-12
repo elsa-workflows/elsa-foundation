@@ -35,6 +35,23 @@ public abstract class RuntimePipelineTestSupport
     protected static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
+    protected static WorkflowExecutable NewExecutable() =>
+        new(
+            NewIdentity(),
+            new ExecutableNode(
+                executableNodeId: "node-root",
+                authoredActivityId: "activity-root",
+                activityType: "Elsa.Test",
+                activityTypeVersion: "1.0.0",
+                descriptorType: "Test",
+                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+                metadata: new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>());
+
     protected static WorkflowExecutionState NewWorkflowState(WorkflowExecutionStatus status) =>
         new(
             WorkflowExecutionId: "wf-1",

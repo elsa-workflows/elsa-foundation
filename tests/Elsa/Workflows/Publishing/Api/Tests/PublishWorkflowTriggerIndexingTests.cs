@@ -298,7 +298,8 @@ public sealed class PublishWorkflowTriggerIndexingTests
             _executableStore,
             _referenceStore,
             indexer,
-            new NullLayoutStore());
+            new NullLayoutStore(),
+            TestRootWriteLeases.Create(_executableStore));
     }
 
     private static WorkflowExecutableCompiler Compiler(

@@ -101,7 +101,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Applies_A_v1_To_v3_Chain_In_Order()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry(
+        var registry = Registry(
         [
             new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
             new RenameFieldUpcaster("test-thing", fromVersion: 2, "b", "c")
@@ -118,7 +118,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Leaves_Content_Untouched_When_From_Equals_To()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 2, toVersion: 2, content);
@@ -178,15 +178,19 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     }
 
     [Fact]
-    public void Registry_With_No_Upcasters_Constructs_And_Passes_Content_Through()
+    public void Registry_With_Only_Production_Upcasters_Passes_Unrelated_Content_Through()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 1, toVersion: 1, content);
 
         Assert.Same(content, result);
     }
+
+    private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
+        params IGroundworkRuntimeDocumentUpcaster[] additional) =>
+        new([new WorkflowExecutableDocumentV1ToV2Upcaster(), .. additional]);
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",

@@ -536,7 +536,8 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
         new GroundworkBookmarkStateStore(store, Serializer),
         new GroundworkDurableValueStateStore(store, Serializer),
         new GroundworkIncidentStateStore(store, Serializer),
-        new GroundworkExecutionLivenessStateStore(store, Serializer));
+        new GroundworkExecutionLivenessStateStore(store, Serializer),
+        PassThroughRootWriteLeaseManager.Instance);
 
     private static JsonElement Json(string json)
     {

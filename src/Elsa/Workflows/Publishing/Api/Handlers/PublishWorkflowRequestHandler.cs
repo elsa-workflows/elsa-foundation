@@ -23,7 +23,8 @@ public sealed class PublishWorkflowRequestHandler(
     IWorkflowExecutableStore executableStore,
     IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
     IWorkflowTriggerIndexer triggerIndexer,
-    IWorkflowDefinitionVersionLayoutStore layoutStore)
+    IWorkflowDefinitionVersionLayoutStore layoutStore,
+    IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
     : IRequestHandler<PublishWorkflow, PublishedWorkflowView>
 {
     private const string PublishedArtifactPrefix = "artifact-";
@@ -54,7 +55,11 @@ public sealed class PublishWorkflowRequestHandler(
         await executableStore.SaveAsync(executable, cancellationToken);
 
         var reference = await BuildSourceReferenceAsync(executable, now, cancellationToken);
-        await sourceReferenceStore.SaveAsync(reference, cancellationToken);
+        await rootWriteLeaseManager.ExecuteAsync(
+            executable.Identity.ArtifactId,
+            $"publish:{reference.SourceReferenceId}",
+            ct => sourceReferenceStore.SaveAsync(reference, ct),
+            cancellationToken);
 
         // Index this artifact's start-triggers within the publish flow (W7, E3-1). A failure here propagates and
         // fails the publish by design: a silently unindexed published trigger — one that can never start a

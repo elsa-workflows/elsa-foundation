@@ -1,8 +1,11 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Configuration;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -264,7 +267,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointCommitStore_ProjectsWorkflowExecutionStateChanges()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var running = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var completed = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -289,10 +292,36 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointDoesNotWriteExecutionRootWhileDeletionGuardOwnsArtifact()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var now = DateTimeOffset.UtcNow;
+        var deletionGuard = await executableStore.TryBeginDeletionAsync(_executableIdentity.ArtifactId, "gc-test", now.AddMinutes(1), now);
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var rootWriteLeaseManager = new WorkflowExecutableRootWriteLeaseManager(
+            executableStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            TimeProvider.System);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            rootWriteLeaseManager: rootWriteLeaseManager);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            writer.CommitAsync(
+                NewCommit(RuntimeCheckpointNames.WorkflowStarted),
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+
+        Assert.NotNull(deletionGuard);
+        Assert.Null(await workflowStateStore.FindAsync(_workflowState.WorkflowExecutionId));
+        Assert.Empty(writer.ListCommits());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotProjectConflictingReplay()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var first = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
         var conflictingReplay = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
@@ -325,7 +354,7 @@ public sealed class RuntimeCheckpointCommitTests
     public async Task InMemoryCheckpointCommitStore_RejectsUnsupportedWorkflowStateProjectionBeforeRecordingWrite()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
-        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore);
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowCompleted) with
         {
@@ -347,7 +376,9 @@ public sealed class RuntimeCheckpointCommitTests
     [Fact]
     public async Task InMemoryCheckpointCommitStore_DoesNotRecordWhenWorkflowStateProjectionFails()
     {
-        var writer = new InMemoryRuntimeCheckpointCommitStore(new ThrowingWorkflowExecutionStateStore());
+        var writer = new InMemoryRuntimeCheckpointCommitStore(
+            new ThrowingWorkflowExecutionStateStore(),
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
         var commit = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
 
@@ -1381,6 +1412,23 @@ public sealed class RuntimeCheckpointCommitTests
         return document.RootElement.Clone();
     }
 
+    private WorkflowExecutable Executable() =>
+        new(
+            _executableIdentity,
+            new ExecutableNode(
+                executableNodeId: "node-root",
+                authoredActivityId: "activity-root",
+                activityType: "Test.Root",
+                activityTypeVersion: "1.0.0",
+                descriptorType: "Test",
+                descriptorPayload: JsonSerializer.SerializeToElement(new { }),
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
+                metadata: new Dictionary<string, string>()),
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            _now,
+            new Dictionary<string, string>());
+
     private sealed class FixedPolicy(RuntimeCheckpointPersistenceMode mode) : IRuntimeCheckpointPersistencePolicy
     {
         public ValueTask<RuntimeCheckpointPersistenceDecision> DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default) =>
@@ -1416,6 +1464,12 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutionState>>([]);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<string>>([]);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
     }
 
     private sealed class ThrowingActivityExecutionStateStore : IActivityExecutionStateStore

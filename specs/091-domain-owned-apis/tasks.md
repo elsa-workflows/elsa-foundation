@@ -51,21 +51,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] Add failing retained-execution status and final-root collection cases in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorTests.cs`
-- [ ] T013 [P] [US3] Add failing GC-versus-new-root race and grace-period tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorConcurrencyTests.cs`
-- [ ] T014 [P] [US3] Add failing in-memory distinct pinned-artifact query tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutionStateStoreRetentionTests.cs`
-- [ ] T015 [P] [US3] Add failing Groundwork distinct pinned-artifact query and restart tests in `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs`
+- [X] T012 [P] [US3] Add failing retained-execution status and final-root collection cases in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorTests.cs`
+- [X] T013 [P] [US3] Add failing GC-versus-new-root race and grace-period tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorConcurrencyTests.cs`
+- [X] T014 [P] [US3] Add failing in-memory distinct pinned-artifact query tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowExecutionStateStoreRetentionTests.cs`
+- [X] T015 [P] [US3] Add failing Groundwork distinct pinned-artifact query and restart tests in `tests/Elsa/Persistence/Groundwork/Tests/GroundworkWorkflowExecutionRetentionTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T016 [US3] Add the retained executable-root query and execution removal/retention seam to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutionStateStore.cs`
-- [ ] T017 [P] [US3] Implement distinct retained roots and retention removal in `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowExecutionStateStore.cs`
-- [ ] T018 [P] [US3] Implement provider-side retained-root projection/index querying in `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutionStateStore.cs` and `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`
-- [ ] T019 [US3] Add artifact creation/staging grace and final conditional root-check contracts to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs` and `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Options/WorkflowExecutableReferenceGarbageCollectionOptions.cs`
-- [ ] T020 [US3] Protect the live-reference plus retained-execution union and close check-delete races in `src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs`
-- [ ] T021 [US3] Wire the new retention dependencies in `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs` and its registration tests
-- [ ] T022 [US3] Document the retained-root query and GC behavior in `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md` and the Runtime feature README
-- [ ] T023 [US3] Run the US3 commands from `specs/091-domain-owned-apis/quickstart.md` and record any provider-specific follow-up in `specs/091-domain-owned-apis/migration-matrix.md`
+- [X] T016 [US3] Add the retained executable-root query and execution removal/retention seam to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutionStateStore.cs`
+- [X] T017 [P] [US3] Implement distinct retained roots and retention removal in `src/Elsa/Workflows/Runtime/Services/InMemoryWorkflowExecutionStateStore.cs`
+- [X] T018 [P] [US3] Implement provider-side retained-root projection/index querying in `src/Elsa/Persistence/Groundwork/Stores/GroundworkWorkflowExecutionStateStore.cs` and `src/Elsa/Persistence/Groundwork/ElsaRuntimeStorageManifest.cs`
+- [X] T019 [US3] Add artifact creation/staging grace and final conditional root-check contracts to `src/Elsa/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs` and `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/Options/WorkflowExecutableReferenceGarbageCollectionOptions.cs`
+- [X] T020 [US3] Protect the live-reference plus retained-execution union and close check-delete races in `src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs`
+- [X] T021 [US3] Wire the new retention dependencies in `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs` and its registration tests
+- [X] T022 [US3] Document the retained-root query and GC behavior in `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md` and the Runtime feature README
+- [X] T023 [US3] Run the US3 commands from `specs/091-domain-owned-apis/quickstart.md` and record any provider-specific follow-up in `specs/091-domain-owned-apis/migration-matrix.md`
 
 **Checkpoint**: US3 independently proves retained executions preserve executable availability.
 
@@ -79,12 +79,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T024 [P] [US2] Add failing publication policy precedence and slot state-transition tests in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationPolicyTests.cs` and `PublicationSlotTests.cs`
-- [ ] T025 [P] [US2] Replace append-only expectations with failing default replacement, named coexistence, unpublish, and restore cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowRequestHandlerTests.cs`
-- [ ] T026 [P] [US2] Add failing preflight trigger-diff and cardinality cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationPreflightTests.cs`
-- [ ] T027 [P] [US2] Add failing concurrent CAS and projection-failure preservation tests in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationActivationTests.cs`
-- [ ] T028 [P] [US2] Add failing publication-scoped binding and schedule persistence tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerIndexerTests.cs` and `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
-- [ ] T029 [P] [US2] Add failing HTTP exclusive-claim replacement and cross-slot collision tests in `tests/Elsa/Workflows/Runtime/Http/Tests/HttpEndpointRoutingUniquenessValidatorTests.cs`
+- [X] T024 [P] [US2] Add failing publication policy precedence and slot state-transition tests in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationPolicyTests.cs` and `PublicationSlotTests.cs`
+- [X] T025 [P] [US2] Replace append-only expectations with failing default replacement, named coexistence, unpublish, and restore cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublishWorkflowRequestHandlerTests.cs`
+- [X] T026 [P] [US2] Add failing preflight trigger-diff and cardinality cases in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationPreflightTests.cs`
+- [X] T027 [P] [US2] Add failing concurrent CAS and projection-failure preservation tests in `tests/Elsa/Workflows/Publishing/Api/Tests/PublicationActivationTests.cs`
+- [X] T028 [P] [US2] Add failing publication-scoped binding and schedule persistence tests in `tests/Elsa/Workflows/Runtime/Tests/WorkflowTriggerIndexerTests.cs` and `tests/Elsa/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs`
+- [X] T029 [P] [US2] Add failing HTTP exclusive-claim replacement and cross-slot collision tests in `tests/Elsa/Workflows/Runtime/Http/Tests/HttpEndpointRoutingUniquenessValidatorTests.cs`
 
 ### Implementation for User Story 2
 

@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
@@ -47,6 +48,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddWorkflowRuntime();
 
         services.AddGroundworkRuntimeStores();
 
@@ -67,10 +69,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     }
 
     // Constitution §2.23.1: the versioned-document serialization services must be registered as their
-    // sealed defaults, and the upcaster registry must construct cleanly when no upcasters are contributed
-    // (the state today — every kind is at version 1, so there are no historical versions to upcast).
+    // sealed defaults, and the complete production upcaster chain must be contributed.
     [Fact]
-    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Empty_Upcaster_Registry()
+    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Upcaster_Registry()
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
@@ -94,9 +95,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
         Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
 
-        // With no contributed upcasters the enumerable is empty, yet the registry still constructs (its
-        // eager validation over an empty set is a no-op).
-        Assert.Empty(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        var upcaster = Assert.Single(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        Assert.IsType<WorkflowExecutableDocumentV1ToV2Upcaster>(upcaster);
         Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 
@@ -106,6 +106,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.AddWorkflowRuntime();
 
         new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
 

@@ -21,6 +21,55 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
         new(bindings[0].ArtifactId, bindings);
 
     [Fact]
+    public async Task AllowsExclusiveClaimToReplaceTheActivePublicationInItsOwnSlot()
+    {
+        var current = PublicationBinding(
+            artifactId: "artifact-current",
+            publicationId: "publication-current",
+            slotId: "slot-default",
+            definitionId: "definition-1");
+        await ActivateAsync(current);
+        var replacement = PublicationBinding(
+            artifactId: "artifact-replacement",
+            publicationId: "publication-replacement",
+            slotId: "slot-default",
+            definitionId: "definition-1");
+
+        await Validator().ValidateAsync(Snapshot(replacement));
+
+        var authoritative = Assert.Single(await _store.ListByStimulusAsync(replacement.StimulusType, replacement.StimulusHash));
+        Assert.Equal("publication-current", authoritative.PublicationId);
+        Assert.Equal("slot-default", authoritative.SlotId);
+    }
+
+    [Fact]
+    public async Task RejectsExclusiveClaimOwnedByAnotherAuthoritativeSlotWithPublicationDiagnostics()
+    {
+        var blue = PublicationBinding(
+            artifactId: "artifact-shared",
+            publicationId: "publication-blue",
+            slotId: "slot-blue",
+            definitionId: "definition-1");
+        await ActivateAsync(blue);
+        var candidate = PublicationBinding(
+            artifactId: "artifact-shared",
+            publicationId: "publication-default",
+            slotId: "slot-default",
+            definitionId: "definition-1");
+
+        var exception = await Assert.ThrowsAsync<EndpointRoutingConflictException>(() =>
+            Validator().ValidateAsync(Snapshot(candidate)).AsTask());
+
+        Assert.Equal("GET orders/{id}", exception.Endpoint);
+        Assert.Equal("publication-default", exception.CandidatePublicationId);
+        Assert.Equal("slot-default", exception.CandidateSlotId);
+        Assert.Equal("publication-blue", exception.ConflictingPublicationId);
+        Assert.Equal("slot-blue", exception.ConflictingSlotId);
+        Assert.Contains("publication-blue", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("slot-blue", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Throws_WhenAnotherDefinitionAlreadyClaimsTheTemplateAndMethod()
     {
         await _store.SaveAsync(Bindings.HttpEndpoint("a1", "n1", "orders/{id}", "GET", definitionId: "def-a"));
@@ -86,4 +135,22 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
 
         await Validator().ValidateAsync(incoming); // must not throw
     }
+
+    private async Task ActivateAsync(WorkflowTriggerBinding binding)
+    {
+        await _store.PreparePublicationAsync(binding.PublicationId, [binding]);
+        await _store.ActivatePublicationAsync(binding.PublicationId, replacedPublicationId: null);
+    }
+
+    private static WorkflowTriggerBinding PublicationBinding(
+        string artifactId,
+        string publicationId,
+        string slotId,
+        string definitionId) =>
+        Bindings.HttpEndpoint(artifactId, "node-http", "orders/{id}", "GET", definitionId) with
+        {
+            TriggerBindingId = $"{publicationId}:node-http:orders-get",
+            PublicationId = publicationId,
+            SlotId = slotId
+        };
 }
