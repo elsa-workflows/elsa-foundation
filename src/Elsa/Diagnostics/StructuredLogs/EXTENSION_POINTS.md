@@ -4,9 +4,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.Struc
 
 The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
 
-- **`IStructuredLogSink`** assigns the monotonic `Sequence`, stamps the entry once, then dispatches to the store **and** the live publisher (keeping history and the tail consistent).
-- **`IStructuredLogStore`** is pure history (`Append`/`GetRecentAsync`/`GetAfterAsync`). Swap this to make logs durable.
-- **`IStructuredLogLiveFeed` / `IStructuredLogLivePublisher`** is the in-process fan-out to SSE subscribers. It stays in-process for every storage backend.
+- **`IStructuredLogSink`** assigns display-only `Sequence` metadata, submits to the store, and publishes a local wake hint only after commitment.
+- **`IStructuredLogStore`** owns append commit, lifetime high-water, recent history, opaque-cursor bounded tail reads, and exact retention. Swap this to make logs durable.
+- **`IStructuredLogLiveFeed` / `IStructuredLogLivePublisher`** is an in-process wake channel for SSE durable tails. It stays in-process for every storage backend.
 
 ---
 
@@ -15,23 +15,25 @@ The capture/serve pipeline is decomposed into three single-responsibility roles 
 All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature registers `InMemoryStructuredLogStore` (history), `InMemoryStructuredLogLiveFeed` (live fan-out, also the publisher), a `StructuredLogSink` (sequencing/dispatch), and a `LocalStructuredLogSourceProvider`. The store is registered with `TryAddSingleton` so a persistence feature can override it; the others use `AddSingleton`.
 
 ### `IStructuredLogStore` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
-- **Signature:** `void Append(StructuredLogEntry entry)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(StructuredLogFilter filter, CancellationToken ct = default)`, `Task<IReadOnlyList<StructuredLogEntry>> GetAfterAsync(long afterSequence, StructuredLogFilter filter, CancellationToken ct = default)`, `Task<long> GetHighWaterMarkAsync(CancellationToken ct = default)`. Queries are async so persistent backends never block a request thread on storage I/O; `Append` stays synchronous because it sits on the logging hot path.
-- **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer (capacity from `StructuredLogsOptions.BufferCapacity`). Stores entries verbatim; the externally-assigned `Sequence` is the cursor.
-- **Override:** register your own `IStructuredLogStore` to persist entries and serve `recent`/Last-Event-ID resume from durable storage. Pure *replace-one-keep-rest* override. Shipped override: **`EfCoreStructuredLogStore`** (see _Persistence_ below). Because the default uses `TryAddSingleton`, a persistence feature's plain `AddSingleton<IStructuredLogStore>` wins regardless of feature order.
+- **Signature:** `ValueTask<StructuredLogEntry> AppendAsync(...)`, `Task<long> GetHighWaterMarkAsync(...)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(...)`, `Task<StructuredLogReplayCursor?> GetTailCursorAsync(...)`, `Task<StructuredLogReadPage> ReadAfterAsync(...)`, and `Task TrimAsync(int keepNewest, ...)`.
+- **Contract:** append returns the committed entry carrying the authoritative cursor. `ReadAfterAsync` validates an optional source/scope/stream-bound opaque anchor and returns one oldest-first bounded snapshot page strictly after it, plus the next scanned cursor and `HasMore`. Cursor codecs and decoded provider positions stay internal to each adapter. The lifetime logical high-water never rewinds after retention or restart. `Sequence` is display metadata and is neither unique nor a replay identity.
+- **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer with process-lifetime cursor and high-water state.
+- **Override:** register your own `IStructuredLogStore` to persist entries and serve recent/bounded tail reads. Durable adapters own a bounded nonblocking ingest queue and complete `AppendAsync` only after commit. `ReadAfterAsync` must scan in committed cursor order and advance its next cursor over filtered-out records. The default uses `TryAddSingleton`, so a persistence feature's `AddSingleton<IStructuredLogStore>` wins regardless of feature order.
 
 ### `IStructuredLogLiveFeed` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
 - **Signature:** `IAsyncEnumerable<StructuredLogStreamItem> Subscribe(StructuredLogFilter filter, CancellationToken cancellationToken)`.
 - **Default impl:** `InMemoryStructuredLogLiveFeed` — each subscriber gets an independent bounded channel; a slow consumer never blocks the logging path, its overflowed entries are dropped and a `DroppedEntriesSignal` is delivered in-band.
-- **Override:** replace to source the live feed from an external broker (Redis Streams, a message bus) so multiple hosts fan into one tail.
+- **Override:** replace to tune local wake distribution. SSE correctness does not depend on this feed: it is
+  only a wake hint for the durable store tail, which also polls on a bound interval.
 
 ### `IStructuredLogLivePublisher` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
 - **Signature:** `void Publish(StructuredLogEntry entry)`.
-- **Default impl:** `InMemoryStructuredLogLiveFeed` (same instance as the feed). This is the write side the sink pushes stamped entries into.
-- **Override:** replace alongside `IStructuredLogLiveFeed` when relocating the fan-out to an external broker.
+- **Default impl:** `InMemoryStructuredLogLiveFeed` (same instance as the feed). This is the write side the sink uses for committed local wake hints.
+- **Override:** replace alongside `IStructuredLogLiveFeed` when changing wake distribution. Durable store reads remain authoritative.
 
 ### `IStructuredLogSink` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
 - **Signature:** `void Emit(StructuredLogEntry entry)`.
-- **Default impl:** `StructuredLogSink` — assigns the monotonic `Sequence` (seeded from `store.GetHighWaterMarkAsync()` lazily on the first emit, guaranteed to complete before the first sequence is assigned), stamps the entry, then calls `store.Append(stamped)` + `publisher.Publish(stamped)`. This is the seam the capture `ILoggerProvider` writes to.
+- **Default impl:** `StructuredLogSink` — assigns a process-local `Sequence` seeded from the store's lifetime logical high-water, starts `AppendAsync` without blocking the logging hot path, and publishes a wake hint only for the committed result. Append failures never publish and never escape into host logging.
 - **Override:** replace to tee captured entries elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
 
 ### `IStructuredLogSourceProvider` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
@@ -41,14 +43,25 @@ All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature regist
 
 ---
 
-## Persistence (EF Core override)
+## Persistence
+
+### Groundwork diagnostic records
+
+`Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork` ships **`GroundworkStructuredLogStore`**, the
+conformance adapter over Groundwork's specialized `IDiagnosticRecordStore`. It uses provider-issued opaque
+cursors, idempotent batch operation ids, bounded declared predicates, snapshot continuation, exact trim, and
+provider inspection state for lifetime high-water. The Elsa Core contract has no Groundwork dependency; hosts
+construct and register the adapter with their selected Groundwork provider and a
+`StructuredLogStoreBinding` (tenant, host storage scope, and logical stream).
+
+### Temporary EF Core compatibility override
 
 `Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` ships **`EfCoreStructuredLogStore`**, an `IStructuredLogStore` override that makes captured logs durable. It is enabled per-provider, e.g. the `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature.
 
 Key design points (so the override stays safe on a high-volume, hot logging path):
-- **Non-blocking `Append`** writes to a bounded `Channel` (drop-oldest); a background drain loop batch-inserts into the `StructuredLogsDbContext`. `Append` never touches the database synchronously.
+- **Non-blocking append** writes to the existing bounded `Channel` (drop-oldest); a background drain loop batch-inserts into the `StructuredLogsDbContext` and completes accepted append operations after commit.
 - **Feedback-loop break:** the persistence feature configures the DbContext factory with `UseLoggerFactory(NullLoggerFactory.Instance)`, so the store's own "Executed DbCommand" logs are not captured and re-persisted.
-- **Durable cursor:** `PersistedStructuredLogEntry` uses its own auto-increment `long Id` (not the per-process `Sequence`, which can repeat across restarts and which SQLite would not honour as a `RowNumber`). Queries order by `Id`. The entity deliberately does **not** derive from `Entity`.
+- **Compatibility cursor/state:** `PersistedStructuredLogEntry` uses its existing auto-increment `long Id` rather than `Sequence`. The adapter-private codec wraps it in the opaque boundary, and reserved hidden state rows in the existing table preserve lifetime logical high-water independently of retained tail rows. State and appended data commit in one `SaveChanges`; failed batches cannot advance high-water. State is excluded from recent history, read-after pages, and retention counts; exact reserved input is rejected and concurrent initializers safely converge on the maximum. No EF schema or migration surface was added for this change; Groundwork is the durable cursor conformance target.
 - **Retention:** the drain loop periodically prunes rows below `maxId - maxRetainedEntries` so the table stays bounded like the in-memory ring buffer.
 - **Startup ordering:** a migration startup task runs first; a draining startup task (`StartStructuredLogDrainingStartupTask`) then calls `store.StartDraining()`. Batch inserts retry briefly to tolerate the pre-migration window.
 - **Shutdown ordering:** `StopStructuredLogDrainingShellTerminator` completes and flushes the channel

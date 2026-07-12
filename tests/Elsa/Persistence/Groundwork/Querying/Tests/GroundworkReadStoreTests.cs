@@ -180,7 +180,7 @@ public class GroundworkReadStoreTests
                 StorageIntent.PortableDocument(),
                 LifecyclePolicy.Mutable,
                 IdentityPolicy.StringId(),
-                TenancyPolicy.None,
+                TenancyPolicy.Global,
                 ConcurrencyPolicy.Optimistic(),
                 SerializationPolicy.Json(),
                 [

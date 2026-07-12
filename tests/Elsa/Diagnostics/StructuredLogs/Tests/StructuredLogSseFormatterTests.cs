@@ -11,9 +11,9 @@ public sealed class StructuredLogSseFormatterTests
     [Fact]
     public void EntryFrameCarriesIdEventAndData()
     {
-        var frame = _formatter.Format(StructuredLogStreamItem.ForEntry(TestEntries.Create(sequence: 7)));
+        var frame = _formatter.Format(StructuredLogStreamItem.ForEntry(Committed(sequence: 7)));
 
-        Assert.StartsWith("id: 7\n", frame);
+        Assert.StartsWith("id: slrc1.", frame);
         Assert.Contains("event: entry\n", frame);
         Assert.Contains("data: {", frame);
         Assert.EndsWith("\n\n", frame);
@@ -34,5 +34,14 @@ public sealed class StructuredLogSseFormatterTests
     public void HeartbeatIsAnSseComment()
     {
         Assert.Equal(": keep-alive\n\n", _formatter.Heartbeat());
+    }
+
+    private static StructuredLogEntry Committed(long sequence)
+    {
+        var entry = TestEntries.Create(sequence: sequence);
+        return entry with
+        {
+            ReplayCursor = new StructuredLogReplayCursor($"slrc1.test.{sequence}")
+        };
     }
 }

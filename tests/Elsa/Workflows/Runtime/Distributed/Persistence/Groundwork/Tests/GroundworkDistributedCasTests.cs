@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Distributed.Models;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
@@ -126,6 +127,7 @@ public sealed class GroundworkDistributedCasTests
     private sealed class InterceptingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
         public Func<SaveDocumentRequest, Task>? OnBeforeSave { get; set; }
+        public DocumentStoreAccess Access => inner.Access;
 
         public async Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
         {

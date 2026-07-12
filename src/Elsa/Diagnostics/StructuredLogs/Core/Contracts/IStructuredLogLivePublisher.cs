@@ -3,12 +3,11 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 namespace Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 
 /// <summary>
-/// Publishes already-sequenced entries to the in-process live feed for real-time fan-out to subscribers.
-/// Separated from <see cref="IStructuredLogStore"/> so the live tail stays in-memory regardless of where
-/// durable history is stored (in-memory ring buffer or a persistent backend).
+/// Publishes committed entries to the in-process feed. SSE treats these notifications only as wake hints;
+/// payload and ordering always come from <see cref="IStructuredLogStore.ReadAfterAsync"/>.
 /// </summary>
 public interface IStructuredLogLivePublisher
 {
-    /// <summary>Fans <paramref name="entry"/> out to every matching live subscriber. Never blocks the caller.</summary>
+    /// <summary>Fans a committed wake hint out to every matching local subscriber. Never blocks.</summary>
     void Publish(StructuredLogEntry entry);
 }

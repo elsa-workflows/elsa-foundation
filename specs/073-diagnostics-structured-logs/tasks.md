@@ -91,8 +91,8 @@ confirm it resumes.
 
 ### Implementation for User Story 1
 
-- [X] T021 [US1] Implement `StreamEndpoint` (SSE) in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/StreamEndpoint.cs` — FastEndpoint at `StreamPath`, sets `Content-Type: text/event-stream`, subscribes via `IStructuredLogLiveFeed`, writes each entry as `id: <sequence>\nevent: entry\ndata: <json>\n\n`, writes `event: dropped` for `DroppedEntriesSignal`, emits `: keep-alive` heartbeats, requires the `Diagnostics:StructuredLogs` policy (depends on T012, T015).
-- [X] T022 [US1] Implement `Last-Event-ID` resume in `StreamEndpoint` — read the header, replay buffered entries after that sequence from the store before live streaming (Acceptance 1.2; depends on T021).
+- [X] T021 [US1] Implement `StreamEndpoint` (SSE) in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/StreamEndpoint.cs` — FastEndpoint at `StreamPath`, sets `Content-Type: text/event-stream`, subscribes via `IStructuredLogLiveFeed`, writes committed entries with an opaque cursor `id`, writes `event: dropped` for `DroppedEntriesSignal`, emits `: keep-alive` heartbeats, requires the `Diagnostics:StructuredLogs` policy (depends on T012, T015; cursor contract hardened by spec 091).
+- [X] T022 [US1] Implement `Last-Event-ID` resume in `StreamEndpoint` — read the opaque cursor header, validate and replay the committed snapshot strictly after it, then hand off to cursor-de-duplicated live streaming (Acceptance 1.2; depends on T021; hardened by spec 091).
 - [X] T023 [US1] Implement `StructuredLogEntrySerializer` (`public sealed`) in `src/Elsa/Diagnostics/StructuredLogs/Endpoints/StructuredLogEntrySerializer.cs` — serializes `StructuredLogEntry` to the contract JSON shape (camelCase; properties/scopes/exception, including the null/empty branches for each) used by `data` lines, reused by US2 (depends on T005).
 
 ### Tests for User Story 1 (constitution-required)

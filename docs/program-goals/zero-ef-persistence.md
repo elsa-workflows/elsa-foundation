@@ -62,6 +62,7 @@ This is the successor to the completed [Groundwork Persistence Readiness](ground
 - Groundwork work lands in its own repository and is consumed here through versioned releases; do not coordinate the repositories through one long-lived cross-repository branch.
 - Stop adding EF migrations. Existing EF implementations remain only until the corresponding Groundwork family passes parity and benchmark gates.
 - Diagnostics domain behavior remains owned by Diagnostics Observability Readiness; this bucket owns replacing its EF persistence implementation.
+- Structured Logs multi-writer replay hardening is implemented by [spec 091](../../specs/091-structured-logs-replay-cursors/spec.md): Core remains Groundwork-neutral, while the first-party adapter consumes Groundwork preview.33 diagnostic records. The temporary EF adapter received no migration or schema expansion.
 - Runtime hot paths remain subject to Runtime Execution Seam correctness and performance gates.
 
 ## Drift / Review Notes

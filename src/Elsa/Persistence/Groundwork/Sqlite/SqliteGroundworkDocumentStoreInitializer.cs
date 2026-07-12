@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Documents.Scoping;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Extensions.Hosting;
 
@@ -35,7 +36,12 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         if (holder.IsInitialized)
             return;
 
-        var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, manifest, provider, cancellationToken: cancellationToken);
-        holder.Set(handle.Store, handle);
+        var store = await SqliteDocumentStoreFactory.CreateAsync(
+            connectionString,
+            manifest,
+            provider,
+            DocumentStoreAccess.Global,
+            cancellationToken: cancellationToken);
+        holder.Set(store);
     }
 }

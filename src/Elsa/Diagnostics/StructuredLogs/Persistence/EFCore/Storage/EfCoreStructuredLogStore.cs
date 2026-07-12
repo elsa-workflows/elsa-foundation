@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
+using Elsa.Diagnostics.StructuredLogs.Core.Exceptions;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.DbContext;
@@ -14,8 +16,9 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Storage;
 
 /// <summary>
 /// A durable <see cref="IStructuredLogStore"/> backed by EF Core. Writes are decoupled from the capture
-/// hot path: <see cref="Append"/> only enqueues onto a bounded channel (oldest dropped under sustained
-/// overload) and a single background drain loop batch-inserts via the <see cref="IDbContextFactory{T}"/>.
+/// hot path: <see cref="AppendAsync"/> only enqueues onto a bounded channel (oldest dropped under sustained
+/// overload) and its acknowledgement completes after a single background drain loop batch-inserts via the
+/// <see cref="IDbContextFactory{T}"/>.
 /// History queries read the database directly and are defensive — any provider error degrades to an empty
 /// result rather than throwing into the diagnostics endpoints. The channel and drain lifecycle
 /// (start/complete/dispose, retries, shed accounting) live in <see cref="ChannelDrainingStoreBase{TItem}"/>;
@@ -26,10 +29,14 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
     private const int BatchSize = 200;
     private const int DefaultMaxRetainedEntries = 100_000;
     private const int DefaultPruneInterval = 5_000;
+    private const string HighWaterStateSourceId = "__elsa_structured_logs_high_water__";
 
     private readonly IDbContextFactory<StructuredLogsDbContext> _dbContextFactory;
     private readonly int _maxRecentQuerySize;
     private readonly int _maxRetainedEntries;
+    private readonly StructuredLogStoreBinding _binding = StructuredLogStoreBinding.Default;
+    private readonly ConcurrentDictionary<StructuredLogEntry, ConcurrentQueue<TaskCompletionSource<StructuredLogEntry>>> _pending =
+        new(ReferenceEqualityComparer.Instance);
 
     public EfCoreStructuredLogStore(
         IDbContextFactory<StructuredLogsDbContext> dbContextFactory,
@@ -70,27 +77,43 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
     /// <inheritdoc />
     public void Append(StructuredLogEntry entry)
     {
+        _ = AppendAsync(entry);
+    }
+
+    /// <inheritdoc />
+    public ValueTask<StructuredLogEntry> AppendAsync(
+        StructuredLogEntry entry,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(entry);
-        // Non-blocking; the bounded channel drops the oldest queued entry under sustained overload so the
-        // capture path never stalls a host thread on database I/O.
-        TryWrite(entry);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (IsHighWaterState(entry))
+            throw new ArgumentException("The structured log entry uses a representation reserved by the EF compatibility store.", nameof(entry));
+        var completion = new TaskCompletionSource<StructuredLogEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending.GetOrAdd(entry, _ => new()).Enqueue(completion);
+        if (!TryWrite(entry))
+            CompletePending(entry, exception: new StructuredLogsException("The structured log store is not accepting appends."));
+
+        return new(completion.Task.WaitAsync(cancellationToken));
     }
 
     /// <inheritdoc />
     public async Task<long> GetHighWaterMarkAsync(CancellationToken cancellationToken = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         try
         {
-            await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
             return await db.StructuredLogEntries.MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch
+        catch (Exception exception) when (IsMissingLegacySqliteTable(db, exception))
         {
-            // The table may not exist yet (queried before migrations run). Treat as empty.
+            // The temporary SQLite compatibility feature can seed the sink before its existing migration
+            // creates the table. Only that explicit pre-migration condition means "never written"; every
+            // other provider, connectivity, corruption, and query failure must remain observable.
             return 0;
         }
     }
@@ -110,13 +133,13 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            var rows = await ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
+            var rows = await ApplyFilter(DataRows(db.StructuredLogEntries.AsNoTracking()), filter)
                 .OrderByDescending(x => x.Id)
                 .Take(max)
                 .ToListAsync(cancellationToken);
 
             rows.Reverse(); // Contract: newest last.
-            return rows.Select(StructuredLogEntryMapper.ToModel).ToList();
+            return rows.Select(ToCommittedModel).ToList();
         }
         catch (OperationCanceledException)
         {
@@ -129,29 +152,88 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<StructuredLogEntry>> GetAfterAsync(long afterSequence, StructuredLogFilter filter, CancellationToken cancellationToken = default)
+    public async Task<StructuredLogReplayCursor?> GetTailCursorAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var tail = await DataRows(db.StructuredLogEntries.AsNoTracking())
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        return tail is null ? null : ToCommittedModel(tail).ReplayCursor;
+    }
+
+    /// <inheritdoc />
+    public async Task<StructuredLogReadPage> ReadAfterAsync(
+        StructuredLogReplayCursor? afterCursor,
+        StructuredLogFilter filter,
+        int maxCount,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
+        var limit = Math.Min(maxCount, _maxRecentQuerySize);
 
         try
         {
             await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-            var rows = await ApplyFilter(db.StructuredLogEntries.AsNoTracking(), filter)
-                .Where(x => x.Sequence > afterSequence)
-                .OrderBy(x => x.Id)
-                .Take(_maxRecentQuerySize)
-                .ToListAsync(cancellationToken);
+            var afterId = 0L;
+            if (afterCursor is { } cursor)
+            {
+                if (!EfCoreReplayCursorCodec.TryDecode(cursor, _binding, out var parts) ||
+                    !long.TryParse(parts.ProviderPosition, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out afterId))
+                    throw new StructuredLogReplayCursorUnavailableException();
+                var anchor = await DataRows(db.StructuredLogEntries.AsNoTracking())
+                    .SingleOrDefaultAsync(x => x.Id == afterId, cancellationToken);
+                if (anchor is null ||
+                    !StringComparer.Ordinal.Equals(anchor.SourceId, parts.EntrySourceId) ||
+                    !StringComparer.Ordinal.Equals(RecordToken(anchor), parts.RecordToken))
+                    throw new StructuredLogReplayCursorUnavailableException();
+            }
 
-            return rows.Select(StructuredLogEntryMapper.ToModel).ToList();
+            var snapshot = await DataRows(db.StructuredLogEntries)
+                .MaxAsync(x => (long?)x.Id, cancellationToken) ?? afterId;
+            var rows = await DataRows(db.StructuredLogEntries.AsNoTracking())
+                .Where(x => x.Id > afterId && x.Id <= snapshot)
+                .OrderBy(x => x.Id)
+                .Take(limit)
+                .ToListAsync(cancellationToken);
+            var entries = rows.Select(ToCommittedModel).Where(filter.Matches).ToArray();
+            var next = rows.Count == 0 ? afterCursor : ToCommittedModel(rows[^1]).ReplayCursor;
+            return new(entries, next, rows.Count > 0 && rows[^1].Id < snapshot);
         }
         catch (OperationCanceledException)
         {
             throw;
         }
+        catch (StructuredLogReplayCursorUnavailableException)
+        {
+            throw;
+        }
         catch
         {
-            return [];
+            throw new StructuredLogReplayCursorUnavailableException();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task TrimAsync(int keepNewest, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(keepNewest);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await EnsureHighWaterStateAsync(db, [], cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        if (keepNewest == 0)
+        {
+            await DataRows(db.StructuredLogEntries).ExecuteDeleteAsync(cancellationToken);
+            return;
+        }
+
+        var threshold = await DataRows(db.StructuredLogEntries)
+            .OrderByDescending(x => x.Id)
+            .Skip(keepNewest - 1)
+            .Select(x => (long?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (threshold is { } cursor)
+            await DataRows(db.StructuredLogEntries).Where(x => x.Id < cursor).ExecuteDeleteAsync(cancellationToken);
     }
 
     private static IQueryable<PersistedStructuredLogEntry> ApplyFilter(IQueryable<PersistedStructuredLogEntry> query, StructuredLogFilter filter)
@@ -174,10 +256,18 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
     protected override async Task<int> PersistBatchAsync(IReadOnlyList<StructuredLogEntry> batch, CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var rows = new List<PersistedStructuredLogEntry>(batch.Count);
         foreach (var entry in batch)
-            db.StructuredLogEntries.Add(StructuredLogEntryMapper.ToEntity(entry));
+        {
+            var row = StructuredLogEntryMapper.ToEntity(entry);
+            rows.Add(row);
+            db.StructuredLogEntries.Add(row);
+        }
 
+        await EnsureHighWaterStateAsync(db, batch, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        for (var index = 0; index < batch.Count; index++)
+            CompletePending(batch[index], ToCommittedModel(rows[index]));
         return batch.Count;
     }
 
@@ -188,21 +278,41 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
         Logger.LogError(exception, "Dropping a structured log batch of {EntryCount} entries after {MaxAttempts} failed persistence attempts.", batch.Count, attempts);
         // Historically a dropped batch still counted toward the prune interval (the drain loop advanced the
         // counter by batch size regardless of persistence outcome).
+        foreach (var entry in batch)
+            CompletePending(entry, exception: new StructuredLogsException("The structured log append could not be committed.", exception));
         return batch.Count;
+    }
+
+    protected override void OnItemShed(StructuredLogEntry entry) =>
+        CompletePending(entry, exception: new StructuredLogsException("The structured log append was shed before commit."));
+
+    protected override void OnDrainStopped()
+    {
+        var exception = new StructuredLogsException("The structured log append was canceled before commit.");
+        foreach (var (entry, completions) in _pending)
+        {
+            if (!_pending.TryRemove(entry, out _))
+                continue;
+            while (completions.TryDequeue(out var completion))
+                completion.TrySetException(exception);
+        }
     }
 
     protected override async Task PruneAsync(CancellationToken cancellationToken)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var maxId = await db.StructuredLogEntries.MaxAsync(x => (long?)x.Id, cancellationToken) ?? 0;
-        var threshold = maxId - _maxRetainedEntries;
+        await EnsureHighWaterStateAsync(db, [], cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
+        var threshold = await DataRows(db.StructuredLogEntries)
+            .OrderByDescending(x => x.Id)
+            .Skip(_maxRetainedEntries)
+            .Select(x => (long?)x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (threshold > 0)
+        if (threshold is { } oldestRetainedBoundary)
         {
-            // Durable ordering is by Id, so deleting everything at or below the threshold keeps the newest
-            // _maxRetainedEntries rows. Runs off the capture hot path inside the drain loop.
-            await db.StructuredLogEntries
-                .Where(x => x.Id <= threshold)
+            await DataRows(db.StructuredLogEntries)
+                .Where(x => x.Id <= oldestRetainedBoundary)
                 .ExecuteDeleteAsync(cancellationToken);
         }
     }
@@ -220,4 +330,107 @@ public sealed class EfCoreStructuredLogStore : ChannelDrainingStoreBase<Structur
 
     protected override void LogPruneGivenUp(int maxAttempts) =>
         Logger.LogWarning("Giving up pruning structured log retention after {MaxAttempts} attempts; the next persisted batch retries.", maxAttempts);
+
+    private StructuredLogEntry ToCommittedModel(PersistedStructuredLogEntry row)
+    {
+        var entry = StructuredLogEntryMapper.ToModel(row);
+        return entry with
+        {
+            ReplayCursor = EfCoreReplayCursorCodec.Encode(
+                _binding,
+                row.SourceId,
+                RecordToken(row),
+                row.Id.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        };
+    }
+
+    private static string RecordToken(PersistedStructuredLogEntry row)
+    {
+        var canonical = $"{row.Id}:{row.SourceId.Length}:{row.SourceId}:{row.Sequence}:{row.Timestamp.UtcTicks}";
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(canonical)));
+    }
+
+    private void CompletePending(
+        StructuredLogEntry entry,
+        StructuredLogEntry? committed = null,
+        Exception? exception = null)
+    {
+        if (!_pending.TryGetValue(entry, out var completions) || !completions.TryDequeue(out var completion))
+            return;
+        if (completions.IsEmpty)
+            _pending.TryRemove(entry, out _);
+
+        if (exception is null)
+            completion.TrySetResult(committed!);
+        else
+            completion.TrySetException(exception);
+    }
+
+    private static IQueryable<PersistedStructuredLogEntry> DataRows(IQueryable<PersistedStructuredLogEntry> query) =>
+        query.Where(x =>
+            x.SourceId != HighWaterStateSourceId ||
+            x.Category != HighWaterStateSourceId ||
+            x.EventName != HighWaterStateSourceId ||
+            x.MessageTemplate != HighWaterStateSourceId);
+
+    private static bool IsHighWaterState(StructuredLogEntry entry) =>
+        entry.SourceId == HighWaterStateSourceId &&
+        entry.Category == HighWaterStateSourceId &&
+        entry.EventName == HighWaterStateSourceId &&
+        entry.MessageTemplate == HighWaterStateSourceId;
+
+    private static bool IsMissingLegacySqliteTable(StructuredLogsDbContext db, Exception exception)
+    {
+        var entityType = db.Model.FindEntityType(typeof(PersistedStructuredLogEntry))
+                         ?? throw new InvalidOperationException("The Structured Logs EF model does not contain its persistence entity.");
+        var tableName = entityType.GetTableName()
+                        ?? throw new InvalidOperationException("The Structured Logs EF entity is not mapped to a table.");
+        var providerFailure = exception.GetBaseException();
+        return StringComparer.Ordinal.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.Sqlite") &&
+               StringComparer.Ordinal.Equals(providerFailure.GetType().FullName, "Microsoft.Data.Sqlite.SqliteException") &&
+               StringComparer.Ordinal.Equals(
+                   providerFailure.Message,
+                   $"SQLite Error 1: 'no such table: {tableName}'.");
+    }
+
+    private static async Task EnsureHighWaterStateAsync(
+        StructuredLogsDbContext db,
+        IReadOnlyList<StructuredLogEntry> pending,
+        CancellationToken cancellationToken)
+    {
+        var retainedHighWater = await db.StructuredLogEntries
+            .MaxAsync(x => (long?)x.Sequence, cancellationToken) ?? 0;
+        var pendingHighWater = pending.Count == 0 ? 0 : pending.Max(x => x.Sequence);
+        var highWater = Math.Max(retainedHighWater, pendingHighWater);
+        if (highWater == 0 && !await db.StructuredLogEntries.AnyAsync(cancellationToken))
+            return;
+
+        var states = await db.StructuredLogEntries
+            .Where(x =>
+                x.SourceId == HighWaterStateSourceId &&
+                x.Category == HighWaterStateSourceId &&
+                x.EventName == HighWaterStateSourceId &&
+                x.MessageTemplate == HighWaterStateSourceId)
+            .ToListAsync(cancellationToken);
+        if (states.Count == 0)
+        {
+            db.StructuredLogEntries.Add(new PersistedStructuredLogEntry
+            {
+                Sequence = highWater,
+                Timestamp = DateTimeOffset.UnixEpoch,
+                Level = (int)Microsoft.Extensions.Logging.LogLevel.None,
+                Category = HighWaterStateSourceId,
+                EventName = HighWaterStateSourceId,
+                Message = string.Empty,
+                MessageTemplate = HighWaterStateSourceId,
+                SourceId = HighWaterStateSourceId
+            });
+        }
+        else
+        {
+            foreach (var state in states)
+                if (highWater > state.Sequence)
+                    state.Sequence = highWater;
+        }
+    }
 }

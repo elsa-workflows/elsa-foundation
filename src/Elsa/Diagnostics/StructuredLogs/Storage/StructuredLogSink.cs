@@ -4,18 +4,18 @@ using Elsa.Diagnostics.StructuredLogs.Core.Models;
 namespace Elsa.Diagnostics.StructuredLogs.Storage;
 
 /// <summary>
-/// The single capture entry-point. Owns monotonic <see cref="StructuredLogEntry.Sequence"/> assignment so
-/// the durable store and the in-process live feed always observe the same stamped entry. Stamps once, then
-/// appends to the history store and publishes to the live feed. The sequence counter is seeded from the
-/// store's high-water mark lazily on the first emit (so construction never touches storage) and is
-/// guaranteed to complete before the first sequence is assigned, so persistent backends keep increasing
-/// across restarts.
+/// The single capture entry-point. Assigns display-only <see cref="StructuredLogEntry.Sequence"/> metadata,
+/// submits the entry through the store's nonblocking append path, and publishes a process-local wake hint
+/// only after durable commit. Durable SSE payload and order come from store read-after pages; concurrent
+/// processes may assign equal display sequences.
 /// </summary>
 public sealed class StructuredLogSink : IStructuredLogSink
 {
     private readonly IStructuredLogStore _store;
     private readonly IStructuredLogLivePublisher _publisher;
     private readonly Lazy<SequenceCounter> _counter;
+    private readonly object _publicationGate = new();
+    private Task _publicationTail = Task.CompletedTask;
 
     public StructuredLogSink(IStructuredLogStore store, IStructuredLogLivePublisher publisher)
     {
@@ -37,8 +37,37 @@ public sealed class StructuredLogSink : IStructuredLogSink
 
         var counter = _counter.Value;
         var stamped = entry with { Sequence = Interlocked.Increment(ref counter.Value) };
-        _store.Append(stamped);
-        _publisher.Publish(stamped);
+        lock (_publicationGate)
+        {
+            Task<StructuredLogEntry> commit;
+            try
+            {
+                commit = _store.AppendAsync(stamped).AsTask();
+            }
+            catch (Exception exception)
+            {
+                commit = Task.FromException<StructuredLogEntry>(exception);
+            }
+
+            _publicationTail = PublishInAcceptedOrderAsync(_publicationTail, commit);
+        }
+    }
+
+    private async Task PublishInAcceptedOrderAsync(
+        Task previousPublication,
+        Task<StructuredLogEntry> commit)
+    {
+        try
+        {
+            await previousPublication.ConfigureAwait(false);
+            var committed = await commit.ConfigureAwait(false);
+            _publisher.Publish(committed);
+        }
+        catch
+        {
+            // Capture must never throw into or recursively log through the host logging path. Durable
+            // adapters own retry/drop diagnostics and complete failed or shed appends without publication.
+        }
     }
 
     private sealed class SequenceCounter

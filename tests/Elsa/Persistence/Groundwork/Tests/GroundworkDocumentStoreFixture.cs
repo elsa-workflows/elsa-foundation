@@ -1,5 +1,6 @@
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 
@@ -20,12 +21,23 @@ internal sealed class GroundworkDocumentStoreFixture(IDocumentStore documentStor
 
     public static GroundworkDocumentStoreFixture CreateSqlite(string connectionString, StorageManifest? manifest = null)
     {
-        var handle = SqliteDocumentStoreFactory
-            .CreateAsync(connectionString, manifest ?? ElsaRuntimeStorageManifest.Create(), SqliteProvider)
+        TemporarySqliteDatabase? database = null;
+        if (connectionString.Contains(":memory:", StringComparison.OrdinalIgnoreCase))
+        {
+            database = new TemporarySqliteDatabase();
+            connectionString = database.ConnectionString;
+        }
+
+        var store = SqliteDocumentStoreFactory
+            .CreateAsync(
+                connectionString,
+                manifest ?? ElsaRuntimeStorageManifest.Create(),
+                SqliteProvider,
+                DocumentStoreAccess.Global)
             .GetAwaiter()
             .GetResult();
 
-        return new GroundworkDocumentStoreFixture(handle.Store, handle);
+        return new GroundworkDocumentStoreFixture(store, database);
     }
 
     public async ValueTask DisposeAsync()
@@ -34,5 +46,18 @@ internal sealed class GroundworkDocumentStoreFixture(IDocumentStore documentStor
             await owner.DisposeAsync();
         else if (DocumentStore is IAsyncDisposable asyncDisposable)
             await asyncDisposable.DisposeAsync();
+    }
+
+    private sealed class TemporarySqliteDatabase : IAsyncDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-{Guid.NewGuid():N}.db");
+
+        public string ConnectionString => $"Data Source={_path}";
+
+        public ValueTask DisposeAsync()
+        {
+            File.Delete(_path);
+            return ValueTask.CompletedTask;
+        }
     }
 }

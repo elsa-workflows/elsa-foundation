@@ -39,11 +39,17 @@ public sealed class StructuredLogsOptions
     public string StreamPath { get; set; } = "/_elsa/studio/diagnostics/structured-logs/stream";
 
     /// <summary>
-    /// How long the EF Core store's async disposal waits for the background drain loop to persist buffered
+    /// How long a durable store's async disposal waits for the background drain loop to persist buffered
     /// log entries on graceful shutdown before hard-cancelling. <see cref="IAsyncDisposable.DisposeAsync"/>
     /// carries no cancellation token, so this window is the only bound on shutdown drain time — size it
     /// below the host's shutdown budget (e.g. the container termination grace period). Negative values are
     /// clamped to zero; <see cref="TimeSpan.Zero"/> disables the graceful wait entirely.
     /// </summary>
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Maximum delay before an SSE durable tail checks storage for commits made by another process.
+    /// In-process live notifications are wake hints only and may cause an earlier check.
+    /// </summary>
+    public TimeSpan TailPollInterval { get; set; } = TimeSpan.FromSeconds(1);
 }
