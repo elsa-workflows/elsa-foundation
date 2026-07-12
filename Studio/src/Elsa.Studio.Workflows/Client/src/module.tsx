@@ -13,6 +13,7 @@ import {
 } from "./workflow-editor/pages";
 import "./styles.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
+import { registerInputReferenceContribution } from "./inputReferenceContribution";
 
 // Re-exported for the test suite (src/__tests__/module.test.tsx), which imports these connect-end
 // helpers directly alongside register().
@@ -25,6 +26,7 @@ export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
+  registerInputReferenceContribution(api.expressionEditors);
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",

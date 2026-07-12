@@ -28,8 +28,8 @@ interface WrappedInputValue {
 
 interface WireArgumentState {
   referenceKey: string;
-  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; a Variable
-  // expression keeps its structured VariableReference object so the declaring scope survives the trip.
+  // `value` is the backend ArgumentValue.Value (object?). Literals serialize to a string; reference
+  // expressions keep their structured identity objects so stable reference keys survive the trip.
   value: { value: unknown; expressionType: string };
 }
 
@@ -201,16 +201,16 @@ function camelize(value: string): string {
 
 // Resolves an expression to the backend's ArgumentValue { value, expressionType }. Most expressions keep
 // their authored syntax and serialize the value to a string. Two exceptions:
-//  - A Variable expression keeps its structured VariableReference object (the backend's
+//  - Variable and Input expressions keep their structured reference objects (the backend's
 //    VariableReference.TryParse reads `{ referenceKey, declaringScopeId }` from an ArgumentValue.Value
-//    object) so the declaring scope survives the trip.
+//    object) so stable identities and declaring scope survive the trip.
 //  - A Literal whose value is structured (an array or object, e.g. a collection repeater's list) is sent
 //    as an "Object" expression. The backend's literal converter only handles scalars, so it can't turn
 //    the JSON-string form of a list into ICollection<T>; the Object handler JSON-deserializes it into the
 //    target type. isRecord covers both arrays and plain objects.
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
-  if (expressionType === "Variable" && isRecord(expression.value)) {
+  if ((expressionType === "Variable" || expressionType === "Input") && isRecord(expression.value)) {
     return { value: expression.value, expressionType };
   }
   if (expressionType === "Literal" && isRecord(expression.value)) {

@@ -1,13 +1,15 @@
-import { createContext, useContext, type ReactNode } from "react";
 import type {
   StudioContributionRegistry,
   StudioExpressionEditorContribution,
   StudioExpressionEditorProps
 } from "@elsa-workflows/studio-sdk";
-import type { ScopedVariableAnalysisStatus } from "./api/workflows";
-import { describeCollectionType, formatTypeName } from "./activityProperties";
 import { getChildSlots } from "./workflowAdapter";
 import { readArgumentType } from "./workflowProperties";
+import {
+  formatArgumentType,
+  isArgumentTypeCompatible,
+  useWorkflowReferenceAuthoring
+} from "./workflowReferenceAuthoring";
 import {
   makeVariableReference,
   readContainerVariables,
@@ -24,29 +26,6 @@ import type {
 const variableSyntax = "Variable";
 const variableOptionSeparator = "::";
 
-interface VariableReferenceAuthoringState {
-  workflowState: WorkflowDefinitionState;
-  visibleVariables: VisibleVariableView[];
-  status: ScopedVariableAnalysisStatus;
-  retry?: () => void;
-}
-
-const VariableReferenceAuthoringContext = createContext<VariableReferenceAuthoringState | null>(null);
-
-export function VariableReferenceAuthoringProvider({
-  workflowState,
-  visibleVariables,
-  status,
-  retry,
-  children
-}: VariableReferenceAuthoringState & { children: ReactNode }) {
-  return (
-    <VariableReferenceAuthoringContext.Provider value={{ workflowState, visibleVariables, status, retry }}>
-      {children}
-    </VariableReferenceAuthoringContext.Provider>
-  );
-}
-
 export const variableReferenceContribution: StudioExpressionEditorContribution = {
   id: "studio.workflows.variable-reference",
   order: 100,
@@ -62,7 +41,7 @@ export function registerVariableReferenceContribution(
 }
 
 function VariableReferenceEditor({ descriptor, value, disabled, onChange }: StudioExpressionEditorProps) {
-  const authoring = useContext(VariableReferenceAuthoringContext);
+  const authoring = useWorkflowReferenceAuthoring();
   if (!authoring) {
     return <p className="wf-variable-picker-note">Variable authoring context is unavailable. The current reference is preserved.</p>;
   }
@@ -71,7 +50,7 @@ function VariableReferenceEditor({ descriptor, value, disabled, onChange }: Stud
   const options = authoring.visibleVariables.map(variable => {
     const declaration = declarations.get(variableOptionKey(variable.referenceKey, variable.scopeId));
     const type = declaration ? readArgumentType(declaration) : null;
-    return { variable, type, compatible: type ? isVariableTypeCompatible(type, descriptor.typeName) : false };
+    return { variable, type, compatible: type ? isArgumentTypeCompatible(type, descriptor.typeName) : false };
   });
   const compatible = options.filter(option => option.compatible);
   const incompatible = options.filter(option => !option.compatible);
@@ -164,45 +143,6 @@ function indexVariableDeclarations(state: WorkflowDefinitionState) {
   };
   if (state.rootActivity) visit(state.rootActivity);
   return declarations;
-}
-
-function isVariableTypeCompatible(variableType: ArgumentType, propertyTypeName: string) {
-  const propertyCollection = describeCollectionType(propertyTypeName);
-  const propertyAlias = canonicalTypeAlias(propertyCollection?.elementTypeName ?? propertyTypeName);
-  const variableAlias = canonicalTypeAlias(variableType.alias);
-  if (propertyAlias === "system.object") return true;
-  if (!propertyAlias || !variableAlias || propertyAlias !== variableAlias) return false;
-  return propertyCollection ? variableType.collectionKind !== "Single" : variableType.collectionKind === "Single";
-}
-
-const clrPrimitiveAliases = new Set([
-  "boolean", "byte", "sbyte", "int16", "uint16", "int32", "uint32", "int64", "uint64",
-  "single", "double", "decimal", "char", "string", "object", "datetime", "datetimeoffset",
-  "timespan", "guid", "uri"
-]);
-
-function canonicalTypeAlias(typeName: string | null | undefined) {
-  const unqualified = stripTopLevelAssemblyQualifier((typeName ?? "").trim().replace(/^global::/, ""));
-  if (!unqualified) return "";
-  const lower = unqualified.toLowerCase();
-  const primitive = lower.startsWith("system.") ? lower.slice("system.".length) : lower;
-  return clrPrimitiveAliases.has(primitive) ? `system.${primitive}` : lower;
-}
-
-function stripTopLevelAssemblyQualifier(typeName: string) {
-  let depth = 0;
-  for (let index = 0; index < typeName.length; index++) {
-    const character = typeName[index];
-    if (character === "[") depth += 1;
-    else if (character === "]") depth = Math.max(0, depth - 1);
-    else if (character === "," && depth === 0) return typeName.slice(0, index).trim();
-  }
-  return typeName;
-}
-
-function formatArgumentType(type: ArgumentType) {
-  const alias = formatTypeName(type.alias);
-  return type.collectionKind === "Single" ? alias : `${type.collectionKind}<${alias}>`;
 }
 
 function normalizeScopeId(scopeId: string | null | undefined) {

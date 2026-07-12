@@ -41,6 +41,8 @@ interface InspectorPanelProps {
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
   descriptorStatus: "loading" | "ready" | "failed";
+  definitionStatus: "loading" | "ready" | "error";
+  onRetryDefinition(): void;
   scopedVariableAnalysis: ScopedVariableAnalysis;
   onSelectedActivityChange(activity: ActivityNode): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
@@ -67,6 +69,8 @@ export function InspectorPanel({
   expressionEditors,
   expressionDescriptors,
   descriptorStatus,
+  definitionStatus,
+  onRetryDefinition,
   scopedVariableAnalysis,
   onSelectedActivityChange,
   onEnterSlot,
@@ -116,6 +120,8 @@ export function InspectorPanel({
         visibleVariables={scopedVariableAnalysis.visibleVariables}
         scopeStatus={scopedVariableAnalysis.status}
         scopeRetry={scopedVariableAnalysis.retry}
+        inputStatus={definitionStatus}
+        inputRetry={onRetryDefinition}
         onChange={onSelectedActivityChange}
       />
       {selectedSupportsScopedVariables ? (

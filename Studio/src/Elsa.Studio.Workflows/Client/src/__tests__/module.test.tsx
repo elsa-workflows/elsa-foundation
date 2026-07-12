@@ -87,7 +87,8 @@ describe("workflows module", () => {
     ]);
     expect(api.expressionEditors.list()).toEqual([
       expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
-      expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) })
+      expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
     ]);
   });
 

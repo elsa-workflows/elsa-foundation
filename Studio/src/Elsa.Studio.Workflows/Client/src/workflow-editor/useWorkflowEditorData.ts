@@ -31,37 +31,47 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
   const [availabilityDiagnostics, setAvailabilityDiagnostics] = useState<ActivityAvailabilityDiagnostics | null>(null);
   const [expressionDescriptors, setExpressionDescriptors] = useState<StudioExpressionDescriptor[]>(fallbackExpressionDescriptors);
   const [descriptorStatus, setDescriptorStatus] = useState<"loading" | "ready" | "failed">("loading");
+  const [definitionStatus, setDefinitionStatus] = useState<"loading" | "ready" | "error">("loading");
 
   const reload = useCallback(async () => {
     setError("");
-    setDescriptorStatus("loading");
-    const [nextDetails, nextCatalog, nextDescriptors, nextExpressions, nextAvailability] = await Promise.all([
-      getDefinition(context, definitionId),
-      listActivities(context),
-      listActivityDescriptors(context).then(
-        descriptors => ({ ok: true as const, descriptors }),
-        () => ({ ok: false as const, descriptors: [] as StudioActivityDescriptor[] })
-      ),
-      listExpressionDescriptors(context).then(
-        descriptors => ({ ok: true as const, descriptors }),
-        () => ({ ok: false as const, descriptors: fallbackExpressionDescriptors })
-      ),
-      // Non-essential: drives only the non-blocking availability warnings, so failure is tolerated.
-      listActivityAvailabilityDiagnostics(context).then(
-        diagnostics => diagnostics,
-        () => null
-      )
-    ]);
-    const nextDraft = nextDetails.draft ?? null;
-    setDetails(nextDetails);
-    markSaved(nextDraft);
-    resetHistory(nextDraft);
-    loadDraft(nextDraft);
-    setCatalog(nextCatalog.activities ?? []);
-    setActivityDescriptors(nextDescriptors.descriptors);
-    setAvailabilityDiagnostics(nextAvailability);
-    setExpressionDescriptors(nextExpressions.descriptors.length > 0 ? nextExpressions.descriptors : fallbackExpressionDescriptors);
-    setDescriptorStatus(nextDescriptors.ok ? "ready" : "failed");
+    // Keep an already-rendered descriptor snapshot during refresh. The matching loaded draft remains
+    // visible too, allowing reference editors to preserve their current value and expose Retry if the
+    // definition transaction fails. Initial load still starts in descriptorStatus="loading".
+    setDefinitionStatus("loading");
+    try {
+      const [nextDetails, nextCatalog, nextDescriptors, nextExpressions, nextAvailability] = await Promise.all([
+        getDefinition(context, definitionId),
+        listActivities(context),
+        listActivityDescriptors(context).then(
+          descriptors => ({ ok: true as const, descriptors }),
+          () => ({ ok: false as const, descriptors: [] as StudioActivityDescriptor[] })
+        ),
+        listExpressionDescriptors(context).then(
+          descriptors => ({ ok: true as const, descriptors }),
+          () => ({ ok: false as const, descriptors: fallbackExpressionDescriptors })
+        ),
+        // Non-essential: drives only the non-blocking availability warnings, so failure is tolerated.
+        listActivityAvailabilityDiagnostics(context).then(
+          diagnostics => diagnostics,
+          () => null
+        )
+      ]);
+      const nextDraft = nextDetails.draft ?? null;
+      setDetails(nextDetails);
+      markSaved(nextDraft);
+      resetHistory(nextDraft);
+      loadDraft(nextDraft);
+      setCatalog(nextCatalog.activities ?? []);
+      setActivityDescriptors(nextDescriptors.descriptors);
+      setAvailabilityDiagnostics(nextAvailability);
+      setExpressionDescriptors(nextExpressions.descriptors.length > 0 ? nextExpressions.descriptors : fallbackExpressionDescriptors);
+      setDescriptorStatus(nextDescriptors.ok ? "ready" : "failed");
+      setDefinitionStatus("ready");
+    } catch (error) {
+      setDefinitionStatus("error");
+      throw error;
+    }
   }, [context, definitionId, resetHistory, loadDraft, markSaved, setError]);
 
   useEffect(() => {
@@ -76,6 +86,7 @@ export function useWorkflowEditorData({ context, definitionId, resetHistory, loa
     availabilityDiagnostics,
     expressionDescriptors,
     descriptorStatus,
+    definitionStatus,
     reload
   };
 }

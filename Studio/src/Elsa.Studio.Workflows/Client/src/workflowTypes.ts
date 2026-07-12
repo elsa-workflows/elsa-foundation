@@ -353,6 +353,12 @@ export interface WorkflowInput {
   [key: string]: unknown;
 }
 
+// A workflow Input expression stores the declaration's stable identity, never its mutable display
+// name or an unvalidated text expression.
+export interface InputReference {
+  referenceKey: string;
+}
+
 // Outputs are produced by activities, so they have a smaller field set than inputs (no default/storage).
 // `referenceKey` is the stable identity (a required positional on the backend OutputDefinition).
 export interface WorkflowOutput {

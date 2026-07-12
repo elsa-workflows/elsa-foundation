@@ -32,7 +32,11 @@ import {
   writeInputValue
 } from "./activityProperties";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
-import { VariableReferenceAuthoringProvider } from "./variableReferenceContribution";
+import {
+  readWorkflowInputs,
+  WorkflowReferenceAuthoringProvider,
+  type WorkflowReferenceAuthoringStatus
+} from "./workflowReferenceAuthoring";
 import { CollectionValueEditor } from "./CollectionValueEditor";
 
 const inlineSyntaxEditorIds = new Set([
@@ -54,6 +58,8 @@ export interface ActivityPropertiesPanelProps {
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
+  inputStatus?: WorkflowReferenceAuthoringStatus;
+  inputRetry?: () => void;
   onChange(activity: ActivityNode): void;
 }
 
@@ -69,6 +75,8 @@ export function ActivityPropertiesPanel({
   visibleVariables,
   scopeStatus,
   scopeRetry,
+  inputStatus = "ready",
+  inputRetry,
   onChange
 }: ActivityPropertiesPanelProps) {
   if (descriptorStatus === "loading") {
@@ -89,11 +97,14 @@ export function ActivityPropertiesPanel({
   const syntaxDescriptors = expressionDescriptors.length > 0 ? expressionDescriptors : defaultExpressionDescriptors;
 
   return (
-    <VariableReferenceAuthoringProvider
+    <WorkflowReferenceAuthoringProvider
       workflowState={workflowState}
+      workflowInputs={readWorkflowInputs(workflowState.inputs)}
       visibleVariables={visibleVariables}
       status={scopeStatus}
       retry={scopeRetry}
+      inputStatus={inputStatus}
+      inputRetry={inputRetry}
     >
     <div className="wf-properties">
       <span className="wf-section-label">Properties</span>
@@ -117,7 +128,7 @@ export function ActivityPropertiesPanel({
         </section>
       ))}
     </div>
-    </VariableReferenceAuthoringProvider>
+    </WorkflowReferenceAuthoringProvider>
   );
 }
 
