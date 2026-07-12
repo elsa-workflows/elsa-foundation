@@ -2,7 +2,7 @@
 
 namespace Elsa.Expressions.Core.Models;
 
-public class ExpressionDescriptor(string typeName) : IExpressionDescriptor
+public class ExpressionDescriptor(string typeName, ExpressionEditingMode editingMode) : IExpressionDescriptor
 {
     /// <summary>
     /// Gets or sets the syntax name.
@@ -13,6 +13,11 @@ public class ExpressionDescriptor(string typeName) : IExpressionDescriptor
     /// Gets or sets the display name of the expression type.
     /// </summary>
     public string DisplayName { get; set; } = default!;
+
+    /// <summary>
+    /// Gets the semantic authoring mode required by this expression type.
+    /// </summary>
+    public ExpressionEditingMode EditingMode { get; } = editingMode;
 
     /// <summary>
     /// Gets or sets the expression handler factory.
