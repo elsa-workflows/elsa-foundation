@@ -4023,6 +4023,58 @@ button.wf-reference-select {
   font-weight: 600;
 }
 
+.wf-syntax-picker-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.wf-syntax-picker-menu button small {
+  display: block;
+  margin-top: 2px;
+  color: var(--studio-text-muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.wf-expression-transition-confirmation {
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--wf-warning) 55%, var(--wf-border));
+  border-radius: var(--wf-radius);
+  background: color-mix(in srgb, var(--wf-warning) 9%, var(--wf-panel-muted));
+  padding: 9px;
+}
+
+.wf-expression-transition-confirmation p {
+  margin: 0;
+  color: var(--wf-text);
+  font-size: 12px;
+}
+
+.wf-expression-transition-confirmation > div {
+  display: flex;
+  gap: 6px;
+}
+
+.wf-expression-transition-confirmation button {
+  min-height: 28px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0 9px;
+}
+
+.wf-expression-transition-confirmation button:hover,
+.wf-expression-transition-confirmation button:focus-visible {
+  border-color: color-mix(in srgb, var(--wf-accent) 40%, var(--wf-border));
+  outline: none;
+}
+
 .studio-property-multiselect {
   display: grid;
   gap: 6px;

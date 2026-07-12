@@ -561,6 +561,8 @@ export interface StudioExpressionEditorContribution {
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+  /** Creates a valid empty value when authoring switches to this expression syntax. */
+  createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
   metadata?: StudioExpressionEditorMetadata;
 }

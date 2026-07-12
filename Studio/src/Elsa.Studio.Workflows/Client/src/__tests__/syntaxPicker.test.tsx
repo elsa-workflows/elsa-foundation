@@ -80,6 +80,84 @@ describe("SyntaxPicker", () => {
     expect(document.body.querySelector("[role='listbox']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
+
+  it("skips unavailable options for Arrow, Home, and End navigation", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      disconnect() {}
+    });
+    const host = mount(
+      <SyntaxPicker
+        label="Text expression syntax"
+        value="Literal"
+        descriptors={[
+          { type: "Literal", displayName: "Literal", editingMode: "literal" },
+          { type: "Variable", displayName: "Variable", editingMode: "reference" },
+          { type: "Liquid", displayName: "Liquid", editingMode: "text" }
+        ]}
+        getUnavailableReason={descriptor => descriptor.type === "Variable" ? "Variable editor unavailable." : null}
+        disabled={false}
+        onChange={() => {}}
+      />
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!;
+    trigger.click();
+    await nextFrame();
+    press("ArrowUp");
+    expect(document.activeElement?.textContent).toBe("Liquid");
+    press("ArrowDown");
+    expect(document.activeElement?.textContent).toBe("Literal");
+    press("End");
+    expect(document.activeElement?.textContent).toBe("Liquid");
+    press("Home");
+    expect(document.activeElement?.textContent).toBe("Literal");
+
+    const unavailable = [...document.body.querySelectorAll<HTMLButtonElement>("[role='option']")]
+      .find(option => option.textContent?.includes("Variable"));
+    expect(unavailable?.disabled).toBe(true);
+    expect(unavailable?.textContent).toContain("Variable editor unavailable.");
+  });
+
+  it("keeps focus on the trigger when every option is unavailable", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      disconnect() {}
+    });
+    const changes: string[] = [];
+    const host = mount(
+      <SyntaxPicker
+        label="Expression syntax"
+        value="Variable"
+        descriptors={[
+          { type: "Variable", displayName: "Variable", editingMode: "reference" },
+          { type: "Secret", displayName: "Secret", editingMode: "reference" }
+        ]}
+        getUnavailableReason={() => "Editor unavailable."}
+        disabled={false}
+        onChange={value => changes.push(value)}
+      />
+    );
+
+    const trigger = host.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")!;
+    trigger.focus();
+    trigger.click();
+    await nextFrame();
+    expect(document.activeElement).toBe(trigger);
+    press("ArrowDown");
+    press("Enter");
+    expect(changes).toEqual([]);
+    expect([...document.body.querySelectorAll<HTMLButtonElement>("[role='option']")].every(option => option.disabled)).toBe(true);
+
+    press("Escape");
+    expect(document.body.querySelector("[role='listbox']")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    trigger.click();
+    await nextFrame();
+    press("Tab");
+    expect(document.body.querySelector("[role='listbox']")).toBeNull();
+  });
 });
 
 function mount(node: React.ReactElement): HTMLElement {

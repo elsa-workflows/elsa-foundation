@@ -63,6 +63,73 @@ export function withSyntax(previous: WrappedActivityInputValue, syntax: string):
   };
 }
 
+export function withExpression(previous: WrappedActivityInputValue, syntax: string, value: unknown): WrappedActivityInputValue {
+  return {
+    ...previous,
+    expression: { type: syntax, value }
+  };
+}
+
+export interface ExpressionModeTransition {
+  requiresConfirmation: boolean;
+  nextValue: unknown;
+}
+
+/** Plans a syntax change without mutating the Activity Property Value. */
+export function planExpressionModeTransition(
+  sourceMode: StudioExpressionDescriptor["editingMode"],
+  targetMode: StudioExpressionDescriptor["editingMode"],
+  propertyTypeName: string,
+  currentValue: unknown,
+  targetDefaultValue: unknown
+): ExpressionModeTransition {
+  if (isEmptyExpressionValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: targetDefaultValue };
+  }
+
+  if (sourceMode === "text" && targetMode === "text") {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (sourceMode === "literal" && targetMode === "text" && isPrimitiveValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: String(currentValue) };
+  }
+
+  if (sourceMode === "text" && targetMode === "literal" && isStringType(propertyTypeName)) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (sourceMode === targetMode && (sourceMode === "literal" || sourceMode === "text")) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  return { requiresConfirmation: true, nextValue: targetDefaultValue };
+}
+
+export function isEmptyExpressionValue(value: unknown): boolean {
+  if (value == null || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null) && Object.keys(value).length === 0;
+}
+
+export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
+  if (descriptor.defaultValue != null) return descriptor.defaultValue;
+  if (describeCollectionType(descriptor.typeName)) return [];
+  const typeName = descriptor.typeName.trim().toLowerCase();
+  return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
+}
+
+function isPrimitiveValue(value: unknown): boolean {
+  return ["string", "number", "boolean", "bigint"].includes(typeof value);
+}
+
+function isStringType(typeName: string): boolean {
+  const normalized = typeName.split(",", 1)[0]?.trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
+}
+
 export function writeInputValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor, value: unknown): ActivityNode {
   return {
     ...activity,

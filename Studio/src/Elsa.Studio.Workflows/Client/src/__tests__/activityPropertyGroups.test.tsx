@@ -29,6 +29,7 @@ function renderPanel(
     editors?: StudioActivityPropertyEditorContribution[];
     expressionEditors?: StudioExpressionEditorContribution[];
     expressionDescriptors?: StudioExpressionDescriptor[];
+    onChange?(activity: ActivityNode): void;
   } = {}
 ) {
   const container = document.createElement("div");
@@ -45,6 +46,10 @@ function renderPanel(
 
   function Harness() {
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
+    const handleChange = (nextActivity: ActivityNode) => {
+      options.onChange?.(nextActivity);
+      setCurrentActivity(nextActivity);
+    };
     return (
       <ActivityPropertiesPanel
         activity={currentActivity}
@@ -55,7 +60,7 @@ function renderPanel(
         descriptorStatus="ready"
         visibleVariables={[]}
         scopeStatus="ready"
-        onChange={setCurrentActivity}
+        onChange={handleChange}
       />
     );
   }
@@ -203,7 +208,7 @@ describe("activity property organization", () => {
     expect(fields).toHaveLength(2);
     expect(fields.every(field => !field.classList.contains("wf-expression-field--toggle"))).toBe(true);
     expect(fields[0]?.querySelector("textarea[aria-label='JavaScript expression']")).not.toBeNull();
-    expect(fields[1]?.querySelector(".wf-variable-picker")).not.toBeNull();
+    expect(fields[1]?.textContent).toContain("current value is preserved and read-only");
   });
 
   it("does not steal focus for pre-existing text expressions and still expands regardless of property type", () => {
@@ -251,6 +256,168 @@ describe("activity property organization", () => {
     expect(document.activeElement).toBe(replacement);
   });
 
+  it("preserves a primitive Literal as visible text when switching to a text expression", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("Count", { typeName: "System.Int32", isWrapped: true })
+    ], {
+      onChange: next => changes.push(next),
+      activity: activity({
+        count: { typeName: "System.Int32", expression: { type: "Literal", value: 42 } }
+      })
+    });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
+    const javaScriptOption = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")]
+      .find(option => option.textContent === "JavaScript");
+    flushSync(() => javaScriptOption?.click());
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.count).toEqual({
+      typeName: "System.Int32",
+      expression: { type: "JavaScript", value: "42" }
+    });
+  });
+
+  it("prompts before replacing an incompatible value and mutates syntax and value atomically", async () => {
+    const changes: ActivityNode[] = [];
+    const checkboxEditor: StudioActivityPropertyEditorContribution = {
+      id: "studio.property.checkbox",
+      supports: descriptor => descriptor.typeName === "System.Boolean",
+      component: ({ value, disabled, onChange }) => (
+        <input type="checkbox" checked={value === true} disabled={disabled} onChange={event => onChange(event.target.checked)} />
+      )
+    };
+    const container = renderPanel([
+      input("Condition", { typeName: "System.Boolean", isWrapped: true })
+    ], {
+      editors: [checkboxEditor],
+      onChange: next => changes.push(next),
+      activity: activity({
+        condition: { typeName: "System.Boolean", expression: { type: "JavaScript", value: "input.enabled" } }
+      })
+    });
+
+    openAndSelect(container, "Literal");
+    expect(changes).toHaveLength(0);
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Condition expression']")?.value).toBe("input.enabled");
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    const cancel = [...confirmation.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel")!;
+    await nextFrame();
+    expect(document.activeElement).toBe(cancel);
+
+    flushSync(() => cancel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    await nextFrame();
+    expect(changes).toHaveLength(0);
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector(".wf-syntax-picker-trigger"));
+
+    openAndSelect(container, "Literal");
+    const replace = [...container.querySelectorAll<HTMLButtonElement>("[role='alertdialog'] button")]
+      .find(button => button.textContent === "Replace value")!;
+    flushSync(() => replace.click());
+    await nextFrame();
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.condition).toEqual({
+      typeName: "System.Boolean",
+      expression: { type: "Literal", value: false }
+    });
+    expect(document.activeElement).toBe(container.querySelector("input[type='checkbox']"));
+  });
+
+  it("uses the admitted inline Contribution's default when an empty value changes to reference mode", async () => {
+    const changes: ActivityNode[] = [];
+    const factoryOnly: StudioExpressionEditorContribution = {
+      id: "factory-only",
+      order: 1,
+      supports: context => context.syntax === "Secret",
+      surfaces: {},
+      createDefaultValue: () => ({ referenceKey: "wrong-provider" })
+    };
+    const admitted: StudioExpressionEditorContribution = {
+      id: "secret.inline",
+      order: 2,
+      supports: context => context.syntax === "Secret",
+      surfaces: { inline: TestReferenceEditor },
+      createDefaultValue: () => ({ referenceKey: "new-secret" })
+    };
+    const container = renderPanel([input("Credential", { isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Secret", displayName: "Secret", editingMode: "reference" }
+      ],
+      expressionEditors: [factoryOnly, admitted],
+      onChange: next => changes.push(next),
+      activity: activity({
+        credential: { typeName: "System.String", expression: { type: "Literal", value: "" } }
+      })
+    });
+
+    openAndSelect(container, "Secret");
+    await nextFrame();
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.credential).toEqual({
+      typeName: "System.String",
+      expression: { type: "Secret", value: { referenceKey: "new-secret" } }
+    });
+    expect(document.activeElement).toBe(container.querySelector("input[aria-label='Secret reference']"));
+  });
+
+  it("disables structured and reference modes without an inline Contribution and default factory", () => {
+    const container = renderPanel([input("Source", { isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Record", displayName: "Record", editingMode: "structured" },
+        { type: "Variable", displayName: "Variable", editingMode: "reference" }
+      ],
+      expressionEditors: [{
+        id: "record.inline-without-default",
+        supports: context => context.syntax === "Record",
+        surfaces: { inline: TestReferenceEditor }
+      }]
+    });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
+    const options = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")];
+    const record = options.find(option => option.textContent?.includes("Record"));
+    const variable = options.find(option => option.textContent?.includes("Variable"));
+    expect(record?.disabled).toBe(true);
+    expect(record?.textContent).toContain("default value factory");
+    expect(variable?.disabled).toBe(true);
+    expect(variable?.textContent).toContain("inline editor Contribution");
+  });
+
+  it("keeps the Object collection bridge selectable from text mode and defaults it after confirmation", () => {
+    const changes: ActivityNode[] = [];
+    const collectionType = "System.Collections.Generic.ICollection`1[System.String]";
+    const container = renderPanel([input("Items", { typeName: collectionType, isWrapped: true })], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+        { type: "Object", displayName: "Object", editingMode: "structured" }
+      ],
+      onChange: next => changes.push(next),
+      activity: activity({
+        items: { typeName: collectionType, expression: { type: "JavaScript", value: "input.items" } }
+      })
+    });
+
+    openAndSelect(container, "Object");
+    expect(container.querySelector("[role='alertdialog']")).not.toBeNull();
+    flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("[role='alertdialog'] button")]
+      .find(button => button.textContent === "Replace value")?.click());
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.items).toEqual({
+      typeName: collectionType,
+      expression: { type: "Object", value: [] }
+    });
+    expect(container.querySelector(".wf-collection-editor")).not.toBeNull();
+  });
+
   it("keeps contribution diagnostics visible when text mode uses the generic inline fallback", () => {
     const liquidEditor: StudioExpressionEditorContribution = {
       id: "liquid.expanded",
@@ -289,6 +456,7 @@ describe("activity property organization", () => {
   });
 
   it("requires an owning contribution for arbitrary structured syntaxes while retaining the Object collection bridge", () => {
+    const changes: ActivityNode[] = [];
     const collectionType = "System.Collections.Generic.ICollection`1[System.String]";
     const container = renderPanel([
       input("RecordItems", { typeName: collectionType, isWrapped: true }),
@@ -299,6 +467,7 @@ describe("activity property organization", () => {
         { type: "Object", displayName: "Object", editingMode: "structured" },
         { type: "Record", displayName: "Record", editingMode: "structured" }
       ],
+      onChange: next => changes.push(next),
       activity: activity({
         recordItems: { typeName: collectionType, expression: { type: "Record", value: ["one"] } },
         objectItems: { typeName: collectionType, expression: { type: "Object", value: ["one"] } }
@@ -307,6 +476,34 @@ describe("activity property organization", () => {
 
     expect(container.querySelectorAll(".wf-collection-editor")).toHaveLength(1);
     expect(container.textContent).toContain("No editor is available for Record.");
+    expect(container.textContent).toContain("current value is preserved and read-only");
     expect(container.textContent).not.toContain("No editor is available for Object.");
+    const recordRow = [...container.querySelectorAll<HTMLElement>(".wf-property-row")]
+      .find(row => row.textContent?.includes("RecordItems"))!;
+    flushSync(() => recordRow.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
+    const recordOption = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")]
+      .find(option => option.textContent?.includes("Record"));
+    expect(recordOption?.getAttribute("aria-selected")).toBe("true");
+    expect(recordOption?.disabled).toBe(true);
+    expect(changes).toHaveLength(0);
   });
 });
+
+function TestReferenceEditor({ value, disabled, initialFocus }: React.ComponentProps<NonNullable<StudioExpressionEditorContribution["surfaces"]["inline"]>>) {
+  const ref = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    if (initialFocus) ref.current?.focus();
+  }, [initialFocus]);
+  return <input ref={ref} aria-label="Secret reference" value={JSON.stringify(value)} disabled={disabled} readOnly />;
+}
+
+function openAndSelect(container: HTMLElement, label: string) {
+  flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
+  const option = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")]
+    .find(candidate => candidate.textContent === label);
+  flushSync(() => option?.click());
+}
+
+async function nextFrame() {
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+}

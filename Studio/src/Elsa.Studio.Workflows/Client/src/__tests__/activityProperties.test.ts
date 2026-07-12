@@ -7,6 +7,7 @@ import {
   isRepeaterOptOut,
   makeCollectionElementDescriptor,
   moveCollectionItem,
+  planExpressionModeTransition,
   readWrappedInput,
   toLiteralCollection,
   writeInputValue,
@@ -70,6 +71,96 @@ describe("activity property values", () => {
     expect(nestedActivities[0].text).toBe("Updated");
     expect((updated.structure?.payload.activities as ActivityNode[])[0]).toBe(left);
     expect(root).not.toBe(updated);
+  });
+});
+
+describe("expression mode transitions", () => {
+  const plan = (
+    source: "literal" | "text" | "structured" | "reference",
+    target: "literal" | "text" | "structured" | "reference",
+    value: unknown,
+    typeName = "System.String"
+  ) => planExpressionModeTransition(source, target, typeName, value, "target-default");
+
+  it.each([
+    [null],
+    [undefined],
+    [""],
+    [[]],
+    [{}],
+    [Object.create(null)]
+  ])("initializes an empty value from the target default without confirmation (%s)", value => {
+    expect(plan("reference", "structured", value)).toEqual({
+      requiresConfirmation: false,
+      nextValue: "target-default"
+    });
+  });
+
+  it.each([
+    [false],
+    [0],
+    [" "],
+    [["value"]],
+    [{ referenceKey: "key" }],
+    [new Date(0)]
+  ])("does not treat a meaningful or non-plain value as empty (%s)", value => {
+    expect(plan("reference", "structured", value)).toEqual({
+      requiresConfirmation: true,
+      nextValue: "target-default"
+    });
+  });
+
+  it("preserves text between text syntaxes", () => {
+    expect(plan("text", "text", "order.total + 1")).toEqual({
+      requiresConfirmation: false,
+      nextValue: "order.total + 1"
+    });
+  });
+
+  it.each([
+    [false, "false"],
+    [0, "0"],
+    [42, "42"],
+    ["hello", "hello"]
+  ])("preserves primitive Literal %s as visible text", (value, expected) => {
+    expect(plan("literal", "text", value, "System.Object")).toEqual({
+      requiresConfirmation: false,
+      nextValue: expected
+    });
+  });
+
+  it("preserves text when returning to a string Literal", () => {
+    expect(plan("text", "literal", "hello", "System.String")).toEqual({
+      requiresConfirmation: false,
+      nextValue: "hello"
+    });
+  });
+
+  it("requires confirmation when returning text to a non-string Literal", () => {
+    expect(plan("text", "literal", "1 + 1", "System.Int32")).toEqual({
+      requiresConfirmation: true,
+      nextValue: "target-default"
+    });
+  });
+
+  it.each([
+    ["literal", "structured"],
+    ["literal", "reference"],
+    ["text", "structured"],
+    ["text", "reference"],
+    ["structured", "literal"],
+    ["structured", "text"],
+    ["structured", "structured"],
+    ["structured", "reference"],
+    ["reference", "literal"],
+    ["reference", "text"],
+    ["reference", "structured"],
+    ["reference", "reference"]
+  ] as const)("requires confirmation for a non-empty %s to %s transition", (source, target) => {
+    expect(plan(source, target, { existing: true })).toEqual({
+      requiresConfirmation: true,
+      nextValue: "target-default"
+    });
   });
 });
 

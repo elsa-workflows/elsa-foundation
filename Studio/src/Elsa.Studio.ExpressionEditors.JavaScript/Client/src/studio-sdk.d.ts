@@ -48,6 +48,7 @@ declare module "@elsa-workflows/studio-sdk" {
     order?: number;
     supports(context: StudioExpressionEditorContext): boolean;
     surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+    createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   }
 
   export interface ElsaStudioModuleApi {

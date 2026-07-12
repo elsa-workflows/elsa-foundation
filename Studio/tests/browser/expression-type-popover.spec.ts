@@ -27,17 +27,20 @@ for (const theme of ["light", "black-glass"] as const) {
 
     await popover.evaluate(element => { element.scrollTop = element.scrollHeight; });
     expect(await popover.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-    await listbox.getByRole("option", { name: "Variable", exact: true }).click();
-    await expect(trigger).toHaveText("Variable");
+    const variable = listbox.getByRole("option", { name: /Variable/ });
+    await expect(variable).toBeDisabled();
+    await expect(variable).toContainText("requires an inline editor Contribution");
+    await listbox.getByRole("option", { name: "Liquid", exact: true }).click();
+    await expect(trigger).toHaveText("Liquid");
 
     await trigger.click();
-    await listbox.getByRole("option", { name: "Input", exact: true }).click();
-    await expect(trigger).toHaveText("Input");
+    await listbox.getByRole("option", { name: "JavaScript", exact: true }).click();
+    await expect(trigger).toHaveText("JavaScript");
 
     await trigger.press("ArrowDown");
-    await expect(listbox.getByRole("option", { name: "Input", exact: true })).toBeFocused();
+    await expect(listbox.getByRole("option", { name: "JavaScript", exact: true })).toBeFocused();
     await page.keyboard.press("Home");
-    await expect(listbox.getByRole("option", { name: "Input", exact: true })).toBeFocused();
+    await expect(listbox.getByRole("option", { name: "JavaScript", exact: true })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(listbox).toBeHidden();
     await expect(trigger).toBeFocused();
