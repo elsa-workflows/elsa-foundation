@@ -4,9 +4,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// Describes the recurring-start schedule a Timer/Cron start-trigger activity node declares, at publish time
-/// (W16). One provider is registered per recurring-trigger activity type; the schedule indexer asks each
-/// provider to describe a node it recognizes. Returning <c>null</c> means "not my activity type" — the indexer
-/// moves on to the next provider.
+/// (W16). Providers form an exact-one Strategy set selected by executable-node context: the schedule indexer
+/// asks every provider to describe each recurring trigger node and fails preflight if more than one recognizes
+/// it. Returning <c>null</c> means "not my activity type".
 /// </summary>
 /// <remarks>
 /// This is the recurring-schedule sibling of <see cref="IActivityTriggerStimulusProvider"/>: that seam yields
@@ -18,6 +18,13 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </remarks>
 public interface IRecurringTriggerScheduleProvider
 {
+    /// <summary>
+    /// Gets the stable, non-secret identity used to attribute recurring preflight outcomes and failures.
+    /// Existing providers receive a deterministic fallback derived from their public CLR type identity. An
+    /// override must be nonblank whenever the provider recognizes a node or fails while describing one.
+    /// </summary>
+    string ProviderId => GetType().FullName ?? GetType().Name;
+
     /// <summary>
     /// Returns the recurring-start schedule for <paramref name="node"/> if this provider recognizes its activity
     /// type; otherwise <c>null</c>.

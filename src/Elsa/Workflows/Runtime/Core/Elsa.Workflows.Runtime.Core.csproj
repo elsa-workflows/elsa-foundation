@@ -6,6 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!--
+    Spec 090 adds source/binary-compatible default interface members to this public Core package.
+    This is a MINOR-compatible API expansion. Package versions are injected globally by
+    .github/workflows/packages.yml via /p:Version; do not add a project-local Version here.
+  -->
+
   <ItemGroup>
     <ProjectReference Include="..\..\..\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />

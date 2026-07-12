@@ -10,6 +10,9 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// extractor then moves on to the next provider.
 /// </summary>
 /// <remarks>
+/// Registered providers form a context-selected Strategy set, not a contribution fan-in: every classified node
+/// must be recognized by exactly one provider, and registration order never selects a winner.
+///
 /// Providers read only the published <see cref="ExecutableNode"/> (its literal input bindings), never a
 /// running workflow, so the stimulus identity is fixed at publish time exactly as Elsa 4's pinned-executable
 /// model requires. A provider whose trigger carries a non-literal, unresolvable stimulus key throws, which
@@ -23,9 +26,18 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 public interface IActivityTriggerStimulusProvider
 {
     /// <summary>
+    /// Gets the stable, non-secret identity of this strategy. Existing providers receive a deterministic fallback
+    /// derived from their public CLR type identity; first-party providers should override it with an explicit id.
+    /// An override must be nonblank whenever the provider recognizes a node or fails while describing one.
+    /// The default body preserves source and binary compatibility for providers compiled before this member existed.
+    /// </summary>
+    string ProviderId => GetType().FullName ?? GetType().Name;
+
+    /// <summary>
     /// Returns <see cref="ActivityTriggerStimulusResult.Recognized"/> carrying the stimulus identities for
     /// <paramref name="node"/> if this provider owns its activity type (zero or more descriptors); otherwise
     /// <see cref="ActivityTriggerStimulusResult.NotRecognized"/>.
     /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="node"/> is <see langword="null"/>.</exception>
     ActivityTriggerStimulusResult Describe(ExecutableNode node);
 }

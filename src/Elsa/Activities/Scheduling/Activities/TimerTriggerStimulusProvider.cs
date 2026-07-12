@@ -11,6 +11,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </summary>
 public sealed class TimerTriggerStimulusProvider : IActivityTriggerStimulusProvider
 {
+    public string ProviderId => "Elsa.Timer";
     private const string IntervalInput = nameof(Timer.Interval);
 
     public ActivityTriggerStimulusResult Describe(ExecutableNode node)

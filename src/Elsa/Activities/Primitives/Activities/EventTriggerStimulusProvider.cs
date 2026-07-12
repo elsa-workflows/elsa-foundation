@@ -17,6 +17,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </remarks>
 public sealed class EventTriggerStimulusProvider : IActivityTriggerStimulusProvider
 {
+    public string ProviderId => "Elsa.Event";
     private const string EventNameInput = nameof(Event.EventName);
     private const string CorrelationIdInput = nameof(Event.CorrelationId);
 

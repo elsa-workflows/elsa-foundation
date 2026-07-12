@@ -6,7 +6,7 @@ replaces the leaf's in-memory placement store and cross-node command transport
 per-execution placement leases and the durable command inbox survive process restarts and are shared across
 nodes through one host-selected document store. The store contracts themselves (`IExecutionPlacementStore`,
 `IExecutionCommandTransport`) are owned by the leaf and catalogued in
-[`Runtime Core EXTENSION_POINTS`](../../../Core/EXTENSION_POINTS.md); this feature is a concrete,
+[`Runtime EXTENSION_POINTS`](../../../EXTENSION_POINTS.md); this feature is a concrete,
 overridable persistence provider for them.
 
 ## Provider selection — host composition

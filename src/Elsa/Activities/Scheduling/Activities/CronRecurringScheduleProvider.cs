@@ -11,6 +11,8 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </summary>
 public sealed class CronRecurringScheduleProvider : IRecurringTriggerScheduleProvider
 {
+    public string ProviderId => "Elsa.Cron";
+
     private const string ExpressionInput = nameof(Cron.Expression);
 
     public RecurringScheduleDescriptor? Describe(ExecutableNode node)

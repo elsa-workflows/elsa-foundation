@@ -79,7 +79,7 @@ Correctness, durability, tenant isolation, concurrency, restart behavior, and se
 ## vocabulary-api: Does Groundwork's Vocabulary Match The Three-Form Model?
 
 Blocked by: none
-Status: open
+Status: in-progress
 Type: Research
 
 ### Question
@@ -88,12 +88,12 @@ How should the established `StorageUnit`, `PhysicalizationPolicy`, `Portable`, `
 
 ### Answer
 
-Pending. Produce a focused vocabulary/API report in the Groundwork repository and link it here.
+In progress as [Groundwork #28](https://github.com/valence-works/Groundwork/issues/28). Produce a focused vocabulary/API report in the Groundwork repository and link it here.
 
 ## session-concurrency: What Session Lifecycle Replaces The Singleton Gated Connection?
 
 Blocked by: none
-Status: open
+Status: in-progress
 Type: Prototype
 
 ### Question
@@ -102,12 +102,12 @@ What stateless facade, pooled per-operation session, explicit unit-of-work sessi
 
 ### Answer
 
-Pending. Prototype the lifecycle and validate concurrency, cancellation, disposal, pool saturation, and transaction ownership before benchmarking.
+In progress as [Groundwork #27](https://github.com/valence-works/Groundwork/issues/27). Prototype the lifecycle and validate concurrency, cancellation, disposal, pool saturation, and transaction ownership before benchmarking.
 
 ## identity-openiddict: Which Framework Store Contracts Must Groundwork Implement?
 
 Blocked by: none
-Status: open
+Status: in-progress
 Type: Research
 
 ### Question
@@ -116,7 +116,7 @@ Which ASP.NET Core Identity and OpenIddict store contracts, indexes, concurrency
 
 ### Answer
 
-Pending. Produce an Elsa contract inventory and conformance matrix; do not couple core identity contracts to Groundwork.
+In progress as [Elsa #631](https://github.com/elsa-workflows/elsa-foundation/issues/631). Produce an Elsa contract inventory and conformance matrix; do not couple core identity contracts to Groundwork.
 
 ## diagnostic-storage: What Specialized Groundwork Primitive Fits Diagnostics?
 
