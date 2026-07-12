@@ -48,9 +48,49 @@ _Avoid_: Component when referring to the registered contribution as a whole
 The render implementation used by a UI Contribution.
 _Avoid_: Contribution
 
+**Dashboard**:
+The dedicated Studio capability that owns the `/dashboard` surface, Dashboard Slot, widget framing, layout, refresh orchestration, and dashboard preference schema. The Studio host composes Dashboard but does not own domain widgets.
+_Avoid_: Studio Web host, Attention, module catalog
+
 **Dashboard Slot**:
-A host-framed Slot for workspace summary UI Contributions that help users understand what to know or do next. Dashboard Contributions are module-contributed and ordered deterministically by explicit order and stable fallback values, not by module load order.
+A host-framed Slot for workspace summary UI Contributions that help users understand what to know or do next. A module may contribute zero, one, or multiple Dashboard Widgets; no screen space or widget count is reserved by module identity. Dashboard Contributions are ordered deterministically by explicit order and stable fallback values, not by module load order.
 _Avoid_: Overview, diagnostics page
+
+**Dashboard Widget**:
+A UI Contribution to the Dashboard Slot whose frame, title, accessibility semantics, loading and error treatment, and layout controls are owned by Dashboard. The contributing module supplies widget metadata and a body Component.
+_Avoid_: Self-framed dashboard card, Attention Item
+
+**Dashboard Integration Module**:
+A dedicated Studio adapter module that contributes one or more domain-owned widgets to the Dashboard Slot without coupling the domain itself to Dashboard. Its name identifies the Studio domain and the singular Dashboard surface.
+_Avoid_: DashboardWidgets module, dashboard code embedded in a domain core module
+
+**Dashboard Data Module**:
+A dedicated backend satellite module that translates complete authorized domain data into bounded snapshots for Dashboard Widgets. It depends on the domain while keeping the domain itself independent of Dashboard.
+_Avoid_: Dashboard queries embedded in a domain core module, client-side full-dataset aggregation
+
+**Studio Preferences**:
+A governed capability for storing versioned, bounded preference documents scoped to a user, tenant, and Studio host. Preference namespaces must be registered; owning domains define defaults, validation, migration, and meaning while Studio Preferences owns persistence, quotas, concurrency, and transport.
+_Avoid_: Arbitrary JSON store, domain settings, secret storage
+
+**Preference Namespace**:
+The stable identity and governance boundary of one kind of Studio Preference document, such as Dashboard layout preferences or Attention snoozes.
+_Avoid_: Unregistered storage key, widget ID
+
+**Attention**:
+A cross-cutting capability for discovering, normalizing, correlating, and managing conditions that may require a user's attention. Attention is independent of Dashboard; Dashboard may present Attention through a widget, while other Studio surfaces may consume the same capability.
+_Avoid_: Dashboard subdomain, dashboard widget framework
+
+**Attention Item**:
+A normalized, permission-scoped description of one condition that may require attention, including its stable identity, severity, occurrence, destination, sensitivity, and correlation identifiers.
+_Avoid_: Dashboard Widget, notification, domain action
+
+**Attention Contributor**:
+A domain-owned provider that evaluates its complete authorized dataset and returns bounded Attention Items through the shared Attention contract. The contributor owns the domain meaning of a condition; shared Attention infrastructure owns orchestration and structural policy.
+_Avoid_: Dashboard Contributor, widget provider
+
+**Attention Integration Module**:
+A dedicated satellite module within a domain that translates domain state into Attention Items. It depends on the domain and Attention capabilities while keeping the domain itself independent of Attention.
+_Avoid_: Attention code embedded in a domain core module, Dashboard integration module
 
 **Workflow Designer Slot**:
 A Slot owned by the Workflows module for extending the workflow designer, such as panel tabs, toolbar actions, node actions, or property editors. Built-in designer tabs are also Contributions into these Slots.
