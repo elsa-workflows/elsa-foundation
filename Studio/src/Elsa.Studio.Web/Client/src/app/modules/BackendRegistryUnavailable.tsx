@@ -39,7 +39,9 @@ export function BackendRegistryUnavailable({
         {host.label} module registry is unavailable — {labelForBackendRegistryStatus(status)}. {detail}
       </StudioAlert>
       <EmptyState icon={<Boxes size={22} />}>
-        The {host.label} module registry could not be loaded. It is served through the Studio management bridge; check the backend management configuration.
+        {status === "unconfigured"
+          ? <>Privileged host management is optional, but required to manage {host.label} modules. Set <code>Studio:BackendBaseUrl</code> and <code>Studio:BackendModuleManagementApiKey</code> on the Studio host to enable it.</>
+          : <>The {host.label} module registry could not be loaded. It is served through Studio's privileged host-management integration.</>}
       </EmptyState>
     </>
   );

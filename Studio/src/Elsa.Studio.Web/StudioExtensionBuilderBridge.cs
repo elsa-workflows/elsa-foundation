@@ -139,7 +139,7 @@ internal sealed class StudioExtensionBuilderRelayClient(
     TimeProvider timeProvider,
     ILogger<StudioExtensionBuilderRelayClient> logger)
 {
-    private const string UnconfiguredDetail = "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
+    private const string UnconfiguredDetail = "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
     private const string UnauthorizedDetail = "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.";
     private const string UnreachableDetail = "The backend Extension Builder surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.";
     private const string TimedOutDetail = "The backend Extension Builder surface did not answer within the operation's time budget. The operation may still have completed on the backend.";

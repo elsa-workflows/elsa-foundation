@@ -58,7 +58,7 @@ function ExtensionBuilderView() {
           <button type="button" className="studio-button" onClick={builder.bootstrap}>Retry</button>
         </div>
         <StudioAlert tone="warning">
-          {`Backend management is unavailable, so Extension Builder actions are disabled. ${backendManagementUnavailableMessage(managementUnavailable)}`}
+          {`Extension Builder requires the optional privileged host-management integration. ${backendManagementUnavailableMessage(managementUnavailable)}`}
         </StudioAlert>
       </section>
     );
@@ -133,12 +133,12 @@ function ExtensionBuilderView() {
 function backendManagementUnavailableMessage(unavailable: BackendManagementUnavailable | null): string {
   if (unavailable?.detail) return unavailable.detail;
   switch (unavailable?.kind) {
-    case "unconfigured": return "Backend management is not configured on the Studio host.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
-    case "unreachable": return "The backend management surface could not be reached.";
-    case "degraded": return "The backend management surface is degraded.";
+    case "unreachable": return "The privileged host-management surface could not be reached.";
+    case "degraded": return "The privileged host-management surface is degraded.";
     case "forbidden": return "This requires the extension-builder.read permission.";
-    default: return "Backend management status is unknown.";
+    default: return "Privileged host-management status is unknown.";
   }
 }
 

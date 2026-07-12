@@ -173,17 +173,17 @@ internal sealed class StudioBackendManagementClient(
     // operator-facing wording each surface shipped with.
     private static readonly BackendReadSurface ManagementRegistrySurface = new(
         Path: BackendRegistryPath,
-        Description: "backend management surface",
-        UnconfiguredDetail: "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable it.",
-        AvailableDetail: "The backend management surface is reachable.",
-        UnauthorizedDetail: "The backend rejected the Studio management key (or the backend management surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
-        UnreachableDetail: "The backend management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
+        Description: "privileged host-management surface",
+        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Server module management.",
+        AvailableDetail: "The privileged host-management surface is reachable.",
+        UnauthorizedDetail: "The backend rejected the Studio management key (or its privileged host-management surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
+        UnreachableDetail: "The privileged host-management surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",
         UnrecognizedPayloadDetail: "The backend responded but did not return a recognizable management registry.");
 
     private static readonly BackendReadSurface ExtensionBuilderCapabilitiesSurface = new(
         Path: BackendExtensionBuilderCapabilitiesPath,
         Description: "backend Extension Builder capabilities surface",
-        UnconfiguredDetail: "Backend management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
+        UnconfiguredDetail: "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.",
         AvailableDetail: "The backend Extension Builder capabilities are reachable.",
         UnauthorizedDetail: "The backend rejected the Studio management key (or the Extension Builder surface is disabled). Verify Studio:BackendModuleManagementApiKey matches the backend host management key.",
         UnreachableDetail: "The backend Extension Builder capabilities surface could not be reached. Check that the backend host is running and Studio:BackendBaseUrl is correct.",

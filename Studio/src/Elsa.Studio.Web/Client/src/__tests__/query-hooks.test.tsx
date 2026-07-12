@@ -106,7 +106,7 @@ describe("host health query hook", () => {
     expect(hostGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
     expect(hostGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
     expect(container.textContent).toContain("Studio host");
-    expect(container.textContent).toContain("Backend management");
+    expect(container.textContent).not.toContain("Privileged host management");
     expect(container.textContent).toContain("No host issues reported.");
 
     await unmount();

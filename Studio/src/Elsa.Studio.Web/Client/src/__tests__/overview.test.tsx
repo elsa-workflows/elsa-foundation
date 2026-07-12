@@ -11,13 +11,13 @@ afterEach(() => {
 });
 
 describe("dashboard", () => {
-  it("shows Studio host and backend management tiles from the bridge status", async () => {
+  it("keeps a healthy optional privileged host-management integration out of global health", async () => {
     const { container, unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("available") }));
 
     await flushPromises();
 
     expect(container.textContent).toContain("Studio host");
-    expect(container.textContent).toContain("Backend management");
+    expect(container.textContent).not.toContain("Privileged host management");
     expect(container.textContent).toContain("Attention");
     expect(container.textContent).toContain("No host issues reported.");
     // The old direct-backend probes are gone: no "Server host" tile, no "Backend API" liveness tile.
@@ -38,7 +38,7 @@ describe("dashboard", () => {
     // Bridge read goes to the Studio host origin; the backend context is never probed for registry/liveness.
     expect(bridgeGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
     expect(backendGetJson).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Connected");
+    expect(container.textContent).not.toContain("Connected");
 
     await unmount();
   });
@@ -56,17 +56,16 @@ describe("dashboard", () => {
     await unmount();
   });
 
-  it("renders an explicit unconfigured state without marking it as an outage", async () => {
+  it("hides an unconfigured optional privileged host-management integration", async () => {
     const { container, unmount } = await renderDashboard(stubApi({
       backendStatus: bridgeStatus("unconfigured", "Backend management is not configured on the Studio host.")
     }));
 
     await flushPromises();
 
-    expect(container.textContent).toContain("Backend management");
-    expect(container.textContent).toContain("Not configured");
-    expect(container.textContent).toContain("Backend management is not configured on the Studio host.");
-    // Unconfigured is fail-closed-by-design, not an outage: no attention weight is added.
+    expect(container.textContent).not.toContain("Privileged host management");
+    expect(container.textContent).not.toContain("Not configured");
+    expect(container.textContent).not.toContain("Backend management is not configured on the Studio host.");
     expect(container.textContent).toContain("No host issues reported.");
 
     await unmount();
@@ -80,6 +79,7 @@ describe("dashboard", () => {
     await flushPromises();
 
     expect(container.textContent).toContain("Unauthorized");
+    expect(container.textContent).toContain("Privileged host management");
     expect(container.textContent).toContain("The backend rejected the Studio management key.");
     expect(container.textContent).not.toContain("Connected");
 
@@ -94,6 +94,7 @@ describe("dashboard", () => {
     await flushPromises();
 
     expect(container.textContent).toContain("Unreachable");
+    expect(container.textContent).toContain("Privileged host management");
     expect(container.textContent).toContain("The backend management surface could not be reached.");
 
     await unmount();
@@ -107,19 +108,32 @@ describe("dashboard", () => {
     await flushPromises();
 
     expect(container.textContent).toContain("Degraded");
-    expect(container.textContent).toContain("Open Modules to review host-scoped issues.");
+    expect(container.textContent).toContain("Privileged host management");
+    expect(container.textContent).toContain("Review Modules or Extension Builder for host-management issues.");
 
     await unmount();
   });
 
-  it("falls back to an unknown state when the bridge itself is unreachable", async () => {
+  it("uses privileged host-management terminology when a configured failure has no detail", async () => {
+    const { container, unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("degraded") }));
+
+    await flushPromises();
+
+    expect(container.textContent).toContain("Privileged host management is degraded.");
+    expect(container.textContent).not.toContain("Backend management is degraded.");
+
+    await unmount();
+  });
+
+  it("hides an unknown bridge state because it does not prove the optional integration is configured", async () => {
     const bridgeGetJson = vi.fn(async () => { throw new Error("bridge offline"); });
     const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
 
     await flushPromises();
 
-    expect(container.textContent).toContain("Unknown");
-    expect(container.textContent).toContain("Backend management status is unavailable: bridge offline");
+    expect(container.textContent).not.toContain("Privileged host management");
+    expect(container.textContent).not.toContain("Unknown");
+    expect(container.textContent).not.toContain("Backend management status is unavailable: bridge offline");
 
     await unmount();
   });
