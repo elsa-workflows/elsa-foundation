@@ -121,7 +121,7 @@ Implement the framework-facing stores in concrete foundation packages over Groun
 ## diagnostic-storage: What Specialized Groundwork Primitive Fits Diagnostics?
 
 Blocked by: none
-Status: open
+Status: resolved
 Type: Research
 
 ### Question
@@ -130,7 +130,7 @@ Which append, batching, time-range, ordering, retention, count, aggregation, ten
 
 ### Answer
 
-Pending. Produce a workload contract shared with [Diagnostics Observability Readiness](../program-goals/diagnostics-observability-readiness.md), then design the smallest specialized Groundwork primitive.
+Use a provider-neutral diagnostic record store for explicit-scope immutable time-ordered records: fingerprint-bound idempotent single-stream batch append and trim, cursor-only or logical-field-plus-cursor ordering, snapshot-bound keyset paging, exact counts, trim-surviving lifetime high-water metadata, and exact per-stream retention. Elsa retains channel buffering, retry/drop/drain policy and composes ordinary Groundwork documents for mutable OpenTelemetry resources and instruments. No current caller requires generic reduce. See the [diagnostics storage workload](../reports/diagnostics-storage-workload.md), [Elsa #632](https://github.com/elsa-workflows/elsa-foundation/issues/632), and upstream delivery slice [Groundwork #30](https://github.com/valence-works/Groundwork/issues/30). The public Groundwork name remains subject to [Groundwork #28](https://github.com/valence-works/Groundwork/issues/28).
 
 ## physical-table-definition: What Is The Stable Physical Description Contract?
 
