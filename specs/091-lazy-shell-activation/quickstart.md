@@ -47,6 +47,7 @@ bash tools/performance/measure-server-cold-start.sh \
   --expected-status 200 \
   --expected-body 'Hello World!' \
   --boots 20 \
+  --shutdown-timeout-seconds 30 \
   --output-json /tmp/elsa-cold-start.json \
   --output-markdown /tmp/elsa-cold-start.md \
   --enforce-ready-p95-ms 30000 \

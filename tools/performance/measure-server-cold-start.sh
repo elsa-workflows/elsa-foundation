@@ -24,6 +24,7 @@ Reports and limits:
   --artifacts-dir PATH          Reports plus failed-boot files and logs.
   --liveness-path PATH          Listening probe path (default: /health/live).
   --startup-timeout-seconds N   Per-milestone timeout (default: 120).
+  --shutdown-timeout-seconds N  Graceful process-group shutdown timeout (default: 30).
   --retain-success-artifacts    Keep successful boot logs and mutable data copies.
   --enforce-ready-p95-ms N      Fail when shell-ready p95 exceeds this budget.
   --enforce-first-request-p95-ms N
@@ -56,6 +57,7 @@ output_markdown=""
 artifacts_dir=""
 liveness_path="/health/live"
 startup_timeout_seconds=120
+shutdown_timeout_seconds=30
 ready_budget_ms=""
 workflow_budget_ms=""
 retain_success_artifacts=false
@@ -78,6 +80,7 @@ while (($# > 0)); do
     --artifacts-dir) require_value "$@"; artifacts_dir="$2"; shift 2 ;;
     --liveness-path) require_value "$@"; liveness_path="$2"; shift 2 ;;
     --startup-timeout-seconds) require_value "$@"; startup_timeout_seconds="$2"; shift 2 ;;
+    --shutdown-timeout-seconds) require_value "$@"; shutdown_timeout_seconds="$2"; shift 2 ;;
     --retain-success-artifacts) retain_success_artifacts=true; shift ;;
     --enforce-ready-p95-ms) require_value "$@"; ready_budget_ms="$2"; shift 2 ;;
     --enforce-first-request-p95-ms|--enforce-workflow-p95-ms)
@@ -96,6 +99,7 @@ done
 [[ -n "$expected_body" ]] || die_usage "--expected-body is required"
 [[ "$boots" =~ ^[1-9][0-9]*$ ]] || die_usage "--boots must be a positive integer"
 [[ "$startup_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die_usage "--startup-timeout-seconds must be a positive integer"
+[[ "$shutdown_timeout_seconds" =~ ^[1-9][0-9]*$ ]] || die_usage "--shutdown-timeout-seconds must be a positive integer"
 [[ "$expected_status" =~ ^[1-5][0-9][0-9]$ ]] || die_usage "--expected-status must be a three-digit HTTP status"
 for budget in "$ready_budget_ms" "$workflow_budget_ms"; do
   [[ -z "$budget" || "$budget" =~ ^[0-9]+([.][0-9]+)?$ ]] || die_usage "performance budgets must be non-negative numbers"
@@ -181,7 +185,7 @@ server_pid=""
 cleanup_process() {
   if [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null; then
     kill -TERM -- "-$server_pid" 2>/dev/null || true
-    for _ in {1..50}; do
+    for ((attempt=0; attempt<shutdown_timeout_seconds*20; attempt++)); do
       kill -0 "$server_pid" 2>/dev/null || break
       sleep 0.1
     done
@@ -373,7 +377,7 @@ PY
 
   shutdown_started_ns="$(now_ns)"
   kill -TERM -- "-$server_pid" 2>/dev/null || true
-  for _ in {1..100}; do
+  for ((attempt=0; attempt<shutdown_timeout_seconds*20; attempt++)); do
     kill -0 "$server_pid" 2>/dev/null || break
     sleep 0.05
   done

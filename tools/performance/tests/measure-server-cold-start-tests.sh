@@ -141,6 +141,8 @@ run_case "help" 0 'Usage:|--server-dll' --help
 run_case "unknown argument" 2 'Unknown argument.*--definitely-unknown' --definitely-unknown
 run_case "zero boots" 2 '--boots.*positive|positive.*--boots' "${common_args[@]:0:${#common_args[@]}-2}" --boots 0
 run_case "non-numeric boots" 2 '--boots.*positive|positive.*--boots' "${common_args[@]:0:${#common_args[@]}-2}" --boots nope
+run_case "invalid shutdown timeout" 2 '--shutdown-timeout-seconds.*positive|positive.*--shutdown-timeout-seconds' \
+  "${common_args[@]}" --shutdown-timeout-seconds 0
 
 run_case "missing server DLL" 2 'Server DLL.*not found|not found.*server' \
   --server-dll "$temporary_directory/missing-server.dll" \
