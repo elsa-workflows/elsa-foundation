@@ -11,7 +11,9 @@ import type {
   StudioExpressionEditorContribution,
   StudioExpressionEditorContext,
   StudioExpressionEditorDiagnostic,
-  StudioExpressionDescriptor
+  StudioExpressionEditorProps,
+  StudioExpressionDescriptor,
+  StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -155,15 +157,17 @@ function PropertyRow({
   const EditorComponent = editor?.component;
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? "Literal";
+  const editingMode = expressionDescriptors.find(descriptor => descriptor.type === syntax)?.editingMode;
   const value = getLiteralEditorValue(activity, input);
   // Collection-typed literals get structured authoring: a collection-scoped editor (e.g. a multi-select
   // for option sets) owns the whole value when one claims it; otherwise a repeater of per-element editors.
   // The repeater authors collection literals under both the "Literal" syntax (freshly added inputs) and
   // the "Object" syntax — how they come back from the backend, which needs Object to JSON-deserialize the
   // list into ICollection<T> (see toWireArgument in activityInputWire).
-  const lowerSyntax = syntax.toLowerCase();
-  const isStructuredLiteralSyntax = lowerSyntax === "literal" || lowerSyntax === "object";
-  const collectionType = wrapped && isStructuredLiteralSyntax && !isRepeaterOptOut(input)
+  // Object is the one pre-contribution structured bridge retained for collection values. Other
+  // structured syntaxes remain owned by their expression module and require an inline contribution.
+  const usesStructuredPropertyEditor = editingMode === "literal" || (editingMode === "structured" && syntax === "Object");
+  const collectionType = wrapped && usesStructuredPropertyEditor && !isRepeaterOptOut(input)
     ? describeCollectionType(input.typeName)
     : null;
   const collectionScopedEditor = collectionType
@@ -179,8 +183,11 @@ function PropertyRow({
   } : null;
   const inlineExpressionEditor = inlineExpressionContext ? resolveExpressionEditor(expressionEditors, inlineExpressionContext) : null;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
-  const inlineDiagnostics = inlineExpressionEditor && inlineExpressionContext
-    ? getExpressionEditorDiagnostics(inlineExpressionEditor, inlineExpressionContext, value)
+  const inlineDiagnosticProvider = inlineExpressionContext
+    ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
+    : null;
+  const inlineDiagnostics = inlineDiagnosticProvider && inlineExpressionContext
+    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, value)
     : [];
   // A collection renders a multi-row repeater, not a single-line field, so the inline text chrome (the
   // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
@@ -188,10 +195,19 @@ function PropertyRow({
   // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
   // gating on the collection itself (not the hint) is what keeps the two features from colliding.
   const isCollectionEditor = collectionType != null;
-  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && isSingleLineTextInput(input, editor?.id));
-  const useToggleLayout = editor?.id === "studio.property.checkbox" && lowerSyntax === "literal";
-  const canExpandEditor = Boolean(wrapped && !isCollectionEditor && isExpandableTextInput(input, editor?.id));
+  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
+    editingMode === "text" || isSingleLineTextInput(input, editor?.id)
+  ));
+  const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
+  const canExpandEditor = Boolean(wrapped && (
+    editingMode === "text" || (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
+  ));
   const [expanded, setExpanded] = useState(false);
+  const [focusRequested, setFocusRequested] = useState(false);
+
+  useEffect(() => {
+    if (focusRequested) setFocusRequested(false);
+  }, [focusRequested]);
 
   const setRaw = (nextValue: unknown) => {
     const next = wrapped ? withLiteralValue(wrapped, nextValue) : nextValue;
@@ -200,6 +216,8 @@ function PropertyRow({
 
   const setSyntax = (nextSyntax: string) => {
     if (!wrapped) return;
+    const nextMode = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax)?.editingMode;
+    setFocusRequested(nextMode === "text");
     onChange(writeInputValue(activity, input, withSyntax(wrapped, nextSyntax)));
   };
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
@@ -219,7 +237,30 @@ function PropertyRow({
         />
       )
     : null;
-  const valueEditor = syntax === variableSyntax && wrapped ? (
+  const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
+    <InlineExpressionEditorComponent
+      descriptor={input}
+      syntax={syntax}
+      value={value}
+      disabled={readOnly}
+      initialFocus={focusRequested && editingMode === "text" && !expanded}
+      context={inlineExpressionContext}
+      onChange={setRaw}
+    />
+  ) : null;
+  const valueEditor = editingMode === "text" && inlineExpressionContext ? (
+    contributedExpressionEditor ?? (
+      <GenericTextExpressionEditor
+        descriptor={input}
+        syntax={syntax}
+        value={value}
+        disabled={readOnly}
+        initialFocus={focusRequested && !expanded}
+        context={inlineExpressionContext}
+        onChange={setRaw}
+      />
+    )
+  ) : syntax === variableSyntax && wrapped ? (
     <VariablePicker
       value={value}
       visibleVariables={visibleVariables}
@@ -227,16 +268,9 @@ function PropertyRow({
       disabled={readOnly}
       onChange={setRaw}
     />
-  ) : collectionEditor ?? (InlineExpressionEditorComponent && inlineExpressionContext ? (
-    <InlineExpressionEditorComponent
-      descriptor={input}
-      syntax={syntax}
-      value={value}
-      disabled={readOnly}
-      context={inlineExpressionContext}
-      onChange={setRaw}
-    />
-  ) : renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw));
+  ) : collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
+    ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
+    : <UnavailableExpressionEditor syntax={syntax} />);
 
   return (
     <div className="wf-property-row">
@@ -313,6 +347,7 @@ function PropertyRow({
           input={input}
           value={value}
           syntax={syntax}
+          editingMode={editingMode}
           descriptors={expressionDescriptors}
           activity={activity}
           expressionEditors={expressionEditors}
@@ -462,6 +497,7 @@ function ExpandedPropertyEditor({
   input,
   value,
   syntax,
+  editingMode,
   descriptors,
   activity,
   expressionEditors,
@@ -473,6 +509,7 @@ function ExpandedPropertyEditor({
   input: StudioActivityInputDescriptor;
   value: unknown;
   syntax: string;
+  editingMode: StudioExpressionEditingMode | undefined;
   descriptors: StudioExpressionDescriptor[];
   activity: ActivityNode;
   expressionEditors: StudioExpressionEditorContribution[];
@@ -482,6 +519,7 @@ function ExpandedPropertyEditor({
   onClose(): void;
 }) {
   const titleId = useId();
+  const fallbackEditorRef = useRef<HTMLTextAreaElement>(null);
   const displayName = input.displayName || input.name;
   const expressionContext: StudioExpressionEditorContext = {
     activity,
@@ -493,8 +531,16 @@ function ExpandedPropertyEditor({
   };
   const expressionEditor = resolveExpressionEditor(expressionEditors, expressionContext);
   const ExpressionEditorComponent = expressionEditor?.surfaces.expanded;
-  const diagnostics = expressionEditor ? getExpressionEditorDiagnostics(expressionEditor, expressionContext, value) : [];
-  const fallbackHint = !ExpressionEditorComponent ? getExpressionEditorFallbackHint(expressionEditors, expressionContext) : null;
+  const diagnosticProvider = resolveExpressionDiagnosticProvider(expressionEditors, expressionContext);
+  const diagnostics = diagnosticProvider ? getExpressionEditorDiagnostics(diagnosticProvider, expressionContext, value) : [];
+  const useTextFallback = editingMode === "text";
+  const fallbackHint = useTextFallback && !ExpressionEditorComponent
+    ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)
+    : null;
+
+  useEffect(() => {
+    if (!ExpressionEditorComponent) fallbackEditorRef.current?.focus();
+  }, [ExpressionEditorComponent, syntax]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -535,10 +581,11 @@ function ExpandedPropertyEditor({
               syntax={syntax}
               value={value}
               disabled={disabled}
+              initialFocus
               context={expressionContext}
               onChange={onChange}
             />
-          ) : (
+          ) : useTextFallback || editingMode === "literal" ? (
             <>
               {fallbackHint ? (
                 <p className="wf-expression-editor-hint">
@@ -550,9 +597,12 @@ function ExpandedPropertyEditor({
                 value={value == null ? "" : String(value)}
                 disabled={disabled}
                 spellCheck={false}
+                ref={fallbackEditorRef}
                 onChange={event => onChange(event.target.value)}
               />
             </>
+          ) : (
+            <UnavailableExpressionEditor syntax={syntax} />
           )}
           {renderExpressionDiagnostics(diagnostics)}
         </div>
@@ -584,6 +634,32 @@ function renderEditor(
   ) : (
     <input type="text" value={value == null ? "" : String(value)} disabled={disabled} onChange={event => onChange(event.target.value)} />
   );
+}
+
+function GenericTextExpressionEditor({ descriptor, syntax, value, disabled, initialFocus, onChange }: StudioExpressionEditorProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialFocus) inputRef.current?.focus();
+  }, [initialFocus, syntax]);
+
+  return (
+    <input
+      type="text"
+      aria-label={`${descriptor.displayName || descriptor.name} expression`}
+      value={value == null ? "" : String(value)}
+      disabled={disabled}
+      ref={inputRef}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      onChange={event => onChange(event.target.value)}
+    />
+  );
+}
+
+function UnavailableExpressionEditor({ syntax }: { syntax: string }) {
+  return <p className="wf-expression-editor-hint" role="status">No editor is available for {syntax}.</p>;
 }
 
 export function SyntaxPicker({
@@ -820,6 +896,15 @@ function resolveExpressionEditor(
   return [...editors]
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
     .find(editor => !!editor.surfaces[context.surface] && editor.supports(context));
+}
+
+function resolveExpressionDiagnosticProvider(
+  editors: StudioExpressionEditorContribution[],
+  context: StudioExpressionEditorContext
+) {
+  return [...editors]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
+    .find(editor => !!editor.diagnostics && editor.supports(context));
 }
 
 function getExpressionEditorDiagnostics(

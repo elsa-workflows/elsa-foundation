@@ -11,13 +11,13 @@ const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 
 const expressionDescriptors: StudioExpressionDescriptor[] = [
-  { type: "Input", displayName: "Input" },
-  { type: "JavaScript", displayName: "JavaScript" },
-  { type: "Liquid", displayName: "Liquid" },
-  { type: "Literal", displayName: "Literal" },
-  { type: "Object", displayName: "Object" },
-  { type: "Secret", displayName: "Secret" },
-  { type: "Variable", displayName: "Variable" }
+  { type: "Input", displayName: "Input", editingMode: "reference" },
+  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
+  { type: "Literal", displayName: "Literal", editingMode: "literal" },
+  { type: "Object", displayName: "Object", editingMode: "structured" },
+  { type: "Secret", displayName: "Secret", editingMode: "reference" },
+  { type: "Variable", displayName: "Variable", editingMode: "reference" }
 ];
 
 const descriptor: StudioActivityDescriptor = {

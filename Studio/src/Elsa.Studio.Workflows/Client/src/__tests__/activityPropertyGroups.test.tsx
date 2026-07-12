@@ -1,11 +1,12 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputDescriptor,
   StudioActivityPropertyEditorContribution,
+  StudioExpressionDescriptor,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
@@ -27,6 +28,7 @@ function renderPanel(
     activity?: ActivityNode;
     editors?: StudioActivityPropertyEditorContribution[];
     expressionEditors?: StudioExpressionEditorContribution[];
+    expressionDescriptors?: StudioExpressionDescriptor[];
   } = {}
 ) {
   const container = document.createElement("div");
@@ -39,20 +41,26 @@ function renderPanel(
     ports: [],
     customProperties: options.customProperties
   };
+  const initialActivity = options.activity ?? activity();
 
-  flushSync(() => root.render(
-    <ActivityPropertiesPanel
-      activity={options.activity ?? activity()}
-      descriptor={descriptor}
-      editors={options.editors ?? []}
-      expressionEditors={options.expressionEditors ?? []}
-      expressionDescriptors={[]}
-      descriptorStatus="ready"
-      visibleVariables={[]}
-      scopeStatus="ready"
-      onChange={vi.fn()}
-    />
-  ));
+  function Harness() {
+    const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
+    return (
+      <ActivityPropertiesPanel
+        activity={currentActivity}
+        descriptor={descriptor}
+        editors={options.editors ?? []}
+        expressionEditors={options.expressionEditors ?? []}
+        expressionDescriptors={options.expressionDescriptors ?? []}
+        descriptorStatus="ready"
+        visibleVariables={[]}
+        scopeStatus="ready"
+        onChange={setCurrentActivity}
+      />
+    );
+  }
+
+  flushSync(() => root.render(<Harness />));
   active = { root, container };
   return container;
 }
@@ -196,5 +204,109 @@ describe("activity property organization", () => {
     expect(fields.every(field => !field.classList.contains("wf-expression-field--toggle"))).toBe(true);
     expect(fields[0]?.querySelector("textarea[aria-label='JavaScript expression']")).not.toBeNull();
     expect(fields[1]?.querySelector(".wf-variable-picker")).not.toBeNull();
+  });
+
+  it("does not steal focus for pre-existing text expressions and still expands regardless of property type", () => {
+    const container = renderPanel([
+      input("Condition", { typeName: "System.Boolean", isWrapped: true }),
+      input("Template", { isWrapped: true })
+    ], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Python", displayName: "Python", editingMode: "text" }
+      ],
+      activity: activity({
+        condition: { typeName: "System.Boolean", expression: { type: "Python", value: "value and" } },
+        template: { typeName: "System.String", expression: { type: "Python", value: "message" } }
+      })
+    });
+
+    const inlineEditors = [...container.querySelectorAll<HTMLInputElement>("input[aria-label$=' expression']")];
+    expect(inlineEditors.map(editor => editor.value)).toEqual(["value and", "message"]);
+    expect(inlineEditors).not.toContain(document.activeElement);
+    expect(container.querySelector("input[type='checkbox']")).toBeNull();
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Open expanded Condition editor']")?.click());
+    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Condition expanded value']");
+    expect(expanded?.value).toBe("value and");
+    expect(document.activeElement).toBe(expanded);
+  });
+
+  it("focuses the replacement textbox when selecting a text expression mode", () => {
+    const container = renderPanel([
+      input("Template", { isWrapped: true })
+    ], {
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "Literal", value: "Hello" } }
+      })
+    });
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.click());
+    const liquidOption = [...document.querySelectorAll<HTMLButtonElement>("[role='option']")]
+      .find(option => option.textContent === "Liquid");
+    flushSync(() => liquidOption?.click());
+
+    const replacement = container.querySelector<HTMLInputElement>("input[aria-label='Template expression']");
+    expect(replacement?.value).toBe("Hello");
+    expect(document.activeElement).toBe(replacement);
+  });
+
+  it("keeps contribution diagnostics visible when text mode uses the generic inline fallback", () => {
+    const liquidEditor: StudioExpressionEditorContribution = {
+      id: "liquid.expanded",
+      supports: context => context.syntax === "Liquid",
+      surfaces: { expanded: () => <div>Enhanced Liquid editor</div> },
+      diagnostics: (_context, value) => String(value).endsWith("{")
+        ? [{ severity: "warning", code: "LIQUID_DRAFT", message: "Expression is incomplete." }]
+        : []
+    };
+    const container = renderPanel([
+      input("Template", { isWrapped: true })
+    ], {
+      expressionEditors: [liquidEditor],
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "Liquid", value: "{{ order.{" } }
+      })
+    });
+
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Template expression']")?.value).toBe("{{ order.{");
+    expect(container.querySelector(".wf-expression-editor-diagnostic.warning")?.textContent)
+      .toContain("Expression is incomplete.");
+  });
+
+  it("uses text mode instead of a collection repeater for collection-typed expressions", () => {
+    const container = renderPanel([
+      input("Items", { typeName: "System.Collections.Generic.ICollection`1[System.String]", isWrapped: true })
+    ], {
+      activity: activity({
+        items: { typeName: "System.Collections.Generic.ICollection`1[System.String]", expression: { type: "JavaScript", value: "input.items" } }
+      })
+    });
+
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Items expression']")?.value).toBe("input.items");
+    expect(container.querySelector(".wf-collection-editor")).toBeNull();
+    expect(container.querySelector("button[aria-label='Open expanded Items editor']")).not.toBeNull();
+  });
+
+  it("requires an owning contribution for arbitrary structured syntaxes while retaining the Object collection bridge", () => {
+    const collectionType = "System.Collections.Generic.ICollection`1[System.String]";
+    const container = renderPanel([
+      input("RecordItems", { typeName: collectionType, isWrapped: true }),
+      input("ObjectItems", { typeName: collectionType, isWrapped: true })
+    ], {
+      expressionDescriptors: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "Object", displayName: "Object", editingMode: "structured" },
+        { type: "Record", displayName: "Record", editingMode: "structured" }
+      ],
+      activity: activity({
+        recordItems: { typeName: collectionType, expression: { type: "Record", value: ["one"] } },
+        objectItems: { typeName: collectionType, expression: { type: "Object", value: ["one"] } }
+      })
+    });
+
+    expect(container.querySelectorAll(".wf-collection-editor")).toHaveLength(1);
+    expect(container.textContent).toContain("No editor is available for Record.");
+    expect(container.textContent).not.toContain("No editor is available for Object.");
   });
 });

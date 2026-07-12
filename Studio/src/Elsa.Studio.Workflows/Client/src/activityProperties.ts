@@ -16,12 +16,12 @@ export interface WrappedActivityInputValue {
 }
 
 export const defaultExpressionDescriptors: StudioExpressionDescriptor[] = [
-  { type: "Literal", displayName: "Literal" },
-  { type: "JavaScript", displayName: "JavaScript" },
-  { type: "Liquid", displayName: "Liquid" },
-  { type: "Object", displayName: "Object" },
-  { type: "Variable", displayName: "Variable" },
-  { type: "Input", displayName: "Input" }
+  { type: "Literal", displayName: "Literal", editingMode: "literal" },
+  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
+  { type: "Object", displayName: "Object", editingMode: "structured" },
+  { type: "Variable", displayName: "Variable", editingMode: "reference" },
+  { type: "Input", displayName: "Input", editingMode: "reference" }
 ];
 
 export function camelize(value: string) {

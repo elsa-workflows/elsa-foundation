@@ -31,8 +31,9 @@
 }
 
 .js-expression-editor.inline {
-  min-height: 52px;
-  padding: 7px 9px;
+  min-height: 38px;
+  padding: 7px 132px 7px 9px;
+  resize: none;
 }
 
 .js-expression-expanded {

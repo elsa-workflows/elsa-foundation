@@ -482,10 +482,13 @@ export interface StudioActivityDescriptor {
   isTerminal?: boolean;
 }
 
+export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";
+
 export interface StudioExpressionDescriptor {
   type: string;
   displayName?: string | null;
   description?: string | null;
+  editingMode: StudioExpressionEditingMode;
 }
 
 /**
@@ -534,6 +537,7 @@ export interface StudioExpressionEditorProps {
   syntax: string;
   value: unknown;
   disabled?: boolean;
+  initialFocus?: boolean;
   context: StudioExpressionEditorContext;
   onChange(value: unknown): void;
 }

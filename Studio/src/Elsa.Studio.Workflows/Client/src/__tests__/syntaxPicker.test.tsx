@@ -25,9 +25,9 @@ describe("SyntaxPicker", () => {
           label="Text expression syntax"
           value="Literal"
           descriptors={[
-            { type: "Literal", displayName: "Literal" },
-            { type: "JavaScript", displayName: "JavaScript" },
-            { type: "Liquid", displayName: "Liquid" }
+            { type: "Literal", displayName: "Literal", editingMode: "literal" },
+            { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+            { type: "Liquid", displayName: "Liquid", editingMode: "text" }
           ]}
           disabled={false}
           onChange={value => changes.push(value)}
@@ -64,8 +64,8 @@ describe("SyntaxPicker", () => {
         label="Text expression syntax"
         value="JavaScript"
         descriptors={[
-          { type: "Literal", displayName: "Literal" },
-          { type: "JavaScript", displayName: "JavaScript" }
+          { type: "Literal", displayName: "Literal", editingMode: "literal" },
+          { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
         ]}
         disabled={false}
         onChange={() => {}}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { javaScriptLanguageAdapter, StudioCodeEditor } from "@elsa-workflows/studio-code-editor";
 import type { ElsaStudioModuleApi, StudioExpressionEditorProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -17,14 +17,21 @@ export function register(api: ElsaStudioModuleApi) {
   });
 }
 
-export function JavaScriptInlineEditor({ value, disabled, onChange }: StudioExpressionEditorProps) {
+export function JavaScriptInlineEditor({ value, disabled, initialFocus, onChange }: StudioExpressionEditorProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialFocus) inputRef.current?.focus();
+  }, [initialFocus]);
+
   return (
-    <textarea
+    <input
+      ref={inputRef}
+      type="text"
       aria-label="JavaScript expression"
       className="js-expression-editor inline"
       value={formatValue(value)}
       disabled={disabled}
-      rows={2}
       spellCheck={false}
       autoCapitalize="off"
       autoCorrect="off"

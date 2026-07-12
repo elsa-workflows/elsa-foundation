@@ -50,6 +50,19 @@ Known host-owned Slot IDs:
 - `studio.ai.proposal-renderers`
 - `studio.ai.surfaces`
 
+## Expression editor Contributions
+
+Expression descriptors carry one required semantic `editingMode`: `literal`,
+`text`, `structured`, or `reference`. The Workflows Slot Owner uses that mode to
+choose the property surface; expression modules do not need to duplicate host
+layout rules.
+
+Modules may contribute inline and expanded expression editor surfaces
+independently through `api.expressionEditors`. Text mode always remains usable:
+when a module omits either surface, Workflows supplies a single-line inline or
+multiline expanded text fallback. Expression-specific diagnostics and enhanced
+editing stay in the expression language's owning module.
+
 Module-owned Slots may use their own stable IDs and point at a parent Slot ID
 when they expose nested extension targets.
 

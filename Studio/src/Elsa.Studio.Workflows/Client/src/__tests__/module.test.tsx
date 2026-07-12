@@ -697,8 +697,8 @@ describe("workflows module", () => {
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
@@ -781,8 +781,8 @@ describe("workflows module", () => {
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
@@ -875,7 +875,7 @@ describe("workflows module", () => {
       const url = String(input);
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal" }] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal", editingMode: "literal" }] });
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "write-lines-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines", category: "Primitives", displayName: "Write Lines" })
       ] });
@@ -1682,8 +1682,8 @@ describe("workflows module", () => {
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({

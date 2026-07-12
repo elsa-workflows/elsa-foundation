@@ -50,6 +50,7 @@ declare module "@elsa-workflows/studio-sdk" {
   export interface StudioExpressionDescriptor {
     type: string;
     displayName?: string | null;
+    editingMode: "literal" | "text" | "structured" | "reference";
   }
 
   export interface StudioActivityPropertyEditorContext {
