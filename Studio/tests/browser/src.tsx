@@ -9,6 +9,7 @@ import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
+const dictionaryFixture = searchParams.get("mode") === "dictionary";
 
 const expressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Input", displayName: "Input", editingMode: "reference" },
@@ -39,14 +40,59 @@ const descriptor: StudioActivityDescriptor = {
   ports: []
 };
 
+const dictionaryDescriptor: StudioActivityDescriptor = {
+  typeName: "Elsa.Activities.Http.Activities.HttpRequest",
+  displayName: "HTTP Request",
+  inputs: [{
+    name: "Headers",
+    typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]",
+    displayName: "Headers",
+    description: "Headers sent with the request.",
+    order: 0,
+    category: "General",
+    isBrowsable: true,
+    isWrapped: true,
+    defaultSyntax: "Literal",
+    uiSpecifications: {
+      dictionary: {
+        keyLabel: "Header name",
+        valueLabel: "Header value",
+        keyPlaceholder: "Content-Type",
+        valuePlaceholder: "application/json",
+        keyComparison: "ordinalIgnoreCase"
+      }
+    }
+  }],
+  outputs: [],
+  ports: []
+};
+
 function Fixture() {
   const [activity, setActivity] = useState<ActivityNode>({
     nodeId: "http-endpoint-1",
     activityVersionId: "http-endpoint-v1",
     inputs: [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
     outputs: [],
-    structure: null
+    structure: null,
+    ...(dictionaryFixture ? {
+      headers: {
+        typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]",
+        expression: {
+          type: "Literal",
+          value: {
+            Accept: "application/json",
+            "X-Correlation-Id": "{{ correlationId }}",
+            "Cache-Control": "no-cache",
+            "User-Agent": "Elsa Studio",
+            "X-Region": "eu-west",
+            "X-Trace": "enabled"
+          }
+        }
+      }
+    } : {})
   });
+
+  const activeDescriptor = dictionaryFixture ? dictionaryDescriptor : descriptor;
 
   return (
     <main className="wf-editor browser-fixture">
@@ -55,11 +101,11 @@ function Fixture() {
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
       </div>
       <aside className={`wf-inspector browser-inspector${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
-        <h2>HTTP Endpoint</h2>
+        <h2>{dictionaryFixture ? "HTTP Request" : "HTTP Endpoint"}</h2>
         <div className="browser-inspector-spacer" aria-hidden="true" />
         <ActivityPropertiesPanel
           activity={activity}
-          descriptor={descriptor}
+          descriptor={activeDescriptor}
           editors={[]}
           expressionEditors={[]}
           expressionDescriptors={expressionDescriptors}

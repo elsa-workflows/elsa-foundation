@@ -63,6 +63,27 @@ describe("Object Expression Editor Contribution", () => {
     expect(container.querySelector(".wf-collection-editor")).toBeNull();
   });
 
+  it("uses the dictionary editor for string-keyed Object expressions", () => {
+    const contribution = createObjectExpressionEditorContribution(() => []);
+    const Inline = contribution.surfaces.inline!;
+    const input = descriptor(
+      "Headers",
+      "System.Collections.Generic.IDictionary`2[System.String,System.String]"
+    );
+    const container = render(
+      <Inline
+        descriptor={input}
+        syntax="Object"
+        value={{ Accept: "application/json" }}
+        context={context(input)}
+        onChange={() => {}}
+      />
+    );
+
+    expect(container.querySelector(".wf-dictionary-editor.inline")).not.toBeNull();
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Key 1']")?.value).toBe("Accept");
+  });
+
   it("preserves collection repeater editing, add, reorder, and remove behavior", () => {
     const textEditor: StudioActivityPropertyEditorContribution = {
       id: "test.text",

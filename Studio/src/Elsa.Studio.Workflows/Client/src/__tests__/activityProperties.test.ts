@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   camelize,
   defaultCollectionItem,
+  describeDictionaryType,
   describeCollectionType,
   formatTypeName,
+  getLiteralDefaultValue,
   isRepeaterOptOut,
   makeCollectionElementDescriptor,
   moveCollectionItem,
@@ -260,6 +262,43 @@ describe("collection literal authoring", () => {
     expect(moveCollectionItem(items, 0, 0)).toBe(items);
     expect(moveCollectionItem(items, 0, 5)).toBe(items);
     expect(items).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("dictionary literal authoring", () => {
+  it.each([
+    "System.Collections.Generic.IDictionary`2[System.String,System.Int32]",
+    "System.Collections.Generic.IReadOnlyDictionary`2[System.String,System.Int32]",
+    "System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[System.Int32, mscorlib]], mscorlib",
+    "System.Collections.Generic.SortedDictionary`2[System.String,System.Int32]",
+    "System.Collections.Concurrent.ConcurrentDictionary`2[System.String,System.Int32]",
+    "System.Collections.Immutable.ImmutableDictionary`2[System.String,System.Int32]",
+    "System.Collections.Immutable.ImmutableSortedDictionary`2[System.String,System.Int32]"
+  ])("recognizes the supported string-keyed family %s", typeName => {
+    expect(describeDictionaryType(typeName)).toEqual({ valueTypeName: "System.Int32" });
+  });
+
+  it("preserves a nested assembly-qualified value type", () => {
+    expect(describeDictionaryType(
+      "System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Collections.Generic.List`1[[System.Int32, System.Private.CoreLib]], System.Private.CoreLib]], System.Private.CoreLib"
+    )).toEqual({ valueTypeName: "System.Collections.Generic.List`1[[System.Int32, System.Private.CoreLib]]" });
+  });
+
+  it.each([
+    "System.Collections.Generic.Dictionary`2[System.Int32,System.String]",
+    "System.Collections.Generic.KeyValuePair`2[System.String,System.Int32]",
+    "Company.Dictionary`2[System.String,System.Int32]",
+    "System.Collections.Generic.Dictionary`2",
+    "System.Collections.Generic.List`1[System.String]"
+  ])("rejects unsupported or indeterminate type %s", typeName => {
+    expect(describeDictionaryType(typeName)).toBeNull();
+  });
+
+  it("uses an empty object as the default dictionary value", () => {
+    expect(getLiteralDefaultValue({
+      name: "Headers",
+      typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]"
+    })).toEqual({});
   });
 });
 

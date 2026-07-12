@@ -10,8 +10,9 @@ import type {
   StudioExpressionEditorContribution,
   StudioExpressionEditorProps
 } from "@elsa-workflows/studio-sdk";
-import { describeCollectionType, isRepeaterOptOut } from "./activityProperties";
+import { describeCollectionType, describeDictionaryType, isRepeaterOptOut } from "./activityProperties";
 import { CollectionValueEditor } from "./CollectionValueEditor";
+import { DictionaryValueEditor } from "./DictionaryValueEditor";
 
 const objectSyntax = "Object";
 const jsonLanguageAdapter: StudioCodeLanguageAdapter = { language: "json", displayName: "JSON" };
@@ -26,7 +27,7 @@ export function createObjectExpressionEditorContribution(
     supports: context => context.syntax === objectSyntax,
     surfaces: {
       inline: props => <ObjectInlineEditor {...props} propertyEditors={getPropertyEditors()} />,
-      expanded: ObjectExpandedEditor
+      expanded: props => <ObjectExpandedEditor {...props} propertyEditors={getPropertyEditors()} />
     },
     createDefaultValue: context => describeCollectionType(context.descriptor.typeName) ? [] : {}
   };
@@ -42,11 +43,30 @@ export function ObjectInlineEditor({
   propertyEditors
 }: StudioExpressionEditorProps & { propertyEditors: StudioActivityPropertyEditorContribution[] }) {
   const summaryRef = useRef<HTMLDivElement>(null);
+  const dictionaryType = !isRepeaterOptOut(descriptor) ? describeDictionaryType(descriptor.typeName) : null;
   const collectionType = !isRepeaterOptOut(descriptor) ? describeCollectionType(descriptor.typeName) : null;
 
   useEffect(() => {
-    if (initialFocus && !collectionType) summaryRef.current?.focus();
-  }, [collectionType, initialFocus]);
+    if (initialFocus && !dictionaryType && !collectionType) summaryRef.current?.focus();
+  }, [collectionType, dictionaryType, initialFocus]);
+
+  if (dictionaryType) {
+    return (
+      <DictionaryValueEditor
+        input={descriptor}
+        valueTypeName={dictionaryType.valueTypeName}
+        value={value}
+        editors={propertyEditors}
+        context={{
+          activity: context.activity,
+          expressionDescriptors: context.expressionDescriptors,
+          readOnly: disabled
+        }}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    );
+  }
 
   if (collectionType) {
     return (
@@ -80,7 +100,46 @@ export function ObjectInlineEditor({
   );
 }
 
-export function ObjectExpandedEditor({ descriptor, value, disabled = false, context, onChange }: StudioExpressionEditorProps) {
+export function ObjectExpandedEditor({
+  descriptor,
+  value,
+  disabled = false,
+  context,
+  onChange,
+  propertyEditors = []
+}: StudioExpressionEditorProps & { propertyEditors?: StudioActivityPropertyEditorContribution[] }) {
+  const dictionaryType = !isRepeaterOptOut(descriptor) ? describeDictionaryType(descriptor.typeName) : null;
+  if (dictionaryType) {
+    return (
+      <DictionaryValueEditor
+        input={descriptor}
+        valueTypeName={dictionaryType.valueTypeName}
+        value={value}
+        editors={propertyEditors}
+        context={{
+          activity: context.activity,
+          expressionDescriptors: context.expressionDescriptors,
+          readOnly: disabled
+        }}
+        disabled={disabled}
+        variant="expanded"
+        onChange={onChange}
+      />
+    );
+  }
+  return (
+    <GenericObjectExpandedEditor
+      descriptor={descriptor}
+      syntax={objectSyntax}
+      value={value}
+      disabled={disabled}
+      context={context}
+      onChange={onChange}
+    />
+  );
+}
+
+function GenericObjectExpandedEditor({ descriptor, value, disabled = false, context, onChange }: StudioExpressionEditorProps) {
   const uri = `elsa://expressions/object/${encodeURIComponent(descriptor.name || "value")}.json`;
   const externalKey = useMemo(() => serializeValue(value), [value]);
   const [draft, setDraft] = useState(() => readDraft(context.activity, descriptor.name) ?? formatValue(value));

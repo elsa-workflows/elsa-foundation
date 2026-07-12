@@ -107,6 +107,7 @@ export function isEmptyExpressionValue(value: unknown): boolean {
 
 export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
   if (descriptor.defaultValue != null) return descriptor.defaultValue;
+  if (describeDictionaryType(descriptor.typeName)) return {};
   if (describeCollectionType(descriptor.typeName)) return [];
   const typeName = descriptor.typeName.trim().toLowerCase();
   return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
@@ -165,6 +166,33 @@ const collectionTypeNames = new Set([
   "icollection", "ireadonlycollection", "ilist", "ireadonlylist", "list",
   "collection", "ienumerable", "iset", "hashset", "sortedset", "observablecollection", "array"
 ]);
+
+const dictionaryTypeNames = new Set([
+  "system.collections.generic.idictionary",
+  "system.collections.generic.ireadonlydictionary",
+  "system.collections.generic.dictionary",
+  "system.collections.generic.sorteddictionary",
+  "system.collections.concurrent.concurrentdictionary",
+  "system.collections.immutable.immutabledictionary",
+  "system.collections.immutable.immutablesorteddictionary"
+]);
+
+export interface DictionaryTypeInfo {
+  valueTypeName: string;
+}
+
+/** Recognize only the supported CLR dictionary families when their key type is known to be string. */
+export function describeDictionaryType(typeName: string): DictionaryTypeInfo | null {
+  const core = stripAssemblyQualifier(typeName?.trim() ?? "");
+  const backtick = core.indexOf("`");
+  if (backtick < 0 || core.slice(backtick + 1).match(/^2(?:\[|$)/) == null) return null;
+  const family = core.slice(0, backtick).toLowerCase();
+  if (!dictionaryTypeNames.has(family)) return null;
+
+  const arguments_ = parseRawGenericArguments(core.slice(backtick));
+  if (arguments_.length !== 2 || !isClrStringType(arguments_[0])) return null;
+  return { valueTypeName: arguments_[1] };
+}
 
 export interface CollectionTypeInfo {
   /** The element type name when it can be recovered from `typeName`, otherwise null (render text rows). */
@@ -360,4 +388,21 @@ function splitTopLevel(text: string): string[] {
   }
   parts.push(text.slice(start));
   return parts.map(part => part.trim()).filter(Boolean);
+}
+
+function parseRawGenericArguments(genericPart: string): string[] {
+  const open = genericPart.indexOf("[");
+  if (open < 0) return [];
+  const inner = innerBracketContent(genericPart, open);
+  if (inner == null) return [];
+  return splitTopLevel(inner).map(argument => {
+    const trimmed = argument.trim();
+    const unwrapped = trimmed.startsWith("[") ? innerBracketContent(trimmed, 0) : trimmed;
+    return stripAssemblyQualifier(unwrapped ?? trimmed);
+  });
+}
+
+function isClrStringType(typeName: string): boolean {
+  const normalized = stripAssemblyQualifier(typeName).trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
 }

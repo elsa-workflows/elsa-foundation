@@ -248,8 +248,13 @@ export function computeExecutableSourceDrift(
 
 export async function copyTextToClipboard(value: string) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Sandboxed and permission-restricted browsers can expose the Clipboard API but reject writes.
+      // Fall through to the selection-based copy path so explicit user gestures still work.
+    }
   }
 
   const textArea = document.createElement("textarea");

@@ -20,6 +20,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
 import {
   describeCollectionType,
+  describeDictionaryType,
   formatTypeName,
   getLiteralEditorValue,
   getLiteralDefaultValue,
@@ -36,6 +37,8 @@ import {
   WorkflowReferenceAuthoringProvider
 } from "./workflowReferenceAuthoring";
 import { CollectionValueEditor } from "./CollectionValueEditor";
+import { DictionaryValueEditor } from "./DictionaryValueEditor";
+import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
@@ -58,6 +61,7 @@ export interface ActivityPropertiesPanelProps {
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
   scopeRetry?: () => void;
+  dictionarySessionScope?: string;
   onChange(activity: ActivityNode): void;
 }
 
@@ -75,8 +79,14 @@ export function ActivityPropertiesPanel({
   visibleVariables,
   scopeStatus,
   scopeRetry,
+  dictionarySessionScope,
   onChange
 }: ActivityPropertiesPanelProps) {
+  const generatedDictionarySessionScope = useId();
+  const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
+
+  useEffect(() => () => clearDictionaryEditorSessionScope(effectiveDictionarySessionScope), [effectiveDictionarySessionScope]);
+
   if (descriptorStatus === "loading") {
     return <p className="wf-muted">Loading activity properties...</p>;
   }
@@ -117,6 +127,7 @@ export function ActivityPropertiesPanel({
               activityDescriptor={descriptor}
               endpointContext={context}
               workflowState={workflowState}
+              dictionarySessionScope={effectiveDictionarySessionScope}
               input={input}
               editors={editors}
               expressionEditors={expressionEditors}
@@ -166,6 +177,7 @@ function PropertyRow({
   activityDescriptor,
   endpointContext,
   workflowState,
+  dictionarySessionScope,
   input,
   editors,
   expressionEditors,
@@ -176,6 +188,7 @@ function PropertyRow({
   activityDescriptor: StudioActivityDescriptor;
   endpointContext: StudioEndpointContext;
   workflowState: WorkflowDefinitionState;
+  dictionarySessionScope: string;
   input: StudioActivityInputDescriptor;
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
@@ -198,6 +211,9 @@ function PropertyRow({
   const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
   const editingMode = expressionDescriptor?.editingMode;
   const value = getLiteralEditorValue(activity, input);
+  const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
+    ? describeDictionaryType(effectiveInput.typeName)
+    : null;
   const collectionType = wrapped && editingMode === "literal" && !isRepeaterOptOut(effectiveInput)
     ? describeCollectionType(effectiveInput.typeName)
     : null;
@@ -232,12 +248,13 @@ function PropertyRow({
   const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
     ? describeCollectionType(effectiveInput.typeName)
     : null;
-  const isCollectionEditor = collectionType != null || structuredCollectionType != null;
+  const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
     editingMode === "text" || editingMode === "structured" || isSingleLineTextInput(input, editor?.id)
   ));
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
   const canExpandEditor = Boolean(wrapped && (
+    dictionaryType != null ||
     editingMode === "text" ||
     (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
@@ -311,6 +328,13 @@ function PropertyRow({
     requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.focus());
   };
 
+  const closeExpanded = () => {
+    setExpanded(false);
+    requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
+      ".wf-dictionary-open-expanded, .wf-property-expand-row, .wf-expression-expand-button"
+    )?.focus());
+  };
+
   const setSyntax = (nextSyntax: string) => {
     if (!wrapped || nextSyntax === syntax) return;
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
@@ -344,6 +368,20 @@ function PropertyRow({
       />
     )
     : null;
+  const dictionaryEditor = dictionaryType ? (
+    <DictionaryValueEditor
+      key={expanded ? "dictionary-inline-expanded" : "dictionary-inline-collapsed"}
+      input={effectiveInput}
+      sessionScopeKey={dictionarySessionScope}
+      valueTypeName={dictionaryType.valueTypeName}
+      value={value}
+      editors={editors}
+      context={context}
+      disabled={editorDisabled}
+      onOpenExpanded={() => setExpanded(true)}
+      onChange={setRaw}
+    />
+  ) : null;
   const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
     <InlineExpressionEditorComponent
       descriptor={effectiveInput}
@@ -367,7 +405,7 @@ function PropertyRow({
         onChange={setRaw}
       />
     )
-  ) : collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
+  ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
     ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
     : <UnavailableExpressionEditor syntax={syntax} />);
 
@@ -453,7 +491,7 @@ function PropertyRow({
           </div>
         </div>
       ) : null}
-      {canExpandEditor && !useInlineSyntaxPicker ? (
+      {canExpandEditor && !useInlineSyntaxPicker && !dictionaryType ? (
         <button
           type="button"
           className="wf-property-expand-row"
@@ -478,17 +516,19 @@ function PropertyRow({
       {expanded ? (
         <ExpandedPropertyEditor
           input={input}
+          dictionarySessionScope={dictionarySessionScope}
           value={value}
           syntax={syntax}
           editingMode={editingMode}
           descriptors={expressionDescriptors}
           getUnavailableReason={getUnavailableReason}
           activity={activity}
+          propertyEditors={editors}
           expressionEditors={expressionEditors}
           disabled={readOnly}
           onChange={setRaw}
           onSyntaxChange={setSyntax}
-          onClose={() => setExpanded(false)}
+          onClose={closeExpanded}
         />
       ) : null}
     </div>
@@ -497,12 +537,14 @@ function PropertyRow({
 
 function ExpandedPropertyEditor({
   input,
+  dictionarySessionScope,
   value,
   syntax,
   editingMode,
   descriptors,
   getUnavailableReason,
   activity,
+  propertyEditors,
   expressionEditors,
   disabled,
   onChange,
@@ -510,12 +552,14 @@ function ExpandedPropertyEditor({
   onClose
 }: {
   input: StudioActivityInputDescriptor;
+  dictionarySessionScope: string;
   value: unknown;
   syntax: string;
   editingMode: StudioExpressionEditingMode | undefined;
   descriptors: StudioExpressionDescriptor[];
   getUnavailableReason(descriptor: StudioExpressionDescriptor): string | null;
   activity: ActivityNode;
+  propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   disabled: boolean;
   onChange(value: unknown): void;
@@ -523,7 +567,10 @@ function ExpandedPropertyEditor({
   onClose(): void;
 }) {
   const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
   const fallbackEditorRef = useRef<HTMLTextAreaElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const displayName = input.displayName || input.name;
   const expressionContext: StudioExpressionEditorContext = {
     activity,
@@ -538,6 +585,9 @@ function ExpandedPropertyEditor({
   const diagnosticProvider = resolveExpressionDiagnosticProvider(expressionEditors, expressionContext);
   const diagnostics = diagnosticProvider ? getExpressionEditorDiagnostics(diagnosticProvider, expressionContext, value) : [];
   const useTextFallback = editingMode === "text";
+  const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
+    ? describeDictionaryType(input.typeName)
+    : null;
   const fallbackHint = useTextFallback && !ExpressionEditorComponent
     ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)
     : null;
@@ -547,17 +597,60 @@ function ExpandedPropertyEditor({
   }, [ExpressionEditorComponent, syntax]);
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusableSelector = [
+      "button:not(:disabled)",
+      "input:not(:disabled)",
+      "textarea:not(:disabled)",
+      "select:not(:disabled)",
+      "[href]",
+      "[tabindex]:not([tabindex='-1'])"
+    ].join(",");
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
+        .filter(element => element.offsetParent !== null || element === document.activeElement);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   return (
     <div className="wf-property-editor-backdrop">
-      <section className="wf-property-editor-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <section
+        ref={dialogRef}
+        className="wf-property-editor-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <header>
           <div>
             <span>Property editor</span>
@@ -580,7 +673,19 @@ function ExpandedPropertyEditor({
             <span>{formatTypeName(input.typeName)}</span>
           </div>
           {input.description ? <p>{input.description}</p> : null}
-          {ExpressionEditorComponent ? (
+          {dictionaryType ? (
+            <DictionaryValueEditor
+              input={input}
+              sessionScopeKey={dictionarySessionScope}
+              valueTypeName={dictionaryType.valueTypeName}
+              value={value}
+              editors={propertyEditors}
+              context={{ activity, expressionDescriptors: descriptors, readOnly: disabled }}
+              disabled={disabled}
+              variant="expanded"
+              onChange={onChange}
+            />
+          ) : ExpressionEditorComponent ? (
             <ExpressionEditorComponent
               descriptor={input}
               syntax={syntax}
