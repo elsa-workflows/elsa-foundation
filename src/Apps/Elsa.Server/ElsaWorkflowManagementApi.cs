@@ -8,6 +8,7 @@ using Elsa.Activities.Sequence.Activities;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Exceptions;
@@ -1052,17 +1053,19 @@ internal static class ElsaWorkflowManagementApi
     }
 
     private static ExpressionDescriptorResponse ToExpressionDescriptorResponse(IExpressionDescriptor descriptor) =>
-        new(descriptor.TypeName, descriptor.DisplayName, null);
+        new(descriptor.TypeName, descriptor.DisplayName, null, ToEditingModeValue(descriptor.EditingMode));
 
     private static IEnumerable<ExpressionDescriptorResponse> DefaultExpressionDescriptors()
     {
-        yield return new ExpressionDescriptorResponse("Literal", "Literal", null);
-        yield return new ExpressionDescriptorResponse("JavaScript", "JavaScript", null);
-        yield return new ExpressionDescriptorResponse("Liquid", "Liquid", null);
-        yield return new ExpressionDescriptorResponse("Object", "Object", null);
-        yield return new ExpressionDescriptorResponse("Variable", "Variable", null);
-        yield return new ExpressionDescriptorResponse("Input", "Input", null);
+        yield return new ExpressionDescriptorResponse("Literal", "Literal", null, "literal");
+        yield return new ExpressionDescriptorResponse("JavaScript", "JavaScript", null, "text");
+        yield return new ExpressionDescriptorResponse("Liquid", "Liquid", null, "text");
+        yield return new ExpressionDescriptorResponse("Object", "Object", null, "structured");
+        yield return new ExpressionDescriptorResponse("Variable", "Variable", null, "reference");
+        yield return new ExpressionDescriptorResponse("Input", "Input", null, "reference");
     }
+
+    private static string ToEditingModeValue(ExpressionEditingMode mode) => mode.ToString().ToLowerInvariant();
 
     // The authored type is now a rename-proof alias (TypeReference); the descriptor response reports the alias.
     private static string GetTypeName(TypeReference type) => type.Alias;
@@ -1265,7 +1268,7 @@ internal sealed record DescriptorOptionResponse(string Label, object Value);
 
 internal sealed record ExpressionDescriptorsResponse(IReadOnlyList<ExpressionDescriptorResponse> Items);
 
-internal sealed record ExpressionDescriptorResponse(string Type, string DisplayName, string? Description);
+internal sealed record ExpressionDescriptorResponse(string Type, string DisplayName, string? Description, string EditingMode);
 
 internal sealed record VariableDescriptorsResponse(IReadOnlyList<VariableDescriptorResponse> Descriptors);
 
