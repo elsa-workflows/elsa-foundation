@@ -17,6 +17,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17"
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3"
   }
 }

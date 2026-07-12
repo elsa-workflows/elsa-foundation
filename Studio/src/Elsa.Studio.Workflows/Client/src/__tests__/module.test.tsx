@@ -743,8 +743,8 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-property-row > .wf-syntax-picker:not(.inline)")).toBeNull();
 
     await click(container.querySelector(".wf-syntax-picker-trigger"));
-    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
-    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
 
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
     await click(buttonByLabel(container, "Open expanded Text editor"));

@@ -21,4 +21,5 @@ export * from "./inspector/Inspector";
 export * from "./layout/Tabs";
 export * from "./layout/Toolbar";
 export * from "./list/ListRow";
+export * from "./overlay/AnchoredPopover";
 export * from "./stat/StatTile";

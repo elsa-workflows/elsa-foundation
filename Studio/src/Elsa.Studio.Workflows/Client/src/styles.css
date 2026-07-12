@@ -3812,25 +3812,16 @@ button.wf-reference-select {
 }
 
 .wf-syntax-picker-menu {
-  position: absolute;
-  z-index: 100;
-  top: calc(100% + 5px);
-  right: 0;
-  left: 0;
-  display: grid;
-  max-height: 210px;
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--wf-accent) 35%, var(--wf-border));
-  border-radius: var(--wf-radius);
-  background: var(--wf-panel);
-  box-shadow: var(--wf-shadow-menu);
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 35%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-raised);
+  box-shadow: var(--studio-shadow-sm);
   padding: 4px;
 }
 
-.wf-syntax-picker.inline .wf-syntax-picker-menu {
-  left: auto;
-  right: 0;
-  min-width: 176px;
+.wf-syntax-picker-menu [role="listbox"] {
+  display: grid;
 }
 
 .wf-expression-expand-button {
@@ -4010,9 +4001,9 @@ button.wf-reference-select {
 .wf-syntax-picker-menu button {
   width: 100%;
   border: 0;
-  border-radius: var(--wf-radius-sm);
+  border-radius: var(--studio-radius-sm);
   background: transparent;
-  color: var(--wf-text);
+  color: var(--studio-text);
   font: inherit;
   font-size: 12px;
   padding: 8px 9px;
@@ -4021,15 +4012,15 @@ button.wf-reference-select {
 
 .wf-syntax-picker-menu button:hover,
 .wf-syntax-picker-menu button:focus-visible {
-  background: color-mix(in srgb, var(--wf-accent) 16%, transparent);
-  color: var(--wf-text);
+  background: var(--studio-accent-soft);
+  color: var(--studio-text);
   outline: none;
 }
 
 .wf-syntax-picker-menu button.selected {
-  background: color-mix(in srgb, var(--wf-accent) 28%, transparent);
-  color: var(--wf-text);
-  font-weight: var(--wf-label-weight, 600);
+  background: color-mix(in srgb, var(--studio-accent) 28%, transparent);
+  color: var(--studio-text);
+  font-weight: 600;
 }
 
 .studio-property-multiselect {

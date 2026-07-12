@@ -1,5 +1,6 @@
-import { type DragEvent, useEffect, useId, useState } from "react";
+import { type DragEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, GripVertical, Maximize2, Plus, Trash2, X } from "lucide-react";
+import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
   StudioActivityCustomProperties,
@@ -585,7 +586,7 @@ function renderEditor(
   );
 }
 
-function SyntaxPicker({
+export function SyntaxPicker({
   label,
   value,
   descriptors,
@@ -601,19 +602,85 @@ function SyntaxPicker({
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const listboxId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = descriptors.find(descriptor => descriptor.type === value);
+  const selectedIndex = Math.max(0, descriptors.findIndex(descriptor => descriptor.type === value));
   const className = [
     "wf-syntax-picker-trigger",
     variant === "inline" ? "inline" : "",
     open ? "open" : ""
   ].filter(Boolean).join(" ");
 
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => optionRefs.current[activeIndex]?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [activeIndex, open]);
+
+  const openPicker = (index = selectedIndex) => {
+    setActiveIndex(index);
+    setOpen(true);
+  };
+
+  const closePicker = (restoreFocus: boolean) => {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
+  const focusOption = (index: number) => {
+    if (descriptors.length === 0) return;
+    const nextIndex = (index + descriptors.length) % descriptors.length;
+    setActiveIndex(nextIndex);
+    optionRefs.current[nextIndex]?.focus();
+  };
+
+  const selectOption = (index: number) => {
+    const descriptor = descriptors[index];
+    if (!descriptor) return;
+    onChange(descriptor.type);
+    closePicker(true);
+  };
+
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const index = event.key === "Home" ? 0 : event.key === "End" ? descriptors.length - 1 : selectedIndex;
+      openPicker(index);
+    }
+  };
+
+  const handleListboxKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const focusedIndex = Math.max(0, optionRefs.current.findIndex(option => option === event.target));
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(focusedIndex + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOption(focusedIndex - 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      focusOption(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      focusOption(descriptors.length - 1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectOption(focusedIndex);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closePicker(true);
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  };
+
   return (
-    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"} onBlur={event => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }}>
+    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"}>
       <button
+        ref={triggerRef}
         type="button"
         className={className}
         aria-label={label}
@@ -621,33 +688,41 @@ function SyntaxPicker({
         aria-expanded={open}
         aria-controls={listboxId}
         disabled={disabled}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => open ? closePicker(false) : openPicker()}
+        onKeyDown={handleTriggerKeyDown}
       >
         <span>{selected?.displayName || selected?.type || value}</span>
       </button>
-      {open ? (
-        <div id={listboxId} role="listbox" className="wf-syntax-picker-menu" aria-label={label}>
-          {descriptors.map(descriptor => {
+      <AnchoredPopover
+        anchorRef={triggerRef}
+        open={open}
+        className="wf-syntax-picker-menu"
+        minWidth={variant === "inline" ? 176 : 0}
+        maxHeight={210}
+        onDismiss={reason => closePicker(reason !== "anchor-hidden")}
+      >
+        <div id={listboxId} role="listbox" aria-label={label} onKeyDown={handleListboxKeyDown}>
+          {descriptors.map((descriptor, index) => {
             const optionLabel = descriptor.displayName || descriptor.type;
             const selectedOption = descriptor.type === value;
             return (
               <button
+                ref={element => { optionRefs.current[index] = element; }}
                 type="button"
                 role="option"
                 aria-selected={selectedOption}
+                tabIndex={-1}
                 key={descriptor.type}
                 className={selectedOption ? "selected" : ""}
-                onClick={() => {
-                  onChange(descriptor.type);
-                  setOpen(false);
-                }}
+                onFocus={() => setActiveIndex(index)}
+                onClick={() => selectOption(index)}
               >
                 {optionLabel}
               </button>
             );
           })}
         </div>
-      ) : null}
+      </AnchoredPopover>
     </div>
   );
 }
