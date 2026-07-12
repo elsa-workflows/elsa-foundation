@@ -334,14 +334,14 @@ describe("activity property organization", () => {
       order: 1,
       supports: context => context.syntax === "Secret",
       surfaces: {},
-      createDefaultValue: () => ({ referenceKey: "wrong-provider" })
+      createDefaultValue: () => ({ name: "wrong-provider" })
     };
     const admitted: StudioExpressionEditorContribution = {
       id: "secret.inline",
       order: 2,
       supports: context => context.syntax === "Secret",
       surfaces: { inline: TestReferenceEditor },
-      createDefaultValue: () => ({ referenceKey: "new-secret" })
+      createDefaultValue: () => ({ name: "new-secret" })
     };
     const container = renderPanel([input("Credential", { isWrapped: true })], {
       expressionDescriptors: [
@@ -362,7 +362,7 @@ describe("activity property organization", () => {
     expect(changes).toHaveLength(1);
     expect(changes[0]?.credential).toEqual({
       typeName: "System.String",
-      expression: { type: "Secret", value: { referenceKey: "new-secret" } }
+      expression: { type: "Secret", value: { name: "new-secret" } }
     });
     expect(document.activeElement).toBe(container.querySelector("input[aria-label='Secret reference']"));
   });

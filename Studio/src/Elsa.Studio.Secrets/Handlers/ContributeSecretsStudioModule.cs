@@ -17,7 +17,7 @@ public sealed class ContributeSecretsStudioModule : IStudioEventHandler<OnStudio
             [$"/_content/Elsa.Studio.Secrets/studio/modules/secrets/module.css?v={ModuleVersion}"],
             "^1.0.0",
             "^1.0.0",
-            ["navigation", "routes", "http", "property-editors", "secrets"],
+            ["navigation", "routes", "http", "expression-editors", "secrets"],
             "SecretsStudio"));
 
         return Task.CompletedTask;
