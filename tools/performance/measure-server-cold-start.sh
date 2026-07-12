@@ -403,10 +403,11 @@ done
 
 python3 - "$results_tsv" "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" \
   "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
-  "$base_url" "$readiness_path" "$workflow_path" "$ready_budget_ms" "$workflow_budget_ms" <<'PY'
+  "$base_url" "$readiness_path" "$workflow_path" "$startup_timeout_seconds" "$shutdown_timeout_seconds" \
+  "$ready_budget_ms" "$workflow_budget_ms" <<'PY'
 import csv, datetime, json, math, pathlib, sys
 
-tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash, content_hash, baseline_hash, base_url, readiness_path, workflow_path, ready_budget, workflow_budget = sys.argv[1:]
+tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash, content_hash, baseline_hash, base_url, readiness_path, workflow_path, startup_timeout, shutdown_timeout, ready_budget, workflow_budget = sys.argv[1:]
 with open(tsv, newline='') as stream:
     rows = []
     for row in csv.DictReader(stream, delimiter='\t'):
@@ -428,7 +429,14 @@ aggregates = {key: aggregate(key) for key in (*milestones, "shutdown_ms")}
 report = {
     "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "provenance": {"repositoryHeadAtMeasurement": repository_head, "dotnetVersion": dotnet, "dotnetRuntimes": runtimes, "machine": machine, "serverSha256": server_hash, "contentSha256": content_hash, "baselineSha256": baseline_hash, "environment": "Production"},
-    "request": {"baseUrl": base_url, "readinessPath": readiness_path, "workflowPath": workflow_path, "boots": len(rows)},
+    "request": {
+        "baseUrl": base_url,
+        "readinessPath": readiness_path,
+        "workflowPath": workflow_path,
+        "boots": len(rows),
+        "startupTimeoutSeconds": int(startup_timeout),
+        "shutdownTimeoutSeconds": int(shutdown_timeout),
+    },
     "boots": rows,
     "aggregates": aggregates,
 }
