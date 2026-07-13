@@ -7,5 +7,10 @@ public sealed record ListWorkflowInstances(
     string? Status,
     string? DefinitionId,
     string? CorrelationId,
-    int? Take)
-    : IRequest<IReadOnlyCollection<WorkflowInstanceSummaryView>>;
+    int? Take,
+    string? Cursor = null,
+    string? WorkflowExecutionId = null,
+    string? ArtifactId = null,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null)
+    : IRequest<WorkflowInstanceListView>;

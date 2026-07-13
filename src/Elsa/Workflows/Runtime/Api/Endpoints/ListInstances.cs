@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Api.Endpoints;
 
 internal sealed class ListInstances(IRequestSender requestSender, ILogger<ListInstances> logger)
-    : ElsaRequestHandlerEndpoint<ListWorkflowInstances, IReadOnlyCollection<WorkflowInstanceSummaryView>>(requestSender, logger)
+    : ElsaRequestHandlerEndpoint<ListWorkflowInstances, WorkflowInstanceListView>(requestSender, logger)
 {
     public override void Configure()
     {
