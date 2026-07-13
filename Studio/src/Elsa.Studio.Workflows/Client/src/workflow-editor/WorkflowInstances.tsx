@@ -155,10 +155,11 @@ export function WorkflowInstances({ context }: { context: StudioEndpointContext 
   );
 }
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId }: {
+export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId, navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   workflowExecutionId: string;
+  navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
@@ -220,16 +221,14 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
   }, [load]);
 
   const goBack = () => {
-    window.history.pushState({}, "", "/workflows/instances");
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    navigate("/workflows/instances");
   };
 
   const openDefinitionDesigner = () => {
     const definitionId = data?.details.instance.definitionId;
     if (!definitionId) return;
 
-    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
   };
   const detailWorkbenchClassName = [
     "wf-instance-detail-workbench",

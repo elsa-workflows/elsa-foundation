@@ -1923,6 +1923,66 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("uses the host router from every run tab and preserves browser history", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/runtime/workflows/instances/wfexec-1")) return response(workflowInstanceDetails());
+      if (url.includes("/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/design/workflows/definitions/definition-1")) {
+        return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      }
+      if (url.includes("/design/activities/catalog")) return response({ activities: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
+
+    await waitForText(container, "Pinned Runtime executable");
+    await click(buttonByText(container, "Designer"));
+    await waitForText(container, "Hello World");
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
+
+    window.history.forward();
+    await waitForText(container, "Hello World");
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+
+    const openTab = async (tab: "Activity" | "Issues" | "Details") => {
+      if (tab === "Activity") {
+        await click(container.querySelector(".wf-timeline-entry"));
+      } else {
+        await click(buttonByText(container, tab));
+      }
+      expect(container.querySelector(`[data-tab-id='${tab.toLowerCase()}']`)?.getAttribute("aria-selected")).toBe("true");
+    };
+
+    for (const tab of ["Activity", "Issues", "Details"] as const) {
+      await openTab(tab);
+      await click(buttonByText(container, "Designer"));
+      await waitForText(container, "Hello World");
+      expect(window.location.pathname).toBe("/workflows/definitions");
+      expect(container.querySelector(".wf-editor")).toBeTruthy();
+      expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+      window.history.back();
+      await waitForText(container, "Pinned Runtime executable");
+    }
+
+    await unmount();
+  });
+
   it("renders workflow instance canvas from Runtime executable structure", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -2307,7 +2367,11 @@ function withHeaders(headers?: HeadersInit, json = false) {
   return result;
 }
 
-async function renderRegisteredRoute(path = "/workflows/definitions", configureApi?: (api: ElsaStudioModuleApi) => void) {
+async function renderRegisteredRoute(
+  path = "/workflows/definitions",
+  configureApi?: (api: ElsaStudioModuleApi) => void,
+  followNavigation = false
+) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -2324,11 +2388,6 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
   const api = testApi();
   configureApi?.(api);
   register(api);
-  const routePath = new URL(path, window.location.origin).pathname;
-  const route = api.routes.list().find(candidate => candidate.path === routePath) ??
-    api.routes.list().find(candidate => routeMatchesPath(candidate.path, routePath)) ??
-    api.routes.list()[0];
-  const Component = route.component;
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -2339,8 +2398,28 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
     }
   });
 
+  function RegisteredRouteHost() {
+    const [routePath, setRoutePath] = React.useState(() => window.location.pathname);
+    React.useEffect(() => {
+      if (!followNavigation) return;
+      const syncFromLocation = () => setRoutePath(window.location.pathname);
+      window.addEventListener("popstate", syncFromLocation);
+      return () => window.removeEventListener("popstate", syncFromLocation);
+    }, []);
+    const route = api.routes.list().find(candidate => candidate.path === routePath) ??
+      api.routes.list().find(candidate => routeMatchesPath(candidate.path, routePath)) ??
+      api.routes.list()[0];
+    const navigate = (nextPath: string) => {
+      window.history.pushState({}, "", nextPath);
+      if (followNavigation) setRoutePath(window.location.pathname);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    };
+    const Component = route.component;
+    return <Component navigate={navigate} />;
+  }
+
   flushSync(() => {
-    root.render(<QueryClientProvider client={queryClient}><Component /></QueryClientProvider>);
+    root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
 
   return {
