@@ -194,6 +194,44 @@ describe("workflow adapter", () => {
     expect(getChildSlots(normalized!, forEachActivity)[0]).toMatchObject({ label: "Body", cardinality: "single" });
   });
 
+  it("persists the only eligible Flowchart activity as its start node", () => {
+    const root = flowchartRoot([node("first")]);
+
+    const normalized = normalizeActivityStructures(root, [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("first");
+  });
+
+  it("persists an explicit null start for an empty Flowchart", () => {
+    const normalized = normalizeActivityStructures(flowchartRoot([]), [flowchartActivity]);
+
+    expect(normalized?.structure?.payload).toHaveProperty("startNodeId", null);
+  });
+
+  it("chooses the first authored activity for an unconnected multi-node Flowchart", () => {
+    const normalized = normalizeActivityStructures(flowchartRoot([node("first"), node("second")]), [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("first");
+  });
+
+  it("preserves an explicitly authored eligible Flowchart start node", () => {
+    const root = flowchartRoot([node("first"), node("selected")]);
+    root.structure!.payload.startNodeId = "selected";
+
+    const normalized = normalizeActivityStructures(root, [flowchartActivity]);
+
+    expect(normalized?.structure?.payload.startNodeId).toBe("selected");
+  });
+
+  it("reassigns a deleted Flowchart start node to the first remaining activity", () => {
+    const root = flowchartRoot([node("first"), node("deleted")]);
+    root.structure!.payload.startNodeId = "deleted";
+
+    const updated = replaceSlotActivities(root, getChildSlots(root)[0], [node("first")]);
+
+    expect(updated.structure?.payload.startNodeId).toBe("first");
+  });
+
   it("updates repeatable collection child slots without replacing authored collection items", () => {
     const switchActivity: ActivityCatalogItem = {
       ...writeLine,

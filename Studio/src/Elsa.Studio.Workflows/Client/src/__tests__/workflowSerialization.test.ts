@@ -46,6 +46,32 @@ describe("workflow serialization", () => {
     }
   });
 
+  it("shows an explicit Flowchart start node in Code view JSON", () => {
+    const workflow = draft();
+    workflow.state.rootActivity = {
+      nodeId: "flowchart",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.flowchart.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          activities: [
+            { nodeId: "first", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+            { nodeId: "second", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+          ],
+          connections: [],
+          startNodeId: null
+        }
+      }
+    };
+
+    const codeView = JSON.parse(serializeDraftToJson(workflow));
+
+    expect(codeView.state.rootActivity.structure.payload.startNodeId).toBe("first");
+  });
+
   it("reports a parse error for malformed JSON", () => {
     const result = buildDraftFromJson("{ not json", draft());
     expect(result.ok).toBe(false);
