@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// language-specific pre-processors (e.g. JavaScript) can surface <c>variables.foo</c>, <c>input.bar</c>,
 /// and prior-output accessors without depending on a live workflow execution context.
 /// </summary>
-public interface IMaterializationExpressionState
+public interface IMaterializationExpressionState : Elsa.Expressions.Core.Contracts.IExpressionTenantContext
 {
     /// <summary>Current workflow variable values keyed by variable name.</summary>
     IReadOnlyDictionary<string, object?> WorkflowVariables { get; }

@@ -1,5 +1,7 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
+using Elsa.Secrets.Persistence.Groundwork;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
 using Groundwork.Core.Manifests;
 
@@ -41,5 +43,7 @@ public static class GroundworkUnifiedManifest
         Version,
         ElsaRuntimeStorageManifest.Create(),
         WorkflowsDesignStorageManifest.Create(),
-        ActivitiesDesignStorageManifest.Create());
+        ActivitiesDesignStorageManifest.Create(),
+        SecretsStorageManifest.Create(),
+        StudioPreferencesStorageManifest.Create());
 }

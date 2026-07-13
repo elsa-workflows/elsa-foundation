@@ -44,7 +44,7 @@ public sealed class SecretsFeatureRegistrationTests
 
     private sealed class CustomValueResolver : ISecretValueResolver
     {
-        public ValueTask<ResolvedSecret> ResolveAsync(SecretReference reference, CancellationToken cancellationToken = default)
+        public ValueTask<ResolvedSecret> ResolveAsync(string tenantId, SecretReference reference, CancellationToken cancellationToken = default)
             => new(ResolvedSecret.Failure(SecretResolutionFailureCode.NotFound, "custom"));
     }
 

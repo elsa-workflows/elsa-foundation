@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Persistence.Groundwork.Serialization;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -35,8 +36,8 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
     {
         var (schemaVersion, contentJson) = await GroundworkRuntimeDocumentFixtureFactory.CaptureAsync(kind);
 
-        // Every kind is at version 1 today; the bridge stamps the current version as the bare integer "1".
-        Assert.Equal("1", schemaVersion);
+        var currentVersion = ElsaRuntimeDocumentVersions.CurrentFor(kind);
+        Assert.Equal(ElsaRuntimeDocumentVersions.Stamp(currentVersion), schemaVersion);
 
         if (Regenerate)
         {
@@ -44,7 +45,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
             return;
         }
 
-        var expected = ReadCommittedFixture(kind);
+        var expected = ReadCommittedFixture(kind, currentVersion);
         AssertJsonSemanticallyEqual(expected, contentJson, kind);
     }
 
@@ -55,7 +56,7 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
         if (Regenerate)
             return;
 
-        var fixtureContent = ReadCommittedFixture(kind);
+        var fixtureContent = ReadCommittedFixture(kind, 1);
 
         // Seed the committed fixture under the pre-versioning "1.0.0" stamp, exactly as a document written
         // before per-kind versioning would carry it, then read it back through the real store bridge.
@@ -123,9 +124,9 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
     // --- Fixture file access ---
 
-    private static string ReadCommittedFixture(string kind)
+    private static string ReadCommittedFixture(string kind, int version)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1", kind + ".json");
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", $"v{version}", kind + ".json");
         Assert.True(
             File.Exists(path),
             $"Missing committed golden fixture for kind '{kind}' at '{path}'. " +
@@ -135,7 +136,8 @@ public sealed class GroundworkRuntimeDocumentFixtureTests
 
     private static void WriteFixtureToSource(string kind, string contentJson)
     {
-        var directory = Path.Combine(SourceDirectory(), "Fixtures", "v1");
+        var version = ElsaRuntimeDocumentVersions.CurrentFor(kind);
+        var directory = Path.Combine(SourceDirectory(), "Fixtures", $"v{version}");
         Directory.CreateDirectory(directory);
         var canonical = Canonicalize(JsonNode.Parse(contentJson));
         File.WriteAllText(Path.Combine(directory, kind + ".json"), canonical);

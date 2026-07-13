@@ -11,7 +11,14 @@ public sealed class SecretExpressionHandler(ISecretValueResolver resolver, IObje
     public async ValueTask<object?> EvaluateAsync(IExpression expression, Type returnType, IExpressionExecutionContext context, IExpressionEvaluatorOptions options)
     {
         var reference = ToReference(expression.Value);
-        var result = await resolver.ResolveAsync(reference);
+        if (context is not IExpressionTenantContext tenantContext)
+            throw new InvalidOperationException("Secret expression evaluation requires an authoritative tenant-scoped expression context.");
+
+        var tenantId = await tenantContext.GetTenantIdAsync(context.CancellationToken);
+        if (string.IsNullOrWhiteSpace(tenantId))
+            throw new InvalidOperationException("Secret expression evaluation requires an authoritative tenant identity.");
+
+        var result = await resolver.ResolveAsync(tenantId, reference, context.CancellationToken);
 
         if (!result.Succeeded)
             throw new InvalidOperationException(result.Error ?? "Secret could not be resolved.");

@@ -24,6 +24,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Persistence\Groundwork\PostgreSql\Unified\Elsa.Persistence.Groundwork.PostgreSql.Unified.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Persistence.Groundwork.Testing.csproj" />
   </ItemGroup>
 

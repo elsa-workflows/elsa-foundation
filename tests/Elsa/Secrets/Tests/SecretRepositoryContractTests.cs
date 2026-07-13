@@ -9,6 +9,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class SecretRepositoryContractTests
 {
+    private const string TenantId = "tenant-1";
     public static TheoryData<string, Func<ISecretRepository>> RepositoryFactories { get; } = new()
     {
         { "In-memory", () => new InMemorySecretRepository() },
@@ -24,7 +25,7 @@ public sealed class SecretRepositoryContractTests
 
         await repository.SaveAsync(secret);
 
-        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(secret.Name))!.Status);
+        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(TenantId, secret.Name))!.Status);
     }
 
     [Theory]
@@ -36,7 +37,7 @@ public sealed class SecretRepositoryContractTests
 
         await repository.SaveAsync(secret);
 
-        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync()).Status);
+        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync(TenantId)).Status);
     }
 
     [Theory]
@@ -60,6 +61,7 @@ public sealed class SecretRepositoryContractTests
 
     private static Secret ActiveSecret(string name) => new()
     {
+        TenantId = TenantId,
         Name = name,
         DisplayName = name,
         TypeName = SecretTypeNames.Text,

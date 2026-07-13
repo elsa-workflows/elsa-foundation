@@ -7,6 +7,7 @@ namespace Elsa.Secrets.Tests;
 
 public sealed class GroundworkSecretRepositoryTests
 {
+    private const string TenantId = "tenant-1";
     [Fact]
     public async Task RoundTrips_And_Lists_Secrets_By_Collection_Index()
     {
@@ -16,8 +17,8 @@ public sealed class GroundworkSecretRepositoryTests
         Assert.True(await repository.TryAddAsync(secret));
         Assert.False(await repository.TryAddAsync(secret));
 
-        var found = await repository.FindAsync("payments.api");
-        var all = await repository.ListAsync();
+        var found = await repository.FindAsync(TenantId, "payments.api");
+        var all = await repository.ListAsync(TenantId);
 
         Assert.NotNull(found);
         Assert.Equal("payments.api", found!.Name);
@@ -35,12 +36,13 @@ public sealed class GroundworkSecretRepositoryTests
         secret.Status = SecretStatus.Deleted;
         await repository.SaveAsync(secret);
 
-        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync()).Status);
-        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("payments.api"))!.Status);
+        Assert.Equal(SecretStatus.Deleted, Assert.Single(await repository.ListAsync(TenantId)).Status);
+        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(TenantId, "payments.api"))!.Status);
     }
 
     private static Secret Secret(string name, string value) => new()
     {
+        TenantId = TenantId,
         Name = name,
         DisplayName = name,
         TypeName = SecretTypeNames.Text,

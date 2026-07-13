@@ -15,7 +15,18 @@ public sealed record WorkflowExecutionState(
     string? CorrelationId,
     string? ParentWorkflowExecutionId,
     string? TenantId,
-    IReadOnlyDictionary<string, string> SystemMetadata);
+    IReadOnlyDictionary<string, string> SystemMetadata,
+    WorkflowExecutionOrigin Origin = WorkflowExecutionOrigin.Published);
+
+/// <summary>
+/// Identifies the user-facing origin of an execution. This is durable query data rather than an inference from
+/// transient source references, allowing operational projections to exclude test runs exactly.
+/// </summary>
+public enum WorkflowExecutionOrigin
+{
+    Published,
+    TestRun
+}
 
 public enum WorkflowExecutionStatus
 {

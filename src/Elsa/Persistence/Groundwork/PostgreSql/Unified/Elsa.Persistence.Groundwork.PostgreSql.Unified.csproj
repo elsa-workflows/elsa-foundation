@@ -16,6 +16,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.PostgreSql.csproj" />
     <ProjectReference Include="..\..\Unified\Elsa.Persistence.Groundwork.Unified.csproj" />
+    <ProjectReference Include="..\..\..\..\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\..\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
 </Project>

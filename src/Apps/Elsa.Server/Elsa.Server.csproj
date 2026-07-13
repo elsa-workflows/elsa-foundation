@@ -44,6 +44,8 @@
 		<ProjectReference Include="..\..\Elsa\Agent\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
 		<ProjectReference Include="..\..\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
+		<ProjectReference Include="..\..\Elsa\Attention\Core\Elsa.Attention.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Attention\Api\Elsa.Attention.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
@@ -71,9 +73,13 @@
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
 		<ProjectReference Include="..\..\Elsa\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+		<ProjectReference Include="..\..\Elsa\Secrets\Attention\Elsa.Secrets.Attention.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Dashboard\Persistence\Groundwork\Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Workflows\Runtime\Attention\Elsa.Workflows.Runtime.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\Elsa\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
@@ -87,6 +93,7 @@
 		<ProjectReference Include="..\..\Elsa\Mediator\Core\Elsa.Mediator.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Api\Elsa.Modularity.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Modularity\Attention\Elsa.Modularity.Attention.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Core\Elsa.Modularity.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\ExtensionBuilder\Elsa.Modularity.ExtensionBuilder.csproj" />
 		<ProjectReference Include="..\..\Elsa\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
@@ -99,6 +106,9 @@
 		<ProjectReference Include="..\..\Elsa\Serialization\Core\Elsa.Serialization.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
 		<ProjectReference Include="..\..\Elsa\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
+		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
+		<ProjectReference Include="..\..\Elsa\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Api\Elsa.Secrets.Api.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\Elsa\Secrets\Elsa.Secrets.csproj" />

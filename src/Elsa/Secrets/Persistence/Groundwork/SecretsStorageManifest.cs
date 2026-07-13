@@ -7,10 +7,12 @@ namespace Elsa.Secrets.Persistence.Groundwork;
 
 public static class SecretsStorageManifest
 {
-    public const string SchemaVersion = "1.0.0";
+    public const string SchemaVersion = "2.0.0";
     public const string SecretDocumentKind = "secret";
     public const string ByCollectionIndex = "by-collection";
+    public const string ByTenantIndex = "by-tenant";
     public const string CollectionField = "collection";
+    public const string TenantField = "tenantId";
     public const string SecretCollection = "secret";
 
     public static StorageManifest Create() => new(
@@ -21,8 +23,8 @@ public static class SecretsStorageManifest
             Unit(
                 SecretDocumentKind,
                 "Secret",
-                [Keyword(ByCollectionIndex, CollectionField)],
-                [Query("list-all", ByCollectionIndex)])
+                [Keyword(ByCollectionIndex, CollectionField), Keyword(ByTenantIndex, TenantField)],
+                [Query("list-all", ByCollectionIndex), Query("list-by-tenant", ByTenantIndex)])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

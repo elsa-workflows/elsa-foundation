@@ -227,7 +227,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState)));
+            }, priorWorkflowState)),
+            Origin: ReadWorkflowExecutionOrigin(workItem));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
@@ -267,7 +268,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, priorWorkflowState)));
+            }, priorWorkflowState)),
+            Origin: priorWorkflowState?.Origin ?? ReadWorkflowExecutionOrigin(workItem));
 
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
@@ -285,6 +287,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? startedAt
             : null;
     }
+
+    private static WorkflowExecutionOrigin ReadWorkflowExecutionOrigin(RuntimeSchedulerWorkItem workItem) =>
+        workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionOrigin, out var value) &&
+        Enum.TryParse<WorkflowExecutionOrigin>(value, ignoreCase: true, out var origin)
+            ? origin
+            : WorkflowExecutionOrigin.Published;
 
     private static RuntimeStateChange<WorkflowExecutionState> NewWorkflowExecutionStateChange(
         RuntimeSchedulerWorkItem workItem,

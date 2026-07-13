@@ -2,6 +2,9 @@ using Elsa.Activities.Design.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
+using Elsa.Secrets.Persistence.Groundwork.DependencyInjection;
+using Elsa.Studio.Preferences.Persistence.Groundwork;
+using Elsa.Workflows.Dashboard.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -31,6 +34,14 @@ public static class GroundworkSqliteUnifiedRegistration
         services.AddGroundworkRuntimeStores();
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
+        services.AddGroundworkSecretsStore();
+        services.AddGroundworkStudioPreferences();
+        services.AddGroundworkWorkflowRunHealth(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
+        services.AddGroundworkWorkflowPortfolio(
+            _ => new Microsoft.Data.Sqlite.SqliteConnection(connectionString),
+            GroundworkRunHealthDialect.Sqlite);
 
         return services;
     }

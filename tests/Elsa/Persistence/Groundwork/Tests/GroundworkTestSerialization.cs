@@ -12,7 +12,7 @@ internal static class GroundworkTestSerialization
 {
     /// <summary>The default upcaster registry with no contributed upcasters.</summary>
     public static readonly IGroundworkRuntimeDocumentUpcasterRegistry UpcasterRegistry =
-        new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        new GroundworkRuntimeDocumentUpcasterRegistry([new WorkflowExecutionStateV1ToV2Upcaster()]);
 
     /// <summary>The production default serializer, wired to an empty upcaster registry.</summary>
     public static readonly IGroundworkRuntimeDocumentSerializer Serializer =

@@ -11,6 +11,7 @@ public static class GroundworkSecretsStoreRegistration
     {
         services.RemoveAll<ISecretRepository>();
         services.AddSingleton<ISecretRepository, GroundworkSecretRepository>();
+        services.AddSingleton<ILegacySecretTenantBackfill, LegacySecretTenantBackfill>();
         return services;
     }
 }

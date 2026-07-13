@@ -2,6 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 
 public static class RuntimeMetadataKeys
 {
+    public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";

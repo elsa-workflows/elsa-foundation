@@ -31,6 +31,7 @@ public sealed class SimpleActivityExecutionContext(
     // parameter — a context built through it (e.g. a non-execution test context) simply has no carrier and its
     // accessors return empty. See RuntimeExecutionExpressionCarrier.
     private readonly RuntimeExecutionExpressionCarrierState? _executionCarrier;
+    private readonly RuntimeExpressionTenantContext _tenantContext = new(serviceProvider, workflowExecutionId ?? string.Empty, cancellationToken);
 
     // The single construction path for an execution-time context (leaf invoke, resume callback, composite
     // child-completion). Requires the resolved carrier state — a non-nullable value type, so it is always
@@ -278,6 +279,8 @@ public sealed class SimpleActivityExecutionContext(
     public JsonElement? ResumeInput => _executionCarrier?.ResumeInput;
     public IReadOnlyDictionary<string, object?> WorkflowVariables => _executionCarrier?.WorkflowVariables ?? EmptyExpressionState;
     public IReadOnlyDictionary<string, object?> ActivityOutputValues => _executionCarrier?.ActivityOutputValues ?? EmptyExpressionState;
+    public ValueTask<string> GetTenantIdAsync(CancellationToken cancellationToken = default) =>
+        _tenantContext.GetTenantIdAsync(cancellationToken);
 
     public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => _memory.Declare(blockReference);
     public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) => _memory.TryGetBlock(blockReference.Id, out block);

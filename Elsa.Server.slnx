@@ -57,6 +57,10 @@
     <Project Path="src\Elsa\Agent\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="src\Elsa\Agent\Workflows\Elsa.Agent.Workflows.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Attention/">
+    <Project Path="src/Elsa/Attention/Core/Elsa.Attention.Core.csproj" />
+    <Project Path="src/Elsa/Attention/Api/Elsa.Attention.Api.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Api/">
     <Project Path="src/Elsa/Api/FastEndpoints/Elsa.Api.FastEndpoints.csproj" />
   </Folder>
@@ -138,6 +142,7 @@
     <Project Path="src/Elsa/Mediator/Elsa.Mediator.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Modularity/">
+    <Project Path="src/Elsa/Modularity/Attention/Elsa.Modularity.Attention.csproj" />
     <Project Path="src/Elsa/Modularity/Api/Elsa.Modularity.Api.csproj" />
     <Project Path="src/Elsa/Modularity/Core/Elsa.Modularity.Core.csproj" />
     <Project Path="src/Elsa/Modularity/ExtensionBuilder/Elsa.Modularity.ExtensionBuilder.csproj" />
@@ -180,9 +185,17 @@
     <Project Path="src/Elsa/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Secrets/">
+    <Project Path="src/Elsa/Secrets/Attention/Elsa.Secrets.Attention.csproj" />
     <Project Path="src/Elsa/Secrets/Api/Elsa.Secrets.Api.csproj" />
     <Project Path="src/Elsa/Secrets/Core/Elsa.Secrets.Core.csproj" />
     <Project Path="src/Elsa/Secrets/Elsa.Secrets.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Studio/Preferences/">
+    <Project Path="src/Elsa/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj" />
+    <Project Path="src/Elsa/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Studio/Preferences/Persistence/">
+    <Project Path="src/Elsa/Studio/Preferences/Persistence/Groundwork/Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Secrets/Persistence/">
     <Project Path="src/Elsa/Secrets/Persistence/Groundwork/Elsa.Secrets.Persistence.Groundwork.csproj" />
@@ -197,6 +210,12 @@
   <Folder Name="/src/Elsa/Tasks/Core/" />
   <Folder Name="/src/Elsa/Workflows/">
     <Project Path="src/Elsa/Workflows/Primitives/Elsa.Workflows.Primitives.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Workflows/Dashboard/">
+    <Project Path="src/Elsa/Workflows/Dashboard/Elsa.Workflows.Dashboard.csproj" />
+  </Folder>
+  <Folder Name="/src/Elsa/Workflows/Dashboard/Persistence/">
+    <Project Path="src/Elsa/Workflows/Dashboard/Persistence/Groundwork/Elsa.Workflows.Dashboard.Persistence.Groundwork.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Design/">
     <Project Path="src/Elsa/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
@@ -225,6 +244,7 @@
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
+    <Project Path="src/Elsa/Workflows/Runtime/Attention/Elsa.Workflows.Runtime.Attention.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Elsa.Workflows.Runtime.csproj" />
@@ -330,8 +350,17 @@
   <Folder Name="/tests/Elsa/Foundation/Identity/Persistence/Groundwork/">
     <Project Path="tests/Elsa/Foundation/Identity/Persistence/Groundwork/Tests/Elsa.Foundation.Identity.Persistence.Groundwork.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Attention/Core/">
+    <Project Path="tests/Elsa/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Attention/Api/">
+    <Project Path="tests/Elsa/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Modularity/">
     <Project Path="tests/Elsa/Modularity/Tests/Elsa.Modularity.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Modularity/Attention/">
+    <Project Path="tests/Elsa/Modularity/Attention/Tests/Elsa.Modularity.Attention.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Primitives/">
     <Project Path="tests/Elsa/Primitives/Tests/Elsa.Primitives.Tests.csproj" />
@@ -370,12 +399,24 @@
   <Folder Name="/tests/Elsa/Secrets/">
     <Project Path="tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Elsa/Secrets/Attention/">
+    <Project Path="tests/Elsa/Secrets/Attention/Tests/Elsa.Secrets.Attention.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Studio/Preferences/">
+    <Project Path="tests/Elsa/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Studio/Preferences/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Studio/Preferences/Persistence/Groundwork/Tests/Elsa.Studio.Preferences.Persistence.Groundwork.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Serialization/">
     <Project Path="tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/" />
   <Folder Name="/tests/Elsa/Workflows/Design/">
     <Project Path="tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Dashboard/">
+    <Project Path="tests/Elsa/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Design/Api/">
     <Project Path="tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj" />
@@ -390,6 +431,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Runtime/Attention/">
+    <Project Path="tests/Elsa/Workflows/Runtime/Attention/Tests/Elsa.Workflows.Runtime.Attention.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/Http/">
     <Project Path="tests/Elsa/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj" />

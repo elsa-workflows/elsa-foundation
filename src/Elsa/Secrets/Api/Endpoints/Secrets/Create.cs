@@ -17,7 +17,14 @@ internal sealed class Create(ISecretManager secretManager) : ElsaEndpoint<Create
 
     public override async Task HandleAsync(CreateSecretRequest request, CancellationToken cancellationToken)
     {
-        var secret = await secretManager.CreateAsync(request, cancellationToken);
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var secret = await secretManager.CreateAsync(tenantId, request, cancellationToken);
         await Send.ResponseAsync(secret, 201, cancellationToken);
     }
 }

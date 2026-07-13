@@ -101,7 +101,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Applies_A_v1_To_v3_Chain_In_Order()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry(
+        var registry = Registry(
         [
             new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
             new RenameFieldUpcaster("test-thing", fromVersion: 2, "b", "c")
@@ -118,7 +118,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Leaves_Content_Untouched_When_From_Equals_To()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 2, toVersion: 2, content);
@@ -132,7 +132,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     public void Registry_Construction_Throws_On_A_Duplicate_FromVersion()
     {
         var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            new GroundworkRuntimeDocumentUpcasterRegistry(
+            Registry(
             [
                 new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
                 new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "c")
@@ -146,7 +146,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     {
         // Steps at 1 and 3 with no step at 2: the gap must fail at construction, not on first read.
         var exception = Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            new GroundworkRuntimeDocumentUpcasterRegistry(
+            Registry(
             [
                 new RenameFieldUpcaster("test-thing", fromVersion: 1, "a", "b"),
                 new RenameFieldUpcaster("test-thing", fromVersion: 3, "c", "d")
@@ -158,10 +158,9 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_Construction_Throws_On_A_Step_At_Or_Beyond_A_Known_Kinds_Current_Version()
     {
-        // Every real kind is at version 1 today, so any upcaster for one is a signal the current
-        // version was not bumped alongside the step.
+        // Bookmark state remains at version 1, so any upcaster for it signals a missing version bump.
         Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            new GroundworkRuntimeDocumentUpcasterRegistry(
+            Registry(
             [
                 new RenameFieldUpcaster(Kind, fromVersion: 1, "a", "b")
             ]));
@@ -171,7 +170,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     public void Registry_Construction_Throws_On_A_Non_Positive_FromVersion()
     {
         Assert.Throws<GroundworkRuntimeDocumentVersionException>(() =>
-            new GroundworkRuntimeDocumentUpcasterRegistry(
+            Registry(
             [
                 new RenameFieldUpcaster("test-thing", fromVersion: 0, "a", "b")
             ]));
@@ -180,7 +179,7 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
     [Fact]
     public void Registry_With_No_Upcasters_Constructs_And_Passes_Content_Through()
     {
-        var registry = new GroundworkRuntimeDocumentUpcasterRegistry([]);
+        var registry = Registry();
 
         var content = new JsonObject { ["a"] = "value" };
         var result = registry.Upcast("test-thing", fromVersion: 1, toVersion: 1, content);
@@ -200,6 +199,9 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Metadata: new Dictionary<string, string> { ["tag"] = "v1" },
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
+
+    private static GroundworkRuntimeDocumentUpcasterRegistry Registry(params IGroundworkRuntimeDocumentUpcaster[] upcasters) =>
+        new([new WorkflowExecutionStateV1ToV2Upcaster(), .. upcasters]);
 
     private static DocumentEnvelope Envelope(string schemaVersion, string contentJson) =>
         new(Kind, "bm-1", schemaVersion, 1, contentJson, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);

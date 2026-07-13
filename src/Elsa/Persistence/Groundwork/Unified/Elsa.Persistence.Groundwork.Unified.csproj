@@ -14,6 +14,8 @@
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Secrets\Persistence\Groundwork\Elsa.Secrets.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Studio\Preferences\Persistence\Groundwork\Elsa.Studio.Preferences.Persistence.Groundwork.csproj" />
   </ItemGroup>
 
 </Project>

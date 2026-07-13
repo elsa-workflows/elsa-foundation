@@ -56,6 +56,7 @@ public static class GroundworkRuntimeStoreRegistration
         // serializer, which stamps per-kind schema versions on write and enforces them (with upcasting)
         // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateV1ToV2Upcaster>());
         services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the

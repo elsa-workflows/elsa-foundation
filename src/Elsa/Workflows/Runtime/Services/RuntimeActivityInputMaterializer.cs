@@ -265,6 +265,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         CancellationToken cancellationToken)
         : IExpressionExecutionContext, IMaterializationExpressionState, IScopedVariableProvider
     {
+        private readonly RuntimeExpressionTenantContext _tenantContext = new(serviceProvider, resolutionContext.WorkflowExecutionId, cancellationToken);
         public IReadOnlyDictionary<string, object?> WorkflowVariables => resolutionContext.WorkflowVariables;
         public IReadOnlyDictionary<string, object?> WorkflowInputs => resolutionContext.WorkflowInputs;
         public IReadOnlyDictionary<string, object?> ActivityOutputValues => resolutionContext.ActivityOutputValues;
@@ -286,6 +287,8 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         public string GetWorkflowDefinitionVersionId() => string.Empty;
         public int GetWorkflowDefinitionVersion() => 0;
         public string GetWorkflowInstanceId() => resolutionContext.WorkflowExecutionId;
+        public ValueTask<string> GetTenantIdAsync(CancellationToken tenantCancellationToken = default) =>
+            _tenantContext.GetTenantIdAsync(tenantCancellationToken);
 
         public IMemoryBlock GetBlock(IMemoryBlockReference blockReference) => blockReference.Declare();
         public bool TryGetBlock(IMemoryBlockReference blockReference, out IMemoryBlock block) { block = null!; return false; }

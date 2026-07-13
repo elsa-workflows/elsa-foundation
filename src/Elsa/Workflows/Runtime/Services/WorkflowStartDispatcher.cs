@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -59,7 +60,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // rejection reason distinguishes "no live reference" from "reference expired".
         await GateOnReferenceAsync(request.ArtifactId, requiredScope, cancellationToken);
 
-        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
+        return await DispatchCoreAsync(request, executable, requiredScope, dispatchOptions, cancellationToken);
     }
 
     // Resolves the artifact's Source References and enforces the reference-derived scope/expiry gate.
@@ -97,12 +98,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutable executable,
+        WorkflowExecutableReferenceScope requiredScope,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
-        var metadata = CreateDispatchMetadata(request, executable.Identity);
+        var metadata = CreateDispatchMetadata(request, executable.Identity, requiredScope);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: executable.Identity,
             requestedArtifactId: request.ArtifactId,
@@ -148,7 +150,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(
         WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity)
+        WorkflowExecutableIdentity identity,
+        WorkflowExecutableReferenceScope requiredScope)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
@@ -156,6 +159,9 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         metadata["runtime.artifactId"] = identity.ArtifactId;
         metadata["runtime.artifactVersion"] = identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
+        metadata[RuntimeMetadataKeys.WorkflowExecutionOrigin] = requiredScope == WorkflowExecutableReferenceScope.TestRun
+            ? nameof(WorkflowExecutionOrigin.TestRun)
+            : nameof(WorkflowExecutionOrigin.Published);
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 

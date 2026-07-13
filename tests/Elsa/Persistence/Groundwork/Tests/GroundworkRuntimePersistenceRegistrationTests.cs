@@ -94,9 +94,8 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
         Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
 
-        // With no contributed upcasters the enumerable is empty, yet the registry still constructs (its
-        // eager validation over an empty set is a no-op).
-        Assert.Empty(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        Assert.IsType<WorkflowExecutionStateV1ToV2Upcaster>(
+            Assert.Single(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>()));
         Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 

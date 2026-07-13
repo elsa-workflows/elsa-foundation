@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// are sourced from Runtime-owned state (execution state, durable-value projections, the pinned executable),
 /// so the carrier introduces no dependency on <c>Elsa.Workflows.Design.*</c> (constitution §E2.2 / §E2.6).
 /// </remarks>
-public interface IExecutionExpressionState
+public interface IExecutionExpressionState : Elsa.Expressions.Core.Contracts.IExpressionTenantContext
 {
     /// <summary>The runtime workflow execution (instance) id.</summary>
     string WorkflowInstanceId { get; }

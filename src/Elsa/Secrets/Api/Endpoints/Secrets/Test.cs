@@ -18,7 +18,14 @@ internal sealed class Test(ISecretManager secretManager) : ElsaEndpoint<TestSecr
 
     public override async Task HandleAsync(TestSecretRequest request, CancellationToken cancellationToken)
     {
-        var result = await secretManager.TestAsync(request.Name, cancellationToken);
+        var tenantId = SecretEndpointTenant.Resolve(User);
+        if (tenantId is null)
+        {
+            await Send.ForbiddenAsync(cancellationToken);
+            return;
+        }
+
+        var result = await secretManager.TestAsync(tenantId, request.Name, cancellationToken);
         await Send.OkAsync(result, cancellationToken);
     }
 }
