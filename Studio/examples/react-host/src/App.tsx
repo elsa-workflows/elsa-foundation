@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudioCodeEditor, javaScriptLanguageAdapter, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import {
@@ -12,6 +12,11 @@ import {
   type StudioStatusTone
 } from "@elsa-workflows/studio-ui";
 import { register } from "@elsa-workflows/studio-workflows";
+import {
+  createBrowserNavigationAdapter,
+  routeMatchesPath,
+  subscribeToBrowserNavigation
+} from "./browserNavigation";
 import { createStubModuleApi } from "./stubModuleApi";
 
 // A backend is not required for the app to run. When there is no Elsa backend at this URL,
@@ -139,14 +144,20 @@ function PrimitivesSection() {
 /** Section 3 — `@elsa-workflows/studio-workflows` module registered against a stub host API. */
 function WorkflowsModuleSection() {
   // Build a real (SDK-factory-backed) module API, register the workflows module into it, then
-  // pull the first registered route and render its component. `register` is idempotent enough
+  // render the registered route matching the browser location. `register` is idempotent enough
   // for a demo, but we memoize so it runs once.
-  const RegisteredPage = useMemo(() => {
+  const routes = useMemo(() => {
     const api = createStubModuleApi(BACKEND_BASE_URL);
     register(api);
-    const route = api.routes.list()[0];
-    return route?.component ?? null;
+    return api.routes.list();
   }, []);
+  const [routePath, setRoutePath] = useState(() => window.location.pathname);
+  const navigate = useMemo(() => createBrowserNavigationAdapter(window), []);
+
+  useEffect(() => subscribeToBrowserNavigation(setRoutePath, window), []);
+
+  const activeRoute = routes.find(route => routeMatchesPath(route.path, routePath)) ?? routes[0];
+  const RegisteredPage = activeRoute?.component ?? null;
 
   return (
     <section className="example-section">
@@ -158,10 +169,12 @@ function WorkflowsModuleSection() {
       </p>
       <div className="example-panel">
         <StudioAlert tone="info">
-          Rendering <code>{"api.routes.list()[0].component"}</code> — the "Workflow runs" page. It
-          will attempt to reach the backend at <code>{BACKEND_BASE_URL}</code>.
+          Rendering the route for <code>{activeRoute?.path ?? routePath}</code>. It will attempt to
+          reach the backend at <code>{BACKEND_BASE_URL}</code>.
         </StudioAlert>
-        {RegisteredPage ? <RegisteredPage /> : <StudioAlert tone="warning">No route was registered.</StudioAlert>}
+        {RegisteredPage
+          ? <RegisteredPage navigate={navigate} />
+          : <StudioAlert tone="warning">No route was registered.</StudioAlert>}
       </div>
     </section>
   );
