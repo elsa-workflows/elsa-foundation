@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Handlers;
+using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
@@ -81,7 +82,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.False(second.WasCreated);
         Assert.Equal(first.PublicationId, second.PublicationId);
         Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
-        Assert.Equal(PublicationStatus.Active, second.Status);
+        Assert.Equal(PublicationStatusView.Active, second.Status);
         Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
     }
 

@@ -9,7 +9,7 @@ public sealed record PublicationView(
     string ArtifactId,
     string SlotName,
     string? SourceReferenceId,
-    PublicationStatus Status,
+    PublicationStatusView Status,
     DateTimeOffset CreatedAt,
     DateTimeOffset? ActivatedAt,
     DateTimeOffset? RetiredAt,
@@ -23,7 +23,7 @@ public sealed record PublicationView(
             publication.ArtifactId,
             publication.SlotName,
             publication.SourceReferenceId,
-            publication.Status,
+            PublicationContract.ToView(publication.Status),
             publication.CreatedAt,
             publication.ActivatedAt,
             publication.RetiredAt,
@@ -37,7 +37,7 @@ public sealed record PublicationSlotView(
     string? ActivePublicationId,
     long Revision,
     DateTimeOffset UpdatedAt,
-    PublicationStatus? Status,
+    PublicationStatusView? Status,
     PublicationView? Publication)
 {
     public static PublicationSlotView From(PublicationSlot slot, PublicationRecord? publication) =>
@@ -48,7 +48,7 @@ public sealed record PublicationSlotView(
             slot.ActivePublicationId,
             slot.Revision,
             slot.UpdatedAt,
-            publication?.Status,
+            publication is null ? null : PublicationContract.ToView(publication.Status),
             publication is null ? null : PublicationView.From(publication));
 }
 
@@ -58,12 +58,12 @@ public sealed record PublicationPolicyView(
     string DefinitionId,
     PublicationPolicyDefaultActionView DefaultAction,
     string DefaultSlotName,
-    PublicationPolicySource Source,
+    PublicationPolicySourceView Source,
     long Revision,
     DateTimeOffset UpdatedAt)
 {
     public static PublicationPolicyView From(string workflowDefinitionId, PublicationPolicy policy, PublicationPolicySource source) =>
-        new(workflowDefinitionId, PublicationPolicyContract.ToView(policy.DefaultAction), policy.DefaultSlotName, source, policy.Revision, policy.UpdatedAt);
+        new(workflowDefinitionId, PublicationPolicyContract.ToView(policy.DefaultAction), policy.DefaultSlotName, PublicationContract.ToView(source), policy.Revision, policy.UpdatedAt);
 }
 
 public enum PublicationPolicyDefaultActionView
@@ -95,6 +95,51 @@ public enum PublicationActionView
     SideBySide
 }
 
+public enum PublicationStatusView
+{
+    Preparing,
+    Pending,
+    Active,
+    Retiring,
+    Retired,
+    Failed
+}
+
+public enum PublicationPolicySourceView
+{
+    Request,
+    Workflow,
+    Host
+}
+
+public static class PublicationContract
+{
+    public static PublicationStatusView ToView(PublicationStatus status) => status switch
+    {
+        PublicationStatus.Candidate => PublicationStatusView.Preparing,
+        PublicationStatus.PendingProjection => PublicationStatusView.Pending,
+        PublicationStatus.Active => PublicationStatusView.Active,
+        PublicationStatus.Retired => PublicationStatusView.Retired,
+        PublicationStatus.Failed => PublicationStatusView.Failed,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported publication status.")
+    };
+
+    public static PublicationActionView ToView(PublicationAction action) => action switch
+    {
+        PublicationAction.Replace => PublicationActionView.Replace,
+        PublicationAction.PublishSideBySide => PublicationActionView.SideBySide,
+        _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unsupported publication action.")
+    };
+
+    public static PublicationPolicySourceView ToView(PublicationPolicySource source) => source switch
+    {
+        PublicationPolicySource.Request => PublicationPolicySourceView.Request,
+        PublicationPolicySource.Workflow => PublicationPolicySourceView.Workflow,
+        PublicationPolicySource.Host => PublicationPolicySourceView.Host,
+        _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported publication policy source.")
+    };
+}
+
 public static class PublicationIntentContract
 {
     public static PublicationAction ToModel(PublicationActionView action) => action switch
@@ -109,8 +154,8 @@ public sealed record PublicationPreflightView(
     string DefinitionId,
     string VersionId,
     string SlotName,
-    PublicationAction ResolvedAction,
-    PublicationPolicySource PolicySource,
+    PublicationActionView ResolvedAction,
+    PublicationPolicySourceView PolicySource,
     long? PolicyRevision,
     bool CanActivate,
     IReadOnlyCollection<PublicationTriggerChange> Changes,

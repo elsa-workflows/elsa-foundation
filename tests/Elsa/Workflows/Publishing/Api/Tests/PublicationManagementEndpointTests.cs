@@ -55,11 +55,22 @@ public sealed class PublicationManagementEndpointTests
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         using var document = JsonDocument.Parse(JsonSerializer.Serialize(
-            new PublicationPolicyView("definition-1", action, "default", Elsa.Workflows.Publishing.Core.Models.PublicationPolicySource.Workflow, 1, DateTimeOffset.UnixEpoch),
+            new PublicationPolicyView("definition-1", action, "default", PublicationPolicySourceView.Workflow, 1, DateTimeOffset.UnixEpoch),
             options));
 
         Assert.Equal(expected, document.RootElement.GetProperty("defaultAction").GetString());
     }
+
+    [Theory]
+    [InlineData(Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Candidate, PublicationStatusView.Preparing)]
+    [InlineData(Elsa.Workflows.Publishing.Core.Models.PublicationStatus.PendingProjection, PublicationStatusView.Pending)]
+    [InlineData(Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Active, PublicationStatusView.Active)]
+    [InlineData(Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Retired, PublicationStatusView.Retired)]
+    [InlineData(Elsa.Workflows.Publishing.Core.Models.PublicationStatus.Failed, PublicationStatusView.Failed)]
+    public void Internal_publication_statuses_map_to_the_stable_management_contract(
+        Elsa.Workflows.Publishing.Core.Models.PublicationStatus status,
+        PublicationStatusView expected) =>
+        Assert.Equal(expected, PublicationContract.ToView(status));
 
     [Theory]
     [InlineData(PublicationActionView.Replace, "replace")]

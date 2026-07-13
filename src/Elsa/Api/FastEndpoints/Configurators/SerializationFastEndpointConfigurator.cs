@@ -20,7 +20,7 @@ internal sealed class SerializationFastEndpointConfigurator
             DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
-        result.Converters.Add(new JsonStringEnumConverter());
+        result.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
 
         return result;
     }

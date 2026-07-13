@@ -11,7 +11,7 @@ public sealed record PublishedWorkflowView(
     string DefinitionVersionId,
     string ArtifactId,
     string SlotName,
-    PublicationStatus Status,
+    PublicationStatusView Status,
     string SourceReferenceId,
     DateTimeOffset CreatedAt,
     DateTimeOffset ActivatedAt,
@@ -34,7 +34,7 @@ public sealed record PublishedWorkflowView(
             executable.Identity.DefinitionVersionId,
             publication.ArtifactId,
             publication.SlotName,
-            publication.Status,
+            PublicationContract.ToView(publication.Status),
             reference.SourceReferenceId,
             publication.CreatedAt,
             publication.ActivatedAt ?? throw new InvalidOperationException(
