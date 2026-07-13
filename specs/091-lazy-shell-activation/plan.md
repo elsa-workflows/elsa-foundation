@@ -116,6 +116,7 @@ src/Apps/Elsa.Server/
 ├── Program.cs
 ├── Readiness/
 │   ├── DefaultShellWarmup.cs
+│   ├── ShellReadinessEndpointExtensions.cs
 │   ├── ShellReadinessOptions.cs
 │   ├── ShellReadinessSnapshot.cs
 │   └── ShellReadinessState.cs
@@ -123,7 +124,10 @@ src/Apps/Elsa.Server/
 
 src/Elsa/Tasks/
 ├── Diagnostics/StartupTaskTelemetry.cs
-└── Services/TaskManager.cs
+└── Services/TaskExecutor.cs
+
+src/Elsa/Primitives/Primitives/Diagnostics/
+└── ObservationalTelemetryScope.cs
 
 src/Elsa/Persistence/Groundwork/Sqlite/
 ├── SqliteGroundworkDocumentStoreInitializer.cs
@@ -131,7 +135,12 @@ src/Elsa/Persistence/Groundwork/Sqlite/
 └── DependencyInjection/SqliteGroundworkDocumentStoreRegistration.cs
 
 tests/Elsa/Modularity/Tests/
-└── ServerReadinessTests.cs
+├── ServerReadinessFixture.cs
+├── ServerReadinessTests.cs
+└── ShellReadinessTests.cs
+
+tests/Elsa/Primitives/Tests/Diagnostics/
+└── ObservationalTelemetryScopeTests.cs
 
 tests/Elsa/Tasks/Tests/
 └── StartupTaskTelemetryTests.cs
@@ -143,7 +152,11 @@ tests/Elsa/Architecture/
 └── ArchitectureGuardTests.cs
 
 tools/performance/
-└── measure-server-cold-start.sh
+├── measure-server-cold-start.sh
+├── measure-http-workflow.sh
+└── tests/
+    ├── measure-server-cold-start-tests.sh
+    └── measure-http-workflow-tests.sh
 
 docs/reports/
 └── shell-activation-performance-2026-07.md
