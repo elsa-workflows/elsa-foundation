@@ -48,7 +48,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             ? SqliteGroundworkTelemetry.HistoryHitOutcome
             : SqliteGroundworkTelemetry.MaterializedOutcome;
         using var activity = ObservationalTelemetryScope.Start(
-            SqliteGroundworkTelemetry.ActivitySource,
+            SqliteGroundworkTelemetry.GetActivitySource,
             SqliteGroundworkTelemetry.ActivityName);
 
         try
@@ -105,8 +105,9 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         finally
         {
             activity.SetTag(SqliteGroundworkTelemetry.OutcomeTag, outcome);
-            activity.Observe(() =>
-                SqliteGroundworkTelemetry.Duration.Record(
+            activity.Observe(
+                SqliteGroundworkTelemetry.GetDuration,
+                histogram => histogram.Record(
                     Stopwatch.GetElapsedTime(started).TotalMilliseconds,
                     new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome)));
         }

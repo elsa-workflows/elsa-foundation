@@ -22,6 +22,26 @@ public sealed class SqliteGroundworkInitializationTests
     private static readonly ProviderIdentity Provider = new("groundwork-sqlite", "1.0.0");
 
     [Fact]
+    public async Task StaticActivitySourceDiscoveryFailureDoesNotPreventInitialization()
+    {
+        var databasePath = NewDatabasePath();
+        var holder = new GroundworkDocumentStoreHolder();
+
+        try
+        {
+            await NewInitializer(databasePath, holder).InitializeAsync();
+
+            Assert.True(holder.IsInitialized);
+            Assert.Equal(1, SqliteStaticTelemetryFailureProbe.FailureCount);
+        }
+        finally
+        {
+            await holder.DisposeAsync();
+            DeleteDatabase(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task FirstInitialization_EmitsMaterializedActivityAndDuration()
     {
         var databasePath = NewDatabasePath();

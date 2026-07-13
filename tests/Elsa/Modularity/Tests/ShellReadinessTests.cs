@@ -15,6 +15,20 @@ namespace Elsa.Modularity.Tests;
 public sealed class ShellReadinessTests
 {
     [Fact]
+    public async Task StaticActivitySourceDiscoveryFailureDoesNotPreventSuccessfulWarmup()
+    {
+        await using var harness = WarmupHarness.Create();
+
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        harness.Lifetime.SignalStarted();
+        await harness.Gate.WaitUntilEnteredAsync();
+        harness.Gate.Release();
+        await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
+
+        Assert.Equal(1, ShellStaticTelemetryFailureProbe.FailureCount);
+    }
+
+    [Fact]
     public void OptionsDefaultToWarmingTheDefaultShell()
     {
         var options = new ShellReadinessOptions();

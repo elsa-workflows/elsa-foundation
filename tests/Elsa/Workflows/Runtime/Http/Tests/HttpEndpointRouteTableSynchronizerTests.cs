@@ -25,6 +25,16 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
     private const string RouteCountTag = "elsa.route.count";
 
     [Fact]
+    public async Task StaticInstrumentPublicationFailureDoesNotFailSuccessfulRefresh()
+    {
+        var synchronizer = Build(new StaticResolver(_ => ValueTask.FromResult<IReadOnlyCollection<HttpRouteData>>([])));
+
+        await synchronizer.RefreshAsync();
+
+        Assert.Equal(1, HttpRouteStaticTelemetryFailureProbe.FailureCount);
+    }
+
+    [Fact]
     public async Task RefreshAsync_SerializesConcurrentRefreshes_SecondWaitsForTheFirst()
     {
         // A resolver that blocks inside its first ResolveRoutesAsync until the test releases it, and signals when a

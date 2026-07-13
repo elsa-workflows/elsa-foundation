@@ -19,10 +19,20 @@ public static class ShellActivationTelemetry
     public const string FailedOutcome = "failed";
     public const string CancelledOutcome = "cancelled";
 
-    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName);
-    internal static readonly Meter Meter = new(MeterName);
-    internal static readonly Histogram<double> Duration = Meter.CreateHistogram<double>(
-        DurationInstrumentName,
-        "ms",
-        "Default-shell preparation phase duration.");
+    private static readonly Lazy<ActivitySource> ActivitySource = new(
+        () => new(ActivitySourceName),
+        LazyThreadSafetyMode.PublicationOnly);
+    private static readonly Lazy<Meter> Meter = new(
+        () => new(MeterName),
+        LazyThreadSafetyMode.PublicationOnly);
+    private static readonly Lazy<Histogram<double>> Duration = new(
+        () => Meter.Value.CreateHistogram<double>(
+            DurationInstrumentName,
+            "ms",
+            "Default-shell preparation phase duration."),
+        LazyThreadSafetyMode.PublicationOnly);
+
+    internal static ActivitySource GetActivitySource() => ActivitySource.Value;
+
+    internal static Histogram<double> GetDuration() => Duration.Value;
 }

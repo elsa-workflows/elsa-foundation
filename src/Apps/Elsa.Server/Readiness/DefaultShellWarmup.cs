@@ -99,7 +99,7 @@ public sealed class DefaultShellWarmup(
         var started = Stopwatch.GetTimestamp();
         var outcome = ShellActivationTelemetry.SuccessOutcome;
         using var activity = ObservationalTelemetryScope.Start(
-            ShellActivationTelemetry.ActivitySource,
+            ShellActivationTelemetry.GetActivitySource,
             ShellActivationTelemetry.ActivityName);
 
         try
@@ -127,8 +127,9 @@ public sealed class DefaultShellWarmup(
             };
             activity.SetTag(ShellActivationTelemetry.PhaseTag, phase);
             activity.SetTag(ShellActivationTelemetry.OutcomeTag, outcome);
-            activity.Observe(() =>
-                ShellActivationTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
+            activity.Observe(
+                ShellActivationTelemetry.GetDuration,
+                histogram => histogram.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
 

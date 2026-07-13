@@ -42,7 +42,7 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
         int? routeCount = null;
         var gateAcquired = false;
         using var activity = ObservationalTelemetryScope.Start(
-            HttpRouteTableTelemetry.ActivitySource,
+            HttpRouteTableTelemetry.GetActivitySource,
             HttpRouteTableTelemetry.ActivityName);
 
         try
@@ -81,8 +81,9 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
                 activity.SetTag(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
             }
 
-            activity.Observe(() =>
-                HttpRouteTableTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
+            activity.Observe(
+                HttpRouteTableTelemetry.GetDuration,
+                histogram => histogram.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
 

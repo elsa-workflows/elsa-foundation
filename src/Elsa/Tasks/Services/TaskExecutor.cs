@@ -38,7 +38,7 @@ public sealed class TaskExecutor(IDistributedLockProvider distributedLockProvide
         var started = Stopwatch.GetTimestamp();
         var outcome = StartupTaskTelemetry.SuccessOutcome;
         using var activity = ObservationalTelemetryScope.Start(
-            StartupTaskTelemetry.ActivitySource,
+            StartupTaskTelemetry.GetActivitySource,
             StartupTaskTelemetry.ActivityName);
 
         try
@@ -69,7 +69,9 @@ public sealed class TaskExecutor(IDistributedLockProvider distributedLockProvide
             };
             activity.SetTag(StartupTaskTelemetry.TaskTypeTag, taskType);
             activity.SetTag(StartupTaskTelemetry.OutcomeTag, outcome);
-            activity.Observe(() => StartupTaskTelemetry.Duration.Record(durationMs, tags));
+            activity.Observe(
+                StartupTaskTelemetry.GetDuration,
+                histogram => histogram.Record(durationMs, tags));
             logger.LogInformation(
                 "Startup task {TaskType} completed with outcome {Outcome} after {DurationMs:F3} ms",
                 taskType,

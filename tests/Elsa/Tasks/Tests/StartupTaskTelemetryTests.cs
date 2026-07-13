@@ -13,6 +13,14 @@ namespace Elsa.Tasks.Tests;
 public sealed class StartupTaskTelemetryTests
 {
     [Fact]
+    public async Task StaticInstrumentPublicationFailureDoesNotFailSuccessfulTask()
+    {
+        await ExecuteAsync(new SuccessfulTask(), new AvailableLockProvider(), CancellationToken.None);
+
+        Assert.Equal(1, StartupTaskStaticTelemetryFailureProbe.FailureCount);
+    }
+
+    [Fact]
     public async Task SuccessfulTask_EmitsBoundedSuccessActivityAndDuration()
     {
         using var telemetry = new TelemetryCapture();

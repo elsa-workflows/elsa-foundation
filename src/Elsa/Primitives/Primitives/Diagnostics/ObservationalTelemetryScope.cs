@@ -21,8 +21,31 @@ public sealed class ObservationalTelemetryScope : IDisposable
     public static ObservationalTelemetryScope Start(ActivitySource source, string name)
     {
         ArgumentNullException.ThrowIfNull(source);
+        return Start(() => source, name);
+    }
+
+    /// <summary>Creates the source and starts an activity when possible; listener failures produce an empty scope.</summary>
+    public static ObservationalTelemetryScope Start(Func<ActivitySource> sourceFactory, string name)
+    {
+        ArgumentNullException.ThrowIfNull(sourceFactory);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var parentActivity = Activity.Current;
+        ActivitySource? source = null;
+
+        for (var attempt = 0; attempt < 2 && source is null; attempt++)
+        {
+            try
+            {
+                source = sourceFactory();
+            }
+            catch (Exception)
+            {
+                RestoreAfterFailedStart(parentActivity);
+            }
+        }
+
+        if (source is null)
+            return Empty;
 
         try
         {
@@ -55,6 +78,18 @@ public sealed class ObservationalTelemetryScope : IDisposable
         {
             // Diagnostics are observational and must never change application behavior.
         }
+    }
+
+    /// <summary>Creates a diagnostic resource with one retry, then observes it at most once.</summary>
+    public void Observe<T>(Func<T> resourceFactory, Action<T> observation) where T : class
+    {
+        ArgumentNullException.ThrowIfNull(resourceFactory);
+        ArgumentNullException.ThrowIfNull(observation);
+
+        if (!TryCreate(resourceFactory, out var resource))
+            return;
+
+        Observe(() => observation(resource));
     }
 
     /// <summary>Stops the activity without surfacing listener failures.</summary>
@@ -96,5 +131,24 @@ public sealed class ObservationalTelemetryScope : IDisposable
         {
             Activity.Current = parentActivity;
         }
+    }
+
+    private static bool TryCreate<T>(Func<T> resourceFactory, out T resource) where T : class
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            try
+            {
+                resource = resourceFactory();
+                return true;
+            }
+            catch (Exception)
+            {
+                // Diagnostic resource creation may be retried, but observation itself is never repeated.
+            }
+        }
+
+        resource = null!;
+        return false;
     }
 }
