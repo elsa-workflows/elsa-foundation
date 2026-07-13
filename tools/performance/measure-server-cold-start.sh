@@ -481,6 +481,27 @@ for key, label in labels:
     cells = [item[name] for name in ("p50Ms", "p95Ms", "minMs", "maxMs")]
     rendered = ["n/a" if value is None else f"{value:.3f}" for value in cells]
     lines.append(f"| {label} | {' | '.join(rendered)} |")
+
+lines.extend([
+    "", "## Performance budgets", "",
+    "| Budget | Configured (ms) | Actual (ms) | Result |",
+    "|---|---:|---:|---|",
+])
+for key, label in (
+    ("shellReadyP95Ms", "Shell ready p95"),
+    ("firstRequestP95Ms", "First workflow request p95"),
+):
+    item = budgets[key]
+    configured = "n/a" if item["configuredMs"] is None else f"{item['configuredMs']:.3f}"
+    actual = "n/a" if item["actualMs"] is None else f"{item['actualMs']:.3f}"
+    if item["configuredMs"] is None:
+        result = "not configured"
+    elif item["passed"] is None:
+        result = "not evaluated"
+    else:
+        result = "passed" if item["passed"] else "failed"
+    lines.append(f"| {label} | {configured} | {actual} | {result} |")
+
 if failure:
     lines.extend(["", f"Failure: `{failure['category']}`. {failure['message']}"])
     if failure["logPath"]:

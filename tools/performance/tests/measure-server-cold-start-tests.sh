@@ -266,9 +266,12 @@ run_case "output closure hash changes with sibling" 0 'Cold-start report' \
   --expected-status 200 --expected-body 'Hello World!' --boots 1 \
   --startup-timeout-seconds 7 --shutdown-timeout-seconds 3 \
   --enforce-ready-p95-ms 100000 --enforce-first-request-p95-ms 100000
-if ! python3 - "$hash_a_artifacts/report.json" "$hash_b_artifacts/report.json" <<'PY'
-import json, pathlib, sys
-first, second = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:])
+if ! python3 - "$hash_a_artifacts/report.json" "$hash_b_artifacts/report.json" \
+  "$hash_a_artifacts/report.md" "$hash_b_artifacts/report.md" <<'PY'
+import json, pathlib, re, sys
+first, second = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:3])
+unconfigured_markdown = pathlib.Path(sys.argv[3]).read_text()
+markdown = pathlib.Path(sys.argv[4]).read_text()
 assert first["provenance"]["serverOutputSha256"] != second["provenance"]["serverOutputSha256"]
 assert second["request"]["startupTimeoutSeconds"] == 7
 assert second["request"]["shutdownTimeoutSeconds"] == 3
@@ -279,6 +282,11 @@ assert second["budgets"]["firstRequestP95Ms"]["configuredMs"] == 100000
 assert second["budgets"]["firstRequestP95Ms"]["passed"] is True
 assert second["budgets"]["passed"] is True
 assert second["outcome"] == {"status": "passed", "failure": None}
+assert "## Performance budgets" in markdown
+assert re.search(r"\| Shell ready p95 \| 100000\.000 \| [0-9.]+ \| passed \|", markdown)
+assert re.search(r"\| First workflow request p95 \| 100000\.000 \| [0-9.]+ \| passed \|", markdown)
+assert re.search(r"\| Shell ready p95 \| n/a \| [0-9.]+ \| not configured \|", unconfigured_markdown)
+assert re.search(r"\| First workflow request p95 \| n/a \| [0-9.]+ \| not configured \|", unconfigured_markdown)
 PY
 then
   printf 'FAIL: successful report did not preserve output-closure hash and timeout provenance.\n' >&2
@@ -297,10 +305,12 @@ run_case "later boot failure preserves prior rows" 1 'Boot 2 workflow validation
   --expected-status 200 --expected-body 'Hello World!' --boots 2 \
   --enforce-ready-p95-ms 100000 --enforce-first-request-p95-ms 100000
 unset FAKE_BOOT_COUNTER_FILE FAKE_FAIL_WORKFLOW_ON_BOOT
-if ! python3 - "$hash_b_artifacts/report.json" "$two_boot_artifacts/report.json" <<'PY'
-import json, pathlib, sys
+if ! python3 - "$hash_b_artifacts/report.json" "$two_boot_artifacts/report.json" \
+  "$two_boot_artifacts/report.md" <<'PY'
+import json, pathlib, re, sys
 
-success, failure = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:])
+success, failure = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:3])
+markdown = pathlib.Path(sys.argv[3]).read_text()
 assert set(failure) == set(success)
 assert set(failure["provenance"]) == set(success["provenance"])
 assert set(failure["request"]) == set(success["request"])
@@ -317,6 +327,8 @@ assert failure["budgets"]["passed"] is None
 assert failure["outcome"]["status"] == "failed"
 assert failure["outcome"]["failure"]["boot"] == 2
 assert failure["outcome"]["failure"]["category"] == "workflow_validation_failed"
+assert re.search(r"\| Shell ready p95 \| 100000\.000 \| [0-9.]+ \| not evaluated \|", markdown)
+assert re.search(r"\| First workflow request p95 \| 100000\.000 \| [0-9.]+ \| not evaluated \|", markdown)
 PY
 then
   printf 'FAIL: later-boot failure report did not preserve prior rows and the stable report schema.\n' >&2
@@ -386,10 +398,11 @@ run_case "ready budget failure" 1 'p95.*exceeds.*budget|budget.*failed' \
   --boots 1 --enforce-ready-p95-ms 0 \
   --output-json "$temporary_directory/result.json" \
   --output-markdown "$temporary_directory/result.md"
-if ! python3 - "$temporary_directory/result.json" <<'PY'
-import json, pathlib, sys
+if ! python3 - "$temporary_directory/result.json" "$temporary_directory/result.md" <<'PY'
+import json, pathlib, re, sys
 
 report = json.loads(pathlib.Path(sys.argv[1]).read_text())
+markdown = pathlib.Path(sys.argv[2]).read_text()
 budget = report["budgets"]["shellReadyP95Ms"]
 assert budget["configuredMs"] == 0
 assert budget["actualMs"] > 0
@@ -397,6 +410,8 @@ assert budget["passed"] is False
 assert report["budgets"]["passed"] is False
 assert report["outcome"]["status"] == "failed"
 assert report["outcome"]["failure"]["category"] == "budget_failed"
+assert re.search(r"\| Shell ready p95 \| 0\.000 \| [0-9.]+ \| failed \|", markdown)
+assert re.search(r"\| First workflow request p95 \| n/a \| [0-9.]+ \| not configured \|", markdown)
 PY
 then
   printf 'FAIL: budget failure report did not retain configured, actual, and failed budget state.\n' >&2
