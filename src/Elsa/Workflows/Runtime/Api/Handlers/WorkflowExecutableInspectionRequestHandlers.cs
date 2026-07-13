@@ -18,7 +18,7 @@ public sealed class GetWorkflowExecutableRequestHandler(WorkflowExecutableInspec
     : IRequestHandler<GetWorkflowExecutable, WorkflowExecutableDetailsView>
 {
     public async Task<WorkflowExecutableDetailsView> Handle(GetWorkflowExecutable request, CancellationToken cancellationToken) =>
-        await inspector.GetAsync(request.ArtifactId, cancellationToken)
+        await inspector.GetAsync(request.ArtifactId, request.Ref, cancellationToken)
         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutable), request.ArtifactId);
 }
 

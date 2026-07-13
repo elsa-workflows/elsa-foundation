@@ -11,6 +11,7 @@ public static class PublishingApiCapabilities
         CapabilityId,
         1,
         [
+            new("publication-snapshot-preflight", "publishing/workflows/preflight"),
             new("publication-preflight", "publishing/workflows/{versionId}/preflight", templated: true),
             new("workflow-publish", "publishing/workflows/{versionId}/publish", templated: true),
             new("publication-slots", "publishing/workflows/{definitionId}/slots", templated: true),

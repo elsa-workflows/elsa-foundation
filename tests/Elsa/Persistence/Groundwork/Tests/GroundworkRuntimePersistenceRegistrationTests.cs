@@ -104,6 +104,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.True(upcasterTypes.SetEquals(
             [
                 typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
+                typeof(WorkflowExecutionStateDocumentV1ToV2Upcaster),
                 typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
                 typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
                 typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)

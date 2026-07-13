@@ -21,7 +21,9 @@ public sealed class RuntimeCheckpointCommandPayload
         IReadOnlyDictionary<string, JsonElement>? seedVariables = null,
         IReadOnlyDictionary<string, JsonElement>? seedInputs = null,
         JsonElement? seedStimulusInput = null,
-        string? seedTriggerNodeId = null)
+        string? seedTriggerNodeId = null,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown,
+        WorkflowExecutableSourceProvenance? pinnedSource = null)
     {
         if (pinnedExecutable is null)
             throw new RuntimeCheckpointCommandPayloadValidationException("Pinned executable cannot be null.", nameof(pinnedExecutable));
@@ -58,6 +60,8 @@ public sealed class RuntimeCheckpointCommandPayload
         SeedInputs = SnapshotElements(seedInputs);
         SeedStimulusInput = seedStimulusInput?.Clone();
         SeedTriggerNodeId = seedTriggerNodeId;
+        RunKind = runKind;
+        PinnedSource = pinnedSource;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -89,6 +93,17 @@ public sealed class RuntimeCheckpointCommandPayload
     /// commits. Populated only for the workflow-started checkpoint of a trigger-matched start; null otherwise.
     /// </summary>
     public string? SeedTriggerNodeId { get; }
+
+    /// <summary>
+    /// The durable execution classification carried from the start command into the first checkpoint.
+    /// Legacy checkpoint payloads without this field use <see cref="WorkflowRunKind.Unknown"/>.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; }
+
+    /// <summary>
+    /// Immutable source attribution carried by the workflow-started checkpoint. Null for legacy payloads.
+    /// </summary>
+    public WorkflowExecutableSourceProvenance? PinnedSource { get; }
 
     private static IReadOnlyDictionary<string, JsonElement> SnapshotElements(IReadOnlyDictionary<string, JsonElement>? values) =>
         (values ?? new Dictionary<string, JsonElement>()).ToDictionary(item => item.Key, item => item.Value.Clone(), StringComparer.Ordinal);

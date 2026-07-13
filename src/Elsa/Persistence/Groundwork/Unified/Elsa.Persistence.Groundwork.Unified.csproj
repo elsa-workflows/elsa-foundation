@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Elsa.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Workflows\Design\Persistence\Groundwork\Elsa.Workflows.Design.Persistence.Groundwork.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Publishing\Persistence\Groundwork\Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
     <ProjectReference Include="..\..\..\Activities\Design\Persistence\Groundwork\Elsa.Activities.Design.Persistence.Groundwork.csproj" />
   </ItemGroup>
 

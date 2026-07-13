@@ -57,59 +57,104 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         // References for this artifact and gates on them. A published dispatch requires a live Published
         // reference; a test-run dispatch requires a live TestRun reference and enforces its ExpiresAt. The
         // rejection reason distinguishes "no live reference" from "reference expired".
-        await GateOnReferenceAsync(request.ArtifactId, requiredScope, cancellationToken);
+        var resolved = await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
 
-        return await DispatchCoreAsync(request, executable, dispatchOptions, cancellationToken);
+        return await DispatchCoreAsync(request, resolved.Identity, resolved.Source, dispatchOptions, cancellationToken);
     }
 
-    // Resolves the artifact's Source References and enforces the reference-derived scope/expiry gate.
-    //
-    // Backward-compatibility seam: an artifact with NO references at all is dispatched through unchanged. Lower-level
-    // callers (integration harnesses, direct runtime seeding) legitimately save an executable straight into the single
-    // artifact store without publishing a reference; gating those out would turn a storage primitive into a publish
-    // gate. The gate therefore engages only once at least one reference exists for the artifact — which is exactly the
-    // published and test-run flows this slice rewired to always append one.
-    private async ValueTask GateOnReferenceAsync(
-        string artifactId,
+    // Resolves the artifact's Source References and returns content identity plus independently pinned source
+    // attribution. This is deliberately fail-closed: the content artifact's identity can reflect whichever source
+    // first produced deduplicated content, so it is never authoritative publication provenance on its own.
+    private async ValueTask<ResolvedPinnedExecutable> ResolvePinnedExecutableAsync(
+        WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutable executable,
         WorkflowExecutableReferenceScope requiredScope,
         CancellationToken cancellationToken)
     {
-        var references = await _sourceReferenceStore.ListByArtifactAsync(artifactId, cancellationToken);
+        var references = await _sourceReferenceStore.ListByArtifactAsync(request.ArtifactId, cancellationToken);
         if (references.Count == 0)
-            return;
+        {
+            if (request.SourceSelection is null &&
+                request.ProvenanceRequirement == WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
+                return new(executable.Identity, null);
+
+            throw new WorkflowExecutableReferenceRejectedException(
+                request.ArtifactId,
+                requiredScope,
+                request.SourceSelection is null
+                    ? WorkflowExecutableReferenceRejectionReason.NoLiveReference
+                    : WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
+        }
 
         var now = _timeProvider.GetUtcNow();
         var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
+        var selectedReferences = Select(scopedReferences, request.SourceSelection);
+        var liveReferences = selectedReferences
+            .Where(reference => reference.IsLive(now))
+            .OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
+            .ToArray();
 
-        if (scopedReferences.Any(reference => reference.IsLive(now)))
-            return;
+        if (liveReferences.Length == 1)
+            return new(
+                executable.Identity,
+                WorkflowExecutableSourceProvenance.From(liveReferences[0]));
+
+        if (liveReferences.Length > 1)
+            throw new WorkflowExecutableReferenceRejectedException(
+                request.ArtifactId,
+                requiredScope,
+                WorkflowExecutableReferenceRejectionReason.Ambiguous);
+
+        if (request.SourceSelection is not null && selectedReferences.Length == 0)
+            throw new WorkflowExecutableReferenceRejectedException(
+                request.ArtifactId,
+                requiredScope,
+                WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
 
         // No live reference of the required scope. Distinguish the test-run-lapsed case (a non-retired reference
         // that is present but past its expiry) from the absent/retired/wrong-scope case, so an expired test run is
         // reported honestly rather than as an unpublished artifact.
-        var expired = scopedReferences.Any(reference => reference.DeletedAt is null && reference.IsExpired(now));
+        var expired = selectedReferences.Any(reference => reference.DeletedAt is null && reference.IsExpired(now));
         throw new WorkflowExecutableReferenceRejectedException(
-            artifactId,
+            request.ArtifactId,
             requiredScope,
             expired ? WorkflowExecutableReferenceRejectionReason.Expired : WorkflowExecutableReferenceRejectionReason.NoLiveReference);
     }
 
+    private static WorkflowExecutableSourceReference[] Select(
+        WorkflowExecutableSourceReference[] references,
+        WorkflowExecutableSourceSelection? selection)
+    {
+        if (selection is null)
+            return references;
+        if (selection.SourceReferenceId is { } sourceReferenceId)
+            return references.Where(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId)).ToArray();
+
+        return references
+            .Where(reference => selection.PublicationId is null || StringComparer.Ordinal.Equals(reference.PublicationId, selection.PublicationId))
+            .Where(reference => selection.SlotId is null || StringComparer.Ordinal.Equals(reference.SlotId, selection.SlotId))
+            .ToArray();
+    }
+
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutable executable,
+        WorkflowExecutableIdentity pinnedIdentity,
+        WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var now = _timeProvider.GetUtcNow();
-        var metadata = CreateDispatchMetadata(request, executable.Identity);
+        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
-            pinnedExecutable: executable.Identity,
+            pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
             variables: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Variables),
             inputs: WorkflowExecutionStartCommandPayload.ToJsonValues(request.Inputs),
             stimulusInput: request.StimulusInput,
-            triggerNodeId: request.TriggerNodeId));
+            triggerNodeId: request.TriggerNodeId,
+            runKind: request.RunKind,
+            pinnedSource: pinnedSource));
 
         var command = new WorkflowExecutionCommand(
             CommandId: _idGenerator.NewWorkflowExecutionCommandId(),
@@ -123,7 +168,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             envelopeId: _idGenerator.NewWorkflowExecutionCommandEnvelopeId(),
             workflowExecutionId: workflowExecutionId,
             command: command,
-            idempotencyKey: request.IdempotencyKey ?? CreateDefaultIdempotencyKey(workflowExecutionId, executable.Identity.ArtifactId),
+            idempotencyKey: request.IdempotencyKey ?? CreateDefaultIdempotencyKey(workflowExecutionId, pinnedIdentity.ArtifactId),
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: now,
             metadata: metadata);
@@ -141,24 +186,30 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
         return new WorkflowExecutionStartDispatchResult(
             workflowExecutionId: workflowExecutionId,
-            pinnedExecutable: executable.Identity,
+            pinnedExecutable: pinnedIdentity,
             commandDispatch: dispatchResult,
-            agent: agent.Descriptor);
+            agent: agent.Descriptor,
+            pinnedSource: pinnedSource);
     }
 
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(
         WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutableIdentity identity)
+        WorkflowExecutableIdentity identity,
+        WorkflowExecutableSourceProvenance? source)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
         metadata["runtime.dispatcher"] = nameof(WorkflowStartDispatcher);
         metadata["runtime.artifactId"] = identity.ArtifactId;
-        metadata["runtime.artifactVersion"] = identity.ArtifactVersion;
+        metadata["runtime.artifactVersion"] = source?.ArtifactVersion ?? identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
 
     private static string CreateDefaultIdempotencyKey(string workflowExecutionId, string artifactId) =>
         $"{workflowExecutionId}:start:{artifactId}";
+
+    private sealed record ResolvedPinnedExecutable(
+        WorkflowExecutableIdentity Identity,
+        WorkflowExecutableSourceProvenance? Source);
 }

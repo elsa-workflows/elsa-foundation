@@ -69,6 +69,42 @@ public sealed class PublishingGroundworkStoreTests
         Assert.Single(await stores.Intents.ListByPublicationAsync("publication-record"));
     }
 
+    [Theory]
+    [InlineData("memory")]
+    [InlineData("sqlite")]
+    public async Task SnapshotReviewsAreCrossReplicaSingleUseAndCleanupIsBounded(string provider)
+    {
+        await using var fixture = await PublishingStoreFixture.CreateAsync(provider);
+        var serializer = new PublishingGroundworkDocumentSerializer();
+        var firstReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
+        var review = Review("token-1", Now.AddMinutes(15));
+
+        Assert.True(await firstReplica.TryAddAsync(review));
+        await fixture.RestartAsync();
+        firstReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
+        var secondReplica = new GroundworkPublicationSnapshotReviewStore(fixture.Store, serializer);
+        Assert.Equal(review, await secondReplica.FindAsync(review.PreflightToken));
+
+        var consumers = await Task.WhenAll(
+            firstReplica.TryConsumeAsync(review.PreflightToken).AsTask(),
+            secondReplica.TryConsumeAsync(review.PreflightToken).AsTask());
+        Assert.Single(consumers, consumed => consumed);
+
+        Assert.True(await firstReplica.TryAddAsync(Review("expired-1", Now.AddMinutes(-1))));
+        Assert.True(await firstReplica.TryAddAsync(Review("expired-2", Now.AddMinutes(-2))));
+        Assert.Equal(1, await firstReplica.DeleteExpiredAsync(Now, maxCount: 1));
+        Assert.Single(new[]
+        {
+            await firstReplica.FindAsync("expired-1"),
+            await firstReplica.FindAsync("expired-2")
+        }, item => item is not null);
+    }
+
+    private static PublicationSnapshotReview Review(string token, DateTimeOffset expiresAt) => new(
+        token, "sha256:candidate", "definition-1", PublicationAction.Replace, "default",
+        PublicationPolicySource.Workflow, 7, PublicationAction.Replace, "default", "publication-current",
+        3, "publication-current", "tenant-a", expiresAt);
+
     private static PublicationRecord Publication(string id, PublicationStatus status) => new(
         id,
         PublicationSlotIdentity.Create("definition-1", "default"),

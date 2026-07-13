@@ -227,11 +227,24 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.False(scheduleState["isActive"]!.GetValue<bool>());
     }
 
+    [Fact]
+    public void WorkflowExecutionStateV1ToV2Upcaster_AddsNeutralClassificationAndSourceProvenance()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutionState","state":{"workflowExecutionId":"wf-1"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV1ToV2Upcaster().Upcast(content);
+
+        var state = Assert.IsType<JsonObject>(result["state"]);
+        Assert.Equal(0, state["runKind"]!.GetValue<int>());
+        Assert.Null(state["pinnedSource"]);
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),

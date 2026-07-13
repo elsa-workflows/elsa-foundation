@@ -10,9 +10,12 @@ public interface IWorkflowStartDispatcher
     /// <summary>
     /// Dispatches a start of the stored artifact, gated on its Source References (ADR 0040). The dispatch is refused
     /// with a <see cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableReferenceRejectedException"/> when the
-    /// artifact carries references but none is a live reference of <paramref name="requiredScope"/> (published dispatch
+    /// artifact has no single authoritative live reference of <paramref name="requiredScope"/> (published dispatch
     /// requires a live Published reference; a test-run dispatch requires a live TestRun reference and its ExpiresAt is
-    /// enforced). An artifact with no references at all is dispatched unchanged (direct/seeded runtime path).
+    /// enforced). Public callers set <see cref="WorkflowExecutionStartDispatchRequest.ProvenanceRequirement"/> to
+    /// <see cref="WorkflowExecutableProvenanceRequirement.RequireLiveReference"/> and fail closed. The request's
+    /// explicit legacy-compatibility default exists only for internal seeded/direct artifacts that predate source
+    /// references; those executions pin immutable content identity and null source provenance.
     /// </summary>
     /// <param name="dispatchOptions">
     /// Optional per-request dispatch options forwarded verbatim to the workflow execution agent (spec 089 FR-019).

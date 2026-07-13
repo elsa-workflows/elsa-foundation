@@ -269,6 +269,40 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
+    public async Task CheckpointHandler_PreservesPinnedRunKindThroughCompletion()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStateStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            NewIdentity(),
+            WorkflowExecutionStatus.Running,
+            null,
+            _now.AddMinutes(-5),
+            _now.AddMinutes(-5),
+            _now.AddMinutes(-5),
+            null,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        {
+            RunKind = WorkflowRunKind.TestRun
+        });
+        await activityStateStore.SaveAsync(NewCompletedActivityState());
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStateStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var handler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue, workflowStateStore);
+
+        await handler.HandleAsync(NewCheckpointWorkItem([], RuntimeCheckpointNames.WorkflowCompleted));
+
+        var state = await workflowStateStore.FindAsync("wfexec-1");
+        Assert.Equal(WorkflowRunKind.TestRun, state!.RunKind);
+    }
+
+    [Fact]
     public async Task CheckpointHandler_RecordsSchedulerIntentAfterSuccessfulCommit()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -340,14 +374,16 @@ public sealed class RuntimeDownstreamSchedulingTests
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
         IRuntimeCheckpointCommitStore checkpointWriter,
-        IWorkflowSchedulerWorkQueue queue) =>
+        IWorkflowSchedulerWorkQueue queue,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter),
             inspectionAccumulator: null,
-            timeProvider: new FixedTimeProvider(_now));
+            timeProvider: new FixedTimeProvider(_now),
+            workflowExecutionStateStore: workflowExecutionStateStore);
 
     private RuntimeSchedulerWorkItem NewCompleteWorkItem(
         WorkflowExecutableIdentity pinnedExecutable,

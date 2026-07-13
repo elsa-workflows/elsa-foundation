@@ -186,6 +186,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             typeof(SqliteGroundworkUnifiedPersistenceShellFeature).Assembly,
             typeof(PostgreSqlGroundworkUnifiedPersistenceShellFeature).Assembly,
+            typeof(Elsa.Workflows.Publishing.Persistence.Groundwork.Sqlite.SqliteGroundworkPublishingPersistenceShellFeature).Assembly,
             typeof(WorkflowsDesignApiFeature).Assembly,
             typeof(ActivitiesDesignApiFeature).Assembly,
 

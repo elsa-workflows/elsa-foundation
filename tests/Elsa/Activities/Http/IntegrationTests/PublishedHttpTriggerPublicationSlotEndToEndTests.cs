@@ -39,7 +39,10 @@ public sealed class PublishedHttpTriggerPublicationSlotEndToEndTests : IAsyncLif
         Assert.Equal(HttpStatusCode.NotFound, (await GetAsync("foo")).StatusCode);
         var barResponse = await GetAsync("bar");
         Assert.Equal(HttpStatusCode.Accepted, barResponse.StatusCode);
-        Assert.Single(await ReadStartedIdsAsync(barResponse));
+        var state = await _fixture.WorkflowExecutionAsync(Assert.Single(await ReadStartedIdsAsync(barResponse)));
+        Assert.Equal("reference:publication-bar", state.PinnedSource!.SourceReferenceId);
+        Assert.Equal("publication-bar", state.PinnedSource.PublicationId);
+        Assert.Equal(DefaultSlot, state.PinnedSource.SlotId);
     }
 
     [Fact]

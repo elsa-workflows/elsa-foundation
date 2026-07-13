@@ -18,6 +18,7 @@ public static class RuntimeApiCapabilities
             new("workflow-executable-provenance", "runtime/workflows/executables/{artifactId}/provenance", templated: true),
             new("workflow-execute", "runtime/workflows/executables/{artifactId}/execute", templated: true),
             new("workflow-instances", "runtime/workflows/instances"),
+            new("workflow-instances-page", "runtime/workflows/instances/page"),
             new("workflow-instance", "runtime/workflows/instances/{workflowExecutionId}", templated: true),
             new("activity-execution", "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}", templated: true),
             new("workflow-incidents", "runtime/workflows/instances/{workflowExecutionId}/incidents", templated: true)

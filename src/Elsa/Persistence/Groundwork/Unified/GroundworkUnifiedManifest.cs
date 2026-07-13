@@ -1,12 +1,13 @@
 using Elsa.Activities.Design.Persistence.Groundwork;
 using Elsa.Persistence.Groundwork;
 using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Groundwork.Core.Manifests;
 
 namespace Elsa.Persistence.Groundwork.Unified;
 
 /// <summary>
-/// Composes the Elsa runtime, workflows-design and activities-design Groundwork manifests into one
+/// Composes the Elsa runtime, workflows-design, activities-design and workflows-publishing Groundwork manifests into one
 /// <see cref="StorageManifest"/> so a single host-selected document store can back every Elsa module.
 /// <para>
 /// This manifest is <b>provider-neutral</b>: it declares document kinds only, with no dependency on a
@@ -32,7 +33,7 @@ public static class GroundworkUnifiedManifest
     private static readonly StorageManifestVersion Version = new("1.0.0");
 
     /// <summary>
-    /// Builds the unioned manifest spanning runtime + workflows-design + activities-design. Document kinds are
+    /// Builds the unioned manifest spanning runtime + workflows-design + activities-design + workflows-publishing. Document kinds are
     /// disjoint across the lanes, so the union passes the Groundwork manifest validator unchanged.
     /// </summary>
     public static StorageManifest Create() => StorageManifestComposition.Union(
@@ -41,5 +42,6 @@ public static class GroundworkUnifiedManifest
         Version,
         ElsaRuntimeStorageManifest.Create(),
         WorkflowsDesignStorageManifest.Create(),
-        ActivitiesDesignStorageManifest.Create());
+        ActivitiesDesignStorageManifest.Create(),
+        PublishingGroundworkStorageManifest.Create());
 }

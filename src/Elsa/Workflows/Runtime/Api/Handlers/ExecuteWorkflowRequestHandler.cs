@@ -33,7 +33,16 @@ public sealed class ExecuteWorkflowRequestHandler(
         var inputs = ToInputValues(request.Inputs);
 
         var result = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables, inputs: inputs),
+            new WorkflowExecutionStartDispatchRequest(
+                request.ArtifactId,
+                RequestedBy,
+                variables: variables,
+                inputs: inputs,
+                runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: request.SourceReferenceId is null
+                    ? null
+                    : new WorkflowExecutableSourceSelection(sourceReferenceId: request.SourceReferenceId),
+                provenanceRequirement: WorkflowExecutableProvenanceRequirement.RequireLiveReference),
             cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }

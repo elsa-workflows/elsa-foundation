@@ -42,6 +42,7 @@
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},
+          "GroundworkPublishingPersistenceSqlite": {},
           "GroundworkRuntimePersistenceSqlite": {
             "RematerializeOnStartup": false
           },

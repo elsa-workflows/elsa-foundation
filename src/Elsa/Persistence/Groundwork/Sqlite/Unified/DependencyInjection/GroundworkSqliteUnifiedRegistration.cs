@@ -3,6 +3,7 @@ using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Sqlite.DependencyInjection;
 using Elsa.Persistence.Groundwork.Unified;
 using Elsa.Workflows.Design.Persistence.Groundwork.DependencyInjection;
+using Elsa.Workflows.Publishing.Persistence.Groundwork.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Capabilities;
 using Groundwork.Documents.Store;
@@ -12,7 +13,7 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
 
 /// <summary>
 /// Registers a single SQLite-backed Groundwork <see cref="IDocumentStore"/> — materialized from the unioned
-/// runtime + workflows-design + activities-design manifest (<see cref="GroundworkUnifiedManifest"/>) — and points
+/// runtime + workflows-design + activities-design + workflows-publishing manifest (<see cref="GroundworkUnifiedManifest"/>) — and points
 /// every Elsa persistence lane's read/write ports at it. This is the concrete realization of the host-selects-
 /// the-provider goal: domain and runtime code reference only the neutral ports, and one host choice (SQLite here)
 /// backs every module from one database.
@@ -41,6 +42,7 @@ public static class GroundworkSqliteUnifiedRegistration
         services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
+        services.AddGroundworkPublishingStores();
 
         return services;
     }

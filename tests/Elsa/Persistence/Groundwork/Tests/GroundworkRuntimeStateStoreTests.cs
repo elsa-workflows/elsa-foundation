@@ -78,12 +78,13 @@ public sealed class GroundworkRuntimeStateStoreTests
 
         await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Running));
         await store.SaveAsync(WorkflowState("wf-2", WorkflowExecutionStatus.Pending));
-        await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Completed));
+        await store.SaveAsync(WorkflowState("wf-1", WorkflowExecutionStatus.Completed, WorkflowRunKind.PublishedRun));
 
         var found = await store.FindAsync("wf-1");
         Assert.NotNull(found);
         Assert.Equal(WorkflowExecutionStatus.Completed, found!.Status);
         Assert.Equal("artifact-wf-1", found.PinnedExecutable.ArtifactId);
+        Assert.Equal(WorkflowRunKind.PublishedRun, found.RunKind);
 
         Assert.Null(await store.FindAsync("missing"));
 
@@ -239,7 +240,10 @@ public sealed class GroundworkRuntimeStateStoreTests
         AggregateFaultCount: 0,
         Metadata: new Dictionary<string, string>());
 
-    private static WorkflowExecutionState WorkflowState(string workflowExecutionId, WorkflowExecutionStatus status) => new(
+    private static WorkflowExecutionState WorkflowState(
+        string workflowExecutionId,
+        WorkflowExecutionStatus status,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown) => new(
         workflowExecutionId,
         new WorkflowExecutableIdentity(
             ArtifactId: $"artifact-{workflowExecutionId}",
@@ -256,7 +260,10 @@ public sealed class GroundworkRuntimeStateStoreTests
         CorrelationId: null,
         ParentWorkflowExecutionId: null,
         TenantId: null,
-        SystemMetadata: new Dictionary<string, string>());
+        SystemMetadata: new Dictionary<string, string>())
+    {
+        RunKind = runKind
+    };
 
     private static DurableValueState DurableValue(string workflowExecutionId, string durableValueId) => new(
         durableValueId,

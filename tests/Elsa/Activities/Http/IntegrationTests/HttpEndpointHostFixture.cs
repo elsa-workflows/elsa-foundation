@@ -253,7 +253,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
         // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
         // also fires the route-table index observer, so the published template lands in the live route table.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
 
@@ -271,7 +271,22 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         params string[] methods)
     {
         var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"reference:{publicationId}",
+                artifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published,
+                PublicationId: publicationId,
+                SlotId: slotId));
         await Services.GetRequiredService<IWorkflowTriggerIndexer>()
             .PreparePublicationAsync(executable, publicationId, slotId);
     }
@@ -339,7 +354,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — exactly the spec 089 D US4 independent test's shape.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -399,7 +414,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -515,7 +530,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
         // start is the only way in — the mid-flow route goes live off the bookmark-lifecycle notification.
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
     }
 
     /// <summary>
@@ -543,7 +558,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
 
-        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
     }
@@ -683,6 +698,29 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <summary>The single persisted workflow execution's state — asserts exactly one run exists.</summary>
     public async Task<WorkflowExecutionState> SingleWorkflowExecutionAsync() =>
         Assert.Single(await Services.GetRequiredService<IWorkflowExecutionStateStore>().ListAsync());
+
+    /// <summary>Reads one persisted execution by id.</summary>
+    public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
+        await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
+        ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' was not found.");
+
+    private async Task SaveExecutableAsync(WorkflowExecutable executable)
+    {
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await Services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                $"fixture-reference:{executable.Identity.ArtifactId}",
+                executable.Identity.ArtifactId,
+                "WorkflowDefinitionVersion",
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                executable.Identity.ArtifactVersion,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                WorkflowExecutableReferenceScope.Published));
+    }
 
     /// <summary>Counts physical Groundwork checkpoint commit markers in this fixture's isolated database.</summary>
     public async Task<int> CountPhysicalCheckpointCommitsAsync()
