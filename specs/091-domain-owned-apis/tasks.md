@@ -164,7 +164,7 @@
 - [X] T071 [US5] Implement `ApiCapabilitiesFeature` and authenticated `GET /capabilities` endpoint in `src/Elsa/Api/Capabilities/`
 - [ ] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
 - [ ] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
-- [ ] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
+- [X] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
 - [ ] T075 [US5] Run the multi-shell capability commands from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US5 independently proves one-request discovery without feature-name inference.
