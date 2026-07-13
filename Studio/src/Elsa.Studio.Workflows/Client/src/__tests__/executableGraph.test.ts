@@ -204,7 +204,11 @@ describe("buildExecutableInspectorCanvas", () => {
       sourceHandle: "True",
       targetHandle: "Input",
       label: "True",
-      deletable: false
+      deletable: false,
+      focusable: true,
+      ariaRole: "button",
+      ariaLabel: "Connection from Write Line (write-line-1), True output, to Write Line (write-line-2). Not selected.",
+      domAttributes: { "aria-pressed": false }
     });
     expect(canvas.edges[0].data).toBeUndefined();
   });

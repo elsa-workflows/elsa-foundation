@@ -1269,13 +1269,53 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders workflow executables and runs an artifact", async () => {
+  it("runs a published executable and opens its exact pinned multi-node canvas", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
         return response(workflowInstanceDetails({
-          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1" })
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", activityCount: 3 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "root-execution",
+              executableNodeId: "exec-root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart"
+            }),
+            activityExecution(),
+            activityExecution({
+              activityExecutionId: "write-line-2-execution",
+              executableNodeId: "exec-write-line-2",
+              authoredActivityId: "write-line-2"
+            })
+          ]
+        }));
+      }
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1?ref=ref-new")) {
+        return response(executableDetail({
+          rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          rootActivity: executableWireNode({
+            executableNodeId: "exec-root",
+            authoredActivityId: "root",
+            activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            structureKind: "elsa.flowchart.structure",
+            childSlots: [{ name: "Flowchart.Activities", activities: [
+              executableWireNode(),
+              executableWireNode({ executableNodeId: "exec-write-line-2", authoredActivityId: "write-line-2" })
+            ] }],
+            connections: [{ source: { nodeId: "write-line-1", port: "Done" }, target: { nodeId: "write-line-2" } }]
+          }),
+          chosenReference: {
+            sourceReferenceId: "ref-new",
+            selection: "requested",
+            layout: [{ nodeId: "write-line-1", x: 120, y: 100 }, { nodeId: "write-line-2", x: 480, y: 100 }]
+          }
         }));
       }
       if (url.startsWith("https://server.example/design/workflows/versions/version-1")) {
@@ -1305,7 +1345,7 @@ describe("workflows module", () => {
       })] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables", undefined, true);
 
     await waitForText(container, "artifact-1");
     expect(container.textContent).toContain("Executables");
@@ -1325,6 +1365,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
+    await waitForText(container, "Pinned Runtime executable");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://server.example/runtime/workflows/executables/artifact-1/execute",
@@ -1339,6 +1380,10 @@ describe("workflows module", () => {
       sourceReferenceId: "ref-new"
     });
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
+    expect(container.querySelectorAll(".wf-instance-canvas .react-flow__node")).toHaveLength(2);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=ref-new"
+    );
 
     await unmount();
   });
@@ -2351,7 +2396,7 @@ describe("workflows module", () => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
         return response(workflowInstanceDetails({
-          instance: workflowInstance({ sourceReferenceId: "reference-published", activityCount: 2 }),
+          instance: workflowInstance({ sourceReferenceId: "reference-published", activityCount: 3 }),
           activities: [
             activityExecution({
               activityExecutionId: "root-execution",
@@ -2359,7 +2404,12 @@ describe("workflows module", () => {
               authoredActivityId: "root",
               activityType: "Elsa.Activities.Flowchart.Activities.Flowchart"
             }),
-            activityExecution()
+            activityExecution(),
+            activityExecution({
+              activityExecutionId: "write-line-2-execution",
+              executableNodeId: "exec-write-line-2",
+              authoredActivityId: "write-line-2"
+            })
           ]
         }));
       }
@@ -2372,12 +2422,25 @@ describe("workflows module", () => {
             authoredActivityId: "root",
             activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
             structureKind: "elsa.flowchart.structure",
-            childSlots: [{ name: "Flowchart.Activities", activities: [executableWireNode()] }]
+            childSlots: [{ name: "Flowchart.Activities", activities: [
+              executableWireNode(),
+              executableWireNode({
+                executableNodeId: "exec-write-line-2",
+                authoredActivityId: "write-line-2"
+              })
+            ]}],
+            connections: [{
+              source: { nodeId: "write-line-1", port: "Done" },
+              target: { nodeId: "write-line-2" }
+            }]
           }),
           chosenReference: {
             sourceReferenceId: "reference-published",
             selection: "requested",
-            layout: [{ nodeId: "write-line-1", x: 180, y: 120 }]
+            layout: [
+              { nodeId: "write-line-1", x: 180, y: 120 },
+              { nodeId: "write-line-2", x: 520, y: 120 }
+            ]
           }
         }));
       }
@@ -2421,6 +2484,8 @@ describe("workflows module", () => {
     const canvasText = () => container.querySelector(".wf-instance-canvas")?.textContent ?? "";
     expect(canvasText()).toContain("Write Line");
     expect(canvasText()).not.toContain("No workflow activities are available");
+    const nodes = container.querySelectorAll(".wf-instance-canvas .react-flow__node");
+    expect(nodes).toHaveLength(2);
     expect(container.textContent).toContain("Flowchart");
     expect(container.textContent).toContain("WriteLine");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(

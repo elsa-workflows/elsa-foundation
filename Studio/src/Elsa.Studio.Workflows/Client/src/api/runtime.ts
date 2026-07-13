@@ -13,6 +13,7 @@ import type {
   WorkflowInstanceSummary
 } from "../workflowTypes";
 import { capabilityIds, resolveCapabilityLink } from "./capabilities";
+import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export const runtimeKeys = {
   all: ["workflow-runtime"] as const,
@@ -115,10 +116,10 @@ export async function runExecutable(
     capabilityIds.runtime,
     "workflow-execute",
     { artifactId });
-  return context.http.postJson<WorkflowExecutableRunResponse>(path, {
+  return context.http.requestJson<WorkflowExecutableRunResponse>(path, createWorkflowExecutionRequestInit({
     inputs,
     ...(sourceReferenceId ? { sourceReferenceId } : {})
-  });
+  }));
 }
 
 export interface ListWorkflowInstancesRequest {

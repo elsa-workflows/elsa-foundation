@@ -24,6 +24,7 @@ export function decorateWorkflowCanvasElements<TNode extends Node<WorkflowNodeDa
     })),
     edges: edges.map(edge => ({
       ...edge,
+      focusable: true,
       ariaRole: "button" as const,
       ariaLabel: describeConnection(edge, labels),
       domAttributes: {

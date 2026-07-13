@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowInput } from "../workflowTypes";
-import { parseWorkflowRunInputs } from "../workflowRunInputs";
+import { parseWorkflowRunInputs, serializeWorkflowExecutionPayload } from "../workflowRunInputs";
 import { WorkflowRunInputDialog } from "../workflow-editor/WorkflowRunInputDialog";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -101,6 +101,91 @@ describe("workflow run inputs", () => {
       [workflowInput("payload", "Payload", "Contoso.Order", true)],
       { payload: "null" }
     )).toEqual({ values: {}, errors: { payload: "Payload is required." } });
+  });
+
+  it("preserves the exact CLR Int64 and UInt64 boundaries as JSON numeric tokens", () => {
+    const inputs = [
+      workflowInput("minimum", "Minimum", "System.Int64", true),
+      workflowInput("maximum", "Maximum", "Int64", true),
+      workflowInput("unsigned", "Unsigned", "UInt64", true)
+    ];
+
+    const parsed = parseWorkflowRunInputs(inputs, {
+      minimum: "-9223372036854775808",
+      maximum: "9223372036854775807",
+      unsigned: "18446744073709551615"
+    });
+
+    expect(parsed.errors).toEqual({});
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+      '{"inputs":{"Minimum":-9223372036854775808,"Maximum":9223372036854775807,"Unsigned":18446744073709551615}}'
+    );
+  });
+
+  it("rejects malformed, fractional, signed-unsigned, and overflowing 64-bit integers clearly", () => {
+    const inputs = [
+      workflowInput("fractional", "Fractional", "Int64", false),
+      workflowInput("malformed", "Malformed", "Int64", false),
+      workflowInput("signedOverflow", "Signed overflow", "Int64", false),
+      workflowInput("negativeUnsigned", "Negative unsigned", "UInt64", false),
+      workflowInput("unsignedOverflow", "Unsigned overflow", "System.UInt64", false)
+    ];
+
+    expect(parseWorkflowRunInputs(inputs, {
+      fractional: "1.5",
+      malformed: "12oops",
+      signedOverflow: "9223372036854775808",
+      negativeUnsigned: "-1",
+      unsignedOverflow: "18446744073709551616"
+    }).errors).toEqual({
+      fractional: "Enter a whole number.",
+      malformed: "Enter a whole number.",
+      signedOverflow: "Enter an integer from -9223372036854775808 to 9223372036854775807.",
+      negativeUnsigned: "Enter an integer from 0 to 18446744073709551615.",
+      unsignedOverflow: "Enter an integer from 0 to 18446744073709551615."
+    });
+  });
+
+  it("preserves exact 64-bit integers in typed input collections", () => {
+    const parsed = parseWorkflowRunInputs(
+      [workflowInput("ids", "IDs", "UInt64", true, "Array")],
+      { ids: "[0, 9007199254740993, 18446744073709551615]" }
+    );
+
+    expect(parsed.errors).toEqual({});
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+      '{"inputs":{"IDs":[0,9007199254740993,18446744073709551615]}}'
+    );
+  });
+
+  it("reports the exact invalid item in a 64-bit integer collection", () => {
+    const parsed = parseWorkflowRunInputs(
+      [workflowInput("ids", "IDs", "UInt64", true, "Array")],
+      { ids: "[1, -1, 18446744073709551616]" }
+    );
+
+    expect(parsed).toEqual({
+      values: {},
+      errors: { ids: "Item 2: Enter an integer from 0 to 18446744073709551615." }
+    });
+  });
+
+  it("preserves exact integer tokens when JSON.rawJSON is unavailable", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(JSON, "rawJSON");
+    Object.defineProperty(JSON, "rawJSON", { configurable: true, value: undefined });
+    try {
+      const parsed = parseWorkflowRunInputs(
+        [workflowInput("id", "ID", "UInt64", true)],
+        { id: "18446744073709551615" }
+      );
+
+      expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+        '{"inputs":{"ID":18446744073709551615}}'
+      );
+    } finally {
+      if (descriptor) Object.defineProperty(JSON, "rawJSON", descriptor);
+      else Reflect.deleteProperty(JSON, "rawJSON");
+    }
   });
 
   it("keeps required and type errors in the dialog until the form is valid", () => {

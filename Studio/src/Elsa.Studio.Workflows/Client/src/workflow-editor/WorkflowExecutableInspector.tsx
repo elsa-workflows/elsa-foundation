@@ -50,6 +50,7 @@ import {
   useExecutableWorkflowRun
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
+import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -362,29 +363,28 @@ export function buildExecutableInspectorCanvas(
     ? buildUnsupportedActivityCanvas(scopeOwner, activityCatalog, layout)
     : buildCanvas(scope, activityCatalog, layout);
 
-  return {
-    nodes: baseCanvas.nodes.map(node => {
-      const fact = graph.factsByNodeId.get(node.id);
-      const ghost = isGhostFact(fact);
-      const selected = node.id === selectedNodeId;
-      return {
-        ...node,
-        draggable: false,
-        connectable: false,
-        deletable: false,
-        selected,
-        data: {
-          ...node.data,
-          ...(ghost && fact ? { ghost: true, label: ghostNodeLabel(fact.activityType) } : {}),
-          onEnterSlot: (slot: ChildSlot) => {
-            const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
-            if (plan) onNavigateToScope(plan.frames);
-          }
+  const nodes = baseCanvas.nodes.map(node => {
+    const fact = graph.factsByNodeId.get(node.id);
+    const ghost = isGhostFact(fact);
+    const selected = node.id === selectedNodeId;
+    return {
+      ...node,
+      draggable: false,
+      connectable: false,
+      deletable: false,
+      selected,
+      data: {
+        ...node.data,
+        ...(ghost && fact ? { ghost: true, label: ghostNodeLabel(fact.activityType) } : {}),
+        onEnterSlot: (slot: ChildSlot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
         }
-      };
-    }),
-    edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
-  };
+      }
+    };
+  });
+  const edges = baseCanvas.edges.map(edge => ({ ...edge, deletable: false }));
+  return decorateWorkflowCanvasElements(nodes, edges);
 }
 
 function WorkflowExecutableSidePanel({ detail, graph, chosenReference, sourceDefinition, selectedNodeId, onSelectReference, collapsed, expanded, maximized, onToggleCollapsed, onToggleMaximized }: {

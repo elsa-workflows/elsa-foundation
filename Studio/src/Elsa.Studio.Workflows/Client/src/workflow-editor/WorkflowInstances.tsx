@@ -39,6 +39,7 @@ import {
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
+import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
 
@@ -636,10 +637,10 @@ export function buildInstanceCanvas(
     }
   }));
 
-  return {
-    nodes: applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
-    edges: baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
-  };
+  return decorateWorkflowCanvasElements(
+    applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
+    baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
+  );
 }
 
 function getInstanceScopeKey(frames: ScopeFrame[]) {

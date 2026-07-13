@@ -406,4 +406,37 @@ describe("buildInstanceCanvas", () => {
     expect(overlaid.data.runtime?.status).toBe("Completed");
     expect(descended.nodes.find(node => node.id === "wl-2")!.data.runtime).toBeUndefined();
   });
+
+  it("renders a projected Flowchart connection as a focusable, named run-canvas edge", () => {
+    const connectedRoot = flowchartNode("fc-connected", [leafNode("wl-1"), leafNode("wl-2")]);
+    connectedRoot.structure = {
+      ...connectedRoot.structure!,
+      payload: {
+        ...connectedRoot.structure!.payload,
+        connections: [{ source: { nodeId: "wl-1", port: "Done" }, target: { nodeId: "wl-2" } }]
+      }
+    };
+    const connectedVersion: WorkflowDefinitionVersionDetails = {
+      ...definitionVersion,
+      state: { rootActivity: connectedRoot },
+      layout: [{ nodeId: "wl-1", x: 100, y: 120 }, { nodeId: "wl-2", x: 480, y: 120 }]
+    };
+
+    const canvas = buildInstanceCanvas(connectedVersion, instanceCatalog, instanceDetails([]), null, [], () => {});
+
+    expect(canvas.nodes.map(node => ({ id: node.id, position: node.position }))).toEqual([
+      { id: "wl-1", position: { x: 100, y: 120 } },
+      { id: "wl-2", position: { x: 480, y: 120 } }
+    ]);
+    expect(canvas.edges).toHaveLength(1);
+    expect(canvas.edges[0]).toMatchObject({
+      source: "wl-1",
+      target: "wl-2",
+      sourceHandle: "Done",
+      focusable: true,
+      ariaRole: "button",
+      ariaLabel: "Connection from Write Line (wl-1), Done output, to Write Line (wl-2). Not selected.",
+      domAttributes: { "aria-pressed": false }
+    });
+  });
 });

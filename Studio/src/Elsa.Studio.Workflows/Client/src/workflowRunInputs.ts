@@ -10,6 +10,8 @@ export interface WorkflowRunInputParseResult {
 
 export type WorkflowRunInputControlKind = "boolean" | "integer" | "number" | "datetime" | "text" | "json";
 
+const exactIntegerValues = new WeakMap<object, string>();
+
 export function getWorkflowRunInputControlKind(input: WorkflowInput): WorkflowRunInputControlKind {
   if (input.type.collectionKind !== "Single") return "json";
   const alias = canonicalAlias(input.type.alias);
@@ -58,12 +60,7 @@ function parseScalarDraft(draft: string, alias: string): { value?: unknown; erro
     case "int32":
     case "uint32":
     case "int64":
-    case "uint64": {
-      const value = Number(draft);
-      return Number.isSafeInteger(value) && isIntegerInRange(value, canonical)
-        ? { value }
-        : { error: "Enter a whole number." };
-    }
+    case "uint64": return parseIntegerDraft(draft, canonical);
     case "single":
     case "double":
     case "decimal": {
@@ -90,6 +87,54 @@ function parseScalarDraft(draft: string, alias: string): { value?: unknown; erro
   }
 }
 
+// Int64/UInt64 values outside JavaScript's safe-integer range stay opaque until the execution
+// request is serialized. This keeps them out of Number entirely while still emitting JSON number
+// tokens for Foundation's JsonElement input contract (never quoted decimal strings).
+function parseIntegerDraft(draft: string, alias: string): { value?: unknown; error?: string } {
+  const decimal = draft.trim();
+  if (!integerPattern.test(decimal)) return { error: "Enter a whole number." };
+
+  const value = BigInt(decimal);
+  const range = integerRanges[alias];
+  if (range && (value < range[0] || value > range[1])) {
+    return { error: `Enter an integer from ${range[0]} to ${range[1]}.` };
+  }
+  if (alias !== "int64" && alias !== "uint64") return { value: Number(value) };
+
+  const exact = Object.freeze(Object.create(null)) as object;
+  exactIntegerValues.set(exact, decimal);
+  return { value: exact };
+}
+
+/** Serializes workflow execution inputs while preserving opaque 64-bit integers as JSON numbers. */
+export function serializeWorkflowExecutionPayload(payload: unknown): string {
+  const rawJson = (JSON as typeof JSON & { rawJSON?: (text: string) => unknown }).rawJSON;
+  const fallbacks = new Map<string, string>();
+  const fallbackNonce = crypto.randomUUID();
+  let fallbackIndex = 0;
+  const result = JSON.stringify(payload, (_key, value: unknown) => {
+    const decimal = value && typeof value === "object" ? exactIntegerValues.get(value) : undefined;
+    if (decimal === undefined) return value;
+    if (rawJson) return rawJson(decimal);
+
+    const marker = `\u0000elsa-exact-integer-${fallbackNonce}-${fallbackIndex++}\u0000`;
+    fallbacks.set(JSON.stringify(marker), decimal);
+    return marker;
+  });
+
+  let serialized = result ?? "";
+  for (const [marker, decimal] of fallbacks) serialized = serialized.replaceAll(marker, decimal);
+  return serialized;
+}
+
+export function createWorkflowExecutionRequestInit(payload: unknown): RequestInit {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: serializeWorkflowExecutionPayload(payload)
+  };
+}
+
 function parseCollectionDraft(draft: string, alias: string): { value?: unknown[]; error?: string } {
   let value: unknown;
   try {
@@ -98,11 +143,58 @@ function parseCollectionDraft(draft: string, alias: string): { value?: unknown[]
     return { error: "Enter a valid JSON array." };
   }
   if (!Array.isArray(value)) return { error: "Enter a JSON array." };
+
+  const canonical = canonicalAlias(alias);
+  if (canonical === "int64" || canonical === "uint64") {
+    const tokens = readJsonArrayItems(draft);
+    if (!tokens || tokens.length !== value.length) return { error: "Enter a valid JSON array." };
+    const exactValues: unknown[] = [];
+    for (let index = 0; index < tokens.length; index++) {
+      const parsed = parseIntegerDraft(tokens[index], canonical);
+      if (parsed.error) return { error: `Item ${index + 1}: ${parsed.error}` };
+      exactValues.push(parsed.value);
+    }
+    return { value: exactValues };
+  }
+
   for (let index = 0; index < value.length; index++) {
     const error = validateJsonScalar(value[index], alias);
     if (error) return { error: `Item ${index + 1} ${error}` };
   }
   return { value };
+}
+
+// JSON.parse validates the document first; this scanner only retains each top-level array item's
+// original token so a 64-bit number is never rounded while being projected into the input value.
+function readJsonArrayItems(draft: string): string[] | null {
+  const text = draft.trim();
+  if (!text.startsWith("[") || !text.endsWith("]")) return null;
+  const content = text.slice(1, -1);
+  if (content.trim() === "") return [];
+
+  const items: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < content.length; index++) {
+    const character = content[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === "[" || character === "{") depth += 1;
+    else if (character === "]" || character === "}") depth -= 1;
+    else if (character === "," && depth === 0) {
+      items.push(content.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  items.push(content.slice(start).trim());
+  return items;
 }
 
 function validateJsonScalar(value: unknown, alias: string): string | undefined {
@@ -136,21 +228,22 @@ function validateJsonScalar(value: unknown, alias: string): string | undefined {
 
 function isIntegerInRange(value: number, alias: string) {
   const range = integerRanges[alias];
-  return !range || (value >= range[0] && value <= range[1]);
+  return !range || (BigInt(value) >= range[0] && BigInt(value) <= range[1]);
 }
 
-const integerRanges: Record<string, readonly [number, number]> = {
-  byte: [0, 255],
-  sbyte: [-128, 127],
-  int16: [-32768, 32767],
-  uint16: [0, 65535],
-  int32: [-2147483648, 2147483647],
-  uint32: [0, 4294967295],
-  int64: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-  uint64: [0, Number.MAX_SAFE_INTEGER]
+const integerRanges: Record<string, readonly [bigint, bigint]> = {
+  byte: [0n, 255n],
+  sbyte: [-128n, 127n],
+  int16: [-32768n, 32767n],
+  uint16: [0n, 65535n],
+  int32: [-2147483648n, 2147483647n],
+  uint32: [0n, 4294967295n],
+  int64: [-9223372036854775808n, 9223372036854775807n],
+  uint64: [0n, 18446744073709551615n]
 };
 
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const integerPattern = /^-?(?:0|[1-9]\d*)$/;
 const integerAliases = new Set(Object.keys(integerRanges));
 const numericAliases = new Set(["single", "double", "decimal"]);
 const knownTextAliases = new Set(["char", "string", "datetime", "datetimeoffset", "timespan", "guid", "uri"]);
