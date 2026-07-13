@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="YamlDotNet" />
     <PackageReference Include="xunit" />
@@ -18,10 +19,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Elsa\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Expressions\Api\Elsa.Expressions.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Serialization\Newtonsoft\Elsa.Serialization.Newtonsoft.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\src\Elsa\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Elsa\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />

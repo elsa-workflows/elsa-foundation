@@ -179,9 +179,9 @@
 
 ### Tests for User Story 1
 
-- [ ] T076 [P] [US1] Add the custom-host composition fixture and representative journey tests in `tests/Elsa/Architecture/DomainManagementApiCompositionTests.cs`
-- [ ] T077 [P] [US1] Add an architecture guard rejecting management endpoints and legacy route literals in `src/Apps/Elsa.Server` at `tests/Elsa/Architecture/ElsaServerReferenceCompositionTests.cs`
-- [ ] T078 [P] [US1] Add contract inventory parity asserting every former facade operation has one canonical owner or removal rationale in `tests/Elsa/Architecture/ManagementApiOperationInventoryTests.cs`
+- [X] T076 [P] [US1] Add the custom-host composition fixture and representative journey tests in `tests/Elsa/Architecture/DomainManagementApiCompositionTests.cs`
+- [X] T077 [P] [US1] Add an architecture guard rejecting management endpoints and legacy route literals in `src/Apps/Elsa.Server` at `tests/Elsa/Architecture/ElsaServerReferenceCompositionTests.cs`
+- [X] T078 [P] [US1] Add contract inventory parity asserting every former facade operation has one canonical owner or removal rationale in `tests/Elsa/Architecture/ManagementApiOperationInventoryTests.cs`
 
 ### Implementation for User Story 1
 
