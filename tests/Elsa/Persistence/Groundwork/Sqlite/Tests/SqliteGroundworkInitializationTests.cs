@@ -79,6 +79,8 @@ public sealed class SqliteGroundworkInitializationTests
 
         Assert.False(holder.IsInitialized);
         Assert.NotNull(exception.InnerException);
+        Assert.Contains(ElsaRuntimeStorageManifest.Create().Identity.Value, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(Provider.Name, exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("connection", exception.Message, StringComparison.OrdinalIgnoreCase);
         telemetry.AssertSingle(SqliteGroundworkTelemetry.FailedOutcome);
     }

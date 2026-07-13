@@ -15,15 +15,24 @@ namespace Elsa.Persistence.Groundwork.DependencyInjection;
 /// </summary>
 public static class GroundworkRuntimeStoreRegistration
 {
+    /// <summary>Key used for the durable Groundwork executable-store backend behind optional decorators.</summary>
+    public const string WorkflowExecutableProviderKey = "Elsa.Persistence.Groundwork.WorkflowExecutableProvider";
+
+    /// <summary>Registers Groundwork runtime stores with direct executable-provider reads for compatibility.</summary>
+    public static IServiceCollection AddGroundworkRuntimeStores(this IServiceCollection services) =>
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions { Enabled = false });
+
+    /// <summary>Registers Groundwork runtime stores with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkRuntimeStores(
         this IServiceCollection services,
-        bool cacheWorkflowExecutables = true,
-        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+
         var cacheOptions = new WorkflowExecutableCacheOptions
         {
-            Enabled = cacheWorkflowExecutables,
-            Capacity = workflowExecutableCacheCapacity
+            Enabled = workflowExecutableCacheOptions.Enabled,
+            Capacity = workflowExecutableCacheOptions.Capacity
         };
         cacheOptions.Validate();
 
@@ -32,15 +41,14 @@ public static class GroundworkRuntimeStoreRegistration
         services.RemoveAll<IBookmarkStateStore>();
         services.AddSingleton<IBookmarkStateStore, GroundworkBookmarkStateStore>();
         services.RemoveAll<IWorkflowExecutableStore>();
-        services.RemoveAll<GroundworkWorkflowExecutableStore>();
         services.RemoveAll<CachingWorkflowExecutableStore>();
         services.RemoveAll<WorkflowExecutableCacheOptions>();
         services.AddSingleton(cacheOptions);
-        services.AddSingleton<GroundworkWorkflowExecutableStore>();
+        services.TryAddKeyedSingleton<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>(WorkflowExecutableProviderKey);
         if (cacheOptions.Enabled)
         {
             services.AddSingleton(serviceProvider => new CachingWorkflowExecutableStore(
-                serviceProvider.GetRequiredService<GroundworkWorkflowExecutableStore>(),
+                serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(WorkflowExecutableProviderKey),
                 serviceProvider.GetRequiredService<WorkflowExecutableCacheOptions>()));
             services.AddSingleton<IWorkflowExecutableStore>(serviceProvider =>
                 serviceProvider.GetRequiredService<CachingWorkflowExecutableStore>());
@@ -48,7 +56,7 @@ public static class GroundworkRuntimeStoreRegistration
         else
         {
             services.AddSingleton<IWorkflowExecutableStore>(serviceProvider =>
-                serviceProvider.GetRequiredService<GroundworkWorkflowExecutableStore>());
+                serviceProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(WorkflowExecutableProviderKey));
         }
         services.RemoveAll<IWorkflowExecutableSourceReferenceStore>();
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore, GroundworkWorkflowExecutableSourceReferenceStore>();

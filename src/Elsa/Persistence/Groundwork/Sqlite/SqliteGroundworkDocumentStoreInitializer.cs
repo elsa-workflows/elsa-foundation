@@ -29,8 +29,12 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
 {
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
 
+    /// <summary>Initializes the configured manifest/provider store once.</summary>
+    /// <exception cref="SqliteGroundworkInitializationException">The configured manifest/provider store could not be opened or materialized.</exception>
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
 
+    /// <summary>Initializes the configured manifest/provider store for the hosted-service lifecycle.</summary>
+    /// <exception cref="SqliteGroundworkInitializationException">The configured manifest/provider store could not be opened or materialized.</exception>
     public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -90,7 +94,7 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
             outcome = SqliteGroundworkTelemetry.FailedOutcome;
             activity?.SetStatus(ActivityStatusCode.Error);
             throw new SqliteGroundworkInitializationException(
-                "The SQLite Groundwork document store could not be initialized.",
+                $"The SQLite Groundwork document store for manifest '{manifest.Identity.Value}' and provider '{provider.Name}' could not be initialized.",
                 exception);
         }
         finally

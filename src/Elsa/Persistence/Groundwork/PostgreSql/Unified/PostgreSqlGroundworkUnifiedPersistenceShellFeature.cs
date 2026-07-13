@@ -37,7 +37,7 @@ public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
         DisplayName = "Cache workflow executables",
         Description = "Retain a bounded process-local cache of immutable workflow executable artifacts loaded from durable storage.",
         Category = "Performance")]
-    public bool CacheWorkflowExecutables { get; set; } = true;
+    public bool CacheWorkflowExecutables { get; set; }
 
     [ManifestSetting(
         DisplayName = "Workflow executable cache capacity",
@@ -50,7 +50,10 @@ public class PostgreSqlGroundworkUnifiedPersistenceShellFeature : IShellFeature
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
         services.AddGroundworkPostgreSqlUnifiedPersistence(
             connectionString,
-            CacheWorkflowExecutables,
-            WorkflowExecutableCacheCapacity);
+            new WorkflowExecutableCacheOptions
+            {
+                Enabled = CacheWorkflowExecutables,
+                Capacity = WorkflowExecutableCacheCapacity
+            });
     }
 }

@@ -79,7 +79,7 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **FR-007**: The cache MUST enforce a configurable positive capacity using deterministic least-recently-used eviction and MUST have a documented bounded default.
 - **FR-008**: Successful save and delete operations MUST invalidate the cached value so the provider's idempotent-save result remains authoritative. Failed mutations MUST leave the prior cache state unchanged.
 - **FR-009**: List operations MUST delegate to the provider and MUST NOT implicitly populate the cache.
-- **FR-010**: Cache lifetime MUST be limited to the runtime service-provider/shell lifetime so restart and shell replacement begin empty.
+- **FR-010**: Resident cache entries MUST be limited to the runtime service-provider/shell lifetime so restart and shell replacement begin empty; cancellation/backpressure for provider loads that ignore host lifetime is tracked separately as lifecycle hardening.
 - **FR-011**: Durable-provider composition MUST allow caching to be enabled or disabled and capacity to be configured without replacing source-reference resolution.
 - **FR-012**: Telemetry MUST expose hit, miss, eviction, and provider-load duration/outcome using bounded metric dimensions and no workflow/artifact identifiers.
 - **FR-013**: Existing in-memory and custom store implementations MUST remain usable without mandatory wrapping.
@@ -109,5 +109,5 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - Executable artifact IDs are immutable/content-addressed; mutation creates a new ID.
 - The durable executable provider remains the source of truth; this feature caches only positive immutable lookups.
 - A default capacity of 256 executable artifacts is a conservative bounded starting point and is tunable per runtime composition.
-- Cache state is intentionally process-local and is not distributed between nodes.
+- Cache state is intentionally process-local and is not distributed between nodes. SQLite reference features enable it by default; PostgreSQL/distributed and legacy direct registrations default to direct provider reads until a host explicitly accepts immutable-artifact retention or supplies distributed invalidation.
 - This work remains `none/free-flow`; it closes an evidence-backed runtime performance follow-up rather than creating a new program-goal bucket.

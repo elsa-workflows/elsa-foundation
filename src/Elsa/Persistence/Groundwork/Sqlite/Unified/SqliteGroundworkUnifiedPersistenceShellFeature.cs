@@ -50,7 +50,10 @@ public class SqliteGroundworkUnifiedPersistenceShellFeature : IShellFeature
         var connectionString = string.IsNullOrWhiteSpace(ConnectionString) ? DefaultConnectionString : ConnectionString;
         services.AddGroundworkSqliteUnifiedPersistence(
             connectionString,
-            CacheWorkflowExecutables,
-            WorkflowExecutableCacheCapacity);
+            new WorkflowExecutableCacheOptions
+            {
+                Enabled = CacheWorkflowExecutables,
+                Capacity = WorkflowExecutableCacheCapacity
+            });
     }
 }

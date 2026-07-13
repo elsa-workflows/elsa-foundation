@@ -63,6 +63,10 @@ public class SqliteGroundworkRuntimePersistenceShellFeature : IShellFeature
             new ProviderIdentity("groundwork-sqlite", "1.0.0"),
             RematerializeOnStartup);
 
-        services.AddGroundworkRuntimeStores(CacheWorkflowExecutables, WorkflowExecutableCacheCapacity);
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions
+        {
+            Enabled = CacheWorkflowExecutables,
+            Capacity = WorkflowExecutableCacheCapacity
+        });
     }
 }

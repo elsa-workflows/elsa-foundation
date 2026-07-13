@@ -65,7 +65,7 @@ Save and delete delegate first and then invalidate the key. Save cannot safely a
 
 ### Composition and controls
 
-`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` concretely and selects either it or its cache decorator as `IWorkflowExecutableStore`. Runtime and unified SQLite/PostgreSQL feature settings expose `CacheWorkflowExecutables` (default true) and `WorkflowExecutableCacheCapacity` (default 256) and pass those settings into the shared registration helper. Invalid enabled capacities fail options validation during composition.
+`AddGroundworkRuntimeStores` registers `GroundworkWorkflowExecutableStore` as a keyed `IWorkflowExecutableStore` backend and selects either it or its cache decorator as the unkeyed runtime store. Original overloads remain binary compatible and preserve direct reads; additive overloads accept `WorkflowExecutableCacheOptions`. Runtime and unified provider features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default 256). SQLite reference features enable caching; PostgreSQL/distributed features default it off until a host explicitly accepts process-local immutable-artifact retention or supplies invalidation. Invalid enabled capacities fail options validation during composition.
 
 ### Evidence
 

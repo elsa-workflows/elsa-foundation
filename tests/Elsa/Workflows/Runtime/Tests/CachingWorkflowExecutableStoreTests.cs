@@ -30,6 +30,25 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task ConstructorAndPublicMethods_ValidateArguments()
+    {
+        var provider = new ControllableStore();
+        var enabled = new WorkflowExecutableCacheOptions();
+
+        Assert.Throws<ArgumentNullException>(() => new CachingWorkflowExecutableStore(null!, enabled));
+        Assert.Throws<ArgumentNullException>(() => new CachingWorkflowExecutableStore(provider, null!));
+        Assert.Throws<ArgumentException>(() => new CachingWorkflowExecutableStore(
+            provider,
+            new WorkflowExecutableCacheOptions { Enabled = false, Capacity = 0 }));
+
+        var cache = NewCache(provider);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => cache.SaveAsync(null!).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.SaveAsync(NewExecutable(string.Empty)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.DeleteAsync(" ").AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.FindAsync(" ").AsTask());
+    }
+
+    [Fact]
     public async Task RepeatedFind_ReusesOnePositiveProviderLoad()
     {
         var expected = NewExecutable("artifact-a");
@@ -305,6 +324,59 @@ public sealed class CachingWorkflowExecutableStoreTests
         release.SetResult(stale);
         Assert.Same(stale, await inFlight);
 
+        Assert.Same(durable, await cache.FindAsync(stale.Identity.ArtifactId));
+        Assert.Equal(2, provider.FindCalls(stale.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task CallerStartingAfterDelete_DoesNotJoinPreDeleteLoad()
+    {
+        var stale = NewExecutable("artifact-a", "stale");
+        var release = NewCompletionSource<WorkflowExecutable?>();
+        var call = 0;
+        int providerCall() => Interlocked.Increment(ref call);
+        var provider = new ControllableStore
+        {
+            FindHandler = (_, _) => providerCall() == 1
+                ? new ValueTask<WorkflowExecutable?>(release.Task)
+                : ValueTask.FromResult<WorkflowExecutable?>(null),
+            DeleteHandler = (_, _) => ValueTask.FromResult(true)
+        };
+        var cache = NewCache(provider);
+
+        var beforeDelete = cache.FindAsync(stale.Identity.ArtifactId).AsTask();
+        await WaitUntilAsync(() => provider.FindCalls(stale.Identity.ArtifactId) == 1);
+        await cache.DeleteAsync(stale.Identity.ArtifactId);
+        var afterDelete = cache.FindAsync(stale.Identity.ArtifactId).AsTask();
+        await WaitUntilAsync(() => provider.FindCalls(stale.Identity.ArtifactId) == 2);
+
+        Assert.Null(await afterDelete);
+        release.SetResult(stale);
+        Assert.Same(stale, await beforeDelete);
+        Assert.Equal(2, provider.FindCalls(stale.Identity.ArtifactId));
+    }
+
+    [Fact]
+    public async Task CallerStartingAfterSave_DoesNotJoinPreSaveLoad()
+    {
+        var stale = NewExecutable("artifact-a", "stale");
+        var durable = NewExecutable("artifact-a", "durable");
+        var release = NewCompletionSource<WorkflowExecutable?>();
+        var provider = new ControllableStore(durable);
+        provider.FindHandler = (_, _) => provider.TotalFindCalls == 1
+            ? new ValueTask<WorkflowExecutable?>(release.Task)
+            : ValueTask.FromResult<WorkflowExecutable?>(durable);
+        var cache = NewCache(provider);
+
+        var beforeSave = cache.FindAsync(stale.Identity.ArtifactId).AsTask();
+        await WaitUntilAsync(() => provider.FindCalls(stale.Identity.ArtifactId) == 1);
+        await cache.SaveAsync(NewExecutable("artifact-a", "caller"));
+        var afterSave = cache.FindAsync(stale.Identity.ArtifactId).AsTask();
+        await WaitUntilAsync(() => provider.FindCalls(stale.Identity.ArtifactId) == 2);
+
+        Assert.Same(durable, await afterSave);
+        release.SetResult(stale);
+        Assert.Same(stale, await beforeSave);
         Assert.Same(durable, await cache.FindAsync(stale.Identity.ArtifactId));
         Assert.Equal(2, provider.FindCalls(stale.Identity.ArtifactId));
     }

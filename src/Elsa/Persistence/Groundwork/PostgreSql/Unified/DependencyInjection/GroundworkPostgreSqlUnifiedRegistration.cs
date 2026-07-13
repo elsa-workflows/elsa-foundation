@@ -21,19 +21,26 @@ public static class GroundworkPostgreSqlUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The PostgreSQL connection string the single document store opens.</param>
+    public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(this IServiceCollection services, string connectionString) =>
+        services.AddGroundworkPostgreSqlUnifiedPersistence(
+            connectionString,
+            new WorkflowExecutableCacheOptions { Enabled = false });
+
+    /// <summary>Registers unified PostgreSQL persistence with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkPostgreSqlUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        bool cacheWorkflowExecutables = true,
-        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+
         // One store, one database, one materialized union manifest — shared by every lane.
         services.AddPostgreSqlGroundworkDocumentStore(
             connectionString,
             GroundworkUnifiedManifest.Create(),
             new ProviderIdentity("groundwork-postgresql", "1.0.0"));
 
-        services.AddGroundworkRuntimeStores(cacheWorkflowExecutables, workflowExecutableCacheCapacity);
+        services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 

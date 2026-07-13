@@ -17,22 +17,65 @@ namespace Elsa.Persistence.Groundwork.Tests;
 public sealed class GroundworkRuntimeStoreRegistrationTests
 {
     private const string CacheTypeName = "Elsa.Workflows.Runtime.Core.Services.CachingWorkflowExecutableStore";
-    private const string OptionsTypeName = "Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCacheOptions";
+
+    [Fact]
+    public void OriginalParameterlessRegistrationOverload_IsPreservedWithDirectProviderBehavior()
+    {
+        var method = typeof(GroundworkRuntimeStoreRegistration).GetMethod(
+            nameof(GroundworkRuntimeStoreRegistration.AddGroundworkRuntimeStores),
+            [typeof(IServiceCollection)]);
+
+        Assert.NotNull(method);
+        var services = NewServices();
+        services.AddGroundworkRuntimeStores();
+        using var provider = services.BuildServiceProvider();
+        Assert.IsType<GroundworkWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
+    }
+
+    [Fact]
+    public void ExplicitRegistration_RejectsNullOptions()
+    {
+        var services = NewServices();
+
+        Assert.Throws<ArgumentNullException>(() => services.AddGroundworkRuntimeStores(null!));
+    }
+
+    [Fact]
+    public void HostSuppliedKeyedProvider_IsPreservedAndDecorated()
+    {
+        var services = NewServices();
+        var replacement = new ReplacementWorkflowExecutableStore();
+        services.AddKeyedSingleton<IWorkflowExecutableStore>(
+            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey,
+            replacement);
+
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
+
+        using var provider = services.BuildServiceProvider();
+        var selected = provider.GetRequiredService<IWorkflowExecutableStore>();
+        Assert.Same(replacement, provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey));
+        Assert.Contains(
+            selected.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            field => ReferenceEquals(field.GetValue(selected), replacement));
+    }
 
     [Fact]
     public void DefaultRegistration_SelectsCacheAroundConcreteGroundworkStore()
     {
         var services = NewServices();
 
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions());
 
         using var provider = services.BuildServiceProvider();
         var selected = provider.GetRequiredService<IWorkflowExecutableStore>();
-        var concrete = provider.GetRequiredService<GroundworkWorkflowExecutableStore>();
+        var durableProvider = provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey);
         Assert.Equal(CacheTypeName, selected.GetType().FullName);
+        Assert.IsType<GroundworkWorkflowExecutableStore>(durableProvider);
         Assert.Contains(
             selected.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
-            field => ReferenceEquals(field.GetValue(selected), concrete));
+            field => ReferenceEquals(field.GetValue(selected), durableProvider));
     }
 
     [Fact]
@@ -44,8 +87,10 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
 
         using var provider = services.BuildServiceProvider();
         var selected = provider.GetRequiredService<IWorkflowExecutableStore>();
+        var durableProvider = provider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+            GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey);
         Assert.IsType<GroundworkWorkflowExecutableStore>(selected);
-        Assert.Same(selected, provider.GetRequiredService<GroundworkWorkflowExecutableStore>());
+        Assert.Same(selected, durableProvider);
     }
 
     [Fact]
@@ -56,8 +101,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         AddGroundworkRuntimeStores(services, enabled: true, capacity: 17);
 
         using var provider = services.BuildServiceProvider();
-        var options = ResolveCacheOptions(provider);
-        Assert.Equal(17, ReadIntProperty(options, "Capacity"));
+        Assert.Equal(17, provider.GetRequiredService<WorkflowExecutableCacheOptions>().Capacity);
     }
 
     [Theory]
@@ -67,11 +111,9 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
     {
         var services = NewServices();
 
-        var exception = Assert.Throws<TargetInvocationException>(() =>
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             AddGroundworkRuntimeStores(services, enabled: true, capacity: capacity));
-
-        Assert.NotNull(exception.InnerException);
-        Assert.Contains("capacity", exception.InnerException!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("capacity", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -83,7 +125,8 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         object firstCache;
         await using (var firstProvider = BuildProvider(documents))
         {
-            await firstProvider.GetRequiredService<GroundworkWorkflowExecutableStore>().SaveAsync(executable);
+            await firstProvider.GetRequiredKeyedService<IWorkflowExecutableStore>(
+                GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey).SaveAsync(executable);
             documents.ResetLoadCount();
 
             firstCache = firstProvider.GetRequiredService<IWorkflowExecutableStore>();
@@ -102,6 +145,37 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         }
     }
 
+    [Fact]
+    public async Task ProviderBackedCache_CoversSaveFindDeleteConcurrencyAndEviction()
+    {
+        var documents = new CountingDocumentStore(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        var first = Executable("artifact-provider-a");
+        var second = Executable("artifact-provider-b");
+
+        await using var provider = BuildProvider(
+            documents,
+            new WorkflowExecutableCacheOptions { Capacity = 1 });
+        var store = provider.GetRequiredService<IWorkflowExecutableStore>();
+        await store.SaveAsync(first);
+        await store.SaveAsync(second);
+        documents.ResetLoadCount();
+
+        var concurrent = await Task.WhenAll(Enumerable.Range(0, 32)
+            .Select(_ => store.FindAsync(first.Identity.ArtifactId).AsTask()));
+        Assert.NotNull(concurrent[0]);
+        Assert.All(concurrent, executable => Assert.Same(concurrent[0], executable));
+        Assert.Equal(first.Identity, concurrent[0]!.Identity);
+        Assert.Equal(1, documents.LoadCount);
+
+        Assert.Equal(second.Identity, (await store.FindAsync(second.Identity.ArtifactId))!.Identity);
+        Assert.Equal(first.Identity, (await store.FindAsync(first.Identity.ArtifactId))!.Identity);
+        Assert.Equal(3, documents.LoadCount);
+
+        Assert.True(await store.DeleteAsync(first.Identity.ArtifactId));
+        Assert.Null(await store.FindAsync(first.Identity.ArtifactId));
+        Assert.Equal(4, documents.LoadCount);
+    }
+
     private static ServiceCollection NewServices(IDocumentStore? documentStore = null)
     {
         var services = new ServiceCollection();
@@ -109,40 +183,19 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
         return services;
     }
 
-    private static ServiceProvider BuildProvider(IDocumentStore documents)
+    private static ServiceProvider BuildProvider(
+        IDocumentStore documents,
+        WorkflowExecutableCacheOptions? options = null)
     {
         var services = NewServices(documents);
-        services.AddGroundworkRuntimeStores();
+        services.AddGroundworkRuntimeStores(options ?? new WorkflowExecutableCacheOptions());
         return services.BuildServiceProvider();
     }
 
     private static void AddGroundworkRuntimeStores(IServiceCollection services, bool enabled, int capacity)
-    {
-        var method = typeof(GroundworkRuntimeStoreRegistration).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .SingleOrDefault(candidate =>
-                candidate.Name == nameof(GroundworkRuntimeStoreRegistration.AddGroundworkRuntimeStores)
-                && candidate.GetParameters().Length == 3);
-        Assert.NotNull(method);
-        method!.Invoke(null, [services, enabled, capacity]);
-    }
+        => services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions { Enabled = enabled, Capacity = capacity });
 
-    internal static object ResolveCacheOptions(IServiceProvider provider)
-    {
-        var type = typeof(IWorkflowExecutableStore).Assembly.GetType(OptionsTypeName);
-        Assert.NotNull(type);
-        var options = provider.GetService(type!);
-        Assert.NotNull(options);
-        return options!;
-    }
-
-    internal static int ReadIntProperty(object instance, string propertyName)
-    {
-        var property = instance.GetType().GetProperty(propertyName);
-        Assert.NotNull(property);
-        return Assert.IsType<int>(property!.GetValue(instance));
-    }
-
-    private static WorkflowExecutable Executable()
+    private static WorkflowExecutable Executable(string artifactId = "artifact-cache-restart")
     {
         var root = new ExecutableNode(
             executableNodeId: "root",
@@ -157,11 +210,11 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
 
         return new WorkflowExecutable(
             identity: new WorkflowExecutableIdentity(
-                ArtifactId: "artifact-cache-restart",
+                ArtifactId: artifactId,
                 DefinitionId: "definition-1",
                 DefinitionVersionId: "version-1",
                 ArtifactVersion: "1",
-                ArtifactHash: "hash-artifact-cache-restart"),
+                ArtifactHash: $"hash-{artifactId}"),
             rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UnixEpoch,
@@ -170,16 +223,18 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
 
     private sealed class CountingDocumentStore(IDocumentStore inner) : IDocumentStore
     {
-        public int LoadCount { get; private set; }
+        private int _loadCount;
 
-        public void ResetLoadCount() => LoadCount = 0;
+        public int LoadCount => Volatile.Read(ref _loadCount);
+
+        public void ResetLoadCount() => Interlocked.Exchange(ref _loadCount, 0);
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(request, cancellationToken);
 
         public Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
         {
-            LoadCount++;
+            Interlocked.Increment(ref _loadCount);
             return inner.LoadAsync(documentKind, id, cancellationToken);
         }
 
@@ -202,5 +257,20 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
 
         public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
             inner.BeginAsync(scope, cancellationToken);
+    }
+
+    private sealed class ReplacementWorkflowExecutableStore : IWorkflowExecutableStore
+    {
+        public ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutable?>(null);
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutable>> ListAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutable>>([]);
     }
 }

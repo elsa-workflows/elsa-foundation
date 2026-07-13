@@ -1,6 +1,8 @@
 using CShells.Lifecycle;
+using Elsa.Persistence.Groundwork.DependencyInjection;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using global::Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -54,7 +56,16 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
         var services = ConfiguredServices();
 
         AssertBridge<IBookmarkStateStore, GroundworkBookmarkStateStore>(services);
-        AssertBridge<IWorkflowExecutableStore, GroundworkWorkflowExecutableStore>(services);
+        var selectedExecutableDescriptor = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutableStore) && !descriptor.IsKeyedService);
+        Assert.NotNull(selectedExecutableDescriptor.ImplementationFactory);
+        var cacheOptions = Assert.IsType<WorkflowExecutableCacheOptions>(
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableCacheOptions)).ImplementationInstance);
+        Assert.False(cacheOptions.Enabled);
+        var providerDescriptor = Assert.Single(services, descriptor =>
+            descriptor.ServiceType == typeof(IWorkflowExecutableStore)
+            && descriptor.ServiceKey?.Equals(GroundworkRuntimeStoreRegistration.WorkflowExecutableProviderKey) == true);
+        Assert.Equal(typeof(GroundworkWorkflowExecutableStore), providerDescriptor.KeyedImplementationType);
         AssertBridge<IActivityExecutionStateStore, GroundworkActivityExecutionStateStore>(services);
         AssertBridge<IWorkflowExecutionStateStore, GroundworkWorkflowExecutionStateStore>(services);
         AssertBridge<IDurableValueStateStore, GroundworkDurableValueStateStore>(services);
@@ -84,7 +95,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceRegistrationTests
     {
         var feature = new PostgreSqlGroundworkRuntimePersistenceShellFeature();
 
-        AssertSetting(feature, CacheEnabledProperty, expectedDefault: true);
+        AssertSetting(feature, CacheEnabledProperty, expectedDefault: false);
         AssertSetting(feature, CacheCapacityProperty, expectedDefault: 256);
     }
 

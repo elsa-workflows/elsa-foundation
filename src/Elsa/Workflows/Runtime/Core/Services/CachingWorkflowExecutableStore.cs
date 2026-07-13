@@ -36,8 +36,7 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
         ArgumentException.ThrowIfNullOrWhiteSpace(executable.Identity.ArtifactId);
 
         await _inner.SaveAsync(executable, cancellationToken);
-        InvalidateInFlight(executable.Identity.ArtifactId);
-        Evict(executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
+        InvalidateAndEvict(executable.Identity.ArtifactId, WorkflowExecutableCacheTelemetry.SaveReason);
     }
 
     public async ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default)
@@ -45,8 +44,7 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
 
         var deleted = await _inner.DeleteAsync(artifactId, cancellationToken);
-        InvalidateInFlight(artifactId);
-        Evict(artifactId, WorkflowExecutableCacheTelemetry.DeleteReason);
+        InvalidateAndEvict(artifactId, WorkflowExecutableCacheTelemetry.DeleteReason);
         return deleted;
     }
 
@@ -92,8 +90,8 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
 
             // A lookup that started before a mutation may complete for its original caller, but it must not
             // repopulate cache state after the provider-authoritative save/delete linearization point.
-            if (executable is not null && mutationVersion == operation.Version)
-                Admit(artifactId, executable);
+            if (executable is not null)
+                AdmitIfCurrent(artifactId, executable, operation, mutationVersion);
 
             RemoveInFlight(artifactId, operation);
             operation.Completion.TrySetResult(executable);
@@ -112,12 +110,6 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
 
     private void RemoveInFlight(string artifactId, LoadOperation operation) =>
         _inFlight.TryRemove(new KeyValuePair<string, LoadOperation>(artifactId, operation));
-
-    private void InvalidateInFlight(string artifactId)
-    {
-        if (_inFlight.TryGetValue(artifactId, out var operation))
-            operation.Invalidate();
-    }
 
     private async Task<WorkflowExecutable?> LoadProviderOnceAsync(string artifactId)
     {
@@ -175,12 +167,21 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
         }
     }
 
-    private void Admit(string artifactId, WorkflowExecutable executable)
+    private void AdmitIfCurrent(
+        string artifactId,
+        WorkflowExecutable executable,
+        LoadOperation operation,
+        long mutationVersion)
     {
         var evictedForCapacity = false;
 
         lock (_gate)
         {
+            if (mutationVersion != operation.Version
+                || !_inFlight.TryGetValue(artifactId, out var currentOperation)
+                || !ReferenceEquals(operation, currentOperation))
+                return;
+
             if (_entries.TryGetValue(artifactId, out var existing))
             {
                 _recency.Remove(existing);
@@ -205,12 +206,15 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
             RecordEviction(WorkflowExecutableCacheTelemetry.CapacityReason);
     }
 
-    private void Evict(string artifactId, string reason)
+    private void InvalidateAndEvict(string artifactId, string reason)
     {
         var removed = false;
 
         lock (_gate)
         {
+            if (_inFlight.TryRemove(artifactId, out var operation))
+                operation.Invalidate();
+
             if (_entries.Remove(artifactId, out var node))
             {
                 _recency.Remove(node);

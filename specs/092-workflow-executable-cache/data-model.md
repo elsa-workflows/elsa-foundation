@@ -24,4 +24,4 @@ No persistent data model is added.
 4. Only positive provider lookup results are admitted.
 5. Successful save and delete operations remove the resident entry; the next lookup re-reads provider-authoritative state.
 6. The cache never maps a mutable source reference to an artifact ID.
-7. Cache state does not survive service-provider/shell replacement.
+7. Resident cache entries do not survive service-provider/shell replacement; the replacement provider begins with an empty cache.

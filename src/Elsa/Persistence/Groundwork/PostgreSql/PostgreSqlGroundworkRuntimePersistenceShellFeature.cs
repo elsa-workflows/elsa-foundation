@@ -38,7 +38,7 @@ public class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellFeature
         DisplayName = "Cache workflow executables",
         Description = "Retain a bounded process-local cache of immutable workflow executable artifacts loaded from durable storage.",
         Category = "Performance")]
-    public bool CacheWorkflowExecutables { get; set; } = true;
+    public bool CacheWorkflowExecutables { get; set; }
 
     [ManifestSetting(
         DisplayName = "Workflow executable cache capacity",
@@ -55,6 +55,10 @@ public class PostgreSqlGroundworkRuntimePersistenceShellFeature : IShellFeature
             ElsaRuntimeStorageManifest.Create(),
             new ProviderIdentity("groundwork-postgresql", "1.0.0"));
 
-        services.AddGroundworkRuntimeStores(CacheWorkflowExecutables, WorkflowExecutableCacheCapacity);
+        services.AddGroundworkRuntimeStores(new WorkflowExecutableCacheOptions
+        {
+            Enabled = CacheWorkflowExecutables,
+            Capacity = WorkflowExecutableCacheCapacity
+        });
     }
 }

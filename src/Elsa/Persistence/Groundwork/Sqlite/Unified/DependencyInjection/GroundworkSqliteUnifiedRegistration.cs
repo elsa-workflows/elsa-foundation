@@ -21,19 +21,24 @@ public static class GroundworkSqliteUnifiedRegistration
 {
     /// <param name="services">The host service collection.</param>
     /// <param name="connectionString">The SQLite connection string the single document store opens.</param>
+    public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(this IServiceCollection services, string connectionString) =>
+        services.AddGroundworkSqliteUnifiedPersistence(connectionString, new WorkflowExecutableCacheOptions { Enabled = false });
+
+    /// <summary>Registers unified SQLite persistence with explicit executable-cache options.</summary>
     public static IServiceCollection AddGroundworkSqliteUnifiedPersistence(
         this IServiceCollection services,
         string connectionString,
-        bool cacheWorkflowExecutables = true,
-        int workflowExecutableCacheCapacity = WorkflowExecutableCacheOptions.DefaultCapacity)
+        WorkflowExecutableCacheOptions workflowExecutableCacheOptions)
     {
+        ArgumentNullException.ThrowIfNull(workflowExecutableCacheOptions);
+
         // One store, one database, one materialized union manifest — shared by every lane.
         services.AddSqliteGroundworkDocumentStore(
             connectionString,
             GroundworkUnifiedManifest.Create(),
             new ProviderIdentity("groundwork-sqlite", "1.0.0"));
 
-        services.AddGroundworkRuntimeStores(cacheWorkflowExecutables, workflowExecutableCacheCapacity);
+        services.AddGroundworkRuntimeStores(workflowExecutableCacheOptions);
         services.AddGroundworkWorkflowsDesignStores();
         services.AddGroundworkActivitiesDesignStores();
 
