@@ -1,6 +1,6 @@
 using Elsa.Persistence.Groundwork.Sqlite.Unified;
 using Elsa.Persistence.Groundwork.Sqlite.Unified.DependencyInjection;
-using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -10,7 +10,6 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
 {
     private const string EnabledProperty = "CacheWorkflowExecutables";
     private const string CapacityProperty = "WorkflowExecutableCacheCapacity";
-    private const string OptionsTypeName = "Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCacheOptions";
 
     [Fact]
     public void OriginalConnectionStringRegistrationOverloadIsPreserved()
@@ -29,7 +28,7 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
         services.AddGroundworkSqliteUnifiedPersistence("Data Source=:memory:");
         using var provider = services.BuildServiceProvider();
 
-        Assert.False(ResolveOption<bool>(provider, EnabledProperty));
+        Assert.False(provider.GetRequiredService<WorkflowExecutableCacheOptions>().Enabled);
     }
 
     [Fact]
@@ -61,18 +60,7 @@ public sealed class SqliteUnifiedExecutableCacheFeatureSettingsTests
         feature.ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
 
-        Assert.Equal(23, ResolveOption<int>(provider, CapacityProperty));
-    }
-
-    private static T ResolveOption<T>(IServiceProvider provider, string propertyName)
-    {
-        var optionsType = typeof(IWorkflowExecutableStore).Assembly.GetType(OptionsTypeName);
-        Assert.NotNull(optionsType);
-        var options = provider.GetService(optionsType!);
-        Assert.NotNull(options);
-        var property = options!.GetType().GetProperty(propertyName);
-        Assert.NotNull(property);
-        return Assert.IsType<T>(property!.GetValue(options));
+        Assert.Equal(23, provider.GetRequiredService<WorkflowExecutableCacheOptions>().Capacity);
     }
 
     private static void AssertSetting(object feature, string name, object expected)
