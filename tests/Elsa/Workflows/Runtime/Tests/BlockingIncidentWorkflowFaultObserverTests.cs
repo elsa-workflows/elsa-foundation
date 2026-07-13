@@ -19,14 +19,20 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
     {
         var harness = new Harness(_now);
         await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveActivity("actexec-sequence", ActivityExecutionStatus.Running, activityType: "Elsa.Sequence");
+        await harness.SaveActivity("actexec-1", ActivityExecutionStatus.Faulted, parentActivityExecutionId: "actexec-sequence");
         await harness.SaveBlockingIncident();
 
         await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
 
         var state = await harness.WorkflowStore.FindAsync("wfexec-1");
+        var sequence = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-sequence");
         Assert.NotNull(state);
         Assert.Equal(WorkflowExecutionStatus.Faulted, state!.Status);
         Assert.Equal(_now, state.CompletedAt);
+        Assert.NotNull(sequence);
+        Assert.Equal(ActivityExecutionStatus.Faulted, sequence!.Status);
+        Assert.Equal(_now, sequence.CompletedAt);
     }
 
     [Fact]
@@ -39,6 +45,84 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
 
         var state = await harness.WorkflowStore.FindAsync("wfexec-1");
         Assert.Equal(WorkflowExecutionStatus.Running, state!.Status);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WithNestedFlowchartAndSequence_FaultsAncestorsButNotSiblingBranches()
+    {
+        var harness = new Harness(_now);
+        await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveActivity("actexec-flowchart", ActivityExecutionStatus.Running, activityType: "Elsa.Flowchart");
+        await harness.SaveActivity("actexec-sequence", ActivityExecutionStatus.Running, "actexec-flowchart", "Elsa.Sequence");
+        await harness.SaveActivity("actexec-1", ActivityExecutionStatus.Faulted, "actexec-sequence");
+        await harness.SaveActivity("actexec-waiting-sibling", ActivityExecutionStatus.Waiting, "actexec-flowchart");
+        await harness.SaveActivity("actexec-suspended-sibling", ActivityExecutionStatus.Suspended, "actexec-flowchart");
+        await harness.SaveBlockingIncident();
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
+
+        var flowchart = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-flowchart");
+        var sequence = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-sequence");
+        var child = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-1");
+        var waitingSibling = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-waiting-sibling");
+        var suspendedSibling = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-suspended-sibling");
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, flowchart!.Status);
+        Assert.Equal(0, flowchart.FaultCount);
+        Assert.Equal(1, flowchart.AggregateFaultCount);
+        Assert.Equal(ActivityExecutionStatus.Faulted, sequence!.Status);
+        Assert.Equal(0, sequence.FaultCount);
+        Assert.Equal(1, sequence.AggregateFaultCount);
+        Assert.Equal(["incident-1"], child!.IncidentIds);
+        Assert.Equal(1, child.FaultCount);
+        Assert.Equal(1, child.AggregateFaultCount);
+        Assert.Equal(ActivityExecutionStatus.Waiting, waitingSibling!.Status);
+        Assert.Null(waitingSibling.CompletedAt);
+        Assert.Equal(ActivityExecutionStatus.Suspended, suspendedSibling!.Status);
+        Assert.Null(suspendedSibling.CompletedAt);
+        var flowchartInspection = await harness.InspectionStore.FindAsync("wfexec-1", "actexec-flowchart");
+        var sequenceInspection = await harness.InspectionStore.FindAsync("wfexec-1", "actexec-sequence");
+        Assert.Equal(ActivityExecutionStatus.Faulted, flowchartInspection!.Status);
+        Assert.Equal(ActivityExecutionStatus.Faulted, sequenceInspection!.Status);
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(["actexec-flowchart", "actexec-sequence"], commit.Checkpoint.ActivityExecutionIds);
+        Assert.Equal(commit.Checkpoint.ActivityExecutionIds, commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
+        Assert.Equal(commit.Checkpoint.ActivityExecutionIds, commit.StateChanges.ActivityExecutionInspections.Select(change => change.StateId));
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenIncidentActivityIsMissing_StillFaultsWorkflowWithoutActivityChanges()
+    {
+        var harness = new Harness(_now);
+        await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveBlockingIncident();
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Empty(commit.Checkpoint.ActivityExecutionIds);
+        Assert.Empty(commit.StateChanges.ActivityExecutions);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WithTerminalAncestor_PreservesItAndContinuesToActiveOuterAncestor()
+    {
+        var harness = new Harness(_now);
+        await harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SaveActivity("actexec-flowchart", ActivityExecutionStatus.Running, activityType: "Elsa.Flowchart");
+        await harness.SaveActivity("actexec-terminal-sequence", ActivityExecutionStatus.Completed, "actexec-flowchart", "Elsa.Sequence");
+        await harness.SaveActivity("actexec-1", ActivityExecutionStatus.Faulted, "actexec-terminal-sequence");
+        await harness.SaveBlockingIncident();
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.DrainResult);
+
+        var flowchart = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-flowchart");
+        var sequence = await harness.ActivityStore.FindAsync("wfexec-1", "actexec-terminal-sequence");
+        Assert.Equal(ActivityExecutionStatus.Faulted, flowchart!.Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, sequence!.Status);
+        Assert.Equal(["actexec-flowchart"], Assert.Single(harness.CommitStore.ListCommits()).Commit.Checkpoint.ActivityExecutionIds);
     }
 
     [Fact]
@@ -72,7 +156,10 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
     {
         private readonly DateTimeOffset _now;
         public InMemoryWorkflowExecutionStateStore WorkflowStore { get; }
+        public InMemoryActivityExecutionStateStore ActivityStore { get; }
         public InMemoryIncidentStateStore IncidentStore { get; }
+        public InMemoryActivityExecutionInspectionStore InspectionStore { get; }
+        public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
         public BlockingIncidentWorkflowFaultObserver Observer { get; }
         public WorkflowExecutionCommandEnvelope Envelope { get; }
         public RuntimeSchedulerDrainResult DrainResult { get; }
@@ -81,13 +168,23 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
         {
             _now = now;
             WorkflowStore = new InMemoryWorkflowExecutionStateStore();
+            ActivityStore = new InMemoryActivityExecutionStateStore();
             IncidentStore = new InMemoryIncidentStateStore();
-            var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            InspectionStore = new InMemoryActivityExecutionInspectionStore();
+            CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 WorkflowStore,
+                activityExecutionStateStore: ActivityStore,
                 incidentStateStore: IncidentStore,
+                activityExecutionInspectionWriter: InspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
-            Observer = new BlockingIncidentWorkflowFaultObserver(IncidentStore, WorkflowStore, committer, new FixedTimeProvider(now));
+            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore);
+            Observer = new BlockingIncidentWorkflowFaultObserver(
+                IncidentStore,
+                WorkflowStore,
+                ActivityStore,
+                new RuntimeActivityExecutionInspectionAccumulator(InspectionStore),
+                committer,
+                new FixedTimeProvider(now));
             Envelope = NewEnvelope();
             DrainResult = new RuntimeSchedulerDrainResult("wfexec-1", now, now, []);
         }
@@ -106,6 +203,37 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
                 ParentWorkflowExecutionId: null,
                 TenantId: null,
                 SystemMetadata: new Dictionary<string, string>()));
+
+        public ValueTask<ActivityExecutionState> SaveActivity(
+            string activityExecutionId,
+            ActivityExecutionStatus status,
+            string? parentActivityExecutionId = null,
+            string activityType = "Elsa.WriteLine") =>
+            ActivityStore.SaveAsync(new ActivityExecutionState(
+                Execution: new ActivityExecution(
+                    activityExecutionId,
+                    "wfexec-1",
+                    $"node-{activityExecutionId}",
+                    $"activity-{activityExecutionId}",
+                    activityType,
+                    "1"),
+                Status: status,
+                SubStatus: null,
+                ScheduledAt: _now,
+                StartedAt: _now,
+                CompletedAt: status is ActivityExecutionStatus.Completed or ActivityExecutionStatus.Faulted or ActivityExecutionStatus.Cancelled or ActivityExecutionStatus.Recovered
+                    ? _now
+                    : null,
+                SchedulingActivityExecutionId: parentActivityExecutionId,
+                ParentActivityExecutionId: parentActivityExecutionId,
+                BranchId: null,
+                IterationId: null,
+                CallStackDepth: null,
+                BookmarkIds: [],
+                IncidentIds: status == ActivityExecutionStatus.Faulted ? ["incident-1"] : [],
+                FaultCount: status == ActivityExecutionStatus.Faulted ? 1 : 0,
+                AggregateFaultCount: status == ActivityExecutionStatus.Faulted ? 1 : 0,
+                Metadata: new Dictionary<string, string>()));
 
         public ValueTask<bool> SaveBlockingIncident() =>
             IncidentStore.TryAddAsync(new IncidentState(
