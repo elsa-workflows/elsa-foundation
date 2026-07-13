@@ -1,6 +1,7 @@
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using global::Groundwork.Documents.Store;
 using global::Groundwork.PostgreSql.Documents;
@@ -25,6 +26,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
 
         var connectionString = await fixture.CreateIsolatedDatabaseAsync();
         var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
@@ -64,6 +66,7 @@ public sealed class PostgreSqlGroundworkRuntimePersistenceIntegrationTests(Postg
     private static async Task<ServiceProvider> BuildComposedProviderAsync(string connectionString)
     {
         var services = new ServiceCollection();
+        services.AddWorkflowRuntime();
         new PostgreSqlGroundworkRuntimePersistenceShellFeature { ConnectionString = connectionString }.ConfigureServices(services);
         var provider = services.BuildServiceProvider();
         await provider.InitializeGroundworkStoreAsync();
