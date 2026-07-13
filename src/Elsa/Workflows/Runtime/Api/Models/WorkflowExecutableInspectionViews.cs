@@ -16,6 +16,7 @@ public enum WorkflowExecutableListScope
 /// a Runtime API v1 compatibility alias and always contains the same value; new clients must use
 /// <see cref="SourceKind"/>. The alias is scheduled for removal with Runtime API v2.
 /// </remarks>
+[method: JsonConstructor]
 public sealed record ExecutableSourceReferenceView(
     string SourceReferenceId,
     string ArtifactId,
@@ -38,7 +39,53 @@ public sealed record ExecutableSourceReferenceView(
     /// <summary>Runtime API v1 compatibility alias for <see cref="SourceKind"/>.</summary>
     [Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
     [JsonPropertyName("sourceType")]
-    public string? SourceType => SourceKind;
+    public string? SourceType
+    {
+        get => SourceKind;
+        init => SourceKind = ResolveSourceKind(value, SourceKind);
+    }
+
+    /// <summary>Runtime API v1 constructor retained for source and binary compatibility.</summary>
+    [Obsolete("The sourceType constructor parameter is retained for Runtime API v1 compatibility and will be removed in Runtime API v2. Use the sourceKind constructor overload.")]
+    public ExecutableSourceReferenceView(
+        string SourceReferenceId,
+        string ArtifactId,
+        string Scope,
+        string? SourceType,
+        string? SourceKind,
+        string? SourceId,
+        string? SourceVersion,
+        string DefinitionId,
+        string DefinitionVersionId,
+        string ArtifactVersion,
+        string? PublicationId,
+        string? SlotId,
+        DateTimeOffset CreatedAt,
+        DateTimeOffset? PublishedAt,
+        DateTimeOffset? ExpiresAt,
+        DateTimeOffset? DeletedAt,
+        string? DeletedReason,
+        bool Live)
+        : this(
+            SourceReferenceId,
+            ArtifactId,
+            Scope,
+            ResolveSourceKind(SourceType, SourceKind),
+            SourceId,
+            SourceVersion,
+            DefinitionId,
+            DefinitionVersionId,
+            ArtifactVersion,
+            PublicationId,
+            SlotId,
+            CreatedAt,
+            PublishedAt,
+            ExpiresAt,
+            DeletedAt,
+            DeletedReason,
+            Live)
+    {
+    }
 
     public static ExecutableSourceReferenceView From(WorkflowExecutableSourceReference reference, DateTimeOffset now) =>
         new(
@@ -59,6 +106,14 @@ public sealed record ExecutableSourceReferenceView(
             reference.DeletedAt,
             reference.DeletedReason,
             reference.IsLive(now));
+
+    private static string? ResolveSourceKind(string? sourceType, string? sourceKind)
+    {
+        if (sourceType is not null && sourceKind is not null && !string.Equals(sourceType, sourceKind, StringComparison.Ordinal))
+            throw new ArgumentException("sourceType and sourceKind must contain the same value.", nameof(sourceType));
+
+        return sourceKind ?? sourceType;
+    }
 }
 
 public sealed record WorkflowExecutableSummaryView(

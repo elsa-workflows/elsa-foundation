@@ -50,7 +50,26 @@ public sealed class WorkflowExecutableInspectorTests
 
         Assert.NotNull(canonical);
         Assert.NotNull(compatibilityAlias);
-        Assert.DoesNotContain(responseType.GetConstructors().Single().GetParameters(), parameter => parameter.Name == "SourceType");
+        var versionOneConstructor = Assert.Single(
+            responseType.GetConstructors(),
+            constructor => constructor.GetParameters().Any(parameter => parameter.Name == "SourceType"));
+        var versionOneParameters = versionOneConstructor.GetParameters();
+        Assert.Equal(
+            [
+                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
+                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
+                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
+            ],
+            versionOneParameters.Select(parameter => parameter.Name));
+        Assert.Equal(
+            [
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
+                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
+            ],
+            versionOneParameters.Select(parameter => parameter.ParameterType));
+        Assert.NotNull(compatibilityAlias!.SetMethod);
+        Assert.True(compatibilityAlias.SetMethod!.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(System.Runtime.CompilerServices.IsExternalInit)));
         var obsolete = Assert.Single(compatibilityAlias!.GetCustomAttributes<ObsoleteAttribute>());
         Assert.False(obsolete.IsError);
         Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
@@ -61,6 +80,91 @@ public sealed class WorkflowExecutableInspectorTests
         var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.Equal("WorkflowDefinitionVersion", json.GetProperty("sourceKind").GetString());
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_constructor_promotes_source_type_when_source_kind_is_absent()
+    {
+        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
+
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+#pragma warning disable CS0618 // The obsolete property is the compatibility contract under test.
+        Assert.Equal(view.SourceKind, view.SourceType);
+#pragma warning restore CS0618
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_source_type_initializer_promotes_the_canonical_source_kind()
+    {
+#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
+        var view = new Models.ExecutableSourceReferenceView(
+            SourceReferenceId: "reference-init",
+            ArtifactId: "artifact-init",
+            Scope: "Published",
+            SourceKind: null,
+            SourceId: "definition-version-init",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-init",
+            DefinitionVersionId: "definition-version-init",
+            ArtifactVersion: "1.0.0",
+            PublicationId: null,
+            SlotId: null,
+            CreatedAt: _now,
+            PublishedAt: _now,
+            ExpiresAt: null,
+            DeletedAt: null,
+            DeletedReason: null,
+            Live: true)
+        {
+            SourceType = "WorkflowDefinitionVersion"
+        };
+#pragma warning restore CS0618
+
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_alias_rejects_values_that_diverge_from_source_kind()
+    {
+        Assert.Throws<ArgumentException>(() => CreateVersionOneView("LegacySource", "CanonicalSource"));
+        var canonical = Models.ExecutableSourceReferenceView.From(
+            Reference("reference-divergent", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
+            _now);
+
+#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
+        Assert.Throws<ArgumentException>(() => canonical with { SourceType = "LegacySource" });
+#pragma warning restore CS0618
+    }
+
+    [Fact]
+    public void Version_one_json_promotes_source_type_when_source_kind_is_absent()
+    {
+        const string payload = """
+                               {
+                                 "sourceReferenceId": "reference-json-v1",
+                                 "artifactId": "artifact-json-v1",
+                                 "scope": "Published",
+                                 "sourceType": "WorkflowDefinitionVersion",
+                                 "definitionId": "definition-json-v1",
+                                 "definitionVersionId": "definition-version-json-v1",
+                                 "artifactVersion": "1.0.0",
+                                 "createdAt": "2026-07-13T12:00:00+00:00",
+                                 "live": true
+                               }
+                               """;
+
+        var view = JsonSerializer.Deserialize<Models.ExecutableSourceReferenceView>(
+            payload,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(view);
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
     }
 
@@ -297,6 +401,31 @@ public sealed class WorkflowExecutableInspectorTests
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
             new Dictionary<string, string>());
+
+    private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
+    {
+#pragma warning disable CS0618 // The obsolete v1 constructor is the compatibility contract under test.
+        return new Models.ExecutableSourceReferenceView(
+            SourceReferenceId: "reference-v1",
+            ArtifactId: "artifact-v1",
+            Scope: "Published",
+            SourceType: sourceType,
+            SourceKind: sourceKind,
+            SourceId: "definition-version-v1",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-v1",
+            DefinitionVersionId: "definition-version-v1",
+            ArtifactVersion: "1.0.0",
+            PublicationId: null,
+            SlotId: null,
+            CreatedAt: _now,
+            PublishedAt: _now,
+            ExpiresAt: null,
+            DeletedAt: null,
+            DeletedReason: null,
+            Live: true);
+#pragma warning restore CS0618
+    }
 
     private Task<WorkflowExecutable> ActivateAsync(params WorkflowExecutableSourceReference[] references) =>
         ActivateAsync(null, references);
