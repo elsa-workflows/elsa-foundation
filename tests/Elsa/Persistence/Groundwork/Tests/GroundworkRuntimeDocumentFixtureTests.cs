@@ -16,6 +16,13 @@ namespace Elsa.Persistence.Groundwork.Tests;
 /// </remarks>
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
+    [Fact]
+    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v2() =>
+        Assert.Equal(
+            2,
+            Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
+                ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
+
     // Set GROUNDWORK_FIXTURE_REGEN=1 and run this project to (re)write the committed fixtures into the
     // source tree after an intentional version bump. Off by default so a normal run only compares.
     private static readonly bool Regenerate =

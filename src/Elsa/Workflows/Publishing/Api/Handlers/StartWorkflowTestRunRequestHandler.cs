@@ -187,7 +187,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
                 },
                 variables: variables,
-                inputs: inputs),
+                inputs: inputs,
+                runKind: WorkflowRunKind.TestRun,
+                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: reference.SourceReferenceId)),
             WorkflowExecutableReferenceScope.TestRun,
             cancellationToken: cancellationToken);
 

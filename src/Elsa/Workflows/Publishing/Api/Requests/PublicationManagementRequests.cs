@@ -1,3 +1,5 @@
+using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Core.Models;
 
@@ -21,11 +23,20 @@ public sealed record PreflightWorkflowPublication(
     string? SlotName = null,
     string? ExpectedPublicationId = null);
 
+public sealed record PreflightWorkflowPublicationSnapshot(
+    string DefinitionId,
+    WorkflowDefinitionState State,
+    IReadOnlyCollection<DesignMetadataRecord> Layout,
+    PublicationActionView? Action = null,
+    string? SlotName = null,
+    string? ExpectedPublicationId = null);
+
 public sealed record PublishWorkflowRequest(
     string VersionId,
     PublicationActionView? Action = null,
     string? SlotName = null,
-    string? ExpectedPublicationId = null);
+    string? ExpectedPublicationId = null,
+    string? PreflightToken = null);
 
 public sealed record UnpublishPublicationSlotRequest(string DefinitionId, string SlotName);
 

@@ -22,6 +22,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Core.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -50,6 +51,45 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly InMemoryPublicationRecordStore _publicationStore = new();
     private readonly InMemoryPublicationPolicyStore _policyStore = new();
     private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
+    private readonly PublicationSnapshotReviewService _snapshotReviews = new(
+        TimeProvider.System,
+        new InMemoryPublicationSnapshotReviewStore());
+
+    [Fact]
+    public async Task Publishes_reviewed_snapshot_when_candidate_and_authority_are_unchanged()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var layout = new WorkflowDefinitionVersionLayout
+        {
+            WorkflowDefinitionVersionId = workflowVersion.Id,
+            Records = [new DesignMetadataRecord("write-one", 10, 20)]
+        };
+        var issued = await _snapshotReviews.IssueAsync(
+            _snapshotReviews.ComputeCandidateHash(workflowVersion.State, layout.Records),
+            SnapshotPlan());
+
+        var result = await Handler(workflowVersion, layout, _writeLineActivity)
+            .Handle(new PublishWorkflow(workflowVersion.Id, PreflightToken: issued.PreflightToken), CancellationToken.None);
+
+        Assert.True(result.WasCreated);
+        Assert.NotNull(await _store.FindAsync(result.ArtifactId));
+    }
+
+    [Fact]
+    public async Task Stale_snapshot_token_fails_before_persisting_the_compiled_artifact()
+    {
+        var workflowVersion = WorkflowVersion(Node("write-one", Text("one")));
+        var issued = await _snapshotReviews.IssueAsync(
+            _snapshotReviews.ComputeCandidateHash(WorkflowDefinitionState.Empty, []),
+            SnapshotPlan());
+
+        await Assert.ThrowsAsync<PublicationSnapshotReviewException>(() =>
+            Handler(workflowVersion)
+                .Handle(new PublishWorkflow(workflowVersion.Id, PreflightToken: issued.PreflightToken), CancellationToken.None));
+
+        Assert.Empty(await _store.ListAsync());
+        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published));
+    }
 
     [Fact]
     public async Task PublishesRootActivityIntoExecutableArtifact()
@@ -495,9 +535,10 @@ public sealed class PublishWorkflowRequestHandlerTests
             indexer,
             _bindingStore,
             TimeProvider.System);
+        var versionStore = new FakeVersionStore(workflowVersion);
         return new(
             TestCompiler.Create(
-                new FakeVersionStore(workflowVersion),
+                versionStore,
                 new FakeActivityVersionStore(activityVersions.ToList()),
                 _activityStructureService,
                 TestWellKnownTypeRegistry.Create()),
@@ -513,8 +554,23 @@ public sealed class PublishWorkflowRequestHandlerTests
             _publicationStore,
             new PublicationPreflightService(),
             new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
-            TimeProvider.System);
+            TimeProvider.System,
+            workflowVersionStore: versionStore,
+            snapshotReviews: _snapshotReviews);
     }
+
+    private static WorkflowPublicationPreflightPlan SnapshotPlan() =>
+        new(
+            new ResolvedPublicationAction(
+                "definition-1",
+                "snapshot",
+                PublicationAction.Replace,
+                "default",
+                PublicationPolicySource.Host,
+                PolicyRevision: 0),
+            Slot: null,
+            new PublicationPreflightResult(true, [], []),
+            CandidateClaims: []);
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         WorkflowVersion(rootActivity, "definition-1", "version-1", "1.0.0");

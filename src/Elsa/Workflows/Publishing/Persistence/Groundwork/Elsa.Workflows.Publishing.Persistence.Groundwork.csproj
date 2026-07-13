@@ -12,4 +12,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\Elsa.Workflows.Publishing.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Sqlite\**\*.cs" />
+    <EmbeddedResource Remove="Sqlite\**\*" />
+    <None Remove="Sqlite\**\*" />
+  </ItemGroup>
 </Project>

@@ -468,7 +468,8 @@
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorSqlServerTests.cs -\u003E UseSqlServer x 1",
       "tests/Elsa/Persistence/EFCore/Tests/UpsertCommandGeneratorTests.cs -\u003E UseSqlite x 1",
       "tests/Elsa/Workflows/Design/Tests/Infrastructure/WorkflowsDesignTestHost.cs -\u003E UseSqlite x 3",
-      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2"
+      "tests/Elsa/Workflows/Design/Tests/Unit/MigrationSmokeTests.cs -\u003E UseSqlite x 2",
+      "tests/Elsa/Workflows/Design/Tests/Unit/PublishingGroundworkSqliteUpgradeTests.cs -\u003E UseSqlite x 1"
     ],
     "HostConfigurationFiles": [
       "src/Apps/Elsa.Server/appsettings.json -\u003E json:$.Logging.LogLevel.Microsoft.EntityFrameworkCore -\u003E EntityFrameworkCore",

@@ -2,6 +2,9 @@ using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -71,4 +74,29 @@ internal sealed class TestActivity : IActivity
     public Dictionary<string, object> Metadata { get; set; } = new();
     public ValueTask<bool> CanExecuteAsync(IActivityExecutionContext context) => new(true);
     public ValueTask ExecuteAsync(IActivityExecutionContext context) => ValueTask.CompletedTask;
+}
+
+/// <summary>Seeds an artifact and the live Published reference required by the public execute boundary.</summary>
+internal static class PublishedExecutableSeeder
+{
+    public static async ValueTask SaveAsync(IServiceProvider services, WorkflowExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(executable);
+        var identity = executable.Identity;
+        await services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await services.GetRequiredService<IWorkflowExecutableSourceReferenceStore>().SaveAsync(
+            new WorkflowExecutableSourceReference(
+                SourceReferenceId: $"published:{identity.ArtifactId}",
+                ArtifactId: identity.ArtifactId,
+                SourceKind: "WorkflowDefinitionVersion",
+                SourceId: identity.DefinitionVersionId,
+                SourceVersion: identity.ArtifactVersion,
+                DefinitionId: identity.DefinitionId,
+                DefinitionVersionId: identity.DefinitionVersionId,
+                ArtifactVersion: identity.ArtifactVersion,
+                CreatedAt: DateTimeOffset.UnixEpoch,
+                PublishedAt: DateTimeOffset.UnixEpoch,
+                Scope: WorkflowExecutableReferenceScope.Published));
+    }
 }

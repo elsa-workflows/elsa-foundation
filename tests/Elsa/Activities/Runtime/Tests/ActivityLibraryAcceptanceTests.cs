@@ -102,7 +102,7 @@ public sealed class ActivityLibraryAcceptanceTests
         await using var provider = BuildEndToEndProvider();
 
         var executable = WrapWithIdentity(NewComposedRoot(["a", "b", "c"]), artifactId: "acceptance-e2e");
-        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await PublishedExecutableSeeder.SaveAsync(provider, executable);
 
         var handler = new Elsa.Workflows.Runtime.Api.Handlers.ExecuteWorkflowRequestHandler(
             provider.GetRequiredService<IWorkflowStartDispatcher>(),

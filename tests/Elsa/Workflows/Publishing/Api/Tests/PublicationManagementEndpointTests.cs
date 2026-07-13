@@ -19,6 +19,7 @@ public sealed class PublicationManagementEndpointTests
 
     public static TheoryData<string, string, string> ManagementEndpoints => new()
     {
+        { "PreflightWorkflowPublicationSnapshotEndpoint", "publishing/workflows/preflight", PermissionNames.WorkflowPublishingRead },
         { "PreflightWorkflowPublicationEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight", PermissionNames.WorkflowPublishingRead },
         { "PublishWorkflowEndpoint", "publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish", PermissionNames.WorkflowPublishingManage },
         { "ListPublicationSlotsEndpoint", "publishing/workflows/{definitionId}/slots", PermissionNames.WorkflowPublishingRead },
@@ -42,6 +43,17 @@ public sealed class PublicationManagementEndpointTests
         Assert.Contains(PermissionNames.All, definition.AllowedPermissions!);
         Assert.Contains(permission, definition.AllowedPermissions!);
         Assert.Null(definition.AnonymousVerbs);
+    }
+
+    [Fact]
+    public void Snapshot_preflight_and_publish_expose_the_review_token_contract()
+    {
+        AssertProperties(typeof(PreflightWorkflowPublicationSnapshot),
+            "DefinitionId", "State", "Layout", "Action", "SlotName", "ExpectedPublicationId");
+        AssertProperties(typeof(PublicationSnapshotPreflightView),
+            "PreflightToken", "CandidateHash", "DefinitionId", "VersionId", "SlotName", "ResolvedAction",
+            "PolicySource", "PolicyRevision", "CanActivate", "Claims", "Triggers", "Conflicts");
+        Assert.NotNull(typeof(PublishWorkflowRequest).GetProperty("PreflightToken"));
     }
 
     [Theory]
@@ -122,6 +134,9 @@ public sealed class PublicationManagementEndpointTests
         endpoint.Configure();
         return endpoint.Definition;
     }
+
+    private static void AssertProperties(Type type, params string[] properties) =>
+        Assert.Equal(properties, type.GetProperties().Select(property => property.Name));
 
     private static object ResolveDependency(Type type)
     {

@@ -3,6 +3,8 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -145,6 +147,91 @@ public sealed class RuntimeStartCommandSchedulingTests
         var schedulePayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
         Assert.Equal("node-start", schedulePayload.ExecutableNodeId);
         Assert.Equal("actexec-1", schedulePayload.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task DrainAsync_PersistsRunKindFromStartCommandAsWorkflowState()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [
+                NewHandler(store, queue),
+                NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue),
+                new NoopWorkflowSchedulerWorkHandler()
+            ],
+            new FixedTimeProvider(_now));
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            executable.Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.BackgroundWeaverRun));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var write = Assert.Single(checkpointWriter.ListCommits());
+        Assert.Equal(WorkflowRunKind.BackgroundWeaverRun, write.Commit.StateChanges.WorkflowExecution!.State.RunKind);
+    }
+
+    [Fact]
+    public async Task DrainAsync_PersistsSelectedSourceProvenanceIntoListAndDetailReadModels()
+    {
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        var durableValueStore = new InMemoryDurableValueStateStore();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: workflowStore,
+            activityExecutionStateStore: activityStore,
+            durableValueStateStore: durableValueStore,
+            incidentStateStore: incidentStore,
+            activityExecutionInspectionWriter: inspectionStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await executableStore.SaveAsync(executable);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [
+                NewHandler(executableStore, queue),
+                NewCheckpointHandler(activityStore, checkpointWriter, queue),
+                new NoopWorkflowSchedulerWorkHandler()
+            ],
+            new FixedTimeProvider(_now));
+        var provenance = new WorkflowExecutableSourceProvenance(
+            "reference-2", "WorkflowDefinitionVersion", "version-2", "2.0.0",
+            "definition-1", "version-2", "2.0.0", "publication-2", "slot-production");
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            executable.Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.PublishedRun,
+            pinnedSource: provenance));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var list = await new ListWorkflowInstancesRequestHandler(workflowStore, activityStore, incidentStore)
+            .Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var detail = await new GetWorkflowInstanceRequestHandler(
+                workflowStore,
+                inspectionStore,
+                incidentStore,
+                durableValueStore,
+                new DefaultRuntimePayloadCapturePolicy())
+            .Handle(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
+        var summary = Assert.Single(list.Items);
+        Assert.Equal("version-2", summary.DefinitionVersionId);
+        Assert.Equal("2.0.0", summary.ArtifactVersion);
+        Assert.Equal("reference-2", summary.SourceReferenceId);
+        Assert.Equal("publication-2", summary.PublicationId);
+        Assert.Equal("slot-production", summary.SlotId);
+        Assert.Equal(summary, detail.Instance!.Instance);
     }
 
     [Fact]

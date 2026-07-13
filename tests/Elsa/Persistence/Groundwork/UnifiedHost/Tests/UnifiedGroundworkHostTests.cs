@@ -13,6 +13,9 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Groundwork;
+using Elsa.Workflows.Publishing.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,6 +48,17 @@ public class UnifiedGroundworkHostTests
         return provider;
     }
 
+    private static async Task<ServiceProvider> BuildHostAsync(string connectionString)
+    {
+        var provider = new ServiceCollection()
+            .AddSingleton<IPayloadSerializer, FakePayloadSerializer>()
+            .AddSingleton<ISystemClock, FakeSystemClock>()
+            .AddGroundworkSqliteUnifiedPersistence(connectionString)
+            .BuildServiceProvider();
+        await provider.InitializeGroundworkStoreAsync();
+        return provider;
+    }
+
     [Fact]
     public async Task Host_registers_one_document_store_shared_by_every_lane()
     {
@@ -59,6 +73,10 @@ public class UnifiedGroundworkHostTests
         // Runtime lane port resolves.
         Assert.NotNull(provider.GetRequiredService<IWorkflowExecutionStateStore>());
 
+        // Publishing authority uses the same durable store; the API's in-memory fallbacks must not win.
+        Assert.NotNull(provider.GetRequiredService<IPublicationSlotStore>());
+        Assert.NotNull(provider.GetRequiredService<IPublicationRecordStore>());
+
         // Design lane ports resolve (scoped).
         using var scope = provider.CreateScope();
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>());
@@ -66,7 +84,7 @@ public class UnifiedGroundworkHostTests
     }
 
     [Fact]
-    public async Task One_database_materializes_and_serves_all_three_lanes()
+    public async Task One_database_materializes_and_serves_all_four_lanes()
     {
         await using var provider = await BuildHostAsync();
         var store = provider.GetRequiredService<IDocumentStore>();
@@ -76,10 +94,40 @@ public class UnifiedGroundworkHostTests
         await SaveAsync(store, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1", "workflowExecutionState");
         await SaveAsync(store, WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1", "workflowDefinition");
         await SaveAsync(store, ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, "act-1", "activityDefinition");
+        await SaveAsync(store, PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1", "publicationSlot");
 
         Assert.NotNull(await store.LoadAsync(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, "run-1"));
         Assert.NotNull(await store.LoadAsync(WorkflowsDesignStorageManifest.WorkflowDefinitionDocumentKind, "def-1"));
         Assert.NotNull(await store.LoadAsync(ActivitiesDesignStorageManifest.ActivityDefinitionDocumentKind, "act-1"));
+        Assert.NotNull(await store.LoadAsync(PublishingGroundworkStorageManifest.PublicationSlotDocumentKind, "slot-1"));
+    }
+
+    [Fact]
+    public async Task Publication_authority_survives_host_restart()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        var now = DateTimeOffset.Parse("2026-07-13T10:00:00Z");
+        var slotId = PublicationSlotIdentity.Create("definition-1", "default");
+        var record = new PublicationRecord(
+            "publication-1", slotId, "definition-1", "version-1", "artifact-1", "reference-1", 0,
+            PublicationStatus.Active, now, now, null, null);
+
+        await using (var firstHost = await BuildHostAsync(database.ConnectionString))
+        {
+            await firstHost.GetRequiredService<IPublicationRecordStore>().SaveAsync(record);
+            var activation = await firstHost.GetRequiredService<IPublicationSlotStore>()
+                .TryActivateAsync("definition-1", "default", record.PublicationId, 0, now);
+            Assert.True(activation.Succeeded);
+        }
+
+        await using var restartedHost = await BuildHostAsync(database.ConnectionString);
+        var restoredSlot = await restartedHost.GetRequiredService<IPublicationSlotStore>()
+            .FindAsync("definition-1", "default");
+        var restoredRecord = await restartedHost.GetRequiredService<IPublicationRecordStore>()
+            .FindAsync(record.PublicationId);
+
+        Assert.Equal(record.PublicationId, restoredSlot?.ActivePublicationId);
+        Assert.Equal(PublicationStatus.Active, restoredRecord?.Status);
     }
 
     [Fact]

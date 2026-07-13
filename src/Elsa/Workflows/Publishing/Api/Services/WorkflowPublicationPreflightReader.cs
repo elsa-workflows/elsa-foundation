@@ -8,7 +8,8 @@ namespace Elsa.Workflows.Publishing.Api.Services;
 public sealed record WorkflowPublicationPreflightPlan(
     ResolvedPublicationAction ResolvedAction,
     PublicationSlot? Slot,
-    PublicationPreflightResult Result);
+    PublicationPreflightResult Result,
+    IReadOnlyCollection<PublicationTriggerClaim> CandidateClaims);
 
 /// <summary>Builds the same policy-resolved, publication-scoped trigger plan used by preview and activation.</summary>
 public sealed class WorkflowPublicationPreflightReader(
@@ -61,7 +62,11 @@ public sealed class WorkflowPublicationPreflightReader(
                 activeBindings.Select(binding => Claim(activePublicationId, binding)).ToArray()));
         }
 
-        return new WorkflowPublicationPreflightPlan(resolved, slot, preflightService.Evaluate(candidateClaims, authoritativeSets));
+        return new WorkflowPublicationPreflightPlan(
+            resolved,
+            slot,
+            preflightService.Evaluate(candidateClaims, authoritativeSets),
+            candidateClaims);
     }
 
     private static PublicationTriggerClaim Claim(string publicationId, WorkflowTriggerBinding binding) =>
