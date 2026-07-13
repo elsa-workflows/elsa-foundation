@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,6 @@ internal sealed class ListVersions(IRequestSender requestSender, ILogger<List> l
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
     }
 }

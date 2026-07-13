@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Requests;
@@ -12,7 +13,7 @@ public sealed class ListIncidentsEndpoint(IRequestSender requestSender, ILogger<
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("instances/{workflowExecutionId}/incidents"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeRead);
     }
 
     public override async Task HandleAsync(ListIncidents req, CancellationToken ct)

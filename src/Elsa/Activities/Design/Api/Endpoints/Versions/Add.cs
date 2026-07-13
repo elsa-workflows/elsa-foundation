@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,6 @@ internal sealed class Add(ICommandSender commandSender, ILogger<Add> logger) : E
     public override void Configure()
     {
         Post(RouteConstants.Versions);
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignManage);
     }
 }

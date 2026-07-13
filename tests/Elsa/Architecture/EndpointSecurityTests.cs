@@ -13,12 +13,14 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 public sealed partial class EndpointSecurityTests
 {
-    private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
+    private static readonly (string Area, string RelativePath, string[] Permissions)[] CurrentManagementEndpointRoots =
     [
-        ("Workflow Design", "src/Elsa/Workflows/Design/Api/Endpoints"),
-        ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints"),
-        ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints"),
-        ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints")
+        ("Workflow Design", "src/Elsa/Workflows/Design/Api/Endpoints", [nameof(PermissionNames.WorkflowDesignRead), nameof(PermissionNames.WorkflowDesignManage)]),
+        ("Activity Design", "src/Elsa/Activities/Design/Api/Endpoints", [nameof(PermissionNames.ActivityDesignRead), nameof(PermissionNames.ActivityDesignManage)]),
+        ("Expressions", "src/Elsa/Expressions/Api/Endpoints", [nameof(PermissionNames.ExpressionsRead)]),
+        ("Publishing", "src/Elsa/Workflows/Publishing/Api/Endpoints", [nameof(PermissionNames.WorkflowPublishingRead), nameof(PermissionNames.WorkflowPublishingManage)]),
+        ("Runtime", "src/Elsa/Workflows/Runtime/Api/Endpoints", [nameof(PermissionNames.WorkflowRuntimeRead), nameof(PermissionNames.WorkflowRuntimeExecute), nameof(PermissionNames.WorkflowRuntimeManage)]),
+        ("API Capabilities", "src/Elsa/Api/Capabilities/Endpoints", [nameof(PermissionNames.ApiCapabilitiesRead)])
     ];
 
     [Fact]
@@ -53,18 +55,21 @@ public sealed partial class EndpointSecurityTests
     public void Every_current_management_domain_endpoint_configures_permissions_and_is_not_anonymous()
     {
         var endpointFiles = CurrentManagementEndpointRoots
-            .SelectMany(root => EnumerateEndpointFiles(root.Area, root.RelativePath))
+            .SelectMany(root => EnumerateEndpointFiles(root.Area, root.RelativePath)
+                .Select(file => (file.DisplayPath, file.FullPath, root.Permissions)))
             .ToList();
 
         Assert.NotEmpty(endpointFiles);
 
         var violations = endpointFiles
-            .Select(file => (file.DisplayPath, Source: File.ReadAllText(file.FullPath)))
+            .Select(file => (file.DisplayPath, Source: File.ReadAllText(file.FullPath), file.Permissions))
             .SelectMany(file =>
             {
                 var errors = new List<string>();
                 if (!ConfigurePermissionsCall().IsMatch(file.Source))
                     errors.Add($"{file.DisplayPath}: missing ConfigurePermissions(...) in Configure()");
+                if (!file.Permissions.Any(permission => file.Source.Contains($"PermissionNames.{permission}", StringComparison.Ordinal)))
+                    errors.Add($"{file.DisplayPath}: missing a canonical action-scoped permission for its owning domain");
                 if (AllowAnonymousCall().IsMatch(file.Source))
                     errors.Add($"{file.DisplayPath}: management endpoints must not call AllowAnonymous(...)");
                 return errors;
@@ -79,7 +84,9 @@ public sealed partial class EndpointSecurityTests
         var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         Assert.True(Directory.Exists(fullPath), $"Missing {area} endpoint directory: {relativePath}");
 
-        var files = Directory.EnumerateFiles(fullPath, "*.cs", SearchOption.AllDirectories).ToList();
+        var files = Directory.EnumerateFiles(fullPath, "*.cs", SearchOption.AllDirectories)
+            .Where(file => File.ReadAllText(file).Contains("override void Configure", StringComparison.Ordinal))
+            .ToList();
         Assert.True(files.Count > 0, $"No {area} endpoint sources found under {relativePath}");
         return files.Select(file => ($"{area}: {Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}", file));
     }
@@ -95,7 +102,7 @@ public sealed partial class EndpointSecurityTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
-    [GeneratedRegex(@"^\s*ConfigurePermissions\s*\(", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^\s*ConfigurePermissions\s*\(\s*PermissionNames\.[A-Za-z]+", RegexOptions.Multiline)]
     private static partial Regex ConfigurePermissionsCall();
 
     [GeneratedRegex(@"^\s*AllowAnonymous\s*\(", RegexOptions.Multiline)]

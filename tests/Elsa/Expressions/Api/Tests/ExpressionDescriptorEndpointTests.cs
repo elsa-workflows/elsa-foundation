@@ -74,21 +74,20 @@ public sealed class ExpressionDescriptorEndpointTests
 
     private static Type ResponseItemType(BaseEndpoint endpoint)
     {
-        var response = EndpointContract(endpoint).Response;
+        var response = ResponseContract(endpoint);
         var items = response.GetProperty("Items", BindingFlags.Public | BindingFlags.Instance);
         Assert.NotNull(items);
         return CollectionElementType(items!.PropertyType);
     }
 
-    private static (Type Request, Type Response) EndpointContract(BaseEndpoint endpoint)
+    private static Type ResponseContract(BaseEndpoint endpoint)
     {
         for (var current = endpoint.GetType().BaseType; current is not null; current = current.BaseType)
         {
-            if (current.IsGenericType && current.GenericTypeArguments.Length >= 2 &&
-                current.GetGenericTypeDefinition().Namespace == "Elsa.Api.FastEndpoints.Abstractions")
-                return (current.GenericTypeArguments[0], current.GenericTypeArguments[1]);
+            if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(Elsa.Api.FastEndpoints.Abstractions.ElsaEndpointWithoutRequest<>))
+                return current.GenericTypeArguments[0];
         }
-        throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no request/response contract.");
+        throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no response contract.");
     }
 
     private static BaseEndpoint CreateEndpoint(Type endpointType)
