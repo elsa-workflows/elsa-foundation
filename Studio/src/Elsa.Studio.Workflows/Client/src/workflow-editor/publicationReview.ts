@@ -75,7 +75,7 @@ export function createPublicationReview(input: {
     policy,
     slots: input.slots,
     intent: policy.defaultAction === "requireExplicitSlot"
-      ? { action: "sideBySide", slotName: policy.defaultSlotName }
+      ? { action: "sideBySide", slotName: "" }
       : { action: "replace", slotName: policy.defaultSlotName }
   };
 }

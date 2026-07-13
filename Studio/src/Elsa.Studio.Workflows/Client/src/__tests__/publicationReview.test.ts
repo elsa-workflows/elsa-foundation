@@ -72,6 +72,19 @@ describe("publication review model", () => {
 
     expect(review.draftSnapshot.state.inputs).toBeUndefined();
   });
+
+  it("requires the author to name a side-by-side slot when policy forbids implicit replacement", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      sourceVersion: null,
+      policy: { defaultAction: "requireExplicitSlot", defaultSlotName: "default", source: "workflow" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(review.intent).toEqual({ action: "sideBySide", slotName: "" });
+  });
 });
 
 function draft(state: Partial<WorkflowDraft["state"]> = {}): WorkflowDraft {

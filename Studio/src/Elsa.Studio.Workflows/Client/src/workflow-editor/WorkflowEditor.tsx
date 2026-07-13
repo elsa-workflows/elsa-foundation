@@ -631,7 +631,7 @@ export function WorkflowEditor({
           ) : null}
           <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
-          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Promote &amp; publish</button>
+          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Review &amp; publish</button>
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
@@ -874,11 +874,12 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
   const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
   useDialogFocus(dialogRef, closeOnEscape);
 
-  const activeSlot = review.slots.find(slot => slot.slotName === (intent.slotName || review.policy.defaultSlotName));
+  const targetSlotName = intent.slotName || (action === "replace" ? review.policy.defaultSlotName : "the named slot");
+  const activeSlot = review.slots.find(slot => slot.slotName === targetSlotName);
   const currentTargetVersion = activeSlot?.publication?.artifactVersion ?? activeSlot?.publication?.versionId ?? "None";
   const targetDescription = action === "replace" && activeSlot?.publication
     ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in slot ${activeSlot.slotName}.`
-    : `Create a new executable source reference in slot ${intent.slotName || review.policy.defaultSlotName}.`;
+    : `Create a new executable source reference in slot ${targetSlotName}.`;
   const preflightChanges = review.preflight?.triggers ?? review.preflight?.changes ?? [];
   const triggerSummary = review.preflight
     ? preflightChanges.length
