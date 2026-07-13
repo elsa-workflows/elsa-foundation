@@ -891,6 +891,7 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
       : "No trigger changes."
     : formatChangeCount(changes.triggers);
   const statusMessage = publicationStatusMessage(review);
+  const validationStatus = publicationPreflightValidationStatus(review, reviewedPreflight, busy);
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
@@ -927,7 +928,7 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
             <div><dt>Current published version</dt><dd>{currentTargetVersion}</dd></div>
             <div><dt>Proposed next version</dt><dd>{review.proposedVersion} (confirmed after promotion)</dd></div>
             <div><dt>Unsaved changes</dt><dd>Included — the captured editor state is saved only after Publish.</dd></div>
-            <div><dt>Validation</dt><dd>{review.validationErrors.length ? `${review.validationErrors.length} blocking issue${review.validationErrors.length === 1 ? "" : "s"}` : "Ready for server preflight"}</dd></div>
+            <div><dt>Validation</dt><dd>{validationStatus}</dd></div>
             <div><dt>Executable status</dt><dd>{review.executableStatus === "ready" ? "Executable after server preflight" : "Not executable until blocking validation is resolved"}</dd></div>
             <div><dt>Resolved action</dt><dd>{reviewedPreflight?.resolvedAction ?? "Requires authoritative review"}</dd></div>
             <div><dt>Target slot</dt><dd>{reviewedPreflight?.slotName ?? targetSlotName}</dd></div>
@@ -1011,6 +1012,25 @@ function ChangeSummary({ label, value }: { label: string; value: PublicationChan
 
 function formatChangeCount(value: PublicationChangeCount) {
   return `${value.added} added, ${value.changed} changed, ${value.removed} removed`;
+}
+
+function publicationPreflightValidationStatus(
+  review: PublicationReviewState,
+  reviewedPreflight: PublicationReviewState["preflight"],
+  busy: boolean
+) {
+  if (review.validationErrors.length) {
+    return `${review.validationErrors.length} blocking issue${review.validationErrors.length === 1 ? "" : "s"}`;
+  }
+  if (reviewedPreflight) {
+    return reviewedPreflight.canActivate
+      ? "Server preflight completed — validation passed."
+      : "Server preflight completed — activation conflicts found.";
+  }
+  if (busy) return "Server preflight in progress.";
+  if (/stale/i.test(review.failureMessage ?? "")) return "Server preflight is stale — review the target again.";
+  if (/preflight failed/i.test(review.failureMessage ?? "")) return "Server preflight failed — review the target again.";
+  return "Server preflight required for this target.";
 }
 
 function publicationStatusMessage(review: PublicationReviewState) {

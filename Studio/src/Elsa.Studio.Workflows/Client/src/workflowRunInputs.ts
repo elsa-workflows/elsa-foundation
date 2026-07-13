@@ -10,7 +10,7 @@ export interface WorkflowRunInputParseResult {
 
 export type WorkflowRunInputControlKind = "boolean" | "integer" | "number" | "datetime" | "text" | "json";
 
-const exactIntegerValues = new WeakMap<object, string>();
+const exactJsonNumbers = new WeakMap<object, string>();
 
 export function getWorkflowRunInputControlKind(input: WorkflowInput): WorkflowRunInputControlKind {
   if (input.type.collectionKind !== "Single") return "json";
@@ -27,25 +27,32 @@ export function parseWorkflowRunInputs(
   inputs: WorkflowInput[],
   drafts: WorkflowRunInputDrafts
 ): WorkflowRunInputParseResult {
-  const values: WorkflowRunInputValues = {};
-  const errors: Record<string, string> = {};
+  const valueEntries: [string, unknown][] = [];
+  const errorEntries: [string, string][] = [];
 
   for (const input of inputs) {
-    const draft = drafts[input.referenceKey] ?? "";
+    const draft = Object.prototype.hasOwnProperty.call(drafts, input.referenceKey)
+      ? drafts[input.referenceKey]
+      : "";
     if (draft === "") {
-      if (input.isRequired) errors[input.referenceKey] = `${input.displayName || input.name} is required.`;
+      if (input.isRequired) errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
       continue;
     }
 
     const parsed = input.type.collectionKind === "Single"
       ? parseScalarDraft(draft, input.type.alias)
       : parseCollectionDraft(draft, input.type.alias);
-    if (parsed.error) errors[input.referenceKey] = parsed.error;
-    else if (input.isRequired && parsed.value === null) errors[input.referenceKey] = `${input.displayName || input.name} is required.`;
-    else values[input.name] = parsed.value;
+    if (parsed.error) errorEntries.push([input.referenceKey, parsed.error]);
+    else if (input.isRequired && parsed.value === null) {
+      errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
+    }
+    else valueEntries.push([input.name, parsed.value]);
   }
 
-  return { values, errors };
+  return {
+    values: Object.fromEntries(valueEntries),
+    errors: Object.fromEntries(errorEntries)
+  };
 }
 
 function parseScalarDraft(draft: string, alias: string): { value?: unknown; error?: string } {
@@ -62,11 +69,11 @@ function parseScalarDraft(draft: string, alias: string): { value?: unknown; erro
     case "int64":
     case "uint64": return parseIntegerDraft(draft, canonical);
     case "single":
-    case "double":
-    case "decimal": {
+    case "double": {
       const value = Number(draft);
       return Number.isFinite(value) ? { value } : { error: "Enter a number." };
     }
+    case "decimal": return parseDecimalDraft(draft);
     case "char":
       return [...draft].length === 1 ? { value: draft } : { error: "Enter one character." };
     case "datetime":
@@ -87,9 +94,8 @@ function parseScalarDraft(draft: string, alias: string): { value?: unknown; erro
   }
 }
 
-// Int64/UInt64 values outside JavaScript's safe-integer range stay opaque until the execution
-// request is serialized. This keeps them out of Number entirely while still emitting JSON number
-// tokens for Foundation's JsonElement input contract (never quoted decimal strings).
+// Exact CLR numbers stay opaque until the execution request is serialized. This keeps them out of
+// Number entirely while still emitting JSON number tokens for Foundation's JsonElement contract.
 function parseIntegerDraft(draft: string, alias: string): { value?: unknown; error?: string } {
   const decimal = draft.trim();
   if (!integerPattern.test(decimal)) return { error: "Enter a whole number." };
@@ -101,23 +107,42 @@ function parseIntegerDraft(draft: string, alias: string): { value?: unknown; err
   }
   if (alias !== "int64" && alias !== "uint64") return { value: Number(value) };
 
-  const exact = Object.freeze(Object.create(null)) as object;
-  exactIntegerValues.set(exact, decimal);
-  return { value: exact };
+  return { value: exactJsonNumber(decimal) };
 }
 
-/** Serializes workflow execution inputs while preserving opaque 64-bit integers as JSON numbers. */
+function parseDecimalDraft(draft: string): { value?: unknown; error?: string } {
+  const decimal = draft.trim();
+  if (!decimalPattern.test(decimal)) return { error: "Enter a decimal number without exponent notation." };
+
+  const unsigned = decimal.startsWith("-") ? decimal.slice(1) : decimal;
+  const [integer, fraction = ""] = unsigned.split(".");
+  const significantFraction = fraction.replace(/0+$/, "");
+  const coefficient = BigInt(`${integer}${significantFraction}`);
+  if (significantFraction.length > decimalMaxScale || coefficient > decimalMaxCoefficient) {
+    return { error: decimalRangeError };
+  }
+
+  return { value: exactJsonNumber(decimal) };
+}
+
+function exactJsonNumber(value: string): object {
+  const exact = Object.freeze(Object.create(null)) as object;
+  exactJsonNumbers.set(exact, value);
+  return exact;
+}
+
+/** Serializes workflow execution inputs while preserving opaque CLR numbers as JSON numbers. */
 export function serializeWorkflowExecutionPayload(payload: unknown): string {
   const rawJson = (JSON as typeof JSON & { rawJSON?: (text: string) => unknown }).rawJSON;
   const fallbacks = new Map<string, string>();
   const fallbackNonce = crypto.randomUUID();
   let fallbackIndex = 0;
   const result = JSON.stringify(payload, (_key, value: unknown) => {
-    const decimal = value && typeof value === "object" ? exactIntegerValues.get(value) : undefined;
+    const decimal = value && typeof value === "object" ? exactJsonNumbers.get(value) : undefined;
     if (decimal === undefined) return value;
     if (rawJson) return rawJson(decimal);
 
-    const marker = `\u0000elsa-exact-integer-${fallbackNonce}-${fallbackIndex++}\u0000`;
+    const marker = `\u0000elsa-exact-number-${fallbackNonce}-${fallbackIndex++}\u0000`;
     fallbacks.set(JSON.stringify(marker), decimal);
     return marker;
   });
@@ -145,12 +170,14 @@ function parseCollectionDraft(draft: string, alias: string): { value?: unknown[]
   if (!Array.isArray(value)) return { error: "Enter a JSON array." };
 
   const canonical = canonicalAlias(alias);
-  if (canonical === "int64" || canonical === "uint64") {
+  if (canonical === "int64" || canonical === "uint64" || canonical === "decimal") {
     const tokens = readJsonArrayItems(draft);
     if (!tokens || tokens.length !== value.length) return { error: "Enter a valid JSON array." };
     const exactValues: unknown[] = [];
     for (let index = 0; index < tokens.length; index++) {
-      const parsed = parseIntegerDraft(tokens[index], canonical);
+      const parsed = canonical === "decimal"
+        ? parseDecimalDraft(tokens[index])
+        : parseIntegerDraft(tokens[index], canonical);
       if (parsed.error) return { error: `Item ${index + 1}: ${parsed.error}` };
       exactValues.push(parsed.value);
     }
@@ -165,7 +192,7 @@ function parseCollectionDraft(draft: string, alias: string): { value?: unknown[]
 }
 
 // JSON.parse validates the document first; this scanner only retains each top-level array item's
-// original token so a 64-bit number is never rounded while being projected into the input value.
+// original token so an exact CLR number is never rounded while being projected into the input value.
 function readJsonArrayItems(draft: string): string[] | null {
   const text = draft.trim();
   if (!text.startsWith("[") || !text.endsWith("]")) return null;
@@ -244,6 +271,10 @@ const integerRanges: Record<string, readonly [bigint, bigint]> = {
 
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const integerPattern = /^-?(?:0|[1-9]\d*)$/;
+const decimalPattern = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
+const decimalMaxCoefficient = 79228162514264337593543950335n;
+const decimalMaxScale = 28;
+const decimalRangeError = "Enter a decimal from -79228162514264337593543950335 to 79228162514264337593543950335 with up to 28 decimal places.";
 const integerAliases = new Set(Object.keys(integerRanges));
 const numericAliases = new Set(["single", "double", "decimal"]);
 const knownTextAliases = new Set(["char", "string", "datetime", "datetimeoffset", "timespan", "guid", "uri"]);

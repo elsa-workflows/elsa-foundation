@@ -57,13 +57,13 @@ export function WorkflowRunInputDialog({ inputs, busy = false, onSubmit, onCance
               <WorkflowRunInputField
                 key={input.referenceKey}
                 input={input}
-                value={drafts[input.referenceKey] ?? ""}
-                error={errors[input.referenceKey]}
+                value={ownValue(drafts, input.referenceKey) ?? ""}
+                error={ownValue(errors, input.referenceKey)}
                 disabled={busy}
                 onChange={value => {
                   setDrafts(current => ({ ...current, [input.referenceKey]: value }));
                   setErrors(current => {
-                    if (!current[input.referenceKey]) return current;
+                    if (!ownValue(current, input.referenceKey)) return current;
                     const next = { ...current };
                     delete next[input.referenceKey];
                     return next;
@@ -156,6 +156,10 @@ function renderInputControl(
       onChange={event => onChange(event.currentTarget.value)}
     />
   );
+}
+
+function ownValue<T>(record: Record<string, T>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
 }
 
 function trapFocus(event: ReactKeyboardEvent, dialog: HTMLElement | null) {

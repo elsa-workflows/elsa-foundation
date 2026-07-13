@@ -156,13 +156,15 @@ describe("canonical domain clients", () => {
     );
   });
 
-  it("emits exact Int64 and UInt64 JSON number tokens for transient and published execution", async () => {
+  it("emits exact Int64, UInt64, and Decimal JSON number tokens for transient and published execution", async () => {
     const parsed = parseWorkflowRunInputs([
       workflowInput("signed", "Signed", "Int64"),
-      workflowInput("unsigned", "Unsigned", "UInt64")
+      workflowInput("unsigned", "Unsigned", "UInt64"),
+      workflowInput("amount", "Amount", "Decimal")
     ], {
       signed: "-9223372036854775808",
-      unsigned: "18446744073709551615"
+      unsigned: "18446744073709551615",
+      amount: "0.1234567890123456789012345678"
     });
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
     const requestJson = vi.fn(async (url: string) => url.includes("drafts/test-runs")
@@ -180,11 +182,11 @@ describe("canonical domain clients", () => {
 
     expect(requestJson).toHaveBeenNthCalledWith(1, "/publishing/workflows/drafts/test-runs", expect.objectContaining({
       method: "POST",
-      body: '{"definitionId":"definition-1","snapshotId":"snapshot-1","state":{"rootActivity":null},"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615}}'
+      body: '{"definitionId":"definition-1","snapshotId":"snapshot-1","state":{"rootActivity":null},"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615,"Amount":0.1234567890123456789012345678}}'
     }));
     expect(requestJson).toHaveBeenNthCalledWith(2, "/runtime/workflows/executables/artifact%2F1/execute", expect.objectContaining({
       method: "POST",
-      body: '{"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615},"sourceReferenceId":"reference-1"}'
+      body: '{"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615,"Amount":0.1234567890123456789012345678},"sourceReferenceId":"reference-1"}'
     }));
   });
 

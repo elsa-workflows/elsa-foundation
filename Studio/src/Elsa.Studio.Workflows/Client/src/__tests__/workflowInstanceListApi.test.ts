@@ -34,15 +34,14 @@ describe("workflow instance list client", () => {
     });
   });
 
-  it("preserves cursor metadata and normalizes the legacy array response", async () => {
-    const pageContext = context(async url => url === "/capabilities" ? capabilities : {
+  it("prefers the advertised paged relation and preserves its cursor metadata", async () => {
+    const pageContext = context(async url => url === "/capabilities" ? pagedCapabilities : {
       items: [instance("execution-1")],
       nextCursor: "next",
       hasNext: true,
       count: 1,
       totalCount: 3
     });
-    const legacyContext = context(async url => url === "/capabilities" ? capabilities : [instance("legacy")]);
 
     await expect(listWorkflowInstances(pageContext, { take: 1 })).resolves.toMatchObject({
       nextCursor: "next",
@@ -50,19 +49,48 @@ describe("workflow instance list client", () => {
       count: 1,
       totalCount: 3
     });
+    expect(pageContext.http.getJson).toHaveBeenLastCalledWith("/runtime/workflows/instances/page?take=1");
+  });
+
+  it("falls back to the v1 array relation and normalizes its result", async () => {
+    const legacyContext = context(async url => url === "/capabilities" ? legacyCapabilities : [instance("legacy")]);
+
     await expect(listWorkflowInstances(legacyContext)).resolves.toMatchObject({
       items: [{ workflowExecutionId: "legacy" }],
       hasNext: false,
       totalCount: 1
     });
+    expect(legacyContext.http.getJson).toHaveBeenLastCalledWith("/runtime/workflows/instances");
+  });
+
+  it("does not silently infer a paged contract from the legacy v1 relation", async () => {
+    const legacyContext = context(async url => url === "/capabilities" ? legacyCapabilities : {
+      items: [instance("unexpected-page")],
+      nextCursor: "next"
+    });
+
+    await expect(listWorkflowInstances(legacyContext)).rejects.toThrow(
+      "Legacy workflow instance relation must return an array."
+    );
   });
 });
 
-const capabilities = {
+const legacyCapabilities = {
   capabilities: [{
     id: "elsa.api.runtime",
     contractVersion: "1",
     links: [{ rel: "workflow-instances", href: "runtime/workflows/instances" }]
+  }]
+};
+
+const pagedCapabilities = {
+  capabilities: [{
+    id: "elsa.api.runtime",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-instances", href: "runtime/workflows/instances" },
+      { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" }
+    ]
   }]
 };
 

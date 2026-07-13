@@ -170,6 +170,61 @@ describe("workflow run inputs", () => {
     });
   });
 
+  it("preserves CLR Decimal boundaries, precision, and scale as JSON numeric tokens", () => {
+    const parsed = parseWorkflowRunInputs([
+      workflowInput("minimum", "Minimum", "System.Decimal", true),
+      workflowInput("maximum", "Maximum", "Decimal", true),
+      workflowInput("precise", "Precise", "Decimal", true),
+      workflowInput("scaled", "Scaled", "Decimal", true)
+    ], {
+      minimum: "-79228162514264337593543950335",
+      maximum: "79228162514264337593543950335",
+      precise: "0.1234567890123456789012345678",
+      scaled: "1.2300"
+    });
+
+    expect(parsed.errors).toEqual({});
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+      '{"inputs":{"Minimum":-79228162514264337593543950335,"Maximum":79228162514264337593543950335,"Precise":0.1234567890123456789012345678,"Scaled":1.2300}}'
+    );
+  });
+
+  it("preserves exact CLR Decimal tokens in typed input collections", () => {
+    const parsed = parseWorkflowRunInputs(
+      [workflowInput("amounts", "Amounts", "Decimal", true, "Array")],
+      { amounts: "[-79228162514264337593543950335, 0.1234567890123456789012345678, 1.2300]" }
+    );
+
+    expect(parsed.errors).toEqual({});
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+      '{"inputs":{"Amounts":[-79228162514264337593543950335,0.1234567890123456789012345678,1.2300]}}'
+    );
+  });
+
+  it("rejects malformed, exponent, over-scale, and overflowing CLR Decimal values clearly", () => {
+    const parsed = parseWorkflowRunInputs([
+      workflowInput("malformed", "Malformed", "Decimal", false),
+      workflowInput("exponent", "Exponent", "Decimal", false),
+      workflowInput("scale", "Scale", "Decimal", false),
+      workflowInput("overflow", "Overflow", "Decimal", false),
+      workflowInput("amounts", "Amounts", "Decimal", false, "Array")
+    ], {
+      malformed: "12oops",
+      exponent: "1e2",
+      scale: "0.12345678901234567890123456789",
+      overflow: "79228162514264337593543950336",
+      amounts: "[1.0, 1e2]"
+    });
+
+    expect(parsed.errors).toEqual({
+      malformed: "Enter a decimal number without exponent notation.",
+      exponent: "Enter a decimal number without exponent notation.",
+      scale: "Enter a decimal from -79228162514264337593543950335 to 79228162514264337593543950335 with up to 28 decimal places.",
+      overflow: "Enter a decimal from -79228162514264337593543950335 to 79228162514264337593543950335 with up to 28 decimal places.",
+      amounts: "Item 2: Enter a decimal number without exponent notation."
+    });
+  });
+
   it("preserves exact integer tokens when JSON.rawJSON is unavailable", () => {
     const descriptor = Object.getOwnPropertyDescriptor(JSON, "rawJSON");
     Object.defineProperty(JSON, "rawJSON", { configurable: true, value: undefined });
@@ -186,6 +241,50 @@ describe("workflow run inputs", () => {
       if (descriptor) Object.defineProperty(JSON, "rawJSON", descriptor);
       else Reflect.deleteProperty(JSON, "rawJSON");
     }
+  });
+
+  it("keeps prototype-shaped input names as ordinary own payload properties", () => {
+    const parsed = parseWorkflowRunInputs([
+      workflowInput("proto-ref", "__proto__", "String", true),
+      workflowInput("constructor-ref", "constructor", "String", true),
+      workflowInput("prototype-ref", "prototype", "String", true),
+      workflowInput("collection-ref", "__proto__-collection", "String", true, "Array")
+    ], Object.fromEntries([
+      ["proto-ref", "safe"],
+      ["constructor-ref", "also safe"],
+      ["prototype-ref", "still safe"],
+      ["collection-ref", '["one", "two"]']
+    ]));
+
+    expect(parsed.errors).toEqual({});
+    expect(Object.prototype.hasOwnProperty.call(parsed.values, "__proto__")).toBe(true);
+    expect(Object.getPrototypeOf(parsed.values)).toBe(Object.prototype);
+    expect(Object.keys(parsed.values)).toEqual(["__proto__", "constructor", "prototype", "__proto__-collection"]);
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe(
+      '{"inputs":{"__proto__":"safe","constructor":"also safe","prototype":"still safe","__proto__-collection":["one","two"]}}'
+    );
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it("reports errors under a prototype-shaped reference key without mutating the error map", () => {
+    const parsed = parseWorkflowRunInputs(
+      [workflowInput("__proto__", "Count", "Int32", true)],
+      Object.fromEntries([["__proto__", "not-an-integer"]])
+    );
+
+    expect(Object.prototype.hasOwnProperty.call(parsed.errors, "__proto__")).toBe(true);
+    expect(parsed.errors["__proto__"]).toBe("Enter a whole number.");
+    expect(Object.getPrototypeOf(parsed.errors)).toBe(Object.prototype);
+  });
+
+  it("does not mistake inherited prototype members for supplied dangerous-key drafts", () => {
+    const parsed = parseWorkflowRunInputs([
+      workflowInput("__proto__", "Proto", "String", false),
+      workflowInput("constructor", "Constructor", "String", false),
+      workflowInput("prototype", "Prototype", "String", false, "Array")
+    ], {});
+
+    expect(parsed).toEqual({ values: {}, errors: {} });
   });
 
   it("keeps required and type errors in the dialog until the form is valid", () => {

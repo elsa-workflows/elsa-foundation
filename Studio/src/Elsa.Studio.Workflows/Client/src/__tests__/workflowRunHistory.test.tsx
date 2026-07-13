@@ -34,7 +34,7 @@ describe("workflow run history", () => {
     expect(input(container, "Workflow run artifact").value).toBe("artifact-1");
     expect(container.textContent).toContain("Showing 1 of 42 matching runs");
     expect(getJson).toHaveBeenCalledWith(
-      "/runtime/workflows/instances?definitionId=definition-1&artifactId=artifact-1&take=10");
+      "/runtime/workflows/instances/page?definitionId=definition-1&artifactId=artifact-1&take=10");
 
     click(button(container, "Next workflow run page"));
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
@@ -149,7 +149,10 @@ const capabilities = {
   capabilities: [{
     id: "elsa.api.runtime",
     contractVersion: "1",
-    links: [{ rel: "workflow-instances", href: "runtime/workflows/instances" }]
+    links: [
+      { rel: "workflow-instances", href: "runtime/workflows/instances" },
+      { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" }
+    ]
   }]
 };
 

@@ -33,6 +33,34 @@ describe("publication slot UX", () => {
     expect(container.textContent).toContain("host (revision 7)");
     expect(container.textContent).toContain("http:orders (exclusive)");
     expect(container.textContent).toContain("Create a new executable source reference in slot default");
+    expect(container.textContent).toContain("Server preflight completed — validation passed.");
+    expect(container.textContent).not.toContain("Ready for server preflight");
+  });
+
+  it("reports an authoritative preflight in progress distinctly", () => {
+    const container = render(review({ preflight: undefined }), vi.fn(async () => undefined), true);
+
+    expect(container.textContent).toContain("Server preflight in progress.");
+  });
+
+  it("reports a failed authoritative preflight distinctly", () => {
+    const container = render(review({
+      preflight: undefined,
+      failureMessage: "Server preflight failed. Review the target again. Connection unavailable."
+    }), vi.fn(async () => undefined));
+
+    expect(container.textContent).toContain("Server preflight failed — review the target again.");
+  });
+
+  it("reports a stale authoritative preflight distinctly", () => {
+    const container = render(review({
+      phase: "partialFailure",
+      preflight: undefined,
+      promotedVersionId: "version-2",
+      failureMessage: "The reviewed publication target became stale before activation."
+    }), vi.fn(async () => undefined));
+
+    expect(container.textContent).toContain("Server preflight is stale — review the target again.");
   });
 
   it("shows the resolved replacement policy, trigger diff, and blocks conflicts", () => {
@@ -116,7 +144,8 @@ describe("publication slot UX", () => {
 
 function render(
   value: PublicationReviewState,
-  onPublish: (intent: PublicationIntent) => Promise<void>
+  onPublish: (intent: PublicationIntent) => Promise<void>,
+  busy = false
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -125,7 +154,7 @@ function render(
   flushSync(() => root.render(
     <PublicationReviewDialog
       review={value}
-      busy={false}
+      busy={busy}
       onPublish={onPublish}
       onCancel={() => undefined}
     />));

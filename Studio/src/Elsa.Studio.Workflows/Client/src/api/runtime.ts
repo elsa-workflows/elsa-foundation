@@ -12,7 +12,7 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
-import { capabilityIds, resolveCapabilityLink } from "./capabilities";
+import { capabilityIds, getApiCapability, resolveCapabilityLink } from "./capabilities";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export const runtimeKeys = {
@@ -161,12 +161,19 @@ export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest 
 }
 
 export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
-  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-instances");
+  const capability = await getApiCapability(context, capabilityIds.runtime);
+  // Runtime v1 guarantees an array at the legacy relation. The cursor envelope is additive and
+  // must be explicitly advertised so Studio can keep interoperating with older Foundation hosts.
+  const relation = capability?.links.some(link => link.rel === "workflow-instances-page")
+    ? "workflow-instances-page"
+    : "workflow-instances";
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, relation);
   const query = workflowInstanceListQuery(request);
-  const response = await context.http.getJson<
-    Partial<WorkflowInstanceListPage> | WorkflowInstanceSummary[]
-  >(`${path}${query ? `?${query}` : ""}`);
-  if (Array.isArray(response)) {
+  const url = `${path}${query ? `?${query}` : ""}`;
+
+  if (relation === "workflow-instances") {
+    const response = await context.http.getJson<WorkflowInstanceSummary[]>(url);
+    if (!Array.isArray(response)) throw new Error("Legacy workflow instance relation must return an array.");
     return {
       items: response,
       previousCursor: null,
@@ -176,6 +183,11 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
       count: response.length,
       totalCount: response.length
     } satisfies WorkflowInstanceListPage;
+  }
+
+  const response = await context.http.getJson<Partial<WorkflowInstanceListPage>>(url);
+  if (!response || Array.isArray(response) || typeof response !== "object") {
+    throw new Error("Paged workflow instance relation must return a page object.");
   }
   const items = response.items ?? [];
   return {

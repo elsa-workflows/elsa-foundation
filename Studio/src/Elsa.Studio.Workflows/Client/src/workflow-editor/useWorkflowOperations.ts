@@ -163,8 +163,17 @@ export function useWorkflowOperations({
         } : current);
         setStatus("");
       } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        setPublicationReview(current => current ? {
+          ...current,
+          phase: "review",
+          progressStep: undefined,
+          preflight: undefined,
+          intent,
+          failureMessage: `Server preflight failed. Review the target again. ${reason}`
+        } : current);
         setStatus("");
-        setError(`Could not prepare an authoritative review for this target. No changes were saved, promoted, or published. ${error instanceof Error ? error.message : String(error)}`);
+        setError(`Could not prepare an authoritative review for this target. No changes were saved, promoted, or published. ${reason}`);
       } finally {
         setOperation("idle");
       }
