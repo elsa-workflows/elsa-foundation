@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicationReviewDialog } from "../workflow-editor/WorkflowEditor";
 import type { PublicationPreflight } from "../api/publishing";
+import { createPublicationReview, type PublicationReviewState } from "../workflow-editor/publicationReview";
+import type { WorkflowDraft } from "../workflowTypes";
 
 let mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement } | null = null;
 
@@ -17,25 +19,30 @@ afterEach(() => {
 describe("publication slot UX", () => {
   it("shows the resolved replacement policy, trigger diff, and blocks conflicts", () => {
     const onPublish = vi.fn(async () => undefined);
-    const container = render(preflight({
+    const container = render(review({
+      phase: "partialFailure",
+      promotedVersionId: "version-2",
+      failureMessage: "The promoted version was retained.",
+      preflight: preflight({
       canActivate: false,
       triggers: [
         { change: "removed", key: "http:/foo", cardinality: "exclusive" },
         { change: "added", key: "http:/bar", cardinality: "exclusive" }
       ],
       conflicts: [{ key: "http:/bar", cardinality: "exclusive", publicationId: "publication-2", slotName: "canary" }]
-    }), {}, onPublish);
+      })
+    }), onPublish);
 
-    expect(container.textContent).toContain("host policy resolved to replacement");
-    expect(container.textContent).toContain("removed: http:/foo");
-    expect(container.textContent).toContain("added: http:/bar");
+    expect(container.textContent).toContain("host policy defaults to replacement");
+    expect(container.textContent).toContain("removed http:/foo");
+    expect(container.textContent).toContain("added http:/bar");
     expect(container.textContent).toContain("Conflict with slot canary");
-    expect(button(container, "Publish").disabled).toBe(true);
+    expect(container.textContent).toContain("promoted version was retained");
   });
 
-  it("requires a meaningful named slot and re-preflights side-by-side publication", () => {
-    const onReview = vi.fn(async () => undefined);
-    const container = render(preflight(), {}, vi.fn(async () => undefined), onReview);
+  it("requires a meaningful named slot and publishes the reviewed side-by-side intent", () => {
+    const onPublish = vi.fn(async () => undefined);
+    const container = render(review(), onPublish);
 
     flushSync(() => radio(container, "Publish side by side").click());
     const input = container.querySelector<HTMLInputElement>("input[aria-label='Publication slot']")!;
@@ -44,17 +51,15 @@ describe("publication slot UX", () => {
       setter.call(input, "blue");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    flushSync(() => button(container, "Review changes").click());
+    flushSync(() => button(container, "Publish").click());
 
-    expect(onReview).toHaveBeenCalledWith({ action: "sideBySide", slotName: "blue" });
+    expect(onPublish).toHaveBeenCalledWith({ action: "sideBySide", slotName: "blue" });
   });
 });
 
 function render(
-  value: PublicationPreflight,
-  reviewedIntent: {},
-  onPublish: () => Promise<void>,
-  onReview: (intent: any) => Promise<void> = async () => undefined
+  value: PublicationReviewState,
+  onPublish: (intent: any) => Promise<void>
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -62,14 +67,37 @@ function render(
   mounted = { root, container };
   flushSync(() => root.render(
     <PublicationReviewDialog
-      preflight={value}
-      reviewedIntent={reviewedIntent}
+      review={value}
       busy={false}
-      onReview={onReview}
       onPublish={onPublish}
       onCancel={() => undefined}
     />));
   return container;
+}
+
+function review(overrides: Partial<PublicationReviewState> = {}): PublicationReviewState {
+  return {
+    ...createPublicationReview({
+      draft: draft(),
+      details: null,
+      sourceVersion: null,
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    }),
+    ...overrides
+  };
+}
+
+function draft(): WorkflowDraft {
+  return {
+    id: "draft-1",
+    definitionId: "definition-1",
+    sourceVersionId: "version-1",
+    state: { rootActivity: { nodeId: "root", activityVersionId: "root-v1", inputs: [], outputs: [] } },
+    layout: [],
+    validationErrors: []
+  };
 }
 
 function preflight(overrides: Partial<PublicationPreflight> = {}): PublicationPreflight {
