@@ -62,7 +62,7 @@ public sealed class RouteTableTriggerIndexObserver(IHttpEndpointRouteTableSynchr
 
         // Skip only when provably redundant: this publish declares no HTTP binding AND a prior successful refresh
         // already covered this artifact's no-HTTP state, so the table holds nothing of its to reconcile out.
-        if (!declaresHttp && _knownNonHttpArtifacts.ContainsKey(snapshot.ArtifactId))
+        if (!snapshot.RequiresProjectionRefresh && !declaresHttp && _knownNonHttpArtifacts.ContainsKey(snapshot.ArtifactId))
             return;
 
         // Serialized read-then-swap via the shared synchronizer; a throw here fails the publish (matches the

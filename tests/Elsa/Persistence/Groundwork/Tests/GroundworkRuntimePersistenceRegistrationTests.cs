@@ -95,8 +95,16 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
         Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
 
-        var upcaster = Assert.Single(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
-        Assert.IsType<WorkflowExecutableDocumentV1ToV2Upcaster>(upcaster);
+        var upcasterTypes = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>()
+            .Select(x => x.GetType())
+            .ToHashSet();
+        Assert.True(upcasterTypes.SetEquals(
+            [
+                typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
+                typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
+                typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
+                typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)
+            ]));
         Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 

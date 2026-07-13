@@ -135,7 +135,7 @@ not automatic constitution violations.
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Workflows publishing — executable compiler, transient executable store, test-run store | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| Workflows publishing — policy, slot authority, preflight, projection reconciliation, compiler, and persistence stores | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |

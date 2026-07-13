@@ -64,7 +64,7 @@ Adding an upcaster never removes another. When bumping a kind's current version 
 
 ## Schema-version model
 
-Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Per-kind current versions are integers declared in `ElsaRuntimeDocumentVersions`; `workflowExecutable` is version `2` and has a production v1-to-v2 upcaster, while unchanged kinds remain at version `1`. The legacy manifest-wide stamp `"1.0.0"` parses as version `1` for every kind. Committed versioned golden fixtures make any unversioned change to a persisted state-record shape a test failure.
+Versions live in the Groundwork **envelope** `SchemaVersion` field (already persisted per document), not inside content JSON and not on the domain state records. Per-kind current versions are integers declared in `ElsaRuntimeDocumentVersions`; `workflowExecutable`, `workflowExecutableSourceReference`, `workflowTriggerBinding`, and `recurringTriggerSchedule` are version `2` with complete production v1-to-v2 upcasters, while unchanged kinds remain at version `1`. The legacy manifest-wide stamp `"1.0.0"` parses as version `1` for every kind. Committed versioned golden fixtures make any unversioned change to a persisted state-record shape a test failure.
 
 ## Cross-references
 

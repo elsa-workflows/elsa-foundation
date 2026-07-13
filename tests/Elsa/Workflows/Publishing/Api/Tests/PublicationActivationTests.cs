@@ -1,6 +1,9 @@
+using Elsa.Workflows.Publishing.Api.Handlers;
+using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
@@ -67,6 +70,30 @@ public sealed class PublicationActivationTests
         Assert.NotNull(failedCandidate.Failure);
     }
 
+    [Fact]
+    public async Task UnpublishProjectionRemovalFailureRestoresAuthorityAndReplaysServingProjection()
+    {
+        await SeedActivePublicationAsync("publication-current");
+        var projectionPreparer = new PartialRemovalProjectionPreparer();
+        var handler = new UnpublishPublicationSlotRequestHandler(
+            _slotStore,
+            _publicationStore,
+            projectionPreparer,
+            new InMemoryWorkflowExecutableSourceReferenceStore(),
+            new FixedTimeProvider(_now));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(
+            new UnpublishPublicationSlot("definition-1", "default"),
+            CancellationToken.None));
+
+        var slot = await _slotStore.FindAsync("definition-1", "default");
+        var publication = await _publicationStore.FindAsync("publication-current");
+        Assert.Equal("publication-current", slot!.ActivePublicationId);
+        Assert.Equal(3, slot.Revision);
+        Assert.Equal(PublicationStatus.Active, publication!.Status);
+        Assert.True(projectionPreparer.Restored);
+    }
+
     private PublicationActivator NewActivator(IPublicationProjectionPreparer projectionPreparer) =>
         new(
             _slotStore,
@@ -125,12 +152,40 @@ public sealed class PublicationActivationTests
 
             await _allArrived.Task.WaitAsync(cancellationToken);
         }
+
+        public ValueTask ActivateAsync(PublicationRecord candidate, string? replacedPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     private sealed class ThrowingProjectionPreparer : IPublicationProjectionPreparer
     {
         public ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default) =>
             ValueTask.FromException(new InvalidOperationException("Candidate trigger projection could not be prepared."));
+
+        public ValueTask ActivateAsync(PublicationRecord candidate, string? replacedPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    private sealed class PartialRemovalProjectionPreparer : IPublicationProjectionPreparer
+    {
+        public bool Restored { get; private set; }
+
+        public ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask ActivateAsync(PublicationRecord candidate, string? replacedPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
+        {
+            Restored = true;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException(new InvalidOperationException("Recurring schedule removal failed after trigger bindings were removed."));
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

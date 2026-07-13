@@ -57,6 +57,9 @@ public static class GroundworkRuntimeStoreRegistration
         // on read. TryAdd keeps host-supplied replacements and contributed upcasters intact.
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV1ToV2Upcaster>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowTriggerBindingDocumentV1ToV2Upcaster>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, RecurringTriggerScheduleDocumentV1ToV2Upcaster>());
         services.TryAddSingleton<IGroundworkRuntimeDocumentUpcasterRegistry, GroundworkRuntimeDocumentUpcasterRegistry>();
 
         // Durable scheduler work queue. Without this swap the post-commit outbox delivers into the

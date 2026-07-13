@@ -9,8 +9,8 @@ T042; it does not itself change a storage manifest.
 - `ElsaRuntimeStorageManifest.SchemaVersion` is the frozen manifest stamp `1.0.0`; it is not a
   per-document migration knob.
 - `ElsaRuntimeDocumentVersions` carries the current integer version for each Runtime document kind.
-  `workflowExecutable` is now version 2; the other pre-spec-091 kinds remain version 1 until their
-  owning implementation tasks evolve them.
+  `workflowExecutable`, its source reference, trigger binding, and recurring schedule are now version 2;
+  the new publication-projection marker starts at version 1 and unchanged kinds remain version 1.
 - A persisted JSON shape change requires, in the same implementation change: incrementing that kind's
   version, registering a concrete `IGroundworkRuntimeDocumentUpcaster` for every newly required step,
   adding the new current-version golden fixture, and retaining the historical fixture.
@@ -37,9 +37,10 @@ Authoritative sources:
 |---|---|---|---|---|---|
 | Workflow executable | `workflowExecutable`, v2 | Envelope `{ collection, executable, rootWriteLeases, deletionGuard }`. Leases are keyed by logical writer ID and carry an opaque fencing token plus expiry; the optional deletion guard carries operation ID, fencing token, and expiry. | `by-collection` on `collection`; `list-all` equality query. Retention transitions load the raw envelope and use its Groundwork document version as `ExpectedVersion` for every CAS update or conditional delete. | `Fixtures/v1/workflowExecutable.json` remains the historical artifact-only envelope. `WorkflowExecutableDocumentV1ToV2Upcaster` adds an empty lease set and null deletion guard. `Fixtures/v2/workflowExecutable.json` is the current golden shape. | T018's race-safe deletion state machine is provider-owned and persisted with the artifact. Root acquisition and deletion reservation are mutually exclusive CAS transitions; expired states are recoverable; stale fencing tokens cannot renew, release, cancel, or delete; guarded state survives restart. This closes the root-write/GC check-then-delete race without making source references or execution records share a transaction with the artifact document. |
 | Workflow execution state | `workflowExecutionState`, v1 | Envelope `{ collection, state }`. The pinned artifact is nested at `state.pinnedExecutable.artifactId`; no artifact ID is lifted to the envelope. | `by-collection` on `collection`; `list-all` equality query. The retained-root query reads only the stable nested artifact-ID JSON fragment from current envelopes and applies normal deserialization/upcasting only to historical versions, then returns distinct IDs. | No production upcaster. `Fixtures/v1/workflowExecutionState.json` exists and includes the complete pinned executable identity. | T018 satisfies FR-066 without changing the wire shape: it does not call `ListAsync()` or materialize complete workflow execution states. Save and removal update the same execution document that the projection reads, so there is no duplicate lifecycle record or backfill requirement. |
-| Executable source reference | `workflowExecutableSourceReference`, v1 | Envelope `{ collection, artifactId, reference }`. `reference` contains source/artifact/definition identity, scope, expiry, retirement facts, and layout. It has no publication or slot identity. | `by-collection` on `collection` with `list-all`; `by-artifact` on lifted `artifactId` with `list-by-artifact`. | No production upcaster. `Fixtures/v1/workflowExecutableSourceReference.json` exists. | Adding `PublicationId` and `SlotId` changes the stored reference and requires v2, a concrete v1-to-v2 upcaster, a v2 fixture, and retained v1. Publication-scoped queries also require a lifted or nested indexed publication ID plus manifest/query declarations. Historical Published references cannot be assigned default-slot authority by a shape-only upcaster when several references exist; T034 must use the legacy-adoption decision below. TestRun references remain slotless. |
-| Workflow trigger binding | `workflowTriggerBinding`, v1 | Direct binding document; no envelope. Identity is artifact/node/stimulus. It contains artifact/definition/stimulus metadata but no publication, slot, or cardinality. | `by-stimulus` on `stimulusHash` with `list-by-stimulus`; `by-artifact` on `artifactId` with `list-by-artifact`. | No production upcaster. `Fixtures/v1/workflowTriggerBinding.json` exists. | Publication/slot identity and trigger cardinality change the shape and require v2, a concrete v1-to-v2 upcaster, a v2 fixture, and retained v1. Add publication-scoped index/query operations. A binding cannot be mapped reliably to one historical source reference when several publications share an artifact; serving bindings must be rebuilt from adopted authoritative publication records instead of treating an upcast placeholder as authority. |
-| Recurring trigger schedule | `recurringTriggerSchedule`, v1 | Envelope `{ collection, artifactId, schedule }`; artifact ID is lifted for indexing and repeated inside the schedule. The schedule contains stimulus/timing facts but no publication or slot identity. | `by-collection` on `collection` with `list-all`; `by-artifact` on lifted `artifactId` with `list-by-artifact`. | No production upcaster. `Fixtures/v1/recurringTriggerSchedule.json` exists. | Publication/slot identity changes the schedule shape and requires v2, a concrete v1-to-v2 upcaster, a v2 fixture, and retained v1. Add publication-scoped index/query operations. Historical schedules must be rebuilt or associated through the adopted publication; a synthetic upcast value alone must not make a non-authoritative schedule fire. |
+| Executable source reference | `workflowExecutableSourceReference`, v2 | Envelope `{ collection, artifactId, reference }`. `reference` now carries nullable publication and slot provenance in addition to its source/artifact/definition, scope, expiry, retirement, and layout facts. | `by-collection` on `collection` with `list-all`; `by-artifact` on lifted `artifactId` with `list-by-artifact`. | The v1 fixture is retained. `WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster` adds neutral null publication/slot markers; the v2 fixture carries real publication and default-slot identities. | TestRun references remain slotless. A null publication on an upcast Published reference means `legacy-unadopted`, never implicit start authority; the deterministic adoption reconciliation below assigns authority. |
+| Workflow trigger binding | `workflowTriggerBinding`, v2 | Direct binding document with publication ID, slot ID, provider cardinality, and prepared/active visibility in addition to artifact/node/stimulus identity. | Existing artifact/stimulus indexes remain; publication-scoped query/index operations are added with the T036 store implementation. | The v1 fixture is retained. `WorkflowTriggerBindingDocumentV1ToV2Upcaster` adds null publication/slot, marks the projection inactive, and preserves provider semantics by mapping legacy `HttpEndpoint` stimuli to `Exclusive` and other legacy stimuli to `FanOut`. The v2 fixture is publication-scoped and active. | Upcast legacy bindings are deliberately non-serving. Binding identity now has a publication-scoped builder so named slots sharing one artifact cannot collapse. Authoritative bindings are rebuilt from the adopted publication. |
+| Recurring trigger schedule | `recurringTriggerSchedule`, v2 | Envelope `{ collection, artifactId, schedule }`; the schedule now includes publication ID, slot ID, and prepared/active visibility. | Existing collection/artifact indexes remain; publication-scoped query/index operations are added with the T036 store implementation. | The v1 fixture is retained. `RecurringTriggerScheduleDocumentV1ToV2Upcaster` adds null publication/slot and marks the legacy schedule inactive. The v2 fixture is publication-scoped and active. | Upcast legacy schedules cannot fire. Authoritative schedules are rebuilt from the adopted publication rather than assigned authority by document-local inference. |
+| Publication projection state | `publicationProjectionState`, v1 | Lightweight marker `{ projectionKind, publicationId, isActive }`, including zero-row prepared publications. | Deterministic document ID from projection kind and length-prefixed publication ID; mutated atomically with the owning binding/schedule documents. | New v1 fixture covers a prepared, inactive trigger-binding projection; no upcaster is required for a new kind. | Makes prepare/activate explicit and durable even when a publication contributes no rows. Activation requires the marker, so a missing or never-prepared publication cannot silently succeed. |
 
 ### Legacy publication adoption required before v1-to-v2 upcasters
 
@@ -48,19 +49,22 @@ bindings, and artifact-owned recurring schedules. It did not persist which publi
 authoritative. A serializer upcaster sees one document at a time and therefore cannot safely infer a
 global slot winner.
 
-T034 must implement and test one explicit adoption policy before registering the v1-to-v2 steps:
+The accepted adoption policy is **latest persisted publish wins the default slot; every other legacy
+publish remains historical and non-authoritative**. Reconciliation performs these restart-safe steps:
 
 1. group live v1 Published references by workflow definition;
-2. deterministically select the reference adopted into the `default` slot using persisted publication
-   facts and a stable tie-breaker;
-3. either retire the remaining references from start authority or adopt them into explicit deterministic
-   legacy named slots, according to the publication-slot ADR's compatibility decision;
-4. create publication records/slots through an idempotent migration or reconciliation operation; and
-5. rebuild trigger bindings and recurring schedules from those authoritative publications before new
+2. deterministically select the maximum `(PublishedAt ?? CreatedAt, CreatedAt, SourceReferenceId)` using
+   ordinal ID comparison as the final tie-breaker and adopt it into `default`;
+3. retain the other references as historical provenance but do not synthesize named slots or start authority;
+4. create the default slot and adopted publication through an idempotent reconciliation keyed by the
+   deterministic legacy publication identity derived from the winning source-reference ID; and
+5. rebuild trigger bindings and recurring schedules from that authoritative publication before new
    routing authority is exposed.
 
-The migration must be restart-safe. A v1-to-v2 document upcaster may add a neutral legacy marker needed
-for deserialization, but it must not independently decide publication authority.
+The migration is fail-closed and restart-safe. The v1-to-v2 upcasters add only neutral legacy markers:
+null publication/slot provenance and inactive serving projections. They never independently decide
+publication authority. If reconciliation stops after upcasting, no legacy projection is accidentally
+promoted; replay selects the same winner and rebuilds the same publication-scoped projections.
 
 ## Planned Publishing document kinds
 
@@ -106,8 +110,10 @@ Therefore T011 is deferred to the first stored-shape implementation:
   is v2 and the remaining pre-existing kinds are v1.
 - [x] Manifest index fields and equality queries are recorded above.
 - [x] Existing v1 fixtures are present for all four kinds.
-- [x] The production upcaster set contains the complete `workflowExecutable` v1-to-v2 chain.
+- [x] The production upcaster set contains complete v1-to-v2 chains for the executable and all three
+  changed Runtime publication projections.
 - [x] Planned Publishing records are confirmed absent from the current Runtime manifest.
 - [x] T018 records the provider-CAS executable retention guard, v2 envelope, migration, and fixtures.
-- [ ] T034 records the legacy publication-adoption policy.
-- [ ] T034/T042 adds concrete new-version/new-kind fixtures and migration tests with the implementation.
+- [x] T034 records the deterministic fail-closed legacy publication-adoption policy.
+- [x] T034 preserves the three changed Runtime v1 fixtures and adds concrete v2 fixtures/upcaster tests.
+- [ ] T042 adds concrete fixtures for the new Publishing-owned document kinds.

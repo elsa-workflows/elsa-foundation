@@ -1294,13 +1294,13 @@ components:
       type: object
       required: [defaultAction, defaultSlotName, source]
       properties:
-        defaultAction: { type: string, enum: [replace, sideBySide] }
+        defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
         source: { type: string, enum: [workflow, host] }
     SetPublicationPolicyRequest:
       type: object
       properties:
-        defaultAction: { type: string, enum: [replace, sideBySide] }
+        defaultAction: { type: string, enum: [replace, requireExplicitSlot] }
         defaultSlotName: { type: string, default: default }
     TestRun:
       type: object

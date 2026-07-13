@@ -188,9 +188,55 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Same(content, result);
     }
 
+    [Fact]
+    public void PublicationProjectionUpcasters_AreNeutralAndPreserveLegacyTriggerSemantics()
+    {
+        var registry = Registry();
+        var sourceReference = registry.Upcast(
+            ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind,
+            1,
+            2,
+            new JsonObject { ["reference"] = new JsonObject() });
+        var eventBinding = registry.Upcast(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
+            1,
+            2,
+            new JsonObject { ["stimulusType"] = "Event" });
+        var httpBinding = registry.Upcast(
+            ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind,
+            1,
+            2,
+            new JsonObject { ["stimulusType"] = "HttpEndpoint" });
+        var schedule = registry.Upcast(
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
+            1,
+            2,
+            new JsonObject { ["schedule"] = new JsonObject() });
+
+        var reference = Assert.IsType<JsonObject>(sourceReference["reference"]);
+        Assert.True(reference.ContainsKey("publicationId"));
+        Assert.Null(reference["publicationId"]);
+        Assert.Null(reference["slotId"]);
+        Assert.Equal((int)TriggerCardinality.FanOut, eventBinding["cardinality"]!.GetValue<int>());
+        Assert.Equal((int)TriggerCardinality.Exclusive, httpBinding["cardinality"]!.GetValue<int>());
+        Assert.False(eventBinding["isActive"]!.GetValue<bool>());
+        Assert.False(httpBinding["isActive"]!.GetValue<bool>());
+        var scheduleState = Assert.IsType<JsonObject>(schedule["schedule"]);
+        Assert.Null(scheduleState["publicationId"]);
+        Assert.Null(scheduleState["slotId"]);
+        Assert.False(scheduleState["isActive"]!.GetValue<bool>());
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
-        new([new WorkflowExecutableDocumentV1ToV2Upcaster(), .. additional]);
+        new(
+        [
+            new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
+            new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
+            new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),
+            .. additional
+        ]);
 
     private static BookmarkState Bookmark() => new(
         BookmarkId: "bm-1",

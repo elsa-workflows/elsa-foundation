@@ -19,6 +19,7 @@ using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -43,6 +44,11 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
     private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
+    private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
+    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryPublicationRecordStore _publicationStore = new();
+    private readonly InMemoryPublicationPolicyStore _policyStore = new();
+    private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
 
     [Fact]
     public async Task PublishesRootActivityIntoExecutableArtifact()
@@ -61,6 +67,22 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Equal("write-one", executable.RootActivity.ExecutableNodeId);
         Assert.Equal("one", executable.NodesById["write-one"].InputBindings["Text"].LiteralValue!.Value.GetString());
         Assert.Equal($"{typeof(string).FullName}, {typeof(string).Assembly.GetName().Name}", executable.NodesById["write-one"].InputBindings["Text"].Metadata["typeName"]);
+    }
+
+    [Fact]
+    public async Task RepublishingIdenticalArtifactKeepsExistingPublicationAuthority()
+    {
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("one"))));
+
+        var first = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var second = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.True(first.WasCreated);
+        Assert.False(second.WasCreated);
+        Assert.Equal(first.PublicationId, second.PublicationId);
+        Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
+        Assert.Equal(PublicationStatus.Active, second.Status);
+        Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
     }
 
     [Fact]
@@ -412,7 +434,8 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.NotNull(actionProperty);
 
         slotProperty.SetValue(request, slotName);
-        actionProperty.SetValue(request, Enum.Parse(actionProperty.PropertyType, "PublishSideBySide"));
+        var actionType = Nullable.GetUnderlyingType(actionProperty.PropertyType) ?? actionProperty.PropertyType;
+        actionProperty.SetValue(request, Enum.Parse(actionType, "PublishSideBySide"));
         return request;
     }
 
@@ -431,9 +454,15 @@ public sealed class PublishWorkflowRequestHandlerTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowExecutableStore>(_store);
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(_referenceStore);
-        services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(
-            new WorkflowTriggerBindingExtractor([]),
-            new InMemoryWorkflowTriggerBindingStore()));
+        services.AddSingleton<IWorkflowTriggerBindingStore>(_bindingStore);
+        services.AddSingleton<IPublicationSlotStore>(_slotStore);
+        services.AddSingleton<IPublicationRecordStore>(_publicationStore);
+        services.AddSingleton<IPublicationPolicyStore>(_policyStore);
+        services.AddSingleton<IPublicationProjectionIntentStore>(_intentStore);
+        services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(TestRootWriteLeases.Create(_store));
+        var extractor = new WorkflowTriggerBindingExtractor([]);
+        services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);
+        services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(extractor, _bindingStore));
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
@@ -455,8 +484,17 @@ public sealed class PublishWorkflowRequestHandlerTests
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         WorkflowDefinitionVersionLayout? layout,
-        params ActivityDefinitionVersion[] activityVersions) =>
-        new(
+        params ActivityDefinitionVersion[] activityVersions)
+    {
+        var extractor = new WorkflowTriggerBindingExtractor([]);
+        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
+        var reconciler = new PublicationProjectionReconciler(
+            _intentStore,
+            _store,
+            indexer,
+            _bindingStore,
+            TimeProvider.System);
+        return new(
             TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore(activityVersions.ToList()),
@@ -464,11 +502,18 @@ public sealed class PublishWorkflowRequestHandlerTests
                 TestWellKnownTypeRegistry.Create()),
             _store,
             _referenceStore,
-            new WorkflowTriggerIndexer(
-                new WorkflowTriggerBindingExtractor([]),
-                new InMemoryWorkflowTriggerBindingStore()),
+            extractor,
+            _bindingStore,
             new FakeLayoutStore(layout),
-            TestRootWriteLeases.Create(_store));
+            TestRootWriteLeases.Create(_store),
+            _policyStore,
+            new PublicationPolicyResolver(),
+            _slotStore,
+            _publicationStore,
+            new PublicationPreflightService(),
+            new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
+            TimeProvider.System);
+    }
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         WorkflowVersion(rootActivity, "definition-1", "version-1", "1.0.0");

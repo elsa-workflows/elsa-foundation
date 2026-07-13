@@ -88,22 +88,22 @@
 
 ### Implementation for User Story 2
 
-- [ ] T030 [P] [US2] Add publication policy, resolved intent, slot, record, trigger claim, projection intent, and lifecycle enums in `src/Elsa/Workflows/Publishing/Core/Models/`
-- [ ] T031 [P] [US2] Add CQS slot/publication/policy/preflight/activation contracts in `src/Elsa/Workflows/Publishing/Core/Contracts/`
-- [ ] T032 [US2] Implement policy resolution and validation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationPolicyResolver.cs`
-- [ ] T033 [US2] Implement in-memory slot, publication, policy, and projection-intent stores in `src/Elsa/Workflows/Publishing/Api/Services/`
-- [ ] T034 [US2] Extend source references, trigger bindings, and recurring schedules with publication/slot identity in `src/Elsa/Workflows/Runtime/Core/Models/` and update Groundwork versions/upcasters/fixtures in `src/Elsa/Persistence/Groundwork/`
-- [ ] T035 [US2] Add trigger cardinality to extraction contracts and declare HTTP Exclusive in `src/Elsa/Workflows/Runtime/Core/Models/` and `src/Elsa/Activities/Http/`
-- [ ] T036 [US2] Add publication-scoped list/delete/prepare/activate operations to Runtime trigger and schedule stores in `src/Elsa/Workflows/Runtime/Core/Contracts/` and their in-memory/Groundwork implementations
-- [ ] T037 [US2] Implement candidate extraction, trigger diffing, and conflict validation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationPreflight.cs`
-- [ ] T038 [US2] Implement CAS activation and old-authority preservation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationActivator.cs`
-- [ ] T039 [US2] Implement durable idempotent projection reconciliation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationProjectionReconciler.cs`
-- [ ] T040 [US2] Refactor `src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs` to use preflight, policy resolution, slot activation, and publication-scoped references
-- [ ] T041 [US2] Add preflight, publish, slot list/detail/unpublish/restore, and workflow-policy endpoints under `src/Elsa/Workflows/Publishing/Api/Endpoints/`
-- [ ] T042 [US2] Add provider-neutral Publishing Groundwork persistence in `src/Elsa/Workflows/Publishing/Persistence/Groundwork/` with CAS, indexes, and restart tests in `tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/`
-- [ ] T043 [US2] Update HTTP route-table and recurring-schedule observers to switch only authoritative publication projections in `src/Elsa/Workflows/Runtime/Http/` and `src/Elsa/Workflows/Runtime/Scheduling/`
-- [ ] T044 [US2] Document publication extension points/tasks in `src/Elsa/Workflows/Publishing/Api/README.md` and `src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`
-- [ ] T045 [US2] Run the US2 commands and `/foo` to `/bar` scenario from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T030 [P] [US2] Add publication policy, resolved intent, slot, record, trigger claim, projection intent, and lifecycle enums in `src/Elsa/Workflows/Publishing/Core/Models/`
+- [X] T031 [P] [US2] Add CQS slot/publication/policy/preflight/activation contracts in `src/Elsa/Workflows/Publishing/Core/Contracts/`
+- [X] T032 [US2] Implement policy resolution and validation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationPolicyResolver.cs`
+- [X] T033 [US2] Implement in-memory slot, publication, policy, and projection-intent stores in `src/Elsa/Workflows/Publishing/Api/Services/`
+- [X] T034 [US2] Extend source references, trigger bindings, and recurring schedules with publication/slot identity in `src/Elsa/Workflows/Runtime/Core/Models/` and update Groundwork versions/upcasters/fixtures in `src/Elsa/Persistence/Groundwork/`
+- [X] T035 [US2] Add trigger cardinality to extraction contracts and declare HTTP Exclusive in `src/Elsa/Workflows/Runtime/Core/Models/` and `src/Elsa/Activities/Http/`
+- [X] T036 [US2] Add publication-scoped list/delete/prepare/activate operations to Runtime trigger and schedule stores in `src/Elsa/Workflows/Runtime/Core/Contracts/` and their in-memory/Groundwork implementations
+- [X] T037 [US2] Implement candidate extraction, trigger diffing, and conflict validation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationPreflight.cs`
+- [X] T038 [US2] Implement CAS activation and old-authority preservation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationActivator.cs`
+- [X] T039 [US2] Implement durable idempotent projection reconciliation in `src/Elsa/Workflows/Publishing/Api/Services/PublicationProjectionReconciler.cs`
+- [X] T040 [US2] Refactor `src/Elsa/Workflows/Publishing/Api/Handlers/PublishWorkflowRequestHandler.cs` to use preflight, policy resolution, slot activation, and publication-scoped references
+- [X] T041 [US2] Add preflight, publish, slot list/detail/unpublish/restore, and workflow-policy endpoints under `src/Elsa/Workflows/Publishing/Api/Endpoints/`
+- [X] T042 [US2] Add provider-neutral Publishing Groundwork persistence in `src/Elsa/Workflows/Publishing/Persistence/Groundwork/` with CAS, indexes, and restart tests in `tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/`
+- [X] T043 [US2] Update HTTP route-table and recurring-schedule observers to switch only authoritative publication projections in `src/Elsa/Workflows/Runtime/Http/` and `src/Elsa/Workflows/Runtime/Scheduling/`
+- [X] T044 [US2] Document publication extension points/tasks in `src/Elsa/Workflows/Publishing/Api/README.md` and `src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`
+- [X] T045 [US2] Run the US2 commands and `/foo` to `/bar` scenario from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US2 independently proves safe replacement and explicit coexistence.
 

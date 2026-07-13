@@ -532,7 +532,7 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IActivityTriggerStimulusProvider` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Strategy set (context-selected, exact-one owner per executable trigger node; not a contributor fan-in).
-- **Signature:** additive stable nonblank `ProviderId`; `ActivityTriggerStimulusResult Describe(ExecutableNode node)`.
+- **Signature:** additive stable nonblank `ProviderId`; additive `Cardinality` (`FanOut` compatibility default); `ActivityTriggerStimulusResult Describe(ExecutableNode node)`.
 - **Usage:** at **publish time** the trigger extractor evaluates every registered strategy once for each compiler-marked node. Exactly one strategy must return `Recognized`; zero owners and multiple owners fail rather than selecting by registration order. The selected provider's stable id appears in the non-persisted preflight outcome and contextual typed failures. `Recognized([...])` carries the node's stimulus identities `(stimulusType, stimulusHash, correlationScope?, metadata)`. `Recognized([])` deliberately means an intentional non-start (for example a mid-flow `HttpEndpoint` with `CanStartWorkflow = false`) and succeeds without a binding. Providers read only the pinned published `ExecutableNode`, never Design state or a running workflow. Public contract XML documents `WorkflowTriggerPreflightException`; parser/calculator exceptions are wrapped at the publication boundary and retained as inner exceptions.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, MyProvider>())`.
 

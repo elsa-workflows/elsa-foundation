@@ -229,6 +229,9 @@
     <Project Path="src/Elsa/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj" />
   </Folder>
+  <Folder Name="/src/Elsa/Workflows/Publishing/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Workflows/Publishing/Persistence/Groundwork/Elsa.Workflows.Publishing.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Workflows/Runtime/">
     <Project Path="src/Elsa/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <Project Path="src/Elsa/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
@@ -395,6 +398,9 @@
   <Folder Name="/tests/Elsa/Workflows/Publishing/" />
   <Folder Name="/tests/Elsa/Workflows/Publishing/Api/">
     <Project Path="tests/Elsa/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Workflows/Publishing/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/Elsa.Workflows.Publishing.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Workflows/Runtime/">
     <Project Path="tests/Elsa/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj" />

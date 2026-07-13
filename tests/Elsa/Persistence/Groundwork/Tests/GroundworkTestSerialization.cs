@@ -11,7 +11,13 @@ internal static class GroundworkTestSerialization
 {
     /// <summary>The default upcaster registry with the production runtime migration chain.</summary>
     public static readonly IGroundworkRuntimeDocumentUpcasterRegistry UpcasterRegistry =
-        new GroundworkRuntimeDocumentUpcasterRegistry([new WorkflowExecutableDocumentV1ToV2Upcaster()]);
+        new GroundworkRuntimeDocumentUpcasterRegistry(
+        [
+            new WorkflowExecutableDocumentV1ToV2Upcaster(),
+            new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
+            new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
+            new RecurringTriggerScheduleDocumentV1ToV2Upcaster()
+        ]);
 
     /// <summary>The production default serializer, wired to the production upcaster registry.</summary>
     public static readonly IGroundworkRuntimeDocumentSerializer Serializer =

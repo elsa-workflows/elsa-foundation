@@ -1,0 +1,34 @@
+{
+  "artifactId": "artifact-1",
+  "collection": "workflowExecutableSourceReference",
+  "reference": {
+    "artifactId": "artifact-1",
+    "artifactVersion": "1",
+    "createdAt": "1970-01-01T00:00:00\u002B00:00",
+    "definitionId": "definition-1",
+    "definitionVersionId": "version-1",
+    "deletedAt": null,
+    "deletedReason": null,
+    "expiresAt": null,
+    "layout": [
+      {
+        "additionalProperties": {
+          "collapsed": false
+        },
+        "height": 60,
+        "nodeId": "root",
+        "width": 100,
+        "x": 10,
+        "y": 20
+      }
+    ],
+    "publicationId": "publication-1",
+    "publishedAt": "1970-01-01T00:00:00\u002B00:00",
+    "scope": 0,
+    "slotId": "slot-default",
+    "sourceId": "version-1",
+    "sourceKind": "WorkflowDefinitionVersion",
+    "sourceReferenceId": "sourceref-1",
+    "sourceVersion": "1"
+  }
+}

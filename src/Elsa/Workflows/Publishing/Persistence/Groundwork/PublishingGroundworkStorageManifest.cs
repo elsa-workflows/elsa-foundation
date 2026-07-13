@@ -1,0 +1,51 @@
+using Groundwork.Core.Indexing;
+using Groundwork.Core.Intents;
+using Groundwork.Core.Manifests;
+using Groundwork.Core.Queries;
+
+namespace Elsa.Workflows.Publishing.Persistence.Groundwork;
+
+public static class PublishingGroundworkStorageManifest
+{
+    public const string SchemaVersion = "1.0.0";
+    public const string PublicationSlotDocumentKind = "publishingPublicationSlot";
+    public const string PublicationRecordDocumentKind = "publishingPublicationRecord";
+    public const string PublicationPolicyDocumentKind = "publishingPublicationPolicy";
+    public const string ProjectionIntentDocumentKind = "publishingProjectionIntent";
+    public const string ByDefinitionIndex = "by-definition";
+    public const string BySlotIndex = "by-slot";
+    public const string ByPublicationIndex = "by-publication";
+    public const string ByActivePublicationIndex = "by-active-publication";
+    public const string WorkflowDefinitionIdField = "workflowDefinitionId";
+    public const string SlotIdField = "slotId";
+    public const string PublicationIdField = "publicationId";
+    public const string ActivePublicationIdField = "slot.activePublicationId";
+
+    public static StorageManifest Create() => new(
+        new StorageManifestIdentity("elsa-workflows-publishing"),
+        new StorageManifestOwner("elsa.workflows.publishing"),
+        new StorageManifestVersion(SchemaVersion),
+        [
+            Unit(PublicationSlotDocumentKind, "Publication slot",
+                [Keyword(ByDefinitionIndex, WorkflowDefinitionIdField), Keyword(ByActivePublicationIndex, ActivePublicationIdField)],
+                [Query("list-by-definition", ByDefinitionIndex), Query("find-by-active-publication", ByActivePublicationIndex)]),
+            Unit(PublicationRecordDocumentKind, "Publication record", [Keyword(BySlotIndex, SlotIdField)], [Query("list-by-slot", BySlotIndex)]),
+            Unit(PublicationPolicyDocumentKind, "Publication policy", [], []),
+            Unit(ProjectionIntentDocumentKind, "Publication projection intent", [Keyword(ByPublicationIndex, PublicationIdField)], [Query("list-by-publication", ByPublicationIndex)])
+        ],
+        new HashSet<string> { "schema-history", "optimistic-concurrency" },
+        []);
+
+    private static StorageUnit Unit(string kind, string label, IndexDeclaration[] indexes, PortableQueryDeclaration[] queries) => new(
+        new StorageUnitIdentity(kind), label, StorageIntent.PortableDocument(), LifecyclePolicy.Mutable,
+        IdentityPolicy.StringId(), TenancyPolicy.None, ConcurrencyPolicy.Optimistic(), SerializationPolicy.Json(),
+        indexes, queries, PhysicalizationPolicy.Portable);
+
+    private static PortableQueryDeclaration Query(string name, string index) => new(
+        name, index, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal },
+        QuerySortSupport.None, QueryPagingSupport.Offset);
+
+    private static IndexDeclaration Keyword(string identity, string field) => new(
+        identity, [new IndexField(field)], IndexValueKind.Keyword, false, true,
+        MissingValueBehavior.Excluded, new HashSet<PortableQueryOperation> { PortableQueryOperation.Equal });
+}

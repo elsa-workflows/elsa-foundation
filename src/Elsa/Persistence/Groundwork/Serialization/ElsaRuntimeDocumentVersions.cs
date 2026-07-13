@@ -29,7 +29,7 @@ public static class ElsaRuntimeDocumentVersions
     {
         [ElsaRuntimeStorageManifest.BookmarkStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind] = 2,
-        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 1,
+        [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 1,
@@ -42,8 +42,9 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.PostCommitOutboxDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerWorkItemDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.DurableTimerDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 1
+        [ElsaRuntimeStorageManifest.WorkflowTriggerBindingDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind] = 1
     };
 
     /// <summary>The current versions of every runtime document kind, keyed by document kind.</summary>

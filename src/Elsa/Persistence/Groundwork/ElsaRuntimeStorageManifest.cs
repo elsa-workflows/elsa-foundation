@@ -118,6 +118,9 @@ public static class ElsaRuntimeStorageManifest
     // and by artifact id (replace-on-republish).
     public const string WorkflowTriggerBindingDocumentKind = "workflowTriggerBinding";
 
+    /// <summary>Durable prepared/active marker for a publication-owned Runtime serving projection.</summary>
+    public const string PublicationProjectionStateDocumentKind = "publicationProjectionState";
+
     /// <summary>
     /// Cross-artifact index used by <c>IWorkflowTriggerBindingStore.ListByStimulusAsync</c> so a single
     /// stimulus can start instances of any workflow that triggers on it. Keyed by stimulus hash alone; the
@@ -285,7 +288,12 @@ public static class ElsaRuntimeStorageManifest
                 [
                     Query("list-all", ByCollectionIndex),
                     Query("list-by-artifact", ByArtifactIndex)
-                ])
+                ]),
+            Unit(
+                PublicationProjectionStateDocumentKind,
+                "Publication projection state",
+                [],
+                [])
         ],
         new HashSet<string> { "schema-history", "optimistic-concurrency" },
         []);

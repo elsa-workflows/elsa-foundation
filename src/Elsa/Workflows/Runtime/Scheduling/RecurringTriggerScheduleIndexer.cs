@@ -69,6 +69,42 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
 
         var artifactId = executable.Identity.ArtifactId;
         var now = _timeProvider.GetUtcNow();
+        var schedules = MaterializeSchedules(executable, now, publicationId: null, slotId: null);
+
+        var bindings = await _inner.IndexAsync(executable, cancellationToken);
+        await _store.DeleteByArtifactAsync(artifactId, cancellationToken);
+        foreach (var schedule in schedules)
+            await _store.SaveAsync(schedule, cancellationToken);
+
+        return bindings;
+    }
+
+    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        WorkflowExecutable executable,
+        string publicationId,
+        string slotId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+
+        if (_providers.Count == 0)
+            return await _inner.PreparePublicationAsync(executable, publicationId, slotId, cancellationToken);
+
+        var schedules = MaterializeSchedules(executable, _timeProvider.GetUtcNow(), publicationId, slotId);
+        var bindings = await _inner.PreparePublicationAsync(executable, publicationId, slotId, cancellationToken);
+        await _store.PreparePublicationAsync(publicationId, schedules, cancellationToken);
+        return bindings;
+    }
+
+    private IReadOnlyCollection<RecurringTriggerSchedule> MaterializeSchedules(
+        WorkflowExecutable executable,
+        DateTimeOffset now,
+        string? publicationId,
+        string? slotId)
+    {
+        var artifactId = executable.Identity.ArtifactId;
         var schedules = new List<RecurringTriggerSchedule>();
 
         // Fully materialize every provider-owned recurring projection before either index is mutated.
@@ -95,22 +131,22 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
                 throw Failure(artifactId, node, [providerId], "RecurringSchedule", $"Recurring expression '{descriptor.Expression}' has no future occurrence.");
 
             schedules.Add(new RecurringTriggerSchedule(
-                ScheduleId: RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId),
+                ScheduleId: publicationId is null
+                    ? RecurringTriggerSchedule.BuildId(artifactId, node.ExecutableNodeId)
+                    : RecurringTriggerSchedule.BuildId(publicationId, artifactId, node.ExecutableNodeId),
                 ArtifactId: artifactId,
                 StimulusType: descriptor.StimulusType,
                 StimulusHash: descriptor.StimulusHash,
                 Kind: descriptor.Kind,
                 Expression: descriptor.Expression,
                 NextOccurrence: next.Value,
-                CreatedAt: now));
+                CreatedAt: now,
+                PublicationId: publicationId,
+                SlotId: slotId,
+                IsActive: publicationId is null));
         }
 
-        var bindings = await _inner.IndexAsync(executable, cancellationToken);
-        await _store.DeleteByArtifactAsync(artifactId, cancellationToken);
-        foreach (var schedule in schedules)
-            await _store.SaveAsync(schedule, cancellationToken);
-
-        return bindings;
+        return schedules;
     }
 
     private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, IReadOnlyCollection<string> providerIds, string facet, string message, Exception? innerException = null) =>

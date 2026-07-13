@@ -23,6 +23,12 @@ internal static class RouteConstants
     internal static string GetRoute(string path) => string.Join('/', DomainPrefix, path.TrimStart('/'));
 
     internal static string Activities => GetRoute("activities");
+    internal static string WorkflowPreflight => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/preflight");
+    internal static string WorkflowPublish => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/publish");
+    internal static string WorkflowSlots => GetRoute("workflows/{definitionId}/slots");
+    internal static string WorkflowSlot => GetRoute("workflows/{definitionId}/slots/{slotName}");
+    internal static string WorkflowSlotRestore => GetRoute("workflows/{definitionId}/slots/{slotName}/restore");
+    internal static string WorkflowPolicy => GetRoute("workflows/{definitionId}/policy");
     internal static string VersionedWorkflowTestRuns => GetRoute($"workflows/{{versionId:{VersionIdConstraint}}}/test-runs");
     internal static string WorkflowDraftTestRuns => GetRoute($"workflows/{DraftsSegment}/test-runs");
 }

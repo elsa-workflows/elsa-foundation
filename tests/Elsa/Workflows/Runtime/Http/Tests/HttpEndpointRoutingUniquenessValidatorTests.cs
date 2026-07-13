@@ -138,8 +138,8 @@ public sealed class HttpEndpointRoutingUniquenessValidatorTests
 
     private async Task ActivateAsync(WorkflowTriggerBinding binding)
     {
-        await _store.PreparePublicationAsync(binding.PublicationId, [binding]);
-        await _store.ActivatePublicationAsync(binding.PublicationId, replacedPublicationId: null);
+        await _store.PreparePublicationAsync(binding.PublicationId!, [binding]);
+        await _store.ActivatePublicationAsync(binding.PublicationId!, replacedPublicationId: null);
     }
 
     private static WorkflowTriggerBinding PublicationBinding(
