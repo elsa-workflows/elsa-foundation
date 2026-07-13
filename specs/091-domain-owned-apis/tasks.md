@@ -137,7 +137,7 @@
 - [X] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints
 - [X] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
 - [ ] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
-- [ ] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
+- [X] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
 - [ ] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US4 independently proves every authoring/read slice works without the facade.
