@@ -131,14 +131,31 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
-    public async Task DispatchAsync_RejectsArtifactWithNoAuthoritativeReference()
+    public async Task DispatchAsync_DispatchesReferenceLessArtifactWithNullLegacyProvenance()
+    {
+        await _store.SaveAsync(NewExecutable());
+
+        var result = await _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test"));
+
+        var envelope = Assert.Single(_agentProvider.Agent.Envelopes);
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.Null(result.PinnedSource);
+        Assert.Null(payload.PinnedSource);
+        Assert.Equal("1.0.0", envelope.Command.Metadata["runtime.artifactVersion"]);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_RejectsExplicitSelectionForReferenceLessArtifact()
     {
         await _store.SaveAsync(NewExecutable());
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
-            _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest("artifact-1", "runtime-test")).AsTask());
+            _dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
+                "artifact-1",
+                "runtime-test",
+                sourceSelection: new WorkflowExecutableSourceSelection(sourceReferenceId: "missing-reference"))).AsTask());
 
-        Assert.Equal(WorkflowExecutableReferenceRejectionReason.NoLiveReference, exception.Reason);
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.SelectionNotFound, exception.Reason);
         Assert.Empty(_agentProvider.Agent.Envelopes);
     }
 

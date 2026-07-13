@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
@@ -69,6 +70,20 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public void Executable_detail_exposes_compact_connection_endpoints_on_each_node()
+    {
+        var response = RuntimeApiEndpointTestFactory.Contract(
+            RuntimeApiEndpointTestFactory.FindByRoute("runtime/workflows/executables/{artifactId}")).Response;
+        var rootActivity = response.GetProperty("RootActivity", BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(rootActivity);
+        var connections = rootActivity!.PropertyType.GetProperty("Connections", BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(connections);
+        var connection = ElementType(connections!.PropertyType);
+        AssertProperties(connection, "Source", "Target");
+        AssertProperties(connection.GetProperty("Source")!.PropertyType, "NodeId", "Port");
+    }
+
+    [Fact]
     public void Provenance_is_read_only_and_reports_collection_protection()
     {
         var response = RuntimeApiEndpointTestFactory.Contract(
@@ -125,9 +140,26 @@ public sealed class WorkflowExecutableInspectorTests
             ["test-newest", "published-new", "published-old"],
             defaultDetail.References.Select(reference => reference.SourceReferenceId));
 
-        var unknownRequestedDetail = await _inspector.GetAsync("artifact-1", "missing-reference");
-        Assert.Equal("published-new", unknownRequestedDetail!.ChosenReference!.SourceReferenceId);
-        Assert.Equal("newest-live", unknownRequestedDetail.ChosenReference.Selection);
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", "missing-reference").AsTask());
+        Assert.Contains("missing-reference", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_rejects_explicit_retired_reference_without_substituting_live_layout()
+    {
+        await ActivateAsync(
+            Reference("published-live", WorkflowExecutableReferenceScope.Published, _now.AddMinutes(-10), "2.0.0"),
+            Reference("published-retired", WorkflowExecutableReferenceScope.Published, _now.AddMinutes(-20), "1.0.0")
+                .Retire(_now.AddMinutes(-5), "superseded"));
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", "published-retired").AsTask());
+        var defaultDetail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Contains("published-retired", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("published-live", defaultDetail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("newest-live", defaultDetail.ChosenReference.Selection);
     }
 
     [Fact]
@@ -189,6 +221,35 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_projects_immutable_flowchart_connections_with_ports()
+    {
+        var structure = new ExecutableActivityStructure(
+            "elsa.flowchart.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new
+            {
+                connections = new[]
+                {
+                    new
+                    {
+                        source = new { nodeId = "approve-order", port = "Approved" },
+                        target = new { nodeId = "send-email", port = "In" }
+                    }
+                },
+                startNodeId = "approve-order"
+            }));
+        await _executableStore.SaveAsync(Executable(_now, structure: structure));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        var connection = Assert.Single(detail!.RootActivity.Connections);
+        Assert.Equal("approve-order", connection.Source.NodeId);
+        Assert.Equal("Approved", connection.Source.Port);
+        Assert.Equal("send-email", connection.Target.NodeId);
+        Assert.Equal("In", connection.Target.Port);
+    }
+
+    [Fact]
     public void Runtime_api_registers_the_inspector()
     {
         var services = new ServiceCollection();
@@ -197,7 +258,10 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableInspector));
     }
 
-    private static WorkflowExecutable Executable(DateTimeOffset now, JsonElement? descriptor = null) =>
+    private static WorkflowExecutable Executable(
+        DateTimeOffset now,
+        JsonElement? descriptor = null,
+        ExecutableActivityStructure? structure = null) =>
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
@@ -205,7 +269,8 @@ public sealed class WorkflowExecutableInspectorTests
                 descriptor ?? JsonSerializer.SerializeToElement(new { }),
                 new Dictionary<string, RuntimeInputBinding>(),
                 new Dictionary<string, RuntimeOutputCapture>(),
-                new Dictionary<string, string>()),
+                new Dictionary<string, string>(),
+                structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
             new Dictionary<string, string>());

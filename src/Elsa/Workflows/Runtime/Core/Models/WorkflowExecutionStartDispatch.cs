@@ -190,7 +190,8 @@ public sealed class WorkflowExecutionStartCommandPayload
     public WorkflowRunKind RunKind { get; }
 
     /// <summary>
-    /// Server-validated source attribution selected at dispatch. Null only for legacy commands.
+    /// Server-validated source attribution selected at dispatch. Null for legacy commands and direct execution
+    /// of seeded artifacts that have no source references.
     /// </summary>
     public WorkflowExecutableSourceProvenance? PinnedSource { get; }
 

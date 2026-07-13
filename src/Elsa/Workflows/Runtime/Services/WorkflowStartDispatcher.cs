@@ -73,12 +73,15 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     {
         var references = await _sourceReferenceStore.ListByArtifactAsync(request.ArtifactId, cancellationToken);
         if (references.Count == 0)
+        {
+            if (request.SourceSelection is null)
+                return new(executable.Identity, null);
+
             throw new WorkflowExecutableReferenceRejectedException(
                 request.ArtifactId,
                 requiredScope,
-                request.SourceSelection is null
-                    ? WorkflowExecutableReferenceRejectionReason.NoLiveReference
-                    : WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
+                WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
+        }
 
         var now = _timeProvider.GetUtcNow();
         var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
@@ -133,7 +136,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity pinnedIdentity,
-        WorkflowExecutableSourceProvenance pinnedSource,
+        WorkflowExecutableSourceProvenance? pinnedSource,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
@@ -189,13 +192,13 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(
         WorkflowExecutionStartDispatchRequest request,
         WorkflowExecutableIdentity identity,
-        WorkflowExecutableSourceProvenance source)
+        WorkflowExecutableSourceProvenance? source)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
         metadata["runtime.dispatcher"] = nameof(WorkflowStartDispatcher);
         metadata["runtime.artifactId"] = identity.ArtifactId;
-        metadata["runtime.artifactVersion"] = source.ArtifactVersion;
+        metadata["runtime.artifactVersion"] = source?.ArtifactVersion ?? identity.ArtifactVersion;
         metadata["runtime.artifactHash"] = identity.ArtifactHash;
         return RuntimeModelMetadata.Snapshot(metadata);
     }
@@ -205,5 +208,5 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 
     private sealed record ResolvedPinnedExecutable(
         WorkflowExecutableIdentity Identity,
-        WorkflowExecutableSourceProvenance Source);
+        WorkflowExecutableSourceProvenance? Source);
 }

@@ -42,7 +42,7 @@ public sealed class RuntimeContractTests
     }
 
     [Fact]
-    public void WorkflowExecutionState_DeserializesPreRunKindHistoryAsUnknown()
+    public void WorkflowExecutionState_DeserializesLegacyHistoryWithoutClassificationOrSourceProvenance()
     {
         var state = new WorkflowExecutionState(
             WorkflowExecutionId: "wfexec-legacy",
@@ -59,10 +59,12 @@ public sealed class RuntimeContractTests
             SystemMetadata: new Dictionary<string, string>());
         var legacyJson = JsonSerializer.SerializeToNode(state)!.AsObject();
         Assert.True(legacyJson.Remove(nameof(WorkflowExecutionState.RunKind)));
+        Assert.True(legacyJson.Remove(nameof(WorkflowExecutionState.PinnedSource)));
 
         var restored = legacyJson.Deserialize<WorkflowExecutionState>()!;
 
         Assert.Equal(WorkflowRunKind.Unknown, restored.RunKind);
+        Assert.Null(restored.PinnedSource);
     }
 
     [Fact]

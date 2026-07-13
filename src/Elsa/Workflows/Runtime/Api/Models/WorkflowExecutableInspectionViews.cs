@@ -80,7 +80,14 @@ public sealed record WorkflowExecutableNodeView(
     string ActivityTypeVersion,
     string? StructureKind,
     IReadOnlyCollection<WorkflowExecutableInputBindingView> InputBindings,
-    IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots);
+    IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
+    IReadOnlyCollection<WorkflowExecutableConnectionView> Connections);
+
+public sealed record WorkflowExecutableConnectionEndpointView(string NodeId, string? Port);
+
+public sealed record WorkflowExecutableConnectionView(
+    WorkflowExecutableConnectionEndpointView Source,
+    WorkflowExecutableConnectionEndpointView Target);
 
 public sealed record WorkflowExecutableInputBindingView(string InputName, string Source, string? Summary);
 

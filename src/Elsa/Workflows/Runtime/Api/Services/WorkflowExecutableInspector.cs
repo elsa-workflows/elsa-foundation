@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -66,6 +68,8 @@ public sealed class WorkflowExecutableInspector(
         var requested = sourceReferenceId is null
             ? null
             : ordered.FirstOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId));
+        if (sourceReferenceId is not null && (requested is null || !requested.IsLive(now)))
+            throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), sourceReferenceId);
         var chosen = requested
             ?? ordered.FirstOrDefault(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now))
             ?? ordered.FirstOrDefault(reference => reference.IsLive(now))
@@ -163,7 +167,51 @@ public sealed class WorkflowExecutableInspector(
             node.ActivityTypeVersion,
             node.Structure?.Kind,
             node.InputBindings.Values.OrderBy(binding => binding.InputName, StringComparer.Ordinal).Select(Binding).ToArray(),
-            node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(Node).ToArray())).ToArray());
+            node.ChildSlots.Select(slot => new WorkflowExecutableChildSlotView(slot.Name, slot.Activities.Select(Node).ToArray())).ToArray(),
+            ProjectConnections(node));
+
+    // The immutable executable structure is activity-owned, so Runtime API does not deserialize it through an
+    // activity-module type. It projects only the compact endpoint shape understood by inspection clients and skips
+    // malformed entries rather than leaking the complete compiled structure payload.
+    private static IReadOnlyCollection<WorkflowExecutableConnectionView> ProjectConnections(ExecutableNode node)
+    {
+        if (node.Structure?.Payload is not { ValueKind: JsonValueKind.Object } payload ||
+            !payload.TryGetProperty("connections", out var connections) ||
+            connections.ValueKind != JsonValueKind.Array)
+            return [];
+
+        return connections.EnumerateArray()
+            .Select(ProjectConnection)
+            .Where(connection => connection is not null)
+            .Cast<WorkflowExecutableConnectionView>()
+            .ToArray();
+    }
+
+    private static WorkflowExecutableConnectionView? ProjectConnection(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object ||
+            !value.TryGetProperty("source", out var sourceValue) ||
+            !value.TryGetProperty("target", out var targetValue))
+            return null;
+
+        var source = ProjectEndpoint(sourceValue);
+        var target = ProjectEndpoint(targetValue);
+        return source is null || target is null ? null : new(source, target);
+    }
+
+    private static WorkflowExecutableConnectionEndpointView? ProjectEndpoint(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object ||
+            !value.TryGetProperty("nodeId", out var nodeIdValue) ||
+            nodeIdValue.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(nodeIdValue.GetString()))
+            return null;
+
+        var port = value.TryGetProperty("port", out var portValue) && portValue.ValueKind == JsonValueKind.String
+            ? portValue.GetString()
+            : null;
+        return new(nodeIdValue.GetString()!, port);
+    }
 
     private static WorkflowExecutableInputBindingView Binding(RuntimeInputBinding binding) =>
         new(binding.InputName, binding.Source.ToString(), Preview(binding));
