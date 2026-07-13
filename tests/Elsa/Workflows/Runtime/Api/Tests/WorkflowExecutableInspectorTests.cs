@@ -41,6 +41,28 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.DoesNotContain(dependencies, dependency => dependency?.Contains("Design", StringComparison.Ordinal) == true);
     }
 
+    [Fact]
+    public void Source_kind_is_canonical_and_source_type_is_a_version_one_compatibility_alias()
+    {
+        var responseType = typeof(Models.ExecutableSourceReferenceView);
+        var canonical = responseType.GetProperty(nameof(Models.ExecutableSourceReferenceView.SourceKind));
+        var compatibilityAlias = responseType.GetProperty("SourceType");
+
+        Assert.NotNull(canonical);
+        Assert.NotNull(compatibilityAlias);
+        var obsolete = Assert.Single(compatibilityAlias!.GetCustomAttributes<ObsoleteAttribute>());
+        Assert.False(obsolete.IsError);
+        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
+
+        var view = Models.ExecutableSourceReferenceView.From(
+            Reference("reference-contract", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
+            _now);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("WorkflowDefinitionVersion", json.GetProperty("sourceKind").GetString());
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
     [Theory]
     [InlineData("runtime/workflows/executables")]
     [InlineData("runtime/workflows/executables/{artifactId}")]

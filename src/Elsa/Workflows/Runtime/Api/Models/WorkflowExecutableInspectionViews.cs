@@ -9,10 +9,17 @@ public enum WorkflowExecutableListScope
     All
 }
 
+/// <summary>Describes one source reference that keeps a workflow executable reachable.</summary>
+/// <remarks>
+/// <see cref="SourceKind"/> is the canonical source discriminator. <see cref="SourceType"/> is emitted only as
+/// a Runtime API v1 compatibility alias and always contains the same value; new clients must use
+/// <see cref="SourceKind"/>. The alias is scheduled for removal with Runtime API v2.
+/// </remarks>
 public sealed record ExecutableSourceReferenceView(
     string SourceReferenceId,
     string ArtifactId,
     string Scope,
+    [property: Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
     string? SourceType,
     string? SourceKind,
     string? SourceId,
