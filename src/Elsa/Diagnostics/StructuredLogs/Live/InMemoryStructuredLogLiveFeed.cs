@@ -3,6 +3,7 @@ using System.Threading.Channels;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
+using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.StructuredLogs.Live;
@@ -16,11 +17,17 @@ namespace Elsa.Diagnostics.StructuredLogs.Live;
 public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStructuredLogLivePublisher
 {
     private readonly int _subscriberQueueCapacity;
+    private readonly DiagnosticsSubscriberDeliveryLossBridge? _deliveryLossBridge;
     private readonly object _gate = new();
     private readonly List<Subscriber> _subscribers = [];
 
-    public InMemoryStructuredLogLiveFeed(IOptions<StructuredLogsOptions> options) =>
+    public InMemoryStructuredLogLiveFeed(
+        IOptions<StructuredLogsOptions> options,
+        DiagnosticsSubscriberDeliveryLossBridge? deliveryLossBridge = null)
+    {
         _subscriberQueueCapacity = Math.Max(1, options.Value.SubscriberQueueCapacity);
+        _deliveryLossBridge = deliveryLossBridge;
+    }
 
     /// <inheritdoc />
     public void Publish(StructuredLogEntry entry)
@@ -43,7 +50,10 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
         ArgumentNullException.ThrowIfNull(filter);
 
         // Register eagerly (not inside the iterator) so entries published before the first MoveNext are delivered.
-        var subscriber = new Subscriber(filter, _subscriberQueueCapacity);
+        var subscriber = new Subscriber(
+            filter,
+            _subscriberQueueCapacity,
+            _deliveryLossBridge?.CreateStructuredLogRecorder());
         lock (_gate)
             _subscribers.Add(subscriber);
 
@@ -84,13 +94,18 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
     {
         private readonly StructuredLogFilter _filter;
         private readonly Channel<StructuredLogEntry> _channel;
+        private readonly Action<DroppedEntriesSignal>? _recordDeliveryLoss;
         private long _droppedCount;
         private long _signalledDrops;
         private long _firstDropTicks;
 
-        public Subscriber(StructuredLogFilter filter, int capacity)
+        public Subscriber(
+            StructuredLogFilter filter,
+            int capacity,
+            Action<DroppedEntriesSignal>? recordDeliveryLoss)
         {
             _filter = filter;
+            _recordDeliveryLoss = recordDeliveryLoss;
             _channel = Channel.CreateBounded<StructuredLogEntry>(new BoundedChannelOptions(capacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
@@ -139,6 +154,7 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
                 _signalledDrops = dropped;
                 var since = new DateTimeOffset(Interlocked.Read(ref _firstDropTicks), TimeSpan.Zero);
                 signal = new DroppedEntriesSignal(dropped, since);
+                _recordDeliveryLoss?.Invoke(signal);
                 return true;
             }
 

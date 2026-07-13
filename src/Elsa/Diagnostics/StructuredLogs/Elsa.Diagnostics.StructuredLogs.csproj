@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
     <ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
   </ItemGroup>
 

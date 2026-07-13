@@ -17,13 +17,14 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentDictionary<PendingItem, byte> _accepted = new();
     private readonly object _lifecycleGate = new();
+    private readonly object _shutdownGate = new();
     private Task? _drainLoop;
     private Task<DiagnosticsDrainStopResult>? _stopTask;
     private Task? _asyncDisposeTask;
+    private Task? _shutdownCancellationTask;
     private long _retentionUnits;
     private int _accepting = 1;
     private int _forcedTermination;
-    private int _shutdownCancellationRequested;
     private int _shutdownDisposed;
     private int _state = (int)DiagnosticsDrainState.Created;
 
@@ -73,12 +74,6 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     public bool TryEnqueue(TItem item, out Task<TResult> acknowledgement)
     {
         ArgumentNullException.ThrowIfNull(item);
-        if (Volatile.Read(ref _accepting) == 0)
-        {
-            acknowledgement = RejectedAcknowledgement(DiagnosticsPersistenceLossReason.WriteAfterClosure);
-            return false;
-        }
-
         var pending = new PendingItem(item);
         acknowledgement = pending.Completion.Task;
         _accepted.TryAdd(pending, 0);
@@ -255,19 +250,19 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         }
         catch (TimeoutException)
         {
-            return await TransitionToTimedOutAsync(
+            return TransitionToTimedOut(
                 drainLoop,
                 "The diagnostics drain exceeded its shutdown window.");
         }
         catch
         {
-            return await TransitionToTimedOutAsync(
+            return TransitionToTimedOut(
                 drainLoop,
                 "The diagnostics drain stopped before every acknowledgement completed.");
         }
     }
 
-    private async Task<DiagnosticsDrainStopResult> TransitionToTimedOutAsync(Task drainLoop, string message)
+    private DiagnosticsDrainStopResult TransitionToTimedOut(Task drainLoop, string message)
     {
         lock (_lifecycleGate)
         {
@@ -279,9 +274,9 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
             SetState(DiagnosticsDrainState.TimedOut);
         }
 
-        await CancelShutdownAsync();
+        var cancellation = RequestShutdownCancellation();
         FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, message);
-        ScheduleShutdownDisposal(drainLoop);
+        ScheduleShutdownDisposal(drainLoop, cancellation);
         return new(DiagnosticsDrainState.TimedOut, Drained: false);
     }
 
@@ -294,12 +289,6 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
 
     private void OnItemShed(PendingItem pending) =>
         Fail(pending, DiagnosticsPersistenceLossReason.QueueOverflow, "The diagnostics capture was shed before commit because the queue was full.");
-
-    private Task<TResult> RejectedAcknowledgement(DiagnosticsPersistenceLossReason reason)
-    {
-        Observe(observer => observer.RecordLoss(reason, 1));
-        return Task.FromException<TResult>(new DiagnosticsDrainException(reason, "The diagnostics drain is closed."));
-    }
 
     private void Complete(PendingItem pending, TResult result)
     {
@@ -365,9 +354,9 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
             drainLoop = _drainLoop;
         }
 
-        CancelShutdown();
+        var cancellation = RequestShutdownCancellation();
         FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, "The diagnostics drain was synchronously disposed before commit.");
-        ScheduleShutdownDisposal(drainLoop);
+        ScheduleShutdownDisposal(drainLoop, cancellation);
     }
 
     public ValueTask DisposeAsync()
@@ -378,28 +367,42 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
 
     private async Task DisposeCoreAsync() => await StopAsync();
 
-    private void CancelShutdown()
+    private Task RequestShutdownCancellation()
     {
-        if (Interlocked.Exchange(ref _shutdownCancellationRequested, 1) == 0)
-            _shutdown.Cancel();
-    }
-
-    private async Task CancelShutdownAsync()
-    {
-        if (Interlocked.Exchange(ref _shutdownCancellationRequested, 1) == 0)
-            await _shutdown.CancelAsync();
-    }
-
-    private void ScheduleShutdownDisposal(Task? drainLoop)
-    {
-        if (drainLoop is null || drainLoop.IsCompleted)
+        lock (_shutdownGate)
         {
+            if (_shutdownCancellationTask is not null)
+                return _shutdownCancellationTask;
+
+            try
+            {
+                return _shutdownCancellationTask = _shutdown.CancelAsync();
+            }
+            catch (Exception exception)
+            {
+                return _shutdownCancellationTask = Task.FromException(exception);
+            }
+        }
+    }
+
+    private void ScheduleShutdownDisposal(Task? drainLoop, Task? cancellation = null)
+    {
+        var cleanup = Task.WhenAll(
+            drainLoop ?? Task.CompletedTask,
+            cancellation ?? Task.CompletedTask);
+        if (cleanup.IsCompleted)
+        {
+            _ = cleanup.Exception;
             DisposeShutdownSource();
             return;
         }
 
-        _ = drainLoop.ContinueWith(
-            static (_, state) => ((DiagnosticsDrain<TItem, TResult>)state!).DisposeShutdownSource(),
+        _ = cleanup.ContinueWith(
+            static (completed, state) =>
+            {
+                _ = completed.Exception;
+                ((DiagnosticsDrain<TItem, TResult>)state!).DisposeShutdownSource();
+            },
             this,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,

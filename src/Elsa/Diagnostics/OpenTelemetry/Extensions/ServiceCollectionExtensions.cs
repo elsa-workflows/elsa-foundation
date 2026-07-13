@@ -2,6 +2,7 @@ using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
 using Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 using Elsa.Diagnostics.OpenTelemetry.Services;
+using Elsa.Diagnostics.Persistence.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddOpenTelemetryDiagnosticsServices(this IServiceCollection services, Action<OpenTelemetryDiagnosticsOptions>? configureOptions = null)
     {
+        services.AddDiagnosticsPersistenceObservability();
         if (configureOptions != null)
             services.Configure(configureOptions);
 

@@ -25,6 +25,11 @@ evidence, but it must not remove an EF oracle below until its mapped conformance
 
 | Area | Structured Logs EF evidence | OpenTelemetry EF evidence |
 |---|---|---|
+| Shared draining implementation | `src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs` | `src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs` |
+| Drain resilience tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreResilienceTests.cs` | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreResilienceTests.cs` |
+| Drain startup task | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Tasks/StartStructuredLogDrainingStartupTask.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Tasks/StartOpenTelemetryDrainingStartupTask.cs` |
+| Drain shell terminator | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Tasks/StopStructuredLogDrainingShellTerminator.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Tasks/StopOpenTelemetryDrainingShellTerminator.cs` |
+| Subscriber-loss live feed | `src/Elsa/Diagnostics/StructuredLogs/Live/InMemoryStructuredLogLiveFeed.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Providers/InMemory/InMemoryOpenTelemetryLiveFeed.cs` |
 | Query and replay implementation | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Storage/EfCoreStructuredLogStore.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Storage/EfCoreOpenTelemetryStore.cs` |
 | Query and replay tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreTests.cs` (`GetRecent*`, `ReplayPages*`, `ReadAfter*`) | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreTests.cs` (`QueryTraces*`, `QueryMetricsAndLogs*`) |
 | Retention and retry tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreTests.cs` (`TrimToZero*`, `DrainPrunes*`, `CompleteDrainingPrunes*`) and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStorePruneRetryTests.cs` | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreTests.cs` (`DrainPrunesHighVolumeSignalsToConfiguredCapacities`) |

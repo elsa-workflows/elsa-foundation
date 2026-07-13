@@ -20,8 +20,8 @@ public sealed record DiagnosticsDrainCommit<TResult>(
     int RetentionUnits);
 
 /// <summary>
-/// The composed adapter seam used by the Elsa-owned drain. Implementations keep provider operations and
-/// operation-id binding in their concrete persistence project.
+/// Replacement contract: exactly one target is composed per drain. Implementations keep provider
+/// operations and operation-id binding in their concrete persistence project.
 /// </summary>
 public interface IDiagnosticsDrainTarget<TItem, TResult> where TItem : notnull
 {

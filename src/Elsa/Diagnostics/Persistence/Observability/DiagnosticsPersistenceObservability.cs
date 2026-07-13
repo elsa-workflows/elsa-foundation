@@ -27,8 +27,9 @@ public enum DiagnosticsPersistenceLossReason
 }
 
 /// <summary>
-/// Low-cardinality pull-observability seam. It deliberately accepts no diagnostic payloads, identifiers,
-/// tenant values, or free-form labels, preventing the drain from recursively emitting captured signals.
+/// Replacement contract: exactly one low-cardinality pull observer is composed per drain. It deliberately
+/// accepts no diagnostic payloads, identifiers, tenant values, or free-form labels, preventing the drain
+/// from recursively emitting captured signals.
 /// </summary>
 public interface IDiagnosticsPersistenceObserver
 {

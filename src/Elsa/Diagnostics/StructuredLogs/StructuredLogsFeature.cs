@@ -7,6 +7,7 @@ using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Diagnostics.StructuredLogs.Live;
 using Elsa.Diagnostics.StructuredLogs.Sources;
 using Elsa.Diagnostics.StructuredLogs.Storage;
+using Elsa.Diagnostics.Persistence.Extensions;
 using Elsa.Platform.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -43,6 +44,7 @@ public class StructuredLogsFeature : FastEndpointsFeatureBase
     public override void ConfigureServices(IServiceCollection services)
     {
         base.ConfigureServices(services);
+        services.AddDiagnosticsPersistenceObservability();
 
         var minimumLevel = Enum.TryParse<LogLevel>(MinimumLevel, ignoreCase: true, out var parsed)
             ? parsed

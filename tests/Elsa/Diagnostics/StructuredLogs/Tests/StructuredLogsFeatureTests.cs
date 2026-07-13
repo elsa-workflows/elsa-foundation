@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Elsa.Diagnostics.StructuredLogs.Core.Options;
+using Elsa.Diagnostics.StructuredLogs.Core.Models;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.DependencyInjection;

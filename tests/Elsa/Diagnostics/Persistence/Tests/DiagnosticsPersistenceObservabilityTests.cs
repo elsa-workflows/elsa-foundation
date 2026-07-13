@@ -64,9 +64,10 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     {
         var counters = new DiagnosticsPersistenceCounters();
         var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+        var structuredLogs = bridge.CreateStructuredLogRecorder();
 
-        bridge.Record(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
-        bridge.Record(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Trace, 3, "SubscriberQueueFull"));
+        structuredLogs(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
+        bridge.RecordOpenTelemetry(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Trace, 3, "SubscriberQueueFull"));
 
         Assert.Equal(7, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
@@ -77,9 +78,10 @@ public sealed class DiagnosticsPersistenceObservabilityTests
         var counters = new DiagnosticsPersistenceCounters();
         var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
         var since = DateTimeOffset.UnixEpoch;
+        var structuredLogs = bridge.CreateStructuredLogRecorder();
 
-        Parallel.For(1, 101, count => bridge.Record(new DroppedEntriesSignal(count, since)));
-        bridge.Record(new DroppedEntriesSignal(100, since));
+        Parallel.For(1, 101, count => structuredLogs(new DroppedEntriesSignal(count, since)));
+        structuredLogs(new DroppedEntriesSignal(100, since));
 
         Assert.Equal(100, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
@@ -89,9 +91,11 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     {
         var counters = new DiagnosticsPersistenceCounters();
         var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+        var firstSubscription = bridge.CreateStructuredLogRecorder();
+        var restartedSubscription = bridge.CreateStructuredLogRecorder();
 
-        bridge.Record(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
-        bridge.Record(new DroppedEntriesSignal(2, DateTimeOffset.UnixEpoch.AddSeconds(1)));
+        firstSubscription(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
+        restartedSubscription(new DroppedEntriesSignal(2, DateTimeOffset.UnixEpoch.AddSeconds(1)));
 
         Assert.Equal(6, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
@@ -102,12 +106,13 @@ public sealed class DiagnosticsPersistenceObservabilityTests
         Assert.Throws<ArgumentNullException>(() => new DiagnosticsSubscriberDeliveryLossBridge(null!));
         var counters = new DiagnosticsPersistenceCounters();
         var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+        var structuredLogs = bridge.CreateStructuredLogRecorder();
 
-        Assert.Throws<ArgumentNullException>(() => bridge.Record((DroppedEntriesSignal)null!));
-        Assert.Throws<ArgumentNullException>(() => bridge.Record((OpenTelemetryDroppedItemSummary)null!));
+        Assert.Throws<ArgumentNullException>(() => structuredLogs(null!));
+        Assert.Throws<ArgumentNullException>(() => bridge.RecordOpenTelemetry(null!));
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            bridge.Record(new DroppedEntriesSignal(0, DateTimeOffset.UnixEpoch)));
-        bridge.Record(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Log, 3_000_000_000, "SubscriberQueueFull"));
+            structuredLogs(new DroppedEntriesSignal(0, DateTimeOffset.UnixEpoch)));
+        bridge.RecordOpenTelemetry(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Log, 3_000_000_000, "SubscriberQueueFull"));
 
         Assert.Equal(3_000_000_000,
             counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);

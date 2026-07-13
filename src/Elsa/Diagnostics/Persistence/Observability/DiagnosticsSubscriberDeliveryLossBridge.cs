@@ -17,18 +17,57 @@ public sealed class DiagnosticsSubscriberDeliveryLossBridge
         _observer = observer;
     }
 
-    public void Record(DroppedEntriesSignal signal)
+    public void RecordOpenTelemetry(OpenTelemetryDroppedItemSummary signal)
     {
         ArgumentNullException.ThrowIfNull(signal);
-        Record(signal.DroppedCount);
+        ArgumentOutOfRangeException.ThrowIfLessThan(signal.Count, 1);
+        RecordLoss(signal.Count);
     }
 
-    public void Record(OpenTelemetryDroppedItemSummary signal)
+    /// <summary>
+    /// Creates one cumulative-signal recorder for one Structured Logs subscription. Per-subscription state
+    /// prevents repeated cumulative signals from being counted twice and is released with the subscriber.
+    /// </summary>
+    public Action<DroppedEntriesSignal> CreateStructuredLogRecorder()
     {
-        ArgumentNullException.ThrowIfNull(signal);
-        Record(signal.Count);
+        var counter = new CumulativeDropCounter();
+        return signal =>
+        {
+            ArgumentNullException.ThrowIfNull(signal);
+            ArgumentOutOfRangeException.ThrowIfLessThan(signal.DroppedCount, 1);
+            RecordLoss(counter.Advance(signal.DroppedCount));
+        };
     }
 
-    private void Record(long count) =>
-        _observer.RecordLoss(DiagnosticsPersistenceLossReason.SubscriberDelivery, count);
+    private void RecordLoss(long count)
+    {
+        if (count == 0)
+            return;
+
+        try
+        {
+            _observer.RecordLoss(DiagnosticsPersistenceLossReason.SubscriberDelivery, count);
+        }
+        catch
+        {
+            // Observability must never break live-feed delivery.
+        }
+    }
+
+    private sealed class CumulativeDropCounter
+    {
+        private long _count;
+
+        public long Advance(long count)
+        {
+            while (true)
+            {
+                var previous = Volatile.Read(ref _count);
+                if (count <= previous)
+                    return 0;
+                if (Interlocked.CompareExchange(ref _count, count, previous) == previous)
+                    return count - previous;
+            }
+        }
+    }
 }

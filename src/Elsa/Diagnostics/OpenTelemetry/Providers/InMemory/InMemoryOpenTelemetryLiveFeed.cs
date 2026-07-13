@@ -3,11 +3,15 @@ using System.Threading.Channels;
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.OpenTelemetry.Core.Models;
 using Elsa.Diagnostics.OpenTelemetry.Core.Options;
+using Elsa.Diagnostics.Persistence.Observability;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Diagnostics.OpenTelemetry.Providers.InMemory;
 
-public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOptions> options, IOpenTelemetrySourceRegistry sourceRegistry) : IOpenTelemetryLiveFeed
+public class InMemoryOpenTelemetryLiveFeed(
+    IOptions<OpenTelemetryDiagnosticsOptions> options,
+    IOpenTelemetrySourceRegistry sourceRegistry,
+    DiagnosticsSubscriberDeliveryLossBridge? deliveryLossBridge = null) : IOpenTelemetryLiveFeed
 {
     private readonly OpenTelemetryDiagnosticsOptions _options = options.Value;
     private readonly object _subscribersLock = new();
@@ -29,7 +33,11 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
     {
         // Register eagerly (not inside the async iterator) so telemetry published between obtaining the
         // enumerable and the first MoveNextAsync is still delivered — matching the structured-logs feed.
-        var subscriber = new OpenTelemetrySubscriber(filter, sourceRegistry, _options.SubscriberChannelCapacity);
+        var subscriber = new OpenTelemetrySubscriber(
+            filter,
+            sourceRegistry,
+            _options.SubscriberChannelCapacity,
+            deliveryLossBridge);
 
         lock (_subscribersLock)
             _subscribers.Add(subscriber);
@@ -54,7 +62,11 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
         }
     }
 
-    private sealed class OpenTelemetrySubscriber(OpenTelemetryTraceFilter filter, IOpenTelemetrySourceRegistry sourceRegistry, int channelCapacity)
+    private sealed class OpenTelemetrySubscriber(
+        OpenTelemetryTraceFilter filter,
+        IOpenTelemetrySourceRegistry sourceRegistry,
+        int channelCapacity,
+        DiagnosticsSubscriberDeliveryLossBridge? deliveryLossBridge)
     {
         private readonly object _lock = new();
         private readonly int _capacity = Math.Max(1, channelCapacity);
@@ -139,12 +151,14 @@ public class InMemoryOpenTelemetryLiveFeed(IOptions<OpenTelemetryDiagnosticsOpti
                 return;
 
             var dropped = _droppedSinceLastSummary.OrderBy(x => x.Key).First();
-            if (Channel.Writer.TryWrite(new OpenTelemetryStreamItem { DroppedItems = new(dropped.Key, dropped.Value, "SubscriberQueueFull") }))
+            var summary = new OpenTelemetryDroppedItemSummary(dropped.Key, dropped.Value, "SubscriberQueueFull");
+            if (Channel.Writer.TryWrite(new OpenTelemetryStreamItem { DroppedItems = summary }))
             {
                 _pendingItemCount++;
                 // Clear the emitted signal as soon as it is queued so a write before the client reads the
                 // summary cannot enqueue the same drop count again (which would over-count drops).
                 _droppedSinceLastSummary.Remove(dropped.Key);
+                deliveryLossBridge?.RecordOpenTelemetry(summary);
             }
         }
 

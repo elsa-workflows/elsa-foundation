@@ -122,6 +122,24 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         Assert.Contains(method.GetParameters(), parameter => parameter.ParameterType == typeof(ServiceLifetime));
     }
 
+    [Fact]
+    public void Explicit_singleton_store_lifetime_is_preserved_for_default_and_replacement_registrations()
+    {
+        var defaultServices = new ServiceCollection();
+        defaultServices.AddDefaultDiagnosticsStore<ITestStore, FirstStore>(ServiceLifetime.Singleton);
+        var replacementServices = new ServiceCollection();
+        replacementServices.ReplaceDiagnosticsStore<ITestStore, ReplacementStore>(ServiceLifetime.Singleton);
+
+        Assert.All(
+            defaultServices.Where(descriptor =>
+                descriptor.ServiceType == typeof(ITestStore) || descriptor.ServiceType == typeof(FirstStore)),
+            descriptor => Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime));
+        Assert.All(
+            replacementServices.Where(descriptor =>
+                descriptor.ServiceType == typeof(ITestStore) || descriptor.ServiceType == typeof(ReplacementStore)),
+            descriptor => Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime));
+    }
+
     private interface ITestStore;
     private sealed class FirstStore : ITestStore;
     private sealed class SecondStore : ITestStore;
