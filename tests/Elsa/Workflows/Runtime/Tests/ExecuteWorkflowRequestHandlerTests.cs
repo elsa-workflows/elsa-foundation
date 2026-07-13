@@ -51,6 +51,9 @@ public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
         await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 
         Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(dispatcher.Requests).RunKind);
+        Assert.Equal(
+            WorkflowExecutableProvenanceRequirement.RequireLiveReference,
+            Assert.Single(dispatcher.Requests).ProvenanceRequirement);
     }
 
     [Fact]

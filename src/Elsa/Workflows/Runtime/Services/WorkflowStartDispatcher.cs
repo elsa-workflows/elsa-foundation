@@ -74,13 +74,16 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var references = await _sourceReferenceStore.ListByArtifactAsync(request.ArtifactId, cancellationToken);
         if (references.Count == 0)
         {
-            if (request.SourceSelection is null)
+            if (request.SourceSelection is null &&
+                request.ProvenanceRequirement == WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
                 return new(executable.Identity, null);
 
             throw new WorkflowExecutableReferenceRejectedException(
                 request.ArtifactId,
                 requiredScope,
-                WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
+                request.SourceSelection is null
+                    ? WorkflowExecutableReferenceRejectionReason.NoLiveReference
+                    : WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
         }
 
         var now = _timeProvider.GetUtcNow();

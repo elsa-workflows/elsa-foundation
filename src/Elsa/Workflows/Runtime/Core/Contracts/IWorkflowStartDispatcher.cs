@@ -12,8 +12,10 @@ public interface IWorkflowStartDispatcher
     /// with a <see cref="Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableReferenceRejectedException"/> when the
     /// artifact has no single authoritative live reference of <paramref name="requiredScope"/> (published dispatch
     /// requires a live Published reference; a test-run dispatch requires a live TestRun reference and its ExpiresAt is
-    /// enforced). Scoped dispatch fails closed when the artifact has no source reference: the artifact's stored
-    /// identity is never accepted as a substitute for publication provenance.
+    /// enforced). Public callers set <see cref="WorkflowExecutionStartDispatchRequest.ProvenanceRequirement"/> to
+    /// <see cref="WorkflowExecutableProvenanceRequirement.RequireLiveReference"/> and fail closed. The request's
+    /// explicit legacy-compatibility default exists only for internal seeded/direct artifacts that predate source
+    /// references; those executions pin immutable content identity and null source provenance.
     /// </summary>
     /// <param name="dispatchOptions">
     /// Optional per-request dispatch options forwarded verbatim to the workflow execution agent (spec 089 FR-019).

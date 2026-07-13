@@ -16,7 +16,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
         WorkflowRunKind runKind = WorkflowRunKind.Unknown,
-        WorkflowExecutableSourceSelection? sourceSelection = null)
+        WorkflowExecutableSourceSelection? sourceSelection = null,
+        WorkflowExecutableProvenanceRequirement provenanceRequirement = WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -41,6 +42,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         TriggerNodeId = triggerNodeId;
         RunKind = runKind;
         SourceSelection = sourceSelection;
+        ProvenanceRequirement = provenanceRequirement;
     }
 
     public string ArtifactId { get; }
@@ -92,8 +94,21 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// </summary>
     public WorkflowExecutableSourceSelection? SourceSelection { get; }
 
+    /// <summary>
+    /// Controls whether a stored artifact without any source-reference history may use the internal seeded/direct
+    /// compatibility path. Public execution surfaces require authoritative live provenance; internal callers that
+    /// seed content-addressed artifacts directly retain the legacy null-provenance behavior explicitly.
+    /// </summary>
+    public WorkflowExecutableProvenanceRequirement ProvenanceRequirement { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+}
+
+public enum WorkflowExecutableProvenanceRequirement
+{
+    AllowReferenceLessLegacy,
+    RequireLiveReference
 }
 
 /// <summary>

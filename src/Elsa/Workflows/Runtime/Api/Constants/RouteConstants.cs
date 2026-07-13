@@ -10,4 +10,6 @@ internal static class RouteConstants
     internal static string Executables => GetRoute("executables");
     internal static string Executable => GetRoute("executables/{artifactId}");
     internal static string ExecutableProvenance => GetRoute("executables/{artifactId}/provenance");
+    internal static string Instances => GetRoute("instances");
+    internal static string InstancesPage => GetRoute("instances/page");
 }
