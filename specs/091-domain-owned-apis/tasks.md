@@ -138,7 +138,7 @@
 - [X] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
 - [X] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
 - [X] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
-- [ ] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US4 independently proves every authoring/read slice works without the facade.
 
@@ -165,7 +165,7 @@
 - [X] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
 - [X] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
 - [X] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
-- [ ] T075 [US5] Run the multi-shell capability commands from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T075 [US5] Run the multi-shell capability commands from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US5 independently proves one-request discovery without feature-name inference.
 
@@ -185,11 +185,11 @@
 
 ### Implementation for User Story 1
 
-- [ ] T079 [US1] Add the canonical API features to `src/Apps/Elsa.Server/shells.json` and `src/Apps/Elsa.Server/shells.baseline.json` as reference composition only
-- [ ] T080 [US1] Remove `MapElsaWorkflowManagementApi` from `src/Apps/Elsa.Server/Program.cs` and delete `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs`
-- [ ] T081 [US1] Remove obsolete server project references and registrations from `src/Apps/Elsa.Server/Elsa.Server.csproj`
-- [ ] T082 [US1] Delete or relocate all facade-specific tests from `tests/Elsa/Modularity/Tests/` after preserving their objectives in T048, T049, T050, T051, T076, and T078
-- [ ] T083 [US1] Verify the custom-host and zero-legacy Foundation gates in `specs/091-domain-owned-apis/quickstart.md`
+- [X] T079 [US1] Add the canonical API features to `src/Apps/Elsa.Server/shells.json` and `src/Apps/Elsa.Server/shells.baseline.json` as reference composition only
+- [X] T080 [US1] Remove `MapElsaWorkflowManagementApi` from `src/Apps/Elsa.Server/Program.cs` and delete `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs`
+- [X] T081 [US1] Remove obsolete server project references and registrations from `src/Apps/Elsa.Server/Elsa.Server.csproj`
+- [X] T082 [US1] Delete or relocate all facade-specific tests from `tests/Elsa/Modularity/Tests/` after preserving their objectives in T048, T049, T050, T051, T076, and T078
+- [X] T083 [US1] Verify the custom-host and zero-legacy Foundation gates in `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US1 independently proves Elsa.Server is unnecessary for supported management clients.
 

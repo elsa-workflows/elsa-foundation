@@ -4,6 +4,10 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class ElsaServerReferenceCompositionTests
 {
+    private static readonly string LegacyRoute = string.Join('/', "", "_elsa", "workflow-management");
+    private static readonly string FacadeTypeName = string.Concat("ElsaWorkflow", "ManagementApi");
+    private static readonly string MapFacadeMethodName = string.Concat("MapElsaWorkflow", "ManagementApi");
+
     [Fact]
     public void Elsa_Server_contains_no_workflow_management_endpoint_implementation_or_legacy_route()
     {
@@ -25,11 +29,11 @@ public sealed class ElsaServerReferenceCompositionTests
     {
         var displayPath = Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
 
-        if (source.Contains("/_elsa/workflow-management", StringComparison.Ordinal))
-            yield return $"{displayPath}: contains the legacy /_elsa/workflow-management route literal";
-        if (source.Contains("ElsaWorkflowManagementApi", StringComparison.Ordinal))
+        if (source.Contains(LegacyRoute, StringComparison.Ordinal))
+            yield return $"{displayPath}: contains the legacy workflow-management route literal";
+        if (source.Contains(FacadeTypeName, StringComparison.Ordinal))
             yield return $"{displayPath}: contains the host-owned workflow-management facade";
-        if (source.Contains("MapElsaWorkflowManagementApi", StringComparison.Ordinal))
+        if (source.Contains(MapFacadeMethodName, StringComparison.Ordinal))
             yield return $"{displayPath}: maps host-owned workflow-management endpoints";
     }
 

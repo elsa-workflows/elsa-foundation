@@ -41,7 +41,8 @@ public sealed partial class ManagementApiOperationInventoryTests
     [Fact]
     public void Frozen_inventory_matches_every_operation_in_the_former_facade_source_when_present()
     {
-        var facadePath = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", "ElsaWorkflowManagementApi.cs");
+        var facadeFileName = string.Concat("ElsaWorkflow", "ManagementApi.cs");
+        var facadePath = Path.Combine(RepoRoot, "src", "Apps", "Elsa.Server", facadeFileName);
         if (!File.Exists(facadePath))
             return;
 

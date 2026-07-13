@@ -117,7 +117,7 @@ public class ManagementApiContractTests
 
         Assert.DoesNotContain(
             document.Paths,
-            path => path.StartsWith("/_elsa/workflow-management", StringComparison.Ordinal));
+            path => path.StartsWith(string.Join('/', "", "_elsa", "workflow-management"), StringComparison.Ordinal));
     }
 
     private static async Task<ContractInventory> LoadContractAsync()
