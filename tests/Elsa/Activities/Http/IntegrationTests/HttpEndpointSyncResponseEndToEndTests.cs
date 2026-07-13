@@ -94,7 +94,9 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
             path: "sync/slow",
             method: "POST",
             resultValueId: "sync-slow-result",
-            requestTimeout: TimeSpan.FromMilliseconds(150),
+            // Leave enough headroom for the endpoint checkpoint to commit on a contended CI host; the 30-second
+            // activity stall still guarantees that this five-second request budget is the operation that wins.
+            requestTimeout: TimeSpan.FromSeconds(5),
             stallDuration: TimeSpan.FromSeconds(30));
 
         var response = await _fixture.Client.PostAsync($"{BasePath}sync/slow",
