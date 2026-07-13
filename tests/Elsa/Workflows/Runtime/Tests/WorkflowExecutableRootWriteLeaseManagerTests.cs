@@ -18,7 +18,9 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
             store,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions
             {
-                RootWriteLeaseDuration = TimeSpan.FromMilliseconds(300)
+                // Keep enough scheduling headroom for the full parallel solution suite while still
+                // waiting beyond the original lease to prove that renewal extended it.
+                RootWriteLeaseDuration = TimeSpan.FromSeconds(2)
             }),
             TimeProvider.System);
         var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -31,7 +33,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
         }).AsTask();
 
         await writeStarted.Task;
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        await Task.Delay(TimeSpan.FromMilliseconds(2500));
 
         var guardWhileWriting = await store.TryBeginDeletionAsync(
             "artifact-1",
