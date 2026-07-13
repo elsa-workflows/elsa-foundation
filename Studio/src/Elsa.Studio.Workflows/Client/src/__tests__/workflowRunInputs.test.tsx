@@ -96,6 +96,13 @@ describe("workflow run inputs", () => {
     });
   });
 
+  it("does not treat JSON null as a supplied required complex value", () => {
+    expect(parseWorkflowRunInputs(
+      [workflowInput("payload", "Payload", "Contoso.Order", true)],
+      { payload: "null" }
+    )).toEqual({ values: {}, errors: { payload: "Payload is required." } });
+  });
+
   it("keeps required and type errors in the dialog until the form is valid", () => {
     const onSubmit = vi.fn();
     const container = render(

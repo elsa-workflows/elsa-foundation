@@ -38,15 +38,13 @@ import {
   createDraftSnapshotId,
   dispatchAiAction,
   findAiAction,
-  formatExecutableRunError,
   formatExecutableSourceKind,
-  formatReferenceScope,
-  readExecutableRunWorkflowExecutionId
+  formatReferenceScope
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -126,16 +124,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
   const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
   const executableRun = useExecutableWorkflowRun({
     context,
-    onDispatchStart: () => {
-      setRunStatus("");
-      setRunError("");
-      setLastRun(null);
-    },
-    onStarted: (target, result) => {
-      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setRunStatus(`Started ${target.artifactId}`);
-    },
-    onError: error => setRunError(formatExecutableRunError(error))
+    ...createExecutableWorkflowRunFeedback({ setStatus: setRunStatus, setLastRun, setError: setRunError })
   });
 
   // The source definition is looked up for the drift caption and the Open-source-definition gate.

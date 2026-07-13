@@ -10,16 +10,14 @@ import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } fro
 import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 import {
   compareExecutablesByPublishedDate,
   dispatchAiAction,
   executableMatchesDefinitionFilter,
   findAiAction,
   formatExecutableRoot,
-  formatExecutableRunError,
-  formatExecutableSourceKind,
-  readExecutableRunWorkflowExecutionId
+  formatExecutableSourceKind
 } from "./editorHelpers";
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
@@ -55,16 +53,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
   const executableRun = useExecutableWorkflowRun({
     context,
-    onDispatchStart: () => {
-      setStatus("");
-      setLastRun(null);
-      setError("");
-    },
-    onStarted: (target, result) => {
-      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(`Started ${target.artifactId}`);
-    },
-    onError: error => setError(formatExecutableRunError(error))
+    ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
   });
 
   const load = useCallback(async () => {
@@ -288,16 +277,7 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
   const executableRun = useExecutableWorkflowRun({
     context,
-    onDispatchStart: () => {
-      setStatus("");
-      setLastRun(null);
-      setError("");
-    },
-    onStarted: (target, result) => {
-      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(`Started ${target.artifactId}`);
-    },
-    onError: error => setError(formatExecutableRunError(error))
+    ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
   });
 
   const load = useCallback(async () => {

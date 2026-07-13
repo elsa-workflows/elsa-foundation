@@ -4,6 +4,8 @@ import { getWorkflowDefinitionVersion } from "../api/workflowDesign";
 import { runExecutable } from "../api/runtime";
 import type { WorkflowExecutableRunResponse, WorkflowExecutionInputs, WorkflowInput } from "../workflowTypes";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
+import { formatExecutableRunError, readExecutableRunWorkflowExecutionId } from "./editorHelpers";
+import type { ExecutableRunState } from "./editorTypes";
 
 export interface ExecutableWorkflowRunTarget {
   artifactId: string;
@@ -13,6 +15,25 @@ export interface ExecutableWorkflowRunTarget {
 interface PendingExecutableRun {
   target: ExecutableWorkflowRunTarget;
   inputs: WorkflowInput[];
+}
+
+export function createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError }: {
+  setStatus(value: string): void;
+  setLastRun(value: ExecutableRunState | null): void;
+  setError(value: string): void;
+}) {
+  return {
+    onDispatchStart: () => {
+      setStatus("");
+      setLastRun(null);
+      setError("");
+    },
+    onStarted: (target: ExecutableWorkflowRunTarget, result: WorkflowExecutableRunResponse) => {
+      setLastRun({ artifactId: target.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
+      setStatus(`Started ${target.artifactId}`);
+    },
+    onError: (error: unknown) => setError(formatExecutableRunError(error))
+  };
 }
 
 export function useExecutableWorkflowRun({ context, onDispatchStart, onStarted, onError }: {

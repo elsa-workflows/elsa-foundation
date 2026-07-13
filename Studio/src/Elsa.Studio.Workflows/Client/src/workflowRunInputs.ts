@@ -39,6 +39,7 @@ export function parseWorkflowRunInputs(
       ? parseScalarDraft(draft, input.type.alias)
       : parseCollectionDraft(draft, input.type.alias);
     if (parsed.error) errors[input.referenceKey] = parsed.error;
+    else if (input.isRequired && parsed.value === null) errors[input.referenceKey] = `${input.displayName || input.name} is required.`;
     else values[input.name] = parsed.value;
   }
 
@@ -149,7 +150,7 @@ const integerRanges: Record<string, readonly [number, number]> = {
   uint64: [0, Number.MAX_SAFE_INTEGER]
 };
 
-const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const integerAliases = new Set(Object.keys(integerRanges));
 const numericAliases = new Set(["single", "double", "decimal"]);
 const knownTextAliases = new Set(["char", "string", "datetime", "datetimeoffset", "timespan", "guid", "uri"]);
