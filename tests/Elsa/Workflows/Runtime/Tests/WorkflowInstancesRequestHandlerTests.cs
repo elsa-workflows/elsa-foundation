@@ -48,6 +48,29 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_FiltersAndProjectsDurableRunKind()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-test", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.TestRun));
+        await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.PublishedRun));
+        await _workflowStore.SaveAsync(Workflow("wf-weaver", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.BackgroundWeaverRun));
+        await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRun"), CancellationToken.None);
+        var publishedResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "PublishedRun"), CancellationToken.None);
+        var weaverResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "BackgroundWeaverRun"), CancellationToken.None);
+        var legacyResult = await handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "Unknown"), CancellationToken.None);
+
+        var summary = Assert.Single(result.Items);
+        Assert.Equal("wf-test", summary.WorkflowExecutionId);
+        Assert.Equal("TestRun", summary.RunKind);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal("wf-published", Assert.Single(publishedResult.Items).WorkflowExecutionId);
+        Assert.Equal("wf-weaver", Assert.Single(weaverResult.Items).WorkflowExecutionId);
+        Assert.Equal("wf-legacy", Assert.Single(legacyResult.Items).WorkflowExecutionId);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_NavigatesStableCursorPagesAcrossEqualTimestamps()
     {
         var timestamp = Now(-1);
@@ -117,6 +140,18 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_RejectsUnknownRunKind()
+    {
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
+
+        Assert.Equal("RunKind", exception.ParamName);
+        Assert.Contains("TestRnu", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_MapsMalformedCursorToBadRequestAtHttpBoundary()
     {
         var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
@@ -131,6 +166,23 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
         Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
         Assert.Contains("cursor is invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_MapsUnknownRunKindToBadRequestAtHttpBoundary()
+    {
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
+        var endpoint = Factory.Create<TestListInstancesEndpoint>(
+            context => context.Response.Body = new MemoryStream(),
+            sender,
+            NullLogger<TestListInstancesEndpoint>.Instance);
+
+        var exception = await Assert.ThrowsAsync<ValidationFailureException>(() =>
+            endpoint.HandleAsync(new ListWorkflowInstances(null, null, null, 10, RunKind: "TestRnu"), CancellationToken.None));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+        Assert.Contains("run kind", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -154,6 +206,21 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListAndDetailReturnTheSameRunKindAndKeepLegacyStatesUnknown()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-published", WorkflowExecutionStatus.Running, "definition-1", runKind: WorkflowRunKind.PublishedRun));
+        await _workflowStore.SaveAsync(Workflow("wf-legacy", WorkflowExecutionStatus.Completed, "definition-1"));
+        var listHandler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var list = await listHandler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+        var detail = await NewGetInstanceHandler().Handle(new GetWorkflowInstance("wf-published"), CancellationToken.None);
+
+        Assert.Equal("PublishedRun", Assert.Single(list.Items, item => item.WorkflowExecutionId == "wf-published").RunKind);
+        Assert.Equal("PublishedRun", detail.Instance!.Instance.RunKind);
+        Assert.Equal("Unknown", Assert.Single(list.Items, item => item.WorkflowExecutionId == "wf-legacy").RunKind);
+    }
+
+    [Fact]
     public async Task GetWorkflowInstance_ReturnsNullForMissingInstance()
     {
         var handler = NewGetInstanceHandler();
@@ -168,7 +235,8 @@ public sealed class WorkflowInstancesRequestHandlerTests
         WorkflowExecutionStatus status,
         string definitionId,
         string? correlationId = null,
-        DateTimeOffset? updatedAt = null) =>
+        DateTimeOffset? updatedAt = null,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown) =>
         new(
             WorkflowExecutionId: id,
             PinnedExecutable: new WorkflowExecutableIdentity(
@@ -186,7 +254,10 @@ public sealed class WorkflowInstancesRequestHandlerTests
             CorrelationId: correlationId,
             ParentWorkflowExecutionId: null,
             TenantId: null,
-            SystemMetadata: new Dictionary<string, string>());
+            SystemMetadata: new Dictionary<string, string>())
+        {
+            RunKind = runKind
+        };
 
     private static ActivityExecutionState Activity(
         string workflowExecutionId,

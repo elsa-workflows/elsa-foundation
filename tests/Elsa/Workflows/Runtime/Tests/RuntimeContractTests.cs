@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Reflection;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -38,6 +39,30 @@ public sealed class RuntimeContractTests
         Assert.Equal("7.0.0", state.PinnedExecutable.ArtifactVersion);
         Assert.Equal("sha256:abc", state.PinnedExecutable.ArtifactHash);
         Assert.Equal("version-7", state.PinnedExecutable.DefinitionVersionId);
+    }
+
+    [Fact]
+    public void WorkflowExecutionState_DeserializesPreRunKindHistoryAsUnknown()
+    {
+        var state = new WorkflowExecutionState(
+            WorkflowExecutionId: "wfexec-legacy",
+            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: WorkflowExecutionStatus.Completed,
+            SubStatus: null,
+            CreatedAt: DateTimeOffset.UnixEpoch,
+            StartedAt: DateTimeOffset.UnixEpoch,
+            UpdatedAt: DateTimeOffset.UnixEpoch,
+            CompletedAt: DateTimeOffset.UnixEpoch,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+        var legacyJson = JsonSerializer.SerializeToNode(state)!.AsObject();
+        Assert.True(legacyJson.Remove(nameof(WorkflowExecutionState.RunKind)));
+
+        var restored = legacyJson.Deserialize<WorkflowExecutionState>()!;
+
+        Assert.Equal(WorkflowRunKind.Unknown, restored.RunKind);
     }
 
     [Fact]

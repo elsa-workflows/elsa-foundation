@@ -40,6 +40,19 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     }
 
     [Fact]
+    public async Task ClassifiesDirectExecutableStartsAsPublishedRuns()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var dispatcher = new CapturingStartDispatcher(NewDispatcher(store));
+        var handler = new ExecuteWorkflowRequestHandler(dispatcher, store);
+
+        await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
+
+        Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(dispatcher.Requests).RunKind);
+    }
+
+    [Fact]
     public void ExecuteWorkflowHandler_DoesNotDependOnInlineExecutor()
     {
         var runtimeCoreAssembly = typeof(IWorkflowStartDispatcher).Assembly;
@@ -124,5 +137,20 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class CapturingStartDispatcher(IWorkflowStartDispatcher inner) : IWorkflowStartDispatcher
+    {
+        public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
+        }
     }
 }

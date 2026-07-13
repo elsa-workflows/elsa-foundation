@@ -148,6 +148,34 @@ public sealed class RuntimeStartCommandSchedulingTests
     }
 
     [Fact]
+    public async Task DrainAsync_PersistsRunKindFromStartCommandAsWorkflowState()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore();
+        var executable = NewExecutable(["node-start"], ["node-start"]);
+        await store.SaveAsync(executable);
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [
+                NewHandler(store, queue),
+                NewCheckpointHandler(new InMemoryActivityExecutionStateStore(), checkpointWriter, queue),
+                new NoopWorkflowSchedulerWorkHandler()
+            ],
+            new FixedTimeProvider(_now));
+        var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
+            executable.Identity,
+            "artifact-1",
+            runKind: WorkflowRunKind.BackgroundWeaverRun));
+        await queue.EnqueueAsync(NewStartWorkItem(executable.Identity, payload: payload));
+
+        await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1", maxWorkItems: 2));
+
+        var write = Assert.Single(checkpointWriter.ListCommits());
+        Assert.Equal(WorkflowRunKind.BackgroundWeaverRun, write.Commit.StateChanges.WorkflowExecution!.State.RunKind);
+    }
+
+    [Fact]
     public async Task DrainAsync_SeedsSuppliedVariablesAndInputsAsDurableRuntimeState()
     {
         var store = new InMemoryWorkflowExecutableStore();

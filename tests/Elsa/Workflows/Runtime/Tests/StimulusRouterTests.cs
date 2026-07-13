@@ -29,6 +29,19 @@ public sealed class StimulusRouterTests
     }
 
     [Fact]
+    public async Task Route_StartOnly_ClassifiesPublishedTriggerStartsAsPublishedRuns()
+    {
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher();
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(startDispatcher.Requests).RunKind);
+    }
+
+    [Fact]
     public async Task Route_ResumeOnly_FansInToEveryWaitingInstanceAcrossExecutions()
     {
         // Bookmarks are seeded directly into the store (not produced by running published workflows) as a

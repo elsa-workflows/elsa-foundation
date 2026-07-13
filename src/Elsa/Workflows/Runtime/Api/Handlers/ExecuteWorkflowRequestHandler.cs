@@ -33,7 +33,12 @@ public sealed class ExecuteWorkflowRequestHandler(
         var inputs = ToInputValues(request.Inputs);
 
         var result = await startDispatcher.DispatchAsync(
-            new WorkflowExecutionStartDispatchRequest(request.ArtifactId, RequestedBy, variables: variables, inputs: inputs),
+            new WorkflowExecutionStartDispatchRequest(
+                request.ArtifactId,
+                RequestedBy,
+                variables: variables,
+                inputs: inputs,
+                runKind: WorkflowRunKind.PublishedRun),
             cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }

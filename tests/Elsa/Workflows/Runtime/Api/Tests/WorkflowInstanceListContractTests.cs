@@ -14,9 +14,11 @@ public sealed class WorkflowInstanceListContractTests
 
         AssertProperties(request,
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
-            "WorkflowExecutionId", "ArtifactId", "From", "To");
+            "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
         AssertProperties(response,
             "Items", "PreviousCursor", "NextCursor", "HasPrevious", "HasNext", "Count", "TotalCount");
+        var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
+        AssertProperties(item, "RunKind");
         Assert.Contains(PermissionNames.WorkflowRuntimeRead, endpoint.Definition.AllowedPermissions!);
         Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
     }
