@@ -6,7 +6,7 @@ import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 
 export function ValidationPanel({ draft, onRepair }: { draft: WorkflowDraft; onRepair(nodeId: string | null): void }) {
-  const errors = draft.validationErrors;
+  const errors = Array.isArray(draft.validationErrors) ? draft.validationErrors : [];
   if (!errors.length) {
     return <div className="wf-validation ok"><Check size={14} /> No validation errors</div>;
   }

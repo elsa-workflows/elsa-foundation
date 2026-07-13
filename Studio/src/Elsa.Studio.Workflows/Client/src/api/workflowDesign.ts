@@ -30,6 +30,14 @@ export interface DefinitionListRequest {
   pageSize: number;
 }
 
+type WorkflowDraftResponse = Omit<WorkflowDraft, "validationErrors"> & {
+  validationErrors?: WorkflowDraft["validationErrors"] | null;
+};
+
+type WorkflowDefinitionDetailsResponse = Omit<WorkflowDefinitionDetails, "draft"> & {
+  draft?: WorkflowDraftResponse | null;
+};
+
 export const workflowDesignKeys = {
   all: ["workflow-design"] as const,
   definitions: ["workflow-design", "definitions"] as const,
@@ -92,7 +100,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
 }
 
 export async function getDefinition(context: StudioEndpointContext, definitionId: string) {
-  const details = await context.http.getJson<WorkflowDefinitionDetails>(
+  const details = await context.http.getJson<WorkflowDefinitionDetailsResponse>(
     `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`);
   return normalizeDefinitionDetails(details);
 }
@@ -101,7 +109,7 @@ export async function createDefinition(context: StudioEndpointContext, request: 
   const wireRequest = request.initialState
     ? { ...request, initialState: canonicalizeStateForWire(request.initialState) }
     : request;
-  const details = await context.http.postJson<WorkflowDefinitionDetails>(await definitionsPath(context), wireRequest);
+  const details = await context.http.postJson<WorkflowDefinitionDetailsResponse>(await definitionsPath(context), wireRequest);
   return normalizeDefinitionDetails(details);
 }
 
@@ -122,7 +130,7 @@ export async function updateDefinitionMetadata(
   definitionId: string,
   patch: { name: string; description?: string | null }
 ): Promise<WorkflowDefinitionDetails> {
-  const details = await context.http.requestJson<WorkflowDefinitionDetails>(
+  const details = await context.http.requestJson<WorkflowDefinitionDetailsResponse>(
     `${await definitionsPath(context)}/${encodeURIComponent(definitionId)}`,
     {
       method: "PATCH",
@@ -149,11 +157,11 @@ export async function updateDraft(context: StudioEndpointContext, draft: Workflo
     capabilityIds.workflowDesign,
     "workflow-drafts",
     { draftId: draft.id });
-  const saved = await context.http.putJson<WorkflowDraft>(path, {
+  const saved = await context.http.putJson<WorkflowDraftResponse>(path, {
     state: canonicalizeStateForWire(draft.state),
     layout: draft.layout
   });
-  return { ...saved, state: expandStateFromWire(saved.state) };
+  return normalizeWorkflowDraft(saved);
 }
 
 export async function getDraft(context: StudioEndpointContext, draftId: string) {
@@ -162,8 +170,8 @@ export async function getDraft(context: StudioEndpointContext, draftId: string) 
     capabilityIds.workflowDesign,
     "workflow-drafts",
     { draftId });
-  const draft = await context.http.getJson<WorkflowDraft>(path);
-  return { ...draft, state: expandStateFromWire(draft.state) };
+  const draft = await context.http.getJson<WorkflowDraftResponse>(path);
+  return normalizeWorkflowDraft(draft);
 }
 
 export async function discardDraft(context: StudioEndpointContext, draftId: string) {
@@ -285,8 +293,17 @@ export function useScopedVariableAnalysis(
   return { ...result, retry };
 }
 
-function normalizeDefinitionDetails(details: WorkflowDefinitionDetails): WorkflowDefinitionDetails {
-  return details.draft
-    ? { ...details, draft: { ...details.draft, state: expandStateFromWire(details.draft.state) } }
-    : details;
+function normalizeDefinitionDetails(details: WorkflowDefinitionDetailsResponse): WorkflowDefinitionDetails {
+  return {
+    ...details,
+    draft: details.draft ? normalizeWorkflowDraft(details.draft) : details.draft
+  };
+}
+
+function normalizeWorkflowDraft(draft: WorkflowDraftResponse): WorkflowDraft {
+  return {
+    ...draft,
+    state: expandStateFromWire(draft.state),
+    validationErrors: Array.isArray(draft.validationErrors) ? draft.validationErrors : []
+  };
 }

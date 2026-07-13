@@ -7,6 +7,7 @@ import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinit
 import { clearApiCapabilityCache, isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
+import { ValidationPanel } from "../workflow-editor/editorPanels";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -17,6 +18,20 @@ afterEach(() => {
 });
 
 describe("workflows module", () => {
+  it("renders a draft without validationErrors as valid", () => {
+    const draft = workflowDraft();
+    delete (draft as { validationErrors?: unknown }).validationErrors;
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    try {
+      flushSync(() => root.render(<ValidationPanel draft={draft} onRepair={vi.fn()} />));
+      expect(container.textContent).toContain("No validation errors");
+    } finally {
+      flushSync(() => root.unmount());
+    }
+  });
+
   it("treats a connect-end captured by the source handle as an empty-canvas release when the pointer is over the pane", () => {
     const sourceHandle = document.createElement("div");
     sourceHandle.className = "react-flow__handle";
@@ -1144,6 +1159,54 @@ describe("workflows module", () => {
         }
       }
     });
+
+    await unmount();
+  });
+
+  it("opens a newly created workflow when the draft omits validationErrors", async () => {
+    const createdDefinition = definition({ id: "created-definition", name: "Customer onboarding" });
+    const createdDraft = { ...draftWithFlowchartRoot(), definitionId: "created-definition" };
+    delete (createdDraft as { validationErrors?: unknown }).validationErrors;
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/design/workflows/definitions")) {
+        return response({ definition: createdDefinition, draft: createdDraft, versions: [] });
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "flowchart-v1",
+          activityTypeKey: "Elsa.Activities.Flowchart",
+          category: "Composition",
+          displayName: "Flowchart",
+          authoringTemplate: {
+            nodeId: "activity",
+            activityVersionId: "flowchart-v1",
+            inputs: {},
+            outputs: {},
+            structure: { kind: "elsa.flowchart.structure", schemaVersion: "1.0.0", payload: { activities: [], connections: [] } }
+          }
+        })
+      ] });
+      if (url.includes("/definitions/created-definition")) {
+        return response({ definition: createdDefinition, draft: createdDraft, versions: [] });
+      }
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(container, "Create"));
+    await waitForText(container, "Create Workflow");
+    await fill(inputByLabel(container, "Display name"), "Customer onboarding");
+    await click(buttonByText(dialog(container), "Create"));
+
+    await waitForText(container, "Autosave");
+    expect(container.textContent).toContain("No validation errors");
 
     await unmount();
   });
