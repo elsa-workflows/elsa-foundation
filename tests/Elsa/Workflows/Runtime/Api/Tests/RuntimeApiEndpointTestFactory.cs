@@ -33,7 +33,7 @@ internal static class RuntimeApiEndpointTestFactory
         throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no request/response contract.");
     }
 
-    private static BaseEndpoint Create(Type endpointType)
+    public static BaseEndpoint Create(Type endpointType)
     {
         var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Single().GetParameters().Select(parameter => Resolve(parameter.ParameterType)).ToArray();
