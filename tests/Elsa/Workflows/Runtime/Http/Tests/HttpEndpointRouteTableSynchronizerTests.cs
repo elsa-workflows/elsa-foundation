@@ -15,6 +15,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 /// interleave (the second waits for the first to release the lock) and that a fresh scope is opened per refresh so
 /// the resolver reads the durable sources anew.
 /// </summary>
+[Collection(RouteTableTelemetryCollection.Name)]
 public sealed class HttpEndpointRouteTableSynchronizerTests
 {
     private const string ActivitySourceName = "Elsa.Workflows.Runtime.Http";
@@ -274,4 +275,10 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
             public object? Tag(string name) => Tags.SingleOrDefault(tag => tag.Key == name).Value;
         }
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class RouteTableTelemetryCollection
+{
+    public const string Name = "Route table telemetry";
 }
