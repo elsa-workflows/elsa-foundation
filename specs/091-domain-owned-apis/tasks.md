@@ -136,7 +136,7 @@
 - [X] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
 - [X] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints
 - [X] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
-- [ ] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
+- [X] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
 - [X] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
 - [ ] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
 
@@ -155,15 +155,15 @@
 - [X] T065 [P] [US5] Add failing static declaration, dynamic Source, merge, ordering, and duplicate diagnostics tests in `tests/Elsa/Api/Capabilities/Tests/ApiCapabilityCatalogTests.cs`
 - [X] T066 [P] [US5] Add failing multi-shell route-base and omitted-domain tests in `tests/Elsa/Api/Capabilities/Tests/CapabilityEndpointTests.cs`
 - [X] T067 [P] [US5] Add failing secure-shell authentication and permission-neutral response tests in `tests/Elsa/Api/Capabilities/Tests/CapabilitySecurityTests.cs`
-- [ ] T068 [P] [US5] Add failing feature dependency/declaration tests for all canonical domain API features in `tests/Elsa/Architecture/ApiCapabilityRegistrationTests.cs`
+- [X] T068 [P] [US5] Add failing feature dependency/declaration tests for all canonical domain API features in `tests/Elsa/Architecture/ApiCapabilityRegistrationTests.cs`
 
 ### Implementation for User Story 5
 
 - [X] T069 [P] [US5] Add API capability declaration, link, document, Source, event, and duplicate exception contracts in `src/Elsa/Api/Capabilities/`
 - [X] T070 [US5] Implement the single aggregating capability handler and deterministic catalog in `src/Elsa/Api/Capabilities/Services/ApiCapabilityCatalog.cs`
 - [X] T071 [US5] Implement `ApiCapabilitiesFeature` and authenticated `GET /capabilities` endpoint in `src/Elsa/Api/Capabilities/`
-- [ ] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
-- [ ] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
+- [X] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
+- [X] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
 - [X] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
 - [ ] T075 [US5] Run the multi-shell capability commands from `specs/091-domain-owned-apis/quickstart.md`
 

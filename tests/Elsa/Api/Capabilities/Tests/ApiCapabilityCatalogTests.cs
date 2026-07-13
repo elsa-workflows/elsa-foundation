@@ -78,6 +78,23 @@ public sealed class ApiCapabilityCatalogTests
         Assert.Single((await catalog.GetAsync()).Capabilities);
     }
 
+    [Fact]
+    public async Task Dynamic_sources_augment_static_capabilities_without_weakening_static_duplicate_rules()
+    {
+        var declaration = Declaration(
+            "elsa.api.workflow-design",
+            "WorkflowsDesignApi",
+            new ApiCapabilityLink("workflow-definitions", "design/workflows/definitions"));
+        var source = new StubSource(Declaration(
+            "elsa.api.workflow-design",
+            "WorkflowsDesignApi.Operational",
+            new ApiCapabilityLink("scoped-variable-analysis", "design/workflows/scoped-variables/analyze")));
+
+        var capability = Assert.Single((await new ApiCapabilityCatalog([declaration], [source]).GetAsync()).Capabilities);
+
+        Assert.Equal(["scoped-variable-analysis", "workflow-definitions"], capability.Links.Select(link => link.Rel));
+    }
+
     private static ApiCapabilityDeclaration Declaration(
         string id,
         string sourceFeatureId,

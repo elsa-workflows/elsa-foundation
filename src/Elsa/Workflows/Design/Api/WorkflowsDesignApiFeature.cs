@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api.Services;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Workflows.Design.Api.Capabilities;
 
 namespace Elsa.Workflows.Design.Api;
 
@@ -18,7 +20,8 @@ namespace Elsa.Workflows.Design.Api;
 [ShellFeature(
     name: "WorkflowsDesignApi",
     DisplayName = "Workflows Design API",
-    Description = "Contains endpoints to manage data in the Workflows Design Domain"
+    Description = "Contains endpoints to manage data in the Workflows Design Domain",
+    DependsOn = new object[] { "ApiCapabilities" }
 )]
 public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
 {
@@ -36,5 +39,7 @@ public class WorkflowsDesignApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
+        services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
     }
 }

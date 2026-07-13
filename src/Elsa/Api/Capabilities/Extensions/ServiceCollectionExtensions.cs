@@ -25,7 +25,7 @@ public static class ServiceCollectionExtensions
             .OfType<ApiCapabilityDeclaration>()
             .Where(candidate => string.Equals(candidate.CapabilityId, declaration.CapabilityId, StringComparison.Ordinal))
             .ToArray();
-        var conflicting = existing.FirstOrDefault(candidate => !candidate.IsCompatibleWith(declaration));
+        var conflicting = existing.FirstOrDefault(candidate => !candidate.IsEquivalentTo(declaration));
         if (conflicting is not null)
             throw new ApiCapabilityConflictException(
                 $"Capability '{declaration.CapabilityId}' has incompatible declarations from features " +

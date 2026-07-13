@@ -6,6 +6,8 @@ using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -16,7 +18,8 @@ namespace Elsa.Workflows.Runtime.Api;
 [ShellFeature(
     name: "WorkflowsRuntimeApi",
     DisplayName = "Workflows Runtime API",
-    Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts."
+    Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
+    DependsOn = new object[] { "ApiCapabilities" }
 )]
 public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
 {
@@ -32,5 +35,7 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
 
         // API-only wiring: the FastEndpoints request handlers this feature's endpoints dispatch through.
         services.AddRequestHandlersFrom(GetType().Assembly);
+        services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
     }
 }

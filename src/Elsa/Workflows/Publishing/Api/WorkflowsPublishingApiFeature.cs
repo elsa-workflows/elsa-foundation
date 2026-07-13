@@ -11,6 +11,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -29,7 +31,7 @@ namespace Elsa.Workflows.Publishing.Api;
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam).",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {
@@ -64,5 +66,6 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
+        services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
     }
 }

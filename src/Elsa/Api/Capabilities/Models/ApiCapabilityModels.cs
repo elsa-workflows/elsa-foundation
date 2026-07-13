@@ -53,7 +53,7 @@ public sealed record ApiCapabilityDeclaration
     public IReadOnlyCollection<ApiCapabilityLink> Links { get; init; }
     public string SourceFeatureId { get; init; }
 
-    internal bool IsCompatibleWith(ApiCapabilityDeclaration other) =>
+    internal bool IsEquivalentTo(ApiCapabilityDeclaration other) =>
         ContractMajorVersion == other.ContractMajorVersion && Links.SequenceEqual(other.Links);
 }
 
