@@ -117,10 +117,10 @@
 
 ### Tests for User Story 4
 
-- [ ] T046 [P] [US4] Move and expand definition/draft/version lifecycle tests into `tests/Elsa/Workflows/Design/Api/Tests/`
-- [ ] T047 [P] [US4] Add failing aggregate definition projection query-count tests in `tests/Elsa/Workflows/Design/Api/Tests/WorkflowDefinitionProjectionTests.cs`
-- [ ] T048 [P] [US4] Move scoped-variable and contextual input-option route tests from `tests/Elsa/Modularity/Tests/` to `tests/Elsa/Workflows/Design/Api/Tests/`
-- [ ] T049 [P] [US4] Add failing normalized authoring catalog and availability-filter tests in `tests/Elsa/Activities/Design/Api/Tests/ActivityAuthoringCatalogTests.cs`
+- [X] T046 [P] [US4] Move and expand definition/draft/version lifecycle tests into `tests/Elsa/Workflows/Design/Api/Tests/`
+- [X] T047 [P] [US4] Add failing aggregate definition projection query-count tests in `tests/Elsa/Workflows/Design/Api/Tests/WorkflowDefinitionProjectionTests.cs`
+- [X] T048 [P] [US4] Move scoped-variable and contextual input-option route tests from `tests/Elsa/Modularity/Tests/` to `tests/Elsa/Workflows/Design/Api/Tests/`
+- [X] T049 [P] [US4] Add failing normalized authoring catalog and availability-filter tests in `tests/Elsa/Activities/Design/Api/Tests/ActivityAuthoringCatalogTests.cs`
 - [ ] T050 [P] [US4] Move expression and variable-type projection tests into `tests/Elsa/Expressions/Api/Tests/ExpressionDescriptorEndpointTests.cs`
 - [ ] T051 [P] [US4] Move executable inspector tests from Publishing into `tests/Elsa/Workflows/Runtime/Api/Tests/WorkflowExecutableInspectorTests.cs`
 - [ ] T052 [P] [US4] Add canonical Runtime diagnostics route/security tests in `tests/Elsa/Workflows/Runtime/Api/Tests/RuntimeDiagnosticsEndpointTests.cs`
