@@ -36,6 +36,30 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         Assert.Same(provider.GetRequiredService<ITestStore>(), provider.GetRequiredService<ReplacementStore>());
     }
 
+    [Fact]
+    public void Two_explicit_store_replacements_are_rejected_instead_of_last_write_wins()
+    {
+        var services = new ServiceCollection();
+        services.ReplaceDiagnosticsStore<ITestStore, FirstStore>();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.ReplaceDiagnosticsStore<ITestStore, SecondStore>());
+
+        Assert.Contains(typeof(ITestStore).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(FirstStore).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondStore).FullName!, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Registration_surface_separates_default_from_explicit_selection()
+    {
+        var defaultRegistration = typeof(DiagnosticsPersistenceRegistration)
+            .GetMethods()
+            .SingleOrDefault(method => method.Name == "AddDefaultDiagnosticsStore");
+
+        Assert.NotNull(defaultRegistration);
+    }
+
     private interface ITestStore;
     private sealed class FirstStore : ITestStore;
     private sealed class SecondStore : ITestStore;

@@ -32,7 +32,7 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
-    public void Every_loss_reason_is_counted_independently_including_subscriber_delivery()
+    public void Every_loss_reason_is_counted_independently()
     {
         var counters = new DiagnosticsPersistenceCounters();
         foreach (var reason in Enum.GetValues<DiagnosticsPersistenceLossReason>())
@@ -60,16 +60,30 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
-    public void Existing_live_feed_signals_map_to_subscriber_delivery_without_moving_fanout()
+    public void Production_subscriber_delivery_bridge_is_available_for_existing_live_feed_signals()
     {
-        var structured = new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch);
-        var telemetry = new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Trace, 3, "SubscriberQueueFull");
+        var bridge = typeof(DiagnosticsPersistenceCounters).Assembly.GetType(
+            "Elsa.Diagnostics.Persistence.Observability.DiagnosticsSubscriberDeliveryLossBridge");
+
+        Assert.NotNull(bridge);
+        Assert.Contains(bridge.GetMethods(), method =>
+            method.GetParameters().SingleOrDefault()?.ParameterType == typeof(DroppedEntriesSignal));
+        Assert.Contains(bridge.GetMethods(), method =>
+            method.GetParameters().SingleOrDefault()?.ParameterType == typeof(OpenTelemetryDroppedItemSummary));
+    }
+
+    [Fact]
+    public void Observer_rejects_invalid_state_operation_reason_count_and_attempt_values()
+    {
         var counters = new DiagnosticsPersistenceCounters();
 
-        counters.RecordLoss(DiagnosticsPersistenceLossReason.SubscriberDelivery, checked((int)structured.DroppedCount));
-        counters.RecordLoss(DiagnosticsPersistenceLossReason.SubscriberDelivery, checked((int)telemetry.Count));
-
-        Assert.Equal(7, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
-        Assert.Equal("SubscriberQueueFull", telemetry.Reason);
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordState((DiagnosticsDrainState)int.MaxValue));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry((DiagnosticsPersistenceOperation)int.MaxValue, 1, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordOperationFailure((DiagnosticsPersistenceOperation)int.MaxValue));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordLoss((DiagnosticsPersistenceLossReason)int.MaxValue, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordLoss(DiagnosticsPersistenceLossReason.QueueOverflow, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 0, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 3, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 1, 0));
     }
 }
