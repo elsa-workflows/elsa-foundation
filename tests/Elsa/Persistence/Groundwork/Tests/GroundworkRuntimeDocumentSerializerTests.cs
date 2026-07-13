@@ -239,12 +239,23 @@ public sealed class GroundworkRuntimeDocumentSerializerTests
         Assert.Null(state["pinnedSource"]);
     }
 
+    [Fact]
+    public void WorkflowExecutionStateV2ToV3Upcaster_adds_the_effective_history_timestamp()
+    {
+        var content = JsonNode.Parse("""{"collection":"workflowExecutionState","state":{"createdAt":"2026-07-13T09:00:00+00:00","startedAt":"2026-07-13T10:00:00+00:00","completedAt":"2026-07-13T11:00:00+00:00","updatedAt":"2026-07-13T12:00:00+00:00"}}""")!.AsObject();
+
+        var result = new WorkflowExecutionStateDocumentV2ToV3Upcaster().Upcast(content);
+
+        Assert.Equal(new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero).UtcTicks, result["historySortTicks"]!.GetValue<long>());
+    }
+
     private static GroundworkRuntimeDocumentUpcasterRegistry Registry(
         params IGroundworkRuntimeDocumentUpcaster[] additional) =>
         new(
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
+            new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster(),

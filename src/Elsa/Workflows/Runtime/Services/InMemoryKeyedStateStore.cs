@@ -89,4 +89,12 @@ public abstract class InMemoryKeyedStateStore<TKey, TState>
                 .ToArray();
         }
     }
+
+    /// <summary>Reads the live value collection under the store lock without first duplicating the whole store.</summary>
+    protected TResult ReadValues<TResult>(Func<IEnumerable<TState>, TResult> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        lock (_syncRoot)
+            return read(_states.Values);
+    }
 }

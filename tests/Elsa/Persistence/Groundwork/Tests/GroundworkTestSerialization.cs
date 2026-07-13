@@ -15,6 +15,7 @@ internal static class GroundworkTestSerialization
         [
             new WorkflowExecutableDocumentV1ToV2Upcaster(),
             new WorkflowExecutionStateDocumentV1ToV2Upcaster(),
+            new WorkflowExecutionStateDocumentV2ToV3Upcaster(),
             new WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster(),
             new WorkflowTriggerBindingDocumentV1ToV2Upcaster(),
             new RecurringTriggerScheduleDocumentV1ToV2Upcaster()

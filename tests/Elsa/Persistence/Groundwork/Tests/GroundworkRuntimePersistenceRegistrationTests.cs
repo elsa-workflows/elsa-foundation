@@ -102,6 +102,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
             [
                 typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
                 typeof(WorkflowExecutionStateDocumentV1ToV2Upcaster),
+                typeof(WorkflowExecutionStateDocumentV2ToV3Upcaster),
                 typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
                 typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
                 typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)

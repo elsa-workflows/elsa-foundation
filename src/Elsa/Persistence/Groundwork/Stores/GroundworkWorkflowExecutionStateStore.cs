@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -7,19 +8,34 @@ using Groundwork.Documents.Store;
 namespace Elsa.Persistence.Groundwork.Stores;
 
 /// <summary>
-/// Groundwork-backed <see cref="IWorkflowExecutionStateStore"/>. The unfiltered <see cref="ListAsync"/>
-/// is served through a constant collection partition stamped on every document, so it relies only on the
-/// declared-index equality query every provider supports.
+/// Groundwork-backed <see cref="IWorkflowExecutionStateStore"/>. Ordinary collection projections use the
+/// portable document query contract. Run-history paging delegates to the active provider's bounded native
+/// keyset plan so filtered requests never materialize the full collection.
 /// </summary>
-public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
-    : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind), IWorkflowExecutionStateStore
+public sealed class GroundworkWorkflowExecutionStateStore : GroundworkDocumentStore, IWorkflowExecutionStateStore
 {
+    private readonly IGroundworkWorkflowExecutionStatePageQuery? _pageQuery;
+
+    public GroundworkWorkflowExecutionStateStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
+        : this(store, serializer, null)
+    {
+    }
+
+    public GroundworkWorkflowExecutionStateStore(
+        IDocumentStore store,
+        IGroundworkRuntimeDocumentSerializer serializer,
+        IGroundworkWorkflowExecutionStatePageQuery? pageQuery)
+        : base(store, serializer, ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind)
+    {
+        _pageQuery = pageQuery;
+    }
+
     public async ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentException.ThrowIfNullOrWhiteSpace(state.WorkflowExecutionId);
 
-        var document = new WorkflowExecutionStateDocument(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, state);
+        var document = WorkflowExecutionStateDocument.From(state);
         await SaveDocumentAsync(state.WorkflowExecutionId, document, cancellationToken);
 
         return state;
@@ -39,6 +55,12 @@ public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, 
             ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
             document => document.State,
             cancellationToken);
+
+    public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+        WorkflowExecutionStatePageQuery query,
+        CancellationToken cancellationToken = default) =>
+        _pageQuery?.QueryPageAsync(query, cancellationToken)
+        ?? throw new NotSupportedException("The active Groundwork provider has no bounded workflow execution history query plan.");
 
     public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
     {
@@ -82,5 +104,15 @@ public sealed class GroundworkWorkflowExecutionStateStore(IDocumentStore store, 
         return Serializer.Deserialize<WorkflowExecutionStateDocument>(envelope).State.PinnedExecutable.ArtifactId;
     }
 
-    private sealed record WorkflowExecutionStateDocument(string Collection, WorkflowExecutionState State);
+}
+
+internal sealed record WorkflowExecutionStateDocument(
+    string Collection,
+    WorkflowExecutionState State,
+    long HistorySortTicks)
+{
+    public static WorkflowExecutionStateDocument From(WorkflowExecutionState state) => new(
+        ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
+        state,
+        WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks);
 }
