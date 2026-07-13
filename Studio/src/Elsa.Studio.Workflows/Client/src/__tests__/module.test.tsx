@@ -278,6 +278,70 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("exposes canvas nodes as named controls, synchronizes keyboard selection, and focuses palette insertions", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          executionType: "Action"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([
+          { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+          { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+        ]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+    const first = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-1']")!;
+    expect(first.getAttribute("role")).toBe("button");
+    expect(first.getAttribute("aria-label")).toContain("Activity type: Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(first.getAttribute("aria-label")).toContain("State: authoring");
+    expect(first.getAttribute("aria-pressed")).toBe("false");
+    const descriptionId = first.getAttribute("aria-describedby")!;
+    expect(document.getElementById(descriptionId)?.textContent).toContain("Press Tab to move between canvas items");
+
+    first.focus();
+    flushSync(() => first.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flushPromises();
+    expect(first.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-1");
+
+    const second = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-2']")!;
+    second.focus();
+    flushSync(() => second.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })));
+    await flushPromises();
+    expect(second.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-2");
+
+    const paletteActivity = container.querySelector<HTMLButtonElement>(".wf-palette-activity")!;
+    await click(paletteActivity);
+    for (let attempt = 0; attempt < 20 && container.querySelectorAll(".wf-canvas .react-flow__node").length < 3; attempt += 1) {
+      await flushPromises();
+    }
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.classList.contains("react-flow__node")).toBe(true);
+    expect(focused.getAttribute("aria-pressed")).toBe("true");
+
+    await unmount();
+  });
+
   it("supports resizing, collapsing, and maximizing workflow side panels", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
