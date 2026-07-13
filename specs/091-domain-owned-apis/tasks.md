@@ -121,9 +121,9 @@
 - [X] T047 [P] [US4] Add failing aggregate definition projection query-count tests in `tests/Elsa/Workflows/Design/Api/Tests/WorkflowDefinitionProjectionTests.cs`
 - [X] T048 [P] [US4] Move scoped-variable and contextual input-option route tests from `tests/Elsa/Modularity/Tests/` to `tests/Elsa/Workflows/Design/Api/Tests/`
 - [X] T049 [P] [US4] Add failing normalized authoring catalog and availability-filter tests in `tests/Elsa/Activities/Design/Api/Tests/ActivityAuthoringCatalogTests.cs`
-- [ ] T050 [P] [US4] Move expression and variable-type projection tests into `tests/Elsa/Expressions/Api/Tests/ExpressionDescriptorEndpointTests.cs`
-- [ ] T051 [P] [US4] Move executable inspector tests from Publishing into `tests/Elsa/Workflows/Runtime/Api/Tests/WorkflowExecutableInspectorTests.cs`
-- [ ] T052 [P] [US4] Add canonical Runtime diagnostics route/security tests in `tests/Elsa/Workflows/Runtime/Api/Tests/RuntimeDiagnosticsEndpointTests.cs`
+- [X] T050 [P] [US4] Move expression and variable-type projection tests into `tests/Elsa/Expressions/Api/Tests/ExpressionDescriptorEndpointTests.cs`
+- [X] T051 [P] [US4] Move executable inspector tests from Publishing into `tests/Elsa/Workflows/Runtime/Api/Tests/WorkflowExecutableInspectorTests.cs`
+- [X] T052 [P] [US4] Add canonical Runtime diagnostics route/security tests in `tests/Elsa/Workflows/Runtime/Api/Tests/RuntimeDiagnosticsEndpointTests.cs`
 
 ### Implementation for User Story 4
 
@@ -132,7 +132,7 @@
 - [ ] T055 [US4] Implement definition soft-delete/restore/permanent-delete and keep Publishing state untouched in `src/Elsa/Workflows/Design/Api/`
 - [ ] T056 [US4] Reject synthetic draft identifiers and isolate direct version ingestion behind explicit authorization in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/`
 - [ ] T057 [US4] Move scoped-variable analysis and activity input-option resolution from the facade into `src/Elsa/Workflows/Design/Api/Endpoints/Authoring/`
-- [ ] T058 [US4] Implement the unified normalized authoring catalog in `src/Elsa/Activities/Design/Api/Endpoints/Catalog/` and retain canonical availability endpoints
+- [X] T058 [US4] Implement the unified normalized authoring catalog in `src/Elsa/Activities/Design/Api/Endpoints/Catalog/` and retain canonical availability endpoints
 - [ ] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
 - [ ] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints
 - [ ] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
