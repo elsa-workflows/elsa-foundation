@@ -42,7 +42,10 @@ describe("Runtime-pinned workflow instance rendering", () => {
     const projected = projectPinnedExecutable(executable, details, []);
 
     expect(projected.definition.description).toContain("artifact-pinned");
-    expect(projected.state.rootActivity).toMatchObject({ nodeId: "authored-root", activityVersionId: "Example.Root" });
+    expect(projected.state.rootActivity).toMatchObject({
+      nodeId: "authored-root",
+      activityVersionId: "executable-missing:Example.Root@1.0.0"
+    });
     expect(projected.id).toBe("draft:synthetic");
   });
 });

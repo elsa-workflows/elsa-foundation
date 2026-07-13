@@ -111,20 +111,24 @@ export function WorkflowExecutableInspectorPage({ context, ai }: { context: Stud
   );
 }
 
-export function WorkflowInstancesPage({ context }: { context: StudioEndpointContext }) {
+export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame title="Runs">
-      <WorkflowInstances context={context} />
+      <WorkflowInstances context={context} navigate={navigate} />
     </WorkflowsPageFrame>
   );
 }
 
-export function WorkflowInstanceDetailsPage({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+export function WorkflowInstanceDetailsPage({ context, ai, navigate }: {
+  context: StudioEndpointContext;
+  ai: StudioAiContributionApi;
+  navigate(path: string): void;
+}) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
 
   return (
     <WorkflowsPageFrame title="Run">
-      <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} />
+      <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId={workflowExecutionId} navigate={navigate} />
     </WorkflowsPageFrame>
   );
 }

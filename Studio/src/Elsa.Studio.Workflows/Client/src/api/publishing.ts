@@ -1,15 +1,30 @@
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { canonicalizeStateForWire } from "../activityInputWire";
 import type {
+  DesignMetadataRecord,
   StartWorkflowDraftTestRunRequest,
+  WorkflowDefinitionState,
   WorkflowTestRunView
 } from "../workflowTypes";
 import { capabilityIds, resolveCapabilityLink } from "./capabilities";
+import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export interface PublicationIntent {
   slotName?: string;
   action?: "replace" | "sideBySide";
   expectedPublicationId?: string | null;
+  preflightToken?: string;
+}
+
+export interface PublicationSnapshotPreflightRequest extends PublicationIntent {
+  definitionId: string;
+  state: WorkflowDefinitionState;
+  layout: DesignMetadataRecord[];
+}
+
+export interface PublicationTriggerClaim {
+  key: string;
+  cardinality: "exclusive" | "fanOut";
 }
 
 export interface PublicationTriggerChange {
@@ -26,15 +41,33 @@ export interface PublicationTriggerConflict {
 }
 
 export interface PublicationPreflight {
+  preflightToken: string;
+  candidateHash: string;
   definitionId: string;
-  versionId: string;
+  versionId: string | null;
   slotName: string;
   resolvedAction: "replace" | "sideBySide";
   policySource: "request" | "workflow" | "host";
+  policyRevision?: number | null;
   canActivate: boolean;
+  claims: PublicationTriggerClaim[];
   triggers?: PublicationTriggerChange[];
   changes?: PublicationTriggerChange[];
   conflicts: PublicationTriggerConflict[];
+}
+
+export async function preflightPublicationSnapshot(
+  context: StudioEndpointContext,
+  request: PublicationSnapshotPreflightRequest
+) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.publishing,
+    "publication-snapshot-preflight");
+  return context.http.postJson<PublicationPreflight>(path, {
+    ...request,
+    state: canonicalizeStateForWire(request.state)
+  });
 }
 
 export type PublicationStatus = "preparing" | "pending" | "active" | "retiring" | "retired" | "failed";
@@ -177,7 +210,7 @@ export async function startWorkflowDraftTestRun(
   const path = await resolveCapabilityLink(context, capabilityIds.publishing, "workflow-draft-test-runs");
   const wireRequest = { ...request, state: canonicalizeStateForWire(request.state) };
   try {
-    return await context.http.postJson<WorkflowTestRunView>(path, wireRequest);
+    return await context.http.requestJson<WorkflowTestRunView>(path, createWorkflowExecutionRequestInit(wireRequest));
   } catch (error) {
     const rejected = parseRejectedTestRun(error);
     if (rejected) return rejected;

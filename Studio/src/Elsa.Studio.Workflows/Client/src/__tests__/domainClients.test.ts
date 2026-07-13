@@ -3,8 +3,10 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { listDefinitions } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { preflightPublication } from "../api/publishing";
-import { listExecutables } from "../api/runtime";
+import { preflightPublication, preflightPublicationSnapshot, startWorkflowDraftTestRun } from "../api/publishing";
+import { getExecutable, listExecutables, runExecutable } from "../api/runtime";
+import { parseWorkflowRunInputs } from "../workflowRunInputs";
+import type { WorkflowInput } from "../workflowTypes";
 
 afterEach(clearApiCapabilityCache);
 
@@ -23,12 +25,20 @@ const capabilities = {
     {
       id: "elsa.api.publishing",
       contractVersion: "1",
-      links: [{ rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true }]
+      links: [
+        { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
+        { rel: "publication-snapshot-preflight", href: "publishing/workflows/preflight" },
+        { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
+      ]
     },
     {
       id: "elsa.api.runtime",
       contractVersion: "1",
-      links: [{ rel: "workflow-executables", href: "runtime/workflows/executables" }]
+      links: [
+        { rel: "workflow-executables", href: "runtime/workflows/executables" },
+        { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
+        { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true }
+      ]
     }
   ]
 };
@@ -86,6 +96,14 @@ describe("canonical domain clients", () => {
     const catalog = await listActivities(context);
     await listExecutables(context, { scope: "all", includeRetired: true });
     await preflightPublication(context, "version/1", { action: "sideBySide", slotName: "blue" });
+    await preflightPublicationSnapshot(context, {
+      definitionId: "definition-1",
+      state: { rootActivity: null },
+      layout: [],
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    });
 
     expect(getJson).toHaveBeenCalledWith("/capabilities");
     expect(catalog.activities[0]).toMatchObject({
@@ -99,7 +117,88 @@ describe("canonical domain clients", () => {
     expect(postJson).toHaveBeenCalledWith(
       "/publishing/workflows/version%2F1/preflight",
       { action: "sideBySide", slotName: "blue" });
+    expect(postJson).toHaveBeenCalledWith(
+      "/publishing/workflows/preflight",
+      {
+        definitionId: "definition-1",
+        state: { rootActivity: null },
+        layout: [],
+        action: "replace",
+        slotName: "default",
+        expectedPublicationId: "publication-1"
+      });
     expect(getJson).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends the same keyed input dictionary for transient and published dispatches", async () => {
+    const inputs = { Greeting: "Hello", Attempts: 3 };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const requestJson = vi.fn(async (url: string) => url.includes("drafts/test-runs")
+      ? { testRunId: "test-1", definitionId: "definition-1", definitionVersionId: "version-1", status: "Dispatched" }
+      : { workflowExecutionId: "execution-1" });
+    const context = createContext({ getJson, requestJson });
+
+    await startWorkflowDraftTestRun(context, {
+      definitionId: "definition-1",
+      snapshotId: "snapshot-1",
+      state: { rootActivity: null },
+      inputs
+    });
+    await runExecutable(context, "artifact/1", inputs, "reference-1");
+
+    expect(requestJson).toHaveBeenCalledWith(
+      "/publishing/workflows/drafts/test-runs",
+      expect.objectContaining({ body: expect.stringContaining('"inputs":{"Greeting":"Hello","Attempts":3}') })
+    );
+    expect(requestJson).toHaveBeenCalledWith(
+      "/runtime/workflows/executables/artifact%2F1/execute",
+      expect.objectContaining({ body: '{"inputs":{"Greeting":"Hello","Attempts":3},"sourceReferenceId":"reference-1"}' })
+    );
+  });
+
+  it("emits exact Int64, UInt64, and Decimal JSON number tokens for transient and published execution", async () => {
+    const parsed = parseWorkflowRunInputs([
+      workflowInput("signed", "Signed", "Int64"),
+      workflowInput("unsigned", "Unsigned", "UInt64"),
+      workflowInput("amount", "Amount", "Decimal")
+    ], {
+      signed: "-9223372036854775808",
+      unsigned: "18446744073709551615",
+      amount: "0.1234567890123456789012345678"
+    });
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const requestJson = vi.fn(async (url: string) => url.includes("drafts/test-runs")
+      ? { testRunId: "test-1", definitionId: "definition-1", definitionVersionId: "version-1", status: "Dispatched" }
+      : { workflowExecutionId: "execution-1" });
+    const context = createContext({ getJson, requestJson });
+
+    await startWorkflowDraftTestRun(context, {
+      definitionId: "definition-1",
+      snapshotId: "snapshot-1",
+      state: { rootActivity: null },
+      inputs: parsed.values
+    });
+    await runExecutable(context, "artifact/1", parsed.values, "reference-1");
+
+    expect(requestJson).toHaveBeenNthCalledWith(1, "/publishing/workflows/drafts/test-runs", expect.objectContaining({
+      method: "POST",
+      body: '{"definitionId":"definition-1","snapshotId":"snapshot-1","state":{"rootActivity":null},"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615,"Amount":0.1234567890123456789012345678}}'
+    }));
+    expect(requestJson).toHaveBeenNthCalledWith(2, "/runtime/workflows/executables/artifact%2F1/execute", expect.objectContaining({
+      method: "POST",
+      body: '{"inputs":{"Signed":-9223372036854775808,"Unsigned":18446744073709551615,"Amount":0.1234567890123456789012345678},"sourceReferenceId":"reference-1"}'
+    }));
+  });
+
+  it("requests the exact historical executable reference when one is selected", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    await getExecutable(context, "artifact/1", "reference/old");
+
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/runtime/workflows/executables/artifact%2F1?ref=reference%2Fold"
+    );
   });
 });
 
@@ -108,4 +207,18 @@ function createContext(http: Record<string, unknown>) {
     baseUrl: `test://domain-clients-${Math.random()}`,
     http
   } as unknown as StudioEndpointContext;
+}
+
+function workflowInput(referenceKey: string, name: string, alias: string): WorkflowInput {
+  return {
+    referenceKey,
+    name,
+    displayName: name,
+    description: "",
+    category: "",
+    uiHint: "",
+    storageDriverType: null,
+    type: { alias, collectionKind: "Single" },
+    isRequired: true
+  };
 }

@@ -8,10 +8,12 @@ import type {
   WorkflowExecutableListScope,
   WorkflowExecutableRunResponse,
   WorkflowExecutableSummary,
+  WorkflowExecutionInputs,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
-import { capabilityIds, resolveCapabilityLink } from "./capabilities";
+import { capabilityIds, getApiCapability, resolveCapabilityLink } from "./capabilities";
+import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export const runtimeKeys = {
   all: ["workflow-runtime"] as const,
@@ -83,14 +85,15 @@ export async function listExecutables(context: StudioEndpointContext, options: L
 export async function getExecutable(
   context: StudioEndpointContext,
   artifactId: string,
-  _sourceReferenceId?: string | null
+  sourceReferenceId?: string | null
 ) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-executable",
     { artifactId });
-  return context.http.getJson<WorkflowExecutableDetails>(path);
+  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
+  return context.http.getJson<WorkflowExecutableDetails>(`${path}${query}`);
 }
 
 export async function getExecutableProvenance(context: StudioEndpointContext, artifactId: string) {
@@ -102,13 +105,21 @@ export async function getExecutableProvenance(context: StudioEndpointContext, ar
   return context.http.getJson<unknown>(path);
 }
 
-export async function runExecutable(context: StudioEndpointContext, artifactId: string) {
+export async function runExecutable(
+  context: StudioEndpointContext,
+  artifactId: string,
+  inputs: WorkflowExecutionInputs = {},
+  sourceReferenceId?: string | null
+) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-execute",
     { artifactId });
-  return context.http.postJson<WorkflowExecutableRunResponse>(path, {});
+  return context.http.requestJson<WorkflowExecutableRunResponse>(path, createWorkflowExecutionRequestInit({
+    inputs,
+    ...(sourceReferenceId ? { sourceReferenceId } : {})
+  }));
 }
 
 export interface ListWorkflowInstancesRequest {
@@ -116,22 +127,78 @@ export interface ListWorkflowInstancesRequest {
   runKind?: string;
   definitionId?: string;
   correlationId?: string;
+  workflowExecutionId?: string;
+  artifactId?: string;
+  from?: string;
+  to?: string;
   take?: number;
+  cursor?: string;
 }
 
-export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
-  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-instances");
+export interface WorkflowInstanceListPage {
+  items: WorkflowInstanceSummary[];
+  previousCursor: string | null;
+  nextCursor: string | null;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  count: number;
+  totalCount: number;
+}
+
+export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest = {}) {
   const parameters = new URLSearchParams();
   if (request.status) parameters.set("status", request.status);
   if (request.runKind) parameters.set("runKind", request.runKind);
   if (request.definitionId) parameters.set("definitionId", request.definitionId);
   if (request.correlationId) parameters.set("correlationId", request.correlationId);
+  if (request.workflowExecutionId) parameters.set("workflowExecutionId", request.workflowExecutionId);
+  if (request.artifactId) parameters.set("artifactId", request.artifactId);
+  if (request.from) parameters.set("from", request.from);
+  if (request.to) parameters.set("to", request.to);
   if (request.take) parameters.set("take", String(request.take));
-  const query = parameters.toString();
-  const response = await context.http.getJson<
-    { items?: WorkflowInstanceSummary[] } | WorkflowInstanceSummary[]
-  >(`${path}${query ? `?${query}` : ""}`);
-  return Array.isArray(response) ? response : response.items ?? [];
+  if (request.cursor) parameters.set("cursor", request.cursor);
+  return parameters.toString();
+}
+
+export async function listWorkflowInstances(context: StudioEndpointContext, request: ListWorkflowInstancesRequest = {}) {
+  const capability = await getApiCapability(context, capabilityIds.runtime);
+  // Runtime v1 guarantees an array at the legacy relation. The cursor envelope is additive and
+  // must be explicitly advertised so Studio can keep interoperating with older Foundation hosts.
+  const relation = capability?.links.some(link => link.rel === "workflow-instances-page")
+    ? "workflow-instances-page"
+    : "workflow-instances";
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, relation);
+  const query = workflowInstanceListQuery(request);
+  const url = `${path}${query ? `?${query}` : ""}`;
+
+  if (relation === "workflow-instances") {
+    const response = await context.http.getJson<WorkflowInstanceSummary[]>(url);
+    if (!Array.isArray(response)) throw new Error("Legacy workflow instance relation must return an array.");
+    return {
+      items: response,
+      previousCursor: null,
+      nextCursor: null,
+      hasPrevious: false,
+      hasNext: false,
+      count: response.length,
+      totalCount: response.length
+    } satisfies WorkflowInstanceListPage;
+  }
+
+  const response = await context.http.getJson<Partial<WorkflowInstanceListPage>>(url);
+  if (!response || Array.isArray(response) || typeof response !== "object") {
+    throw new Error("Paged workflow instance relation must return a page object.");
+  }
+  const items = response.items ?? [];
+  return {
+    items,
+    previousCursor: response.previousCursor ?? null,
+    nextCursor: response.nextCursor ?? null,
+    hasPrevious: response.hasPrevious ?? Boolean(response.previousCursor),
+    hasNext: response.hasNext ?? Boolean(response.nextCursor),
+    count: response.count ?? items.length,
+    totalCount: response.totalCount ?? items.length
+  } satisfies WorkflowInstanceListPage;
 }
 
 export async function getWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string) {

@@ -1,8 +1,9 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
+import { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
-export const flowchartStructureKind = "elsa.flowchart.structure";
+export { flowchartStructureKind, normalizeFlowchartStartNode } from "./flowchartStartNode";
 
 export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
@@ -677,7 +678,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
       [slot.childProperty]: nextValue
     };
 
-    return {
+    return normalizeFlowchartStartNode({
       ...activity,
       structure: {
         ...activity.structure,
@@ -686,10 +687,10 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
           [slot.collectionProperty]: nextCollection
         }
       }
-    };
+    });
   }
 
-  return {
+  return normalizeFlowchartStartNode({
     ...activity,
     structure: {
       ...activity.structure,
@@ -698,7 +699,7 @@ export function replaceSlotActivities(activity: ActivityNode, slot: ChildSlot, a
         [slot.property]: nextValue
       }
     }
-  };
+  });
 }
 
 export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeData>[], edges: Edge[], additionalActivities: ActivityNode[] = []) {
@@ -767,7 +768,7 @@ export function normalizeActivityStructures(root: ActivityNode | null | undefine
     }
   }
 
-  return next;
+  return normalizeFlowchartStartNode(next);
 }
 
 export function getActivityDisplay(activity: ActivityCatalogItem) {
