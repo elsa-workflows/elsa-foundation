@@ -50,6 +50,7 @@ public sealed class WorkflowExecutableInspectorTests
 
         Assert.NotNull(canonical);
         Assert.NotNull(compatibilityAlias);
+        Assert.DoesNotContain(responseType.GetConstructors().Single().GetParameters(), parameter => parameter.Name == "SourceType");
         var obsolete = Assert.Single(compatibilityAlias!.GetCustomAttributes<ObsoleteAttribute>());
         Assert.False(obsolete.IsError);
         Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);

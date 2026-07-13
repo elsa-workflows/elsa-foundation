@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Models;
@@ -19,8 +20,6 @@ public sealed record ExecutableSourceReferenceView(
     string SourceReferenceId,
     string ArtifactId,
     string Scope,
-    [property: Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
-    string? SourceType,
     string? SourceKind,
     string? SourceId,
     string? SourceVersion,
@@ -36,12 +35,16 @@ public sealed record ExecutableSourceReferenceView(
     string? DeletedReason,
     bool Live)
 {
+    /// <summary>Runtime API v1 compatibility alias for <see cref="SourceKind"/>.</summary>
+    [Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
+    [JsonPropertyName("sourceType")]
+    public string? SourceType => SourceKind;
+
     public static ExecutableSourceReferenceView From(WorkflowExecutableSourceReference reference, DateTimeOffset now) =>
         new(
             reference.SourceReferenceId,
             reference.ArtifactId,
             reference.Scope.ToString(),
-            reference.SourceKind,
             reference.SourceKind,
             reference.SourceId,
             reference.SourceVersion,
