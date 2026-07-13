@@ -41,6 +41,34 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
     }
 
+    [Fact]
+    public async Task Coalescing_workflow_store_preserves_bounded_history_queries()
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        await using var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
+        await store.SaveAsync(new WorkflowExecutionState(
+            "wfexec-history",
+            new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            WorkflowExecutionStatus.Completed,
+            null,
+            Now.AddMinutes(-2),
+            Now.AddMinutes(-1),
+            Now,
+            Now,
+            null,
+            null,
+            "tenant-1",
+            new Dictionary<string, string>()));
+
+        var page = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(PageSize: 10));
+
+        Assert.Equal("wfexec-history", Assert.Single(page.Items).WorkflowExecutionId);
+    }
+
     // W8's Delay is the first real suspending activity: it writes a durable timer (via IDurableTimerStore) and
     // creates a bookmark, then W8's background timer pump resumes off the DURABLE timer + bookmark stores at due
     // time. Coalescing decorates only the seven core checkpoint stores, so neither the durable-timer store nor the

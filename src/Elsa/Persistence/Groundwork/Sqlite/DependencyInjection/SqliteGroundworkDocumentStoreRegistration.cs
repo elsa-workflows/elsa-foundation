@@ -28,11 +28,17 @@ public static class SqliteGroundworkDocumentStoreRegistration
     {
         services.RemoveAll<IDocumentStore>();
         services.AddSingleton<GroundworkDocumentStoreHolder>();
+        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
+        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new SqliteWorkflowExecutionStatePageQuery(
+            connectionString,
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
         services.AddSingleton(sp => new SqliteGroundworkDocumentStoreInitializer(
             connectionString,
             manifest,
             provider,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>()));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
@@ -43,12 +49,6 @@ public static class SqliteGroundworkDocumentStoreRegistration
             IsExplicit: true,
             Source: $"{nameof(SqliteGroundworkDocumentStoreRegistration)}.{nameof(AddSqliteGroundworkDocumentStore)}"));
         services.AddSingleton<IDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new SqliteWorkflowExecutionStatePageQuery(
-            connectionString,
-            sp.GetRequiredService<IDocumentStore>(),
-            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
-
         return services;
     }
 }

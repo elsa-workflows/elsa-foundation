@@ -28,11 +28,17 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
     {
         services.RemoveAll<IDocumentStore>();
         services.AddSingleton<GroundworkDocumentStoreHolder>();
+        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
+        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new PostgreSqlWorkflowExecutionStatePageQuery(
+            connectionString,
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
         services.AddSingleton(sp => new PostgreSqlGroundworkDocumentStoreInitializer(
             connectionString,
             manifest,
             provider,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>()));
         services.AddHostedService(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
@@ -43,12 +49,6 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             IsExplicit: true,
             Source: $"{nameof(PostgreSqlGroundworkDocumentStoreRegistration)}.{nameof(AddPostgreSqlGroundworkDocumentStore)}"));
         services.AddSingleton<IDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
-        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new PostgreSqlWorkflowExecutionStatePageQuery(
-            connectionString,
-            sp.GetRequiredService<IDocumentStore>(),
-            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
-
         return services;
     }
 }

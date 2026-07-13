@@ -3,6 +3,7 @@ using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
 using Groundwork.Sqlite.Documents;
+using Elsa.Persistence.Groundwork.Querying;
 using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
@@ -23,8 +24,12 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
     string connectionString,
     StorageManifest manifest,
     ProviderIdentity provider,
-    GroundworkDocumentStoreHolder holder) : IHostedService, IShellInitializer
+    GroundworkDocumentStoreHolder holder,
+    IGroundworkWorkflowExecutionStatePageQuery historyQuery) : IHostedService, IShellInitializer
 {
+    private readonly SemaphoreSlim _initializationLock = new(1, 1);
+    private bool _initialized;
+
     public Task InitializeAsync(CancellationToken cancellationToken = default) => EnsureInitializedAsync(cancellationToken);
 
     public Task StartAsync(CancellationToken cancellationToken) => EnsureInitializedAsync(cancellationToken);
@@ -33,15 +38,32 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
 
     private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
     {
-        if (holder.IsInitialized)
+        if (_initialized)
             return;
 
-        var store = await SqliteDocumentStoreFactory.CreateAsync(
-            connectionString,
-            manifest,
-            provider,
-            DocumentStoreAccess.Global,
-            cancellationToken: cancellationToken);
-        holder.Set(store);
+        await _initializationLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_initialized)
+                return;
+
+            if (!holder.IsInitialized)
+            {
+                var store = await SqliteDocumentStoreFactory.CreateAsync(
+                    connectionString,
+                    manifest,
+                    provider,
+                    DocumentStoreAccess.Global,
+                    cancellationToken: cancellationToken);
+                holder.Set(store);
+            }
+
+            await historyQuery.PrepareAsync(cancellationToken);
+            _initialized = true;
+        }
+        finally
+        {
+            _initializationLock.Release();
+        }
     }
 }

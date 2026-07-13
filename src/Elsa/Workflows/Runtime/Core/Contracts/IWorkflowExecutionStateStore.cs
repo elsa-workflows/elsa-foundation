@@ -28,8 +28,7 @@ public interface IWorkflowExecutionStateStore
     /// </summary>
     ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
-        CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException("The workflow execution state provider does not implement bounded history paging.");
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns the distinct executable artifact IDs pinned by retained workflow executions.

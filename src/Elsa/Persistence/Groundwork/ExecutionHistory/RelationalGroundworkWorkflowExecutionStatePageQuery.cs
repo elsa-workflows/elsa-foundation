@@ -11,7 +11,7 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// and native expression-index declarations; result semantics stay identical across providers.
 /// </summary>
 public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
-    IDocumentStore documentStore,
+    GroundworkDocumentStoreHolder documentStoreHolder,
     IGroundworkRuntimeDocumentSerializer serializer) : IGroundworkWorkflowExecutionStatePageQuery
 {
     private const int MigrationBatchSize = 100;
@@ -35,7 +35,8 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
     {
         ArgumentNullException.ThrowIfNull(query);
         query.Validate();
-        await EnsureInitializedAsync(cancellationToken);
+        if (!_initialized)
+            throw new InvalidOperationException("Workflow execution history has not been prepared. Run the Groundwork provider startup initializer before querying history.");
 
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
@@ -105,7 +106,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
             total);
     }
 
-    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    public async ValueTask PrepareAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
             return;
@@ -168,7 +169,7 @@ public abstract class RelationalGroundworkWorkflowExecutionStatePageQuery(
                 var state = serializer.Deserialize<WorkflowExecutionStateDocument>(envelope).State;
                 var document = WorkflowExecutionStateDocument.From(state);
                 var serialized = serializer.Serialize(ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind, document);
-                var result = await documentStore.SaveAsync(new SaveDocumentRequest(
+                var result = await documentStoreHolder.Store.SaveAsync(new SaveDocumentRequest(
                     ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind,
                     state.WorkflowExecutionId,
                     serialized.SchemaVersion,

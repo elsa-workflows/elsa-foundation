@@ -8,6 +8,11 @@ namespace Elsa.Persistence.Groundwork.Querying;
 /// </summary>
 public interface IGroundworkWorkflowExecutionStatePageQuery
 {
+    /// <summary>
+    /// Performs provider-owned history schema preparation during host startup, before requests are accepted.
+    /// </summary>
+    ValueTask PrepareAsync(CancellationToken cancellationToken = default);
+
     ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
         WorkflowExecutionStatePageQuery query,
         CancellationToken cancellationToken = default);

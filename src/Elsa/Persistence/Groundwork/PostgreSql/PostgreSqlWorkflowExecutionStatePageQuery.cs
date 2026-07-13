@@ -1,16 +1,15 @@
 using System.Data.Common;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
-using Groundwork.Documents.Store;
 using Npgsql;
 
 namespace Elsa.Persistence.Groundwork.PostgreSql;
 
 internal sealed class PostgreSqlWorkflowExecutionStatePageQuery(
     string connectionString,
-    IDocumentStore documentStore,
+    GroundworkDocumentStoreHolder documentStoreHolder,
     IGroundworkRuntimeDocumentSerializer serializer)
-    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStore, serializer)
+    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStoreHolder, serializer)
 {
     protected override DbConnection CreateConnection() => new NpgsqlConnection(connectionString);
     protected override string SortTicksExpression => "CAST(d.content_json::jsonb ->> 'historySortTicks' AS bigint)";
@@ -40,6 +39,6 @@ internal sealed class PostgreSqlWorkflowExecutionStatePageQuery(
         var fields = indexFilterExpression is null
             ? $"({sortTicksExpression}) DESC, id ASC"
             : $"({indexFilterExpression}), ({sortTicksExpression}) DESC, id ASC";
-        return $"CREATE INDEX IF NOT EXISTS {name} ON groundwork_documents ({fields}) WHERE document_kind = 'workflowExecutionState';";
+        return $"CREATE INDEX CONCURRENTLY IF NOT EXISTS {name} ON groundwork_documents ({fields}) WHERE document_kind = 'workflowExecutionState';";
     }
 }

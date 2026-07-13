@@ -1465,6 +1465,11 @@ public sealed class RuntimeCheckpointCommitTests
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowExecutionState>>([]);
 
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("workflow state projection failed");
+
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<string>>([]);
 

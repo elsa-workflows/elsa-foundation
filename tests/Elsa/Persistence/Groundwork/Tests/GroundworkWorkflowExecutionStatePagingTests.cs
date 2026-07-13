@@ -2,6 +2,7 @@ using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Documents.Store;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -40,32 +41,41 @@ public sealed class GroundworkWorkflowExecutionStatePagingTests
     }
 
     [Fact]
+    public async Task Sqlite_startup_upgrades_v2_history_before_the_first_page_query()
+    {
+        await using var database = new TemporarySqliteDatabase();
+        await using (var provider = await BuildProviderAsync(database.ConnectionString))
+        {
+            var contentJson = await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "v2", "workflowExecutionState.json"));
+            var store = provider.GetRequiredService<IDocumentStore>();
+            var result = await store.SaveAsync(new SaveDocumentRequest(
+                "workflowExecutionState",
+                "wf-1",
+                "2",
+                contentJson));
+            Assert.Equal(DocumentStoreWriteStatus.Saved, result.Status);
+        }
+
+        await using var restartedProvider = await BuildProviderAsync(database.ConnectionString);
+
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT schema_version, content_json FROM groundwork_documents WHERE document_kind = 'workflowExecutionState' AND id = 'wf-1';";
+        await using var reader = await command.ExecuteReaderAsync();
+        Assert.True(await reader.ReadAsync());
+        Assert.Equal("3", reader.GetString(0));
+        Assert.Contains("\"historySortTicks\"", reader.GetString(1), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Sqlite_query_applies_every_public_history_filter_expression()
     {
         await using var database = new TemporarySqliteDatabase();
         await using var provider = await BuildProviderAsync(database.ConnectionString);
         var store = provider.GetRequiredService<IWorkflowExecutionStateStore>();
-        await store.SaveAsync(State("wf-match", _timestamp) with
-        {
-            CorrelationId = "correlation-1",
-            RunKind = WorkflowRunKind.PublishedRun
-        });
-        await store.SaveAsync(State("wf-other", _timestamp.AddHours(-1)));
-
-        var page = await store.QueryPageAsync(new WorkflowExecutionStatePageQuery(
-            PageSize: 10,
-            TenantId: "tenant-1",
-            DefinitionId: "definition-1",
-            Status: WorkflowExecutionStatus.Completed,
-            RunKind: WorkflowRunKind.PublishedRun,
-            From: _timestamp.AddSeconds(-1),
-            To: _timestamp.AddSeconds(1),
-            CorrelationId: "correlation-1",
-            WorkflowExecutionId: "wf-match",
-            ArtifactId: "artifact-1"));
-
-        Assert.Equal("wf-match", Assert.Single(page.Items).WorkflowExecutionId);
-        Assert.Equal(1, page.TotalCount);
+        await WorkflowExecutionHistoryProviderConformance.VerifyAllFiltersAsync(store, _timestamp);
     }
 
     private static async Task<ServiceProvider> BuildProviderAsync(string connectionString)

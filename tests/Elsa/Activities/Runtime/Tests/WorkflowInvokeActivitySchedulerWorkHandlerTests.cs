@@ -1305,6 +1305,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandlerTests
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             _inner.ListAsync(cancellationToken);
 
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(
+            WorkflowExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            _inner.QueryPageAsync(query, cancellationToken);
+
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
             _inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
 

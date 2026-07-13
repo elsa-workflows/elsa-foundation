@@ -1,16 +1,15 @@
 using System.Data.Common;
 using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Serialization;
-using Groundwork.Documents.Store;
 using Microsoft.Data.Sqlite;
 
 namespace Elsa.Persistence.Groundwork.Sqlite;
 
 internal sealed class SqliteWorkflowExecutionStatePageQuery(
     string connectionString,
-    IDocumentStore documentStore,
+    GroundworkDocumentStoreHolder documentStoreHolder,
     IGroundworkRuntimeDocumentSerializer serializer)
-    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStore, serializer)
+    : RelationalGroundworkWorkflowExecutionStatePageQuery(documentStoreHolder, serializer)
 {
     protected override DbConnection CreateConnection() => new SqliteConnection(connectionString);
     protected override string SortTicksExpression => "CAST(json_extract(d.content_json, '$.historySortTicks') AS INTEGER)";
