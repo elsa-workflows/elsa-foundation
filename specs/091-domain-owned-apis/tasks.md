@@ -234,9 +234,9 @@
 **Purpose**: Close documentation, generated-map, migration, security, performance, and release evidence across both repositories.
 
 - [ ] T102 [P] Refresh the narrowest affected domain, extension-point, architecture-reference, and feature-dependency maps using `tools/maps/generate-*.sh` and review `docs/maps/manifest.json`
-- [ ] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
+- [X] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
 - [ ] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
-- [ ] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
+- [X] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
 - [ ] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/091-domain-owned-apis/completion-audit.md`
 - [ ] T107 Run every Foundation and Studio command in `specs/091-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
 - [ ] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/091-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean

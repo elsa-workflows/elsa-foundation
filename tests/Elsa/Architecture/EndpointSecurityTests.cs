@@ -1,6 +1,10 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Elsa.Api.Capabilities;
 using Elsa.Api.FastEndpoints.Constants;
+using FastEndpoints;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -79,6 +83,32 @@ public sealed partial class EndpointSecurityTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
+    {
+        var endpointType = typeof(ApiCapabilitiesFeature).Assembly.GetType(
+            "Elsa.Api.Capabilities.Endpoints.GetCapabilities",
+            throwOnError: true)!;
+        var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Single().GetParameters()
+            .Select(parameter => parameter.ParameterType.IsInterface
+                ? DispatchProxy.Create(parameter.ParameterType, typeof(NoopProxy))
+                : RuntimeHelpers.GetUninitializedObject(parameter.ParameterType))
+            .ToArray();
+        var create = typeof(Factory).GetMethods()
+            .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
+                              method.GetParameters() is [var first, var rest] &&
+                              first.ParameterType == typeof(Action<DefaultHttpContext>) &&
+                              rest.ParameterType == typeof(object[]))
+            .MakeGenericMethod(endpointType);
+        var endpoint = (BaseEndpoint)create.Invoke(null, [(Action<DefaultHttpContext>)(_ => { }), dependencies])!;
+        endpoint.Configure();
+
+        Assert.Contains(PermissionNames.ApiCapabilitiesRead, endpoint.Definition.AllowedPermissions!);
+        Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
+        Assert.Null(endpoint.Definition.AnonymousVerbs);
+    }
+
     private static IEnumerable<(string DisplayPath, string FullPath)> EnumerateEndpointFiles(string area, string relativePath)
     {
         var fullPath = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -107,4 +137,10 @@ public sealed partial class EndpointSecurityTests
 
     [GeneratedRegex(@"^\s*AllowAnonymous\s*\(", RegexOptions.Multiline)]
     private static partial Regex AllowAnonymousCall();
+
+    private class NoopProxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            throw new InvalidOperationException("A configuration-only endpoint test must not invoke dependencies.");
+    }
 }
