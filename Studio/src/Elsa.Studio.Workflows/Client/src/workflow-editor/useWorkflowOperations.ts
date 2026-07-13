@@ -8,8 +8,7 @@ import {
   preflightPublication,
   publishVersion,
   startWorkflowDraftTestRun,
-  type PublicationIntent,
-  type PublicationPreflight
+  type PublicationIntent
 } from "../api/publishing";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";

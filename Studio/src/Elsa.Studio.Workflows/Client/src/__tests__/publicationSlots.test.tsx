@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicationReviewDialog } from "../workflow-editor/WorkflowEditor";
-import type { PublicationPreflight } from "../api/publishing";
+import type { PublicationIntent, PublicationPreflight } from "../api/publishing";
 import { createPublicationReview, type PublicationReviewState } from "../workflow-editor/publicationReview";
 import type { WorkflowDraft } from "../workflowTypes";
 
@@ -59,7 +59,7 @@ describe("publication slot UX", () => {
 
 function render(
   value: PublicationReviewState,
-  onPublish: (intent: any) => Promise<void>
+  onPublish: (intent: PublicationIntent) => Promise<void>
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
