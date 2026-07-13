@@ -17,8 +17,9 @@
     }
   },
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && pnpm bundle:check",
     "build:lib": "vite build --config vite.lib.config.ts",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

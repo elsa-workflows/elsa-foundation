@@ -68,8 +68,11 @@ public sealed class StudioModuleManifestProviderTests
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal("Workflows", module.DisplayName);
+        Assert.Equal("1.0.6", module.Version);
         Assert.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js", module.Entry, StringComparison.Ordinal);
+        Assert.Contains($"v={module.Version}", module.Entry);
         Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css", StringComparison.Ordinal));
+        Assert.All(module.Styles, style => Assert.Contains($"v={module.Version}", style));
         Assert.Contains("navigation", module.Capabilities);
         Assert.Contains("routes", module.Capabilities);
         Assert.Contains("workflow-designer", module.Capabilities);

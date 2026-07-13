@@ -1,3 +1,4 @@
+import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowExecutionInputs, WorkflowInput } from "./workflowTypes";
 
 export type WorkflowRunInputDrafts = Record<string, string>;
@@ -6,11 +7,31 @@ export type WorkflowRunInputValues = WorkflowExecutionInputs;
 export interface WorkflowRunInputParseResult {
   values: WorkflowRunInputValues;
   errors: Record<string, string>;
+  contributionFailures?: Record<string, WorkflowRunInputContributionFailure>;
+}
+
+export interface WorkflowRunInputContributionFailure {
+  phase: "validate" | "serialize";
+  reason: "callback-error" | "invalid-wire-value";
 }
 
 export type WorkflowRunInputControlKind = "boolean" | "integer" | "number" | "datetime" | "text" | "json";
 
 const exactJsonNumbers = new WeakMap<object, string>();
+
+export function resolveWorkflowRunInputEditor(
+  editors: StudioWorkflowRunInputEditorContribution[],
+  input: WorkflowInput
+) {
+  for (const editor of [...editors].sort((left, right) => (left.order ?? 500) - (right.order ?? 500))) {
+    try {
+      if (editor.supports(input)) return editor;
+    } catch (error) {
+      reportContributionFailure(editor, input, "supports", error);
+    }
+  }
+  return undefined;
+}
 
 export function getWorkflowRunInputControlKind(input: WorkflowInput): WorkflowRunInputControlKind {
   if (input.type.collectionKind !== "Single") return "json";
@@ -25,10 +46,13 @@ export function getWorkflowRunInputControlKind(input: WorkflowInput): WorkflowRu
 
 export function parseWorkflowRunInputs(
   inputs: WorkflowInput[],
-  drafts: WorkflowRunInputDrafts
+  drafts: WorkflowRunInputDrafts,
+  editors: StudioWorkflowRunInputEditorContribution[] = [],
+  fallbackInputKeys: ReadonlySet<string> = new Set()
 ): WorkflowRunInputParseResult {
   const valueEntries: [string, unknown][] = [];
   const errorEntries: [string, string][] = [];
+  const contributionFailureEntries: [string, WorkflowRunInputContributionFailure][] = [];
 
   for (const input of inputs) {
     const draft = Object.prototype.hasOwnProperty.call(drafts, input.referenceKey)
@@ -39,11 +63,19 @@ export function parseWorkflowRunInputs(
       continue;
     }
 
-    const parsed = input.type.collectionKind === "Single"
-      ? parseScalarDraft(draft, input.type.alias)
-      : parseCollectionDraft(draft, input.type.alias);
-    if (parsed.error) errorEntries.push([input.referenceKey, parsed.error]);
-    else if (input.isRequired && parsed.value === null) {
+    const editor = fallbackInputKeys.has(input.referenceKey) ? undefined : resolveWorkflowRunInputEditor(editors, input);
+    const context = { input, draft };
+    const parsed: WorkflowRunInputDraftParseResult = editor
+      ? parseContributionDraft(editor, context)
+      : input.type.collectionKind === "Single"
+        ? parseScalarDraft(draft, input.type.alias)
+        : parseCollectionDraft(draft, input.type.alias);
+    if (parsed.error) {
+      errorEntries.push([input.referenceKey, parsed.error]);
+      if (parsed.contributionFailure) contributionFailureEntries.push([input.referenceKey, parsed.contributionFailure]);
+      continue;
+    }
+    if (input.isRequired && parsed.value === null) {
       errorEntries.push([input.referenceKey, `${input.displayName || input.name} is required.`]);
     }
     else valueEntries.push([input.name, parsed.value]);
@@ -51,8 +83,75 @@ export function parseWorkflowRunInputs(
 
   return {
     values: Object.fromEntries(valueEntries),
-    errors: Object.fromEntries(errorEntries)
+    errors: Object.fromEntries(errorEntries),
+    ...(contributionFailureEntries.length > 0
+      ? { contributionFailures: Object.fromEntries(contributionFailureEntries) }
+      : {})
   };
+}
+
+interface WorkflowRunInputDraftParseResult {
+  value?: unknown;
+  error?: string;
+  contributionFailure?: WorkflowRunInputContributionFailure;
+}
+
+function parseContributionDraft(
+  editor: StudioWorkflowRunInputEditorContribution,
+  context: { input: WorkflowInput; draft: string }
+): WorkflowRunInputDraftParseResult {
+  const label = context.input.displayName || context.input.name;
+  let validationError: string | undefined;
+  try {
+    validationError = editor.validate(context);
+  } catch (error) {
+    reportContributionFailure(editor, context.input, "validate", error);
+    return {
+      error: `The ${label} editor failed while validating.`,
+      contributionFailure: { phase: "validate", reason: "callback-error" }
+    };
+  }
+  if (validationError) return { error: validationError };
+
+  let value: unknown;
+  try {
+    value = editor.serialize(context);
+  } catch (error) {
+    reportContributionFailure(editor, context.input, "serialize", error);
+    return {
+      error: `The ${label} editor failed while serializing.`,
+      contributionFailure: { phase: "serialize", reason: "callback-error" }
+    };
+  }
+  if (!isWireSerializable(value)) {
+    reportContributionFailure(editor, context.input, "serialize", new TypeError("The contribution returned a non-serializable value."));
+    return {
+      error: `The ${label} editor returned a value that cannot be sent.`,
+      contributionFailure: { phase: "serialize", reason: "invalid-wire-value" }
+    };
+  }
+  return { value };
+}
+
+function isWireSerializable(value: unknown): boolean {
+  if (value === undefined || typeof value === "bigint" || typeof value === "function" || typeof value === "symbol") return false;
+  if (typeof value === "number" && !Number.isFinite(value)) return false;
+  try {
+    const serialized = serializeWorkflowExecutionPayload({ value });
+    const roundTrip = JSON.parse(serialized) as Record<string, unknown>;
+    return Object.prototype.hasOwnProperty.call(roundTrip, "value");
+  } catch {
+    return false;
+  }
+}
+
+function reportContributionFailure(
+  editor: StudioWorkflowRunInputEditorContribution,
+  input: WorkflowInput,
+  phase: string,
+  error: unknown
+) {
+  console.error(`[workflow.run-input.editors] ${editor.id} failed during ${phase} for ${input.referenceKey}.`, error);
 }
 
 function parseScalarDraft(draft: string, alias: string): { value?: unknown; error?: string } {

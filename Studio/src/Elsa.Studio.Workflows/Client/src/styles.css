@@ -119,6 +119,48 @@
   overflow: hidden;
 }
 
+.wf-lazy-state {
+  display: flex;
+  min-height: 160px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  text-align: center;
+}
+
+.wf-lazy-state.error {
+  flex-direction: column;
+  border-style: solid;
+  border-color: var(--studio-danger);
+  background: color-mix(in srgb, var(--studio-danger) 12%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+.wf-lazy-reload {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.wf-lazy-reload:hover {
+  background: var(--studio-surface-raised);
+}
+
+.wf-lazy-reload:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
 .wf-page-header,
 .wf-toolbar,
 .wf-editor-top,

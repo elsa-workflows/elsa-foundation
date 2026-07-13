@@ -2,9 +2,15 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowInput } from "../workflowTypes";
-import { parseWorkflowRunInputs, serializeWorkflowExecutionPayload } from "../workflowRunInputs";
+import {
+  parseWorkflowRunInputs,
+  resolveWorkflowRunInputEditor,
+  serializeWorkflowExecutionPayload
+} from "../workflowRunInputs";
 import { WorkflowRunInputDialog } from "../workflow-editor/WorkflowRunInputDialog";
+import { createEnumWorkflowRunInputEditorContribution } from "../workflowRunInputEditorContributions";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
@@ -16,6 +22,248 @@ afterEach(() => {
 });
 
 describe("workflow run inputs", () => {
+  it("resolves the highest-priority contribution supported by declared type metadata", () => {
+    const input = workflowInput("status", "Status", "Contoso.OrderStatus", true);
+    const fallback = editorContribution("fallback", 500, () => true);
+    const enumEditor = editorContribution("enum", 100, candidate => candidate.type.alias === "Contoso.OrderStatus");
+
+    expect(resolveWorkflowRunInputEditor([fallback, enumEditor], input)).toBe(enumEditor);
+    expect(resolveWorkflowRunInputEditor([enumEditor], workflowInput("name", "Name", "String", true))).toBeUndefined();
+  });
+
+  it("delegates custom validation and wire serialization to the resolved contribution", () => {
+    const input = workflowInput("order", "__proto__", "Contoso.OrderId", true);
+    const editor = editorContribution("order-id", 100, candidate => candidate.type.alias === "Contoso.OrderId");
+    editor.validate = ({ draft }) => /^order-\d+$/.test(draft) ? undefined : "Enter an order ID such as order-42.";
+    editor.serialize = ({ draft }) => ({ id: Number(draft.slice("order-".length)) });
+
+    expect(parseWorkflowRunInputs([input], { order: "wrong" }, [editor])).toEqual({
+      values: {},
+      errors: { order: "Enter an order ID such as order-42." }
+    });
+
+    const parsed = parseWorkflowRunInputs([input], { order: "order-42" }, [editor]);
+    expect(parsed.errors).toEqual({});
+    expect(Object.prototype.hasOwnProperty.call(parsed.values, "__proto__")).toBe(true);
+    expect(serializeWorkflowExecutionPayload({ inputs: parsed.values })).toBe('{"inputs":{"__proto__":{"id":42}}}');
+  });
+
+  it("reports the failed contribution phase when callbacks fail or values disappear from the wire payload", () => {
+    const input = workflowInput("order", "Order", "Contoso.OrderId", true);
+    const throwingSupports = editorContribution("throwing-supports", 50, () => { throw new Error("supports failed"); });
+    const throwingValidation = editorContribution("throwing-validation", 100, candidate => candidate.type.alias === "Contoso.OrderId");
+    throwingValidation.validate = () => { throw new Error("validation failed"); };
+    const invalidSerialization = editorContribution("invalid-serialization", 100, candidate => candidate.type.alias === "Contoso.OrderId");
+    invalidSerialization.serialize = () => undefined;
+
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      expect(resolveWorkflowRunInputEditor([throwingSupports], input)).toBeUndefined();
+      expect(parseWorkflowRunInputs([input], { order: "order-42" }, [throwingValidation])).toEqual({
+        values: {},
+        errors: { order: "The Order editor failed while validating." },
+        contributionFailures: { order: { phase: "validate", reason: "callback-error" } }
+      });
+      expect(parseWorkflowRunInputs([input], { order: "order-42" }, [invalidSerialization])).toEqual({
+        values: {},
+        errors: { order: "The Order editor returned a value that cannot be sent." },
+        contributionFailures: { order: { phase: "serialize", reason: "invalid-wire-value" } }
+      });
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it.each([
+    {
+      failure: "validation callback exception",
+      configure: (editor: StudioWorkflowRunInputEditorContribution) => {
+        editor.validate = () => { throw new Error("validation failed"); };
+      },
+      message: "The Payload editor failed while validating. Enter a JSON value instead."
+    },
+    {
+      failure: "serialization callback exception",
+      configure: (editor: StudioWorkflowRunInputEditorContribution) => {
+        editor.serialize = () => { throw new Error("serialization failed"); };
+      },
+      message: "The Payload editor failed while serializing. Enter a JSON value instead."
+    },
+    {
+      failure: "invalid serialized value",
+      configure: (editor: StudioWorkflowRunInputEditorContribution) => {
+        editor.serialize = () => undefined;
+      },
+      message: "The Payload editor returned a value that cannot be sent. Enter a JSON value instead."
+    }
+  ])("switches to the accessible fallback after a $failure and lets the next submit succeed", ({ configure, message }) => {
+    const input = workflowInput("payload", "Payload", "Contoso.Order", true);
+    const editor = editorContribution("unreliable-editor", 100, candidate => candidate.type.alias === "Contoso.Order");
+    editor.component = ({ draft, disabled, controlProps, onChange }) => (
+      <textarea
+        {...controlProps}
+        disabled={disabled}
+        value={draft}
+        data-contributed-editor="true"
+        onChange={event => onChange(event.currentTarget.value)}
+      />
+    );
+    configure(editor);
+    const onSubmit = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const container = render(
+        <WorkflowRunInputDialog inputs={[input]} editors={[editor]} onSubmit={onSubmit} onCancel={vi.fn()} />
+      );
+      const contributedControl = container.querySelector<HTMLTextAreaElement>("[data-contributed-editor='true']")!;
+      fill(contributedControl, '{"id":42}');
+
+      submit(container);
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(container.querySelector("[data-contributed-editor='true']")).toBeNull();
+      const fallback = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload']")!;
+      expect(fallback.value).toBe('{"id":42}');
+      expect(fallback.placeholder).toBe("Enter JSON");
+      expect(container.querySelector("[role='alert']")?.textContent).toBe(message);
+
+      submit(container);
+      expect(onSubmit).toHaveBeenCalledWith({ Payload: { id: 42 } });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("switches a failed primitive contribution to its standard typed input", () => {
+    const input = workflowInput("count", "Count", "Int32", true);
+    const editor = editorContribution("unreliable-counter", 100, candidate => candidate.type.alias === "Int32");
+    editor.component = ({ draft, disabled, controlProps, onChange }) => (
+      <input
+        {...controlProps}
+        disabled={disabled}
+        value={draft}
+        data-contributed-editor="true"
+        onChange={event => onChange(event.currentTarget.value)}
+      />
+    );
+    editor.validate = () => { throw new Error("validation failed"); };
+    const onSubmit = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const container = render(
+        <WorkflowRunInputDialog inputs={[input]} editors={[editor]} onSubmit={onSubmit} onCancel={vi.fn()} />
+      );
+      fill(container.querySelector<HTMLInputElement>("[data-contributed-editor='true']"), "42");
+
+      submit(container);
+
+      const fallback = container.querySelector<HTMLInputElement>("input[aria-label='Count']")!;
+      expect(fallback.type).toBe("number");
+      expect(fallback.value).toBe("42");
+      expect(container.querySelector("[role='alert']")?.textContent)
+        .toBe("The Count editor failed while validating. Use the standard input instead.");
+
+      submit(container);
+      expect(onSubmit).toHaveBeenCalledWith({ Count: 42 });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("falls back to honest JSON entry when a contributed editor component fails", () => {
+    const input = workflowInput("payload", "Payload", "Contoso.Order", true);
+    const editor = editorContribution("broken-component", 100, candidate => candidate.type.alias === "Contoso.Order");
+    editor.component = () => { throw new Error("render failed"); };
+    const onSubmit = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const container = render(
+        <WorkflowRunInputDialog inputs={[input]} editors={[editor]} onSubmit={onSubmit} onCancel={vi.fn()} />
+      );
+
+      const fallback = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload']")!;
+      expect(fallback.placeholder).toBe("Enter JSON");
+      expect(container.textContent).toContain("The Payload editor failed. Enter a JSON value instead.");
+      fill(fallback, '{"id":42}');
+      submit(container);
+      expect(onSubmit).toHaveBeenCalledWith({ Payload: { id: 42 } });
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("renders declared enum values as a keyboard-focusable picker and serializes the selected wire value", () => {
+    const input = workflowInput("status", "Status", "Contoso.OrderStatus", true);
+    const enumEditor = createEnumWorkflowRunInputEditorContribution({
+      id: "contoso.order-status",
+      supports: candidate => candidate.type.alias === "Contoso.OrderStatus",
+      options: [
+        { value: "pending", label: "Pending", wireValue: 1 },
+        { value: "approved", label: "Approved", wireValue: 2 }
+      ]
+    });
+    const onSubmit = vi.fn();
+    const container = render(
+      <WorkflowRunInputDialog
+        inputs={[input]}
+        editors={[enumEditor]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    const picker = container.querySelector<HTMLSelectElement>("select[aria-label='Status']")!;
+    expect(picker).not.toBeNull();
+    expect([...picker.options].map(option => [option.value, option.textContent])).toEqual([
+      ["", "Not set"],
+      ["pending", "Pending"],
+      ["approved", "Approved"]
+    ]);
+    picker.focus();
+    expect(document.activeElement).toBe(picker);
+
+    fill(picker, "approved");
+    submit(container);
+    expect(onSubmit).toHaveBeenCalledWith({ Status: 2 });
+
+    expect(parseWorkflowRunInputs([input], { status: "retired" }, [enumEditor])).toEqual({
+      values: {},
+      errors: { status: "Choose an available Status value." }
+    });
+  });
+
+  it("keeps an honest JSON fallback when no contribution supports a custom declared type", () => {
+    const input = workflowInput("payload", "Payload", "Contoso.Order", true);
+    const enumEditor = createEnumWorkflowRunInputEditorContribution({
+      id: "contoso.order-status",
+      supports: candidate => candidate.type.alias === "Contoso.OrderStatus",
+      options: [{ value: "pending", label: "Pending" }]
+    });
+    const onSubmit = vi.fn();
+    const container = render(
+      <WorkflowRunInputDialog
+        inputs={[input]}
+        editors={[enumEditor]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+
+    const fallback = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Payload']")!;
+    expect(fallback.placeholder).toBe("Enter JSON");
+    fill(fallback, "not-json");
+    submit(container);
+    expect(container.textContent).toContain("Enter valid JSON.");
+
+    fill(fallback, '{"id":42}');
+    submit(container);
+    expect(onSubmit).toHaveBeenCalledWith({ Payload: { id: 42 } });
+  });
+
   it("blocks a missing required value and serializes valid scalar values by input name", () => {
     const inputs = [
       workflowInput("greeting", "Greeting", "String", true),
@@ -425,5 +673,20 @@ function workflowInput(
     storageDriverType: null,
     type: { alias, collectionKind },
     isRequired
+  };
+}
+
+function editorContribution(
+  id: string,
+  order: number,
+  supports: StudioWorkflowRunInputEditorContribution["supports"]
+): StudioWorkflowRunInputEditorContribution {
+  return {
+    id,
+    order,
+    supports,
+    component: () => null,
+    validate: () => undefined,
+    serialize: ({ draft }) => draft
   };
 }

@@ -537,6 +537,63 @@ export interface StudioActivityPropertyEditorContribution {
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }
 
+/** Open, persisted metadata describing one declared workflow-run input type. */
+export interface StudioWorkflowRunInputTypeMetadata extends Record<string, unknown> {
+  alias: string;
+  collectionKind: string;
+}
+
+/** Declarative option consumed by the Workflows module's enum contribution factory. */
+export interface StudioWorkflowRunInputEnumOption extends Record<string, unknown> {
+  /** Stable draft value used by the picker. */
+  value: string;
+  label?: string;
+  /** Optional value placed on the execution wire payload; `value` is used when omitted. */
+  wireValue?: unknown;
+}
+
+/** The stable subset of a workflow input exposed to run-input editor contributions. */
+export interface StudioWorkflowRunInputDescriptor extends Record<string, unknown> {
+  referenceKey: string;
+  name: string;
+  displayName: string;
+  description: string;
+  type: StudioWorkflowRunInputTypeMetadata;
+  isRequired?: boolean;
+}
+
+export interface StudioWorkflowRunInputEditorContext {
+  input: StudioWorkflowRunInputDescriptor;
+  draft: string;
+}
+
+export interface StudioWorkflowRunInputEditorControlProps {
+  id: string;
+  "aria-label": string;
+  "aria-describedby"?: string;
+  "aria-invalid": boolean;
+  "aria-required": boolean;
+}
+
+export interface StudioWorkflowRunInputEditorProps extends StudioWorkflowRunInputEditorContext {
+  disabled?: boolean;
+  controlProps: StudioWorkflowRunInputEditorControlProps;
+  onChange(draft: string): void;
+}
+
+/**
+ * Contributes a complete run-input editing boundary. A contribution owns its visible control,
+ * draft validation, and conversion to the value placed on the execution wire payload.
+ */
+export interface StudioWorkflowRunInputEditorContribution {
+  id: string;
+  order?: number;
+  supports(input: StudioWorkflowRunInputDescriptor): boolean;
+  component: ComponentType<StudioWorkflowRunInputEditorProps>;
+  validate(context: StudioWorkflowRunInputEditorContext): string | undefined;
+  serialize(context: StudioWorkflowRunInputEditorContext): unknown;
+}
+
 export type StudioExpressionEditorSurface = "inline" | "expanded";
 
 export interface StudioExpressionEditorContext {
@@ -906,6 +963,7 @@ export const studioSlotIds = {
   activityEditors: "workflow.activity.editors",
   propertyEditors: "workflow.activity.property-editors",
   expressionEditors: "workflow.expression-editors",
+  workflowRunInputEditors: "workflow.run-input.editors",
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
@@ -997,6 +1055,7 @@ export const studioSlots = {
   activityEditors: defineStudioSlot({ id: studioSlotIds.activityEditors, kind: "activity-editor", title: "Activity editors", owner: hostSlotOwner() }),
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
+  workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1071,6 +1130,8 @@ export interface ElsaStudioModuleApi {
   readonly activityEditors: StudioContributionRegistry<unknown>;
   readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
+  /** Available on hosts that support the workflow run-input editor Slot. */
+  readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {

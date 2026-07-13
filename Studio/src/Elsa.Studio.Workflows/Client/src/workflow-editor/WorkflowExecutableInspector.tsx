@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable } from "../api/runtime";
@@ -69,9 +69,10 @@ type SourceDefinitionState =
   | { status: "absent" }
   | { status: "failed"; error: string };
 
-export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, sourceReferenceId, onSelectReference }: {
+export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
+  runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;
   onSelectReference(sourceReferenceId: string | null): void;
@@ -213,6 +214,7 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
         />

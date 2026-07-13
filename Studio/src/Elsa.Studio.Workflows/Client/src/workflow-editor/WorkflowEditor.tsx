@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
 import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   createActivityNode,
@@ -59,6 +59,7 @@ export function WorkflowEditor({
   ai,
   propertyEditors,
   expressionEditors,
+  runInputEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
   onBack
@@ -68,6 +69,7 @@ export function WorkflowEditor({
   ai: StudioAiContributionApi;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
+  runInputEditors: StudioWorkflowRunInputEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
@@ -567,6 +569,7 @@ export function WorkflowEditor({
         <WorkflowArtifactsPanel
           context={context}
           ai={ai}
+          runInputEditors={runInputEditors}
           definitionId={details.definition.id}
           publishedArtifactId={publishedArtifactId}
         />
@@ -666,6 +669,7 @@ export function WorkflowEditor({
       {runInputPrompt ? (
         <WorkflowRunInputDialog
           inputs={runInputPrompt.inputs}
+          editors={runInputEditors}
           onSubmit={values => { void confirmRunInputs(values); }}
           onCancel={cancelRunInputs}
         />

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "check:bundle:workflows": "pnpm --filter @elsa-workflows/studio-workflows build",
     "test": "pnpm -r test",
     "test:browser": "playwright test",
     "typecheck": "pnpm -r typecheck",

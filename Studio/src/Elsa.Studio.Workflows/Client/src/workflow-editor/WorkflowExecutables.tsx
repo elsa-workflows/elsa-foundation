@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listPublicationSlots, restorePublicationSlot, unpublishSlot, type PublicationSlot } from "../api/publishing";
 import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
@@ -31,7 +31,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
+export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -113,6 +113,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
         />
@@ -271,7 +272,7 @@ function WorkflowExecutableSourceCell({ executable, onCopied, onCopyFailed }: { 
   );
 }
 
-export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioAiContributionApi; definitionId: string; publishedArtifactId: string | null }) {
+export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitionId, publishedArtifactId }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionId: string; publishedArtifactId: string | null }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -367,6 +368,7 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
       {executableRun.pending ? (
         <WorkflowRunInputDialog
           inputs={executableRun.pending.inputs}
+          editors={runInputEditors}
           onSubmit={values => { void executableRun.confirm(values); }}
           onCancel={executableRun.cancel}
         />

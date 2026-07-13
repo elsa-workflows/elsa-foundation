@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import type { WorkflowExecutableReference } from "../workflowTypes";
 import { findPublishedRunReference } from "../workflow-editor/useExecutableWorkflowRun";
 
 describe("published executable run source selection", () => {
+  it("models sourceKind as the only executable source discriminator", () => {
+    expectTypeOf<WorkflowExecutableReference>().toHaveProperty("sourceKind");
+    expectTypeOf<WorkflowExecutableReference>().not.toHaveProperty("sourceType");
+  });
+
   it("falls back to source-reference ID order when publication dates are invalid", () => {
     const references = [reference("ref-z"), reference("ref-a")];
 

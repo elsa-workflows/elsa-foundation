@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { lazy, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import { WorkflowLazyBoundary } from "../../src/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
@@ -10,6 +11,11 @@ import "./fixture.css";
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
+const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
+
+const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
+  window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
+}));
 
 const expressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Input", displayName: "Input", editingMode: "reference" },
@@ -121,7 +127,18 @@ function Fixture() {
   );
 }
 
+function LazyBoundaryFixture() {
+  return (
+    <main className="browser-fixture">
+      <h1>Workflow management</h1>
+      <WorkflowLazyBoundary label="workflow designer">
+        <DeferredWorkflowPanel />
+      </WorkflowLazyBoundary>
+    </main>
+  );
+}
+
 const theme = searchParams.get("theme");
 document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
 document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
-createRoot(document.getElementById("root")!).render(<Fixture />);
+createRoot(document.getElementById("root")!).render(lazyBoundaryFixture ? <LazyBoundaryFixture /> : <Fixture />);

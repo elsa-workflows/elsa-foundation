@@ -5,7 +5,7 @@ namespace Elsa.Studio.Workflows.Handlers;
 
 public sealed class ContributeWorkflowsStudioModule : IStudioEventHandler<OnStudioModuleManifestsCollecting>
 {
-    private const string ModuleVersion = "1.0.5";
+    private const string ModuleVersion = "1.0.6";
 
     public Task Handle(OnStudioModuleManifestsCollecting @event, CancellationToken cancellationToken)
     {

@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Check Workflows bundle budget
+        run: pnpm check:bundle:workflows
+
   browser-tests:
     name: Browser tests (Chromium)
     runs-on: ubuntu-latest

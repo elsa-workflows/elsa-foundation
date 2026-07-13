@@ -4,10 +4,11 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
-import { clearApiCapabilityCache, isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
+import { clearApiCapabilityCache, createEnumWorkflowRunInputEditorContribution, isConnectEndOverExistingWorkflowNode, register, resolveConnectEndSource, type WorkflowDesignerPanelContext } from "../module";
 import { workflowInspectorCollapsedStorageKey, workflowInspectorWidthStorageKey, workflowSidePanelMaximizedStorageKey } from "../workflow-editor/constants";
 import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
 import { ValidationPanel } from "../workflow-editor/editorPanels";
+import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 
 afterEach(() => {
   clearApiCapabilityCache();
@@ -106,6 +107,71 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
       expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
     ]);
+  });
+
+  it("announces while the workflow definitions route loads on demand", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [definition()] })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Loading workflow definitions");
+    await vi.waitFor(() => expect(container.textContent).toContain("Hello World"), { timeout: 10_000 });
+
+    await unmount();
+  });
+
+  it("offers an accessible recovery action when a deferred workflow surface fails", () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const BrokenSurface = () => { throw new Error("chunk unavailable"); };
+
+    try {
+      flushSync(() => root.render(
+        <WorkflowLazyBoundary label="workflow designer">
+          <BrokenSurface />
+        </WorkflowLazyBoundary>
+      ));
+
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toContain("Unable to load workflow designer");
+      expect(alert?.textContent).toContain("unexpected error");
+      expect(alert?.textContent).not.toContain("updated while this page was open");
+      expect(buttonByText(container, "Reload page")).toBeTruthy();
+    } finally {
+      flushSync(() => root.unmount());
+      consoleError.mockRestore();
+    }
+  });
+
+  it("passes late module run-input contributions through every routed run surface", () => {
+    const api = testApi();
+    register(api);
+    const editor = createEnumWorkflowRunInputEditorContribution({
+      id: "contoso.order-status",
+      supports: input => input.type.alias === "Contoso.OrderStatus",
+      options: [{ value: "pending", label: "Pending" }]
+    });
+    api.workflowRunInputEditors!.add(editor);
+
+    for (const routeId of ["workflows-definitions", "workflows-executables", "workflows-executable-inspector"]) {
+      const route = api.routes.list().find(candidate => candidate.id === routeId);
+      const renderRoute = route?.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+      const boundary = renderRoute({ navigate: vi.fn() });
+      const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ runInputEditors: unknown[] }>;
+      expect(surface.props.runInputEditors).toEqual([editor]);
+    }
+  });
+
+  it("keeps the JSON fallback when hosted by a pre-slot SDK registry", () => {
+    const { workflowRunInputEditors: _unsupportedSlot, ...api } = testApi();
+
+    expect(() => register(api)).not.toThrow();
+    const route = api.routes.list().find(candidate => candidate.id === "workflows-definitions")!;
+    const renderRoute = route.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+    const boundary = renderRoute({ navigate: vi.fn() });
+    const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ runInputEditors: unknown[] }>;
+
+    expect(surface.props.runInputEditors).toEqual([]);
   });
 
   it("renders active definition actions and soft-deletes with confirmation", async () => {
@@ -221,7 +287,7 @@ describe("workflows module", () => {
     expect(autosaveInput(container)?.checked).toBe(true);
 
     await unmount();
-  });
+  }, 15_000);
 
   it("uses the configured workflow editor autosave default", async () => {
     stubWorkflowEditorFetch();
@@ -1569,8 +1635,7 @@ describe("workflows module", () => {
 
     // The reference is current with the definition's latest version: no drift caption, source link enabled.
     expect(container.textContent).not.toContain("the definition's latest is");
-    const openSource = buttonByText(container, "Open source definition") as HTMLButtonElement;
-    expect(openSource.disabled).toBe(false);
+    await vi.waitFor(() => expect(buttonByText(container, "Open source definition")?.disabled).toBe(false));
 
     // Selecting another reference updates the routed selection. Runtime remains the executable source.
     await click(buttonByText(container, "References (2)"));
@@ -1618,8 +1683,7 @@ describe("workflows module", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
 
-    await waitForText(container, "Executable Inspector");
-    await click(buttonByText(container, "Run"));
+    await click(await waitForButtonByText(container, "Run"));
     await waitForText(container, "Provide the workflow inputs for this run.");
     await fill(inputByLabel(container, "Greeting"), "Hello from inspector");
     await click(buttonByText(container, "Run workflow"));
@@ -1656,9 +1720,7 @@ describe("workflows module", () => {
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1?ref=ref-test");
 
-    await waitForText(container, "Executable Inspector");
-
-    const run = buttonByText(container, "Run") as HTMLButtonElement;
+    const run = await waitForButtonByText(container, "Run");
     expect(run.disabled).toBe(true);
     expect(run.title).toContain("No live published reference");
 
@@ -1715,8 +1777,8 @@ describe("workflows module", () => {
         }
         await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
         await click(scenario.surface === "artifacts"
-          ? buttonByLabel(container, `Run executable ${scenario.artifactId}`)
-          : buttonByText(container, "Run"));
+          ? await waitForButtonByLabel(container, `Run executable ${scenario.artifactId}`)
+          : await waitForButtonByText(container, "Run"));
         await waitForText(container, "Workflow input definitions unavailable.");
 
         expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
@@ -2662,6 +2724,7 @@ function testApi(): ElsaStudioModuleApi {
     routes,
     propertyEditors: registry(),
     expressionEditors: registry(),
+    workflowRunInputEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },
@@ -3581,26 +3644,39 @@ async function flushPromises() {
 }
 
 async function waitForText(container: HTMLElement, text: string) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await flushPromises();
-    if (container.textContent?.includes(text)) return;
-  }
+  await vi.waitFor(() => {
+    if (!container.textContent?.includes(text)) {
+      throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
 
-  throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+async function waitForButtonByText(container: HTMLElement, text: string) {
+  return vi.waitFor(() => {
+    const button = buttonByText(container, text);
+    if (!button) throw new Error(`Timed out waiting for button: ${text}`);
+    return button;
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForButtonByLabel(container: HTMLElement, label: string) {
+  return vi.waitFor(() => {
+    const button = buttonByLabel(container, label);
+    if (!button) throw new Error(`Timed out waiting for button: ${label}`);
+    return button;
+  }, { timeout: 5_000, interval: 20 });
 }
 
 // Waits for a CANVAS node containing `text`. waitForText alone is not enough before interacting with
 // the canvas: the inspector shows the scope owner as soon as the draft loads, so the activity's name
 // can appear in the panel a flush before React Flow commits the node elements.
 async function waitForCanvasNode(container: HTMLElement, text: string) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await flushPromises();
+  return vi.waitFor(() => {
     const node = Array.from(container.querySelectorAll(".wf-canvas .wf-node"))
       .find(candidate => candidate.textContent?.includes(text));
-    if (node) return node;
-  }
-
-  throw new Error(`Timed out waiting for canvas node: ${text}`);
+    if (!node) throw new Error(`Timed out waiting for canvas node: ${text}`);
+    return node;
+  }, { timeout: 5_000, interval: 20 });
 }
 
 async function waitForTextToDisappear(container: HTMLElement, text: string) {
