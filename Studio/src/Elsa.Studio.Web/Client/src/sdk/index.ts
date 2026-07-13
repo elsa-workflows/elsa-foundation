@@ -189,11 +189,16 @@ export interface StudioEndpointContext {
   accessTokenFactory?: () => Promise<string>;
 }
 
+export interface StudioRouteComponentProps {
+  /** Requests an in-app navigation through the Studio host router. */
+  navigate(path: string): void;
+}
+
 export interface StudioRouteContribution {
   id: string;
   path: string;
   label: string;
-  component: ComponentType;
+  component: ComponentType<StudioRouteComponentProps>;
 }
 
 export interface StudioNavigationContribution {
@@ -329,7 +334,7 @@ export interface StudioFeatureAreaRouteContribution {
   id: string;
   path: string;
   label: string;
-  component: ComponentType;
+  component: ComponentType<StudioRouteComponentProps>;
 }
 
 export interface StudioFeatureAreaContribution {
