@@ -32,6 +32,7 @@ import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
+import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { useWorkflowDocument } from "./workflowDocument";
@@ -315,6 +316,9 @@ export function WorkflowEditor({
     reviewPublication,
     confirmPublication,
     cancelPublication,
+    runInputPrompt,
+    confirmRunInputs,
+    cancelRunInputs,
     run
   } = useWorkflowOperations({
     context,
@@ -654,6 +658,14 @@ export function WorkflowEditor({
           onReview={reviewPublication}
           onPublish={confirmPublication}
           onCancel={cancelPublication}
+        />
+      ) : null}
+
+      {runInputPrompt ? (
+        <WorkflowRunInputDialog
+          inputs={runInputPrompt.inputs}
+          onSubmit={values => { void confirmRunInputs(values); }}
+          onCancel={cancelRunInputs}
         />
       ) : null}
 

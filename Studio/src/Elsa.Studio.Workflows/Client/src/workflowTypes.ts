@@ -420,7 +420,10 @@ export interface StartWorkflowDraftTestRunRequest {
   snapshotId: string;
   state: WorkflowDefinitionState;
   artifactVersion?: string | null;
+  inputs?: WorkflowExecutionInputs;
 }
+
+export type WorkflowExecutionInputs = Record<string, unknown>;
 
 export interface WorkflowTestRunView {
   testRunId: string;

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import type { WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowInput } from "../workflowTypes";
 import { promoteDraft } from "../api/workflowDesign";
 import {
   preflightPublication,
@@ -10,6 +10,7 @@ import {
   type PublicationPreflight
 } from "../api/publishing";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
+import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
 import type { WorkflowEditorOperation, WorkflowTestRunState } from "./editorTypes";
 
@@ -52,6 +53,10 @@ export function useWorkflowOperations({
     versionId: string;
     intent: PublicationIntent;
     preflight: PublicationPreflight;
+  } | null>(null);
+  const [runInputPrompt, setRunInputPrompt] = useState<{
+    draft: WorkflowDraft;
+    inputs: WorkflowInput[];
   } | null>(null);
   const exportJson = useCallback(() => {
     if (!draft) return;
@@ -140,9 +145,7 @@ export function useWorkflowOperations({
     setStatus("Publication cancelled; the promoted version remains available.");
   }, [setStatus]);
 
-  const run = useCallback(async () => {
-    if (!draft?.state.rootActivity || busy) return;
-    const draftSnapshot = draft;
+  const dispatchTestRun = useCallback(async (draftSnapshot: WorkflowDraft, inputs: WorkflowExecutionInputs) => {
     const draftSignature = getDraftSignature(draftSnapshot);
     clearTestRun();
     setStatus("Preparing test run...");
@@ -156,7 +159,8 @@ export function useWorkflowOperations({
       const nextTestRun = await startWorkflowDraftTestRun(context, {
         definitionId: draftSnapshot.definitionId,
         snapshotId,
-        state: draftSnapshot.state
+        state: draftSnapshot.state,
+        inputs
       });
       startTestRun({ draftSignature, view: nextTestRun });
       setActiveRightPanelId("runtime");
@@ -168,7 +172,38 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [draft, busy, context, clearTestRun, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
+  }, [context, clearTestRun, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
-  return { exportJson, save, preparePublication, publicationReview, reviewPublication, confirmPublication, cancelPublication, run };
+  const run = useCallback(async () => {
+    if (!draft?.state.rootActivity || busy) return;
+    const inputs = readWorkflowInputs(draft.state.inputs);
+    if (inputs.length > 0) {
+      setRunInputPrompt({ draft, inputs });
+      return;
+    }
+    await dispatchTestRun(draft, {});
+  }, [draft, busy, dispatchTestRun]);
+
+  const confirmRunInputs = useCallback(async (inputs: WorkflowExecutionInputs) => {
+    const pending = runInputPrompt;
+    if (!pending) return;
+    setRunInputPrompt(null);
+    await dispatchTestRun(pending.draft, inputs);
+  }, [dispatchTestRun, runInputPrompt]);
+
+  const cancelRunInputs = useCallback(() => setRunInputPrompt(null), []);
+
+  return {
+    exportJson,
+    save,
+    preparePublication,
+    publicationReview,
+    reviewPublication,
+    confirmPublication,
+    cancelPublication,
+    runInputPrompt,
+    confirmRunInputs,
+    cancelRunInputs,
+    run
+  };
 }

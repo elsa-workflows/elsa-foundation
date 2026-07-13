@@ -1114,7 +1114,11 @@ describe("workflows module", () => {
         }));
       }
       if (url.startsWith("https://server.example/design/workflows/versions/version-1")) {
-        return response(workflowDefinitionVersionDetails());
+        const version = workflowDefinitionVersionDetails();
+        return response({
+          ...version,
+          state: { ...version.state, inputs: [workflowInput()] }
+        });
       }
       if (url.startsWith("https://server.example/design/activities/catalog")) {
         return response({ activities: [activity({
@@ -1143,6 +1147,13 @@ describe("workflows module", () => {
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await click(buttonByText(container, "Cancel"));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(container, "Greeting"), "Hello from published run");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Open Run wfexec-published-1");
     await click(buttonByText(container, "Open Run wfexec-published-1"));
 
@@ -1150,6 +1161,8 @@ describe("workflows module", () => {
       "https://server.example/runtime/workflows/executables/artifact-1/execute",
       expect.objectContaining({ method: "POST" })
     );
+    const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({ inputs: { Greeting: "Hello from published run" } });
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
 
     await unmount();
@@ -1333,6 +1346,42 @@ describe("workflows module", () => {
 
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
+
+    await unmount();
+  });
+
+  it("collects workflow inputs before running from the Executable Inspector", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/executables/artifact-1/execute")) {
+        return response({ workflowExecutionId: "wfexec-inspector-1" });
+      }
+      if (url.includes("/design/workflows/versions/version-2")) {
+        const version = workflowDefinitionVersionDetails({ id: "version-2", version: "2.0.0" });
+        return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
+      }
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Executable Inspector");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(container, "Greeting"), "Hello from inspector");
+    await click(buttonByText(container, "Run workflow"));
+    await waitForText(container, "Open Run wfexec-inspector-1");
+
+    const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({ inputs: { Greeting: "Hello from inspector" } });
 
     await unmount();
   });
@@ -1613,7 +1662,7 @@ describe("workflows module", () => {
       ] });
       if (url.includes("/definitions/definition-1")) return response({
         definition: definition(),
-        draft: draftWithFlowchartRoot(),
+        draft: draftWithFlowchartRoot([], [workflowInput()]),
         versions: []
       });
       return response({ items: [definition()] });
@@ -1626,6 +1675,10 @@ describe("workflows module", () => {
     await click(optionByText(container, "Write Line"));
     await click(buttonByText(container, "Write Line"));
     await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
+    await fill(inputByLabel(container, "Greeting"), "Hello from test run");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run dispatched");
 
     const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
@@ -1634,6 +1687,7 @@ describe("workflows module", () => {
     const requestBody = JSON.parse(testRunCall?.body ?? "{}");
     expect(requestBody.definitionId).toBe("definition-1");
     expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
+    expect(requestBody.inputs).toEqual({ Greeting: "Hello from test run" });
     expect(requestBody.state.rootActivity).toMatchObject({
       nodeId: "root",
       activityVersionId: "flowchart-v1",
@@ -2734,8 +2788,23 @@ function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function draftWithFlowchartRoot(activities: unknown[] = []) {
-  return workflowDraft({ state: { variables: [], rootActivity: flowchartRoot(activities), inputs: [], outputs: [] } });
+function draftWithFlowchartRoot(activities: unknown[] = [], inputs: unknown[] = []) {
+  return workflowDraft({ state: { variables: [], rootActivity: flowchartRoot(activities), inputs, outputs: [] } });
+}
+
+function workflowInput(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    referenceKey: "greeting",
+    name: "Greeting",
+    displayName: "Greeting",
+    description: "Greeting to use for this run.",
+    category: "General",
+    uiHint: "",
+    storageDriverType: null,
+    type: { alias: "String", collectionKind: "Single" },
+    isRequired: true,
+    ...overrides
+  };
 }
 
 // Contributed-panel double that records the latest designer panel context so tests can assert on its

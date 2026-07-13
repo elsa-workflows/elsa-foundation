@@ -3,8 +3,8 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { listDefinitions } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { preflightPublication } from "../api/publishing";
-import { listExecutables } from "../api/runtime";
+import { preflightPublication, startWorkflowDraftTestRun } from "../api/publishing";
+import { listExecutables, runExecutable } from "../api/runtime";
 
 afterEach(clearApiCapabilityCache);
 
@@ -23,12 +23,18 @@ const capabilities = {
     {
       id: "elsa.api.publishing",
       contractVersion: "1",
-      links: [{ rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true }]
+      links: [
+        { rel: "publication-preflight", href: "publishing/workflows/{versionId}/preflight", templated: true },
+        { rel: "workflow-draft-test-runs", href: "publishing/workflows/drafts/test-runs" }
+      ]
     },
     {
       id: "elsa.api.runtime",
       contractVersion: "1",
-      links: [{ rel: "workflow-executables", href: "runtime/workflows/executables" }]
+      links: [
+        { rel: "workflow-executables", href: "runtime/workflows/executables" },
+        { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true }
+      ]
     }
   ]
 };
@@ -100,6 +106,32 @@ describe("canonical domain clients", () => {
       "/publishing/workflows/version%2F1/preflight",
       { action: "sideBySide", slotName: "blue" });
     expect(getJson).toHaveBeenCalledTimes(3);
+  });
+
+  it("sends the same keyed input dictionary for transient and published dispatches", async () => {
+    const inputs = { Greeting: "Hello", Attempts: 3 };
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const postJson = vi.fn(async (url: string) => url.includes("drafts/test-runs")
+      ? { testRunId: "test-1", definitionId: "definition-1", definitionVersionId: "version-1", status: "Dispatched" }
+      : { workflowExecutionId: "execution-1" });
+    const context = createContext({ getJson, postJson });
+
+    await startWorkflowDraftTestRun(context, {
+      definitionId: "definition-1",
+      snapshotId: "snapshot-1",
+      state: { rootActivity: null },
+      inputs
+    });
+    await runExecutable(context, "artifact/1", inputs);
+
+    expect(postJson).toHaveBeenCalledWith(
+      "/publishing/workflows/drafts/test-runs",
+      expect.objectContaining({ inputs })
+    );
+    expect(postJson).toHaveBeenCalledWith(
+      "/runtime/workflows/executables/artifact%2F1/execute",
+      { inputs }
+    );
   });
 });
 
