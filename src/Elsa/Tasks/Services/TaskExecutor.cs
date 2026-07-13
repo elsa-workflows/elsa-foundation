@@ -1,4 +1,5 @@
 using Elsa.Locking.Core;
+using Elsa.Primitives.Diagnostics;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
 using Elsa.Tasks.Diagnostics;
@@ -36,7 +37,9 @@ public sealed class TaskExecutor(IDistributedLockProvider distributedLockProvide
         var taskType = task.GetType().FullName ?? task.GetType().Name;
         var started = Stopwatch.GetTimestamp();
         var outcome = StartupTaskTelemetry.SuccessOutcome;
-        using var activity = StartupTaskTelemetry.ActivitySource.StartActivity(StartupTaskTelemetry.ActivityName);
+        using var activity = ObservationalTelemetryScope.Start(
+            StartupTaskTelemetry.ActivitySource,
+            StartupTaskTelemetry.ActivityName);
 
         try
         {
@@ -47,13 +50,13 @@ public sealed class TaskExecutor(IDistributedLockProvider distributedLockProvide
         catch (OperationCanceledException)
         {
             outcome = StartupTaskTelemetry.CancelledOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         catch (Exception)
         {
             outcome = StartupTaskTelemetry.FailedOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         finally
@@ -64,9 +67,9 @@ public sealed class TaskExecutor(IDistributedLockProvider distributedLockProvide
                 { StartupTaskTelemetry.TaskTypeTag, taskType },
                 { StartupTaskTelemetry.OutcomeTag, outcome }
             };
-            activity?.SetTag(StartupTaskTelemetry.TaskTypeTag, taskType);
-            activity?.SetTag(StartupTaskTelemetry.OutcomeTag, outcome);
-            StartupTaskTelemetry.Duration.Record(durationMs, tags);
+            activity.SetTag(StartupTaskTelemetry.TaskTypeTag, taskType);
+            activity.SetTag(StartupTaskTelemetry.OutcomeTag, outcome);
+            activity.Observe(() => StartupTaskTelemetry.Duration.Record(durationMs, tags));
             logger.LogInformation(
                 "Startup task {TaskType} completed with outcome {Outcome} after {DurationMs:F3} ms",
                 taskType,

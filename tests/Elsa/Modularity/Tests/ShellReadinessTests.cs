@@ -83,6 +83,37 @@ public sealed class ShellReadinessTests
         Assert.Equal("shell_warmup_disabled", disabled.Snapshot.Code);
     }
 
+    [Theory]
+    [InlineData(ShellReadinessStatus.Ready)]
+    [InlineData(ShellReadinessStatus.Failed)]
+    [InlineData(ShellReadinessStatus.Disabled)]
+    public void TerminalStateIgnoresRepeatedAndConflictingTransitions(ShellReadinessStatus terminalStatus)
+    {
+        var state = new ShellReadinessState(TimeProvider.System);
+        if (terminalStatus == ShellReadinessStatus.Disabled)
+        {
+            state.MarkDisabled("default");
+        }
+        else
+        {
+            Assert.True(state.TryBegin("default"));
+            if (terminalStatus == ShellReadinessStatus.Ready)
+                state.MarkReady(generation: 3);
+            else
+                state.MarkFailed("shell_activation_failed");
+        }
+
+        var terminal = state.Snapshot;
+
+        Assert.False(state.TryBegin("other"));
+        state.MarkReady(generation: 99);
+        state.MarkFailed("other_failure");
+        state.MarkCancelled("other");
+        state.MarkDisabled("other");
+
+        Assert.Same(terminal, state.Snapshot);
+    }
+
     [Fact]
     public async Task WarmupReturnsFromStartAndDoesNotActivateBeforeApplicationStarted()
     {
@@ -102,6 +133,22 @@ public sealed class ShellReadinessTests
         harness.Gate.Release();
         await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
         await harness.Warmup.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task RepeatedWarmupStartSchedulesOnlyOneActivation()
+    {
+        await using var harness = WarmupHarness.Create();
+
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        harness.Lifetime.SignalStarted();
+        await harness.Gate.WaitUntilEnteredAsync();
+
+        Assert.Equal(1, harness.Gate.Attempts);
+
+        harness.Gate.Release();
+        await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
     }
 
     [Fact]
@@ -182,6 +229,30 @@ public sealed class ShellReadinessTests
         telemetry.AssertAttempt(
             ShellActivationTelemetry.FailedOutcome,
             ShellActivationTelemetry.FailedOutcome);
+    }
+
+    [Fact]
+    public async Task ThrowingTelemetryListenerDoesNotPreventSuccessfulWarmup()
+    {
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ShellActivationTelemetry.MeterName)
+                    meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((_, _, _, _) => throw new InvalidOperationException("listener failure"));
+        listener.Start();
+        await using var harness = WarmupHarness.Create();
+
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        harness.Lifetime.SignalStarted();
+        await harness.Gate.WaitUntilEnteredAsync();
+        harness.Gate.Release();
+        await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
+
+        Assert.Equal(ShellReadinessStatus.Ready, harness.State.Snapshot.Status);
     }
 
     private static async Task WaitForStatusAsync(ShellReadinessState state, ShellReadinessStatus expected)

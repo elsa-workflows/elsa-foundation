@@ -56,6 +56,23 @@ public sealed class StartupTaskTelemetryTests
         telemetry.AssertSingle(typeof(FailingTask), StartupTaskTelemetry.FailedOutcome);
     }
 
+    [Fact]
+    public async Task ThrowingTelemetryListenerDoesNotFailSuccessfulTask()
+    {
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == StartupTaskTelemetry.MeterName)
+                    meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<double>((_, _, _, _) => throw new InvalidOperationException("listener failure"));
+        listener.Start();
+
+        await ExecuteAsync(new SuccessfulTask(), new AvailableLockProvider(), CancellationToken.None);
+    }
+
     private static async Task ExecuteAsync(IStartupTask task, IDistributedLockProvider lockProvider, CancellationToken cancellationToken)
     {
         var executor = new TaskExecutor(lockProvider, NullLogger<TaskExecutor>.Instance);

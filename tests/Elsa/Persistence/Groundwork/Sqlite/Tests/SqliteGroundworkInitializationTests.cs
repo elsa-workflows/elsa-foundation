@@ -87,6 +87,57 @@ public sealed class SqliteGroundworkInitializationTests
     }
 
     [Fact]
+    public async Task CancelledInitialization_PropagatesCancellationAndEmitsCancelledTelemetry()
+    {
+        var databasePath = NewDatabasePath();
+        await using var holder = new GroundworkDocumentStoreHolder();
+        using var cancellation = new CancellationTokenSource();
+        using var telemetry = new TelemetryCapture();
+        cancellation.Cancel();
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => NewInitializer(databasePath, holder).InitializeAsync(cancellation.Token));
+
+            Assert.False(holder.IsInitialized);
+            telemetry.AssertSingle(SqliteGroundworkTelemetry.CancelledOutcome);
+        }
+        finally
+        {
+            DeleteDatabase(databasePath);
+        }
+    }
+
+    [Fact]
+    public async Task ThrowingActivityStartedListenerDoesNotPreventInitialization()
+    {
+        var databasePath = NewDatabasePath();
+        var holder = new GroundworkDocumentStoreHolder();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == SqliteGroundworkTelemetry.ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStarted = _ => throw new InvalidOperationException("listener failure")
+        };
+        ActivitySource.AddActivityListener(listener);
+        var ambientActivity = Activity.Current;
+
+        try
+        {
+            await NewInitializer(databasePath, holder).InitializeAsync();
+
+            Assert.True(holder.IsInitialized);
+            Assert.Same(ambientActivity, Activity.Current);
+        }
+        finally
+        {
+            await holder.DisposeAsync();
+            DeleteDatabase(databasePath);
+        }
+    }
+
+    [Fact]
     public async Task ExactSchemaHistory_OpensWithoutTouchingIndexProjection_AndEmitsHistoryHit()
     {
         var databasePath = NewDatabasePath();
@@ -230,19 +281,13 @@ public sealed class SqliteGroundworkInitializationTests
     private static SqliteGroundworkDocumentStoreInitializer NewProbeInitializer(
         string databasePath,
         GroundworkDocumentStoreHolder holder,
-        bool rematerializeOnStartup = false)
-    {
-        if (!rematerializeOnStartup)
-            return new($"Data Source={databasePath}", ProbeManifest(), Provider, holder);
-
-        return Assert.IsType<SqliteGroundworkDocumentStoreInitializer>(Activator.CreateInstance(
-            typeof(SqliteGroundworkDocumentStoreInitializer),
+        bool rematerializeOnStartup = false) =>
+        new(
             $"Data Source={databasePath}",
             ProbeManifest(),
             Provider,
             holder,
-            true));
-    }
+            rematerializeOnStartup);
 
     private static async Task MaterializeBaselineAsync(string databasePath)
     {

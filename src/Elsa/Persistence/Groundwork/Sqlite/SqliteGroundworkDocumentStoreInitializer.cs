@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CShells.Lifecycle;
+using Elsa.Primitives.Diagnostics;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Scoping;
@@ -46,7 +47,9 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         var outcome = holder.IsInitialized
             ? SqliteGroundworkTelemetry.HistoryHitOutcome
             : SqliteGroundworkTelemetry.MaterializedOutcome;
-        using var activity = SqliteGroundworkTelemetry.ActivitySource.StartActivity(SqliteGroundworkTelemetry.ActivityName);
+        using var activity = ObservationalTelemetryScope.Start(
+            SqliteGroundworkTelemetry.ActivitySource,
+            SqliteGroundworkTelemetry.ActivityName);
 
         try
         {
@@ -88,23 +91,24 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         catch (OperationCanceledException)
         {
             outcome = SqliteGroundworkTelemetry.CancelledOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         catch (Exception exception)
         {
             outcome = SqliteGroundworkTelemetry.FailedOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw new SqliteGroundworkInitializationException(
                 $"The SQLite Groundwork document store for manifest '{manifest.Identity.Value}' and provider '{provider.Name}' could not be initialized.",
                 exception);
         }
         finally
         {
-            activity?.SetTag(SqliteGroundworkTelemetry.OutcomeTag, outcome);
-            SqliteGroundworkTelemetry.Duration.Record(
-                Stopwatch.GetElapsedTime(started).TotalMilliseconds,
-                new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome));
+            activity.SetTag(SqliteGroundworkTelemetry.OutcomeTag, outcome);
+            activity.Observe(() =>
+                SqliteGroundworkTelemetry.Duration.Record(
+                    Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                    new KeyValuePair<string, object?>(SqliteGroundworkTelemetry.OutcomeTag, outcome)));
         }
     }
 

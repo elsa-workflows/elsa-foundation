@@ -177,6 +177,28 @@ public sealed class HttpEndpointRouteTableSynchronizerTests
         telemetry.AssertSingle("cancelled", expectedRouteCount: null);
     }
 
+    [Fact]
+    public async Task RefreshAsync_ThrowingActivityStoppedListenerDoesNotFailSuccessfulRefresh()
+    {
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = _ => throw new InvalidOperationException("listener failure")
+        };
+        ActivitySource.AddActivityListener(listener);
+        var ambientActivity = Activity.Current;
+        var routeTable = new FakeRouteTable();
+        var synchronizer = Build(
+            new StaticResolver(_ => ValueTask.FromResult<IReadOnlyCollection<HttpRouteData>>([new("one")])),
+            routeTable);
+
+        await synchronizer.RefreshAsync();
+
+        Assert.Equal(new[] { "one" }, routeTable.RouteTemplates);
+        Assert.Same(ambientActivity, Activity.Current);
+    }
+
     private static HttpEndpointRouteTableSynchronizer Build(IHttpEndpointRoutesResolver resolver, IRouteTable? routeTable = null)
     {
         var services = new ServiceCollection();

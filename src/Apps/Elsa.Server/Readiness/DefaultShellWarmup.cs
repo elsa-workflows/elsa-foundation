@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Server.Readiness;
@@ -97,7 +98,9 @@ public sealed class DefaultShellWarmup(
     {
         var started = Stopwatch.GetTimestamp();
         var outcome = ShellActivationTelemetry.SuccessOutcome;
-        using var activity = ShellActivationTelemetry.ActivitySource.StartActivity(ShellActivationTelemetry.ActivityName);
+        using var activity = ObservationalTelemetryScope.Start(
+            ShellActivationTelemetry.ActivitySource,
+            ShellActivationTelemetry.ActivityName);
 
         try
         {
@@ -106,13 +109,13 @@ public sealed class DefaultShellWarmup(
         catch (OperationCanceledException)
         {
             outcome = ShellActivationTelemetry.CancelledOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         catch (Exception)
         {
             outcome = ShellActivationTelemetry.FailedOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         finally
@@ -122,9 +125,10 @@ public sealed class DefaultShellWarmup(
                 { ShellActivationTelemetry.PhaseTag, phase },
                 { ShellActivationTelemetry.OutcomeTag, outcome }
             };
-            activity?.SetTag(ShellActivationTelemetry.PhaseTag, phase);
-            activity?.SetTag(ShellActivationTelemetry.OutcomeTag, outcome);
-            ShellActivationTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags);
+            activity.SetTag(ShellActivationTelemetry.PhaseTag, phase);
+            activity.SetTag(ShellActivationTelemetry.OutcomeTag, outcome);
+            activity.Observe(() =>
+                ShellActivationTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
 

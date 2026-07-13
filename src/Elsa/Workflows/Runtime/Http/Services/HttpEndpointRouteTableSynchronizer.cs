@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Elsa.Http.Core.Contracts;
+using Elsa.Primitives.Diagnostics;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,7 +41,9 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
         var outcome = HttpRouteTableTelemetry.SuccessOutcome;
         int? routeCount = null;
         var gateAcquired = false;
-        using var activity = HttpRouteTableTelemetry.ActivitySource.StartActivity(HttpRouteTableTelemetry.ActivityName);
+        using var activity = ObservationalTelemetryScope.Start(
+            HttpRouteTableTelemetry.ActivitySource,
+            HttpRouteTableTelemetry.ActivityName);
 
         try
         {
@@ -57,13 +60,13 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
         catch (OperationCanceledException)
         {
             outcome = HttpRouteTableTelemetry.CancelledOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         catch (Exception)
         {
             outcome = HttpRouteTableTelemetry.FailedOutcome;
-            activity?.SetStatus(ActivityStatusCode.Error);
+            activity.SetStatus(ActivityStatusCode.Error);
             throw;
         }
         finally
@@ -72,13 +75,14 @@ public sealed class HttpEndpointRouteTableSynchronizer(IServiceScopeFactory scop
                 _gate.Release();
 
             var tags = new TagList { { HttpRouteTableTelemetry.OutcomeTag, outcome } };
-            activity?.SetTag(HttpRouteTableTelemetry.OutcomeTag, outcome);
+            activity.SetTag(HttpRouteTableTelemetry.OutcomeTag, outcome);
             if (routeCount is not null)
             {
-                activity?.SetTag(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
+                activity.SetTag(HttpRouteTableTelemetry.RouteCountTag, routeCount.Value);
             }
 
-            HttpRouteTableTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags);
+            activity.Observe(() =>
+                HttpRouteTableTelemetry.Duration.Record(Stopwatch.GetElapsedTime(started).TotalMilliseconds, tags));
         }
     }
 

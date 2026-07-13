@@ -8,9 +8,6 @@ namespace Elsa.Persistence.Groundwork.Sqlite.Tests;
 
 public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
 {
-    private const string CacheEnabledProperty = "CacheWorkflowExecutables";
-    private const string CacheCapacityProperty = "WorkflowExecutableCacheCapacity";
-
     [Fact]
     public void FeatureType_IsInheritable()
     {
@@ -23,13 +20,10 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
     [Fact]
     public void RematerializeOnStartup_IsAnOperatorSetting_DefaultingToFalse()
     {
-        var featureType = typeof(SqliteGroundworkRuntimePersistenceShellFeature);
-        var property = featureType.GetProperty("RematerializeOnStartup");
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature();
 
-        Assert.NotNull(property);
-        Assert.Equal(typeof(bool), property!.PropertyType);
-        Assert.False(Assert.IsType<bool>(property.GetValue(Activator.CreateInstance(featureType))));
-        Assert.Contains(property.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
+        Assert.False(feature.RematerializeOnStartup);
+        AssertManifestSetting(feature, nameof(feature.RematerializeOnStartup));
     }
 
     [Fact]
@@ -69,16 +63,21 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
     {
         var feature = new SqliteGroundworkRuntimePersistenceShellFeature();
 
-        AssertSetting(feature, CacheEnabledProperty, expectedDefault: true);
-        AssertSetting(feature, CacheCapacityProperty, expectedDefault: 256);
+        Assert.True(feature.CacheWorkflowExecutables);
+        Assert.Equal(256, feature.WorkflowExecutableCacheCapacity);
+        AssertManifestSetting(feature, nameof(feature.CacheWorkflowExecutables));
+        AssertManifestSetting(feature, nameof(feature.WorkflowExecutableCacheCapacity));
     }
 
     [Fact]
     public void DisabledExecutableCacheSetting_IsThreadedToRuntimeRegistration()
     {
-        var feature = new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" };
-        SetSetting(feature, CacheEnabledProperty, false);
-        SetSetting(feature, CacheCapacityProperty, 17);
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature
+        {
+            ConnectionString = "Data Source=:memory:",
+            CacheWorkflowExecutables = false,
+            WorkflowExecutableCacheCapacity = 17
+        };
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
 
@@ -93,10 +92,11 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
         bool rematerializeOnStartup,
         Func<IDocumentStore, Task> assertion)
     {
-        var feature = new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = $"Data Source={databasePath}" };
-        var setting = feature.GetType().GetProperty("RematerializeOnStartup");
-        Assert.NotNull(setting);
-        setting!.SetValue(feature, rematerializeOnStartup);
+        var feature = new SqliteGroundworkRuntimePersistenceShellFeature
+        {
+            ConnectionString = $"Data Source={databasePath}",
+            RematerializeOnStartup = rematerializeOnStartup
+        };
 
         var services = new ServiceCollection();
         feature.ConfigureServices(services);
@@ -129,18 +129,10 @@ public sealed class SqliteGroundworkRuntimePersistenceShellFeatureTests
         }
     }
 
-    private static void AssertSetting(object feature, string propertyName, object expectedDefault)
+    private static void AssertManifestSetting(object feature, string propertyName)
     {
         var property = feature.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
-        Assert.Equal(expectedDefault, property!.GetValue(feature));
         Assert.Contains(property.CustomAttributes, attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
-    }
-
-    private static void SetSetting(object feature, string propertyName, object value)
-    {
-        var property = feature.GetType().GetProperty(propertyName);
-        Assert.NotNull(property);
-        property!.SetValue(feature, value);
     }
 }
