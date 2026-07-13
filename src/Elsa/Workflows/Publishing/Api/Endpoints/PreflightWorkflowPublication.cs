@@ -59,8 +59,8 @@ internal sealed class PreflightWorkflowPublicationEndpoint(
                     PublicationContract.ToView(resolved.PolicySource),
                     resolved.PolicyRevision,
                     plan.Result.CanActivate,
-                    plan.Result.Changes,
-                    plan.Result.Conflicts),
+                    plan.Result.Changes.Select(PublicationTriggerChangeView.From).ToArray(),
+                    plan.Result.Conflicts.Select(PublicationTriggerConflictView.From).ToArray()),
                 cancellationToken);
         }
         catch (PublicationPolicyResolutionException exception)

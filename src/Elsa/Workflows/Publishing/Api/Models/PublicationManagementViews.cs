@@ -112,6 +112,49 @@ public enum PublicationPolicySourceView
     Host
 }
 
+public enum PublicationTriggerChangeKindView
+{
+    Added,
+    Removed,
+    Retained
+}
+
+public enum PublicationTriggerCardinalityView
+{
+    Exclusive,
+    FanOut
+}
+
+public sealed record PublicationTriggerChangeView(
+    PublicationTriggerChangeKindView Change,
+    string Key,
+    PublicationTriggerCardinalityView Cardinality)
+{
+    public static PublicationTriggerChangeView From(PublicationTriggerChange change)
+    {
+        var claim = change.CandidateClaim ?? change.ExistingClaim
+            ?? throw new InvalidOperationException("A publication trigger change must identify a candidate or existing claim.");
+        return new(
+            PublicationContract.ToView(change.Change),
+            PublicationContract.TriggerKey(change.StimulusType, change.StimulusHash),
+            PublicationContract.ToView(claim.Cardinality));
+    }
+}
+
+public sealed record PublicationTriggerConflictView(
+    string Key,
+    PublicationTriggerCardinalityView Cardinality,
+    string PublicationId,
+    string SlotName)
+{
+    public static PublicationTriggerConflictView From(PublicationTriggerConflict conflict) =>
+        new(
+            PublicationContract.TriggerKey(conflict.StimulusType, conflict.StimulusHash),
+            PublicationContract.ToView(conflict.Cardinality),
+            conflict.PublicationId,
+            conflict.SlotName);
+}
+
 public static class PublicationContract
 {
     public static PublicationStatusView ToView(PublicationStatus status) => status switch
@@ -138,6 +181,24 @@ public static class PublicationContract
         PublicationPolicySource.Host => PublicationPolicySourceView.Host,
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unsupported publication policy source.")
     };
+
+    public static PublicationTriggerChangeKindView ToView(PublicationTriggerChangeKind change) => change switch
+    {
+        PublicationTriggerChangeKind.Added => PublicationTriggerChangeKindView.Added,
+        PublicationTriggerChangeKind.Removed => PublicationTriggerChangeKindView.Removed,
+        PublicationTriggerChangeKind.Retained => PublicationTriggerChangeKindView.Retained,
+        _ => throw new ArgumentOutOfRangeException(nameof(change), change, "Unsupported publication trigger change.")
+    };
+
+    public static PublicationTriggerCardinalityView ToView(PublicationTriggerCardinality cardinality) => cardinality switch
+    {
+        PublicationTriggerCardinality.Exclusive => PublicationTriggerCardinalityView.Exclusive,
+        PublicationTriggerCardinality.FanOut => PublicationTriggerCardinalityView.FanOut,
+        _ => throw new ArgumentOutOfRangeException(nameof(cardinality), cardinality, "Unsupported publication trigger cardinality.")
+    };
+
+    public static string TriggerKey(string stimulusType, string stimulusHash) =>
+        $"{stimulusType.ToLowerInvariant()}:{stimulusHash}";
 }
 
 public static class PublicationIntentContract
@@ -158,5 +219,5 @@ public sealed record PublicationPreflightView(
     PublicationPolicySourceView PolicySource,
     long? PolicyRevision,
     bool CanActivate,
-    IReadOnlyCollection<PublicationTriggerChange> Changes,
-    IReadOnlyCollection<PublicationTriggerConflict> Conflicts);
+    IReadOnlyCollection<PublicationTriggerChangeView> Triggers,
+    IReadOnlyCollection<PublicationTriggerConflictView> Conflicts);

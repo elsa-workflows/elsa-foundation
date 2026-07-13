@@ -72,6 +72,21 @@ public sealed class PublicationManagementEndpointTests
         PublicationStatusView expected) =>
         Assert.Equal(expected, PublicationContract.ToView(status));
 
+    [Fact]
+    public void Trigger_preflight_maps_internal_claims_to_the_stable_client_shape()
+    {
+        var claim = new Elsa.Workflows.Publishing.Core.Models.PublicationTriggerClaim(
+            "claim-1", "publication-1", "artifact-1", "node-1", "Http", "/bar",
+            Elsa.Workflows.Publishing.Core.Models.PublicationTriggerCardinality.Exclusive,
+            new Dictionary<string, string>());
+        var change = PublicationTriggerChangeView.From(new Elsa.Workflows.Publishing.Core.Models.PublicationTriggerChange(
+            "Http", "/bar", Elsa.Workflows.Publishing.Core.Models.PublicationTriggerChangeKind.Added, claim));
+
+        Assert.Equal("http:/bar", change.Key);
+        Assert.Equal(PublicationTriggerChangeKindView.Added, change.Change);
+        Assert.Equal(PublicationTriggerCardinalityView.Exclusive, change.Cardinality);
+    }
+
     [Theory]
     [InlineData(PublicationActionView.Replace, "replace")]
     [InlineData(PublicationActionView.SideBySide, "sideBySide")]
