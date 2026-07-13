@@ -1,5 +1,6 @@
 using Elsa.Diagnostics.OpenTelemetry.Core.Contracts;
 using Elsa.Diagnostics.Persistence.Extensions;
+using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -140,8 +141,65 @@ public sealed class DiagnosticsPersistenceArchitectureTests
             descriptor => Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime));
     }
 
+    [Fact]
+    public void Invalid_store_lifetime_is_rejected_by_default_and_replacement_registration()
+    {
+        var invalid = (ServiceLifetime)int.MaxValue;
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new ServiceCollection().AddDefaultDiagnosticsStore<ITestStore, FirstStore>(invalid));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new ServiceCollection().ReplaceDiagnosticsStore<ITestStore, FirstStore>(invalid));
+    }
+
+    [Fact]
+    public void Observer_replacement_is_order_independent_and_rejects_a_second_explicit_selection()
+    {
+        var defaultThenExplicit = new ServiceCollection();
+        defaultThenExplicit.AddDiagnosticsPersistenceObservability();
+        defaultThenExplicit.ReplaceDiagnosticsStore<IDiagnosticsPersistenceObserver, FirstObserver>(ServiceLifetime.Singleton);
+        Assert.Throws<InvalidOperationException>(() =>
+            defaultThenExplicit.ReplaceDiagnosticsStore<IDiagnosticsPersistenceObserver, SecondObserver>(ServiceLifetime.Singleton));
+
+        var explicitThenDefault = new ServiceCollection();
+        explicitThenDefault.ReplaceDiagnosticsStore<IDiagnosticsPersistenceObserver, FirstObserver>(ServiceLifetime.Singleton);
+        explicitThenDefault.AddDiagnosticsPersistenceObservability();
+        Assert.Throws<InvalidOperationException>(() =>
+            explicitThenDefault.ReplaceDiagnosticsStore<IDiagnosticsPersistenceObserver, SecondObserver>(ServiceLifetime.Singleton));
+
+        using var firstProvider = defaultThenExplicit.BuildServiceProvider();
+        using var secondProvider = explicitThenDefault.BuildServiceProvider();
+        Assert.IsType<FirstObserver>(firstProvider.GetRequiredService<IDiagnosticsPersistenceObserver>());
+        Assert.IsType<FirstObserver>(secondProvider.GetRequiredService<IDiagnosticsPersistenceObserver>());
+    }
+
+    [Fact]
+    public void Observability_composition_rejects_untracked_explicit_observer_conflicts_before_or_after_default()
+    {
+        var beforeDefault = new ServiceCollection();
+        beforeDefault.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
+        beforeDefault.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+        Assert.Throws<InvalidOperationException>(beforeDefault.AddDiagnosticsPersistenceObservability);
+
+        var afterDefault = new ServiceCollection();
+        afterDefault.AddDiagnosticsPersistenceObservability();
+        afterDefault.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
+        afterDefault.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+        Assert.Throws<InvalidOperationException>(afterDefault.AddDiagnosticsPersistenceObservability);
+    }
+
     private interface ITestStore;
     private sealed class FirstStore : ITestStore;
     private sealed class SecondStore : ITestStore;
     private sealed class ReplacementStore : ITestStore;
+    private sealed class FirstObserver : TestObserver;
+    private sealed class SecondObserver : TestObserver;
+
+    private abstract class TestObserver : IDiagnosticsPersistenceObserver
+    {
+        public void RecordState(DiagnosticsDrainState state) { }
+        public void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts) { }
+        public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) { }
+        public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count) { }
+    }
 }

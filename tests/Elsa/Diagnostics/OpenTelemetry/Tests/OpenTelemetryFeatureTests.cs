@@ -66,9 +66,7 @@ public sealed class OpenTelemetryFeatureTests
         await using var subscriber = feed.SubscribeAsync(new OpenTelemetryTraceFilter(), cancellation.Token)
             .GetAsyncEnumerator(cancellation.Token);
         var traces = Enumerable.Range(1, 3)
-            .Select(index => new TelemetryTrace(
-                $"trace-{index}", "root", "name", Now, Now.AddMilliseconds(5),
-                TimeSpan.FromMilliseconds(5), SpanStatus.Ok, ["resource-1"], [], 1))
+            .Select(CreateTrace)
             .ToArray();
 
         await feed.PublishAsync(new OpenTelemetryBatch([], traces, [], [], [], []), cancellation.Token);
@@ -79,4 +77,47 @@ public sealed class OpenTelemetryFeatureTests
         Assert.Equal(signal.Count,
             counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
+
+    [Fact]
+    public async Task Evicted_and_requeued_drop_summary_counts_each_underlying_item_once()
+    {
+        var services = new ServiceCollection();
+        new OpenTelemetryFeature { SubscriberChannelCapacity = 1 }.ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        var feed = provider.GetRequiredService<IOpenTelemetryLiveFeed>();
+        var counters = provider.GetRequiredService<DiagnosticsPersistenceCounters>();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await using var subscriber = feed.SubscribeAsync(new OpenTelemetryTraceFilter(), cancellation.Token)
+            .GetAsyncEnumerator(cancellation.Token);
+
+        await feed.PublishAsync(
+            new OpenTelemetryBatch([], Enumerable.Range(1, 3).Select(CreateTrace).ToArray(), [], [], [], []),
+            cancellation.Token);
+        Assert.True(await subscriber.MoveNextAsync());
+        Assert.Equal("trace-3", subscriber.Current.Trace?.TraceId);
+        Assert.Equal(2, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
+
+        await feed.PublishAsync(
+            new OpenTelemetryBatch([], [CreateTrace(4)], [], [], [], []),
+            cancellation.Token);
+        Assert.True(await subscriber.MoveNextAsync());
+        Assert.Equal("trace-4", subscriber.Current.Trace?.TraceId);
+        Assert.True(await subscriber.MoveNextAsync());
+
+        var summary = Assert.IsType<OpenTelemetryDroppedItemSummary>(subscriber.Current.DroppedItems);
+        Assert.Equal(2, summary.Count);
+        Assert.Equal(2, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
+    }
+
+    private static TelemetryTrace CreateTrace(int index) => new(
+        $"trace-{index}",
+        "root",
+        "name",
+        Now,
+        Now.AddMilliseconds(5),
+        TimeSpan.FromMilliseconds(5),
+        SpanStatus.Ok,
+        ["resource-1"],
+        [],
+        1);
 }

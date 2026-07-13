@@ -19,11 +19,11 @@ public sealed class DiagnosticsDocumentationTests
         Assert.Contains("conflict", catalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("helper boundary", catalog, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("## Overridable contracts", catalog, StringComparison.Ordinal);
-        Assert.Contains("## Contributors", catalog, StringComparison.Ordinal);
+        Assert.Contains("## Implementable contributor interfaces", catalog, StringComparison.Ordinal);
         Assert.Contains("## Events", catalog, StringComparison.Ordinal);
         Assert.True(
             catalog.Contains("*(Core —", StringComparison.Ordinal) ||
-            catalog.Contains("*(Feature-contract —", StringComparison.Ordinal));
+            catalog.Contains("*(Feature contract —", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -119,6 +119,19 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
+    public void Subscriber_delivery_observer_failure_cannot_break_live_feed_accounting_paths()
+    {
+        var bridge = new DiagnosticsSubscriberDeliveryLossBridge(new ThrowingObserver());
+        var structuredLogs = bridge.CreateStructuredLogRecorder();
+
+        structuredLogs(new DroppedEntriesSignal(2, DateTimeOffset.UnixEpoch));
+        bridge.RecordOpenTelemetry(new OpenTelemetryDroppedItemSummary(
+            OpenTelemetrySignalType.Trace,
+            3,
+            "SubscriberQueueFull"));
+    }
+
+    [Fact]
     public void Observer_rejects_invalid_state_operation_reason_count_and_attempt_values()
     {
         var counters = new DiagnosticsPersistenceCounters();
@@ -131,5 +144,13 @@ public sealed class DiagnosticsPersistenceObservabilityTests
         Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 0, 2));
         Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 3, 2));
         Assert.Throws<ArgumentOutOfRangeException>(() => counters.RecordRetry(DiagnosticsPersistenceOperation.Commit, 1, 0));
+    }
+
+    private sealed class ThrowingObserver : IDiagnosticsPersistenceObserver
+    {
+        public void RecordState(DiagnosticsDrainState state) => throw new InvalidOperationException();
+        public void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts) => throw new InvalidOperationException();
+        public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) => throw new InvalidOperationException();
+        public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count) => throw new InvalidOperationException();
     }
 }

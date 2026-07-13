@@ -11,6 +11,9 @@ public class InMemoryOpenTelemetryLiveFeedTests
     private static readonly DateTimeOffset Now = new(2026, 5, 26, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public void Live_feed_is_sealed() => Assert.True(typeof(InMemoryOpenTelemetryLiveFeed).IsSealed);
+
+    [Fact]
     public async Task SubscribeAsync_DeliversPublishedTraceMatchingFilter()
     {
         var options = OptionsFactory.Create(new OpenTelemetryDiagnosticsOptions());
