@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
 import { AlertCircle, Boxes, Check, ChevronLeft, ChevronRight, Code2, Download, GitBranch, ListTree, Maximize2, Minimize2, Network, Package, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioWorkflowDesignerPanelContribution } from "@elsa-workflows/studio-sdk";
@@ -49,7 +49,9 @@ import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { SlotEmptyState } from "./SlotEmptyState";
-import type { PublicationIntent, PublicationPreflight } from "../api/publishing";
+import type { PublicationIntent } from "../api/publishing";
+import { publicationChangesFor, publicationIntentFor, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
+import { useDialogFocus } from "./useDialogFocus";
 
 export function WorkflowEditor({
   context,
@@ -116,7 +118,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, autosaveEnabled, setAutosaveEnabled, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
+  const { saveDraft, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -314,7 +316,6 @@ export function WorkflowEditor({
     save,
     preparePublication,
     publicationReview,
-    reviewPublication,
     confirmPublication,
     cancelPublication,
     runInputPrompt,
@@ -325,6 +326,7 @@ export function WorkflowEditor({
     context,
     draft,
     details,
+    catalog,
     busy,
     saveDraft,
     reload,
@@ -335,7 +337,8 @@ export function WorkflowEditor({
     setStatus,
     setError,
     setActiveRightPanelId,
-    setInspectorCollapsed
+    setInspectorCollapsed,
+    setAutosavePaused
   });
 
   // Properties-tab edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -629,7 +632,7 @@ export function WorkflowEditor({
           ) : null}
           <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
-          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Promote &amp; publish</button>
+          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Review &amp; publish</button>
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
@@ -653,10 +656,8 @@ export function WorkflowEditor({
 
       {publicationReview ? (
         <PublicationReviewDialog
-          preflight={publicationReview.preflight}
-          reviewedIntent={publicationReview.intent}
+          review={publicationReview}
           busy={busy}
-          onReview={reviewPublication}
           onPublish={confirmPublication}
           onCancel={cancelPublication}
         />
@@ -859,58 +860,159 @@ export function WorkflowEditor({
   );
 }
 
-export function PublicationReviewDialog({ preflight, reviewedIntent, busy, onReview, onPublish, onCancel }: {
-  preflight: PublicationPreflight;
-  reviewedIntent: PublicationIntent;
+export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
+  review: PublicationReviewState;
   busy: boolean;
-  onReview(intent: PublicationIntent): Promise<void>;
-  onPublish(): Promise<void>;
+  onPublish(intent: PublicationIntent): Promise<void>;
   onCancel(): void;
 }) {
-  const reviewedAction = reviewedIntent.action ?? preflight.resolvedAction;
-  const [action, setAction] = useState<"replace" | "sideBySide">(reviewedAction);
-  const [slotName, setSlotName] = useState(reviewedIntent.slotName ?? preflight.slotName);
-  const intent: PublicationIntent = action === "sideBySide"
-    ? { action, slotName: slotName.trim() }
-    : { action: "replace", slotName: slotName.trim() || preflight.slotName };
-  const reviewIsCurrent = action === reviewedAction
-    && (intent.slotName ?? "") === (reviewedIntent.slotName ?? preflight.slotName);
-  const changes = preflight.triggers ?? preflight.changes ?? [];
-  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim());
+  const dialogRef = useRef<HTMLElement>(null);
+  const [action, setAction] = useState<"replace" | "sideBySide">(review.intent.action ?? "replace");
+  const [slotName, setSlotName] = useState(review.intent.slotName ?? review.policy.defaultSlotName);
+  const canEdit = review.phase === "review" || review.phase === "validationBlocked" || review.phase === "savedFailure" || review.phase === "partialFailure";
+  const reservedSideBySideSlot = action === "sideBySide" && slotName.trim().toLowerCase() === "default";
+  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim()) && !reservedSideBySideSlot;
+  const intent = publicationIntentFor(review, action, slotName);
+  const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
+  useDialogFocus(dialogRef, closeOnEscape);
+
+  const targetSlotName = intent.slotName || (action === "replace" ? review.policy.defaultSlotName : "the named slot");
+  const activeSlot = review.slots.find(slot => slot.slotName === targetSlotName);
+  const currentTargetVersion = activeSlot?.publication?.artifactVersion ?? activeSlot?.publication?.versionId ?? "None";
+  const targetDescription = activeSlot?.publication
+    ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in occupied slot ${activeSlot.slotName}. Concurrency protection requires publication ${activeSlot.publication.publicationId} to remain current.`
+    : `Create a new executable source reference in slot ${targetSlotName}.`;
+  const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
+  const preflightChanges = review.preflight?.triggers ?? review.preflight?.changes ?? [];
+  const triggerSummary = review.preflight
+    ? preflightChanges.length
+      ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
+      : "No trigger changes."
+    : formatChangeCount(changes.triggers);
+  const statusMessage = publicationStatusMessage(review);
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
-      <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="publication-review-title">
-        <h3 id="publication-review-title">Review publication</h3>
-        <p>
-          The {preflight.policySource} policy resolved to <strong>{preflight.resolvedAction === "replace" ? "replacement" : "side-by-side"}</strong>
-          {" "}in slot <strong>{preflight.slotName}</strong>.
-        </p>
-        <fieldset className="wf-form-field">
-          <legend>Publication behavior</legend>
-          <label><input type="radio" name="publication-action" checked={action === "replace"} onChange={() => setAction("replace")} /> Replace authority in this slot</label>
-          <label><input type="radio" name="publication-action" checked={action === "sideBySide"} onChange={() => setAction("sideBySide")} /> Publish side by side</label>
-        </fieldset>
-        <label className="wf-form-field">
-          <span>{action === "sideBySide" ? "Named slot" : "Slot"}</span>
-          <input aria-label="Publication slot" value={slotName} onChange={event => setSlotName(event.target.value)} required={action === "sideBySide"} />
-          {action === "sideBySide" && !slotName.trim() ? <small role="alert">A meaningful slot name is required for side-by-side publication.</small> : null}
-        </label>
-        <div aria-label="Trigger changes">
-          <h4>Trigger changes</h4>
-          {changes.length ? (
-            <ul>{changes.map(change => <li key={`${change.change}-${change.key}`}>{change.change}: {change.key} ({change.cardinality})</li>)}</ul>
-          ) : <p>No trigger changes.</p>}
-          {preflight.conflicts?.length ? (
-            <ul>{preflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`} role="alert">Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
+      <section
+        ref={dialogRef}
+        className="wf-dialog wf-publication-review"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="publication-review-title"
+        aria-describedby="publication-review-status"
+        tabIndex={-1}
+      >
+        <form onSubmit={event => {
+          event.preventDefault();
+          void onPublish(intent);
+        }}>
+          <header className="wf-dialog-heading">
+            <div>
+              <span>Workflow publication</span>
+              <h3 id="publication-review-title">Review publication</h3>
+            </div>
+          </header>
+
+          <output
+            id="publication-review-status"
+            className="wf-publication-status"
+            data-phase={review.phase}
+            aria-live="polite"
+          >
+            {statusMessage}
+          </output>
+
+          <dl className="wf-publication-facts">
+            <div><dt>Current published version</dt><dd>{currentTargetVersion}</dd></div>
+            <div><dt>Proposed next version</dt><dd>{review.proposedVersion} (confirmed after promotion)</dd></div>
+            <div><dt>Unsaved changes</dt><dd>Included — the captured editor state is saved only after Publish.</dd></div>
+            <div><dt>Validation</dt><dd>{review.validationErrors.length ? `${review.validationErrors.length} blocking issue${review.validationErrors.length === 1 ? "" : "s"}` : "Ready for server preflight"}</dd></div>
+            <div><dt>Executable status</dt><dd>{review.executableStatus === "ready" ? "Executable after server preflight" : "Not executable until blocking validation is resolved"}</dd></div>
+          </dl>
+
+          {review.validationErrors.length ? (
+            <div className="wf-publication-risks" role="alert">
+              <strong>Publication blocked before mutation</strong>
+              <ul>{review.validationErrors.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
+            </div>
           ) : null}
-        </div>
-        <div className="wf-dialog-actions">
-          <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
-          {!reviewIsCurrent ? <button type="button" onClick={() => void onReview(intent)} disabled={busy || !slotIsValid}>Review changes</button> : null}
-          <button type="button" onClick={() => void onPublish()} disabled={busy || !slotIsValid || !reviewIsCurrent || !preflight.canActivate}>Publish</button>
-        </div>
+
+          <section className="wf-publication-changes" aria-labelledby="publication-changes-title">
+            <h4 id="publication-changes-title">Changes in the captured draft</h4>
+            <dl>
+              <ChangeSummary label="Activities" value={changes.activities} />
+              <ChangeSummary label="Inputs" value={changes.inputs} />
+              <ChangeSummary label="Outputs" value={changes.outputs} />
+              <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
+            </dl>
+          </section>
+
+          <fieldset className="wf-publication-behavior" disabled={!canEdit || busy}>
+            <legend>Publication behavior</legend>
+            <p>The {review.policy.source} policy defaults to {review.policy.defaultAction === "replace" ? "replacement" : "an explicit side-by-side slot"}.</p>
+            <label><input type="radio" name="publication-action" checked={action === "replace"} onChange={() => setAction("replace")} /> Replace authority in this slot</label>
+            <label><input type="radio" name="publication-action" checked={action === "sideBySide"} onChange={() => setAction("sideBySide")} /> Publish side by side</label>
+          </fieldset>
+          <label className="wf-form-field">
+            <span>{action === "sideBySide" ? "Named slot" : "Slot"}</span>
+            <input
+              aria-label="Publication slot"
+              value={slotName}
+              onChange={event => setSlotName(event.target.value)}
+              required={action === "sideBySide"}
+              disabled={!canEdit || busy}
+            />
+            {action === "sideBySide" && !slotName.trim() ? <small role="alert">A meaningful slot name is required for side-by-side publication.</small> : null}
+            {reservedSideBySideSlot ? <small role="alert">The default slot is reserved for replacement publication. Choose another named slot.</small> : null}
+          </label>
+          <p className="wf-dialog-note"><strong>Executable impact:</strong> {targetDescription}</p>
+
+          {review.preflight?.conflicts.length ? (
+            <div className="wf-publication-risks" role="alert">
+              <strong>Server policy conflicts</strong>
+              <ul>{review.preflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
+            </div>
+          ) : null}
+          {review.failureMessage ? <p className="wf-publication-recovery" role="alert">{review.failureMessage}</p> : null}
+          {review.phase === "success" && review.published ? (
+            <p className="wf-publication-success">Published executable {review.published.artifactId} with source reference {review.published.sourceReferenceId} in slot {review.published.slotName}.</p>
+          ) : null}
+
+          <div className="wf-dialog-actions">
+            <button type="button" onClick={onCancel} disabled={busy}>{review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}</button>
+            {review.phase !== "success" ? (
+              <button type="submit" disabled={busy || !slotIsValid || review.validationErrors.length > 0}>
+                {review.phase === "partialFailure" || review.phase === "savedFailure" ? "Retry Publish" : "Publish"}
+              </button>
+            ) : null}
+          </div>
+        </form>
       </section>
     </div>
   );
+}
+
+function ChangeSummary({ label, value }: { label: string; value: PublicationChangeCount }) {
+  return <div><dt>{label}</dt><dd>{formatChangeCount(value)}</dd></div>;
+}
+
+function formatChangeCount(value: PublicationChangeCount) {
+  return `${value.added} added, ${value.changed} changed, ${value.removed} removed`;
+}
+
+function publicationStatusMessage(review: PublicationReviewState) {
+  if (review.phase === "success") return "Publication completed successfully.";
+  if (review.phase === "validationBlocked") return "Publication is blocked by validation. No version has been promoted.";
+  if (review.phase === "savedFailure") return "The reviewed draft was saved, but no version was promoted and nothing was published.";
+  if (review.phase === "partialFailure") return `Publication did not complete. Promoted version ${review.promotedVersionId} remains available.`;
+  if (review.phase === "publishing") {
+    const messages = {
+      saving: "Saving the captured workflow state...",
+      promoting: "Promoting the saved workflow version...",
+      preflight: "Reviewing server publication policy and trigger conflicts...",
+      publishing: "Publishing the executable source reference..."
+    };
+    return review.progressStep ? messages[review.progressStep] : "Publishing...";
+  }
+  return "Review the target and captured changes. Nothing is saved, promoted, or published until you choose Publish.";
 }

@@ -2018,6 +2018,152 @@
   padding: 8px 10px;
 }
 
+.wf-publication-review {
+  width: min(720px, 100%);
+  max-height: min(880px, calc(100vh - 40px));
+  overflow: hidden;
+}
+
+.wf-publication-review form {
+  max-height: inherit;
+  overflow-y: auto;
+}
+
+.wf-publication-review h4,
+.wf-publication-review p {
+  margin: 0;
+}
+
+.wf-publication-status {
+  display: block;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel-muted);
+  color: var(--wf-muted-text);
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.wf-publication-status[data-phase="publishing"] {
+  border-color: color-mix(in srgb, var(--wf-accent) 45%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+}
+
+.wf-publication-status[data-phase="success"] {
+  border-color: color-mix(in srgb, var(--wf-success) 45%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-success) 10%, var(--wf-panel));
+  color: var(--wf-success);
+}
+
+.wf-publication-status[data-phase="validationBlocked"],
+.wf-publication-status[data-phase="savedFailure"],
+.wf-publication-status[data-phase="partialFailure"] {
+  border-color: color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  color: var(--wf-danger);
+}
+
+.wf-publication-facts,
+.wf-publication-changes dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-border);
+}
+
+.wf-publication-facts > div,
+.wf-publication-changes dl > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  background: var(--wf-panel-muted);
+  padding: 10px 12px;
+}
+
+.wf-publication-facts dt,
+.wf-publication-changes dt {
+  color: var(--wf-muted-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: var(--wf-label-transform, uppercase);
+}
+
+.wf-publication-facts dd,
+.wf-publication-changes dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-publication-changes {
+  display: grid;
+  gap: 8px;
+}
+
+.wf-publication-changes h4 {
+  font-size: 13px;
+}
+
+.wf-publication-behavior {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  padding: 12px;
+}
+
+.wf-publication-behavior legend {
+  color: var(--wf-text);
+  font-weight: 700;
+  padding: 0 4px;
+}
+
+.wf-publication-behavior p {
+  color: var(--wf-muted-text);
+  font-size: 12px;
+}
+
+.wf-publication-behavior label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-publication-risks,
+.wf-publication-recovery,
+.wf-publication-success {
+  border: 1px solid color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
+  border-radius: var(--wf-radius);
+  background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));
+  color: var(--wf-danger);
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.wf-publication-risks ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.wf-publication-success {
+  border-color: color-mix(in srgb, var(--wf-success) 45%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-success) 10%, var(--wf-panel));
+  color: var(--wf-success);
+}
+
+@media (max-width: 640px) {
+  .wf-publication-facts,
+  .wf-publication-changes dl {
+    grid-template-columns: 1fr;
+  }
+}
+
 .wf-dialog-actions {
   display: flex;
   justify-content: flex-end;
