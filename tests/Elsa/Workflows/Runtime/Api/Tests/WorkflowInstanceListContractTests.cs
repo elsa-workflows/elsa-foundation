@@ -1,7 +1,9 @@
 using System.Reflection;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Models;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
@@ -44,6 +46,37 @@ public sealed class WorkflowInstanceListContractTests
         Assert.Equal(1, RuntimeApiCapabilities.StaticDeclaration.ContractMajorVersion);
     }
 
+    [Theory]
+    [InlineData("runtime/workflows/instances", "LegacyArray")]
+    [InlineData("runtime/workflows/instances/page", "Paged")]
+    public async Task Each_route_selects_its_own_page_size_contract(string route, string expectedContract)
+    {
+        var sender = new CapturingRequestSender();
+        var endpoint = RuntimeApiEndpointTestFactory.FindByRoute(route);
+        endpoint = RuntimeApiEndpointTestFactory.Create(endpoint.GetType(), sender);
+        var handle = endpoint.GetType().GetMethod("HandleAsync", BindingFlags.Public | BindingFlags.Instance);
+
+        Assert.NotNull(handle);
+        await Assert.IsAssignableFrom<Task>(handle!.Invoke(
+            endpoint,
+            [new ListWorkflowInstances(null, null, null, Take: null), CancellationToken.None]));
+
+        var contract = typeof(ListWorkflowInstances).GetProperty("PagingContract", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(contract);
+        Assert.Equal(expectedContract, contract!.GetValue(sender.Request)!.ToString());
+    }
+
     private static void AssertProperties(Type type, params string[] properties) =>
         Assert.All(properties, property => Assert.NotNull(type.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)));
+
+    private sealed class CapturingRequestSender : IRequestSender
+    {
+        public ListWorkflowInstances? Request { get; private set; }
+
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        {
+            Request = Assert.IsType<ListWorkflowInstances>(request);
+            return Task.FromResult((T)(object)new WorkflowInstanceListView([], null, null, false, false, 0, 0));
+        }
+    }
 }

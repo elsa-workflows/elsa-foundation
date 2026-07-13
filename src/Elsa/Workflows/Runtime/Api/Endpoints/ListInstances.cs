@@ -22,7 +22,7 @@ internal sealed class ListInstances(IRequestSender requestSender, ILogger<ListIn
     {
         try
         {
-            var result = await requestSender.Send(request, cancellationToken);
+            var result = await requestSender.Send(request.ForLegacyArray(), cancellationToken);
             await Send.OkAsync(result.Items, cancellationToken);
         }
         catch (EntityNotFoundException exception)

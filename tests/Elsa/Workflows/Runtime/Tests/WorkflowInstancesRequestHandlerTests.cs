@@ -23,6 +23,12 @@ public sealed class WorkflowInstancesRequestHandlerTests
     private GetWorkflowInstanceRequestHandler NewGetInstanceHandler() =>
         new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy());
 
+    private async Task SeedWorkflowInstancesAsync(int count)
+    {
+        for (var index = 0; index < count; index++)
+            await _workflowStore.SaveAsync(Workflow($"wf-{index:D3}", WorkflowExecutionStatus.Completed, "definition-1", updatedAt: Now(-index)));
+    }
+
     [Fact]
     public async Task ListWorkflowInstances_ReturnsFilteredSummariesWithActivityAndIncidentCounts()
     {
@@ -95,8 +101,7 @@ public sealed class WorkflowInstancesRequestHandlerTests
     [Fact]
     public async Task ListWorkflowInstances_ClampsPageSizeAtBothBounds()
     {
-        for (var index = 0; index < 105; index++)
-            await _workflowStore.SaveAsync(Workflow($"wf-{index:D3}", WorkflowExecutionStatus.Completed, "definition-1", updatedAt: Now(-index)));
+        await SeedWorkflowInstancesAsync(105);
         var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
 
         var maximum = await handler.Handle(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
@@ -105,6 +110,42 @@ public sealed class WorkflowInstancesRequestHandlerTests
         Assert.Equal(100, maximum.Count);
         Assert.True(maximum.HasNext);
         Assert.Single(minimum.Items);
+    }
+
+    [Theory]
+    [InlineData(null, 25)]
+    [InlineData(25, 25)]
+    [InlineData(100, 100)]
+    [InlineData(101, 100)]
+    [InlineData(500, 100)]
+    public async Task Paged_route_preserves_its_25_default_and_100_maximum(int? take, int expected)
+    {
+        await SeedWorkflowInstancesAsync(501);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(
+            new ListWorkflowInstances(null, null, null, take),
+            CancellationToken.None);
+
+        Assert.Equal(expected, result.Count);
+    }
+
+    [Theory]
+    [InlineData(null, 100)]
+    [InlineData(25, 25)]
+    [InlineData(100, 100)]
+    [InlineData(101, 101)]
+    [InlineData(500, 500)]
+    public async Task Legacy_array_route_preserves_its_100_default_and_500_maximum(int? take, int expected)
+    {
+        await SeedWorkflowInstancesAsync(501);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(
+            new ListWorkflowInstances(null, null, null, take).ForLegacyArray(),
+            CancellationToken.None);
+
+        Assert.Equal(expected, result.Count);
     }
 
     [Fact]

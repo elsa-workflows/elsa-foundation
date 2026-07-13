@@ -14,8 +14,10 @@ public sealed class ListWorkflowInstancesRequestHandler(
     IIncidentStateStore incidentStateStore)
     : IRequestHandler<ListWorkflowInstances, WorkflowInstanceListView>
 {
-    private const int DefaultTake = 25;
-    private const int MaxTake = 100;
+    private const int PagedDefaultTake = 25;
+    private const int PagedMaxTake = 100;
+    private const int LegacyDefaultTake = 100;
+    private const int LegacyMaxTake = 500;
 
     public async Task<WorkflowInstanceListView> Handle(ListWorkflowInstances request, CancellationToken cancellationToken)
     {
@@ -54,12 +56,15 @@ public sealed class ListWorkflowInstancesRequestHandler(
         if (request.To is { } to)
             query = query.Where(state => GetSortTimestamp(state) <= to);
 
-        var take = Math.Clamp(request.Take ?? DefaultTake, 1, MaxTake);
+        var (defaultTake, maxTake) = request.PagingContract == WorkflowInstanceListPagingContract.LegacyArray
+            ? (LegacyDefaultTake, LegacyMaxTake)
+            : (PagedDefaultTake, PagedMaxTake);
+        var take = Math.Clamp(request.Take ?? defaultTake, 1, maxTake);
         var filteredStates = query
             .OrderByDescending(GetSortTimestamp)
             .ThenBy(state => state.WorkflowExecutionId, StringComparer.Ordinal)
             .ToArray();
-        var pageCandidates = ApplyCursor(filteredStates, request.Cursor);
+        var pageCandidates = ApplyCursor(filteredStates, request.Cursor, maxTake);
         var orderedStates = pageCandidates.Take(take).ToArray();
 
         var summaryTasks = orderedStates.Select(async state =>
@@ -88,12 +93,13 @@ public sealed class ListWorkflowInstancesRequestHandler(
 
     private static IReadOnlyCollection<WorkflowExecutionState> ApplyCursor(
         IReadOnlyCollection<WorkflowExecutionState> orderedStates,
-        string? cursor)
+        string? cursor,
+        int maxTake)
     {
         if (string.IsNullOrWhiteSpace(cursor))
             return orderedStates;
 
-        var anchor = DecodeCursor(cursor);
+        var anchor = DecodeCursor(cursor, maxTake);
         var relative = orderedStates.Where(state => anchor.Direction == CursorDirection.Next
             ? IsAfter(anchor, state)
             : IsBefore(anchor, state)).ToArray();
@@ -130,7 +136,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
             .Replace('/', '_');
     }
 
-    private static CursorAnchor DecodeCursor(string cursor)
+    private static CursorAnchor DecodeCursor(string cursor, int maxTake)
     {
         try
         {
@@ -146,7 +152,7 @@ public sealed class ListWorkflowInstancesRequestHandler(
                 new DateTimeOffset(ticks, TimeSpan.Zero),
                 Encoding.UTF8.GetString(Convert.FromBase64String(executionIdText)),
                 parts[1] == "n" ? CursorDirection.Next : CursorDirection.Previous,
-                Math.Clamp(pageSize, 1, MaxTake));
+                Math.Clamp(pageSize, 1, maxTake));
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {

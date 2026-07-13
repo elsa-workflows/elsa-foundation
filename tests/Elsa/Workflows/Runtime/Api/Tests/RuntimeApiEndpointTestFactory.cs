@@ -16,7 +16,7 @@ internal static class RuntimeApiEndpointTestFactory
     {
         var endpoint = typeof(WorkflowsRuntimeApiFeature).Assembly.GetTypes()
             .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(BaseEndpoint).IsAssignableFrom(type))
-            .Select(Create)
+            .Select(type => Create(type))
             .SingleOrDefault(candidate => candidate.Definition.Routes.Contains(route, StringComparer.Ordinal));
         Xunit.Assert.NotNull(endpoint);
         return endpoint;
@@ -33,10 +33,12 @@ internal static class RuntimeApiEndpointTestFactory
         throw new InvalidOperationException($"Endpoint '{endpoint.GetType().FullName}' has no request/response contract.");
     }
 
-    public static BaseEndpoint Create(Type endpointType)
+    public static BaseEndpoint Create(Type endpointType, params object[] providedDependencies)
     {
         var dependencies = endpointType.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-            .Single().GetParameters().Select(parameter => Resolve(parameter.ParameterType)).ToArray();
+            .Single().GetParameters().Select(parameter =>
+                providedDependencies.SingleOrDefault(parameter.ParameterType.IsInstanceOfType)
+                ?? Resolve(parameter.ParameterType)).ToArray();
         var create = typeof(Factory).GetMethods()
             .Single(method => method.Name == nameof(Factory.Create) && method.IsGenericMethodDefinition &&
                               method.GetParameters() is [var first, var rest] &&
