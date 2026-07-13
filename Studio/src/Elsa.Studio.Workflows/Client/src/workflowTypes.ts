@@ -402,7 +402,8 @@ export interface CreateDefinitionRequest {
 }
 
 export interface PromoteDraftResponse {
-  versionId: string;
+  id: string;
+  version: string;
 }
 
 export interface PublishedWorkflowResponse {

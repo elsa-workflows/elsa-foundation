@@ -39,6 +39,7 @@ import {
 import { CollectionValueEditor } from "./CollectionValueEditor";
 import { DictionaryValueEditor } from "./DictionaryValueEditor";
 import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
+import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
@@ -569,8 +570,6 @@ function ExpandedPropertyEditor({
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const fallbackEditorRef = useRef<HTMLTextAreaElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const displayName = input.displayName || input.name;
   const expressionContext: StudioExpressionEditorContext = {
     activity,
@@ -596,50 +595,7 @@ function ExpandedPropertyEditor({
     if (!ExpressionEditorComponent) fallbackEditorRef.current?.focus();
   }, [ExpressionEditorComponent, syntax]);
 
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const focusableSelector = [
-      "button:not(:disabled)",
-      "input:not(:disabled)",
-      "textarea:not(:disabled)",
-      "select:not(:disabled)",
-      "[href]",
-      "[tabindex]:not([tabindex='-1'])"
-    ].join(",");
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
-        .filter(element => element.offsetParent !== null || element === document.activeElement);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogRef.current?.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
-    };
-  }, []);
+  useDialogFocus(dialogRef, onClose, false);
 
   return (
     <div className="wf-property-editor-backdrop">
