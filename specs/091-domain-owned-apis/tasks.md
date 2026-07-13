@@ -152,16 +152,16 @@
 
 ### Tests for User Story 5
 
-- [ ] T065 [P] [US5] Add failing static declaration, dynamic Source, merge, ordering, and duplicate diagnostics tests in `tests/Elsa/Api/Capabilities/Tests/ApiCapabilityCatalogTests.cs`
-- [ ] T066 [P] [US5] Add failing multi-shell route-base and omitted-domain tests in `tests/Elsa/Api/Capabilities/Tests/CapabilityEndpointTests.cs`
-- [ ] T067 [P] [US5] Add failing secure-shell authentication and permission-neutral response tests in `tests/Elsa/Api/Capabilities/Tests/CapabilitySecurityTests.cs`
+- [X] T065 [P] [US5] Add failing static declaration, dynamic Source, merge, ordering, and duplicate diagnostics tests in `tests/Elsa/Api/Capabilities/Tests/ApiCapabilityCatalogTests.cs`
+- [X] T066 [P] [US5] Add failing multi-shell route-base and omitted-domain tests in `tests/Elsa/Api/Capabilities/Tests/CapabilityEndpointTests.cs`
+- [X] T067 [P] [US5] Add failing secure-shell authentication and permission-neutral response tests in `tests/Elsa/Api/Capabilities/Tests/CapabilitySecurityTests.cs`
 - [ ] T068 [P] [US5] Add failing feature dependency/declaration tests for all canonical domain API features in `tests/Elsa/Architecture/ApiCapabilityRegistrationTests.cs`
 
 ### Implementation for User Story 5
 
-- [ ] T069 [P] [US5] Add API capability declaration, link, document, Source, event, and duplicate exception contracts in `src/Elsa/Api/Capabilities/`
-- [ ] T070 [US5] Implement the single aggregating capability handler and deterministic catalog in `src/Elsa/Api/Capabilities/Services/ApiCapabilityCatalog.cs`
-- [ ] T071 [US5] Implement `ApiCapabilitiesFeature` and authenticated `GET /capabilities` endpoint in `src/Elsa/Api/Capabilities/`
+- [X] T069 [P] [US5] Add API capability declaration, link, document, Source, event, and duplicate exception contracts in `src/Elsa/Api/Capabilities/`
+- [X] T070 [US5] Implement the single aggregating capability handler and deterministic catalog in `src/Elsa/Api/Capabilities/Services/ApiCapabilityCatalog.cs`
+- [X] T071 [US5] Implement `ApiCapabilitiesFeature` and authenticated `GET /capabilities` endpoint in `src/Elsa/Api/Capabilities/`
 - [ ] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
 - [ ] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
 - [ ] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
