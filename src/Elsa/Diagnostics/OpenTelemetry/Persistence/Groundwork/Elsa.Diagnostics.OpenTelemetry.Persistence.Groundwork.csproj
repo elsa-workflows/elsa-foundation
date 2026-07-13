@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1-local</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Groundwork.DiagnosticRecords" />
+    <PackageReference Include="Groundwork.Documents" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
+    <ProjectReference Include="..\..\..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

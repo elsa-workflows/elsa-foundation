@@ -68,12 +68,16 @@
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/">
     <Project Path="src/Elsa/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
+    <Project Path="src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj" />
   </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/" />
+  <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/">
+    <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/">
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Elsa.Diagnostics.OpenTelemetry.Persistence.EFCore.Sqlite.csproj" />
@@ -316,6 +320,9 @@
     <Project Path="tests/Elsa/Caching/Tests/Elsa.Caching.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/" />
+  <Folder Name="/tests/Elsa/Diagnostics/Persistence/">
+    <Project Path="tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/ConsoleLogStreaming/">
     <Project Path="tests/Elsa/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj" />
   </Folder>
@@ -324,6 +331,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj" />

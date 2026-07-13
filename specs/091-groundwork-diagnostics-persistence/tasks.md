@@ -18,11 +18,11 @@
 
 **Purpose**: Create project boundaries and registration points without changing active persistence behavior.
 
-- [ ] T001 Create the shared diagnostics lifecycle library in `src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj` and add it to `Elsa.Server.slnx`
-- [ ] T002 [P] Create the OpenTelemetry Groundwork adapter project in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj`
-- [ ] T003 [P] Create the shared lifecycle test project in `tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj`
-- [ ] T004 [P] Create the OpenTelemetry Groundwork test project in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj`
-- [ ] T005 Add all new projects to `Elsa.Server.slnx` and verify project references remain acyclic
+- [X] T001 Create the shared diagnostics lifecycle library in `src/Elsa/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj` and add it to `Elsa.Server.slnx`
+- [X] T002 [P] Create the OpenTelemetry Groundwork adapter project in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.csproj`
+- [X] T003 [P] Create the shared lifecycle test project in `tests/Elsa/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj`
+- [X] T004 [P] Create the OpenTelemetry Groundwork test project in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.Groundwork.Tests.csproj`
+- [X] T005 Add all new projects to `Elsa.Server.slnx` and verify project references remain acyclic
 
 **Checkpoint**: New project boundaries build, but existing EF and Groundwork behavior remains unchanged.
 
@@ -32,12 +32,12 @@
 
 **Purpose**: Establish reusable conformance infrastructure and boundaries that block all story implementation.
 
-- [ ] T006 Write failing architecture tests proving diagnostics core assemblies contain no Groundwork references and persistence registration has one unambiguous replacement path in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs`
-- [ ] T007 Implement only the composition abstractions needed by both adapters in `src/Elsa/Diagnostics/Persistence/` and make T006 pass without exposing Groundwork types from diagnostics core
-- [ ] T008 Build a reusable four-provider fixture with real SQLite, SQL Server, PostgreSQL, and MongoDB lifecycle support in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs`
-- [ ] T009 [P] Add reusable acknowledgement-loss, cancellation, restart, and operational-failure doubles in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsFailureFixtures.cs`
-- [ ] T010 [P] Record the temporary EF behavior-oracle inventory and exact parity mapping in `specs/091-groundwork-diagnostics-persistence/oracle-inventory.md`
-- [ ] T011 Add one shared diagnostics provider capability/readiness assertion helper in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderAssertions.cs`
+- [X] T006 Write failing architecture tests proving diagnostics core assemblies contain no Groundwork references and persistence registration has one unambiguous replacement path in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceArchitectureTests.cs`
+- [X] T007 Implement only the composition abstractions needed by both adapters in `src/Elsa/Diagnostics/Persistence/` and make T006 pass without exposing Groundwork types from diagnostics core
+- [X] T008 Build a reusable four-provider fixture with real SQLite, SQL Server, PostgreSQL, and MongoDB lifecycle support in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsProviderFixture.cs`
+- [X] T009 [P] Add reusable acknowledgement-loss, cancellation, restart, and operational-failure doubles in `tests/Elsa/Diagnostics/Persistence/Tests/Fixtures/DiagnosticsFailureFixtures.cs`
+- [X] T010 [P] Record the temporary EF behavior-oracle inventory and exact parity mapping in `specs/091-groundwork-diagnostics-persistence/oracle-inventory.md`
+- [X] T011 Add one shared diagnostics provider capability/readiness assertion helper in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsProviderAssertions.cs`
 
 **Checkpoint**: All adapters can be tested through the same real-provider and failure harness; architecture boundaries are executable.
 
@@ -105,15 +105,15 @@
 
 ### Tests for User Story 3 — write and observe failures first
 
-- [ ] T034 [P] [US3] Port and expand the EF drain oracle into provider-independent queue, retry, acknowledgement, closure, and disposal tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLifecycleTests.cs`
-- [ ] T035 [P] [US3] Add concurrent producer, overflow shedding, retry exhaustion, and later-batch recovery tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLoadTests.cs`
-- [ ] T036 [P] [US3] Add graceful drain, timeout fallback, final retention, and no-incomplete-acknowledgement tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainShutdownTests.cs`
-- [ ] T037 [P] [US3] Add non-recursive instrumentation, low-cardinality/no-payload telemetry, and subscriber-delivery-loss classification tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceObservabilityTests.cs`
+- [X] T034 [P] [US3] Port and expand the EF drain oracle into provider-independent queue, retry, acknowledgement, closure, and disposal tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLifecycleTests.cs`
+- [X] T035 [P] [US3] Add concurrent producer, overflow shedding, retry exhaustion, and later-batch recovery tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLoadTests.cs`
+- [X] T036 [P] [US3] Add graceful drain, timeout fallback, final retention, and no-incomplete-acknowledgement tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainShutdownTests.cs`
+- [X] T037 [P] [US3] Add non-recursive instrumentation, low-cardinality/no-payload telemetry, and subscriber-delivery-loss classification tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceObservabilityTests.cs`
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] Extract the bounded drain state machine from `src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs` into composed services under `src/Elsa/Diagnostics/Persistence/Draining/`
-- [ ] T039 [US3] Implement queue, retry, shutdown, retention, closure, and subscriber-delivery loss classification in `src/Elsa/Diagnostics/Persistence/Observability/`, reusing the existing domain live-feed signal instead of moving fan-out into persistence
+- [X] T038 [US3] Extract the bounded drain state machine from `src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs` into composed services under `src/Elsa/Diagnostics/Persistence/Draining/`
+- [X] T039 [US3] Implement queue, retry, shutdown, retention, closure, and subscriber-delivery loss classification in `src/Elsa/Diagnostics/Persistence/Observability/`, reusing the existing domain live-feed signal instead of moving fan-out into persistence
 - [ ] T040 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
 - [ ] T041 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
 - [ ] T042 [US3] Register one explicit start/stop/drain-before-provider-disposal lifecycle in `src/Elsa/Diagnostics/Persistence/Extensions/ServiceCollectionExtensions.cs`
