@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
-import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, Play, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
@@ -44,7 +44,12 @@ import {
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import {
+  createExecutableWorkflowRunFeedback,
+  findPublishedRunReference,
+  useExecutableWorkflowRun
+} from "./useExecutableWorkflowRun";
+import { ExecutableRunButton } from "./ExecutableRunButton";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -122,6 +127,14 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
   }, [load]);
 
   const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
+  const publishedRunReference = findPublishedRunReference(data?.detail.references);
+  const publishedRunTarget = data && publishedRunReference
+    ? {
+        artifactId: data.detail.artifactId,
+        definitionVersionId: publishedRunReference.definitionVersionId,
+        sourceReferenceId: publishedRunReference.sourceReferenceId
+      }
+    : null;
   const executableRun = useExecutableWorkflowRun({
     context,
     ...createExecutableWorkflowRunFeedback({ setStatus: setRunStatus, setLastRun, setError: setRunError })
@@ -207,16 +220,12 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</button>
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
         {data ? (
-          <button
-            type="button"
-            disabled={Boolean(executableRun.runningArtifactId)}
-            onClick={() => void executableRun.request({
-              artifactId: data.detail.artifactId,
-              definitionVersionId: chosenReference?.definitionVersionId
-            })}
-          >
-            <Play size={14} /> {executableRun.runningArtifactId ? "Running..." : "Run"}
-          </button>
+          <ExecutableRunButton
+            target={publishedRunTarget}
+            runningArtifactId={executableRun.runningArtifactId}
+            iconSize={14}
+            onRequest={executableRun.request}
+          />
         ) : null}
         {data && explainAction ? (
           <button type="button" onClick={explain}><Sparkles size={13} /> Explain</button>

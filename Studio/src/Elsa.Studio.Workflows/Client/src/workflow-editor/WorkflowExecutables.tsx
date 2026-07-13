@@ -10,7 +10,12 @@ import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } fro
 import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
-import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
+import {
+  createExecutableWorkflowRunFeedback,
+  createExecutableWorkflowRunTarget,
+  useExecutableWorkflowRun
+} from "./useExecutableWorkflowRun";
+import { ExecutableRunButton } from "./ExecutableRunButton";
 import {
   compareExecutablesByPublishedDate,
   dispatchAiAction,
@@ -173,6 +178,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
             const references = executable.references ?? [];
             const expanded = expandedArtifactIds.has(executable.artifactId);
             const retired = Boolean(executable.deletedAt);
+            const runTarget = createExecutableWorkflowRunTarget(executable);
             return (
               <div className="wf-executable-row-group" key={executable.artifactId}>
                 <div className="wf-grid-row" role="row">
@@ -210,13 +216,11 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
                   <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
                   <span className="wf-row-actions">
                     <button type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</button>
-                    <button
-                      type="button"
-                      disabled={Boolean(executableRun.runningArtifactId)}
-                      onClick={() => void executableRun.request(executable)}
-                    >
-                      <Play size={13} /> {executableRun.runningArtifactId === executable.artifactId ? "Running..." : "Run"}
-                    </button>
+                    <ExecutableRunButton
+                      target={runTarget}
+                      runningArtifactId={executableRun.runningArtifactId}
+                      onRequest={executableRun.request}
+                    />
                     {explainExecutableAction ? (
                       <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
                     ) : null}
@@ -398,8 +402,10 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
       {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
       {state === "ready" && artifacts.length > 0 ? (
         <div className="wf-artifact-list" role="list" aria-label="Workflow artifacts">
-          {artifacts.map(artifact => (
-            <article className="wf-artifact-card" role="listitem" key={artifact.artifactId} data-active={artifact.artifactId === publishedArtifactId ? "true" : undefined}>
+          {artifacts.map(artifact => {
+            const runTarget = createExecutableWorkflowRunTarget(artifact);
+            return (
+              <article className="wf-artifact-card" role="listitem" key={artifact.artifactId} data-active={artifact.artifactId === publishedArtifactId ? "true" : undefined}>
               <div className="wf-artifact-card-heading">
                 <div>
                   <span className="wf-artifact-version">Version {artifact.artifactVersion}</span>
@@ -423,18 +429,17 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
               </dl>
               <div className="wf-row-actions">
                 <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
-                <button
-                  type="button"
-                  aria-label={`Run executable ${artifact.artifactId}`}
-                  disabled={Boolean(executableRun.runningArtifactId)}
-                  onClick={() => void executableRun.request(artifact)}
-                >
-                  <Play size={13} /> {executableRun.runningArtifactId === artifact.artifactId ? "Running..." : "Run"}
-                </button>
+                <ExecutableRunButton
+                  target={runTarget}
+                  runningArtifactId={executableRun.runningArtifactId}
+                  ariaLabel={`Run executable ${artifact.artifactId}`}
+                  onRequest={executableRun.request}
+                />
                 {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
               </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </div>
