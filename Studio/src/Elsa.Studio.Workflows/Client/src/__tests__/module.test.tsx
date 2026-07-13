@@ -278,6 +278,70 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("exposes canvas nodes as named controls, synchronizes keyboard selection, and focuses palette insertions", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          executionType: "Action"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([
+          { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+          { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+        ]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+    const first = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-1']")!;
+    expect(first.getAttribute("role")).toBe("button");
+    expect(first.getAttribute("aria-label")).toContain("Activity type: Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(first.getAttribute("aria-label")).toContain("State: authoring");
+    expect(first.getAttribute("aria-pressed")).toBe("false");
+    const descriptionId = first.getAttribute("aria-describedby")!;
+    expect(document.getElementById(descriptionId)?.textContent).toContain("Press Tab to move between canvas items");
+
+    first.focus();
+    flushSync(() => first.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flushPromises();
+    expect(first.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-1");
+
+    const second = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-2']")!;
+    second.focus();
+    flushSync(() => second.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })));
+    await flushPromises();
+    expect(second.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-2");
+
+    const paletteActivity = container.querySelector<HTMLButtonElement>(".wf-palette-activity")!;
+    await click(paletteActivity);
+    for (let attempt = 0; attempt < 20 && container.querySelectorAll(".wf-canvas .react-flow__node").length < 3; attempt += 1) {
+      await flushPromises();
+    }
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.classList.contains("react-flow__node")).toBe(true);
+    expect(focused.getAttribute("aria-pressed")).toBe("true");
+
+    await unmount();
+  });
+
   it("supports resizing, collapsing, and maximizing workflow side panels", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -1977,6 +2041,66 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("uses the host router from every run tab and preserves browser history", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/runtime/workflows/instances/wfexec-1")) return response(workflowInstanceDetails());
+      if (url.includes("/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/design/workflows/definitions/definition-1")) {
+        return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      }
+      if (url.includes("/design/activities/catalog")) return response({ activities: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
+
+    await waitForText(container, "Pinned Runtime executable");
+    await click(buttonByText(container, "Designer"));
+    await waitForText(container, "Hello World");
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
+
+    window.history.forward();
+    await waitForText(container, "Hello World");
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+
+    const openTab = async (tab: "Activity" | "Issues" | "Details") => {
+      if (tab === "Activity") {
+        await click(container.querySelector(".wf-timeline-entry"));
+      } else {
+        await click(buttonByText(container, tab));
+      }
+      expect(container.querySelector(`[data-tab-id='${tab.toLowerCase()}']`)?.getAttribute("aria-selected")).toBe("true");
+    };
+
+    for (const tab of ["Activity", "Issues", "Details"] as const) {
+      await openTab(tab);
+      await click(buttonByText(container, "Designer"));
+      await waitForText(container, "Hello World");
+      expect(window.location.pathname).toBe("/workflows/definitions");
+      expect(container.querySelector(".wf-editor")).toBeTruthy();
+      expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+      window.history.back();
+      await waitForText(container, "Pinned Runtime executable");
+    }
+
+    await unmount();
+  });
+
   it("renders workflow instance canvas from Runtime executable structure", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -2361,7 +2485,11 @@ function withHeaders(headers?: HeadersInit, json = false) {
   return result;
 }
 
-async function renderRegisteredRoute(path = "/workflows/definitions", configureApi?: (api: ElsaStudioModuleApi) => void) {
+async function renderRegisteredRoute(
+  path = "/workflows/definitions",
+  configureApi?: (api: ElsaStudioModuleApi) => void,
+  followNavigation = false
+) {
   if (typeof ResizeObserver === "undefined") {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -2378,11 +2506,6 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
   const api = testApi();
   configureApi?.(api);
   register(api);
-  const routePath = new URL(path, window.location.origin).pathname;
-  const route = api.routes.list().find(candidate => candidate.path === routePath) ??
-    api.routes.list().find(candidate => routeMatchesPath(candidate.path, routePath)) ??
-    api.routes.list()[0];
-  const Component = route.component;
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -2393,8 +2516,28 @@ async function renderRegisteredRoute(path = "/workflows/definitions", configureA
     }
   });
 
+  function RegisteredRouteHost() {
+    const [routePath, setRoutePath] = React.useState(() => window.location.pathname);
+    React.useEffect(() => {
+      if (!followNavigation) return;
+      const syncFromLocation = () => setRoutePath(window.location.pathname);
+      window.addEventListener("popstate", syncFromLocation);
+      return () => window.removeEventListener("popstate", syncFromLocation);
+    }, []);
+    const route = api.routes.list().find(candidate => candidate.path === routePath) ??
+      api.routes.list().find(candidate => routeMatchesPath(candidate.path, routePath)) ??
+      api.routes.list()[0];
+    const navigate = (nextPath: string) => {
+      window.history.pushState({}, "", nextPath);
+      if (followNavigation) setRoutePath(window.location.pathname);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    };
+    const Component = route.component;
+    return <Component navigate={navigate} />;
+  }
+
   flushSync(() => {
-    root.render(<QueryClientProvider client={queryClient}><Component /></QueryClientProvider>);
+    root.render(<QueryClientProvider client={queryClient}><RegisteredRouteHost /></QueryClientProvider>);
   });
 
   return {

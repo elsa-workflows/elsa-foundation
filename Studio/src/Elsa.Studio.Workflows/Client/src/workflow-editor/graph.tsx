@@ -136,7 +136,20 @@ export function WorkflowFlowEdge(props: EdgeProps<WorkflowEdge>) {
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
           >
-            <button type="button" aria-label="Insert activity into connection" title="Insert activity" onClick={event => actions.requestInsertActivity(id, event.clientX, event.clientY)}>
+            <button
+              type="button"
+              aria-label="Insert activity into connection"
+              title="Insert activity"
+              onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const keyboardActivation = event.detail === 0;
+                actions.requestInsertActivity(
+                  id,
+                  keyboardActivation ? rect.left + rect.width / 2 : event.clientX,
+                  keyboardActivation ? rect.top + rect.height / 2 : event.clientY
+                );
+              }}
+            >
               <Plus size={12} />
             </button>
             <button type="button" aria-label="Delete connection" title="Delete connection" onClick={() => actions.deleteEdge(id)}>
@@ -154,6 +167,9 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  const restoreFocusOnCloseRef = useRef(true);
+  const listboxId = React.useId();
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -170,7 +186,14 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
   const flatActivities = useMemo(() => groups.flatMap(group => group.activities), [groups]);
 
   useEffect(() => {
+    const returnFocus = returnFocusRef.current;
     requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      if (!restoreFocusOnCloseRef.current) return;
+      requestAnimationFrame(() => {
+        if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -199,8 +222,13 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
     } else if (event.key === "Enter") {
       event.preventDefault();
       const activity = flatActivities[activeIndex];
-      if (activity) onPick(activity);
+      if (activity) pick(activity);
     }
+  };
+
+  const pick = (activity: ActivityCatalogItem) => {
+    restoreFocusOnCloseRef.current = false;
+    onPick(activity);
   };
 
   const left = Math.max(8, Math.min(clientX + 4, window.innerWidth - 328));
@@ -215,13 +243,15 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
         value={search}
         placeholder="Search activities..."
         aria-label="Search activities"
+        aria-controls={listboxId}
+        aria-activedescendant={flatActivities[activeIndex] ? `${listboxId}-option-${flatActivities[activeIndex].activityVersionId}` : undefined}
         onChange={event => {
           setSearch(event.target.value);
           setActiveIndex(0);
         }}
         onKeyDown={onInputKeyDown}
       />
-      <div className="wf-connect-menu-list" role="listbox" aria-label="Activity picker">
+      <div id={listboxId} className="wf-connect-menu-list" role="listbox" aria-label="Activity picker">
         {groups.length === 0 ? <p>No matching activities.</p> : groups.map(group => (
           <section key={group.category}>
             <h4>{group.category}</h4>
@@ -233,11 +263,12 @@ export function ConnectMenu({ clientX, clientY, activities, onPick, onClose }: {
                 <button
                   type="button"
                   role="option"
+                  id={`${listboxId}-option-${activity.activityVersionId}`}
                   aria-selected={active}
                   className={active ? "active" : ""}
                   key={activity.activityVersionId}
                   onMouseEnter={() => setActiveIndex(currentIndex)}
-                  onClick={() => onPick(activity)}
+                  onClick={() => pick(activity)}
                 >
                   <strong>{getActivityDisplay(activity)}</strong>
                   <small>{activity.category || activity.activityTypeKey}</small>

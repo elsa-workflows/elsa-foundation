@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -138,6 +138,12 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     const onPopState = () => setPath(normalizePath(window.location.pathname));
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigateTo = useCallback((nextPath: string) => {
+    window.history.pushState({}, "", nextPath);
+    setPath(normalizePath(window.location.pathname));
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
 
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
@@ -316,7 +322,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
-        {ActiveComponent ? <ActiveComponent /> : null}
+        {ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
         {!ActiveComponent && !dashboardPath && path !== "/extension-builder" && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
           <div className="empty-state">
             {owningFeatureArea
@@ -1141,11 +1147,6 @@ function getInitialBoolean(storageKey: string, fallback: boolean) {
 
   const value = window.localStorage.getItem(storageKey);
   return value === null ? fallback : value === "true";
-}
-
-function navigateTo(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 export function App() {
