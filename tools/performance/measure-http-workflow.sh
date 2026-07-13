@@ -23,6 +23,7 @@ Options:
   --groundwork-db PATH        Optional SQLite database for commit-marker deltas.
   --output-json PATH          Optional JSON report path.
   --output-markdown PATH      Optional Markdown report path.
+  --output-samples PATH       Write measured warm latencies, one numeric ms value per line.
   --enforce-p95-ms NUMBER     Fail when warm p95 exceeds this budget.
   --insecure                  Disable TLS certificate verification (local development only).
   --help                      Show this help.
@@ -40,6 +41,7 @@ provider="unspecified"
 groundwork_db=""
 output_json=""
 output_markdown=""
+output_samples=""
 enforce_p95_ms=""
 insecure=false
 
@@ -56,6 +58,14 @@ while (($# > 0)); do
     --groundwork-db) groundwork_db="${2:?--groundwork-db requires a value}"; shift 2 ;;
     --output-json) output_json="${2:?--output-json requires a value}"; shift 2 ;;
     --output-markdown) output_markdown="${2:?--output-markdown requires a value}"; shift 2 ;;
+    --output-samples)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        printf '%s\n' '--output-samples requires a value.' >&2
+        exit 2
+      fi
+      output_samples="$2"
+      shift 2
+      ;;
     --enforce-p95-ms) enforce_p95_ms="${2:?--enforce-p95-ms requires a value}"; shift 2 ;;
     --insecure) insecure=true; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -172,6 +182,11 @@ average_ms="$(awk '{ total += $1 } END { printf "%.3f", total / NR }' "$warm_fil
 p50_ms="$(percentile "$sorted_file" 0.50)"
 p95_ms="$(percentile "$sorted_file" 0.95)"
 p99_ms="$(percentile "$sorted_file" 0.99)"
+
+if [[ -n "$output_samples" ]]; then
+  mkdir -p "$(dirname "$output_samples")"
+  cp "$warm_file" "$output_samples"
+fi
 
 commits_after=""
 commit_delta=""
