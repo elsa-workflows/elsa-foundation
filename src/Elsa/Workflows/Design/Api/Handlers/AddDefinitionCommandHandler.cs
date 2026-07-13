@@ -19,6 +19,7 @@ public sealed class AddDefinitionCommandHandler(
     {
         var definition = definitionFactory.Create(command.Name, command.Description);
         var draft = draftFactory.Create(definition.Id, (command.InitialState ?? new WorkflowDefinitionStateView()).ToState());
+        var draftEntity = WorkflowDefinitionDraft.From(draft);
         var layout = (command.Layout ?? [])
             .Select(record => new DesignMetadataRecord(
                 record.NodeId,
@@ -31,10 +32,10 @@ public sealed class AddDefinitionCommandHandler(
 
         await addCommand.Execute(
             WorkflowDefinition.From(definition),
-            WorkflowDefinitionDraft.From(draft),
+            draftEntity,
             layout,
             cancellationToken);
 
-        return new WorkflowDefinitionDetailsView(definition.ToView(), draft.State.ToStateView(), Versions: []);
+        return new WorkflowDefinitionDetailsView(definition.ToView(), WorkflowDraftView.From(draftEntity, layout), Versions: []);
     }
 }

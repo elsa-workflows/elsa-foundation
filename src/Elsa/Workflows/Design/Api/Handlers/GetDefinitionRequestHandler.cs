@@ -22,10 +22,13 @@ public sealed class GetDefinitionRequestHandler(
         var definition = await definitionTask;
         var versions = await versionsTask;
         var draft = await draftTask;
+        var layout = draft is null
+            ? []
+            : await draftStore.FindLayoutByDraftIdAsync(draft.Id, cancellationToken);
 
         return new WorkflowDefinitionDetailsView(
             definition.ToView(),
-            draft?.State.ToStateView(),
+            draft is null ? null : WorkflowDraftView.From(draft, layout),
             versions.Select(e => new WorkflowDefinitionVersionSummary(e.Id, e.Version, e.CreatedAt))
         );
     }

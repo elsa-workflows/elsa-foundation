@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Workflows.Design.Api.Commands;
 using Elsa.Workflows.Design.Api.Handlers;
+using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -87,6 +88,15 @@ public sealed class WorkflowDefinitionLifecycleContractTests
         Assert.Contains("Layout", properties);
         Assert.DoesNotContain("RootKind", properties);
         Assert.DoesNotContain("RootActivityVersionId", properties);
+    }
+
+    [Fact]
+    public void Definition_details_expose_the_current_draft_as_a_first_class_resource()
+    {
+        var draftProperty = typeof(WorkflowDefinitionDetailsView).GetProperty(nameof(WorkflowDefinitionDetailsView.Draft));
+
+        Assert.NotNull(draftProperty);
+        Assert.Equal(typeof(WorkflowDraftView), draftProperty.PropertyType);
     }
 
     [Fact]

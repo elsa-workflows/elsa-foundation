@@ -37,7 +37,10 @@ public sealed class AddDefinitionCommandHandlerTests
         Assert.Equal(layout.NodeId, storedLayout.NodeId);
         Assert.Equal(layout.X, storedLayout.X);
         Assert.Equal(layout.Y, storedLayout.Y);
-        Assert.Null(result.Draft!.RootActivity);
+        Assert.Equal(persistence.Draft.Id, result.Draft!.Id);
+        Assert.Equal(persistence.Draft.WorkflowDefinitionId, result.Draft.DefinitionId);
+        Assert.Null(result.Draft.State.RootActivity);
+        Assert.Equal(layout, Assert.Single(result.Draft.Layout));
     }
 
     private sealed class RecordingAddWorkflowDefinitionCommand : IAddWorkflowDefinitionCommand
