@@ -203,27 +203,27 @@
 
 ### Tests for User Story 6
 
-- [ ] T084 [P] [US6] Rewrite route and response mocks for canonical domain clients in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/`
-- [ ] T085 [P] [US6] Add cached capability discovery and absent-capability UX tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/capabilities.test.tsx`
-- [ ] T086 [P] [US6] Add publication preflight, default replacement, named-slot, unpublish, and restore UX tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/publicationSlots.test.tsx`
-- [ ] T087 [P] [US6] Add Runtime-pinned instance/executable rendering tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstances.test.tsx`
-- [ ] T088 [P] [US6] Update Weaver executable-detail route tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/module.test.tsx`
+- [X] T084 [P] [US6] Rewrite route and response mocks for canonical domain clients in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/`
+- [X] T085 [P] [US6] Add cached capability discovery and absent-capability UX tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/capabilities.test.tsx`
+- [X] T086 [P] [US6] Add publication preflight, default replacement, named-slot, unpublish, and restore UX tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/publicationSlots.test.tsx`
+- [X] T087 [P] [US6] Add Runtime-pinned instance/executable rendering tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/__tests__/workflowInstances.test.tsx`
+- [X] T088 [P] [US6] Update Weaver executable-detail route tests in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Weaver.Workflows/Client/src/__tests__/module.test.tsx`
 
 ### Implementation for User Story 6
 
-- [ ] T089 [P] [US6] Implement cached global discovery in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/api/capabilities.ts`
-- [ ] T090 [P] [US6] Split Workflow Design and Activity Design clients into `api/workflowDesign.ts` and `api/activityDesign.ts` under the Studio Workflows client
-- [ ] T091 [P] [US6] Add Expressions and Runtime clients in `api/expressions.ts` and `api/runtime.ts` under the Studio Workflows client
-- [ ] T092 [P] [US6] Add publication preflight/slot/policy/reference client in `api/publishing.ts` under the Studio Workflows client
-- [ ] T093 [US6] Remove legacy base paths and fallback helper behavior from `api/workflows.ts`, preserving only a private barrel if needed
-- [ ] T094 [US6] Replace `rootKind` creation with catalog-authored initial state in `workflow-editor/CreateWorkflowDialog.tsx`, `editorTypes.ts`, `editorHelpers.ts`, and Weaver workflow creation context
-- [ ] T095 [US6] Consolidate editor bootstrap onto the authoring catalog and capability cache in `workflow-editor/useWorkflowEditorData.ts` and `workflow-editor/useWorkflowScope.ts`
-- [ ] T096 [US6] Implement publication preflight, resolved policy/slot confirmation, explicit side-by-side naming, unpublish, and restore UX in `workflow-editor/useWorkflowOperations.ts`, `WorkflowEditor.tsx`, and `WorkflowExecutables.tsx`
-- [ ] T097 [US6] Render instance state from the pinned Runtime executable instead of Design versions in `workflow-editor/WorkflowInstances.tsx` and `WorkflowExecutableInspector.tsx`
-- [ ] T098 [US6] Move availability, expression, variable, input-option, and runtime-diagnostics screens/hooks to their domain clients in `workflow-editor/`
-- [ ] T099 [US6] Update Weaver `getExecutableDetail` to the Runtime capability link in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Weaver.Workflows/Client/src/module.tsx`
-- [ ] T100 [US6] Delete every legacy and demo fallback literal and update Studio contract documentation under `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/specs/`
-- [ ] T101 [US6] Run targeted Workflows/Weaver tests and full Studio typecheck/test/build/lint gates from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T089 [P] [US6] Implement cached global discovery in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Workflows/Client/src/api/capabilities.ts`
+- [X] T090 [P] [US6] Split Workflow Design and Activity Design clients into `api/workflowDesign.ts` and `api/activityDesign.ts` under the Studio Workflows client
+- [X] T091 [P] [US6] Add Expressions and Runtime clients in `api/expressions.ts` and `api/runtime.ts` under the Studio Workflows client
+- [X] T092 [P] [US6] Add publication preflight/slot/policy/reference client in `api/publishing.ts` under the Studio Workflows client
+- [X] T093 [US6] Remove legacy base paths and fallback helper behavior from `api/workflows.ts`, preserving only a private barrel if needed
+- [X] T094 [US6] Replace `rootKind` creation with catalog-authored initial state in `workflow-editor/CreateWorkflowDialog.tsx`, `editorTypes.ts`, `editorHelpers.ts`, and Weaver workflow creation context
+- [X] T095 [US6] Consolidate editor bootstrap onto the authoring catalog and capability cache in `workflow-editor/useWorkflowEditorData.ts` and `workflow-editor/useWorkflowScope.ts`
+- [X] T096 [US6] Implement publication preflight, resolved policy/slot confirmation, explicit side-by-side naming, unpublish, and restore UX in `workflow-editor/useWorkflowOperations.ts`, `WorkflowEditor.tsx`, and `WorkflowExecutables.tsx`
+- [X] T097 [US6] Render instance state from the pinned Runtime executable instead of Design versions in `workflow-editor/WorkflowInstances.tsx` and `WorkflowExecutableInspector.tsx`
+- [X] T098 [US6] Move availability, expression, variable, input-option, and runtime-diagnostics screens/hooks to their domain clients in `workflow-editor/`
+- [X] T099 [US6] Update Weaver `getExecutableDetail` to the Runtime capability link in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Weaver.Workflows/Client/src/module.tsx`
+- [X] T100 [US6] Delete every legacy and demo fallback literal and update Studio contract documentation under `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/specs/`
+- [X] T101 [US6] Run targeted Workflows/Weaver tests and full Studio typecheck/test/build/lint gates from `specs/091-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US6 independently proves coordinated Studio compatibility with no facade.
 
@@ -235,11 +235,11 @@
 
 - [X] T102 [P] Refresh the narrowest affected domain, extension-point, architecture-reference, and feature-dependency maps using `tools/maps/generate-*.sh` and review `docs/maps/manifest.json`
 - [X] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
-- [ ] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
+- [X] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
 - [X] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
-- [ ] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/091-domain-owned-apis/completion-audit.md`
-- [ ] T107 Run every Foundation and Studio command in `specs/091-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
-- [ ] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/091-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean
+- [X] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/091-domain-owned-apis/completion-audit.md`
+- [X] T107 Run every Foundation and Studio command in `specs/091-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
+- [X] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/091-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean
 
 ---
 

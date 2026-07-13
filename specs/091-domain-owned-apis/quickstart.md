@@ -155,6 +155,11 @@ modules. This is the authoritative proof for FR-004; starting the reference appl
 
 ## 7. Validate the coordinated Studio migration
 
+Node 25 enables an experimental process-global Web Storage implementation that conflicts with Vitest's
+browser environment unless it is disabled. On Node 25, prefix Studio test commands with
+`NODE_OPTIONS=--no-experimental-webstorage`; supported LTS Node versions do not need this compatibility
+flag.
+
 Run the route-sensitive packages first:
 
 ```bash
@@ -174,7 +179,7 @@ Then run the complete Studio gates:
 ```bash
 cd "$STUDIO_ROOT"
 pnpm typecheck
-pnpm test
+NODE_OPTIONS=--no-experimental-webstorage pnpm test # Node 25 only; use `pnpm test` on supported LTS Node
 pnpm build
 pnpm lint
 ```
