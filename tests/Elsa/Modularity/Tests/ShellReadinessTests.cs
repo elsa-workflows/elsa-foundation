@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using Elsa.Server.Readiness;
@@ -146,6 +149,41 @@ public sealed class ShellReadinessTests
         Assert.Equal(0, harness.Gate.Attempts);
     }
 
+    [Fact]
+    public async Task SuccessfulWarmupEmitsBoundedHierarchicalActivationTelemetry()
+    {
+        using var telemetry = new ShellActivationTelemetryRecorder();
+        await using var harness = WarmupHarness.Create();
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        harness.Lifetime.SignalStarted();
+        await harness.Gate.WaitUntilEnteredAsync();
+
+        harness.Gate.Release();
+        await WaitForStatusAsync(harness.State, ShellReadinessStatus.Ready);
+
+        telemetry.AssertAttempt(
+            ShellActivationTelemetry.SuccessOutcome,
+            ShellActivationTelemetry.SuccessOutcome);
+    }
+
+    [Fact]
+    public async Task FailedWarmupEmitsReachedPhasesWithoutSensitiveDimensions()
+    {
+        using var telemetry = new ShellActivationTelemetryRecorder();
+        await using var harness = WarmupHarness.Create();
+        harness.Gate.Failure = new InvalidOperationException("sensitive-test-detail");
+        await harness.Warmup.StartAsync(CancellationToken.None);
+        harness.Lifetime.SignalStarted();
+        await harness.Gate.WaitUntilEnteredAsync();
+
+        harness.Gate.Release();
+        await WaitForStatusAsync(harness.State, ShellReadinessStatus.Failed);
+
+        telemetry.AssertAttempt(
+            ShellActivationTelemetry.FailedOutcome,
+            ShellActivationTelemetry.FailedOutcome);
+    }
+
     private static async Task WaitForStatusAsync(ShellReadinessState state, ShellReadinessStatus expected)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -244,6 +282,104 @@ public sealed class ShellReadinessTests
             _started.Dispose();
             _stopping.Dispose();
             _stopped.Dispose();
+        }
+    }
+
+    private sealed class ShellActivationTelemetryRecorder : IDisposable
+    {
+        private readonly ConcurrentQueue<Activity> _activities = new();
+        private readonly ConcurrentQueue<Measurement> _measurements = new();
+        private readonly ActivityListener _activityListener;
+        private readonly MeterListener _meterListener;
+
+        public ShellActivationTelemetryRecorder()
+        {
+            _activityListener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name == ShellActivationTelemetry.ActivitySourceName,
+                Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = activity => _activities.Enqueue(activity)
+            };
+            ActivitySource.AddActivityListener(_activityListener);
+
+            _meterListener = new MeterListener
+            {
+                InstrumentPublished = (instrument, listener) =>
+                {
+                    if (instrument.Meter.Name == ShellActivationTelemetry.MeterName
+                        && instrument.Name == ShellActivationTelemetry.DurationInstrumentName)
+                        listener.EnableMeasurementEvents(instrument);
+                }
+            };
+            _meterListener.SetMeasurementEventCallback<double>((_, value, tags, _) =>
+                _measurements.Enqueue(new Measurement(value, tags.ToArray())));
+            _meterListener.Start();
+        }
+
+        public void AssertAttempt(string overallOutcome, string shellActivationOutcome)
+        {
+            var activities = _activities.ToArray();
+            var overall = activities.FirstOrDefault(candidate =>
+                HasTags(candidate, ShellActivationTelemetry.OverallPhase, overallOutcome)
+                && activities.Any(child => child.TraceId == candidate.TraceId
+                    && child.ParentSpanId == candidate.SpanId
+                    && HasTags(child, ShellActivationTelemetry.ShellActivationPhase, shellActivationOutcome)));
+            Assert.NotNull(overall);
+            var childPhases = activities
+                .Where(activity => activity.TraceId == overall!.TraceId && activity.ParentSpanId == overall.SpanId)
+                .ToArray();
+
+            Assert.Contains(childPhases, activity => HasTags(
+                activity,
+                ShellActivationTelemetry.FeatureDiscoveryPhase,
+                ShellActivationTelemetry.SuccessOutcome));
+            Assert.Contains(childPhases, activity => HasTags(
+                activity,
+                ShellActivationTelemetry.ShellActivationPhase,
+                shellActivationOutcome));
+            Assert.All(
+                childPhases.Append(overall!),
+                activity => Assert.Equal(
+                    new[] { ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.PhaseTag },
+                    activity.TagObjects.Select(tag => tag.Key).Order(StringComparer.Ordinal)));
+
+            Assert.Contains(_measurements, measurement => measurement.HasTags(
+                ShellActivationTelemetry.OverallPhase,
+                overallOutcome));
+            Assert.Contains(_measurements, measurement => measurement.HasTags(
+                ShellActivationTelemetry.FeatureDiscoveryPhase,
+                ShellActivationTelemetry.SuccessOutcome));
+            Assert.Contains(_measurements, measurement => measurement.HasTags(
+                ShellActivationTelemetry.ShellActivationPhase,
+                shellActivationOutcome));
+            Assert.All(_measurements, measurement =>
+            {
+                Assert.True(measurement.Value >= 0);
+                Assert.Equal(
+                    new[] { ShellActivationTelemetry.OutcomeTag, ShellActivationTelemetry.PhaseTag },
+                    measurement.Tags.Select(tag => tag.Key).Order(StringComparer.Ordinal));
+                Assert.DoesNotContain(measurement.Tags, tag =>
+                    tag.Value?.ToString()?.Contains("sensitive-test-detail", StringComparison.Ordinal) == true);
+            });
+        }
+
+        public void Dispose()
+        {
+            _meterListener.Dispose();
+            _activityListener.Dispose();
+        }
+
+        private static bool HasTags(Activity activity, string phase, string outcome) =>
+            Equals(activity.GetTagItem(ShellActivationTelemetry.PhaseTag), phase)
+            && Equals(activity.GetTagItem(ShellActivationTelemetry.OutcomeTag), outcome);
+
+        private sealed record Measurement(double Value, KeyValuePair<string, object?>[] Tags)
+        {
+            public bool HasTags(string phase, string outcome) =>
+                Equals(Tag(ShellActivationTelemetry.PhaseTag), phase)
+                && Equals(Tag(ShellActivationTelemetry.OutcomeTag), outcome);
+
+            private object? Tag(string name) => Tags.Single(tag => tag.Key == name).Value;
         }
     }
 

@@ -117,7 +117,7 @@ As a workflow client, I receive a fast response after the server declares itself
 - **SC-001**: Across 20 representative cold boots, readiness never succeeds before the default shell can serve its initialized workflow HTTP surface, and liveness remains independently available during preparation.
 - **SC-002**: The reference server's shell-ready p95 improves by at least 30% from the recorded baseline and satisfies an explicit p95 budget of 30 seconds on the reference machine and frozen baseline.
 - **SC-003**: Once readiness succeeds, the first published workflow response completes within 750 ms at p95 on the reference machine, while subsequent warm workflow requests remain within the existing 50 ms p95 budget.
-- **SC-004**: Every measured cold boot reports all five required milestones, and every activation attempt reports the overall duration plus the four required phase categories or an explicit zero/not-applicable observation.
+- **SC-004**: Every measured cold boot reports all five required milestones; every default-shell preparation attempt reports overall duration and every top-level phase it reaches, while each reached owned provider, startup-task, and route operation reports its dedicated bounded observation. Phases not reached because an earlier phase failed are not assigned synthetic timings.
 - **SC-005**: Concurrent readiness polling produces exactly one default-shell preparation attempt and no activation-related request waits.
 - **SC-006**: Existing targeted shell lifecycle/isolation, workflow HTTP, runtime, persistence recovery, and architecture suites pass with no removed coverage.
 

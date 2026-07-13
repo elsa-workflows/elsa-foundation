@@ -89,6 +89,7 @@ Required bounded tags:
 - `elsa.groundwork.initialization` = `history_hit` or `materialized`
 
 Default-shell phase values are `overall`, `feature_discovery`, and `shell_activation`. Outcome values are bounded to `success`, `failed`, `cancelled`, and—where the operation supports it—`skipped`.
+The warmup reports every top-level phase it reaches. If an earlier phase fails, later phases are absent rather than receiving invented zero-duration values. Provider initialization, startup-task execution, and route refresh retain their dedicated sources above and are parented by the active shell-activation activity when listeners are enabled.
 
 No tenant, workflow, artifact, connection-string, exception-message, or arbitrary shell-name value is emitted as a metric dimension.
 

@@ -95,7 +95,7 @@
 - [x] T021 [US3] Instrument startup-task execution at the executor seam (where single-node skips are observable) with structured completion/failure logs in `src/Elsa/Tasks/Services/TaskExecutor.cs`
 - [x] T022 [US3] Instrument Groundwork initialization outcome/duration in `src/Elsa/Persistence/Groundwork/Sqlite/SqliteGroundworkDocumentStoreInitializer.cs`
 - [x] T023 [US3] Instrument route resolution/refresh duration and route count in `src/Elsa/Workflows/Runtime/Http/Services/HttpEndpointRouteTableSynchronizer.cs`
-- [x] T024 [US3] Emit overall warmup, feature-discovery, and shell-activation activities/metrics from `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs`
+- [x] T024 [US3] Emit overall warmup, feature-discovery, and shell-activation activities/metrics from `src/Apps/Elsa.Server/Readiness/DefaultShellWarmup.cs` and verify success/failure vocabulary with in-memory listeners in `tests/Elsa/Modularity/Tests/ShellReadinessTests.cs`
 - [x] T025 [US3] Run focused Tasks, Groundwork SQLite, Runtime HTTP, and Modularity tests and document the stable telemetry vocabulary in `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
 
 **Checkpoint**: A cold activation is attributable through owned phases and failures without telemetry becoming a correctness dependency.

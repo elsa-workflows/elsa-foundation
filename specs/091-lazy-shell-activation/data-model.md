@@ -32,7 +32,7 @@ One telemetry observation correlated to a warmup/activation activity.
 
 | Field | Meaning | Cardinality rule |
 |---|---|---|
-| `Phase` | `feature_discovery`, `shell_activation`, `provider_initialization`, `startup_task`, or `route_table` | Fixed vocabulary. |
+| `Phase` | `overall`, `feature_discovery`, `shell_activation`, `provider_initialization`, `startup_task`, or `route_table` | Fixed vocabulary. Unreached phases are absent rather than receiving synthetic zero-duration observations. |
 | `TaskType` | Registered startup task type | Only on startup-task observations; bounded by application registrations. |
 | `Outcome` | `success`, `failed`, `cancelled`, `skipped`, `history_hit`, or `materialized` | Fixed vocabulary. |
 | `DurationMs` | Monotonic elapsed milliseconds | Non-negative. |
