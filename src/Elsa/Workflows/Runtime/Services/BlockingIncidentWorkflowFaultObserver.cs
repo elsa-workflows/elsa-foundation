@@ -20,22 +20,30 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
     private const string FaultReason = "BlockingIncident";
     private readonly IIncidentStateStore _incidentStateStore;
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore;
+    private readonly IActivityExecutionStateStore _activityExecutionStateStore;
+    private readonly IRuntimeActivityExecutionInspectionAccumulator _inspectionAccumulator;
     private readonly RuntimeCheckpointCommitter _checkpointCommitter;
     private readonly TimeProvider _timeProvider;
 
     public BlockingIncidentWorkflowFaultObserver(
         IIncidentStateStore incidentStateStore,
         IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
         RuntimeCheckpointCommitter checkpointCommitter,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(incidentStateStore);
         ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(inspectionAccumulator);
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         _incidentStateStore = incidentStateStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _activityExecutionStateStore = activityExecutionStateStore;
+        _inspectionAccumulator = inspectionAccumulator;
         _checkpointCommitter = checkpointCommitter;
         _timeProvider = timeProvider;
     }
@@ -59,6 +67,7 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
             return;
 
         var occurredAt = _timeProvider.GetUtcNow();
+        var faultedAncestorStates = await FindFaultedAncestorStatesAsync(workflowExecutionId, blockingIncidents, occurredAt, cancellationToken);
         var faultedState = workflowState with
         {
             Status = WorkflowExecutionStatus.Faulted,
@@ -71,6 +80,28 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
         {
             [RuntimeMetadataKeys.CheckpointReason] = FaultReason
         };
+        var activityStateChanges = faultedAncestorStates
+            .Select(state => new RuntimeStateChange<ActivityExecutionState>(
+                StateId: state.Execution.ActivityExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: state,
+                Metadata: metadata))
+            .ToArray();
+        var activityInspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
+        foreach (var state in faultedAncestorStates)
+        {
+            var inspection = await _inspectionAccumulator.BuildProjectionAsync(
+                state,
+                checkpointId,
+                occurredAt,
+                metadata: metadata,
+                cancellationToken: cancellationToken);
+            activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                StateId: state.Execution.ActivityExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: inspection,
+                Metadata: metadata));
+        }
 
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{workflowExecutionId}:workflow-faulted",
@@ -79,7 +110,7 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
                 Name: RuntimeCheckpointNames.WorkflowFaulted,
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [],
+                ActivityExecutionIds: faultedAncestorStates.Select(state => state.Execution.ActivityExecutionId).ToArray(),
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: new RuntimeStateChange<WorkflowExecutionState>(
@@ -88,14 +119,75 @@ public sealed class BlockingIncidentWorkflowFaultObserver : IWorkflowSchedulerDr
                     State: faultedState,
                     Metadata: metadata),
                 scheduler: null,
-                activityExecutions: [],
+                activityExecutions: activityStateChanges,
                 bookmarks: [],
                 durableValues: [],
                 incidents: [],
-                operational: []),
+                operational: [],
+                activityExecutionInspections: activityInspectionChanges),
             PostCommitIntents: [],
             Metadata: metadata);
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
+
+    private async ValueTask<IReadOnlyCollection<ActivityExecutionState>> FindFaultedAncestorStatesAsync(
+        string workflowExecutionId,
+        IReadOnlyCollection<IncidentState> blockingIncidents,
+        DateTimeOffset completedAt,
+        CancellationToken cancellationToken)
+    {
+        var activeAncestors = new Dictionary<string, ActivityExecutionState>(StringComparer.Ordinal);
+        var incidentsByAncestor = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        foreach (var incident in blockingIncidents.OrderBy(item => item.IncidentId, StringComparer.Ordinal))
+        {
+            if (string.IsNullOrEmpty(incident.ActivityExecutionId))
+                continue;
+
+            var incidentActivity = await _activityExecutionStateStore.FindAsync(workflowExecutionId, incident.ActivityExecutionId, cancellationToken);
+            var ancestorId = incidentActivity?.ParentActivityExecutionId;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+
+            while (!string.IsNullOrEmpty(ancestorId) && visited.Add(ancestorId))
+            {
+                var ancestor = await _activityExecutionStateStore.FindAsync(workflowExecutionId, ancestorId, cancellationToken);
+                if (ancestor is null)
+                    break;
+
+                if (!IsTerminal(ancestor.Status))
+                {
+                    var activityExecutionId = ancestor.Execution.ActivityExecutionId;
+                    activeAncestors[activityExecutionId] = ancestor;
+                    if (!incidentsByAncestor.TryGetValue(activityExecutionId, out var incidentIds))
+                    {
+                        incidentIds = new(StringComparer.Ordinal);
+                        incidentsByAncestor.Add(activityExecutionId, incidentIds);
+                    }
+
+                    incidentIds.Add(incident.IncidentId);
+                }
+
+                ancestorId = ancestor.ParentActivityExecutionId;
+            }
+        }
+
+        return activeAncestors.Values
+            .Select(state => state with
+            {
+                Status = ActivityExecutionStatus.Faulted,
+                SubStatus = FaultReason,
+                CompletedAt = completedAt,
+                AggregateFaultCount = state.AggregateFaultCount + incidentsByAncestor[state.Execution.ActivityExecutionId].Count
+            })
+            .OrderBy(state => state.ExecutionSequence)
+            .ThenBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsTerminal(ActivityExecutionStatus status) =>
+        status is ActivityExecutionStatus.Completed
+            or ActivityExecutionStatus.Faulted
+            or ActivityExecutionStatus.Cancelled
+            or ActivityExecutionStatus.Recovered;
 }
