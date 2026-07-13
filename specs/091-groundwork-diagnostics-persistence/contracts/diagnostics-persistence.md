@@ -30,6 +30,7 @@ Cursor-unavailable is reserved for malformed, trimmed, or foreign cursors. Cance
 ## Composition and deployment
 
 - The host selects one Groundwork provider and supplies provider-neutral store/session access.
+- Each concrete diagnostics Groundwork adapter owns and contributes its schema declaration; the shared Elsa drain/lifecycle project remains Groundwork-free.
 - Schema validation and application can run before application startup through the shared Groundwork CLI/tooling.
 - Readiness fails on missing schema, drift, capability mismatch, or unavailable storage.
 - Registration replaces only `IStructuredLogStore` and `IOpenTelemetryStore`; live feeds, redaction, parsing, authorization, and domain policy stay Elsa-owned.

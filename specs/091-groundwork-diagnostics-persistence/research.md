@@ -24,6 +24,8 @@
 
 **Alternatives rejected**: Copying the existing EF base into each adapter repeats subtle lifecycle code. Moving the policy into Groundwork would invert domain ownership.
 
+The shared lifecycle project therefore has no Groundwork package reference. Structured Logs and OpenTelemetry each own their Groundwork schema declaration inside their concrete adapter project and contribute it to host composition independently.
+
 ## Decision 4: Let host composition supply Groundwork access
 
 **Decision**: Groundwork adapters consume a provider-neutral factory/lease abstraction selected by the host. They do not expose four provider-specific Elsa store implementations.

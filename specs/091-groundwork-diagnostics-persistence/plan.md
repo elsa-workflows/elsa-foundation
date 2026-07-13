@@ -86,7 +86,7 @@ tests/Elsa/Diagnostics/
 
 The exact conformance-project split may reuse existing test projects when that keeps references acyclic; the invariant is one reusable behavior corpus exercised by every supported provider.
 
-**Structure Decision**: Add a small diagnostics-owned persistence helper project for shared capture/drain lifecycle, keep each concrete Groundwork adapter under its diagnostics domain, and keep core projects independent. Provider fixtures and conformance tests remain in `tests/Elsa/Diagnostics` so EF oracles can be removed without deleting the behavior authority.
+**Structure Decision**: Add a small Groundwork-free diagnostics-owned persistence helper project for shared capture/drain lifecycle, keep each Groundwork schema declaration and concrete adapter under its diagnostics domain, and keep core projects independent. Provider fixtures and conformance tests remain in `tests/Elsa/Diagnostics` so EF oracles can be removed without deleting the behavior authority.
 
 ## Delivery Phases
 

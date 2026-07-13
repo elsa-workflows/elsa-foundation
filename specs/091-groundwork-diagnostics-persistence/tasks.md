@@ -53,8 +53,8 @@
 
 - [ ] T012 [P] [US1] Expand Structured Logs conformance tests for tied ordering, filtered cursor advancement, restart, invalid binding, trimmed anchors, and operational failure visibility in `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogReplayTests.cs`
 - [ ] T013 [P] [US1] Add OpenTelemetry restart tests for resources, trace summaries, spans, instruments, metric points, and log records in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryRestartTests.cs`
-- [ ] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, and concurrent-writer tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
-- [ ] T015 [US1] Run T012-T014 against the current adapters and retain the expected failing assertions in the work-unit notes before implementation
+- [ ] T014 [P] [US1] Add append idempotency, operation-identity conflict, acknowledgement-loss, cancellation-boundary, concurrent-writer, malformed-payload, and oversized-batch rejection-without-mutation tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDurableOperationConformanceTests.cs`
+- [ ] T015 [US1] Run T012-T014 against the current adapters and record the expected failing assertions in `specs/091-groundwork-diagnostics-persistence/evidence/red-test-baseline.md` before implementation
 
 ### Implementation for User Story 1
 
@@ -63,7 +63,7 @@
 - [ ] T018 [P] [US1] Define OpenTelemetry record-stream mappings and canonical serializers in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Records/`
 - [ ] T019 [P] [US1] Define resource and instrument catalog document mappings in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Catalogs/`
 - [ ] T020 [US1] Implement idempotent normalized batch writes and durable restart reads in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
-- [ ] T021 [US1] Declare all Structured Logs and OpenTelemetry streams, catalogs, indexes, and operation-ledger requirements in `src/Elsa/Diagnostics/Persistence/DiagnosticsStorageSchema.cs`
+- [ ] T021 [US1] Declare Structured Logs streams/indexes/ledger requirements in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/StructuredLogsGroundworkStorageSchema.cs` and OpenTelemetry streams/catalogs/indexes/ledger requirements in `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/OpenTelemetryGroundworkStorageSchema.cs`
 - [ ] T022 [US1] Run the US1 conformance set against all four providers and store a summarized evidence manifest in `specs/091-groundwork-diagnostics-persistence/evidence/us1-provider-results.json`
 
 **Checkpoint**: Durable append, restart, replay, idempotency, and failure semantics work independently for every diagnostic signal on all four providers.
@@ -79,7 +79,7 @@
 ### Tests for User Story 2 — write and observe failures first
 
 - [ ] T023 [P] [US2] Add the complete Structured Logs filter, limit, tie-break, count, retention-zero, and scope-isolation matrix in `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/GroundworkStructuredLogQueryConformanceTests.cs`
-- [ ] T024 [P] [US2] Add OpenTelemetry resource, trace, trace-detail, metric, and log query matrices with inclusive boundaries and stable ties in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs`
+- [ ] T024 [P] [US2] Add OpenTelemetry resource, trace, trace-detail, metric, and log query matrices with inclusive boundaries, stable ties, invalid-range rejection, and unsupported-query rejection without broad reads in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryQueryConformanceTests.cs`
 - [ ] T025 [P] [US2] Add deterministic resource/instrument catalog capacity and least-recently-seen retention tests in `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/Tests/GroundworkOpenTelemetryCatalogTests.cs`
 - [ ] T026 [P] [US2] Add cross-scope non-disclosure and exact retention tests for all signals in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsScopeAndRetentionConformanceTests.cs`
 - [ ] T027 [US2] Add real-provider execution-plan/index evidence assertions for every scale-bearing query and mutation in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsBoundedExecutionTests.cs`
@@ -108,12 +108,12 @@
 - [ ] T034 [P] [US3] Port and expand the EF drain oracle into provider-independent queue, retry, acknowledgement, closure, and disposal tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLifecycleTests.cs`
 - [ ] T035 [P] [US3] Add concurrent producer, overflow shedding, retry exhaustion, and later-batch recovery tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainLoadTests.cs`
 - [ ] T036 [P] [US3] Add graceful drain, timeout fallback, final retention, and no-incomplete-acknowledgement tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsDrainShutdownTests.cs`
-- [ ] T037 [P] [US3] Add non-recursive instrumentation and low-cardinality/no-payload telemetry tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceObservabilityTests.cs`
+- [ ] T037 [P] [US3] Add non-recursive instrumentation, low-cardinality/no-payload telemetry, and subscriber-delivery-loss classification tests in `tests/Elsa/Diagnostics/Persistence/Tests/DiagnosticsPersistenceObservabilityTests.cs`
 
 ### Implementation for User Story 3
 
 - [ ] T038 [US3] Extract the bounded drain state machine from `src/Elsa/Persistence/EFCore/Storage/ChannelDrainingStoreBase.cs` into composed services under `src/Elsa/Diagnostics/Persistence/Draining/`
-- [ ] T039 [US3] Implement loss-reason, lifecycle, retry, and shutdown observability in `src/Elsa/Diagnostics/Persistence/Observability/`
+- [ ] T039 [US3] Implement queue, retry, shutdown, retention, closure, and subscriber-delivery loss classification in `src/Elsa/Diagnostics/Persistence/Observability/`, reusing the existing domain live-feed signal instead of moving fan-out into persistence
 - [ ] T040 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogStore.cs`
 - [ ] T041 [P] [US3] Integrate the shared drain into `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryStore.cs`
 - [ ] T042 [US3] Register one explicit start/stop/drain-before-provider-disposal lifecycle in `src/Elsa/Diagnostics/Persistence/Extensions/ServiceCollectionExtensions.cs`
@@ -138,14 +138,14 @@
 
 ### Implementation for User Story 4
 
-- [ ] T048 [US4] Wire diagnostics schema declarations into the shared Groundwork validate/apply CLI path in `src/Elsa/Diagnostics/Persistence/DiagnosticsStorageSchema.cs`
+- [ ] T048 [US4] Contribute each concrete schema declaration to the shared Groundwork validate/apply CLI path from `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/GroundworkStructuredLogsPersistenceFeature.cs` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/GroundworkOpenTelemetryPersistenceFeature.cs`
 - [ ] T049 [US4] Implement Groundwork persistence feature composition and readiness in `src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/Groundwork/`
 - [ ] T050 [P] [US4] Add the ratified EF-versus-Groundwork diagnostics workload, datasets, environment manifest, and raw-artifact schema under `tools/performance/diagnostics/`
 - [ ] T051 [US4] Run the non-promotable smoke profile, then the full ratified four-provider performance matrix, and store the decision artifact in `specs/091-groundwork-diagnostics-persistence/evidence/performance-decision.json`
-- [ ] T052 [US4] Resolve any material correctness or performance regression and repeat T044-T051 until every removal gate passes
+- [ ] T052 [US4] For every material correctness or performance regression, record the failing gate, changed source/test paths, remediation commit, and rerun outcome in `specs/091-groundwork-diagnostics-persistence/evidence/performance-decision.json`, then repeat T044-T051 until every removal gate passes
 - [ ] T053 [US4] Delete Structured Logs EF implementation projects and their tests under `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/` and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/` while preserving provider-neutral conformance coverage
 - [ ] T054 [US4] Delete OpenTelemetry EF implementation projects and their tests under `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/` and `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/` while preserving provider-neutral conformance coverage
-- [ ] T055 [US4] Remove diagnostics EF project/package/registration/migration references from `Elsa.Server.slnx`, `Directory.Packages.props`, and affected diagnostics composition projects
+- [ ] T055 [US4] Remove diagnostics EF project/registration/migration/package usages from `Elsa.Server.slnx` and affected diagnostics projects; remove EF entries from `Directory.Packages.props` only when the repository-wide dependency audit proves no remaining feature consumes them
 - [ ] T056 [P] [US4] Update `src/Elsa/Diagnostics/StructuredLogs/README.md`, `src/Elsa/Diagnostics/StructuredLogs/EXTENSION_POINTS.md`, `src/Elsa/Diagnostics/OpenTelemetry/README.md`, and `src/Elsa/Diagnostics/OpenTelemetry/EXTENSION_POINTS.md`
 - [ ] T057 [US4] Run the complete four-provider suite, solution build, architecture audit, and final `rg` zero-EF/zero-core-Groundwork checks documented in `specs/091-groundwork-diagnostics-persistence/quickstart.md`
 
@@ -172,7 +172,7 @@
 - Phase 1 has no dependencies.
 - Phase 2 depends on Phase 1 and blocks every user story.
 - US1 and US2 may start after Phase 2; US2 query implementations depend on the relevant US1 record/catalog mappings.
-- US3 may start after Phase 2 and can proceed in parallel with US1/US2 until adapter integration tasks T040-T041.
+- US3 may start after Phase 2; execute T034-T039 immediately as the first independent implementation slice, then integrate T040-T041 after the relevant adapters exist.
 - US4 schema/readiness test work may begin after Phase 2, but EF removal tasks T053-T055 depend on all US1-US3 gates plus T044-T052.
 - Phase 7 depends on the desired user stories being complete; merge and final verification are strictly last.
 
@@ -193,9 +193,9 @@
 ## Implementation Strategy
 
 1. Land Phase 1-2 as a small architecture/test-fixture checkpoint.
-2. Deliver US1 durable restart/replay as the first independently certified slice.
-3. Add US2 exact query/retention behavior and provider-plan evidence.
-4. Integrate the independently tested US3 drain lifecycle.
+2. Complete the T034-T039 shared-drain tests and extraction as the first independently certified implementation slice.
+3. Deliver US1 durable restart/replay and integrate the tested drain into each adapter as it becomes available.
+4. Add US2 exact query/retention behavior and provider-plan evidence.
 5. Complete US4 deployment/performance gates; only then delete EF.
 6. Obtain exact-HEAD independent review, merge through Model B, and verify remote `main`.
 
