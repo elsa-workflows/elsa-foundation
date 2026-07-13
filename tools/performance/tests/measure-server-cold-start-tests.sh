@@ -272,10 +272,16 @@ import json, pathlib, re, sys
 first, second = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:3])
 unconfigured_markdown = pathlib.Path(sys.argv[3]).read_text()
 markdown = pathlib.Path(sys.argv[4]).read_text()
+expected_body_artifact = (pathlib.Path(sys.argv[2]).parent / "expected-body").resolve()
 assert first["provenance"]["serverOutputSha256"] != second["provenance"]["serverOutputSha256"]
 assert second["request"]["startupTimeoutSeconds"] == 7
 assert second["request"]["shutdownTimeoutSeconds"] == 3
 assert second["request"]["livenessPath"] == "/health/live"
+assert second["request"]["expectedShell"] == "default"
+assert second["request"]["expectedStatus"] == 200
+assert second["provenance"]["expectedBodySha256"] == "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069"
+assert second["provenance"]["expectedBodyArtifact"] == str(expected_body_artifact)
+assert expected_body_artifact.read_bytes() == b"Hello World!"
 assert second["budgets"]["shellReadyP95Ms"]["configuredMs"] == 100000
 assert second["budgets"]["shellReadyP95Ms"]["passed"] is True
 assert second["budgets"]["firstRequestP95Ms"]["configuredMs"] == 100000
@@ -285,6 +291,10 @@ assert second["outcome"] == {"status": "passed", "failure": None}
 assert "## Performance budgets" in markdown
 assert re.search(r"\| Shell ready p95 \| 100000\.000 \| [0-9.]+ \| passed \|", markdown)
 assert re.search(r"\| First workflow request p95 \| 100000\.000 \| [0-9.]+ \| passed \|", markdown)
+assert "- Expected shell: `default`" in markdown
+assert "- Expected workflow status: `200`" in markdown
+assert "- Expected body SHA-256: `7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069`" in markdown
+assert f"- Expected body artifact: `{expected_body_artifact}`" in markdown
 assert re.search(r"\| Shell ready p95 \| n/a \| [0-9.]+ \| not configured \|", unconfigured_markdown)
 assert re.search(r"\| First workflow request p95 \| n/a \| [0-9.]+ \| not configured \|", unconfigured_markdown)
 PY
@@ -311,11 +321,17 @@ import json, pathlib, re, sys
 
 success, failure = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:3])
 markdown = pathlib.Path(sys.argv[3]).read_text()
+expected_body_artifact = (pathlib.Path(sys.argv[2]).parent / "expected-body").resolve()
 assert set(failure) == set(success)
 assert set(failure["provenance"]) == set(success["provenance"])
 assert set(failure["request"]) == set(success["request"])
 assert failure["request"]["boots"] == 2
 assert failure["request"]["livenessPath"] == "/health/live"
+assert failure["request"]["expectedShell"] == "default"
+assert failure["request"]["expectedStatus"] == 200
+assert failure["provenance"]["expectedBodySha256"] == "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069"
+assert failure["provenance"]["expectedBodyArtifact"] == str(expected_body_artifact)
+assert expected_body_artifact.read_bytes() == b"Hello World!"
 assert len(failure["boots"]) == 2
 assert set(failure["boots"][0]) == set(failure["boots"][1])
 assert failure["boots"][0]["status"] == "passed"
@@ -327,6 +343,10 @@ assert failure["budgets"]["passed"] is None
 assert failure["outcome"]["status"] == "failed"
 assert failure["outcome"]["failure"]["boot"] == 2
 assert failure["outcome"]["failure"]["category"] == "workflow_validation_failed"
+assert "- Expected shell: `default`" in markdown
+assert "- Expected workflow status: `200`" in markdown
+assert "- Expected body SHA-256: `7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069`" in markdown
+assert f"- Expected body artifact: `{expected_body_artifact}`" in markdown
 assert re.search(r"\| Shell ready p95 \| 100000\.000 \| [0-9.]+ \| not evaluated \|", markdown)
 assert re.search(r"\| First workflow request p95 \| 100000\.000 \| [0-9.]+ \| not evaluated \|", markdown)
 PY

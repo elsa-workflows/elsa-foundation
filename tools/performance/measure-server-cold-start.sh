@@ -322,20 +322,27 @@ server_output_dir="$(dirname "$server_dll")"
 server_hash="$(hash_paths "$server_output_dir")"
 expected_body_file="$artifacts_dir/expected-body"
 printf '%s' "$expected_body" >"$expected_body_file"
+expected_body_hash="$(python3 - "$expected_body_file" <<'PY'
+import hashlib, pathlib, sys
+print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+)"
 
 write_report() {
   local failure_boot="${1:-}" failure_category="${2:-}" failure_message="${3:-}" failure_log="${4:-}"
   python3 - "$results_tsv" "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" \
     "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
-    "$base_url" "$liveness_path" "$readiness_path" "$workflow_path" "$boots" \
+    "$expected_body_hash" "$expected_body_file" "$base_url" "$liveness_path" "$readiness_path" \
+    "$workflow_path" "$expected_shell" "$expected_status" "$boots" \
     "$startup_timeout_seconds" "$shutdown_timeout_seconds" "$ready_budget_ms" "$workflow_budget_ms" \
     "$failure_boot" "$failure_category" "$failure_message" "$failure_log" <<'PY'
 import csv, datetime, json, math, pathlib, sys
 
 (tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash,
- content_hash, baseline_hash, base_url, liveness_path, readiness_path, workflow_path,
- requested_boots, startup_timeout, shutdown_timeout, ready_budget, workflow_budget,
- failure_boot, failure_category, failure_message, failure_log) = sys.argv[1:]
+ content_hash, baseline_hash, expected_body_hash, expected_body_artifact, base_url,
+ liveness_path, readiness_path, workflow_path, expected_shell, expected_status, requested_boots,
+ startup_timeout, shutdown_timeout, ready_budget, workflow_budget, failure_boot,
+ failure_category, failure_message, failure_log) = sys.argv[1:]
 
 metric_keys = (
     "listening_ms",
@@ -435,6 +442,8 @@ report = {
         "serverOutputSha256": server_hash,
         "contentSha256": content_hash,
         "baselineSha256": baseline_hash,
+        "expectedBodySha256": expected_body_hash,
+        "expectedBodyArtifact": expected_body_artifact,
         "environment": "Production",
     },
     "request": {
@@ -442,6 +451,8 @@ report = {
         "livenessPath": liveness_path,
         "readinessPath": readiness_path,
         "workflowPath": workflow_path,
+        "expectedShell": expected_shell,
+        "expectedStatus": int(expected_status),
         "boots": int(requested_boots),
         "startupTimeoutSeconds": int(startup_timeout),
         "shutdownTimeoutSeconds": int(shutdown_timeout),
@@ -459,6 +470,10 @@ lines = [
     f"- Requested boots: {requested_boots}",
     f"- Startup timeout: `{startup_timeout}` seconds",
     f"- Shutdown timeout: `{shutdown_timeout}` seconds",
+    f"- Expected shell: `{expected_shell}`",
+    f"- Expected workflow status: `{expected_status}`",
+    f"- Expected body SHA-256: `{expected_body_hash}`",
+    f"- Expected body artifact: `{expected_body_artifact}`",
     f"- Repository HEAD at measurement (not binary attribution): `{repository_head}`",
     f"- .NET SDK: `{dotnet}`",
     f"- Server output closure SHA-256: `{server_hash}`",
