@@ -2,10 +2,11 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
 import { DashboardPage } from "../DashboardPage";
-import { reconcileDashboardPreferences } from "../dashboardPreferences";
+import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
 import { register } from "../module";
+import { flush, stubApi, waitUntil, widget } from "./testSupport";
 
 describe("dashboard widget contract", () => {
   it("registers the canonical and legacy Dashboard routes", () => {
@@ -44,6 +45,22 @@ describe("dashboard widget contract", () => {
     flushSync(() => root.unmount());
   });
 
+  it("clears scoped snapshot data when the Dashboard surface unmounts", async () => {
+    const api = stubApi();
+    const load = vi.fn(async () => ({ total: 12 }));
+    api.dashboardWidgets.add(widget({ cacheLifetimeMs: 60_000, load, component: () => null }));
+
+    const firstRoot = createRoot(document.createElement("div"));
+    flushSync(() => firstRoot.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    await waitUntil(() => load.mock.calls.length === 1);
+    flushSync(() => firstRoot.unmount());
+
+    const secondRoot = createRoot(document.createElement("div"));
+    flushSync(() => secondRoot.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    await waitUntil(() => load.mock.calls.length === 2);
+    flushSync(() => secondRoot.unmount());
+  });
+
   it("retains unknown preferences and repairs unsupported sizes and invalid settings", () => {
     const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
       { id: "workflows.runs", visible: true, size: "full", settingsSchemaVersion: 1, settings: { range: "bad" } },
@@ -61,25 +78,56 @@ describe("dashboard widget contract", () => {
     ] }, [widget()], ["workflows.runs"]);
     expect(result.widgets[0].visible).toBe(true);
   });
+
+  it("keeps a newly discovered widget hidden when automatic add is disabled", () => {
+    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: false, widgets: [] }, [widget()]);
+    expect(result.widgets[0]).toMatchObject({ id: "workflows.runs", visible: false });
+  });
+
+  it("resets only the widget whose saved settings cannot migrate", () => {
+    const reset: string[] = [];
+    const result = reconcileDashboardPreferences({ refreshIntervalMs: 300_000, autoAddNewWidgets: true, widgets: [
+      { id: "workflows.runs", visible: true, size: "wide", settingsSchemaVersion: 0, settings: { range: "legacy" } },
+      { id: "missing.widget", visible: false, size: "small", settings: { retained: true } }
+    ] }, [widget()], [], id => reset.push(id));
+
+    expect(reset).toEqual(["workflows.runs"]);
+    expect(result.widgets[0].settings).toEqual({ range: "7d" });
+    expect(result.widgets[1]).toMatchObject({ id: "missing.widget", settings: { retained: true } });
+  });
+
+  it("serializes canonical preference writes against the latest revision", async () => {
+    const api = stubApi();
+    const headers: Array<Record<string, string>> = [];
+    let revision = 0;
+    (api.backend.http as unknown as { putJson: ReturnType<typeof vi.fn> }).putJson = vi.fn(async (_url, body, options) => {
+      headers.push((options as { headers: Record<string, string> }).headers);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      return { namespace: "dashboard", schemaVersion: 1, revision: `rev-${++revision}`, value: (body as { value: unknown }).value };
+    });
+    const store = new DashboardPreferenceStore(api, { studioHostId: "studio", backendBaseUrl: "backend", subjectId: "user", tenantId: "tenant" });
+    const document = { namespace: "dashboard", schemaVersion: 1, value: { refreshIntervalMs: 300_000 as const, autoAddNewWidgets: true, widgets: [] } };
+
+    await Promise.all([store.save(document), store.save({ ...document, value: { ...document.value, autoAddNewWidgets: false } })]);
+
+    expect(headers).toEqual([
+      expect.objectContaining({ "If-None-Match": "*" }),
+      expect.objectContaining({ "If-Match": '"rev-1"' })
+    ]);
+  });
+
+  it("isolates device-local fallback by tenant and host scope", async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) });
+    const api = stubApi();
+    const first = new DashboardPreferenceStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-a" });
+    const second = new DashboardPreferenceStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-b" });
+    const document = { namespace: "dashboard", schemaVersion: 1, value: { refreshIntervalMs: 60_000 as const, autoAddNewWidgets: true, widgets: [] } };
+
+    await first.save(document);
+
+    expect((await first.load()).value.refreshIntervalMs).toBe(60_000);
+    expect((await second.load()).value.refreshIntervalMs).toBe(300_000);
+    vi.unstubAllGlobals();
+  });
 });
-
-function widget(overrides: Partial<StudioDashboardWidgetContribution> = {}): StudioDashboardWidgetContribution {
-  return { id: "workflows.runs", moduleId: "Elsa.Studio.Workflows.Dashboard", title: "Workflow runs", defaultVisible: true, defaultSize: "wide", supportedSizes: ["medium", "wide"], settings: {
-    schemaVersion: 1, defaults: { range: "7d" }, descriptors: [], validate: value => (value as { range?: string })?.range === "7d" ? value as { range: string } : null
-  }, component: () => null, ...overrides };
-}
-
-function stubApi(): ElsaStudioModuleApi {
-  const makeRegistry = <T,>() => { const items: T[] = []; return { add: (item: T) => items.push(item), list: () => items, compose: () => [], slot: { id: "test", kind: "test", owner: { kind: "host", id: "host" } } }; };
-  const notFound = async () => { const error = new Error("missing") as Error & { status: number }; error.status = 404; throw error; };
-  return { host: { baseUrl: "https://studio.example", hostVersion: "1", sdkVersion: "1", http: {} }, backend: { baseUrl: "https://backend.example", http: { getJson: notFound, putJson: vi.fn(async (_url, body) => ({ namespace: "dashboard", schemaVersion: 1, value: (body as { value: unknown }).value })) } }, runtime: { hostId: "test", dashboard: { defaultRefreshIntervalMs: 300_000, widgetTimeoutMs: 10_000 } }, navigation: makeRegistry(), routes: makeRegistry(), dashboardWidgets: makeRegistry(), settingEditors: makeRegistry() } as unknown as ElsaStudioModuleApi;
-}
-
-async function flush() { await new Promise(resolve => setTimeout(resolve, 0)); await new Promise(resolve => setTimeout(resolve, 0)); }
-async function waitUntil(predicate: () => boolean) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (predicate()) return;
-    await new Promise(resolve => setTimeout(resolve, 0));
-  }
-  throw new Error("Condition was not met before the test timeout.");
-}

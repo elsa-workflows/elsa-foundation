@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
 
-const snapshotCache = new Map<string, { snapshot: unknown; updatedAt: number }>();
+const snapshotCache = new Map<string, { snapshot: unknown; updatedAt: number; scopeKey: string; widgetId: string }>();
+
+export function clearDashboardWidgetCache(scopeKey: string) {
+  for (const [key, entry] of snapshotCache)
+    if (entry.scopeKey === scopeKey) snapshotCache.delete(key);
+}
+
+export function retainDashboardWidgetCache(scopeKey: string, widgetIds: ReadonlySet<string>) {
+  for (const [key, entry] of snapshotCache)
+    if (entry.scopeKey === scopeKey && !widgetIds.has(entry.widgetId)) snapshotCache.delete(key);
+}
 
 export type DashboardWidgetRuntimeState =
   | { status: "idle" }
@@ -37,7 +47,7 @@ export function useDashboardWidget(
       const snapshot = await widget.load({ settings, signal: abort.signal });
       if (request !== generation.current || abort.signal.aborted) return;
       const updatedAt = Date.now();
-      if (widget.cacheLifetimeMs) snapshotCache.set(cacheKey, { snapshot, updatedAt });
+      if (widget.cacheLifetimeMs) snapshotCache.set(cacheKey, { snapshot, updatedAt, scopeKey: cacheScopeKey, widgetId: widget.id });
       const effective = refreshIntervalMs === 0 ? 0 : Math.max(refreshIntervalMs, widget.minimumRefreshIntervalMs ?? 0);
       setState({
         status: "ready",
