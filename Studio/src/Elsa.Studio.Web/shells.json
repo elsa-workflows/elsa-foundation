@@ -9,7 +9,8 @@
             "MaxRecentQuerySize": 2000,
             "PreserveAnsi": true
           },
-          "DashboardSample": {},
+          "DashboardStudio": {},
+          "AttentionStudio": {},
           "FeatureManagement": {},
           "OpenTelemetryStudio": {},
           "SecretsStudio": {},
@@ -20,7 +21,8 @@
           "ThemeStoreCore": {},
           "WeatherForecastSample": {},
           "WeaverWorkflowsStudio": {},
-          "WorkflowsStudio": {}
+          "WorkflowsStudio": {},
+          "WorkflowsDashboardStudio": {}
         },
         "Configuration": {
           "WebRouting": {

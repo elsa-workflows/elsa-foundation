@@ -17,6 +17,10 @@ public sealed class StudioRuntimeScriptTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Studio:BackendBaseUrl"] = "https://backend.example/",
+                ["Studio:HostId"] = "studio-primary",
+                ["Studio:Dashboard:DefaultRefreshIntervalMinutes"] = "15",
+                ["Studio:Dashboard:WidgetTimeoutSeconds"] = "12",
+                ["Studio:Dashboard:PinnedWidgetIds:0"] = "attention.queue",
                 // Configured server-side — the bridge needs it — but it must never leak into the browser script.
                 ["Studio:BackendModuleManagementApiKey"] = ManagementKey,
                 ["Studio:Auth:Enabled"] = "true"
@@ -51,5 +55,20 @@ public sealed class StudioRuntimeScriptTests
         Assert.Contains("backendBaseUrl", script);
         Assert.Contains("https://backend.example/", script);
         Assert.Contains("\"enabled\":true", script);
+        Assert.Contains("\"hostId\":\"studio-primary\"", script);
+        Assert.Contains("\"defaultRefreshIntervalMs\":900000", script);
+        Assert.Contains("\"widgetTimeoutMs\":12000", script);
+        Assert.Contains("\"pinnedWidgetIds\":[\"attention.queue\"]", script);
+    }
+
+    [Fact]
+    public void RuntimeScriptUsesStableDashboardDefaultsWhenConfigurationIsAbsent()
+    {
+        var script = StudioRuntimeScript.Render(new ConfigurationBuilder().Build());
+
+        Assert.Contains("\"hostId\":\"default\"", script);
+        Assert.Contains("\"defaultRefreshIntervalMs\":300000", script);
+        Assert.Contains("\"widgetTimeoutMs\":10000", script);
+        Assert.Contains("\"pinnedWidgetIds\":[]", script);
     }
 }

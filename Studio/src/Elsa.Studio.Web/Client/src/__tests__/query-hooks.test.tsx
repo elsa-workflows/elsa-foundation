@@ -5,12 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ModuleManagementPage } from "../app/modules/ModuleManagementPage";
 import { PackageFeedsPage } from "../app/modules/PackageFeedsPage";
-import { Dashboard } from "../app/App";
 import { createEndpointContext, type ElsaStudioModuleApi } from "../sdk";
 import { createTestQueryClient } from "./queryTestUtils";
 
 // Behavioural coverage for the shell's TanStack Query migration (#189): the Modules, Package feeds,
-// and Dashboard host-health surfaces now use `useQuery`/`useMutation`. These tests assert the three
+// surfaces use `useQuery`/`useMutation`. These tests assert the
 // query states (loading → error → success) and that a write invalidates + refetches the read.
 
 afterEach(() => {
@@ -94,24 +93,6 @@ describe("module management query hooks", () => {
   });
 });
 
-describe("host health query hook", () => {
-  it("reads Studio host registry and backend bridge status through the query", async () => {
-    const hostGetJson = vi.fn(async (url: string) =>
-      url === "/_elsa/studio/backend-management/status"
-        ? { status: "available", detail: "", backendBaseUrl: "https://foundation.example", checkedAt: new Date().toISOString() }
-        : healthyRegistry());
-    const { container, unmount } = renderDashboard(stubHealthApi(hostGetJson));
-    await flushPromises();
-
-    expect(hostGetJson).toHaveBeenCalledWith("/_elsa/module-management/registry");
-    expect(hostGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
-    expect(container.textContent).toContain("Studio host");
-    expect(container.textContent).toContain("Backend management");
-    expect(container.textContent).toContain("No host issues reported.");
-
-    await unmount();
-  });
-});
 
 function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): ElsaStudioModuleApi {
   const hostRegistryRead = options.hostGetJson ?? (async () => studioRegistry());
@@ -141,82 +122,7 @@ function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): 
   } as ElsaStudioModuleApi;
 }
 
-function stubHealthApi(hostGetJson: (url: string) => Promise<unknown>): ElsaStudioModuleApi {
-  return {
-    host: {
-      baseUrl: "https://studio.example/",
-      hostVersion: "1.0.0",
-      sdkVersion: "1.0.0",
-      http: { getJson: hostGetJson, postJson: async () => ({}) }
-    },
-    backend: {
-      baseUrl: "https://foundation.example/",
-      // Host-health no longer probes the backend context; a call here would be a regression.
-      http: { getJson: async () => { throw new Error("backend context must not be probed by host-health"); }, postJson: async () => ({}) }
-    },
-    dashboardWidgets: { add() {}, list: () => [] },
-    diagnosticsWidgets: { add() {}, list: () => [] },
-    diagnostics: { add() {}, list: () => [] }
-  } as ElsaStudioModuleApi;
-}
 
-function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
-  const http = createEndpointContext(baseUrl).http;
-  return { ...http, getJson };
-}
-
-function healthyRegistry() {
-  return { modules: [{ status: "available", diagnostics: [] }], diagnostics: [] };
-}
-
-function studioRegistry() {
-  return {
-    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Web", contentRootPath: "/studio" },
-    generatedAt: new Date().toISOString(),
-    modules: [{
-      id: "Elsa.Studio.FeatureManagement",
-      displayName: "Feature management",
-      surface: "Studio",
-      runtime: "Elsa.Studio.Web",
-      sourceKind: "static-web-asset",
-      scope: "full-stack",
-      version: "1.0.1",
-      status: "loaded",
-      compatibility: "compatible",
-      packageId: null,
-      packageVersion: null,
-      contributions: [],
-      diagnostics: [],
-      manifest: null
-    }],
-    packages: [],
-    dropFolderPackages: [],
-    feeds: [{
-      name: "studio-local-packages",
-      directoryPath: "packages",
-      serviceIndex: null,
-      credentials: null,
-      includeAll: true,
-      includePatterns: ["*"],
-      directory: { watch: true, debounceWindow: "00:00:01" }
-    }],
-    retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
-    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true },
-    diagnostics: []
-  };
-}
-
-function renderModuleManagementPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<ModuleManagementPage api={api} />);
-}
-
-function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
-  return renderWithClient(<PackageFeedsPage api={api} />);
-}
-
-function renderDashboard(api: ElsaStudioModuleApi) {
-  return renderWithClient(<Dashboard api={api} />);
-}
 
 function renderWithClient(node: React.ReactNode) {
   const client = createTestQueryClient();
@@ -232,6 +138,30 @@ function renderWithClient(node: React.ReactNode) {
       container.remove();
     }
   };
+}
+
+function stubHttp(baseUrl: string, getJson: (url: string) => Promise<unknown>) {
+  return { ...createEndpointContext(baseUrl).http, getJson };
+}
+
+function studioRegistry() {
+  return {
+    host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Web", contentRootPath: "/studio" },
+    generatedAt: new Date().toISOString(),
+    modules: [{ id: "Elsa.Studio.FeatureManagement", displayName: "Feature management", surface: "Studio", runtime: "Elsa.Studio.Web", sourceKind: "static-web-asset", scope: "full-stack", version: "1.0.1", status: "loaded", compatibility: "compatible", packageId: null, packageVersion: null, contributions: [], diagnostics: [], manifest: null }],
+    packages: [], dropFolderPackages: [],
+    feeds: [{ name: "studio-local-packages", directoryPath: "packages", serviceIndex: null, credentials: null, includeAll: true, includePatterns: ["*"], directory: { watch: true, debounceWindow: "00:00:01" } }],
+    retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
+    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true }, diagnostics: []
+  };
+}
+
+function renderModuleManagementPage(api: ElsaStudioModuleApi) {
+  return renderWithClient(<ModuleManagementPage api={api} />);
+}
+
+function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
+  return renderWithClient(<PackageFeedsPage api={api} />);
 }
 
 async function clickSourceButton(container: Element, text: string) {

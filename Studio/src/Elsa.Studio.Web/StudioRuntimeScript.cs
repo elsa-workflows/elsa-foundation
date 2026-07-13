@@ -20,11 +20,13 @@ internal static class StudioRuntimeScript
         new()
         {
             ["backendBaseUrl"] = configuration["Studio:BackendBaseUrl"] ?? string.Empty,
+            ["hostId"] = configuration["Studio:HostId"] ?? "default",
             // Surface the user-auth seam so the shell can attach real bearer tokens (and 401-refresh-retry) against the
             // backend identity endpoints. Omitted endpoints fall back to the SDK defaults (`/_elsa/identity/token`);
             // when Enabled is false the shell keeps booting anonymously.
             ["auth"] = BuildAuthRuntimeConfig(configuration),
-            ["workflows"] = BuildWorkflowsRuntimeConfig(configuration)
+            ["workflows"] = BuildWorkflowsRuntimeConfig(configuration),
+            ["dashboard"] = BuildDashboardRuntimeConfig(configuration)
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
@@ -53,5 +55,15 @@ internal static class StudioRuntimeScript
         new()
         {
             ["autosaveEnabledByDefault"] = configuration.GetValue("Studio:Workflows:AutosaveEnabledByDefault", defaultValue: true)
+        };
+
+    private static Dictionary<string, object?> BuildDashboardRuntimeConfig(IConfiguration configuration) =>
+        new()
+        {
+            ["defaultRefreshIntervalMs"] = (long)TimeSpan.FromMinutes(
+                configuration.GetValue("Studio:Dashboard:DefaultRefreshIntervalMinutes", 5)).TotalMilliseconds,
+            ["widgetTimeoutMs"] = (long)TimeSpan.FromSeconds(
+                configuration.GetValue("Studio:Dashboard:WidgetTimeoutSeconds", 10)).TotalMilliseconds,
+            ["pinnedWidgetIds"] = configuration.GetSection("Studio:Dashboard:PinnedWidgetIds").Get<string[]>() ?? []
         };
 }

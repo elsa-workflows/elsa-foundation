@@ -2,12 +2,14 @@
 
 Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. The repository owns the Studio module protocol, Vite React shell, TypeScript SDK, and sample class-library modules that contribute same-origin ESM assets and endpoints.
 
-The first slice intentionally proves the extension boundary only:
+The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
 - `Elsa.Studio.Api` exposes `GET /_elsa/studio/modules`.
 - `Elsa.Studio.Web` hosts the root-mounted Vite shell.
-- `Elsa.Studio.Samples.Dashboard` contributes a frontend-only dashboard module.
+- `Elsa.Studio.Dashboard` owns `/dashboard`, the Dashboard Widget slot, host-owned frames, loading, refresh, layout, and scoped preferences.
+- `Elsa.Studio.Attention` contributes the ordinary wide/full Attention widget.
+- `Elsa.Studio.Workflows.Dashboard` contributes workflow portfolio and run-health widgets.
 - `Elsa.Studio.Samples.WeatherForecast` contributes a frontend route and deterministic sample endpoint.
 - `Elsa.Studio.ConsoleStream` demonstrates a backend-scoped console stream module.
 
@@ -25,7 +27,9 @@ Studio is a modular monolith built on [CShells](https://www.cshells.io/). Each m
         "Features": {
           "StudioApi": {},
           "ConsoleStream": {},
-          "DashboardSample": {},
+          "DashboardStudio": {},
+          "AttentionStudio": {},
+          "WorkflowsDashboardStudio": {},
           "WeatherForecastSample": {}
         },
         "Configuration": {
@@ -47,7 +51,9 @@ Features ship in:
 |---|---|---|
 | `StudioApi` | `Elsa.Studio.Api` | `IWebShellFeature` |
 | `ConsoleStream` | `Elsa.Studio.ConsoleStream` | `IWebShellFeature` |
-| `DashboardSample` | `Elsa.Studio.Samples.Dashboard` | `IShellFeature` |
+| `DashboardStudio` | `Elsa.Studio.Dashboard` | `IShellFeature` |
+| `AttentionStudio` | `Elsa.Studio.Attention` | `IShellFeature` |
+| `WorkflowsDashboardStudio` | `Elsa.Studio.Workflows.Dashboard` | `IShellFeature` |
 | `WeatherForecastSample` | `Elsa.Studio.Samples.WeatherForecast` | `IWebShellFeature` |
 
 ## Build

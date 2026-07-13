@@ -7,8 +7,10 @@ using Elsa.Studio.ConsoleStream.Extensions;
 using Elsa.Studio.Diagnostics.OpenTelemetry;
 using Elsa.Studio.Diagnostics.StructuredLogs;
 using Elsa.Studio.FeatureManagement;
+using Elsa.Studio.Dashboard;
+using Elsa.Studio.Attention;
+using Elsa.Studio.Workflows.Dashboard;
 using Elsa.Studio.Workflows;
-using Elsa.Studio.Samples.Dashboard;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Web;
 using Nuplane;
@@ -52,9 +54,11 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(DiagnosticsOpenTelemetryStudioFeature).Assembly,
             typeof(DiagnosticsStructuredLogsStudioFeature).Assembly,
             typeof(FeatureManagementStudioFeature).Assembly,
+            typeof(DashboardStudioFeature).Assembly,
+            typeof(AttentionStudioFeature).Assembly,
+            typeof(WorkflowsDashboardStudioFeature).Assembly,
             typeof(WeaverWorkflowsStudioFeature).Assembly,
             typeof(WorkflowsStudioFeature).Assembly,
-            typeof(DashboardStudioFeature).Assembly,
             typeof(ThemeStoreCoreStudioFeature).Assembly)
         .WithConfigurationProvider(configuration)
         .WithWebRouting(options =>

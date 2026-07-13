@@ -206,11 +206,42 @@ export interface StudioNavigationContribution {
   parentId?: string;
 }
 
-export interface StudioDashboardWidgetContribution {
+export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";
+
+export interface StudioDashboardWidgetLoadContext<TSettings> {
+  settings: TSettings;
+  signal: AbortSignal;
+}
+
+export interface StudioDashboardWidgetSettings<TSettings> {
+  schemaVersion: number;
+  defaults: TSettings;
+  descriptors: StudioSettingDescriptor[];
+  validate(value: unknown): TSettings | null;
+  migrate?(value: unknown, fromVersion: number): TSettings | null;
+}
+
+export interface StudioDashboardWidgetBodyProps<TSnapshot, TSettings> {
+  snapshot: TSnapshot | undefined;
+  settings: TSettings;
+}
+
+export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSettings = unknown> {
   id: string;
+  moduleId: string;
   title: string;
+  description?: string;
   order?: number;
-  component: ComponentType;
+  defaultVisible: boolean;
+  defaultSize: StudioDashboardWidgetSize;
+  supportedSizes: StudioDashboardWidgetSize[];
+  permissions?: string[];
+  minimumRefreshIntervalMs?: number;
+  cacheLifetimeMs?: number;
+  timeoutMs?: number;
+  settings?: StudioDashboardWidgetSettings<TSettings>;
+  load?(context: StudioDashboardWidgetLoadContext<TSettings>): Promise<TSnapshot>;
+  component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -1032,7 +1063,13 @@ export interface StudioWorkflowRuntimeSettings {
 }
 
 export interface StudioRuntimeSettings {
+  hostId?: string;
   workflows?: StudioWorkflowRuntimeSettings;
+  dashboard?: {
+    defaultRefreshIntervalMs?: number;
+    widgetTimeoutMs?: number;
+    pinnedWidgetIds?: string[];
+  };
 }
 
 export interface ElsaStudioModuleApi {

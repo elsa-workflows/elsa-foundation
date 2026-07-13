@@ -2,204 +2,12 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Dashboard, Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
+import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath } from "../app/App";
 import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe("dashboard", () => {
-  it("shows Studio host and backend management tiles from the bridge status", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("available") }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Studio host");
-    expect(container.textContent).toContain("Backend management");
-    expect(container.textContent).toContain("Attention");
-    expect(container.textContent).toContain("No host issues reported.");
-    // The old direct-backend probes are gone: no "Server host" tile, no "Backend API" liveness tile.
-    expect(container.textContent).not.toContain("Server host");
-    expect(container.textContent).not.toContain("Backend API");
-    expect(container.textContent).not.toContain("Available modules");
-
-    await unmount();
-  });
-
-  it("reads backend management status from the Studio bridge, never the backend context", async () => {
-    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
-    const backendGetJson = vi.fn(async () => healthyRegistry());
-    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson, backendGetJson }));
-
-    await flushPromises();
-
-    // Bridge read goes to the Studio host origin; the backend context is never probed for registry/liveness.
-    expect(bridgeGetJson).toHaveBeenCalledWith("/_elsa/studio/backend-management/status");
-    expect(backendGetJson).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Connected");
-
-    await unmount();
-  });
-
-  it("does not issue any direct browser fetch to backend host-control endpoints", async () => {
-    // A global fetch that fails loudly: host-health must never reach it (all reads go through api.host.http).
-    const fetchMock = vi.fn(async () => { throw new Error("host-health must not fetch directly"); });
-    vi.stubGlobal("fetch", fetchMock);
-    const { unmount } = await renderDashboard(stubApi({ backendStatus: bridgeStatus("available") }));
-
-    await flushPromises();
-
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    await unmount();
-  });
-
-  it("renders an explicit unconfigured state without marking it as an outage", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendStatus: bridgeStatus("unconfigured", "Backend management is not configured on the Studio host.")
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Backend management");
-    expect(container.textContent).toContain("Not configured");
-    expect(container.textContent).toContain("Backend management is not configured on the Studio host.");
-    // Unconfigured is fail-closed-by-design, not an outage: no attention weight is added.
-    expect(container.textContent).toContain("No host issues reported.");
-
-    await unmount();
-  });
-
-  it("renders an explicit unauthorized state", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendStatus: bridgeStatus("unauthorized", "The backend rejected the Studio management key.")
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Unauthorized");
-    expect(container.textContent).toContain("The backend rejected the Studio management key.");
-    expect(container.textContent).not.toContain("Connected");
-
-    await unmount();
-  });
-
-  it("renders an explicit unreachable state", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendStatus: bridgeStatus("unreachable", "The backend management surface could not be reached.")
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Unreachable");
-    expect(container.textContent).toContain("The backend management surface could not be reached.");
-
-    await unmount();
-  });
-
-  it("renders a degraded state for attention", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      backendStatus: bridgeStatus("degraded", "The backend management surface responded with an unexpected status.")
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Degraded");
-    expect(container.textContent).toContain("Open Modules to review host-scoped issues.");
-
-    await unmount();
-  });
-
-  it("falls back to an unknown state when the bridge itself is unreachable", async () => {
-    const bridgeGetJson = vi.fn(async () => { throw new Error("bridge offline"); });
-    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Unknown");
-    expect(container.textContent).toContain("Backend management status is unavailable: bridge offline");
-
-    await unmount();
-  });
-
-  it("re-checks host health when modules change", async () => {
-    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
-    const { unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
-
-    await flushPromises();
-    expect(bridgeGetJson).toHaveBeenCalledTimes(1);
-
-    window.dispatchEvent(new Event("elsa-studio:modules-changed"));
-    await flushPromises();
-
-    expect(bridgeGetJson).toHaveBeenCalledTimes(2);
-
-    await unmount();
-  });
-
-  it("re-checks host health when Refresh is clicked", async () => {
-    const bridgeGetJson = vi.fn(async () => bridgeStatus("available"));
-    const { container, unmount } = await renderDashboard(stubApi({ bridgeGetJson }));
-
-    await flushPromises();
-    expect(bridgeGetJson).toHaveBeenCalledTimes(1);
-
-    const refresh = container.querySelector<HTMLButtonElement>(".host-health-refresh");
-    expect(refresh).not.toBeNull();
-    flushSync(() => refresh!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    await flushPromises();
-
-    expect(bridgeGetJson).toHaveBeenCalledTimes(2);
-
-    await unmount();
-  });
-
-  it("renders dashboard widgets contributed through the Studio SDK", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      widgets: [
-        {
-          id: "sample-widget",
-          title: "Sample",
-          component: () => <div>Contributed widget</div>
-        }
-      ]
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("Contributed widget");
-
-    await unmount();
-  });
-
-  it("renders dashboard widgets in deterministic order", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-      widgets: [
-        { id: "beta", title: "Beta", component: () => <div>Beta widget</div> },
-        { id: "alpha", title: "Alpha", component: () => <div>Alpha widget</div> },
-        { id: "first", title: "First", order: 10, component: () => <div>First widget</div> }
-      ]
-    }));
-
-    await flushPromises();
-
-    expect(visibleText(container)).toMatch(/First widget.*Alpha widget.*Beta widget/s);
-
-    await unmount();
-  });
-
-  it("shows a useful Dashboard empty state when no widgets are registered", async () => {
-    const { container, unmount } = await renderDashboard(stubApi({
-    }));
-
-    await flushPromises();
-
-    expect(container.textContent).toContain("No dashboard widgets are registered.");
-
-    await unmount();
-  });
 });
 
 describe("diagnostics", () => {
@@ -293,10 +101,9 @@ describe("diagnostics", () => {
 });
 
 describe("navigation sections", () => {
-  it("keeps Dashboard owned by the host shell", () => {
+  it("accepts Dashboard navigation from its dedicated module", () => {
     const navigation = getStudioNavigation([
-      { id: "dashboard-sample", label: "Dashboard", path: "/dashboard", order: 100 },
-      { id: "overview", label: "Overview", path: "/overview", order: 10 },
+      { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0 },
       { id: "weather", label: "Weather", path: "/weather", order: 20 }
     ]);
 
@@ -388,10 +195,6 @@ function healthyRegistry() {
     ],
     diagnostics: []
   };
-}
-
-async function renderDashboard(api: ElsaStudioModuleApi) {
-  return renderComponent(<Dashboard api={api} />);
 }
 
 async function renderDiagnostics(api: ElsaStudioModuleApi) {

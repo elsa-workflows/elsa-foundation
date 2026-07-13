@@ -17,6 +17,7 @@ export * from "./feedback/StatusPill";
 export * from "./forms/Button";
 export * from "./forms/Field";
 export * from "./forms/SearchInput";
+export * from "./forms/SettingEditors";
 export * from "./inspector/Inspector";
 export * from "./layout/Tabs";
 export * from "./layout/Toolbar";
