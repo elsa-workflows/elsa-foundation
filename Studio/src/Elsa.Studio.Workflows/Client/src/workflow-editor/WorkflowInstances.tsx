@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
-import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances } from "../api/runtime";
+import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowExecutableNode, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
@@ -41,47 +41,129 @@ import {
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
 
-export function WorkflowInstances({ context }: { context: StudioEndpointContext }) {
+const runHistoryPageSizes = [10, 25, 50, 100] as const;
+
+interface RunHistoryFilters {
+  status: string;
+  runKind: string;
+  definitionId: string;
+  workflowExecutionId: string;
+  artifactId: string;
+  correlationId: string;
+  from: string;
+  to: string;
+}
+
+interface RunHistoryLocation {
+  filters: RunHistoryFilters;
+  pageSize: number;
+  cursor: string | null;
+}
+
+const emptyRunHistoryPage: WorkflowInstanceListPage = {
+  items: [],
+  previousCursor: null,
+  nextCursor: null,
+  hasPrevious: false,
+  hasNext: false,
+  count: 0,
+  totalCount: 0
+};
+
+export function WorkflowInstances({ context, navigate }: {
+  context: StudioEndpointContext;
+  navigate(path: string): void;
+}) {
+  const [location, setLocation] = useState<RunHistoryLocation>(readRunHistoryLocation);
+  const [draftFilters, setDraftFilters] = useState<RunHistoryFilters>(location.filters);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [runKindFilter, setRunKindFilter] = useState("");
-  const [instances, setInstances] = useState<WorkflowInstanceSummary[]>([]);
+  const [page, setPage] = useState<WorkflowInstanceListPage>(emptyRunHistoryPage);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setState("loading");
     setError("");
     try {
-      const nextInstances = await listWorkflowInstances(context, {
-        status: statusFilter || undefined,
-        runKind: runKindFilter || undefined,
-        take: 100
+      const filters = location.filters;
+      const nextPage = await listWorkflowInstances(context, {
+        status: valueOrUndefined(filters.status),
+        runKind: valueOrUndefined(filters.runKind),
+        definitionId: valueOrUndefined(filters.definitionId),
+        workflowExecutionId: valueOrUndefined(filters.workflowExecutionId),
+        artifactId: valueOrUndefined(filters.artifactId),
+        correlationId: valueOrUndefined(filters.correlationId),
+        from: toUtcIso(filters.from),
+        to: toUtcIso(filters.to),
+        take: location.pageSize,
+        cursor: location.cursor ?? undefined
       });
-      setInstances(nextInstances);
+      if (requestId !== requestSequence.current) return;
+      setPage(nextPage);
       setState("ready");
     } catch (e) {
+      if (requestId !== requestSequence.current) return;
       setError(e instanceof Error ? e.message : String(e));
-      setInstances([]);
+      setPage(emptyRunHistoryPage);
       setState("failed");
     }
-  }, [context, runKindFilter, statusFilter]);
+  }, [context, location]);
 
   useEffect(() => {
     void load();
+    return () => {
+      requestSequence.current += 1;
+    };
   }, [load]);
 
-  const openInstance = (workflowExecutionId: string) => {
-    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+  useEffect(() => {
+    const restoreLocation = () => {
+      const next = readRunHistoryLocation();
+      setLocation(next);
+      setDraftFilters(next.filters);
+    };
+    window.addEventListener("popstate", restoreLocation);
+    return () => window.removeEventListener("popstate", restoreLocation);
+  }, []);
+
+  const updateLocation = (next: RunHistoryLocation, syncDraft = true) => {
+    setLocation(next);
+    if (syncDraft) setDraftFilters(next.filters);
+    navigate(buildRunHistoryUrl(next));
   };
+
+  const applyFilters = () => updateLocation({
+    filters: normalizeRunHistoryFilters(draftFilters),
+    pageSize: location.pageSize,
+    cursor: null
+  });
+
+  const clearFilters = () => updateLocation({
+    filters: emptyRunHistoryFilters(),
+    pageSize: location.pageSize,
+    cursor: null
+  });
+
+  const openInstance = (workflowExecutionId: string) => {
+    navigate(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+  };
+
+  const instances = page.items;
+  const activeFilterCount = Object.values(location.filters).filter(Boolean).length;
+  const hasDraftFilters = Object.values(draftFilters).some(Boolean);
 
   return (
     <>
-      <div className="wf-toolbar">
+      <form className="wf-run-filters" aria-label="Workflow run filters" onSubmit={event => {
+        event.preventDefault();
+        applyFilters();
+      }}>
+        <div className="wf-toolbar">
         <button type="button" onClick={() => void load()}>Refresh</button>
         <label className="wf-toolbar-field">
           <span>Status</span>
-          <select aria-label="Workflow run status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+          <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
             <option value="">All statuses</option>
             <option value="Pending">Pending</option>
             <option value="Running">Running</option>
@@ -93,7 +175,7 @@ export function WorkflowInstances({ context }: { context: StudioEndpointContext 
         </label>
         <label className="wf-toolbar-field">
           <span>Kind</span>
-          <select aria-label="Run Kind" value={runKindFilter} onChange={event => setRunKindFilter(event.target.value)}>
+          <select aria-label="Run Kind" value={draftFilters.runKind} onChange={event => setDraftFilters(current => ({ ...current, runKind: event.target.value }))}>
             <option value="">All kinds</option>
             <option value="TestRun">Test Run</option>
             <option value="PublishedRun">Published Run</option>
@@ -101,15 +183,32 @@ export function WorkflowInstances({ context }: { context: StudioEndpointContext 
             <option value="Unknown">Unknown / legacy</option>
           </select>
         </label>
-      </div>
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
-      {state === "loading" ? <WfListSkeleton /> : null}
+        </div>
+        <div className="wf-run-filter-fields">
+          <RunFilterInput label="Definition" value={draftFilters.definitionId} onChange={value => setDraftFilters(current => ({ ...current, definitionId: value }))} />
+          <RunFilterInput label="Execution ID" value={draftFilters.workflowExecutionId} onChange={value => setDraftFilters(current => ({ ...current, workflowExecutionId: value }))} />
+          <RunFilterInput label="Artifact" value={draftFilters.artifactId} onChange={value => setDraftFilters(current => ({ ...current, artifactId: value }))} />
+          <RunFilterInput label="Correlation" value={draftFilters.correlationId} onChange={value => setDraftFilters(current => ({ ...current, correlationId: value }))} />
+          <RunFilterInput label="From" type="datetime-local" value={draftFilters.from} onChange={value => setDraftFilters(current => ({ ...current, from: value }))} />
+          <RunFilterInput label="To" type="datetime-local" value={draftFilters.to} onChange={value => setDraftFilters(current => ({ ...current, to: value }))} />
+          <div className="wf-run-filter-actions">
+            <button type="submit">Apply filters</button>
+            <button type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</button>
+          </div>
+        </div>
+      </form>
+      {state === "failed" ? <div role="alert"><WfErrorCard message={error} /></div> : null}
+      {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
       {state === "ready" && instances.length === 0 ? (
-        <WfEmptyState
-          icon={<Boxes size={22} />}
-          title="No workflow runs yet"
-          description="Run a published workflow executable to create execution history here."
-        />
+        <div role="status" aria-live="polite">
+          <WfEmptyState
+            icon={<Boxes size={22} />}
+            title={activeFilterCount ? "No workflow runs match these filters" : "No workflow runs yet"}
+            description={activeFilterCount
+              ? "Clear or adjust the operational filters to broaden the result set."
+              : "Run a published workflow executable to create execution history here."}
+          />
+        </div>
       ) : null}
       {state === "ready" && instances.length > 0 ? (
         <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow runs">
@@ -151,8 +250,109 @@ export function WorkflowInstances({ context }: { context: StudioEndpointContext 
           ))}
         </div>
       ) : null}
+      {state === "ready" ? (
+        <div className="wf-pagination" aria-label="Workflow run pagination">
+          <span className="wf-pagination-summary" aria-live="polite">
+            Showing {page.count} of {page.totalCount} matching runs
+          </span>
+          <label className="wf-page-size">
+            Rows
+            <select aria-label="Workflow run page size" value={location.pageSize} onChange={event => updateLocation({
+              filters: location.filters,
+              pageSize: Number(event.target.value),
+              cursor: null
+            }, false)}>
+              {runHistoryPageSizes.map(size => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </label>
+          <div className="wf-page-controls">
+            <button type="button" disabled={!page.hasPrevious || !page.previousCursor} onClick={() => {
+              if (page.previousCursor) updateLocation({ ...location, cursor: page.previousCursor }, false);
+            }} aria-label="Previous workflow run page">
+              <ChevronLeft size={14} /> Previous
+            </button>
+            <span role="status">{page.hasNext ? "More results" : "End of results"}</span>
+            <button type="button" disabled={!page.hasNext || !page.nextCursor} onClick={() => {
+              if (page.nextCursor) updateLocation({ ...location, cursor: page.nextCursor }, false);
+            }} aria-label="Next workflow run page">
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
+}
+
+function RunFilterInput({ label, value, type = "text", onChange }: {
+  label: string;
+  value: string;
+  type?: "text" | "datetime-local";
+  onChange(value: string): void;
+}) {
+  return (
+    <label className="wf-run-filter-field">
+      <span>{label}</span>
+      <input aria-label={`Workflow run ${label.toLowerCase()}`} type={type} value={value} onChange={event => onChange(event.target.value)} />
+    </label>
+  );
+}
+
+function emptyRunHistoryFilters(): RunHistoryFilters {
+  return {
+    status: "",
+    runKind: "",
+    definitionId: "",
+    workflowExecutionId: "",
+    artifactId: "",
+    correlationId: "",
+    from: "",
+    to: ""
+  };
+}
+
+function normalizeRunHistoryFilters(filters: RunHistoryFilters): RunHistoryFilters {
+  return Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, value.trim()])) as unknown as RunHistoryFilters;
+}
+
+export function readRunHistoryLocation(search = window.location.search): RunHistoryLocation {
+  const parameters = new URLSearchParams(search);
+  const requestedPageSize = Number(parameters.get("pageSize"));
+  return {
+    filters: {
+      status: parameters.get("status") ?? "",
+      runKind: parameters.get("runKind") ?? "",
+      definitionId: parameters.get("definitionId") ?? "",
+      workflowExecutionId: parameters.get("workflowExecutionId") ?? "",
+      artifactId: parameters.get("artifactId") ?? "",
+      correlationId: parameters.get("correlationId") ?? "",
+      from: parameters.get("from") ?? "",
+      to: parameters.get("to") ?? ""
+    },
+    pageSize: runHistoryPageSizes.includes(requestedPageSize as typeof runHistoryPageSizes[number]) ? requestedPageSize : 25,
+    cursor: parameters.get("cursor")
+  };
+}
+
+export function buildRunHistoryUrl(location: RunHistoryLocation) {
+  const parameters = new URLSearchParams();
+  Object.entries(location.filters).forEach(([name, value]) => {
+    if (value) parameters.set(name, value);
+  });
+  if (location.pageSize !== 25) parameters.set("pageSize", String(location.pageSize));
+  if (location.cursor) parameters.set("cursor", location.cursor);
+  const query = parameters.toString();
+  return `/workflows/instances${query ? `?${query}` : ""}`;
+}
+
+function valueOrUndefined(value: string) {
+  return value || undefined;
+}
+
+function toUtcIso(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? undefined : date.toISOString();
 }
 
 export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutionId, navigate }: {

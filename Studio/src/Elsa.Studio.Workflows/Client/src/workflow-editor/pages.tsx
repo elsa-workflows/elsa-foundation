@@ -111,10 +111,10 @@ export function WorkflowExecutableInspectorPage({ context, ai }: { context: Stud
   );
 }
 
-export function WorkflowInstancesPage({ context }: { context: StudioEndpointContext }) {
+export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
     <WorkflowsPageFrame title="Runs">
-      <WorkflowInstances context={context} />
+      <WorkflowInstances context={context} navigate={navigate} />
     </WorkflowsPageFrame>
   );
 }
