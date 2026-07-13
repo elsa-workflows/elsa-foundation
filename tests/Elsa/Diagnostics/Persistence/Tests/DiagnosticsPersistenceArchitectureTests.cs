@@ -3,6 +3,7 @@ using Elsa.Diagnostics.Persistence.Extensions;
 using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
@@ -186,6 +187,73 @@ public sealed class DiagnosticsPersistenceArchitectureTests
         afterDefault.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
         afterDefault.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
         Assert.Throws<InvalidOperationException>(afterDefault.AddDiagnosticsPersistenceObservability);
+    }
+
+    [Fact]
+    public void Startup_validation_rejects_observer_conflicts_registered_after_composition()
+    {
+        var services = new ServiceCollection();
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains(typeof(DiagnosticsPersistenceCounters).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(FirstObserver).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondObserver).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(DiagnosticsPersistenceRegistration.ReplaceDiagnosticsStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Startup_validation_rejects_two_direct_observer_types_with_actionable_descriptions()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, FirstObserver>();
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains(typeof(FirstObserver).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondObserver).FullName!, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(DiagnosticsPersistenceRegistration.ReplaceDiagnosticsStore), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Startup_validation_describes_factory_and_type_observer_conflicts()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<IDiagnosticsPersistenceObserver>(_ => new FirstObserver());
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddSingleton<IDiagnosticsPersistenceObserver, SecondObserver>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<OptionsValidationException>(
+            provider.GetRequiredService<IStartupValidator>().Validate);
+
+        Assert.Contains("factory registration", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(SecondObserver).FullName!, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Startup_validation_accepts_an_instance_observer_and_duplicate_composition_registers_one_validator()
+    {
+        var observer = new FirstObserver();
+        var services = new ServiceCollection();
+        services.AddSingleton<IDiagnosticsPersistenceObserver>(observer);
+        services.AddDiagnosticsPersistenceObservability();
+        services.AddDiagnosticsPersistenceObservability();
+
+        Assert.Single(services, descriptor =>
+            descriptor.ImplementationType?.Name == "DiagnosticsPersistenceObserverRegistrationValidator");
+        using var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<IStartupValidator>().Validate();
+        Assert.Same(observer, provider.GetRequiredService<IDiagnosticsPersistenceObserver>());
     }
 
     private interface ITestStore;
