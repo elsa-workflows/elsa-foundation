@@ -1828,6 +1828,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Published Run");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     await select(selectByLabel(container, "Run Kind"), "TestRun");
+    await click(buttonByText(container, "Apply filters"));
     await waitForText(container, "wfexec-test");
     expect(container.textContent).toContain("Test Run");
     expect(container.textContent).toContain("2 activities");
@@ -1836,11 +1837,11 @@ describe("workflows module", () => {
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/runtime/workflows/instances?take=100",
+      "https://server.example/runtime/workflows/instances?take=25",
       expect.any(Object)
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/runtime/workflows/instances?runKind=TestRun&take=100",
+      "https://server.example/runtime/workflows/instances?runKind=TestRun&take=25",
       expect.any(Object)
     );
 

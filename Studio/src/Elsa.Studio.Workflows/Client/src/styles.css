@@ -325,6 +325,65 @@
   padding: 0 28px 0 10px;
 }
 
+.wf-run-filters {
+  border-bottom: 1px solid var(--wf-border);
+  background: var(--wf-panel);
+}
+
+.wf-run-filters .wf-toolbar {
+  border-bottom: 0;
+}
+
+.wf-run-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 0 18px 12px;
+}
+
+.wf-run-filter-field {
+  display: grid;
+  gap: 4px;
+  color: var(--wf-muted-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wf-run-filter-field input {
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel-muted);
+  color: var(--wf-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 0 9px;
+}
+
+.wf-run-filter-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.wf-run-filter-actions button {
+  min-height: 32px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius);
+  background: var(--wf-panel);
+  color: var(--wf-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.wf-run-filter-actions button:disabled {
+  color: var(--wf-disabled-text);
+  cursor: not-allowed;
+}
+
 .wf-segmented {
   display: inline-flex;
   overflow: hidden;
