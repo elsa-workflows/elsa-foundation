@@ -71,6 +71,61 @@ public sealed class PublicationActivationTests
     }
 
     [Fact]
+    public async Task CandidateActivationStateFailureRestoresPriorAuthorityAndServingState()
+    {
+        await SeedActivePublicationAsync("publication-current");
+        var candidate = Candidate("publication-failing", expectedSlotRevision: 1);
+        var projectionPreparer = new TrackingProjectionPreparer("publication-current");
+        var failingStore = new FailOncePublicationRecordStore(
+            _publicationStore,
+            (publication, expectedStatus) =>
+                publication.PublicationId == candidate.PublicationId &&
+                publication.Status == PublicationStatus.Active &&
+                expectedStatus == PublicationStatus.Candidate);
+        var activator = NewActivator(projectionPreparer, failingStore);
+
+        var result = await activator.ActivateAsync(new PublicationActivationRequest(candidate));
+
+        var currentSlot = await _slotStore.FindAsync("definition-1", "default");
+        var oldPublication = await _publicationStore.FindAsync("publication-current");
+        var failedCandidate = await _publicationStore.FindAsync(candidate.PublicationId);
+        Assert.False(result.Succeeded);
+        Assert.Equal("publication_state_transition_failed", result.Failure?.Code);
+        Assert.Equal("publication-current", currentSlot!.ActivePublicationId);
+        Assert.Equal("publication-current", projectionPreparer.CurrentPublicationId);
+        Assert.Equal(PublicationStatus.Active, oldPublication!.Status);
+        Assert.Equal(PublicationStatus.Failed, failedCandidate!.Status);
+    }
+
+    [Fact]
+    public async Task ReplacedPublicationRetirementFailureRestoresBothPublicationRecordsAndServingState()
+    {
+        await SeedActivePublicationAsync("publication-current");
+        var candidate = Candidate("publication-failing", expectedSlotRevision: 1);
+        var projectionPreparer = new TrackingProjectionPreparer("publication-current");
+        var failingStore = new FailOncePublicationRecordStore(
+            _publicationStore,
+            (publication, expectedStatus) =>
+                publication.PublicationId == "publication-current" &&
+                publication.Status == PublicationStatus.Retired &&
+                expectedStatus == PublicationStatus.Active);
+        var activator = NewActivator(projectionPreparer, failingStore);
+
+        var result = await activator.ActivateAsync(new PublicationActivationRequest(candidate));
+
+        var currentSlot = await _slotStore.FindAsync("definition-1", "default");
+        var oldPublication = await _publicationStore.FindAsync("publication-current");
+        var failedCandidate = await _publicationStore.FindAsync(candidate.PublicationId);
+        Assert.False(result.Succeeded);
+        Assert.Equal("publication_state_transition_failed", result.Failure?.Code);
+        Assert.Equal("publication-current", currentSlot!.ActivePublicationId);
+        Assert.Equal("publication-current", projectionPreparer.CurrentPublicationId);
+        Assert.Equal(PublicationStatus.Active, oldPublication!.Status);
+        Assert.Null(oldPublication.RetiredAt);
+        Assert.Equal(PublicationStatus.Failed, failedCandidate!.Status);
+    }
+
+    [Fact]
     public async Task UnpublishProjectionRemovalFailureRestoresAuthorityAndReplaysServingProjection()
     {
         await SeedActivePublicationAsync("publication-current");
@@ -94,10 +149,12 @@ public sealed class PublicationActivationTests
         Assert.True(projectionPreparer.Restored);
     }
 
-    private PublicationActivator NewActivator(IPublicationProjectionPreparer projectionPreparer) =>
+    private PublicationActivator NewActivator(
+        IPublicationProjectionPreparer projectionPreparer,
+        IPublicationRecordStore? publicationStore = null) =>
         new(
             _slotStore,
-            _publicationStore,
+            publicationStore ?? _publicationStore,
             projectionPreparer,
             new FixedTimeProvider(_now));
 
@@ -168,6 +225,54 @@ public sealed class PublicationActivationTests
         public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
         public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    private sealed class TrackingProjectionPreparer(string? currentPublicationId) : IPublicationProjectionPreparer
+    {
+        public string? CurrentPublicationId { get; private set; } = currentPublicationId;
+
+        public ValueTask PrepareAsync(PublicationRecord candidate, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+
+        public ValueTask ActivateAsync(PublicationRecord candidate, string? replacedPublicationId, CancellationToken cancellationToken = default)
+        {
+            CurrentPublicationId = candidate.PublicationId;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask CompensateAsync(PublicationRecord candidate, string? restoredPublicationId, CancellationToken cancellationToken = default)
+        {
+            CurrentPublicationId = restoredPublicationId;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask RestoreAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+        public ValueTask RemoveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
+    }
+
+    private sealed class FailOncePublicationRecordStore(
+        IPublicationRecordStore inner,
+        Func<PublicationRecord, PublicationStatus, bool> shouldFail) : IPublicationRecordStore
+    {
+        private int _failureInjected;
+
+        public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(publication, cancellationToken);
+
+        public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(publicationId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) =>
+            inner.ListBySlotAsync(slotId, cancellationToken);
+
+        public ValueTask<bool> TryTransitionAsync(
+            PublicationRecord publication,
+            PublicationStatus expectedStatus,
+            CancellationToken cancellationToken = default)
+        {
+            if (shouldFail(publication, expectedStatus) && Interlocked.Exchange(ref _failureInjected, 1) == 0)
+                return ValueTask.FromResult(false);
+            return inner.TryTransitionAsync(publication, expectedStatus, cancellationToken);
+        }
     }
 
     private sealed class PartialRemovalProjectionPreparer : IPublicationProjectionPreparer

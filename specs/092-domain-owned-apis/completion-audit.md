@@ -55,7 +55,7 @@ Foundation:
 - Full solution tests pass after adding the new domain test projects to `Elsa.Server.slnx`.
 - Full solution build passes with zero errors; current Groundwork deprecation warnings and the existing
   `NU1510` package-pruning warning remain non-blocking.
-- Publishing API: 140 tests pass after public status/action/source/trigger normalization.
+- Publishing API: 142 tests pass after public status/action/source/trigger normalization and activation-compensation coverage.
 - Workflow Design API: 52 tests pass; Runtime: 830 tests pass; Architecture: 87 tests pass.
 - Zero-legacy facade search returns no matches.
 

@@ -57,36 +57,11 @@ public sealed class PublicationActivator(
         }
         catch (Exception exception)
         {
-            var failure = new PublicationFailure("projection_activation_failed", exception.Message);
-            Exception? authorityCompensationFailure = null;
-            try
-            {
-                await CompensateAuthorityAsync(candidate, slotResult, CancellationToken.None);
-            }
-            catch (Exception compensationException)
-            {
-                authorityCompensationFailure = compensationException;
-            }
-
-            Exception? projectionCompensationFailure = null;
-            try
-            {
-                await projectionPreparer.CompensateAsync(candidate, slotResult.ReplacedPublicationId, CancellationToken.None);
-            }
-            catch (Exception compensationException)
-            {
-                projectionCompensationFailure = compensationException;
-            }
-
-            if (authorityCompensationFailure is not null || projectionCompensationFailure is not null)
-                failure = new PublicationFailure(
-                    "projection_compensation_failed",
-                    BuildCompensationFailureMessage(exception, authorityCompensationFailure, projectionCompensationFailure));
-
-            var failed = candidate with { Status = PublicationStatus.Failed, Failure = failure };
-            await TransitionOrThrowAsync(failed, PublicationStatus.Candidate, CancellationToken.None);
-            var restoredSlot = await CurrentSlotAsync(candidate, CancellationToken.None);
-            return new PublicationActivationResult(false, failed, restoredSlot, failure, slotResult.ReplacedPublicationId);
+            return await CompensateActivationFailureAsync(
+                candidate,
+                slotResult,
+                exception,
+                "projection_activation_failed");
         }
 
         var active = candidate with
@@ -96,15 +71,26 @@ public sealed class PublicationActivator(
             RetiredAt = null,
             Failure = null
         };
-        await TransitionOrThrowAsync(active, PublicationStatus.Candidate, cancellationToken);
-
-        if (slotResult.ReplacedPublicationId is { } replacedId &&
-            !StringComparer.Ordinal.Equals(replacedId, candidate.PublicationId))
+        try
         {
-            var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
-                ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
-            var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
-            await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
+            await TransitionOrThrowAsync(active, PublicationStatus.Candidate, cancellationToken);
+
+            if (slotResult.ReplacedPublicationId is { } replacedId &&
+                !StringComparer.Ordinal.Equals(replacedId, candidate.PublicationId))
+            {
+                var replaced = await publicationStore.FindAsync(replacedId, cancellationToken)
+                    ?? throw new InvalidOperationException($"The replaced publication '{replacedId}' does not exist.");
+                var retired = replaced with { Status = PublicationStatus.Retired, RetiredAt = now };
+                await TransitionOrThrowAsync(retired, PublicationStatus.Active, cancellationToken);
+            }
+        }
+        catch (Exception exception)
+        {
+            return await CompensateActivationFailureAsync(
+                candidate,
+                slotResult,
+                exception,
+                "publication_state_transition_failed");
         }
 
         return new PublicationActivationResult(
@@ -114,17 +100,136 @@ public sealed class PublicationActivator(
             ReplacedPublicationId: slotResult.ReplacedPublicationId);
     }
 
+    private async ValueTask<PublicationActivationResult> CompensateActivationFailureAsync(
+        PublicationRecord candidate,
+        PublicationSlotTransitionResult activatedSlot,
+        Exception activationFailure,
+        string failureCode)
+    {
+        var failure = new PublicationFailure(failureCode, SafeMessage(activationFailure));
+        var authorityCompensationFailure = await CaptureFailureAsync(() =>
+            CompensateAuthorityAsync(candidate, activatedSlot, CancellationToken.None));
+        var projectionCompensationFailure = await CaptureFailureAsync(() =>
+            projectionPreparer.CompensateAsync(candidate, activatedSlot.ReplacedPublicationId, CancellationToken.None));
+        var publicationCompensationFailure = await CaptureFailureAsync(() =>
+            CompensatePublicationRecordsAsync(candidate, activatedSlot.ReplacedPublicationId, failure));
+
+        if (authorityCompensationFailure is not null ||
+            projectionCompensationFailure is not null ||
+            publicationCompensationFailure is not null)
+        {
+            failure = new PublicationFailure(
+                "activation_compensation_failed",
+                BuildCompensationFailureMessage(
+                    activationFailure,
+                    authorityCompensationFailure,
+                    projectionCompensationFailure,
+                    publicationCompensationFailure));
+        }
+
+        var failed = await publicationStore.FindAsync(candidate.PublicationId, CancellationToken.None)
+            ?? candidate with { Status = PublicationStatus.Failed, Failure = failure };
+        var restoredSlot = await CurrentSlotAsync(candidate, CancellationToken.None);
+        return new PublicationActivationResult(
+            false,
+            failed,
+            restoredSlot,
+            failure,
+            activatedSlot.ReplacedPublicationId);
+    }
+
+    private async ValueTask CompensatePublicationRecordsAsync(
+        PublicationRecord candidate,
+        string? replacedPublicationId,
+        PublicationFailure failure)
+    {
+        Exception? replacedFailure = null;
+        try
+        {
+            if (replacedPublicationId is not null &&
+                !StringComparer.Ordinal.Equals(replacedPublicationId, candidate.PublicationId))
+            {
+                var replaced = await publicationStore.FindAsync(replacedPublicationId, CancellationToken.None)
+                    ?? throw new InvalidOperationException($"The replaced publication '{replacedPublicationId}' does not exist.");
+                if (replaced.Status == PublicationStatus.Retired)
+                {
+                    var restored = replaced with { Status = PublicationStatus.Active, RetiredAt = null, Failure = null };
+                    await TransitionOrThrowAsync(restored, PublicationStatus.Retired, CancellationToken.None);
+                }
+                else if (replaced.Status != PublicationStatus.Active)
+                    throw new InvalidOperationException(
+                        $"The replaced publication '{replacedPublicationId}' cannot be restored from status '{replaced.Status}'.");
+            }
+        }
+        catch (Exception exception)
+        {
+            replacedFailure = exception;
+        }
+
+        Exception? candidateFailure = null;
+        try
+        {
+            var currentCandidate = await publicationStore.FindAsync(candidate.PublicationId, CancellationToken.None)
+                ?? throw new InvalidOperationException($"The candidate publication '{candidate.PublicationId}' does not exist.");
+            if (currentCandidate.Status is PublicationStatus.Candidate or PublicationStatus.Active)
+            {
+                var failed = currentCandidate with
+                {
+                    Status = PublicationStatus.Failed,
+                    ActivatedAt = null,
+                    RetiredAt = null,
+                    Failure = failure
+                };
+                await TransitionOrThrowAsync(failed, currentCandidate.Status, CancellationToken.None);
+            }
+            else if (currentCandidate.Status != PublicationStatus.Failed)
+                throw new InvalidOperationException(
+                    $"The candidate publication '{candidate.PublicationId}' cannot fail from status '{currentCandidate.Status}'.");
+        }
+        catch (Exception exception)
+        {
+            candidateFailure = exception;
+        }
+
+        if (replacedFailure is not null || candidateFailure is not null)
+            throw new AggregateException(
+                "Publication record compensation did not converge.",
+                new[] { replacedFailure, candidateFailure }.OfType<Exception>());
+    }
+
+    private static async ValueTask<Exception?> CaptureFailureAsync(Func<ValueTask> action)
+    {
+        try
+        {
+            await action();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
     private static string BuildCompensationFailureMessage(
         Exception activationFailure,
         Exception? authorityFailure,
-        Exception? projectionFailure)
+        Exception? projectionFailure,
+        Exception? publicationFailure)
     {
         var parts = new List<string> { activationFailure.Message };
         if (authorityFailure is not null)
             parts.Add($"Authority compensation failed: {authorityFailure.Message}");
         if (projectionFailure is not null)
             parts.Add($"Projection compensation failed: {projectionFailure.Message}");
+        if (publicationFailure is not null)
+            parts.Add($"Publication record compensation failed: {publicationFailure.Message}");
         var message = string.Join(" ", parts);
+        return message.Length <= 512 ? message : message[..512];
+    }
+
+    private static string SafeMessage(Exception exception)
+    {
+        var message = string.IsNullOrWhiteSpace(exception.Message) ? exception.GetType().Name : exception.Message;
         return message.Length <= 512 ? message : message[..512];
     }
 
