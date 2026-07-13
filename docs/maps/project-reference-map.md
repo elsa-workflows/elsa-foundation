@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 127
-- Test projects: 61
-- Direct project references: 732
+- Test projects: 63
+- Direct project references: 734
 
 ## Projects
 
@@ -180,6 +180,7 @@ Records direct project references only.
 | [Elsa.Persistence.Groundwork.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.PostgreSql.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
 | [Elsa.Persistence.Groundwork.Querying.Tests](../../tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Querying<br>Elsa.Persistence.Groundwork.Testing |
+| [Elsa.Persistence.Groundwork.Sqlite.Tests](../../tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Sqlite |
 | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | test | Elsa.Persistence | net10.0 | false | - |
 | [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Persistence.Groundwork.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | net10.0 | false | Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
@@ -188,6 +189,7 @@ Records direct project references only.
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | net10.0 | false | Elsa.Expressions<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | net10.0 | false | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | net10.0 | false | Elsa.Tasks |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Mediator.Core<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Reconciliation.Git<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |
@@ -221,13 +223,13 @@ Records direct project references only.
 | Elsa.Locking | 2 | 0 |
 | Elsa.Mediator | 2 | 1 |
 | Elsa.Modularity | 4 | 1 |
-| Elsa.Persistence | 10 | 8 |
+| Elsa.Persistence | 10 | 9 |
 | Elsa.Pipelines | 1 | 0 |
 | Elsa.Primitives | 2 | 2 |
 | Elsa.Samples | 0 | 1 |
 | Elsa.Secrets | 4 | 1 |
 | Elsa.Serialization | 3 | 1 |
 | Elsa.Server | 1 | 0 |
-| Elsa.Tasks | 3 | 0 |
+| Elsa.Tasks | 3 | 1 |
 | Elsa.Workflows | 27 | 13 |
 | Elsa3 | 3 | 1 |

@@ -51,7 +51,7 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 - Use a locked dictionary plus linked list for deterministic bounded LRU operations. The existing generic cache manager is unbounded and does not guarantee same-key miss coalescing.
 - Use one per-key shared in-flight task and remove it on every completion. Positive results enter the LRU; null, cancellation, and failure do not.
 - Shared provider loads use an independent cancellation token; each caller may cancel only its own wait. This avoids one caller poisoning all coalesced readers.
-- Save and delete call the provider first, then update/evict cache state. Listing delegates without populating cache.
+- Save and unconditional delete call the provider first, then update/evict cache state. Root-write lease and deletion-guard transitions delegate directly because they are provider-owned durable safety state. A guarded delete evicts only when the provider confirms deletion. Listing delegates without populating cache.
 - Wrap only durable Groundwork registrations. Existing in-memory stores already avoid serialization and custom hosts retain explicit selection control.
 - Use counters for hit/miss/eviction and a histogram for provider-load duration/outcome. Artifact IDs remain trace/log correlation only, never metric tags.
 
@@ -61,7 +61,7 @@ Add a provider-neutral, bounded LRU decorator around durable workflow-executable
 
 `CachingWorkflowExecutableStore` implements the existing store contract and receives the selected concrete provider, options, and telemetry. It owns a capacity-bounded LRU and a concurrent in-flight-load map. Fast hits promote the entry under a short lock. Misses publish a shared provider task; its owner records duration/outcome, admits only a positive result, and removes the in-flight entry in a finally path.
 
-Save and delete delegate first and then invalidate the key. Save cannot safely admit the caller-supplied value because the provider contract is idempotent by artifact ID: a non-throwing save may be a no-op that retained an existing provider-authoritative object. A provider mutation failure leaves the prior cache entry intact because the durable authority did not confirm a state transition. List delegates directly.
+Save and unconditional delete delegate first and then invalidate the key. Save cannot safely admit the caller-supplied value because the provider contract is idempotent by artifact ID: a non-throwing save may be a no-op that retained an existing provider-authoritative object. Root-write lease and deletion-guard acquire/renew/release/cancel operations pass through unchanged. Guarded delete invalidates only when the provider reports success; a rejected or already-absent guarded delete leaves the local positive entry unchanged under the documented process-local immutable-retention policy. A provider mutation failure leaves the prior cache entry intact because the durable authority did not confirm a state transition. List delegates directly.
 
 ### Composition and controls
 
@@ -69,7 +69,7 @@ Save and delete delegate first and then invalidate the key. Save cannot safely a
 
 ### Evidence
 
-Provider-neutral tests prove all state-machine branches with a counting controllable store. Groundwork tests prove the DI graph wraps the durable provider and that rebuilding the service provider starts empty. The final Release build is measured against spec 091's frozen baseline: a new 20-boot cold lane and 200-request warm lane must satisfy both specs' budgets.
+Provider-neutral tests prove all cache state-machine branches, lease/guard pass-through, and both successful and rejected guarded-delete outcomes with a counting controllable store plus the in-memory provider. Groundwork tests prove the DI graph wraps the durable provider and that rebuilding the service provider starts empty. The final Release build is measured against spec 091's frozen baseline: a new 20-boot cold lane and 200-request warm lane must satisfy both specs' budgets.
 
 ## Project Structure
 

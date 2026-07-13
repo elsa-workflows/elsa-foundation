@@ -7,7 +7,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 127
-- Test projects: 61
+- Test projects: 63
 - Domains: 24
 - Direct cross-domain references: 422
 
@@ -29,14 +29,14 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Locking | 2 | 0 | contract<br>provider/implementation |
 | Elsa.Mediator | 2 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Modularity | 4 | 1 | contract<br>feature/implementation<br>test |
-| Elsa.Persistence | 10 | 8 | contract<br>feature/implementation<br>provider/implementation<br>test |
+| Elsa.Persistence | 10 | 9 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa.Pipelines | 1 | 0 | contract |
 | Elsa.Primitives | 2 | 2 | feature/implementation<br>test |
 | Elsa.Samples | 0 | 1 | test |
 | Elsa.Secrets | 4 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Serialization | 3 | 1 | contract<br>feature/implementation<br>test |
 | Elsa.Server | 1 | 0 | host |
-| Elsa.Tasks | 3 | 0 | contract<br>feature/implementation<br>helper |
+| Elsa.Tasks | 3 | 1 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Workflows | 27 | 13 | contract<br>feature/implementation<br>provider/implementation<br>test |
 | Elsa3 | 3 | 1 | feature/implementation<br>test |
 
@@ -210,6 +210,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Persistence.Groundwork.PostgreSql.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/Tests/Elsa.Persistence.Groundwork.PostgreSql.Tests.csproj) | test | Elsa.Persistence | Groundwork.PostgreSql.Tests | test | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.PostgreSql<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/PostgreSql/UnifiedHost/Tests/Elsa.Persistence.Groundwork.PostgreSql.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | Groundwork.PostgreSql.UnifiedHost.Tests | test | Elsa.Persistence.Groundwork.PostgreSql.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
 | [Elsa.Persistence.Groundwork.Querying.Tests](../../tests/Elsa/Persistence/Groundwork/Querying/Tests/Elsa.Persistence.Groundwork.Querying.Tests.csproj) | test | Elsa.Persistence | Groundwork.Querying.Tests | test | Elsa.Persistence.Groundwork.Querying<br>Elsa.Persistence.Groundwork.Testing |
+| [Elsa.Persistence.Groundwork.Sqlite.Tests](../../tests/Elsa/Persistence/Groundwork/Sqlite/Tests/Elsa.Persistence.Groundwork.Sqlite.Tests.csproj) | test | Elsa.Persistence | Groundwork.Sqlite.Tests | test | Elsa.Persistence.Groundwork.Sqlite |
 | [Elsa.Persistence.Groundwork.Testing](../../tests/Elsa/Persistence/Groundwork/Testing/Elsa.Persistence.Groundwork.Testing.csproj) | test | Elsa.Persistence | Groundwork.Testing | test | - |
 | [Elsa.Persistence.Groundwork.Tests](../../tests/Elsa/Persistence/Groundwork/Tests/Elsa.Persistence.Groundwork.Tests.csproj) | test | Elsa.Persistence | Groundwork.Tests | test | Elsa.Persistence.Groundwork<br>Elsa.Persistence.Groundwork.Sqlite<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Runtime.Api |
 | [Elsa.Persistence.Groundwork.UnifiedHost.Tests](../../tests/Elsa/Persistence/Groundwork/UnifiedHost/Tests/Elsa.Persistence.Groundwork.UnifiedHost.Tests.csproj) | test | Elsa.Persistence | Groundwork.UnifiedHost.Tests | test | Elsa.Persistence.Groundwork.Sqlite.Unified<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Serialization.Core |
@@ -218,6 +219,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Samples.Nuplane.Activities.Tests](../../tests/Elsa/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj) | test | Elsa.Samples | Nuplane.Activities.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Samples.Nuplane.Activities |
 | [Elsa.Secrets.Tests](../../tests/Elsa/Secrets/Tests/Elsa.Secrets.Tests.csproj) | test | Elsa.Secrets | Tests | test | Elsa.Expressions<br>Elsa.Persistence.Groundwork.Testing<br>Elsa.Secrets<br>Elsa.Secrets.Api<br>Elsa.Secrets.Core<br>Elsa.Secrets.Persistence.Groundwork |
 | [Elsa.Serialization.Tests](../../tests/Elsa/Serialization/Tests/Elsa.Serialization.Tests.csproj) | test | Elsa.Serialization | Tests | test | Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText |
+| [Elsa.Tasks.Tests](../../tests/Elsa/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Tasks |
 | [Elsa.Workflows.Design.Api.Tests](../../tests/Elsa/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj) | test | Elsa.Workflows | Design.Api.Tests | test | Elsa.Mediator.Core<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core |
 | [Elsa.Workflows.Design.Persistence.Groundwork.Tests](../../tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/Elsa.Workflows.Design.Persistence.Groundwork.Tests.csproj) | test | Elsa.Workflows | Design.Persistence.Groundwork.Tests | test | Elsa.Persistence.Groundwork.Testing<br>Elsa.Workflows.Design.Persistence.Groundwork |
 | [Elsa.Workflows.Design.Tests](../../tests/Elsa/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj) | test | Elsa.Workflows | Design.Tests | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Reconciliation.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Events<br>Elsa.Events.Core<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Rendering.Core<br>Elsa.Locking.Core<br>Elsa.Mediator<br>Elsa.Persistence.EFCore.Sqlite<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Api<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.EFCore<br>Elsa.Workflows.Design.Persistence.EFCore.Sqlite<br>Elsa.Workflows.Design.Reconciliation<br>Elsa.Workflows.Design.Reconciliation.Core<br>Elsa.Workflows.Design.Reconciliation.Git<br>Elsa.Workflows.Design.Validations<br>Elsa.Workflows.Design.Validations.Core |

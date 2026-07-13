@@ -464,6 +464,27 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task UnsuccessfulGuardedDeletePreservesResidentArtifact()
+    {
+        var executable = NewExecutable("artifact-retained");
+        var provider = new ControllableStore(executable)
+        {
+            GuardedDeleteHandler = (_, _, _) => ValueTask.FromResult(false)
+        };
+        var cache = NewCache(provider);
+        var guard = new WorkflowExecutableDeletionGuard(
+            executable.Identity.ArtifactId,
+            "delete-rejected",
+            "guard-version");
+        Assert.Same(executable, await cache.FindAsync(executable.Identity.ArtifactId));
+
+        Assert.False(await cache.DeleteAsync(guard, DateTimeOffset.UnixEpoch));
+
+        Assert.Same(executable, await cache.FindAsync(executable.Identity.ArtifactId));
+        Assert.Equal(1, provider.FindCalls(executable.Identity.ArtifactId));
+    }
+
+    [Fact]
     public async Task Telemetry_UsesOnlyStableInstrumentsAndBoundedTags()
     {
         var found = NewExecutable("artifact-found");
@@ -579,6 +600,7 @@ public sealed class CachingWorkflowExecutableStoreTests
         public Func<string, CancellationToken, ValueTask<WorkflowExecutable?>>? FindHandler { get; set; }
         public Func<WorkflowExecutable, CancellationToken, ValueTask>? SaveHandler { get; set; }
         public Func<string, CancellationToken, ValueTask<bool>>? DeleteHandler { get; set; }
+        public Func<WorkflowExecutableDeletionGuard, DateTimeOffset, CancellationToken, ValueTask<bool>>? GuardedDeleteHandler { get; set; }
         public Func<CancellationToken, ValueTask<IReadOnlyCollection<WorkflowExecutable>>>? ListHandler { get; set; }
 
         public int TotalFindCalls => _findCalls.Values.Sum();
@@ -642,7 +664,8 @@ public sealed class CachingWorkflowExecutableStoreTests
             WorkflowExecutableDeletionGuard guard,
             DateTimeOffset now,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(false);
+            GuardedDeleteHandler?.Invoke(guard, now, cancellationToken)
+            ?? ValueTask.FromResult(false);
 
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
         {
