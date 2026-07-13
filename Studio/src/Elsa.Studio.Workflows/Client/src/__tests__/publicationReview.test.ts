@@ -1,25 +1,122 @@
 import { describe, expect, it } from "vitest";
-import type { WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 import { createPublicationReview, publicationChangesFor, publicationIntentFor, summarizePublicationChanges } from "../workflow-editor/publicationReview";
+import { flowchartActivity, sequenceActivity } from "./fixtures";
 
 describe("publication review model", () => {
   it("summarizes changed activities, inputs, and outputs against the source version", () => {
     const before = {
-      rootActivity: activity("root", { activities: [activity("kept", { value: 1 }), activity("removed"), activity("trigger", {}, "trigger-v1")] }),
+      rootActivity: flowchart([activity("kept", { value: 1 }), activity("removed"), activity("trigger", {}, "trigger-v1")]),
       inputs: [{ name: "orderId", type: "string" }],
       outputs: [{ name: "result", type: "string" }]
     };
     const after = {
-      rootActivity: activity("root", { activities: [activity("kept", { value: 2 }), activity("added"), activity("trigger", { inputs: [{ value: 2 }] }, "trigger-v1")] }),
+      rootActivity: flowchart([activity("kept", { value: 2 }), activity("added"), activity("trigger", { inputs: [{ value: 2 }] }, "trigger-v1")]),
       inputs: [{ name: "orderId", type: "number" }, { name: "priority", type: "number" }],
       outputs: []
     };
 
-    expect(summarizePublicationChanges(before, after, new Set(["trigger-v1"]))).toEqual({
+    expect(summarizePublicationChanges(before, after, new Set(["trigger-v1"]), [flowchartActivity])).toEqual({
       activities: { added: 1, changed: 2, removed: 1 },
       inputs: { added: 1, changed: 1, removed: 0 },
       outputs: { added: 0, changed: 0, removed: 1 },
       triggers: { added: 0, changed: 1, removed: 0 }
+    });
+  });
+
+  it("treats activity-shaped property payloads as owner data instead of child activities", () => {
+    const before = {
+      rootActivity: activity("root", {
+        structure: {
+          kind: "acme.leaf.structure",
+          schemaVersion: "1.0.0",
+          payload: { configuration: null }
+        }
+      })
+    };
+    const after = {
+      rootActivity: activity("root", {
+        structure: {
+          kind: "acme.leaf.structure",
+          schemaVersion: "1.0.0",
+          payload: {
+            configuration: {
+              nodeId: "payload-id",
+              activityVersionId: "payload-version",
+              value: "ordinary configuration"
+            }
+          }
+        }
+      })
+    };
+
+    expect(summarizePublicationChanges(before, after).activities).toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0
+    });
+  });
+
+  it("follows custom collection child slots declared by the activity catalog facet", () => {
+    const switchActivity: ActivityCatalogItem = {
+      ...flowchartActivity,
+      activityVersionId: "activity-switch-v1",
+      activityTypeKey: "Acme.Activities.Switch",
+      displayName: "Switch",
+      designFacets: [{
+        kind: "acme.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          mode: "generic",
+          supportsScopedVariables: false,
+          slots: [{
+            name: "Case",
+            property: "case",
+            displayName: "Case",
+            cardinality: "single",
+            collectionProperty: "cases",
+            childProperty: "activity",
+            labelProperty: "name"
+          }],
+          initialPayload: { cases: [] }
+        }
+      }]
+    };
+    const switchNode = (...children: Array<ReturnType<typeof activity> | null>) => activity("switch", {
+      structure: {
+        kind: "acme.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          cases: children.map((child, index) => ({ name: String.fromCharCode(65 + index), activity: child }))
+        }
+      }
+    }, switchActivity.activityVersionId);
+    const before = {
+      rootActivity: switchNode(activity("kept", { value: 1 }), activity("removed"), null)
+    };
+    const after = {
+      rootActivity: switchNode(activity("kept", { value: 2 }), null, activity("added"))
+    };
+
+    expect(summarizePublicationChanges(before, after, new Set(), [switchActivity]).activities).toEqual({
+      added: 1,
+      changed: 1,
+      removed: 1
+    });
+  });
+
+  it("keeps traversing nested Flowchart and Sequence activity-owned slots", () => {
+    const before = {
+      rootActivity: flowchart([sequence([activity("kept", { value: 1 })])])
+    };
+    const after = {
+      rootActivity: flowchart([sequence([activity("kept", { value: 2 }), activity("added")])])
+    };
+
+    expect(summarizePublicationChanges(before, after, new Set(), [flowchartActivity, sequenceActivity]).activities).toEqual({
+      added: 1,
+      changed: 1,
+      removed: 0
     });
   });
 
@@ -170,6 +267,26 @@ function draft(state: Partial<WorkflowDraft["state"]> = {}): WorkflowDraft {
 
 function activity(nodeId: string, extra: Record<string, unknown> = {}, activityVersionId = `activity-${nodeId}`) {
   return { nodeId, activityVersionId, inputs: [], outputs: [], ...extra };
+}
+
+function flowchart(activities: ReturnType<typeof activity>[]) {
+  return activity("root", {
+    structure: {
+      kind: "elsa.flowchart.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities, connections: [], startNodeId: null }
+    }
+  }, flowchartActivity.activityVersionId);
+}
+
+function sequence(activities: ReturnType<typeof activity>[]) {
+  return activity("sequence", {
+    structure: {
+      kind: "elsa.sequence.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities }
+    }
+  }, sequenceActivity.activityVersionId);
 }
 
 function version(id: string, state: Partial<WorkflowDefinitionVersionDetails["state"]>): WorkflowDefinitionVersionDetails {

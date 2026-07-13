@@ -5,7 +5,7 @@ import { getWorkflowDefinitionVersion, promoteDraft } from "../api/workflowDesig
 import {
   getPublicationPolicy,
   listPublicationSlots,
-  preflightPublication,
+  preflightPublicationSnapshot,
   publishVersion,
   startWorkflowDraftTestRun,
   type PublicationIntent
@@ -14,7 +14,7 @@ import { buildExportPayload, downloadWorkflowJson } from "../workflowSerializati
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
 import type { WorkflowEditorOperation, WorkflowTestRunState } from "./editorTypes";
-import { createPublicationReview, type PublicationReviewState } from "./publicationReview";
+import { createPublicationReview, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationReviewState } from "./publicationReview";
 
 interface WorkflowOperationsParams {
   context: StudioEndpointContext;
@@ -103,14 +103,21 @@ export function useWorkflowOperations({
         if (!versionsById.has(versionId)) versionsById.set(versionId, await getWorkflowDefinitionVersion(context, versionId));
       }));
       const slotVersions = Object.fromEntries(occupiedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
-      setPublicationReview(createPublicationReview({
+      const review = createPublicationReview({
         draft: draftSnapshot,
         details,
         policy,
         slots,
         slotVersions,
         catalog
-      }));
+      });
+      if (review.validationErrors.length || review.intent.action === "sideBySide" && !review.intent.slotName) {
+        setPublicationReview(review);
+      } else {
+        const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
+        const preflight = await preflightSnapshot(context, review, intent);
+        setPublicationReview({ ...review, intent, preflight });
+      }
       setStatus("");
     } catch (error) {
       setPublicationReview(null);
@@ -135,6 +142,36 @@ export function useWorkflowOperations({
     if (publicationReview.validationErrors.length) {
       setPublicationReview(current => current ? { ...current, phase: "validationBlocked", intent } : current);
       setError("Resolve validation errors before publishing. No changes were saved or promoted.");
+      return;
+    }
+    const reviewedPreflight = publicationReview.preflight;
+    if (!publicationPreflightMatchesIntent(reviewedPreflight, intent)) {
+      setOperation("publicationPreflight");
+      setError("");
+      setStatus("Reviewing the selected publication target...");
+      try {
+        const preflight = await preflightSnapshot(context, publicationReview, intent);
+        setPublicationReview(current => current ? {
+          ...current,
+          phase: "review",
+          progressStep: undefined,
+          preflight,
+          intent,
+          failureMessage: preflight.canActivate
+            ? undefined
+            : "Server preflight found conflicts. Choose another target or resolve the listed claims before publishing."
+        } : current);
+        setStatus("");
+      } catch (error) {
+        setStatus("");
+        setError(`Could not prepare an authoritative review for this target. No changes were saved, promoted, or published. ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        setOperation("idle");
+      }
+      return;
+    }
+    if (!reviewedPreflight.canActivate) {
+      setError("Server preflight blocks this target. Resolve the listed conflicts or review another target.");
       return;
     }
     setOperation("publishing");
@@ -176,37 +213,23 @@ export function useWorkflowOperations({
         setStatus("Promoting publication version...");
         const promoted = await promoteDraft(context, persistedDraft.id);
         promotedVersionId = promoted.id;
-        setPublicationReview(current => current ? { ...current, promotedVersionId, proposedVersion: promoted.version, progressStep: "preflight" } : current);
-      } else {
-        setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "preflight", intent } : current);
+        setPublicationReview(current => current ? { ...current, promotedVersionId, proposedVersion: promoted.version } : current);
       }
 
-      setStatus("Checking server publication policy...");
-      const preflight = await preflightPublication(context, promotedVersionId, intent);
-      setPublicationReview(current => current ? { ...current, preflight, intent } : current);
-      if (!preflight.canActivate) {
-        setPublicationReview(current => current ? {
-          ...current,
-          phase: "partialFailure",
-          progressStep: undefined,
-          promotedVersionId,
-          preflight,
-          intent,
-          failureMessage: "Server preflight blocked publication. The promoted version was retained. Resolve the conflicts or choose another slot, then retry Publish."
-        } : current);
-        setStatus("");
-        return;
-      }
-
-      setPublicationReview(current => current ? { ...current, progressStep: "publishing", preflight, intent } : current);
+      setPublicationReview(current => current ? { ...current, progressStep: "publishing", preflight: reviewedPreflight, intent } : current);
       setStatus("Publishing executable reference...");
-      const published = await publishVersion(context, promotedVersionId, intent);
+      const published = await publishVersion(context, promotedVersionId, {
+        ...intent,
+        action: reviewedPreflight.resolvedAction,
+        slotName: reviewedPreflight.slotName,
+        preflightToken: reviewedPreflight.preflightToken
+      });
       setPublishedArtifact(published.artifactId);
       setPublicationReview(current => current ? {
         ...current,
         phase: "success",
         progressStep: undefined,
-        preflight,
+        preflight: reviewedPreflight,
         intent,
         promotedVersionId,
         published
@@ -221,7 +244,17 @@ export function useWorkflowOperations({
     } catch (e) {
       setStatus("");
       const failureMessage = e instanceof Error ? e.message : String(e);
-      if (promotedVersionId) {
+      if (promotedVersionId && isStalePreflightError(e)) {
+        setPublicationReview(current => current ? {
+          ...current,
+          phase: "partialFailure",
+          progressStep: undefined,
+          promotedVersionId,
+          preflight: undefined,
+          intent,
+          failureMessage: "The reviewed publication target became stale before activation. The promoted version was retained; review the target again before publishing."
+        } : current);
+      } else if (promotedVersionId) {
         setPublicationReview(current => current ? {
           ...current,
           phase: "partialFailure",
@@ -320,4 +353,23 @@ export function useWorkflowOperations({
     cancelRunInputs,
     run
   };
+}
+
+async function preflightSnapshot(
+  context: StudioEndpointContext,
+  review: PublicationReviewState,
+  intent: PublicationIntent
+) {
+  return preflightPublicationSnapshot(context, {
+    definitionId: review.draftSnapshot.definitionId,
+    state: review.draftSnapshot.state,
+    layout: review.draftSnapshot.layout,
+    ...intent
+  });
+}
+
+function isStalePreflightError(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown } };
+  return candidate.status === 409 || candidate.statusCode === 409 || candidate.response?.status === 409;
 }

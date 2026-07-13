@@ -50,7 +50,7 @@ import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
-import { publicationChangesFor, publicationIntentFor, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
+import { publicationChangesFor, publicationIntentFor, publicationPreflightMatchesIntent, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
 
 export function WorkflowEditor({
@@ -873,6 +873,7 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
   const reservedSideBySideSlot = action === "sideBySide" && slotName.trim().toLowerCase() === "default";
   const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim()) && !reservedSideBySideSlot;
   const intent = publicationIntentFor(review, action, slotName);
+  const reviewedPreflight = publicationPreflightMatchesIntent(review.preflight, intent) ? review.preflight : undefined;
   const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
   useDialogFocus(dialogRef, closeOnEscape);
 
@@ -883,8 +884,8 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
     ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in occupied slot ${activeSlot.slotName}. Concurrency protection requires publication ${activeSlot.publication.publicationId} to remain current.`
     : `Create a new executable source reference in slot ${targetSlotName}.`;
   const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
-  const preflightChanges = review.preflight?.triggers ?? review.preflight?.changes ?? [];
-  const triggerSummary = review.preflight
+  const preflightChanges = reviewedPreflight?.triggers ?? reviewedPreflight?.changes ?? [];
+  const triggerSummary = reviewedPreflight
     ? preflightChanges.length
       ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
       : "No trigger changes."
@@ -928,6 +929,9 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
             <div><dt>Unsaved changes</dt><dd>Included — the captured editor state is saved only after Publish.</dd></div>
             <div><dt>Validation</dt><dd>{review.validationErrors.length ? `${review.validationErrors.length} blocking issue${review.validationErrors.length === 1 ? "" : "s"}` : "Ready for server preflight"}</dd></div>
             <div><dt>Executable status</dt><dd>{review.executableStatus === "ready" ? "Executable after server preflight" : "Not executable until blocking validation is resolved"}</dd></div>
+            <div><dt>Resolved action</dt><dd>{reviewedPreflight?.resolvedAction ?? "Requires authoritative review"}</dd></div>
+            <div><dt>Target slot</dt><dd>{reviewedPreflight?.slotName ?? targetSlotName}</dd></div>
+            <div><dt>Policy source</dt><dd>{reviewedPreflight ? `${reviewedPreflight.policySource}${reviewedPreflight.policyRevision == null ? "" : ` (revision ${reviewedPreflight.policyRevision})`}` : "Requires authoritative review"}</dd></div>
           </dl>
 
           {review.validationErrors.length ? (
@@ -945,6 +949,15 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
               <ChangeSummary label="Outputs" value={changes.outputs} />
               <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
             </dl>
+          </section>
+
+          <section className="wf-publication-changes" aria-labelledby="publication-claims-title">
+            <h4 id="publication-claims-title">Authoritative trigger claims</h4>
+            {reviewedPreflight
+              ? reviewedPreflight.claims.length
+                ? <ul>{reviewedPreflight.claims.map(claim => <li key={`${claim.key}-${claim.cardinality}`}>{claim.key} ({claim.cardinality})</li>)}</ul>
+                : <p>No trigger claims.</p>
+              : <p>Review this target to resolve its claims and conflicts before publishing.</p>}
           </section>
 
           <fieldset className="wf-publication-behavior" disabled={!canEdit || busy}>
@@ -967,10 +980,10 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
           </label>
           <p className="wf-dialog-note"><strong>Executable impact:</strong> {targetDescription}</p>
 
-          {review.preflight?.conflicts.length ? (
+          {reviewedPreflight?.conflicts.length ? (
             <div className="wf-publication-risks" role="alert">
               <strong>Server policy conflicts</strong>
-              <ul>{review.preflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
+              <ul>{reviewedPreflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
             </div>
           ) : null}
           {review.failureMessage ? <p className="wf-publication-recovery" role="alert">{review.failureMessage}</p> : null}
@@ -981,8 +994,8 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
           <div className="wf-dialog-actions">
             <button type="button" onClick={onCancel} disabled={busy}>{review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}</button>
             {review.phase !== "success" ? (
-              <button type="submit" disabled={busy || !slotIsValid || review.validationErrors.length > 0}>
-                {review.phase === "partialFailure" || review.phase === "savedFailure" ? "Retry Publish" : "Publish"}
+              <button type="submit" disabled={busy || !slotIsValid || review.validationErrors.length > 0 || reviewedPreflight?.canActivate === false}>
+                {!reviewedPreflight ? "Review target" : review.phase === "partialFailure" || review.phase === "savedFailure" ? "Retry Publish" : "Publish"}
               </button>
             ) : null}
           </div>

@@ -17,6 +17,24 @@ afterEach(() => {
 });
 
 describe("publication slot UX", () => {
+  it("shows the authoritative resolved target, policy, claims, and executable impact before confirmation", () => {
+    const container = render(review({
+      preflight: preflight({
+        policyRevision: 7,
+        claims: [{ key: "http:orders", cardinality: "exclusive" }]
+      })
+    }), vi.fn(async () => undefined));
+
+    expect(container.textContent).toContain("Resolved action");
+    expect(container.textContent).toContain("replace");
+    expect(container.textContent).toContain("Target slot");
+    expect(container.textContent).toContain("default");
+    expect(container.textContent).toContain("Policy source");
+    expect(container.textContent).toContain("host (revision 7)");
+    expect(container.textContent).toContain("http:orders (exclusive)");
+    expect(container.textContent).toContain("Create a new executable source reference in slot default");
+  });
+
   it("shows the resolved replacement policy, trigger diff, and blocks conflicts", () => {
     const onPublish = vi.fn(async () => undefined);
     const container = render(review({
@@ -40,13 +58,13 @@ describe("publication slot UX", () => {
     expect(container.textContent).toContain("promoted version was retained");
   });
 
-  it("requires a meaningful named slot and publishes the reviewed side-by-side intent", () => {
+  it("requires a meaningful named slot and requests authoritative review for a changed target", () => {
     const onPublish = vi.fn(async () => undefined);
     const container = render(review(), onPublish);
 
     flushSync(() => radio(container, "Publish side by side").click());
     setInput(container, "blue");
-    flushSync(() => button(container, "Publish").click());
+    flushSync(() => button(container, "Review target").click());
 
     expect(onPublish).toHaveBeenCalledWith({ action: "sideBySide", slotName: "blue" });
   });
@@ -75,7 +93,7 @@ describe("publication slot UX", () => {
     expect(container.textContent).toContain("Replace executable artifact-blue");
     expect(container.textContent).toContain("Concurrency protection requires publication publication-blue");
 
-    flushSync(() => button(container, "Publish").click());
+    flushSync(() => button(container, "Review target").click());
     expect(onPublish).toHaveBeenCalledWith({
       action: "sideBySide",
       slotName: "blue",
@@ -90,8 +108,8 @@ describe("publication slot UX", () => {
     flushSync(() => radio(container, "Publish side by side").click());
 
     expect(container.textContent).toContain("The default slot is reserved for replacement publication");
-    expect(button(container, "Publish").disabled).toBe(true);
-    flushSync(() => button(container, "Publish").click());
+    expect(button(container, "Review target").disabled).toBe(true);
+    flushSync(() => button(container, "Review target").click());
     expect(onPublish).not.toHaveBeenCalled();
   });
 });
@@ -115,15 +133,17 @@ function render(
 }
 
 function review(overrides: Partial<PublicationReviewState> = {}): PublicationReviewState {
-  return {
-    ...createPublicationReview({
+  const value = createPublicationReview({
       draft: draft(),
       details: null,
       slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [],
       catalog: []
-    }),
+    });
+  return {
+    ...value,
+    preflight: preflight(),
     ...overrides
   };
 }
@@ -141,12 +161,15 @@ function draft(): WorkflowDraft {
 
 function preflight(overrides: Partial<PublicationPreflight> = {}): PublicationPreflight {
   return {
+    preflightToken: "preflight-token-1",
+    candidateHash: "candidate-hash-1",
     definitionId: "definition-1",
-    versionId: "version-2",
+    versionId: null,
     slotName: "default",
     resolvedAction: "replace",
     policySource: "host",
     canActivate: true,
+    claims: [],
     triggers: [],
     conflicts: [],
     ...overrides

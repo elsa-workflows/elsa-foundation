@@ -1,5 +1,6 @@
 import type { Publication, PublicationIntent, PublicationPolicy, PublicationPreflight, PublicationSlot } from "../api/publishing";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import { getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ChildSlot } from "../workflowAdapter";
 
 export type PublicationReviewPhase = "review" | "publishing" | "validationBlocked" | "savedFailure" | "partialFailure" | "success";
 export type PublicationProgressStep = "saving" | "promoting" | "preflight" | "publishing";
@@ -30,6 +31,7 @@ export interface PublicationReviewState {
   policy: PublicationPolicy;
   slots: PublicationSlot[];
   slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
+  catalog: ActivityCatalogItem[];
   triggerActivityVersionIds: string[];
   intent: PublicationIntent;
   preflight?: PublicationPreflight;
@@ -75,10 +77,15 @@ export function createPublicationReview(input: {
     unsavedChangesIncluded: true,
     executableStatus: validationErrors.length ? "blocked" : "ready",
     validationErrors,
-    changes: summarizePublicationChanges(input.slotVersions[initialSlotName]?.state ?? null, draftSnapshot.state, new Set(triggerActivityVersionIds)),
+    changes: summarizePublicationChanges(
+      input.slotVersions[initialSlotName]?.state ?? null,
+      draftSnapshot.state,
+      new Set(triggerActivityVersionIds),
+      input.catalog),
     policy,
     slots: input.slots,
     slotVersions: input.slotVersions,
+    catalog: input.catalog,
     triggerActivityVersionIds,
     intent: policy.defaultAction === "requireExplicitSlot"
       ? { action: "sideBySide", slotName: "" }
@@ -89,18 +96,19 @@ export function createPublicationReview(input: {
 export function summarizePublicationChanges(
   before: WorkflowDefinitionState | null,
   after: WorkflowDefinitionState,
-  triggerActivityVersionIds: ReadonlySet<string> = new Set()
+  triggerActivityVersionIds: ReadonlySet<string> = new Set(),
+  catalog: ActivityCatalogLookup = undefined
 ): PublicationChangeSummary {
-  const beforeActivities = collectActivities(before?.rootActivity);
-  const afterActivities = collectActivities(after.rootActivity);
+  const beforeActivities = collectActivities(before?.rootActivity, catalog);
+  const afterActivities = collectActivities(after.rootActivity, catalog);
   return {
-    activities: compareCollections(beforeActivities, afterActivities, activityFingerprint),
+    activities: compareCollections(beforeActivities, afterActivities, activity => activityFingerprint(activity, catalog)),
     inputs: compareCollections(before?.inputs ?? [], after.inputs ?? []),
     outputs: compareCollections(before?.outputs ?? [], after.outputs ?? []),
     triggers: compareCollections(
       beforeActivities.filter(activity => isTriggerActivity(activity, triggerActivityVersionIds)),
       afterActivities.filter(activity => isTriggerActivity(activity, triggerActivityVersionIds)),
-      activityFingerprint)
+      activity => activityFingerprint(activity, catalog))
   };
 }
 
@@ -118,11 +126,21 @@ export function publicationIntentFor(
   };
 }
 
+export function publicationPreflightMatchesIntent(
+  preflight: PublicationReviewState["preflight"],
+  intent: PublicationIntent
+): preflight is PublicationPreflight {
+  return Boolean(preflight
+    && preflight.resolvedAction === intent.action
+    && preflight.slotName === intent.slotName);
+}
+
 export function publicationChangesFor(review: PublicationReviewState, slotName: string) {
   return summarizePublicationChanges(
     review.slotVersions[slotName]?.state ?? null,
     review.draftSnapshot.state,
-    new Set(review.triggerActivityVersionIds));
+    new Set(review.triggerActivityVersionIds),
+    review.catalog);
 }
 
 function nextVersionLabel(value: string) {
@@ -130,23 +148,25 @@ function nextVersionLabel(value: string) {
   return match ? `${Number(match[1]) + 1}.0.0` : "Next promoted version";
 }
 
-function collectActivities(root: unknown) {
-  const activities: unknown[] = [];
+function collectActivities(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup) {
+  const activities: ActivityNode[] = [];
   const visited = new Set<object>();
-  const visit = (value: unknown) => {
-    if (!value || typeof value !== "object" || visited.has(value)) return;
-    visited.add(value);
-    if ("nodeId" in value && "activityVersionId" in value) activities.push(value);
-    for (const child of Array.isArray(value) ? value : Object.values(value)) visit(child);
+  const visit = (activity: ActivityNode) => {
+    if (visited.has(activity)) return;
+    visited.add(activity);
+    activities.push(activity);
+    for (const slot of publicationChildSlots(activity, catalog)) {
+      for (const child of slot.activities) visit(child);
+    }
   };
-  visit(root);
+  if (root) visit(root);
   return activities;
 }
 
-function compareCollections(
-  before: unknown[],
-  after: unknown[],
-  serialize: (value: unknown) => string = stableJson
+function compareCollections<T>(
+  before: T[],
+  after: T[],
+  serialize: (value: T) => string = stableJson
 ): PublicationChangeCount {
   const beforeByKey = indexValues(before, serialize);
   const afterByKey = indexValues(after, serialize);
@@ -162,7 +182,7 @@ function compareCollections(
   return { added, changed, removed };
 }
 
-function indexValues(values: unknown[], serialize: (value: unknown) => string) {
+function indexValues<T>(values: T[], serialize: (value: T) => string) {
   return new Map(values.map((value, index) => [valueKey(value, index), serialize(value)]));
 }
 
@@ -173,19 +193,45 @@ function isTriggerActivity(value: unknown, triggerActivityVersionIds: ReadonlySe
     && triggerActivityVersionIds.has(value.activityVersionId));
 }
 
-function activityFingerprint(value: unknown) {
-  return stableJson(stripNestedActivities(value, true));
+function activityFingerprint(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  const ownedState = structuredClone(activity);
+  for (const slot of publicationChildSlots(activity, catalog)) clearChildSlot(ownedState, slot);
+  return stableJson(ownedState);
 }
 
-function stripNestedActivities(value: unknown, root = false): unknown {
-  if (Array.isArray(value)) return value
-    .map(child => stripNestedActivities(child))
-    .filter(child => child !== undefined);
-  if (!value || typeof value !== "object") return value;
-  if (!root && "nodeId" in value && "activityVersionId" in value) return undefined;
-  return Object.fromEntries(Object.entries(value)
-    .map(([key, child]) => [key, stripNestedActivities(child)] as const)
-    .filter(([, child]) => child !== undefined));
+function publicationChildSlots(activity: ActivityNode, catalog: ActivityCatalogLookup): ChildSlot[] {
+  const structure = activity.structure;
+  if (!structure) return [];
+  const catalogItem = resolveCatalogItem(activity, catalog);
+  const facet = readStructureDesignFacet(catalogItem);
+  if (facet?.kind === structure.kind) return getChildSlots(activity, catalogItem);
+
+  // Flowchart and Sequence used `activities` before structure facets became part of the catalog.
+  // Preserve that explicit legacy child contract without scanning arbitrary payload properties for
+  // objects that merely happen to look like activities.
+  if (!Array.isArray(structure.payload.activities)) return [];
+  return getChildSlots(activity).filter(slot => slot.property === "activities");
+}
+
+function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup) {
+  if (!catalog) return undefined;
+  if (catalog instanceof Map) return catalog.get(activity.activityVersionId);
+  if (Array.isArray(catalog)) return catalog.find(item => item.activityVersionId === activity.activityVersionId);
+  return catalog.activityVersionId === activity.activityVersionId ? catalog : undefined;
+}
+
+function clearChildSlot(activity: ActivityNode, slot: ChildSlot) {
+  const payload = activity.structure?.payload;
+  if (!payload) return;
+  const emptyValue = slot.cardinality === "many" ? [] : null;
+  if (!slot.collectionProperty || !slot.childProperty || slot.collectionIndex === undefined) {
+    payload[slot.property] = emptyValue;
+    return;
+  }
+
+  const collection = payload[slot.collectionProperty];
+  const item = Array.isArray(collection) ? collection[slot.collectionIndex] : null;
+  if (item && typeof item === "object") (item as Record<string, unknown>)[slot.childProperty] = emptyValue;
 }
 
 function valueKey(value: unknown, index: number) {
