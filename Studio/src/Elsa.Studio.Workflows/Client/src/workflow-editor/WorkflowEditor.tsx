@@ -50,7 +50,7 @@ import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { SlotEmptyState } from "./SlotEmptyState";
 import type { PublicationIntent } from "../api/publishing";
-import { publicationIntentFor, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
+import { publicationChangesFor, publicationIntentFor, type PublicationChangeCount, type PublicationReviewState } from "./publicationReview";
 import { useDialogFocus } from "./useDialogFocus";
 
 export function WorkflowEditor({
@@ -118,7 +118,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, autosaveEnabled, setAutosaveEnabled, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
+  const { saveDraft, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -337,7 +337,8 @@ export function WorkflowEditor({
     setStatus,
     setError,
     setActiveRightPanelId,
-    setInspectorCollapsed
+    setInspectorCollapsed,
+    setAutosavePaused
   });
 
   // Properties-tab edits (variables/inputs/outputs) flow through here. Routing them through an in-place
@@ -868,8 +869,9 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
   const dialogRef = useRef<HTMLElement>(null);
   const [action, setAction] = useState<"replace" | "sideBySide">(review.intent.action ?? "replace");
   const [slotName, setSlotName] = useState(review.intent.slotName ?? review.policy.defaultSlotName);
-  const canEdit = review.phase === "review" || review.phase === "validationBlocked" || review.phase === "partialFailure";
-  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim());
+  const canEdit = review.phase === "review" || review.phase === "validationBlocked" || review.phase === "savedFailure" || review.phase === "partialFailure";
+  const reservedSideBySideSlot = action === "sideBySide" && slotName.trim().toLowerCase() === "default";
+  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim()) && !reservedSideBySideSlot;
   const intent = publicationIntentFor(review, action, slotName);
   const closeOnEscape = !busy && review.phase !== "publishing" ? onCancel : null;
   useDialogFocus(dialogRef, closeOnEscape);
@@ -877,15 +879,16 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
   const targetSlotName = intent.slotName || (action === "replace" ? review.policy.defaultSlotName : "the named slot");
   const activeSlot = review.slots.find(slot => slot.slotName === targetSlotName);
   const currentTargetVersion = activeSlot?.publication?.artifactVersion ?? activeSlot?.publication?.versionId ?? "None";
-  const targetDescription = action === "replace" && activeSlot?.publication
-    ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in slot ${activeSlot.slotName}.`
+  const targetDescription = activeSlot?.publication
+    ? `Replace executable ${activeSlot.publication.artifactId} and source reference ${activeSlot.publication.sourceReferenceId} in occupied slot ${activeSlot.slotName}. Concurrency protection requires publication ${activeSlot.publication.publicationId} to remain current.`
     : `Create a new executable source reference in slot ${targetSlotName}.`;
+  const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
   const preflightChanges = review.preflight?.triggers ?? review.preflight?.changes ?? [];
   const triggerSummary = review.preflight
     ? preflightChanges.length
       ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
       : "No trigger changes."
-    : formatChangeCount(review.changes.triggers);
+    : formatChangeCount(changes.triggers);
   const statusMessage = publicationStatusMessage(review);
 
   return (
@@ -937,9 +940,9 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
           <section className="wf-publication-changes" aria-labelledby="publication-changes-title">
             <h4 id="publication-changes-title">Changes in the captured draft</h4>
             <dl>
-              <ChangeSummary label="Activities" value={review.changes.activities} />
-              <ChangeSummary label="Inputs" value={review.changes.inputs} />
-              <ChangeSummary label="Outputs" value={review.changes.outputs} />
+              <ChangeSummary label="Activities" value={changes.activities} />
+              <ChangeSummary label="Inputs" value={changes.inputs} />
+              <ChangeSummary label="Outputs" value={changes.outputs} />
               <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
             </dl>
           </section>
@@ -960,6 +963,7 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
               disabled={!canEdit || busy}
             />
             {action === "sideBySide" && !slotName.trim() ? <small role="alert">A meaningful slot name is required for side-by-side publication.</small> : null}
+            {reservedSideBySideSlot ? <small role="alert">The default slot is reserved for replacement publication. Choose another named slot.</small> : null}
           </label>
           <p className="wf-dialog-note"><strong>Executable impact:</strong> {targetDescription}</p>
 
@@ -978,7 +982,7 @@ export function PublicationReviewDialog({ review, busy, onPublish, onCancel }: {
             <button type="button" onClick={onCancel} disabled={busy}>{review.phase === "review" || review.phase === "validationBlocked" ? "Cancel" : "Close"}</button>
             {review.phase !== "success" ? (
               <button type="submit" disabled={busy || !slotIsValid || review.validationErrors.length > 0}>
-                {review.phase === "partialFailure" ? "Retry Publish" : "Publish"}
+                {review.phase === "partialFailure" || review.phase === "savedFailure" ? "Retry Publish" : "Publish"}
               </button>
             ) : null}
           </div>
@@ -999,6 +1003,7 @@ function formatChangeCount(value: PublicationChangeCount) {
 function publicationStatusMessage(review: PublicationReviewState) {
   if (review.phase === "success") return "Publication completed successfully.";
   if (review.phase === "validationBlocked") return "Publication is blocked by validation. No version has been promoted.";
+  if (review.phase === "savedFailure") return "The reviewed draft was saved, but no version was promoted and nothing was published.";
   if (review.phase === "partialFailure") return `Publication did not complete. Promoted version ${review.promotedVersionId} remains available.`;
   if (review.phase === "publishing") {
     const messages = {

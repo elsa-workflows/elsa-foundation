@@ -1,7 +1,7 @@
 import type { Publication, PublicationIntent, PublicationPolicy, PublicationPreflight, PublicationSlot } from "../api/publishing";
 import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDefinitionState, WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
 
-export type PublicationReviewPhase = "review" | "publishing" | "validationBlocked" | "partialFailure" | "success";
+export type PublicationReviewPhase = "review" | "publishing" | "validationBlocked" | "savedFailure" | "partialFailure" | "success";
 export type PublicationProgressStep = "saving" | "promoting" | "preflight" | "publishing";
 
 export interface PublicationChangeCount {
@@ -29,9 +29,12 @@ export interface PublicationReviewState {
   changes: PublicationChangeSummary;
   policy: PublicationPolicy;
   slots: PublicationSlot[];
+  slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
+  triggerActivityVersionIds: string[];
   intent: PublicationIntent;
   preflight?: PublicationPreflight;
   promotedVersionId?: string;
+  savedDraft?: WorkflowDraft;
   failureMessage?: string;
   published?: Publication;
 }
@@ -39,7 +42,7 @@ export interface PublicationReviewState {
 export function createPublicationReview(input: {
   draft: WorkflowDraft;
   details: WorkflowDefinitionDetails | null;
-  sourceVersion: WorkflowDefinitionVersionDetails | null;
+  slotVersions: Record<string, WorkflowDefinitionVersionDetails>;
   policy: PublicationPolicy | null;
   slots: PublicationSlot[];
   catalog: ActivityCatalogItem[];
@@ -59,9 +62,10 @@ export function createPublicationReview(input: {
     .map(error => error.message?.trim())
     .filter((message): message is string => Boolean(message));
   if (!draftSnapshot.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
-  const triggerActivityVersionIds = new Set(input.catalog
+  const triggerActivityVersionIds = input.catalog
     .filter(activity => activity.executionType.toLowerCase() === "trigger")
-    .map(activity => activity.activityVersionId));
+    .map(activity => activity.activityVersionId);
+  const initialSlotName = policy.defaultAction === "replace" ? policy.defaultSlotName : "";
 
   return {
     phase: validationErrors.length ? "validationBlocked" : "review",
@@ -71,9 +75,11 @@ export function createPublicationReview(input: {
     unsavedChangesIncluded: true,
     executableStatus: validationErrors.length ? "blocked" : "ready",
     validationErrors,
-    changes: summarizePublicationChanges(input.sourceVersion?.state ?? null, draftSnapshot.state, triggerActivityVersionIds),
+    changes: summarizePublicationChanges(input.slotVersions[initialSlotName]?.state ?? null, draftSnapshot.state, new Set(triggerActivityVersionIds)),
     policy,
     slots: input.slots,
+    slotVersions: input.slotVersions,
+    triggerActivityVersionIds,
     intent: policy.defaultAction === "requireExplicitSlot"
       ? { action: "sideBySide", slotName: "" }
       : { action: "replace", slotName: policy.defaultSlotName }
@@ -104,18 +110,24 @@ export function publicationIntentFor(
   slotName: string
 ): PublicationIntent {
   const normalizedSlot = slotName.trim();
-  if (action === "sideBySide") return { action, slotName: normalizedSlot };
   const current = review.slots.find(slot => slot.slotName === normalizedSlot)?.publication;
   return {
     action,
-    slotName: normalizedSlot || review.policy.defaultSlotName,
+    slotName: normalizedSlot || (action === "replace" ? review.policy.defaultSlotName : ""),
     ...(current?.publicationId ? { expectedPublicationId: current.publicationId } : {})
   };
 }
 
+export function publicationChangesFor(review: PublicationReviewState, slotName: string) {
+  return summarizePublicationChanges(
+    review.slotVersions[slotName]?.state ?? null,
+    review.draftSnapshot.state,
+    new Set(review.triggerActivityVersionIds));
+}
+
 function nextVersionLabel(value: string) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
-  return match ? `${match[1]}.${match[2]}.${Number(match[3]) + 1}` : "Next promoted version";
+  return match ? `${Number(match[1]) + 1}.0.0` : "Next promoted version";
 }
 
 function collectActivities(root: unknown) {

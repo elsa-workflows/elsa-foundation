@@ -32,6 +32,7 @@ interface WorkflowOperationsParams {
   setError(value: string): void;
   setActiveRightPanelId(id: string): void;
   setInspectorCollapsed(collapsed: boolean): void;
+  setAutosavePaused(paused: boolean): void;
 }
 
 // The editor's async command handlers: export JSON, save, promote+publish, and dispatch a transient test
@@ -51,7 +52,8 @@ export function useWorkflowOperations({
   setStatus,
   setError,
   setActiveRightPanelId,
-  setInspectorCollapsed
+  setInspectorCollapsed,
+  setAutosavePaused
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const [runInputPrompt, setRunInputPrompt] = useState<{
@@ -81,39 +83,53 @@ export function useWorkflowOperations({
   const preparePublication = useCallback(async () => {
     if (!draft || busy) return;
     const draftSnapshot = structuredClone(draft);
+    setAutosavePaused(true);
     setOperation("publicationPreflight");
     setError("");
     setStatus("Preparing publication review...");
     try {
       // Review preparation is deliberately read-only. The captured draft is not saved or promoted
       // until the author explicitly presses Publish.
-      const [policy, slots, sourceVersion] = await Promise.all([
+      const [policy, slots] = await Promise.all([
         getPublicationPolicy(context, draftSnapshot.definitionId),
-        listPublicationSlots(context, draftSnapshot.definitionId),
-        draftSnapshot.sourceVersionId ? getWorkflowDefinitionVersion(context, draftSnapshot.sourceVersionId) : Promise.resolve(null)
+        listPublicationSlots(context, draftSnapshot.definitionId)
       ]);
+      const occupiedSlots = slots.filter(slot => slot.activePublicationId || slot.publication);
+      const incompleteSlot = occupiedSlots.find(slot => !slot.publication?.versionId);
+      if (incompleteSlot) throw new Error(`Publication slot '${incompleteSlot.slotName}' did not include its active version.`);
+      const versionsById = new Map<string, Awaited<ReturnType<typeof getWorkflowDefinitionVersion>>>();
+      await Promise.all(occupiedSlots.map(async slot => {
+        const versionId = slot.publication!.versionId;
+        if (!versionsById.has(versionId)) versionsById.set(versionId, await getWorkflowDefinitionVersion(context, versionId));
+      }));
+      const slotVersions = Object.fromEntries(occupiedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
       setPublicationReview(createPublicationReview({
         draft: draftSnapshot,
         details,
         policy,
         slots,
-        sourceVersion,
+        slotVersions,
         catalog
       }));
       setStatus("");
     } catch (error) {
       setPublicationReview(null);
+      setAutosavePaused(false);
       setStatus("");
       setError(`Could not prepare a trustworthy publication review. No changes were saved, promoted, or published. ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setOperation("idle");
     }
-  }, [draft, details, catalog, busy, context, setError, setOperation, setStatus]);
+  }, [draft, details, catalog, busy, context, setAutosavePaused, setError, setOperation, setStatus]);
 
   const confirmPublication = useCallback(async (intent: PublicationIntent) => {
     if (!publicationReview || publicationReview.phase === "success") return;
     if (intent.action === "sideBySide" && !intent.slotName?.trim()) {
       setError("Enter a meaningful slot name for side-by-side publication.");
+      return;
+    }
+    if (intent.action === "sideBySide" && intent.slotName?.trim().toLowerCase() === "default") {
+      setError("The default slot is reserved for replacement publication. Choose another named slot.");
       return;
     }
     if (publicationReview.validationErrors.length) {
@@ -124,35 +140,43 @@ export function useWorkflowOperations({
     setOperation("publishing");
     setError("");
     let promotedVersionId = publicationReview.promotedVersionId;
+    let savedDraft = publicationReview.savedDraft;
     try {
       if (!promotedVersionId) {
-        setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "saving", intent } : current);
-        setStatus("Saving publication snapshot...");
-        const saved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved");
-        const validationErrors = saved.validationErrors
+        if (!savedDraft) {
+          setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "saving", intent } : current);
+          setStatus("Saving publication snapshot...");
+          const justSaved = await saveDraft(publicationReview.draftSnapshot, "Publication snapshot saved");
+          savedDraft = justSaved;
+          setPublicationReview(current => current ? { ...current, savedDraft: justSaved, draftSnapshot: justSaved, intent } : current);
+        }
+        const persistedDraft = savedDraft;
+        const validationErrors = persistedDraft.validationErrors
           .map(error => error.message?.trim())
           .filter((message): message is string => Boolean(message));
-        if (!saved.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
+        if (!persistedDraft.state.rootActivity) validationErrors.unshift("Workflow has no root activity.");
         if (validationErrors.length) {
           setPublicationReview(current => current ? {
             ...current,
-            phase: "validationBlocked",
+            phase: "savedFailure",
             progressStep: undefined,
             validationErrors,
             executableStatus: "blocked",
-            draftSnapshot: saved,
+            savedDraft: persistedDraft,
+            draftSnapshot: persistedDraft,
+            failureMessage: "The reviewed draft was saved, but validation blocked promotion. No version or publication was created. Close the review, correct the validation errors, and try again.",
             intent
           } : current);
           setStatus("");
-          setError("The saved snapshot failed validation and was not promoted or published.");
+          setError("The reviewed draft was saved, but it failed validation and was not promoted or published.");
           return;
         }
 
-        setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "promoting", draftSnapshot: saved, intent } : current);
+        setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "promoting", savedDraft: persistedDraft, draftSnapshot: persistedDraft, intent } : current);
         setStatus("Promoting publication version...");
-        const promoted = await promoteDraft(context, saved.id);
-        promotedVersionId = promoted.versionId;
-        setPublicationReview(current => current ? { ...current, promotedVersionId, progressStep: "preflight" } : current);
+        const promoted = await promoteDraft(context, persistedDraft.id);
+        promotedVersionId = promoted.id;
+        setPublicationReview(current => current ? { ...current, promotedVersionId, proposedVersion: promoted.version, progressStep: "preflight" } : current);
       } else {
         setPublicationReview(current => current ? { ...current, phase: "publishing", progressStep: "preflight", intent } : current);
       }
@@ -193,6 +217,7 @@ export function useWorkflowOperations({
       } catch (reloadError) {
         setError(`Publication succeeded, but the editor could not refresh: ${reloadError instanceof Error ? reloadError.message : String(reloadError)}`);
       }
+      setAutosavePaused(false);
     } catch (e) {
       setStatus("");
       const failureMessage = e instanceof Error ? e.message : String(e);
@@ -205,6 +230,17 @@ export function useWorkflowOperations({
           intent,
           failureMessage: `Publication failed after promotion: ${failureMessage}. The promoted version was retained; retry Publish or close this review and publish it later.`
         } : current);
+      } else if (savedDraft) {
+        const failedSavedDraft = savedDraft;
+        setPublicationReview(current => current ? {
+          ...current,
+          phase: "savedFailure",
+          progressStep: undefined,
+          savedDraft: failedSavedDraft,
+          draftSnapshot: failedSavedDraft,
+          intent,
+          failureMessage: `The reviewed draft was saved, but promotion failed: ${failureMessage}. No version or publication was created. Retry Publish to promote the already-saved snapshot.`
+        } : current);
       } else {
         setPublicationReview(current => current ? { ...current, phase: "review", progressStep: undefined, intent } : current);
       }
@@ -212,14 +248,17 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [context, publicationReview, reload, saveDraft, setError, setOperation, setPublishedArtifact, setStatus]);
+  }, [context, publicationReview, reload, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);
 
   const cancelPublication = useCallback(() => {
     setPublicationReview(null);
+    setAutosavePaused(false);
     setStatus(publicationReview?.promotedVersionId
       ? "Publication review closed; the promoted version remains available."
-      : "Publication cancelled; no changes were saved, promoted, or published.");
-  }, [publicationReview, setStatus]);
+      : publicationReview?.savedDraft
+        ? "Publication review closed; the draft was saved, but no version was promoted or published."
+        : "Publication cancelled; no changes were saved, promoted, or published.");
+  }, [publicationReview, setAutosavePaused, setStatus]);
 
   const dispatchTestRun = useCallback(async (draftSnapshot: WorkflowDraft, inputs: WorkflowExecutionInputs) => {
     const draftSignature = getDraftSignature(draftSnapshot);

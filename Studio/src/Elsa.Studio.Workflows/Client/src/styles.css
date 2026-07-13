@@ -2057,6 +2057,7 @@
 }
 
 .wf-publication-status[data-phase="validationBlocked"],
+.wf-publication-status[data-phase="savedFailure"],
 .wf-publication-status[data-phase="partialFailure"] {
   border-color: color-mix(in srgb, var(--wf-danger) 45%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-danger) 8%, var(--wf-panel));

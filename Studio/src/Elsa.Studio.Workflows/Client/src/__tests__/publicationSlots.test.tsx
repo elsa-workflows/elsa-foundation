@@ -45,15 +45,54 @@ describe("publication slot UX", () => {
     const container = render(review(), onPublish);
 
     flushSync(() => radio(container, "Publish side by side").click());
-    const input = container.querySelector<HTMLInputElement>("input[aria-label='Publication slot']")!;
-    flushSync(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      setter.call(input, "blue");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    setInput(container, "blue");
     flushSync(() => button(container, "Publish").click());
 
     expect(onPublish).toHaveBeenCalledWith({ action: "sideBySide", slotName: "blue" });
+  });
+
+  it("treats an occupied side-by-side slot as a protected replacement", () => {
+    const onPublish = vi.fn(async () => undefined);
+    const occupiedBlue = {
+      definitionId: "definition-1",
+      slotName: "blue",
+      status: "active" as const,
+      publication: {
+        publicationId: "publication-blue",
+        definitionId: "definition-1",
+        versionId: "version-blue",
+        artifactId: "artifact-blue",
+        slotName: "blue",
+        sourceReferenceId: "reference-blue",
+        status: "active" as const
+      }
+    };
+    const container = render(review({ slots: [occupiedBlue] }), onPublish);
+
+    flushSync(() => radio(container, "Publish side by side").click());
+    setInput(container, "blue");
+
+    expect(container.textContent).toContain("Replace executable artifact-blue");
+    expect(container.textContent).toContain("Concurrency protection requires publication publication-blue");
+
+    flushSync(() => button(container, "Publish").click());
+    expect(onPublish).toHaveBeenCalledWith({
+      action: "sideBySide",
+      slotName: "blue",
+      expectedPublicationId: "publication-blue"
+    });
+  });
+
+  it("blocks side-by-side publication to the reserved default slot", () => {
+    const onPublish = vi.fn(async () => undefined);
+    const container = render(review(), onPublish);
+
+    flushSync(() => radio(container, "Publish side by side").click());
+
+    expect(container.textContent).toContain("The default slot is reserved for replacement publication");
+    expect(button(container, "Publish").disabled).toBe(true);
+    flushSync(() => button(container, "Publish").click());
+    expect(onPublish).not.toHaveBeenCalled();
   });
 });
 
@@ -80,7 +119,7 @@ function review(overrides: Partial<PublicationReviewState> = {}): PublicationRev
     ...createPublicationReview({
       draft: draft(),
       details: null,
-      sourceVersion: null,
+      slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [],
       catalog: []
@@ -121,4 +160,13 @@ function button(container: HTMLElement, text: string) {
 function radio(container: HTMLElement, label: string) {
   return [...container.querySelectorAll<HTMLInputElement>("input[type='radio']")]
     .find(candidate => candidate.parentElement?.textContent?.includes(label))!;
+}
+
+function setInput(container: HTMLElement, value: string) {
+  const input = container.querySelector<HTMLInputElement>("input[aria-label='Publication slot']")!;
+  flushSync(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }

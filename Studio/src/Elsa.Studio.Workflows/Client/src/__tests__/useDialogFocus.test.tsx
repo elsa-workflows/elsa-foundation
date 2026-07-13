@@ -7,7 +7,7 @@ import { useDialogFocus } from "../workflow-editor/useDialogFocus";
 afterEach(() => vi.restoreAllMocks());
 
 describe("dialog focus management", () => {
-  it("moves focus into the modal, handles Escape, and restores the opener", () => {
+  it("focuses the first control, contains Shift+Tab from the dialog itself, handles Escape, and restores the opener", () => {
     vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
       callback(0);
       return 1;
@@ -21,7 +21,13 @@ describe("dialog focus management", () => {
     const root = createRoot(container);
 
     flushSync(() => root.render(<Dialog onEscape={onEscape} />));
-    expect(document.activeElement).toBe(container.querySelector("[role='dialog']"));
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const buttons = container.querySelectorAll("button");
+    expect(document.activeElement).toBe(buttons[0]);
+
+    dialog.focus();
+    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+    expect(document.activeElement).toBe(buttons[1]);
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onEscape).toHaveBeenCalledTimes(1);
@@ -36,5 +42,5 @@ describe("dialog focus management", () => {
 function Dialog({ onEscape }: { onEscape(): void }) {
   const ref = useRef<HTMLElement>(null);
   useDialogFocus(ref, onEscape);
-  return <section ref={ref} role="dialog" tabIndex={-1}><button type="button">Publish</button></section>;
+  return <section ref={ref} role="dialog" tabIndex={-1}><button type="button">Publish</button><button type="button">Cancel</button></section>;
 }

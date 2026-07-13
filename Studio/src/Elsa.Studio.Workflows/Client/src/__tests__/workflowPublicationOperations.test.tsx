@@ -30,6 +30,8 @@ describe("workflow publication operations", () => {
     expect(fixture.current().publicationReview).toBeNull();
     expect(fixture.saveDraft).not.toHaveBeenCalled();
     expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.setAutosavePaused).toHaveBeenNthCalledWith(1, true);
+    expect(fixture.setAutosavePaused).toHaveBeenLastCalledWith(false);
     expect(fixture.setError.mock.calls.at(-1)?.[0]).toContain("Could not prepare a trustworthy publication review");
   });
 
@@ -41,6 +43,7 @@ describe("workflow publication operations", () => {
 
     expect(fixture.saveDraft).not.toHaveBeenCalled();
     expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.setAutosavePaused.mock.calls).toEqual([[true], [false]]);
     expect(fixture.current().publicationReview).toBeNull();
     expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication cancelled; no changes were saved, promoted, or published.");
   });
@@ -64,6 +67,7 @@ describe("workflow publication operations", () => {
     expect(fixture.current().publicationReview).toMatchObject({
       phase: "success",
       promotedVersionId: "version-2",
+      proposedVersion: "2.0.0",
       published: { artifactId: "artifact-2", sourceReferenceId: "reference-2" }
     });
   });
@@ -93,9 +97,48 @@ describe("workflow publication operations", () => {
     expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
     expect(fixture.postJson).not.toHaveBeenCalled();
     expect(fixture.current().publicationReview).toMatchObject({
-      phase: "validationBlocked",
-      validationErrors: ["Trigger route is invalid."]
+      phase: "savedFailure",
+      validationErrors: ["Trigger route is invalid."],
+      failureMessage: expect.stringContaining("draft was saved")
     });
+    expect(fixture.current().publicationReview?.savedDraft).toBeDefined();
+    flushSync(() => fixture.current().cancelPublication());
+    expect(fixture.setStatus).toHaveBeenLastCalledWith("Publication review closed; the draft was saved, but no version was promoted or published.");
+  });
+
+  it("retries promotion of the already-saved snapshot without saving a second time", async () => {
+    const fixture = renderOperations({ failPromoteAttempts: 1 });
+    await prepare(fixture);
+
+    await publish(fixture);
+
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "savedFailure",
+      savedDraft: { id: "draft-1" },
+      failureMessage: expect.stringContaining("promotion failed")
+    });
+
+    await publish(fixture);
+
+    expect(fixture.saveDraft).toHaveBeenCalledTimes(1);
+    expect(fixture.postJson.mock.calls.filter(([url]) => url.endsWith("/promote"))).toHaveLength(2);
+    expect(fixture.current().publicationReview).toMatchObject({
+      phase: "success",
+      promotedVersionId: "version-2",
+      proposedVersion: "2.0.0"
+    });
+  });
+
+  it("blocks the reserved default side-by-side slot before any mutation", async () => {
+    const fixture = renderOperations();
+    await prepare(fixture);
+
+    await fixture.current().confirmPublication({ action: "sideBySide", slotName: " default " });
+    await flushUpdates();
+
+    expect(fixture.saveDraft).not.toHaveBeenCalled();
+    expect(fixture.postJson).not.toHaveBeenCalled();
+    expect(fixture.setError).toHaveBeenLastCalledWith("The default slot is reserved for replacement publication. Choose another named slot.");
   });
 
   it("retains and identifies the promoted version when publishing fails", async () => {
@@ -148,12 +191,14 @@ function renderOperations(options: {
   draft?: WorkflowDraft;
   failPublish?: boolean;
   failPublishAttempts?: number;
+  failPromoteAttempts?: number;
   savedValidationErrors?: string[];
   failPolicyLoad?: boolean;
 } = {}) {
   const sourceDraft = options.draft ?? draft();
   const mutationOrder: string[] = [];
   let publishAttempts = 0;
+  let promoteAttempts = 0;
   const getJson = vi.fn(async (url: string) => {
     if (url === "/capabilities") return capabilities;
     if (url === "/publishing/workflows/definition-1/policy") {
@@ -167,7 +212,9 @@ function renderOperations(options: {
   const postJson = vi.fn(async (url: string) => {
     if (url === "/design/workflows/drafts/draft-1/promote") {
       mutationOrder.push("promote");
-      return { versionId: "version-2" };
+      promoteAttempts += 1;
+      if (promoteAttempts <= (options.failPromoteAttempts ?? 0)) throw new Error("promotion unavailable");
+      return { id: "version-2", version: "2.0.0" };
     }
     if (url === "/publishing/workflows/version-2/preflight") {
       mutationOrder.push("preflight");
@@ -217,7 +264,8 @@ function renderOperations(options: {
     setStatus: vi.fn(),
     setError: vi.fn(),
     setActiveRightPanelId: vi.fn(),
-    setInspectorCollapsed: vi.fn()
+    setInspectorCollapsed: vi.fn(),
+    setAutosavePaused: vi.fn()
   };
   let current: Operations | null = null;
   const container = document.createElement("div");

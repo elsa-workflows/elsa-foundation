@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { WorkflowDraft } from "../workflowTypes";
-import { createPublicationReview, publicationIntentFor, summarizePublicationChanges } from "../workflow-editor/publicationReview";
+import type { WorkflowDefinitionVersionDetails, WorkflowDraft } from "../workflowTypes";
+import { createPublicationReview, publicationChangesFor, publicationIntentFor, summarizePublicationChanges } from "../workflow-editor/publicationReview";
 
 describe("publication review model", () => {
   it("summarizes changed activities, inputs, and outputs against the source version", () => {
@@ -27,7 +27,7 @@ describe("publication review model", () => {
     const review = createPublicationReview({
       draft: draft({ rootActivity: null }),
       details: null,
-      sourceVersion: null,
+      slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [{
         definitionId: "definition-1",
@@ -62,7 +62,7 @@ describe("publication review model", () => {
     const review = createPublicationReview({
       draft: original,
       details: null,
-      sourceVersion: null,
+      slotVersions: {},
       policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
       slots: [],
       catalog: []
@@ -77,13 +77,83 @@ describe("publication review model", () => {
     const review = createPublicationReview({
       draft: draft(),
       details: null,
-      sourceVersion: null,
+      slotVersions: {},
       policy: { defaultAction: "requireExplicitSlot", defaultSlotName: "default", source: "workflow" },
       slots: [],
       catalog: []
     });
 
     expect(review.intent).toEqual({ action: "sideBySide", slotName: "" });
+  });
+
+  it("proposes the major version that promotion actually creates", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: {
+        definition: {
+          id: "definition-1",
+          name: "Orders",
+          createdAt: "2026-07-01T00:00:00Z",
+          lastModifiedAt: "2026-07-01T00:00:00Z",
+          latestVersion: "1.0.0",
+          versionCount: 1
+        },
+        versions: []
+      },
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(review.proposedVersion).toBe("2.0.0");
+  });
+
+  it("protects an occupied side-by-side target with its publication id", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { blue: version("version-blue", { inputs: [{ name: "blue" }] }) },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [{
+        definitionId: "definition-1",
+        slotName: "blue",
+        status: "active",
+        publication: {
+          publicationId: "publication-blue",
+          definitionId: "definition-1",
+          versionId: "version-blue",
+          artifactId: "artifact-blue",
+          slotName: "blue",
+          sourceReferenceId: "reference-blue",
+          status: "active"
+        }
+      }],
+      catalog: []
+    });
+
+    expect(publicationIntentFor(review, "sideBySide", " blue ")).toEqual({
+      action: "sideBySide",
+      slotName: "blue",
+      expectedPublicationId: "publication-blue"
+    });
+  });
+
+  it("recomputes changes against the selected occupied slot", () => {
+    const review = createPublicationReview({
+      draft: draft({ inputs: [{ name: "draft-only" }] }),
+      details: null,
+      slotVersions: {
+        default: version("version-default", { inputs: [{ name: "draft-only" }] }),
+        blue: version("version-blue", { inputs: [{ name: "blue-only" }] })
+      },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(publicationChangesFor(review, "default").inputs).toEqual({ added: 0, changed: 0, removed: 0 });
+    expect(publicationChangesFor(review, "blue").inputs).toEqual({ added: 1, changed: 0, removed: 1 });
   });
 });
 
@@ -100,4 +170,19 @@ function draft(state: Partial<WorkflowDraft["state"]> = {}): WorkflowDraft {
 
 function activity(nodeId: string, extra: Record<string, unknown> = {}, activityVersionId = `activity-${nodeId}`) {
   return { nodeId, activityVersionId, inputs: [], outputs: [], ...extra };
+}
+
+function version(id: string, state: Partial<WorkflowDefinitionVersionDetails["state"]>): WorkflowDefinitionVersionDetails {
+  return {
+    id,
+    version: "1.0.0",
+    definition: {
+      id: "definition-1",
+      name: "Orders",
+      createdAt: "2026-07-01T00:00:00Z",
+      lastModifiedAt: "2026-07-01T00:00:00Z"
+    },
+    state: { rootActivity: activity("root"), ...state },
+    layout: []
+  };
 }
