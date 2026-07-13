@@ -391,7 +391,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
     try {
       const details = await getWorkflowInstance(context, workflowExecutionId);
       const [executableResult, activityCatalog] = await Promise.all([
-        getExecutable(context, details.instance.artifactId).then(
+        getExecutable(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
           executable => ({ executable, error: "" }),
           error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
         ),

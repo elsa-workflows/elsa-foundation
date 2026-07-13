@@ -84,14 +84,15 @@ export async function listExecutables(context: StudioEndpointContext, options: L
 export async function getExecutable(
   context: StudioEndpointContext,
   artifactId: string,
-  _sourceReferenceId?: string | null
+  sourceReferenceId?: string | null
 ) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-executable",
     { artifactId });
-  return context.http.getJson<WorkflowExecutableDetails>(path);
+  const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
+  return context.http.getJson<WorkflowExecutableDetails>(`${path}${query}`);
 }
 
 export async function getExecutableProvenance(context: StudioEndpointContext, artifactId: string) {
@@ -106,14 +107,18 @@ export async function getExecutableProvenance(context: StudioEndpointContext, ar
 export async function runExecutable(
   context: StudioEndpointContext,
   artifactId: string,
-  inputs: WorkflowExecutionInputs = {}
+  inputs: WorkflowExecutionInputs = {},
+  sourceReferenceId?: string | null
 ) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-execute",
     { artifactId });
-  return context.http.postJson<WorkflowExecutableRunResponse>(path, { inputs });
+  return context.http.postJson<WorkflowExecutableRunResponse>(path, {
+    inputs,
+    ...(sourceReferenceId ? { sourceReferenceId } : {})
+  });
 }
 
 export interface ListWorkflowInstancesRequest {

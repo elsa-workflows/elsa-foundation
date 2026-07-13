@@ -4,7 +4,7 @@ import { clearApiCapabilityCache } from "../api/capabilities";
 import { listDefinitions } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { preflightPublication, startWorkflowDraftTestRun } from "../api/publishing";
-import { listExecutables, runExecutable } from "../api/runtime";
+import { getExecutable, listExecutables, runExecutable } from "../api/runtime";
 
 afterEach(clearApiCapabilityCache);
 
@@ -33,6 +33,7 @@ const capabilities = {
       contractVersion: "1",
       links: [
         { rel: "workflow-executables", href: "runtime/workflows/executables" },
+        { rel: "workflow-executable", href: "runtime/workflows/executables/{artifactId}", templated: true },
         { rel: "workflow-execute", href: "runtime/workflows/executables/{artifactId}/execute", templated: true }
       ]
     }
@@ -122,7 +123,7 @@ describe("canonical domain clients", () => {
       state: { rootActivity: null },
       inputs
     });
-    await runExecutable(context, "artifact/1", inputs);
+    await runExecutable(context, "artifact/1", inputs, "reference-1");
 
     expect(postJson).toHaveBeenCalledWith(
       "/publishing/workflows/drafts/test-runs",
@@ -130,7 +131,18 @@ describe("canonical domain clients", () => {
     );
     expect(postJson).toHaveBeenCalledWith(
       "/runtime/workflows/executables/artifact%2F1/execute",
-      { inputs }
+      { inputs, sourceReferenceId: "reference-1" }
+    );
+  });
+
+  it("requests the exact historical executable reference when one is selected", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : {});
+    const context = createContext({ getJson });
+
+    await getExecutable(context, "artifact/1", "reference/old");
+
+    expect(getJson).toHaveBeenLastCalledWith(
+      "/runtime/workflows/executables/artifact%2F1?ref=reference%2Fold"
     );
   });
 });

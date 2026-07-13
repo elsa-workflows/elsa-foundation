@@ -504,9 +504,22 @@ describe("workflows module", () => {
         const version = workflowDefinitionVersionDetails();
         return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
       }
-      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [publicationSlot("artifact-current")] });
+      if (url.includes("/publishing/workflows/definition-1/slots")) return response({ items: [
+        publicationSlot("artifact-current"),
+        publicationSlot("artifact-no-live", { slotName: "canary" })
+      ] });
       if (url.includes("/runtime/workflows/executables")) return response([
-        executable({ artifactId: "artifact-current", definitionId: "definition-1", artifactVersion: "2.0.0" }),
+        executable({
+          artifactId: "artifact-current",
+          definitionId: "definition-1",
+          artifactVersion: "2.0.0",
+          references: [executableReference({
+            sourceReferenceId: "reference-current",
+            artifactId: "artifact-current",
+            definitionVersionId: "version-1"
+          })]
+        }),
+        executable({ artifactId: "artifact-no-live", definitionId: "definition-1", references: [] }),
         executable({ artifactId: "artifact-other", definitionId: "definition-2", sourceId: "definition-2" })
       ]);
       if (url.includes("/activities")) return response({ activities: [
@@ -530,6 +543,9 @@ describe("workflows module", () => {
 
       expect(container.textContent).toContain("Version 2.0.0");
       expect(container.textContent).not.toContain("artifact-other");
+      const unavailableRun = buttonByLabel(container, "Run executable artifact-no-live") as HTMLButtonElement;
+      expect(unavailableRun.disabled).toBe(true);
+      expect(unavailableRun.title).toContain("No live published reference");
 
       await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
       expect(writeText).toHaveBeenCalledWith("artifact-current");
@@ -544,7 +560,10 @@ describe("workflows module", () => {
         "https://server.example/design/workflows/versions/version-1"
       );
       const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-current/execute") && init?.method === "POST");
-      expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({ inputs: { Greeting: "Hello from artifacts" } });
+      expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+        inputs: { Greeting: "Hello from artifacts" },
+        sourceReferenceId: "reference-current"
+      });
 
       await click(buttonByText(container, "Open list"));
       expect(window.location.pathname).toBe("/workflows/executables");
@@ -1215,7 +1234,11 @@ describe("workflows module", () => {
       return response({ executables: [executable({
         rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
         sourceKind: "WorkflowDefinitionVersion",
-        sourceId: "version-1"
+        sourceId: "version-1",
+        references: [
+          executableReference({ sourceReferenceId: "ref-old", definitionVersionId: "version-0", publishedAt: "2026-06-17T01:00:00Z" }),
+          executableReference({ sourceReferenceId: "ref-new", definitionVersionId: "version-1", publishedAt: "2026-06-18T01:00:00Z" })
+        ]
       })] });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1248,7 +1271,10 @@ describe("workflows module", () => {
       "https://server.example/design/workflows/versions/version-1"
     );
     const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
-    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({ inputs: { Greeting: "Hello from published run" } });
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+      inputs: { Greeting: "Hello from published run" },
+      sourceReferenceId: "ref-new"
+    });
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
 
     await unmount();
@@ -1268,6 +1294,19 @@ describe("workflows module", () => {
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(window.location.search).toBe("?definition=definition-1");
+
+    await unmount();
+  });
+
+  it("disables executable-list runs without a live Published reference", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable({ references: [] })] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+
+    const run = buttonByText(container, "Run") as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toContain("No live published reference");
 
     await unmount();
   });
@@ -1370,7 +1409,7 @@ describe("workflows module", () => {
       if (init?.method === "POST") {
         return response({ error: "Workflow executable artifact 'artifact-1' has no live Published reference: the matching reference has expired." }, 409);
       }
-      return response({ executables: [executable()] });
+      return response({ executables: [executable({ references: [executableReference()] })] });
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
 
@@ -1428,7 +1467,7 @@ describe("workflows module", () => {
     // Selecting another reference updates the routed selection. Runtime remains the executable source.
     await click(buttonByText(container, "References (2)"));
     await click(buttonByLabel(container, "Show reference ref-0"));
-    await waitForText(container, "Showing newest live reference ref-1");
+    await waitForText(container, "Showing requested reference ref-0");
 
     expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
@@ -1451,7 +1490,19 @@ describe("workflows module", () => {
         const version = workflowDefinitionVersionDetails({ id: "version-2", version: "2.0.0" });
         return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
       }
-      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        chosenReference: { sourceReferenceId: "ref-test", selection: "requested", layout: [] },
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "ref-test",
+            scope: "TestRun",
+            definitionVersionId: "draft:snapshot-1",
+            artifactVersion: "draft",
+            publishedAt: null
+          })
+        ]
+      }));
       if (url.includes("/activities")) return response({ activities: [] });
       if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
       return response(null, 404);
@@ -1467,10 +1518,41 @@ describe("workflows module", () => {
     await waitForText(container, "Open Run wfexec-inspector-1");
 
     const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
-    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({ inputs: { Greeting: "Hello from inspector" } });
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+      inputs: { Greeting: "Hello from inspector" },
+      sourceReferenceId: "ref-1"
+    });
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
       "https://server.example/design/workflows/versions/version-2"
     );
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      "https://server.example/design/workflows/versions/draft%3Asnapshot-1"
+    );
+
+    await unmount();
+  });
+
+  it("disables inspector execution when no live Published reference exists", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        chosenReference: { sourceReferenceId: "ref-test", selection: "requested", layout: [] },
+        references: [
+          executableReference({ sourceReferenceId: "ref-retired", deletedAt: "2026-06-19T01:00:00Z" }),
+          executableReference({ sourceReferenceId: "ref-test", scope: "TestRun", publishedAt: null })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1?ref=ref-test");
+
+    await waitForText(container, "Executable Inspector");
+
+    const run = buttonByText(container, "Run") as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toContain("No live published reference");
 
     await unmount();
   });
@@ -1500,7 +1582,13 @@ describe("workflows module", () => {
           return response({ items: [publicationSlot("artifact-current")] });
         }
         if (url.includes("/runtime/workflows/executables")) {
-          return response([executable({ artifactId: scenario.artifactId })]);
+          return response([executable({
+            artifactId: scenario.artifactId,
+            references: [executableReference({
+              artifactId: scenario.artifactId,
+              definitionVersionId: scenario.versionId
+            })]
+          })]);
         }
         if (url.includes("/activities")) return response({ activities: [] });
         if (url.includes("/definitions/definition-1")) {
@@ -2061,7 +2149,10 @@ describe("workflows module", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
-        return response(workflowInstanceDetails({ activities: [activityWithoutCollectionCounts] }));
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ sourceReferenceId: "reference-pinned" }),
+          activities: [activityWithoutCollectionCounts]
+        }));
       }
 
       if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) {
@@ -2120,7 +2211,7 @@ describe("workflows module", () => {
       expect.any(Object)
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://server.example/runtime/workflows/executables/artifact-1",
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-pinned",
       expect.any(Object)
     );
 

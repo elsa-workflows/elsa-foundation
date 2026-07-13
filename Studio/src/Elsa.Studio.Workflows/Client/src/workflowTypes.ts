@@ -485,6 +485,8 @@ export interface WorkflowExecutableReference {
   expiresAt?: string | null;
   deletedAt?: string | null;
   deletedReason?: string | null;
+  publicationId?: string | null;
+  slotId?: string | null;
 }
 
 // Compact flowchart wiring projected with an executable node. Endpoints refer to authored node ids;
@@ -571,6 +573,12 @@ export interface WorkflowInstanceSummary {
   correlationId?: string | null;
   parentWorkflowExecutionId?: string | null;
   tenantId?: string | null;
+  sourceReferenceId?: string | null;
+  publicationId?: string | null;
+  slotId?: string | null;
+  sourceKind?: string | null;
+  sourceId?: string | null;
+  sourceVersion?: string | null;
   activityCount: number;
   incidentCount: number;
 }
