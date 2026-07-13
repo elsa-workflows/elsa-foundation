@@ -8,13 +8,18 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class ExecuteWorkflowRequestHandlerTests
+public sealed class ExecuteWorkflowRequestHandlerTests : IAsyncLifetime
 {
+    private readonly InMemoryWorkflowExecutableStore _store = new();
+
+    public async Task InitializeAsync() => await _store.SaveAsync(NewExecutable());
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     [Fact]
     public async Task RejectsUnknownArtifactId()
     {
-        var store = new InMemoryWorkflowExecutableStore();
-        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(store), store);
+        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableNotFoundException>(() => handler.Handle(new ExecuteWorkflow("missing-artifact"), CancellationToken.None));
 
@@ -25,9 +30,7 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     [Fact]
     public async Task ReturnsAgentDispatchView()
     {
-        var store = new InMemoryWorkflowExecutableStore();
-        await store.SaveAsync(NewExecutable());
-        var handler = new ExecuteWorkflowRequestHandler(NewDispatcher(store), store);
+        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
 
         var result = await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 
@@ -42,14 +45,68 @@ public sealed class ExecuteWorkflowRequestHandlerTests
     [Fact]
     public async Task ClassifiesDirectExecutableStartsAsPublishedRuns()
     {
-        var store = new InMemoryWorkflowExecutableStore();
-        await store.SaveAsync(NewExecutable());
-        var dispatcher = new CapturingStartDispatcher(NewDispatcher(store));
-        var handler = new ExecuteWorkflowRequestHandler(dispatcher, store);
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync());
+        var handler = new ExecuteWorkflowRequestHandler(dispatcher, _store);
 
         await handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None);
 
         Assert.Equal(WorkflowRunKind.PublishedRun, Assert.Single(dispatcher.Requests).RunKind);
+    }
+
+    [Fact]
+    public async Task UsesCallerSourceReferenceOnlyAsAValidatedDispatchSelector()
+    {
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await references.SaveAsync(new WorkflowExecutableSourceReference(
+            "published-ref-1", "artifact-1", "WorkflowDefinitionVersion", "version-1", "1.0.0",
+            "definition-1", "version-1", "1.0.0", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+            WorkflowExecutableReferenceScope.Published));
+        var dispatcher = new CapturingStartDispatcher(await NewDispatcherAsync(references));
+        var handler = new ExecuteWorkflowRequestHandler(dispatcher, _store);
+
+        await handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: "published-ref-1"), CancellationToken.None);
+
+        var selection = Assert.Single(dispatcher.Requests).SourceSelection;
+        Assert.Equal("published-ref-1", selection!.SourceReferenceId);
+        Assert.Null(selection.PublicationId);
+        Assert.Null(selection.SlotId);
+    }
+
+    [Fact]
+    public async Task RejectsDirectExecutionWhenArtifactHasNoPublishedReference()
+    {
+        var handler = new ExecuteWorkflowRequestHandler(
+            await NewDispatcherAsync(new InMemoryWorkflowExecutableSourceReferenceStore()),
+            _store);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableReferenceRejectedException>(() =>
+            handler.Handle(new ExecuteWorkflow("artifact-1"), CancellationToken.None));
+
+        Assert.Equal(WorkflowExecutableReferenceRejectionReason.NoLiveReference, exception.Reason);
+    }
+
+    [Fact]
+    public async Task RejectsBlankSourceReferenceSelectorAsInvalidInput()
+    {
+        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(), _store);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: " "), CancellationToken.None));
+
+        Assert.Equal("sourceReferenceId", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task DirectExecutionSelectsOneOfMultiplePublicationsByValidatedReferenceId()
+    {
+        var references = new InMemoryWorkflowExecutableSourceReferenceStore();
+        await references.SaveAsync(PublishedReference("ref-v1", "version-1", "1.0.0"));
+        await references.SaveAsync(PublishedReference("ref-v2", "version-2", "2.0.0"));
+        var handler = new ExecuteWorkflowRequestHandler(await NewDispatcherAsync(references), _store);
+
+        var result = await handler.Handle(new ExecuteWorkflow("artifact-1", SourceReferenceId: "ref-v2"), CancellationToken.None);
+
+        Assert.Equal("2.0.0", result.ArtifactVersion);
     }
 
     [Fact]
@@ -66,13 +123,25 @@ public sealed class ExecuteWorkflowRequestHandlerTests
         Assert.Null(runtimeCoreAssembly.GetType("Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutor"));
     }
 
-    private static WorkflowStartDispatcher NewDispatcher(InMemoryWorkflowExecutableStore store) =>
-        new(
-            store,
-            new InMemoryWorkflowExecutableSourceReferenceStore(),
+    private async Task<WorkflowStartDispatcher> NewDispatcherAsync(
+        InMemoryWorkflowExecutableSourceReferenceStore? referenceStore = null)
+    {
+        if (referenceStore is null)
+        {
+            referenceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
+            await referenceStore.SaveAsync(new WorkflowExecutableSourceReference(
+                "published-ref-default", "artifact-1", "WorkflowDefinitionVersion", "version-1", "1.0.0",
+                "definition-1", "version-1", "1.0.0", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+                WorkflowExecutableReferenceScope.Published));
+        }
+
+        return new(
+            _store,
+            referenceStore,
             new RecordingAgentProvider(),
             new FixedRuntimeExecutionIdGenerator(),
             new FixedTimeProvider(new DateTimeOffset(2026, 6, 11, 12, 0, 0, TimeSpan.Zero)));
+    }
 
     private static WorkflowExecutable NewExecutable() =>
         new(
@@ -81,6 +150,15 @@ public sealed class ExecuteWorkflowRequestHandlerTests
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>());
+
+    private static WorkflowExecutableSourceReference PublishedReference(
+        string sourceReferenceId,
+        string definitionVersionId,
+        string artifactVersion) =>
+        new(
+            sourceReferenceId, "artifact-1", "WorkflowDefinitionVersion", definitionVersionId, artifactVersion,
+            "definition-1", definitionVersionId, artifactVersion, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
+            WorkflowExecutableReferenceScope.Published);
 
     private static ExecutableNode NewNode(string nodeId) =>
         new(

@@ -64,8 +64,21 @@ public sealed class WorkflowTestRunRequestHandlerTests
             SnapshotId: "snapshot-1",
             State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
 
-        Assert.Equal(WorkflowRunKind.TestRun, Assert.Single(versionDispatcher.Requests).RunKind);
-        Assert.Equal(WorkflowRunKind.TestRun, Assert.Single(draftDispatcher.Requests).RunKind);
+        var versionRequest = Assert.Single(versionDispatcher.Requests);
+        var draftRequest = Assert.Single(draftDispatcher.Requests);
+        Assert.Equal(WorkflowRunKind.TestRun, versionRequest.RunKind);
+        Assert.Equal(WorkflowRunKind.TestRun, draftRequest.RunKind);
+        await AssertExactTestRunReferenceAsync(versionRequest);
+        await AssertExactTestRunReferenceAsync(draftRequest);
+    }
+
+    private async Task AssertExactTestRunReferenceAsync(WorkflowExecutionStartDispatchRequest request)
+    {
+        var sourceReferenceId = Assert.IsType<string>(request.SourceSelection?.SourceReferenceId);
+        var reference = await _sourceReferenceStore.FindAsync(sourceReferenceId);
+        Assert.NotNull(reference);
+        Assert.Equal(request.ArtifactId, reference.ArtifactId);
+        Assert.Equal(WorkflowExecutableReferenceScope.TestRun, reference.Scope);
     }
 
     [Fact]

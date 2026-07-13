@@ -35,6 +35,10 @@ public sealed class WorkflowExecutableReferenceRejectedException : Exception
         {
             WorkflowExecutableReferenceRejectionReason.Expired =>
                 $"Workflow executable artifact '{artifactId}' has no live {requiredScope} reference: the matching reference has expired.",
+            WorkflowExecutableReferenceRejectionReason.SelectionNotFound =>
+                $"Workflow executable artifact '{artifactId}' has no live {requiredScope} reference matching the requested source selection.",
+            WorkflowExecutableReferenceRejectionReason.Ambiguous =>
+                $"Workflow executable artifact '{artifactId}' has multiple live {requiredScope} references; the source selection must identify exactly one.",
             _ =>
                 $"Workflow executable artifact '{artifactId}' has no live {requiredScope} reference."
         };
@@ -47,5 +51,11 @@ public enum WorkflowExecutableReferenceRejectionReason
     NoLiveReference,
 
     /// <summary>A reference of the required scope exists but has passed its expiry — the distinguishing test-run-lapsed signal.</summary>
-    Expired
+    Expired,
+
+    /// <summary>The caller's selector did not resolve to a reference for this artifact, scope and liveness.</summary>
+    SelectionNotFound,
+
+    /// <summary>More than one live reference matched, so provenance cannot be pinned unambiguously.</summary>
+    Ambiguous
 }

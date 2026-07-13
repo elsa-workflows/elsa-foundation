@@ -34,7 +34,10 @@ public sealed class ListWorkflowInstancesRequestHandler(
         }
 
         if (!string.IsNullOrWhiteSpace(request.DefinitionId))
-            query = query.Where(state => string.Equals(state.PinnedExecutable.DefinitionId, request.DefinitionId, StringComparison.Ordinal));
+            query = query.Where(state => string.Equals(
+                state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
+                request.DefinitionId,
+                StringComparison.Ordinal));
 
         if (!string.IsNullOrWhiteSpace(request.CorrelationId))
             query = query.Where(state => string.Equals(state.CorrelationId, request.CorrelationId, StringComparison.Ordinal));

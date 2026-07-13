@@ -38,7 +38,10 @@ public sealed class ExecuteWorkflowRequestHandler(
                 RequestedBy,
                 variables: variables,
                 inputs: inputs,
-                runKind: WorkflowRunKind.PublishedRun),
+                runKind: WorkflowRunKind.PublishedRun,
+                sourceSelection: request.SourceReferenceId is null
+                    ? null
+                    : new WorkflowExecutableSourceSelection(sourceReferenceId: request.SourceReferenceId)),
             cancellationToken: cancellationToken);
         return WorkflowExecutionStartDispatchView.From(result);
     }
