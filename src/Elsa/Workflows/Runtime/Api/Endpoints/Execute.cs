@@ -23,7 +23,7 @@ internal sealed class Execute : ElsaRequestHandlerEndpoint<ExecuteWorkflow, Work
 
     public override void Configure()
     {
-        Post(RouteConstants.GetRoute("{artifactId}/execute"));
+        Post(RouteConstants.GetRoute("executables/{artifactId}/execute"));
         ConfigurePermissions(PermissionNames.WorkflowRuntimeExecute);
     }
 

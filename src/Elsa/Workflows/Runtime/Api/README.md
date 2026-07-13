@@ -15,7 +15,7 @@ This package does not depend on `Elsa.Server`; a worker, custom application, or 
 | Area | Routes |
 |---|---|
 | Executables | `GET /runtime/workflows/executables`, `GET /runtime/workflows/executables/{artifactId}`, `GET /runtime/workflows/executables/{artifactId}/provenance` |
-| Execution | `POST /runtime/workflows/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
+| Execution | `POST /runtime/workflows/executables/{artifactId}/execute`, `POST /runtime/workflows/stimuli` |
 | Instances | `GET /runtime/workflows/instances`, `GET /runtime/workflows/instances/{workflowExecutionId}`, `GET .../incidents`, `GET .../activity-executions/{activityExecutionId}` |
 | Diagnostics | `GET/PUT /runtime/workflows/diagnostics/settings` |
 
