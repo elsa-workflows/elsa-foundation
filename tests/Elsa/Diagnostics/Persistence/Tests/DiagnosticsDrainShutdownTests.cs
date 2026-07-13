@@ -6,14 +6,14 @@ using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
 
-public sealed class DiagnosticsDrainShutdownTests
+public sealed class DiagnosticsDrainShutdownTests : DiagnosticsDrainTestBase
 {
     [Fact]
     public async Task Graceful_stop_drains_tail_applies_final_retention_and_completes_all_acks()
     {
         var counters = new DiagnosticsPersistenceCounters();
         var target = new DiagnosticsFailureTarget { RetentionDeleted = 3 };
-        await using var drain = CreateDrain(target, counters, TimeSpan.FromSeconds(2));
+        var drain = Fixture.Create(target, counters);
         drain.Start();
         var acknowledgements = Enumerable.Range(1, 8).Select(x => drain.EnqueueAsync(x).AsTask()).ToArray();
 
@@ -34,7 +34,7 @@ public sealed class DiagnosticsDrainShutdownTests
             CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously),
             IgnoreCancellation = true
         };
-        var drain = CreateDrain(target, new DiagnosticsPersistenceCounters(), TimeSpan.FromMilliseconds(50));
+        var drain = Fixture.Create(target, new DiagnosticsPersistenceCounters(), shutdownTimeout: TimeSpan.FromMilliseconds(50));
         drain.Start();
         Assert.True(drain.TryEnqueue(1, out var acknowledgement));
         await target.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -60,7 +60,8 @@ public sealed class DiagnosticsDrainShutdownTests
             CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously),
             IgnoreCancellation = true
         };
-        var drain = CreateDrain(target, new DiagnosticsPersistenceCounters(), TimeSpan.FromMilliseconds(50), queueCapacity: 2, batchSize: 1);
+        var drain = Fixture.Create(target, new DiagnosticsPersistenceCounters(), queueCapacity: 2, batchSize: 1,
+            shutdownTimeout: TimeSpan.FromMilliseconds(50));
         drain.Start();
         var acknowledgements = new List<Task<int>>();
         Assert.True(drain.TryEnqueue(1, out var first));
@@ -88,7 +89,7 @@ public sealed class DiagnosticsDrainShutdownTests
             RetentionDeleted = 2,
             RetentionFailure = call => call < 3 ? new DiagnosticsOperationalException("retention unavailable") : null
         };
-        await using var drain = CreateDrain(target, counters, TimeSpan.FromSeconds(2));
+        var drain = Fixture.Create(target, counters);
         var acknowledgement = drain.EnqueueAsync(1).AsTask();
 
         var result = await drain.StopAsync();
@@ -108,7 +109,7 @@ public sealed class DiagnosticsDrainShutdownTests
         {
             RetentionFailure = _ => new DiagnosticsOperationalException("retention unavailable")
         };
-        await using var drain = CreateDrain(target, counters, TimeSpan.FromSeconds(2));
+        var drain = Fixture.Create(target, counters);
         var acknowledgement = drain.EnqueueAsync(1).AsTask();
 
         var result = await drain.StopAsync();
@@ -121,20 +122,4 @@ public sealed class DiagnosticsDrainShutdownTests
         Assert.Equal(1, snapshot.RetentionFailures);
     }
 
-    private static DiagnosticsDrain<int, int> CreateDrain(
-        DiagnosticsFailureTarget target,
-        IDiagnosticsPersistenceObserver observer,
-        TimeSpan shutdownTimeout,
-        int queueCapacity = 16,
-        int batchSize = 4) =>
-        new(target, new()
-        {
-            BatchSize = batchSize,
-            QueueCapacity = queueCapacity,
-            RetentionInterval = 100,
-            MaxAttempts = 3,
-            BaseRetryDelay = TimeSpan.FromMilliseconds(1),
-            MaxRetryDelay = TimeSpan.FromMilliseconds(2),
-            ShutdownTimeout = shutdownTimeout
-        }, observer);
 }

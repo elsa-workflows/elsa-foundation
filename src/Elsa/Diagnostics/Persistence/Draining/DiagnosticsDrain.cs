@@ -19,9 +19,12 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     private readonly object _lifecycleGate = new();
     private Task? _drainLoop;
     private Task<DiagnosticsDrainStopResult>? _stopTask;
+    private Task? _asyncDisposeTask;
     private long _retentionUnits;
     private int _accepting = 1;
-    private int _disposed;
+    private int _forcedTermination;
+    private int _shutdownCancellationRequested;
+    private int _shutdownDisposed;
     private int _state = (int)DiagnosticsDrainState.Created;
 
     public DiagnosticsDrain(
@@ -52,8 +55,12 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         lock (_lifecycleGate)
         {
             if (_drainLoop is not null)
-                return;
-            if (Volatile.Read(ref _accepting) == 0)
+            {
+                if (_stopTask is null && Volatile.Read(ref _forcedTermination) == 0)
+                    return;
+                throw new InvalidOperationException("The diagnostics drain has entered its terminal lifecycle and cannot be restarted.");
+            }
+            if (Volatile.Read(ref _accepting) == 0 || _stopTask is not null)
                 throw new InvalidOperationException("The diagnostics drain is closing and cannot be started.");
             StartCore();
         }
@@ -101,12 +108,17 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         {
             if (_stopTask is null)
             {
-                _drainLoop ??= StartCore();
-                Volatile.Write(ref _accepting, 0);
-                SetState(DiagnosticsDrainState.Closing);
-                _channel.Writer.TryComplete();
-                SetState(DiagnosticsDrainState.Draining);
-                _stopTask = StopCoreAsync(_drainLoop);
+                if (Volatile.Read(ref _forcedTermination) != 0)
+                    _stopTask = Task.FromResult(new DiagnosticsDrainStopResult(DiagnosticsDrainState.TimedOut, Drained: false));
+                else
+                {
+                    _drainLoop ??= StartCore();
+                    Volatile.Write(ref _accepting, 0);
+                    SetState(DiagnosticsDrainState.Closing);
+                    _channel.Writer.TryComplete();
+                    SetState(DiagnosticsDrainState.Draining);
+                    _stopTask = StopCoreAsync(_drainLoop);
+                }
             }
 
             stopTask = _stopTask;
@@ -232,23 +244,45 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         try
         {
             await drainLoop.WaitAsync(_options.ShutdownTimeout);
-            SetState(DiagnosticsDrainState.Stopped);
-            return new(State, Drained: true);
+            lock (_lifecycleGate)
+            {
+                if (Volatile.Read(ref _forcedTermination) != 0)
+                    return new(DiagnosticsDrainState.TimedOut, Drained: false);
+                SetState(DiagnosticsDrainState.Stopped);
+            }
+            DisposeShutdownSource();
+            return new(DiagnosticsDrainState.Stopped, Drained: true);
         }
         catch (TimeoutException)
         {
-            SetState(DiagnosticsDrainState.TimedOut);
-            await _shutdown.CancelAsync();
-            FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, "The diagnostics drain exceeded its shutdown window.");
-            return new(State, Drained: false);
+            return await TransitionToTimedOutAsync(
+                drainLoop,
+                "The diagnostics drain exceeded its shutdown window.");
         }
         catch
         {
-            SetState(DiagnosticsDrainState.TimedOut);
-            await _shutdown.CancelAsync();
-            FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, "The diagnostics drain stopped before every acknowledgement completed.");
-            return new(State, Drained: false);
+            return await TransitionToTimedOutAsync(
+                drainLoop,
+                "The diagnostics drain stopped before every acknowledgement completed.");
         }
+    }
+
+    private async Task<DiagnosticsDrainStopResult> TransitionToTimedOutAsync(Task drainLoop, string message)
+    {
+        lock (_lifecycleGate)
+        {
+            if (Volatile.Read(ref _forcedTermination) != 0)
+                return new(DiagnosticsDrainState.TimedOut, Drained: false);
+            Volatile.Write(ref _forcedTermination, 1);
+            Volatile.Write(ref _accepting, 0);
+            _channel.Writer.TryComplete();
+            SetState(DiagnosticsDrainState.TimedOut);
+        }
+
+        await CancelShutdownAsync();
+        FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, message);
+        ScheduleShutdownDisposal(drainLoop);
+        return new(DiagnosticsDrainState.TimedOut, Drained: false);
     }
 
     private TimeSpan RetryDelay(int completedAttempt)
@@ -312,29 +346,70 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-            return;
-        Volatile.Write(ref _accepting, 0);
-        _channel.Writer.TryComplete();
-        SetState(DiagnosticsDrainState.TimedOut);
-        _shutdown.Cancel();
+        Task? drainLoop;
+        lock (_lifecycleGate)
+        {
+            if (State == DiagnosticsDrainState.Stopped)
+            {
+                ScheduleShutdownDisposal(_drainLoop);
+                return;
+            }
+            if (Volatile.Read(ref _forcedTermination) != 0)
+                return;
+
+            Volatile.Write(ref _forcedTermination, 1);
+            Volatile.Write(ref _accepting, 0);
+            _channel.Writer.TryComplete();
+            SetState(DiagnosticsDrainState.TimedOut);
+            _stopTask ??= Task.FromResult(new DiagnosticsDrainStopResult(DiagnosticsDrainState.TimedOut, Drained: false));
+            drainLoop = _drainLoop;
+        }
+
+        CancelShutdown();
         FailAll(DiagnosticsPersistenceLossReason.ShutdownTimeout, "The diagnostics drain was synchronously disposed before commit.");
+        ScheduleShutdownDisposal(drainLoop);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        lock (_lifecycleGate)
+            return new(_asyncDisposeTask ??= DisposeCoreAsync());
+    }
+
+    private async Task DisposeCoreAsync() => await StopAsync();
+
+    private void CancelShutdown()
+    {
+        if (Interlocked.Exchange(ref _shutdownCancellationRequested, 1) == 0)
+            _shutdown.Cancel();
+    }
+
+    private async Task CancelShutdownAsync()
+    {
+        if (Interlocked.Exchange(ref _shutdownCancellationRequested, 1) == 0)
+            await _shutdown.CancelAsync();
+    }
+
+    private void ScheduleShutdownDisposal(Task? drainLoop)
+    {
+        if (drainLoop is null || drainLoop.IsCompleted)
+        {
+            DisposeShutdownSource();
             return;
-        await StopAsync();
-        if (_drainLoop is { IsCompleted: true })
+        }
+
+        _ = drainLoop.ContinueWith(
+            static (_, state) => ((DiagnosticsDrain<TItem, TResult>)state!).DisposeShutdownSource(),
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private void DisposeShutdownSource()
+    {
+        if (Interlocked.Exchange(ref _shutdownDisposed, 1) == 0)
             _shutdown.Dispose();
-        else if (_drainLoop is { } drainLoop)
-            _ = drainLoop.ContinueWith(
-                static (_, state) => ((CancellationTokenSource)state!).Dispose(),
-                _shutdown,
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
     }
 
     private sealed class PendingItem(TItem item)

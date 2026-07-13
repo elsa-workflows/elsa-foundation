@@ -17,3 +17,23 @@ This inventory is a deletion aid, not a second contract. The provider-neutral sp
 | Subscriber backpressure is a live-feed loss, not persistence overflow | `InMemoryStructuredLogLiveFeed` and `InMemoryOpenTelemetryLiveFeed` | Existing domain drop signals mapped to `SubscriberDelivery` without moving fan-out |
 
 No current EF test is deleted or weakened in this slice. The provider-specific query, replay, retention, composition, and migration oracles remain mapped by T012–T057 before deletion.
+
+## Exact temporary evidence paths
+
+These paths are the concrete deletion checklist for T010. A later task may add stronger Groundwork
+evidence, but it must not remove an EF oracle below until its mapped conformance behavior is green.
+
+| Area | Structured Logs EF evidence | OpenTelemetry EF evidence |
+|---|---|---|
+| Query and replay implementation | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Storage/EfCoreStructuredLogStore.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Storage/EfCoreOpenTelemetryStore.cs` |
+| Query and replay tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreTests.cs` (`GetRecent*`, `ReplayPages*`, `ReadAfter*`) | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreTests.cs` (`QueryTraces*`, `QueryMetricsAndLogs*`) |
+| Retention and retry tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStoreTests.cs` (`TrimToZero*`, `DrainPrunes*`, `CompleteDrainingPrunes*`) and `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/EfCoreStructuredLogStorePruneRetryTests.cs` | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/EfCoreOpenTelemetryStoreTests.cs` (`DrainPrunesHighVolumeSignalsToConfiguredCapacities`) |
+| Composition implementation | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/EFCoreStructuredLogsPersistenceFeatureBase.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/EFCoreOpenTelemetryPersistenceFeatureBase.cs` |
+| Composition tests | `tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/SqliteStructuredLogsPersistenceFeatureTests.cs` | `tests/Elsa/Diagnostics/OpenTelemetry/Persistence/Tests/SqliteOpenTelemetryPersistenceFeatureTests.cs` |
+| Migration/schema implementation | `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Migrations/20260618004216_Initial.cs` and `src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Migrations/StructuredLogsDbContextModelSnapshot.cs` | `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Migrations/20260623005000_Initial.cs` and `src/Elsa/Diagnostics/OpenTelemetry/Persistence/EFCore/Sqlite/Migrations/OpenTelemetryDbContextModelSnapshot.cs` |
+
+The exact feature tests above are the closest composition/migration-startup evidence: each SQLite
+feature inherits the EF migration startup path and separately proves the store, lifecycle tasks, and
+DbContext factory registrations. There is no dedicated migration-shape test today; the migration and
+model-snapshot files therefore remain explicit source oracles until provider schema validation replaces
+them.

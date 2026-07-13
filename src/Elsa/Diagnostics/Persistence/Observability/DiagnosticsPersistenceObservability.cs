@@ -35,7 +35,7 @@ public interface IDiagnosticsPersistenceObserver
     void RecordState(DiagnosticsDrainState state);
     void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts);
     void RecordOperationFailure(DiagnosticsPersistenceOperation operation);
-    void RecordLoss(DiagnosticsPersistenceLossReason reason, int count);
+    void RecordLoss(DiagnosticsPersistenceLossReason reason, long count);
 }
 
 public sealed record DiagnosticsPersistenceSnapshot(
@@ -56,24 +56,46 @@ public sealed class DiagnosticsPersistenceCounters : IDiagnosticsPersistenceObse
     private long _retentionFailures;
     private int _state = (int)DiagnosticsDrainState.Created;
 
-    public void RecordState(DiagnosticsDrainState state) => Volatile.Write(ref _state, (int)state);
+    public void RecordState(DiagnosticsDrainState state)
+    {
+        ValidateDefined(state);
+        Volatile.Write(ref _state, (int)state);
+    }
 
     public void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts)
     {
+        ValidateDefined(operation);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxAttempts, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(attempt, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(attempt, maxAttempts);
-        Interlocked.Increment(ref operation == DiagnosticsPersistenceOperation.Commit
-            ? ref _commitRetries
-            : ref _retentionRetries);
+        switch (operation)
+        {
+            case DiagnosticsPersistenceOperation.Commit:
+                Interlocked.Increment(ref _commitRetries);
+                break;
+            case DiagnosticsPersistenceOperation.Retention:
+                Interlocked.Increment(ref _retentionRetries);
+                break;
+        }
     }
 
-    public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) =>
-        Interlocked.Increment(ref operation == DiagnosticsPersistenceOperation.Commit
-            ? ref _commitFailures
-            : ref _retentionFailures);
-
-    public void RecordLoss(DiagnosticsPersistenceLossReason reason, int count)
+    public void RecordOperationFailure(DiagnosticsPersistenceOperation operation)
     {
+        ValidateDefined(operation);
+        switch (operation)
+        {
+            case DiagnosticsPersistenceOperation.Commit:
+                Interlocked.Increment(ref _commitFailures);
+                break;
+            case DiagnosticsPersistenceOperation.Retention:
+                Interlocked.Increment(ref _retentionFailures);
+                break;
+        }
+    }
+
+    public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count)
+    {
+        ValidateDefined(reason);
         ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
         Interlocked.Add(ref _losses[(int)reason], count);
     }
@@ -90,6 +112,13 @@ public sealed class DiagnosticsPersistenceCounters : IDiagnosticsPersistenceObse
             Interlocked.Read(ref _retentionFailures),
             losses);
     }
+
+    private static void ValidateDefined<TEnum>(TEnum value, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string? parameterName = null)
+        where TEnum : struct, Enum
+    {
+        if (!Enum.IsDefined(value))
+            throw new ArgumentOutOfRangeException(parameterName, value, $"Unsupported {typeof(TEnum).Name} value.");
+    }
 }
 
 internal sealed class NullDiagnosticsPersistenceObserver : IDiagnosticsPersistenceObserver
@@ -98,5 +127,5 @@ internal sealed class NullDiagnosticsPersistenceObserver : IDiagnosticsPersisten
     public void RecordState(DiagnosticsDrainState state) { }
     public void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts) { }
     public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) { }
-    public void RecordLoss(DiagnosticsPersistenceLossReason reason, int count) { }
+    public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count) { }
 }

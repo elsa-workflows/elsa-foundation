@@ -1,10 +1,11 @@
 using Elsa.Diagnostics.Persistence.Draining;
 using Elsa.Diagnostics.Persistence.Observability;
+using Elsa.Diagnostics.Persistence.Tests.Fixtures;
 using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
 
-public sealed class DiagnosticsDrainValidationTests
+public sealed class DiagnosticsDrainValidationTests : DiagnosticsDrainTestBase
 {
     [Fact]
     public async Task Incomplete_commit_results_exhaust_retries_and_fail_every_acknowledgement()
@@ -13,7 +14,7 @@ public sealed class DiagnosticsDrainValidationTests
         {
             Commit = batch => new([batch.Items[0]], batch.Items.Count)
         };
-        await using var drain = CreateDrain(target);
+        var drain = CreateDrain(target);
         var first = drain.EnqueueAsync(1).AsTask();
         var second = drain.EnqueueAsync(2).AsTask();
 
@@ -30,7 +31,7 @@ public sealed class DiagnosticsDrainValidationTests
     public async Task Null_commit_results_are_invalid_and_fail_with_retry_exhaustion()
     {
         var target = new ScriptedTarget { Commit = _ => new(null!, 0) };
-        await using var drain = CreateDrain(target);
+        var drain = CreateDrain(target);
         var acknowledgement = drain.EnqueueAsync(1).AsTask();
 
         await drain.StopAsync();
@@ -44,7 +45,7 @@ public sealed class DiagnosticsDrainValidationTests
     public async Task Negative_commit_retention_units_are_invalid_and_fail_with_retry_exhaustion()
     {
         var target = new ScriptedTarget { Commit = batch => new(batch.Items.ToArray(), -1) };
-        await using var drain = CreateDrain(target);
+        var drain = CreateDrain(target);
         var acknowledgement = drain.EnqueueAsync(1).AsTask();
 
         await drain.StopAsync();
@@ -59,7 +60,7 @@ public sealed class DiagnosticsDrainValidationTests
     {
         var counters = new DiagnosticsPersistenceCounters();
         var target = new ScriptedTarget { Retention = () => -1 };
-        await using var drain = CreateDrain(target, counters);
+        var drain = CreateDrain(target, counters);
         var acknowledgement = drain.EnqueueAsync(1).AsTask();
 
         var result = await drain.StopAsync();
@@ -71,19 +72,15 @@ public sealed class DiagnosticsDrainValidationTests
         Assert.Equal(1, counters.Snapshot().RetentionFailures);
     }
 
-    private static DiagnosticsDrain<int, int> CreateDrain(
+    private DiagnosticsDrain<int, int> CreateDrain(
         ScriptedTarget target,
         IDiagnosticsPersistenceObserver? observer = null) =>
-        new(target, new()
-        {
-            BatchSize = 4,
-            QueueCapacity = 16,
-            RetentionInterval = 100,
-            MaxAttempts = 2,
-            BaseRetryDelay = TimeSpan.Zero,
-            MaxRetryDelay = TimeSpan.Zero,
-            ShutdownTimeout = TimeSpan.FromSeconds(2)
-        }, observer);
+        Fixture.Create(
+            target,
+            observer,
+            maxAttempts: 2,
+            baseRetryDelay: TimeSpan.Zero,
+            maxRetryDelay: TimeSpan.Zero);
 
     private sealed class ScriptedTarget : IDiagnosticsDrainTarget<int, int>
     {

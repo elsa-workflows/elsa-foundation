@@ -5,13 +5,13 @@ using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
 
-public sealed class DiagnosticsDrainLoadTests
+public sealed class DiagnosticsDrainLoadTests : DiagnosticsDrainTestBase
 {
     [Fact]
     public async Task Concurrent_producers_complete_every_accepted_acknowledgement()
     {
         var target = new DiagnosticsFailureTarget();
-        await using var drain = CreateDrain(target, queueCapacity: 512, batchSize: 25);
+        var drain = Fixture.Create(target, queueCapacity: 512, batchSize: 25);
         drain.Start();
 
         var acknowledgements = Enumerable.Range(1, 200)
@@ -33,7 +33,7 @@ public sealed class DiagnosticsDrainLoadTests
     public async Task Overflow_sheds_the_oldest_item_and_settles_its_acknowledgement()
     {
         var counters = new DiagnosticsPersistenceCounters();
-        await using var drain = CreateDrain(new(), queueCapacity: 2, observer: counters);
+        var drain = Fixture.Create(new DiagnosticsFailureTarget(), counters, queueCapacity: 2);
         Assert.True(drain.TryEnqueue(1, out var first));
         Assert.True(drain.TryEnqueue(2, out var second));
         Assert.True(drain.TryEnqueue(3, out var third));
@@ -54,7 +54,7 @@ public sealed class DiagnosticsDrainLoadTests
         {
             Failure = (batch, _) => batch.Items[0] == 1 ? new DiagnosticsOperationalException("persistently unavailable") : null
         };
-        await using var drain = CreateDrain(target, batchSize: 1, observer: counters);
+        var drain = Fixture.Create(target, counters, batchSize: 1);
         drain.Start();
 
         var failed = drain.EnqueueAsync(1).AsTask();
@@ -70,19 +70,4 @@ public sealed class DiagnosticsDrainLoadTests
         Assert.Equal(1, snapshot.Losses[DiagnosticsPersistenceLossReason.RetryExhausted]);
     }
 
-    private static DiagnosticsDrain<int, int> CreateDrain(
-        DiagnosticsFailureTarget target,
-        int queueCapacity = 16,
-        int batchSize = 4,
-        IDiagnosticsPersistenceObserver? observer = null) =>
-        new(target, new()
-        {
-            BatchSize = batchSize,
-            QueueCapacity = queueCapacity,
-            RetentionInterval = 100,
-            MaxAttempts = 3,
-            BaseRetryDelay = TimeSpan.FromMilliseconds(1),
-            MaxRetryDelay = TimeSpan.FromMilliseconds(2),
-            ShutdownTimeout = TimeSpan.FromSeconds(2)
-        }, observer);
 }

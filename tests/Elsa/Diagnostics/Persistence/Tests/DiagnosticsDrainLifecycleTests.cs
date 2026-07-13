@@ -5,13 +5,13 @@ using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
 
-public sealed class DiagnosticsDrainLifecycleTests
+public sealed class DiagnosticsDrainLifecycleTests : DiagnosticsDrainTestBase
 {
     [Fact]
     public async Task Accepted_item_completes_only_after_authoritative_commit()
     {
         var target = new DiagnosticsFailureTarget { CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
-        await using var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         drain.Start();
 
         Assert.True(drain.TryEnqueue(42, out var acknowledgement));
@@ -27,7 +27,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Acknowledgement_loss_retries_the_same_batch_identity_and_returns_original_result()
     {
         var target = new DiagnosticsFailureTarget { LoseFirstAcknowledgement = true };
-        await using var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         drain.Start();
         var acknowledgement = drain.EnqueueAsync(7).AsTask();
 
@@ -43,7 +43,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Caller_cancellation_does_not_abandon_an_accepted_acknowledgement()
     {
         var target = new DiagnosticsFailureTarget { CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
-        await using var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         drain.Start();
         using var cancellation = new CancellationTokenSource();
         var callerWait = drain.EnqueueAsync(9, cancellation.Token).AsTask();
@@ -61,7 +61,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Writes_after_closure_are_rejected_with_an_explicit_loss_reason()
     {
         var counters = new DiagnosticsPersistenceCounters();
-        await using var drain = CreateDrain(new(), counters);
+        var drain = Fixture.Create(new DiagnosticsFailureTarget(), counters);
         drain.Start();
         await drain.StopAsync();
 
@@ -75,7 +75,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Async_disposal_gracefully_drains_and_is_idempotent()
     {
         var target = new DiagnosticsFailureTarget();
-        var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         var acknowledgement = drain.EnqueueAsync(11).AsTask();
 
         await drain.DisposeAsync();
@@ -89,7 +89,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Synchronous_disposal_settles_queued_acknowledgements_and_is_idempotent()
     {
         var counters = new DiagnosticsPersistenceCounters();
-        var drain = CreateDrain(new(), counters);
+        var drain = Fixture.Create(new DiagnosticsFailureTarget(), counters);
         Assert.True(drain.TryEnqueue(12, out var acknowledgement));
 
         drain.Dispose();
@@ -104,7 +104,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     [Fact]
     public async Task Graceful_stop_followed_by_synchronous_disposal_preserves_stopped()
     {
-        var drain = CreateDrain(new());
+        var drain = Fixture.Create(new DiagnosticsFailureTarget());
         drain.Start();
         var result = await drain.StopAsync();
 
@@ -117,7 +117,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     [Fact]
     public async Task Synchronous_then_asynchronous_disposal_is_safe_and_preserves_timeout()
     {
-        var drain = CreateDrain(new());
+        var drain = Fixture.Create(new DiagnosticsFailureTarget());
         Assert.True(drain.TryEnqueue(13, out var acknowledgement));
 
         drain.Dispose();
@@ -136,7 +136,7 @@ public sealed class DiagnosticsDrainLifecycleTests
             CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously),
             IgnoreCancellation = true
         };
-        var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         drain.Start();
         Assert.True(drain.TryEnqueue(14, out var acknowledgement));
         await target.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -160,7 +160,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     [Fact]
     public async Task Repeated_start_is_idempotent_while_running_but_late_start_is_rejected()
     {
-        await using var drain = CreateDrain(new());
+        var drain = Fixture.Create(new DiagnosticsFailureTarget());
         drain.Start();
         drain.Start();
         await drain.StopAsync();
@@ -172,7 +172,7 @@ public sealed class DiagnosticsDrainLifecycleTests
     public async Task Cancelled_stop_wait_can_reenter_the_same_terminal_transition()
     {
         var target = new DiagnosticsFailureTarget { CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously) };
-        await using var drain = CreateDrain(target);
+        var drain = Fixture.Create(target);
         drain.Start();
         Assert.True(drain.TryEnqueue(16, out var acknowledgement));
         await target.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -189,19 +189,60 @@ public sealed class DiagnosticsDrainLifecycleTests
         Assert.Equal(DiagnosticsDrainState.Stopped, result.State);
     }
 
-    private static DiagnosticsDrain<int, int> CreateDrain(
-        DiagnosticsFailureTarget target,
-        IDiagnosticsPersistenceObserver? observer = null) =>
-        new(target, Options(), observer);
-
-    private static DiagnosticsDrainOptions Options() => new()
+    [Fact]
+    public async Task Concurrent_synchronous_and_asynchronous_disposal_share_one_timeout_outcome()
     {
-        BatchSize = 4,
-        QueueCapacity = 16,
-        RetentionInterval = 100,
-        MaxAttempts = 3,
-        BaseRetryDelay = TimeSpan.FromMilliseconds(1),
-        MaxRetryDelay = TimeSpan.FromMilliseconds(4),
-        ShutdownTimeout = TimeSpan.FromSeconds(2)
-    };
+        var target = new DiagnosticsFailureTarget
+        {
+            CommitRelease = new(TaskCreationOptions.RunContinuationsAsynchronously),
+            IgnoreCancellation = true
+        };
+        var drain = Fixture.Create(target);
+        drain.Start();
+        Assert.True(drain.TryEnqueue(17, out var acknowledgement));
+        await target.CommitEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var asyncDisposals = Enumerable.Range(0, 4)
+            .Select(_ => Task.Run(async () => await drain.DisposeAsync()))
+            .ToArray();
+        var syncDisposals = Enumerable.Range(0, 4)
+            .Select(_ => Task.Run(drain.Dispose))
+            .ToArray();
+        await Task.WhenAll(syncDisposals);
+        target.CommitRelease.SetResult();
+        await Task.WhenAll(asyncDisposals);
+        var stop = await drain.StopAsync();
+
+        Assert.False(stop.Drained);
+        Assert.Equal(DiagnosticsDrainState.TimedOut, stop.State);
+        Assert.Equal(DiagnosticsDrainState.TimedOut, drain.State);
+        Assert.Equal(DiagnosticsPersistenceLossReason.ShutdownTimeout,
+            (await Assert.ThrowsAsync<DiagnosticsDrainException>(() => acknowledgement)).Reason);
+    }
+
+    [Fact]
+    public async Task Observer_failure_cannot_break_persistence_or_terminal_state()
+    {
+        var drain = Fixture.Create(new DiagnosticsFailureTarget(), new ThrowingObserver());
+        drain.Start();
+        var acknowledgement = drain.EnqueueAsync(18).AsTask();
+
+        var stop = await drain.StopAsync();
+
+        Assert.Equal(18, await acknowledgement);
+        Assert.True(stop.Drained);
+        Assert.Equal(DiagnosticsDrainState.Stopped, stop.State);
+    }
+
+    private sealed class ThrowingObserver : IDiagnosticsPersistenceObserver
+    {
+        public void RecordState(DiagnosticsDrainState state) => throw new InvalidOperationException("observer unavailable");
+        public void RecordRetry(DiagnosticsPersistenceOperation operation, int attempt, int maxAttempts) =>
+            throw new InvalidOperationException("observer unavailable");
+        public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) =>
+            throw new InvalidOperationException("observer unavailable");
+        public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count) =>
+            throw new InvalidOperationException("observer unavailable");
+    }
+
 }

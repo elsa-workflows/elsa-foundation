@@ -51,13 +51,41 @@ public sealed class DiagnosticsPersistenceArchitectureTests
     }
 
     [Fact]
-    public void Registration_surface_separates_default_from_explicit_selection()
+    public void Default_and_explicit_registration_have_order_independent_selection_semantics()
     {
-        var defaultRegistration = typeof(DiagnosticsPersistenceRegistration)
-            .GetMethods()
-            .SingleOrDefault(method => method.Name == "AddDefaultDiagnosticsStore");
+        var defaultThenExplicit = new ServiceCollection();
+        defaultThenExplicit.AddDefaultDiagnosticsStore<ITestStore, FirstStore>();
+        defaultThenExplicit.ReplaceDiagnosticsStore<ITestStore, ReplacementStore>();
+        using var firstProvider = defaultThenExplicit.BuildServiceProvider();
 
-        Assert.NotNull(defaultRegistration);
+        var explicitThenDefault = new ServiceCollection();
+        explicitThenDefault.ReplaceDiagnosticsStore<ITestStore, ReplacementStore>();
+        explicitThenDefault.AddDefaultDiagnosticsStore<ITestStore, FirstStore>();
+        using var secondProvider = explicitThenDefault.BuildServiceProvider();
+
+        Assert.IsType<ReplacementStore>(firstProvider.GetRequiredService<ITestStore>());
+        Assert.IsType<ReplacementStore>(secondProvider.GetRequiredService<ITestStore>());
+        Assert.Single(defaultThenExplicit, descriptor => descriptor.ServiceType == typeof(ITestStore));
+        Assert.Single(explicitThenDefault, descriptor => descriptor.ServiceType == typeof(ITestStore));
+    }
+
+    [Fact]
+    public void Repeated_default_registration_and_preexisting_contract_remain_non_overriding()
+    {
+        var repeatedDefault = new ServiceCollection();
+        repeatedDefault.AddDefaultDiagnosticsStore<ITestStore, FirstStore>();
+        repeatedDefault.AddDefaultDiagnosticsStore<ITestStore, SecondStore>();
+        using var firstProvider = repeatedDefault.BuildServiceProvider();
+
+        var preexisting = new ServiceCollection();
+        preexisting.AddSingleton<ITestStore, ReplacementStore>();
+        preexisting.AddDefaultDiagnosticsStore<ITestStore, FirstStore>();
+        using var secondProvider = preexisting.BuildServiceProvider();
+
+        Assert.IsType<FirstStore>(firstProvider.GetRequiredService<ITestStore>());
+        Assert.IsType<ReplacementStore>(secondProvider.GetRequiredService<ITestStore>());
+        Assert.Single(repeatedDefault, descriptor => descriptor.ServiceType == typeof(ITestStore));
+        Assert.Single(preexisting, descriptor => descriptor.ServiceType == typeof(ITestStore));
     }
 
     private interface ITestStore;

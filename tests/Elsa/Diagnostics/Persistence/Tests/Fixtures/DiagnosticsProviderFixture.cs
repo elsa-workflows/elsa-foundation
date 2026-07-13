@@ -45,7 +45,7 @@ public sealed class DiagnosticsProviderFixture : IAsyncLifetime
         .WithUsername("postgres")
         .WithPassword("postgres")
         .Build();
-    private readonly MongoDbContainer _mongoDb = new MongoDbBuilder("mongo:8.0")
+    private readonly MongoDbContainer _mongoDb = new MongoDbBuilder("mongo:7.0.37")
         .WithReplicaSet("rs0")
         .Build();
     private readonly ConcurrentBag<string> _sqliteFiles = [];

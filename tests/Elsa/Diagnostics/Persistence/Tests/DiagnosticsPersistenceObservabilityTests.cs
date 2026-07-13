@@ -60,16 +60,32 @@ public sealed class DiagnosticsPersistenceObservabilityTests
     }
 
     [Fact]
-    public void Production_subscriber_delivery_bridge_is_available_for_existing_live_feed_signals()
+    public void Existing_live_feed_signals_are_classified_through_the_production_bridge()
     {
-        var bridge = typeof(DiagnosticsPersistenceCounters).Assembly.GetType(
-            "Elsa.Diagnostics.Persistence.Observability.DiagnosticsSubscriberDeliveryLossBridge");
+        var counters = new DiagnosticsPersistenceCounters();
+        var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
 
-        Assert.NotNull(bridge);
-        Assert.Contains(bridge.GetMethods(), method =>
-            method.GetParameters().SingleOrDefault()?.ParameterType == typeof(DroppedEntriesSignal));
-        Assert.Contains(bridge.GetMethods(), method =>
-            method.GetParameters().SingleOrDefault()?.ParameterType == typeof(OpenTelemetryDroppedItemSummary));
+        bridge.Record(new DroppedEntriesSignal(4, DateTimeOffset.UnixEpoch));
+        bridge.Record(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Trace, 3, "SubscriberQueueFull"));
+
+        Assert.Equal(7, counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
+    }
+
+    [Fact]
+    public void Subscriber_delivery_bridge_validates_dependencies_signals_and_counts_without_truncation()
+    {
+        Assert.Throws<ArgumentNullException>(() => new DiagnosticsSubscriberDeliveryLossBridge(null!));
+        var counters = new DiagnosticsPersistenceCounters();
+        var bridge = new DiagnosticsSubscriberDeliveryLossBridge(counters);
+
+        Assert.Throws<ArgumentNullException>(() => bridge.Record((DroppedEntriesSignal)null!));
+        Assert.Throws<ArgumentNullException>(() => bridge.Record((OpenTelemetryDroppedItemSummary)null!));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            bridge.Record(new DroppedEntriesSignal(0, DateTimeOffset.UnixEpoch)));
+        bridge.Record(new OpenTelemetryDroppedItemSummary(OpenTelemetrySignalType.Log, 3_000_000_000, "SubscriberQueueFull"));
+
+        Assert.Equal(3_000_000_000,
+            counters.Snapshot().Losses[DiagnosticsPersistenceLossReason.SubscriberDelivery]);
     }
 
     [Fact]
