@@ -168,6 +168,76 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
     }
 
+    [Fact]
+    public void Version_one_deconstruction_preserves_the_exact_contract_and_equal_aliases()
+    {
+        var responseType = typeof(Models.ExecutableSourceReferenceView);
+        var deconstruct = Assert.Single(
+            responseType.GetMethods(BindingFlags.Public | BindingFlags.Instance),
+            method => method.Name == "Deconstruct" && method.GetParameters().Length == 18);
+        var parameters = deconstruct.GetParameters();
+        Assert.Equal(
+            [
+                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
+                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
+                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
+            ],
+            parameters.Select(parameter => parameter.Name));
+        Assert.Equal(
+            [
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
+                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
+            ],
+            parameters.Select(parameter => parameter.ParameterType.GetElementType()));
+        Assert.All(parameters, parameter => Assert.True(parameter.IsOut));
+        var obsolete = Assert.Single(deconstruct.GetCustomAttributes<ObsoleteAttribute>());
+        Assert.False(obsolete.IsError);
+        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
+
+        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
+#pragma warning disable CS0618 // The obsolete v1 deconstructor is the source compatibility contract under test.
+        var (
+            sourceReferenceId,
+            artifactId,
+            scope,
+            sourceType,
+            sourceKind,
+            sourceId,
+            sourceVersion,
+            definitionId,
+            definitionVersionId,
+            artifactVersion,
+            publicationId,
+            slotId,
+            createdAt,
+            publishedAt,
+            expiresAt,
+            deletedAt,
+            deletedReason,
+            live) = view;
+#pragma warning restore CS0618
+
+        Assert.Equal("reference-v1", sourceReferenceId);
+        Assert.Equal("artifact-v1", artifactId);
+        Assert.Equal("Published", scope);
+        Assert.Equal("WorkflowDefinitionVersion", sourceType);
+        Assert.Equal(sourceKind, sourceType);
+        Assert.Equal("definition-version-v1", sourceId);
+        Assert.Equal("1.0.0", sourceVersion);
+        Assert.Equal("definition-v1", definitionId);
+        Assert.Equal("definition-version-v1", definitionVersionId);
+        Assert.Equal("1.0.0", artifactVersion);
+        Assert.Null(publicationId);
+        Assert.Null(slotId);
+        Assert.Equal(_now, createdAt);
+        Assert.Equal(_now, publishedAt);
+        Assert.Null(expiresAt);
+        Assert.Null(deletedAt);
+        Assert.Null(deletedReason);
+        Assert.True(live);
+    }
+
     [Theory]
     [InlineData("runtime/workflows/executables")]
     [InlineData("runtime/workflows/executables/{artifactId}")]

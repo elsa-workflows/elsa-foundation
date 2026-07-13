@@ -87,6 +87,48 @@ public sealed record ExecutableSourceReferenceView(
     {
     }
 
+    /// <summary>Runtime API v1 deconstructor retained for source and binary compatibility.</summary>
+    [Obsolete("The sourceType deconstruction output is retained for Runtime API v1 compatibility and will be removed in Runtime API v2. Use the sourceKind deconstruction overload.")]
+    public void Deconstruct(
+        out string SourceReferenceId,
+        out string ArtifactId,
+        out string Scope,
+        out string? SourceType,
+        out string? SourceKind,
+        out string? SourceId,
+        out string? SourceVersion,
+        out string DefinitionId,
+        out string DefinitionVersionId,
+        out string ArtifactVersion,
+        out string? PublicationId,
+        out string? SlotId,
+        out DateTimeOffset CreatedAt,
+        out DateTimeOffset? PublishedAt,
+        out DateTimeOffset? ExpiresAt,
+        out DateTimeOffset? DeletedAt,
+        out string? DeletedReason,
+        out bool Live)
+    {
+        SourceReferenceId = this.SourceReferenceId;
+        ArtifactId = this.ArtifactId;
+        Scope = this.Scope;
+        SourceType = this.SourceKind;
+        SourceKind = this.SourceKind;
+        SourceId = this.SourceId;
+        SourceVersion = this.SourceVersion;
+        DefinitionId = this.DefinitionId;
+        DefinitionVersionId = this.DefinitionVersionId;
+        ArtifactVersion = this.ArtifactVersion;
+        PublicationId = this.PublicationId;
+        SlotId = this.SlotId;
+        CreatedAt = this.CreatedAt;
+        PublishedAt = this.PublishedAt;
+        ExpiresAt = this.ExpiresAt;
+        DeletedAt = this.DeletedAt;
+        DeletedReason = this.DeletedReason;
+        Live = this.Live;
+    }
+
     public static ExecutableSourceReferenceView From(WorkflowExecutableSourceReference reference, DateTimeOffset now) =>
         new(
             reference.SourceReferenceId,
