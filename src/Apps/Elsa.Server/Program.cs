@@ -17,6 +17,7 @@ using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Sequence;
+using Elsa.Api.Capabilities;
 using Elsa.Agent.Api;
 using Elsa.Agent.Core;
 using Elsa.Agent.GitHubCopilot;
@@ -28,6 +29,7 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite;
 using Elsa.Events;
 using Elsa.Expressions;
+using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Abstractions;
 using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
@@ -159,6 +161,8 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(MediatorFeature).Assembly,
             typeof(EventsFeature).Assembly,
             typeof(ExpressionsFeature).Assembly,
+            typeof(ApiCapabilitiesFeature).Assembly,
+            typeof(ExpressionsApiFeature).Assembly,
 
             // JavaScript expression + activity feature assemblies. Listing them here makes their features
             // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
@@ -279,7 +283,6 @@ app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-serve
 app.MapElsaModuleManagementApi();
 if (extensionBuilderEnabled)
     app.MapElsaExtensionBuilderApi();
-app.MapElsaWorkflowManagementApi();
 app.MapShells();
 
 // Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps
