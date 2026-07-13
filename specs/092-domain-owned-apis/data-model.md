@@ -1,6 +1,6 @@
 # Data Model: Domain-Owned Management APIs
 
-This document defines the durable and wire-level models needed by spec 091. Type names are proposals;
+This document defines the durable and wire-level models needed by spec 092. Type names are proposals;
 the ownership, identities, state transitions, and invariants are normative.
 
 ## Ownership summary

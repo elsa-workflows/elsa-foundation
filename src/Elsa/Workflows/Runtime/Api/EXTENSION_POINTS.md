@@ -16,4 +16,4 @@ The Runtime API also dispatches through the engine contracts composed by `AddWor
 
 Optional stimulus/trigger providers are additive contributors to Runtime routing. Executable/reference/execution stores are single-owner persistence ports and must be replaced deliberately.
 
-Canonical ownership and retention rules are defined in the [domain-owned API spec](../../../../../specs/091-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+Canonical ownership and retention rules are defined in the [domain-owned API spec](../../../../../specs/092-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).

@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -161,7 +162,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         try
         {
             await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
-            var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, unitOfWork);
+            var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, _commitLedger.Access, unitOfWork);
             var stores = GroundworkApplyStores.Create(transactionalStore, _serializer);
             await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
@@ -455,9 +456,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
     private sealed class DocumentUnitOfWorkStore(
         TransactionBoundary transactionBoundary,
+        DocumentStoreAccess access,
         IDocumentUnitOfWork unitOfWork) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => transactionBoundary;
+        public DocumentStoreAccess Access => access;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             unitOfWork.SaveAsync(request, cancellationToken);

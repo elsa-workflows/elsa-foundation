@@ -2,7 +2,7 @@
 
 ## Disposition
 
-Spec 091 is implemented across Foundation and Studio. The normative design remains in `spec.md`; the
+spec 092 is implemented across Foundation and Studio. The normative design remains in `spec.md`; the
 OpenAPI document is the wire contract, `migration-matrix.md` records the facade disposition, the ADRs
 record durable architectural decisions, and this audit records implementation and validation evidence.
 
@@ -11,7 +11,7 @@ Coordinated implementation revisions:
 - Foundation implementation baseline: `753b8987`
 - Studio implementation revision: `fbf49fc0`
 
-The Foundation completion-audit commit follows the implementation baseline and changes only Spec 091
+The Foundation completion-audit commit follows the implementation baseline and changes only spec 092
 completion evidence/task state.
 
 ## Functional requirement evidence

@@ -11,4 +11,4 @@ Providers are additive Sources. Duplicate stable identifiers must be treated acc
 
 Evaluation handlers and language-specific seams are outside the API boundary. Their full contracts and shipped implementations are documented in the [Expressions domain extension catalog](../EXTENSION_POINTS.md).
 
-Canonical ownership is defined in the [domain-owned API spec](../../../../specs/091-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../docs/glossary/elsa.md).
+Canonical ownership is defined in the [domain-owned API spec](../../../../specs/092-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../docs/glossary/elsa.md).

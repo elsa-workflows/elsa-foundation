@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Concurrency contract for spec 091's artifact staging grace and provider-backed deletion guard.
+/// Concurrency contract for spec 092's artifact staging grace and provider-backed deletion guard.
 /// </summary>
 public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
 {

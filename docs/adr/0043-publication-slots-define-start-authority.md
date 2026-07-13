@@ -4,7 +4,7 @@ Status: accepted (2026-07-13)
 
 Related decisions: ADR 0038 (content-addressed executable identity), ADR 0039 (layout on source
 references), and ADR 0040 (reference- and execution-derived artifact lifetime).
-Plan of record: `specs/091-domain-owned-apis/`.
+Plan of record: `specs/092-domain-owned-apis/`.
 
 ## Context
 

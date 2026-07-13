@@ -168,6 +168,14 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
     {
     }
 
+    /// <summary>
+    /// Invoked when the drain loop exits, including a hard-cancel shutdown. Derived stores use this to
+    /// complete any caller-visible acknowledgements that would otherwise remain pending forever.
+    /// </summary>
+    protected virtual void OnDrainStopped()
+    {
+    }
+
     /// <summary>Logs the rate-limited shed warning with the total items shed since startup.</summary>
     protected abstract void LogShedWarning(long totalShed);
 
@@ -203,6 +211,10 @@ public abstract class ChannelDrainingStoreBase<TItem> : IDisposable, IAsyncDispo
         catch (OperationCanceledException)
         {
             // Shutdown requested.
+        }
+        finally
+        {
+            OnDrainStopped();
         }
     }
 

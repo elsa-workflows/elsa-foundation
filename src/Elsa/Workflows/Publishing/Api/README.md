@@ -86,5 +86,5 @@ The version route excludes the reserved literal `drafts`, so the two test-run ro
   observer; Publishing does not reference the HTTP or Scheduling modules.
 
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
-and [the feature quickstart](../../../../../specs/091-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
+and [the feature quickstart](../../../../../specs/092-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
 replacement scenario.

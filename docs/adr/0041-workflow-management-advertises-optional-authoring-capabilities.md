@@ -5,7 +5,7 @@ Status: superseded (2026-07-13)
 ## Supersession
 
 This decision was superseded by the domain-owned management API design in
-[`specs/091-domain-owned-apis`](../../specs/091-domain-owned-apis/spec.md). The host-owned workflow-management
+[`specs/092-domain-owned-apis`](../../specs/092-domain-owned-apis/spec.md). The host-owned workflow-management
 facade and its boolean capability response were removed before release.
 
 The replacement is the authenticated, shell-scoped `GET /capabilities` contract owned by

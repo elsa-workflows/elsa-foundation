@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Persistence.Groundwork.Tests;
 
 /// <summary>
-/// Provider-neutral retained-executable-root contract for workflow execution persistence (spec 091, FR-062..066).
+/// Provider-neutral retained-executable-root contract for workflow execution persistence (spec 092, FR-062..066).
 /// These tests intentionally lead the production contract: they remain red until
 /// <see cref="IWorkflowExecutionStateStore"/> exposes distinct pinned-artifact lookup and retained-state removal.
 /// </summary>

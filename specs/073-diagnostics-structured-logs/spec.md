@@ -23,6 +23,15 @@ This slice delivers an in-memory bounded store (recent buffer) and the live feed
 - Q: How much of each log event to capture? → A: Core fields (level/category/timestamp) + rendered message + exception + a bounded set of structured properties and scopes, with a configurable size cap.
 - Q: Server/Studio dual-host parity in this slice? → A: Keep the feature host-agnostic and target Elsa.Server now; Studio-host parity (for a Server/Studio toggle) is deferred to the studio slice.
 
+### Session 2026-07-12 — issue #635
+
+- Q: What is the reconnect identity under multiple writers? → A: A versioned, source-qualified opaque
+  committed-store cursor. `Sequence` is display-only and may repeat.
+- Q: How does replay join live delivery? → A: SSE payloads come only from bounded durable read-after pages.
+  The process-local feed is a wake hint; bounded polling discovers commits from other processes.
+- Q: How are stale or mismatched cursors reported? → A: Malformed, expired/trimmed, wrong-scope,
+  wrong-stream, and wrong-source values share one non-disclosing `409 Conflict` response.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Live-tail structured logs (Priority: P1)

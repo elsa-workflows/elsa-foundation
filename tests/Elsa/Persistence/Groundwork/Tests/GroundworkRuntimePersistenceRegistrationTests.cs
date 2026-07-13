@@ -111,12 +111,13 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     [Fact]
     public async Task Sqlite_Feature_Wires_DocumentStore_And_Bridge()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddWorkflowRuntime();
 
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -138,8 +139,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
            // resolving thread), and the store is fully usable only after the startup initializer has run.
     public async Task Sqlite_Store_Throws_Before_Init_Then_Is_Usable_After()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -160,8 +162,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     [Fact] // Running the startup step twice is a no-op: the store is materialized once and the singleton is stable.
     public async Task Sqlite_Store_Initialization_Is_Idempotent()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -222,4 +225,17 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Metadata: new Dictionary<string, string>(),
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
+
+    private sealed class TemporarySqliteDatabase : IAsyncDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-registration-{Guid.NewGuid():N}.db");
+
+        public string ConnectionString => $"Data Source={_path}";
+
+        public ValueTask DisposeAsync()
+        {
+            File.Delete(_path);
+            return ValueTask.CompletedTask;
+        }
+    }
 }

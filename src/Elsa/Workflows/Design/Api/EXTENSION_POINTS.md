@@ -4,7 +4,7 @@
 
 `WorkflowsDesignApiFeature` composes the canonical Workflow Design management-client slice described in [README.md](README.md). Its endpoints are host-independent and have no `Elsa.Server` dependency. This catalog covers the seams behind those endpoints; it does not make mediator handlers or API response projections extension points.
 
-The authoring endpoints resolve `IActivityInputOptionsProvider` contributions and traverse authored structures through `IActivityStructureService`. Definition and draft endpoints depend on the provider-neutral stores and commands listed below. Replace a single-owner store/command deliberately; add keyed providers and structure handlers as contributors. Canonical ownership and terminology remain in the [domain-owned API spec](../../../../../specs/091-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md).
+The authoring endpoints resolve `IActivityInputOptionsProvider` contributions and traverse authored structures through `IActivityStructureService`. Definition and draft endpoints depend on the provider-neutral stores and commands listed below. Replace a single-owner store/command deliberately; add keyed providers and structure handlers as contributors. Canonical ownership and terminology remain in the [domain-owned API spec](../../../../../specs/092-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md).
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the Workflows.Design domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Api` — the composition root where `WorkflowsDesignApiFeature` wires the default implementations and aggregating handlers. Three sections:
 

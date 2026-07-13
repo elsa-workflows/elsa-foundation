@@ -45,9 +45,9 @@ The canonical areas are Workflow Design, Activity Design, Expressions, Publishin
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 
-See the [domain-owned API specification](specs/091-domain-owned-apis/spec.md),
-[OpenAPI contract](specs/091-domain-owned-apis/contracts/management-api.openapi.yaml), and
-[validation quickstart](specs/091-domain-owned-apis/quickstart.md) for composition and compatibility details.
+See the [domain-owned API specification](specs/092-domain-owned-apis/spec.md),
+[OpenAPI contract](specs/092-domain-owned-apis/contracts/management-api.openapi.yaml), and
+[validation quickstart](specs/092-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
 ## Run with Docker
 

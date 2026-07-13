@@ -5,7 +5,7 @@ An authenticated `GET /capabilities` returns one caller-neutral document contain
 contracts explicitly declared by the shell's active domain API features.
 
 The distinction between an internal composition feature and a client-visible API capability is defined in
-the [feature specification](../../../../specs/091-domain-owned-apis/spec.md). Capability IDs are stable public
+the [feature specification](../../../../specs/092-domain-owned-apis/spec.md). Capability IDs are stable public
 promises; they are never inferred from CLR types, feature names, service registrations, or route discovery.
 
 ## Composition
@@ -37,5 +37,5 @@ mutate static feature metadata. See [the extension-point catalog](EXTENSION_POIN
 compatibility obligations.
 
 The normative wire shape and multi-shell examples live in the
-[management API contract](../../../../specs/091-domain-owned-apis/contracts/management-api.openapi.yaml) and
-[quickstart](../../../../specs/091-domain-owned-apis/quickstart.md).
+[management API contract](../../../../specs/092-domain-owned-apis/contracts/management-api.openapi.yaml) and
+[quickstart](../../../../specs/092-domain-owned-apis/quickstart.md).

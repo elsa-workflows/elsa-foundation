@@ -2,7 +2,7 @@
 
 `Elsa.Workflows.Design.Api` is the supported management-client slice for authored workflows. It owns workflow definitions, first-class drafts, immutable Design versions, scoped-variable analysis, and context-sensitive activity input options. Publishing and executable inspection belong to their respective domain APIs.
 
-The ownership and lifecycle rules are specified in [`specs/091-domain-owned-apis`](../../../../../specs/091-domain-owned-apis/spec.md). Terms such as *feature*, *API capability*, *draft*, and *workflow executable* are defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+The ownership and lifecycle rules are specified in [`specs/092-domain-owned-apis`](../../../../../specs/092-domain-owned-apis/spec.md). Terms such as *feature*, *API capability*, *draft*, and *workflow executable* are defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
 
 ## Composition
 

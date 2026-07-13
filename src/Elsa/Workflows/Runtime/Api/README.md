@@ -2,7 +2,7 @@
 
 `Elsa.Workflows.Runtime.Api` owns supported management-client operations over runtime state: immutable workflow executables, read-only executable provenance, workflow execution and instance inspection, stimulus dispatch, and runtime diagnostics settings. Design authoring and publication/source-reference mutation belong to their own domains.
 
-See the [domain-owned API specification](../../../../../specs/091-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md) for the lifecycle and ownership model.
+See the [domain-owned API specification](../../../../../specs/092-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md) for the lifecycle and ownership model.
 
 ## Composition
 

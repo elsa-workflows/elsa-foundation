@@ -82,7 +82,9 @@
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj" />
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj" />
   </Folder>
-  <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/Persistence/" />
+  <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/Persistence/">
+    <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.csproj" />
+  </Folder>
   <Folder Name="/src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/">
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.csproj" />
     <Project Path="src/Elsa/Diagnostics/StructuredLogs/Persistence/EFCore/Sqlite/Elsa.Diagnostics.StructuredLogs.Persistence.EFCore.Sqlite.csproj" />
@@ -327,6 +329,9 @@
   </Folder>
   <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/">
     <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/">
+    <Project Path="tests/Elsa/Diagnostics/StructuredLogs/Persistence/Groundwork/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.Groundwork.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Elsa/Expressions/">
     <Project Path="tests/Elsa/Expressions/Tests/Elsa.Expressions.Tests.csproj" />

@@ -1,9 +1,9 @@
 # One Artifact Store with Reference-Derived Lifetime
 
 Status: accepted (2026-07-10; ratified in the same grilling session as ADR 0038)
-Amended: 2026-07-13 by spec 091 to include retained workflow-execution roots and race-safe GC
+Amended: 2026-07-13 by spec 092 to include retained workflow-execution roots and race-safe GC
 Plan of record: `docs/plans/content-addressed-executables-and-inspector.md` and
-`specs/091-domain-owned-apis/`
+`specs/092-domain-owned-apis/`
 
 The transient test-run executable store is retired: all executables live in a single content-addressed
 store, scope and expiry move to the Source Reference, and artifact lifetime is derived from reference

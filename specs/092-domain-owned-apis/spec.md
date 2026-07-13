@@ -2,7 +2,7 @@
 
 **Feature Branch**: `598-domain-owned-apis`
 **Created**: 2026-07-13
-**Status**: Draft
+**Status**: Implemented and verified (2026-07-13)
 **Input**: Replace the `Elsa.Server` workflow-management facade with capability-discovered, domain-owned APIs; correct executable retention and publication lifecycle semantics; and migrate Elsa Studio as a coordinated delivery.
 
 ## Scope and Authority

@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
@@ -474,6 +475,7 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         private int _relevantLoadCount;
 
         public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+        public DocumentStoreAccess Access => inner.Access;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(request, cancellationToken);

@@ -36,8 +36,8 @@ public sealed class EfCoreStructuredLogStoreResilienceTests : IDisposable
 
         // The loop must survive the drop: a subsequent batch persists normally.
         store.Append(TestEntries.Create(sequence: 2, message: "survivor"));
-        var persisted = await WaitForConditionAsync(() => CountRows() == 1);
-        Assert.True(persisted, $"Expected the follow-up batch to persist, found {CountRows()} rows.");
+        var persisted = await WaitForConditionAsync(() => CountRows("survivor") == 1);
+        Assert.True(persisted, $"Expected the follow-up batch to persist, found {CountRows("survivor")} matching rows.");
 
         var retries = _logger.Snapshot().Count(x => x.Level == LogLevel.Debug && x.Message.Contains("Transient failure persisting"));
         Assert.Equal(8, retries);
@@ -57,10 +57,10 @@ public sealed class EfCoreStructuredLogStoreResilienceTests : IDisposable
         Assert.Contains("shedding the oldest queued entry", warning.Message);
     }
 
-    private int CountRows()
+    private int CountRows(string message)
     {
         using var db = _host.CreateDbContext();
-        return db.StructuredLogEntries.Count();
+        return db.StructuredLogEntries.Count(x => x.Message == message);
     }
 
     private static Task<bool> WaitForConditionAsync(Func<bool> probe, int timeoutMs = 10_000) =>

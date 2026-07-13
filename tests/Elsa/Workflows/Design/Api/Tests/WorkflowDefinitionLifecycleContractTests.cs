@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Api.Tests;
 
 /// <summary>
-/// RED contract for spec 091 FR-024 through FR-029. These tests intentionally describe the canonical
+/// RED contract for spec 092 FR-024 through FR-029. These tests intentionally describe the canonical
 /// definition/draft/version lifecycle before T053-T056 add its endpoints and request models.
 /// </summary>
 public sealed class WorkflowDefinitionLifecycleContractTests

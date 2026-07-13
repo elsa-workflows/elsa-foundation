@@ -57,7 +57,7 @@ public sealed class StructuredLogSseStreamWriterTests
 
         var output = responseBody.Text;
         Assert.Contains("event: entry\n", output);
-        Assert.Contains("id: 42\n", output);
+        Assert.Contains("id: slrc1.", output);
         Assert.Contains("\"message\":\"streamed\"", output);
     }
 
@@ -122,7 +122,11 @@ public sealed class StructuredLogSseStreamWriterTests
 
     private static async IAsyncEnumerable<StructuredLogStreamItem> SingleEntryStream()
     {
-        yield return StructuredLogStreamItem.ForEntry(TestEntries.Create(sequence: 42, level: LogLevel.Information, message: "streamed"));
+        var entry = TestEntries.Create(sequence: 42, level: LogLevel.Information, message: "streamed");
+        yield return StructuredLogStreamItem.ForEntry(entry with
+        {
+            ReplayCursor = new StructuredLogReplayCursor("slrc1.test.42")
+        });
         await Task.CompletedTask;
     }
 

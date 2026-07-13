@@ -75,7 +75,7 @@ public sealed partial class ManagementApiOperationInventoryTests
 
     private static HashSet<string> LoadCanonicalOperationIds()
     {
-        var contractPath = Path.Combine(RepoRoot, "specs", "091-domain-owned-apis", "contracts", "management-api.openapi.yaml");
+        var contractPath = Path.Combine(RepoRoot, "specs", "092-domain-owned-apis", "contracts", "management-api.openapi.yaml");
         using var reader = File.OpenText(contractPath);
         var yaml = new YamlStream();
         yaml.Load(reader);

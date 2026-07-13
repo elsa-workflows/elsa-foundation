@@ -7,20 +7,30 @@ Feature name (manifest / appsettings key): **`DiagnosticsStructuredLogs`**.
 ## What this feature provides
 
 - **Three decomposed roles** behind separate contracts so a durable backend can replace just the history store:
-  - **`StructuredLogSink`** → `IStructuredLogSink` — assigns the monotonic `Sequence` (seeded from the store's high-water-mark on startup), stamps each entry once, then dispatches to the store **and** the live publisher.
+  - **`StructuredLogSink`** → `IStructuredLogSink` — assigns display-only `Sequence` metadata (seeded from the store's lifetime high-water), submits entries to the store without blocking capture, and publishes process-local wake hints after commitment.
   - **`InMemoryStructuredLogStore`** → `IStructuredLogStore` — a bounded ring buffer holding recent history. Registered with `TryAddSingleton` so a persistence feature can override it.
-  - **`InMemoryStructuredLogLiveFeed`** → `IStructuredLogLiveFeed` + `IStructuredLogLivePublisher` — an independent bounded channel per live subscriber (in-process fan-out, stays in-process for every storage backend).
+  - **`InMemoryStructuredLogLiveFeed`** → `IStructuredLogLiveFeed` + `IStructuredLogLivePublisher` — an independent bounded channel per subscriber. For SSE it is only a wake hint; durable storage remains the payload and ordering authority.
 - **`LocalStructuredLogSourceProvider`** → `IStructuredLogSourceProvider` — exposes the single local host as the only known source and stamps every captured entry with its source id.
 - **`StructuredLogCaptureProvider`** — an `ILoggerProvider` (registered via `TryAddEnumerable`) that bridges host logging into `IStructuredLogSink`. It ignores its own categories (prefix `Elsa.Diagnostics.StructuredLogs`) to prevent feedback loops and swallows sink failures so capture never throws into the host logging path.
 - **Endpoints** (FastEndpoints, auto-mapped via `app.MapShells()`):
   - `GET /_elsa/studio/diagnostics/structured-logs/recent` — newest-aligned recent entries as a JSON array.
   - `GET /_elsa/studio/diagnostics/structured-logs/sources` — known log sources.
-  - `GET /_elsa/studio/diagnostics/structured-logs/stream` — live tail as Server-Sent Events.
+  - `GET /_elsa/studio/diagnostics/structured-logs/stream` — live tail as Server-Sent Events with
+    versioned opaque committed cursors in `id`/`Last-Event-ID`.
+
+`StructuredLogEntry.Sequence` is display-only logical metadata. Concurrent writers may produce the same
+value, so replay, ordering, and replay/live de-duplication use `StructuredLogReplayCursor` exclusively.
+Malformed, expired, trimmed, wrong-scope, and wrong-stream cursors all return the same non-disclosing
+`409 Conflict` response.
+
+`GroundworkStructuredLogStore` is the first-party durable adapter. It consumes Groundwork's specialized
+diagnostic-record contract, publishes wake hints only after durable append acknowledgement, serves bounded
+read-after pages in committed order, and preserves lifetime logical high-water independently of retention.
 - **Serialization helpers** (`public sealed`, branch-tested): `StructuredLogEntrySerializer` (wire JSON shape) and `StructuredLogSseFormatter` (SSE framing); `StructuredLogFilterBinder` (query-string → `StructuredLogFilter`, rejecting malformed input with `InvalidLogQueryException`).
 
 ## Options (`StructuredLogsOptions`)
 
-Exposed manifest settings: **Minimum level** (default `Information`), **Buffer capacity** (default `2000`), **Service name** (defaults to the process name), **Source display name**. Additional tunables on the options type: `SubscriberQueueCapacity`, `MaxRecentQuerySize`, the capture caps (`MaxCapturedProperties`, `MaxCapturedScopeDepth`, `MaxPropertyValueLength`), and the three endpoint paths.
+Exposed manifest settings: **Minimum level** (default `Information`), **Buffer capacity** (default `2000`), **Service name** (defaults to the process name), **Source display name**. Additional tunables on the options type: `SubscriberQueueCapacity`, `MaxRecentQuerySize`, `TailPollInterval`, the capture caps (`MaxCapturedProperties`, `MaxCapturedScopeDepth`, `MaxPropertyValueLength`), and the three endpoint paths.
 
 ## Authorization
 
@@ -37,8 +47,7 @@ All three endpoints call `ConfigurePermissions("Diagnostics:StructuredLogs")` (t
 
 ## SSE event contract (`stream`)
 
-- **`event: entry`** — carries `id: <sequence>` and a `data:` line with the entry JSON. The `id` lets a reconnecting client send `Last-Event-ID`; the server replays buffered entries after that sequence before resuming the live tail.
-- **`event: dropped`** — no `id`; `data:` carries `{ droppedCount, since }`. Emitted in-band when a slow consumer's bounded queue overflowed and entries were dropped (backpressure), so the client learns of loss without a side channel.
+- **`event: entry`** — carries `id: <opaque committed cursor>` and a `data:` line with the entry JSON. The id lets a reconnecting client send `Last-Event-ID`; the server validates that opaque anchor and tails bounded durable read-after pages from it. The process-local feed can wake the tail early, while bounded polling discovers commits from other hosts. Feed payloads and drop signals are not forwarded.
 - **`: keep-alive`** — an SSE comment heartbeat (every 15s) that keeps idle connections open.
 
 ## Capture scope (host-wide logging)
@@ -49,7 +58,7 @@ All three endpoints call `ConfigurePermissions("Diagnostics:StructuredLogs")` (t
 
 `Elsa.Diagnostics.StructuredLogs.Persistence.EFCore` provides **`EfCoreStructuredLogStore`**, a durable `IStructuredLogStore` override; the `DiagnosticsStructuredLogsPersistenceEFCoreSqlite` shell feature wires it onto SQLite. Enabling it makes captured logs survive restarts and serve `recent` / Last-Event-ID resume from the database, while capture, the live tail, and the UI stay unchanged.
 
-It is built for the hot logging path: `Append` is non-blocking (writes to a bounded channel; a background drain loop batch-inserts), the store's own DbContext logs are silenced (`NullLoggerFactory`) to avoid a capture→persist feedback loop, the table is pruned to a retention cap, and a durable auto-increment `Id` (not the per-process `Sequence`) is the cursor. See the persistence project's [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md#persistence-ef-core-override) section for the full rationale.
+It is built for the hot logging path: `AppendAsync` accepts through a bounded channel without blocking capture and completes after the background drain commits, the store's own DbContext logs are silenced (`NullLoggerFactory`) to avoid a capture→persist feedback loop, the table is pruned to a retention cap, and a durable auto-increment `Id` (not the per-process `Sequence`) is wrapped in an adapter-private opaque cursor. Reserved hidden state rows in the existing table preserve lifetime logical high-water across retention without adding EF schema or migrations; state and data commit atomically, the exact reserved representation is rejected from normal append input, and concurrent first initialization is safe. See the persistence project's [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md#persistence-ef-core-override) section for the full rationale.
 
 ## Replacing the defaults
 

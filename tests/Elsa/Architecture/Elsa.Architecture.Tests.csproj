@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\..\specs\091-domain-owned-apis\contracts\management-api.openapi.yaml"
+    <None Include="..\..\..\specs\092-domain-owned-apis\contracts\management-api.openapi.yaml"
           Link="Contracts\management-api.openapi.yaml"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

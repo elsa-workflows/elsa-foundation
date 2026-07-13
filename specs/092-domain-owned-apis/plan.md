@@ -2,7 +2,7 @@
 
 **Branch**: `598-domain-owned-apis` | **Date**: 2026-07-13 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/091-domain-owned-apis/spec.md`
+**Input**: Feature specification from `specs/092-domain-owned-apis/spec.md`
 
 ## Summary
 
@@ -55,7 +55,7 @@ The Elsa constitution is draft (v3.3.0) and the framework constitution is draft 
 ### Documentation (this feature)
 
 ```text
-specs/091-domain-owned-apis/
+specs/092-domain-owned-apis/
 ├── plan.md
 ├── research.md
 ├── data-model.md

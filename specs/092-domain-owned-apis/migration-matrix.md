@@ -1,6 +1,6 @@
 # Groundwork Migration Matrix: Domain-Owned Management APIs
 
-Inventory date: 2026-07-13. This matrix records the persisted baseline before spec 091 changes any
+Inventory date: 2026-07-13. This matrix records the persisted baseline before spec 092 changes any
 Runtime document shape or adds Publishing-owned persistence. It is the migration gate for T034 and
 T042; it does not itself change a storage manifest.
 
@@ -18,7 +18,7 @@ T042; it does not itself change a storage manifest.
   not require a document-version increment. Groundwork detects and backfills physicalized index-set
   changes. The new query and its backfill still require provider coverage.
 - The committed `Fixtures/v1/*.json` files are the pre-change contracts. They must never be regenerated
-  to contain spec 091 fields.
+  to contain spec 092 fields.
 - The production Runtime upcaster set contains `WorkflowExecutableDocumentV1ToV2Upcaster`. The
   default registration contributes it through `IEnumerable<IGroundworkRuntimeDocumentUpcaster>`;
   serializer tests continue to exercise generic chain validation with test-only implementations.
@@ -33,7 +33,7 @@ Authoritative sources:
 
 ## Existing Runtime document kinds
 
-| Domain record | Document kind and current version | Current persisted shape | Current indexes and portable queries | Upcaster and fixture baseline | Spec 091 impact and migration gate |
+| Domain record | Document kind and current version | Current persisted shape | Current indexes and portable queries | Upcaster and fixture baseline | spec 092 impact and migration gate |
 |---|---|---|---|---|---|
 | Workflow executable | `workflowExecutable`, v2 | Envelope `{ collection, executable, rootWriteLeases, deletionGuard }`. Leases are keyed by logical writer ID and carry an opaque fencing token plus expiry; the optional deletion guard carries operation ID, fencing token, and expiry. | `by-collection` on `collection`; `list-all` equality query. Retention transitions load the raw envelope and use its Groundwork document version as `ExpectedVersion` for every CAS update or conditional delete. | `Fixtures/v1/workflowExecutable.json` remains the historical artifact-only envelope. `WorkflowExecutableDocumentV1ToV2Upcaster` adds an empty lease set and null deletion guard. `Fixtures/v2/workflowExecutable.json` is the current golden shape. | T018's race-safe deletion state machine is provider-owned and persisted with the artifact. Root acquisition and deletion reservation are mutually exclusive CAS transitions; expired states are recoverable; stale fencing tokens cannot renew, release, cancel, or delete; guarded state survives restart. This closes the root-write/GC check-then-delete race without making source references or execution records share a transaction with the artifact document. |
 | Workflow execution state | `workflowExecutionState`, v1 | Envelope `{ collection, state }`. The pinned artifact is nested at `state.pinnedExecutable.artifactId`; no artifact ID is lifted to the envelope. | `by-collection` on `collection`; `list-all` equality query. The retained-root query reads only the stable nested artifact-ID JSON fragment from current envelopes and applies normal deserialization/upcasting only to historical versions, then returns distinct IDs. | No production upcaster. `Fixtures/v1/workflowExecutionState.json` exists and includes the complete pinned executable identity. | T018 satisfies FR-066 without changing the wire shape: it does not call `ListAsync()` or materialize complete workflow execution states. Save and removal update the same execution document that the projection reads, so there is no duplicate lifecycle record or backfill requirement. |

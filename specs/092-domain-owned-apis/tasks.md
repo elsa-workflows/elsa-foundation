@@ -1,6 +1,6 @@
 # Tasks: Domain-Owned Management APIs
 
-**Input**: Design documents from `specs/091-domain-owned-apis/`
+**Input**: Design documents from `specs/092-domain-owned-apis/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/management-api.openapi.yaml`, `quickstart.md`
 
@@ -23,7 +23,7 @@
 - [X] T003 [P] Distinguish client-visible API capabilities from composition features in `docs/glossary/elsa.md`
 - [X] T004 [P] Scaffold `src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj` and `tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj`, then add them to `Elsa.Server.slnx`
 - [X] T005 [P] Scaffold `src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj` and `tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj`, then add them to `Elsa.Server.slnx`
-- [X] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/091-domain-owned-apis` from current `origin/main`
+- [X] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/092-domain-owned-apis` from current `origin/main`
 
 ---
 
@@ -33,11 +33,11 @@
 
 **⚠️ CRITICAL**: Complete this phase before changing stored Runtime or Publishing records.
 
-- [X] T007 Inventory current Groundwork document versions, fixtures, indexes, and upcasters affected by publication identity in `src/Elsa/Persistence/Groundwork/` and record the migration matrix in `specs/091-domain-owned-apis/migration-matrix.md`
-- [X] T008 [P] Add OpenAPI route/schema parity tests for `specs/091-domain-owned-apis/contracts/management-api.openapi.yaml` in `tests/Elsa/Architecture/ManagementApiContractTests.cs`
+- [X] T007 Inventory current Groundwork document versions, fixtures, indexes, and upcasters affected by publication identity in `src/Elsa/Persistence/Groundwork/` and record the migration matrix in `specs/092-domain-owned-apis/migration-matrix.md`
+- [X] T008 [P] Add OpenAPI route/schema parity tests for `specs/092-domain-owned-apis/contracts/management-api.openapi.yaml` in `tests/Elsa/Architecture/ManagementApiContractTests.cs`
 - [X] T009 [P] Verify canonical domain endpoints reuse the existing server-independent Problem Details mapping in `src/Elsa/Api/FastEndpoints/` and its integration coverage in `tests/Elsa/Api/FastEndpoints/Tests/`
 - [X] T010 [P] Define and test reusable action-scoped management permission names for Design, Activity Design, Expressions, Publishing, Runtime, and capability discovery, and sweep every currently implemented management-domain endpoint source for `ConfigurePermissions` without `AllowAnonymous`, in `src/Elsa/Api/FastEndpoints/Constants/PermissionNames.cs` and `tests/Elsa/Architecture/EndpointSecurityTests.cs`; applying the names to new endpoints remains with T062 and the final all-slice/capability sweep remains with T105
-- [X] T011 Record in `specs/091-domain-owned-apis/migration-matrix.md` that existing Runtime v1 fixtures are preserved and concrete version bumps/upcasters/current fixtures move with T034 while Publishing v1 fixtures move with implemented T042 store shapes; reject unsafe placeholder migration logic.
+- [X] T011 Record in `specs/092-domain-owned-apis/migration-matrix.md` that existing Runtime v1 fixtures are preserved and concrete version bumps/upcasters/current fixtures move with T034 while Publishing v1 fixtures move with implemented T042 store shapes; reject unsafe placeholder migration logic.
 
 **Checkpoint**: Stored-shape changes have an explicit migration path and every new endpoint can use common security/error conventions.
 
@@ -65,7 +65,7 @@
 - [X] T020 [US3] Protect the live-reference plus retained-execution union and close check-delete races in `src/Elsa/Workflows/Runtime/Services/WorkflowExecutableReferenceGarbageCollector.cs`
 - [X] T021 [US3] Wire the new retention dependencies in `src/Elsa/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs` and its registration tests
 - [X] T022 [US3] Document the retained-root query and GC behavior in `src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md` and the Runtime feature README
-- [X] T023 [US3] Run the US3 commands from `specs/091-domain-owned-apis/quickstart.md` and record any provider-specific follow-up in `specs/091-domain-owned-apis/migration-matrix.md`
+- [X] T023 [US3] Run the US3 commands from `specs/092-domain-owned-apis/quickstart.md` and record any provider-specific follow-up in `specs/092-domain-owned-apis/migration-matrix.md`
 
 **Checkpoint**: US3 independently proves retained executions preserve executable availability.
 
@@ -103,7 +103,7 @@
 - [X] T042 [US2] Add provider-neutral Publishing Groundwork persistence in `src/Elsa/Workflows/Publishing/Persistence/Groundwork/` with CAS, indexes, and restart tests in `tests/Elsa/Workflows/Publishing/Persistence/Groundwork/Tests/`
 - [X] T043 [US2] Update HTTP route-table and recurring-schedule observers to switch only authoritative publication projections in `src/Elsa/Workflows/Runtime/Http/` and `src/Elsa/Workflows/Runtime/Scheduling/`
 - [X] T044 [US2] Document publication extension points/tasks in `src/Elsa/Workflows/Publishing/Api/README.md` and `src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`
-- [X] T045 [US2] Run the US2 commands and `/foo` to `/bar` scenario from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T045 [US2] Run the US2 commands and `/foo` to `/bar` scenario from `specs/092-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US2 independently proves safe replacement and explicit coexistence.
 
@@ -138,7 +138,7 @@
 - [X] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
 - [X] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
 - [X] T063 [US4] Update feature READMEs and domain extension-point catalogs in `src/Elsa/Workflows/Design/Api/`, `src/Elsa/Activities/Design/Api/`, `src/Elsa/Expressions/Api/`, and `src/Elsa/Workflows/Runtime/Api/`
-- [X] T064 [US4] Run the US4 domain API commands from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T064 [US4] Run the US4 domain API commands from `specs/092-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US4 independently proves every authoring/read slice works without the facade.
 
@@ -165,7 +165,7 @@
 - [X] T072 [US5] Add explicit static declarations and `ApiCapabilities` dependency metadata to Workflow Design, Activity Design, Expressions, Publishing, and Runtime API feature classes
 - [X] T073 [US5] Contribute conditional scoped-variable-analysis and other operational links through typed Sources in `src/Elsa/Workflows/Design/Api/Capabilities/` and other owning domain API capability folders
 - [X] T074 [US5] Document the capability contract and extension points in `src/Elsa/Api/Capabilities/README.md` and `src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`
-- [X] T075 [US5] Run the multi-shell capability commands from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T075 [US5] Run the multi-shell capability commands from `specs/092-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US5 independently proves one-request discovery without feature-name inference.
 
@@ -189,7 +189,7 @@
 - [X] T080 [US1] Remove `MapElsaWorkflowManagementApi` from `src/Apps/Elsa.Server/Program.cs` and delete `src/Apps/Elsa.Server/ElsaWorkflowManagementApi.cs`
 - [X] T081 [US1] Remove obsolete server project references and registrations from `src/Apps/Elsa.Server/Elsa.Server.csproj`
 - [X] T082 [US1] Delete or relocate all facade-specific tests from `tests/Elsa/Modularity/Tests/` after preserving their objectives in T048, T049, T050, T051, T076, and T078
-- [X] T083 [US1] Verify the custom-host and zero-legacy Foundation gates in `specs/091-domain-owned-apis/quickstart.md`
+- [X] T083 [US1] Verify the custom-host and zero-legacy Foundation gates in `specs/092-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US1 independently proves Elsa.Server is unnecessary for supported management clients.
 
@@ -223,7 +223,7 @@
 - [X] T098 [US6] Move availability, expression, variable, input-option, and runtime-diagnostics screens/hooks to their domain clients in `workflow-editor/`
 - [X] T099 [US6] Update Weaver `getExecutableDetail` to the Runtime capability link in `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/src/Elsa.Studio.Weaver.Workflows/Client/src/module.tsx`
 - [X] T100 [US6] Delete every legacy and demo fallback literal and update Studio contract documentation under `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio/specs/`
-- [X] T101 [US6] Run targeted Workflows/Weaver tests and full Studio typecheck/test/build/lint gates from `specs/091-domain-owned-apis/quickstart.md`
+- [X] T101 [US6] Run targeted Workflows/Weaver tests and full Studio typecheck/test/build/lint gates from `specs/092-domain-owned-apis/quickstart.md`
 
 **Checkpoint**: US6 independently proves coordinated Studio compatibility with no facade.
 
@@ -237,9 +237,9 @@
 - [X] T103 [P] Update root/package documentation and the old ADR 0041 disposition in `README.md`, `docs/adr/0041-workflow-management-advertises-optional-authoring-capabilities.md`, and affected feature READMEs
 - [X] T104 [P] Add definition-list bounded-query and capability-bootstrap request-count regression tests in `tests/Elsa/Workflows/Design/Api/Tests/` and Studio Workflows tests
 - [X] T105 [P] Complete endpoint authorization sweeps for every final domain slice (including Expressions and API Capabilities), assert the capability endpoint applies `PermissionNames.ApiCapabilitiesRead`, and add unauthenticated capability tests in `tests/Elsa/Architecture/EndpointSecurityTests.cs`
-- [X] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/091-domain-owned-apis/completion-audit.md`
-- [X] T107 Run every Foundation and Studio command in `specs/091-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
-- [X] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/091-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean
+- [X] T106 Verify all 74 functional requirements and 12 success criteria against code/tests and record evidence in `specs/092-domain-owned-apis/completion-audit.md`
+- [X] T107 Run every Foundation and Studio command in `specs/092-domain-owned-apis/quickstart.md` from clean worktrees and attach failures/evidence to `completion-audit.md`
+- [X] T108 Commit the coordinated Foundation and Studio changes, record both commit IDs in `specs/092-domain-owned-apis/completion-audit.md`, and confirm both worktrees are clean
 
 ---
 

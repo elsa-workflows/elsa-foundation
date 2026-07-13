@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -581,6 +582,7 @@ internal static class GroundworkRuntimeDocumentFixtureFactory
     private sealed class CapturingDocumentStore : IDocumentStore
     {
         private readonly Dictionary<string, (string SchemaVersion, string ContentJson)> _captured = new(StringComparer.Ordinal);
+        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
 
         public (string SchemaVersion, string ContentJson) Captured(string kind) => _captured[kind];
 

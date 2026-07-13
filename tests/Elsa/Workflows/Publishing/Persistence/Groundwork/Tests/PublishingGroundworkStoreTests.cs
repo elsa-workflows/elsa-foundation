@@ -2,6 +2,7 @@ using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Persistence.Groundwork.Stores;
 using Groundwork.Core.Capabilities;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Xunit;
@@ -98,41 +99,34 @@ public sealed class PublishingGroundworkStoreTests
     private sealed class PublishingStoreFixture(
         string provider,
         string? sqlitePath,
-        IDocumentStore store,
-        IAsyncDisposable? owner) : IAsyncDisposable
+        IDocumentStore store) : IAsyncDisposable
     {
         private static readonly ProviderIdentity SqliteProvider = new("publishing-groundwork-sqlite-tests", "1.0.0");
         public IDocumentStore Store { get; private set; } = store;
-        private IAsyncDisposable? _owner = owner;
 
         public static async Task<PublishingStoreFixture> CreateAsync(string provider)
         {
             if (provider == "memory")
-                return new PublishingStoreFixture(provider, null, new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()), null);
+                return new PublishingStoreFixture(provider, null, new InMemoryDocumentStore(PublishingGroundworkStorageManifest.Create()));
             var path = Path.Combine(Path.GetTempPath(), $"elsa-publishing-{Guid.NewGuid():N}.db");
             var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={path}", PublishingGroundworkStorageManifest.Create(), SqliteProvider);
-            return new PublishingStoreFixture(provider, path, handle.Store, handle);
+                $"Data Source={path}", PublishingGroundworkStorageManifest.Create(), SqliteProvider, DocumentStoreAccess.Global);
+            return new PublishingStoreFixture(provider, path, handle);
         }
 
         public async Task RestartAsync()
         {
             if (provider == "memory")
                 return;
-            if (_owner is not null)
-                await _owner.DisposeAsync();
-            var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                $"Data Source={sqlitePath}", PublishingGroundworkStorageManifest.Create(), SqliteProvider);
-            Store = handle.Store;
-            _owner = handle;
+            Store = await SqliteDocumentStoreFactory.CreateAsync(
+                $"Data Source={sqlitePath}", PublishingGroundworkStorageManifest.Create(), SqliteProvider, DocumentStoreAccess.Global);
         }
 
-        public async ValueTask DisposeAsync()
+        public ValueTask DisposeAsync()
         {
-            if (_owner is not null)
-                await _owner.DisposeAsync();
             if (sqlitePath is not null && File.Exists(sqlitePath))
                 File.Delete(sqlitePath);
+            return ValueTask.CompletedTask;
         }
     }
 }

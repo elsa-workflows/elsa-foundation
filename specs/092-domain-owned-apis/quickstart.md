@@ -16,7 +16,7 @@ export STUDIO_ROOT=/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foun
 
 git -C "$FOUNDATION_ROOT" status --short --branch
 git -C "$STUDIO_REPO" fetch origin
-git -C "$STUDIO_REPO" worktree add -b codex/091-domain-owned-apis "$STUDIO_ROOT" origin/main
+git -C "$STUDIO_REPO" worktree add -b codex/092-domain-owned-apis "$STUDIO_ROOT" origin/main
 git -C "$STUDIO_ROOT" status --short --branch
 ```
 
