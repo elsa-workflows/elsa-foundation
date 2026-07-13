@@ -24,7 +24,7 @@ export interface WorkflowDefinitionSummary {
   versionCount: number;
 }
 
-export type DefinitionListState = "active" | "deleted";
+export type DefinitionListState = "active" | "deleted" | "all";
 
 export interface WorkflowDefinitionDetails {
   definition: WorkflowDefinitionSummary;
@@ -115,7 +115,12 @@ export interface ActivityCatalogItem {
   iconColor?: string | null;
   inputs: unknown[];
   outputs: unknown[];
-  designFacets: unknown[];
+  designFacets?: unknown[];
+  available?: boolean;
+  availabilityReason?: string | null;
+  ports?: unknown[];
+  containerStructure?: Record<string, unknown> | null;
+  authoringTemplate?: ActivityNode;
 }
 
 export type ActivityDescriptor = StudioActivityDescriptor;
@@ -371,7 +376,7 @@ export interface WorkflowOutput {
   [key: string]: unknown;
 }
 
-// A selectable argument element type from GET /descriptors/variables (typed-argument-model contract).
+// A selectable argument element type from the Expressions domain's variable-types capability.
 // `alias` is the join key against a stored `type.alias`; `defaultEditor` is an open hint for the
 // default-value editor (text/number/checkbox/date/none — tolerate unknown values). `typeName` is a
 // legacy fallback for older backends that returned it instead of `alias`.
@@ -392,8 +397,8 @@ export interface VariableTypeDescriptorsResponse {
 export interface CreateDefinitionRequest {
   name: string;
   description?: string | null;
-  rootKind: "sequence" | "flowchart";
-  rootActivityVersionId?: string | null;
+  initialState?: WorkflowDefinitionState | null;
+  layout?: DesignMetadataRecord[];
 }
 
 export interface PromoteDraftResponse {
@@ -434,7 +439,7 @@ export interface WorkflowTestRunView {
 // An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).
 // Rows are content-addressed artifacts; the flat Definition*/Published*/Source* fields mirror the newest
 // reference for backward compatibility, and `references` carries every Source Reference newest-first.
-// `references` is optional because the legacy /_demo endpoint returns the flat shape only.
+// `references` remains optional while Runtime's canonical summary and detailed provenance views converge.
 export interface WorkflowExecutableSummary {
   artifactId: string;
   artifactVersion: string;

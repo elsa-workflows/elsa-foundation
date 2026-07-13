@@ -5,9 +5,9 @@ import type {
   StudioAiProposalRendererProps,
   StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
+import { capabilityIds, resolveCapabilityLink } from "@elsa-workflows/studio-workflows";
 
 const moduleId = "Elsa.Studio.Weaver.Workflows";
-const workflowManagementBasePath = "/_elsa/workflow-management";
 
 export function register(api: ElsaStudioModuleApi) {
   api.ai.contextProviders.add({
@@ -45,19 +45,19 @@ export function register(api: ElsaStudioModuleApi) {
     placement: "field-adornment",
     contextKind: "workflow-create-draft",
     createPrompt: context => {
-      // Only the user's intent and the chosen root kind are relevant to naming. Deliberately omit any
+      // Only the user's intent and selected catalog-authored root are relevant to naming. Deliberately omit any
       // activity catalog or large draft payload so the conversation isn't flooded with technical JSON.
       const draft: Record<string, unknown> = isRecord(context) && isRecord(context.draft) ? context.draft : {};
       const intent = isRecord(context) && typeof context.intent === "string" ? context.intent.trim() : "";
-      const rootKind = typeof draft.rootKind === "string" ? draft.rootKind : undefined;
-      const attachment = { intent, rootKind, name: draft.name ?? "", description: draft.description ?? "" };
+      const rootActivityVersionId = typeof draft.rootActivityVersionId === "string" ? draft.rootActivityVersionId : undefined;
+      const attachment = { intent, rootActivityVersionId, name: draft.name ?? "", description: draft.description ?? "" };
       return {
         message: [
           "Suggest a concise display name and a one-sentence description for a new Elsa workflow.",
           intent
             ? `The user describes what the workflow should do as: "${intent}".`
             : "The user has not described the workflow yet — infer a sensible, generic automation name and description.",
-          rootKind ? `The root activity is a ${rootKind}.` : "",
+          rootActivityVersionId ? `The selected root comes from catalog activity version ${rootActivityVersionId}.` : "",
           "Reply with one short friendly sentence, then a fenced ```json code block containing exactly " +
           '{"name": string, "description": string} and nothing else in that block.'
         ].filter(Boolean).join("\n"),
@@ -252,7 +252,8 @@ export async function getExecutableDetail(context: StudioEndpointContext, input:
 
   const sourceReferenceId = readTrimmedString(input.sourceReferenceId);
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
-  return context.http.getJson<unknown>(`${workflowManagementBasePath}/executables/${encodeURIComponent(artifactId)}${query}`);
+  const path = await resolveCapabilityLink(context, capabilityIds.runtime, "workflow-executable", { artifactId });
+  return context.http.getJson<unknown>(`${path}${query}`);
 }
 
 function readTrimmedString(value: unknown) {

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, Package, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listActivities, listDefinitions, restoreDefinition } from "../api/workflows";
+import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition } from "../api/workflowDesign";
+import { listActivities } from "../api/activityDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { getDialogs } from "./dialogs";
 import { defaultDefinitionPageSize } from "./constants";
 import type { CreateWorkflowDraft } from "./editorTypes";
-import { dispatchAiAction, findAiAction, getCreateRootActivityVersionId, getTotalPages, pageItems } from "./editorHelpers";
+import { dispatchAiAction, findAiAction, getCreateInitialState, getTotalPages, pageItems } from "./editorHelpers";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
@@ -83,7 +84,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const openCreateDialog = () => {
     setError("");
     setStatus("");
-    setCreateDraft({ name: "", description: "", rootKind: "flowchart" });
+    setCreateDraft({ name: "", description: "", rootActivityVersionId: null });
     void loadCatalog();
   };
 
@@ -96,8 +97,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        rootKind: createDraft.rootKind,
-        rootActivityVersionId: getCreateRootActivityVersionId(createDraft, catalog)
+        initialState: getCreateInitialState(createDraft, catalog)
       });
       setCreateDraft(null);
       onOpen(details.definition.id);
@@ -317,6 +317,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       {createDraft ? (
         <CreateWorkflowDialog
           draft={createDraft}
+          catalog={catalog}
           creating={creating}
           ai={ai}
           suggestMetadataAction={suggestMetadataAction}

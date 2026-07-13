@@ -2,17 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getActivityExecutionInspection, getWorkflowDefinitionVersion, getWorkflowInstance, listActivities, listWorkflowInstances } from "../api/workflows";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import { listActivities } from "../api/activityDesign";
+import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances } from "../api/runtime";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowExecutableNode, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
+  createActivityNode,
   getActivityDesignerSupport,
   getChildSlots,
   latestActivityExecution,
   planSlotNavigation,
   resolveScope,
+  replaceSlotActivities,
   slotCrumbLabel,
   type ChildSlot,
   type ScopeFrame,
@@ -33,8 +36,7 @@ import {
   dispatchAiAction,
   findAiAction,
   formatRunKind,
-  formatWorkflowRunLoadError,
-  formatWorkflowVersionLoadError
+  formatWorkflowRunLoadError
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
@@ -187,18 +189,21 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
     setError("");
     try {
       const details = await getWorkflowInstance(context, workflowExecutionId);
-      const [definitionVersionResult, activityCatalog] = await Promise.all([
-        getWorkflowDefinitionVersion(context, details.instance.definitionVersionId).then(
-          definitionVersion => ({ definitionVersion, error: "" }),
-          error => ({ definitionVersion: null, error: error instanceof Error ? error.message : String(error) })
+      const [executableResult, activityCatalog] = await Promise.all([
+        getExecutable(context, details.instance.artifactId).then(
+          executable => ({ executable, error: "" }),
+          error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
         ),
         listActivities(context)
       ]);
+      const catalog = activityCatalog.activities;
       setData({
         details,
-        definitionVersion: definitionVersionResult.definitionVersion,
-        definitionVersionError: definitionVersionResult.error,
-        activityCatalog: activityCatalog.activities
+        definitionVersion: executableResult.executable
+          ? projectPinnedExecutable(executableResult.executable, details, catalog)
+          : null,
+        definitionVersionError: executableResult.error,
+        activityCatalog: catalog
       });
       setSelectedEvidenceId(null);
       setFrames([]);
@@ -299,6 +304,46 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, workflowExecutio
   );
 }
 
+export function projectPinnedExecutable(
+  executable: WorkflowExecutableDetails,
+  details: WorkflowInstanceDetails,
+  catalog: ActivityCatalogItem[]
+): WorkflowDefinitionVersionDetails {
+  const timestamp = executable.createdAt ?? details.instance.createdAt;
+  return {
+    id: details.instance.definitionVersionId,
+    version: details.instance.artifactVersion,
+    definition: {
+      id: details.instance.definitionId,
+      name: details.instance.definitionId,
+      description: `Pinned Runtime executable ${executable.artifactId}`,
+      createdAt: timestamp,
+      lastModifiedAt: timestamp
+    },
+    state: { rootActivity: projectExecutableNode(executable.rootActivity, catalog) },
+    layout: executable.chosenReference?.layout ?? []
+  };
+}
+
+function projectExecutableNode(node: WorkflowExecutableNode, catalog: ActivityCatalogItem[]): ActivityNode {
+  const descriptor = catalog.find(candidate =>
+    candidate.activityTypeKey === node.activityType && candidate.version === node.activityTypeVersion);
+  let projected: ActivityNode = descriptor
+    ? createActivityNode(descriptor, node.authoredActivityId)
+    : { nodeId: node.authoredActivityId, activityVersionId: node.activityType, inputs: [], outputs: [] };
+
+  for (const executableSlot of node.childSlots) {
+    const slot = getChildSlots(projected, catalog).find(candidate =>
+      candidate.id === executableSlot.name || candidate.label === executableSlot.name);
+    if (!slot) continue;
+    projected = replaceSlotActivities(
+      projected,
+      slot,
+      executableSlot.activities.map(child => projectExecutableNode(child, catalog)));
+  }
+  return projected;
+}
+
 function WorkflowInstanceCanvas({
   definitionVersion,
   definitionVersionError,
@@ -328,14 +373,14 @@ function WorkflowInstanceCanvas({
     <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas">
       <header>
         <div>
-          <span>Definition version</span>
+          <span>Pinned Runtime executable</span>
           <h3>{definitionVersion ? (
             <>
               {definitionVersion.definition.name} <small>{definitionVersion.version}</small>
             </>
           ) : (
             <>
-              Definition graph unavailable <small>{details.instance.definitionVersionId}</small>
+              Executable graph unavailable <small>{details.instance.artifactId}</small>
             </>
           )}</h3>
         </div>
@@ -347,11 +392,11 @@ function WorkflowInstanceCanvas({
       <div className="wf-instance-canvas">
         {!definitionVersion ? (
           <div className="wf-empty">
-            The workflow run loaded, but its definition graph could not be resolved for this version.
-            {definitionVersionError ? <small>{formatWorkflowVersionLoadError(definitionVersionError)}</small> : null}
+            The workflow run loaded, but its pinned executable graph could not be resolved.
+            {definitionVersionError ? <small>{definitionVersionError}</small> : null}
           </div>
         ) : null}
-        {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this definition version.</div> : null}
+        {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
         {canvas.nodes.length > 0 ? (
           <ReactFlow
             key={scopeKey}

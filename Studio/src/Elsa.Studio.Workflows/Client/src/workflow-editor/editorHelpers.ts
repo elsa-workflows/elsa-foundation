@@ -2,7 +2,7 @@ import type { Node } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
-import { flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
+import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
 import { shortTypeName } from "../workflowFormatting";
 import { groupByCategory } from "../categoryGrouping";
 import { workflowSidePanelMaximizedStorageKey } from "./constants";
@@ -63,15 +63,38 @@ function unquote(value: string) {
   return value.trim().replace(/,$/, "").trim().replace(/^["']/, "").replace(/["']$/, "").trim();
 }
 
-export function getCreateRootActivityVersionId(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
-  return draft.rootActivityVersionId ?? findRootKindActivity(activities, draft.rootKind)?.activityVersionId ?? null;
+export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  const activity = activities.find(candidate => candidate.activityVersionId === draft.rootActivityVersionId)
+    ?? findCompositionActivity(activities, "flowchart")
+    ?? findCompositionActivity(activities, "sequence");
+  if (!activity?.authoringTemplate) return null;
+
+  const rootActivity = createActivityNode(activity, createNodeId(activity));
+  return {
+    rootActivity: {
+      ...rootActivity,
+      inputs: toAuthoredArguments(activity.authoringTemplate.inputs) as unknown as ActivityNode["inputs"],
+      outputs: toAuthoredArguments(activity.authoringTemplate.outputs) as unknown as ActivityNode["outputs"]
+    }
+  };
 }
 
-export function findRootKindActivity(activities: ActivityCatalogItem[], rootKind: CreateWorkflowKind) {
-  return activities.find(activity => getRootKind(activity) === rootKind);
+function toAuthoredArguments(value: unknown) {
+  if (!Array.isArray(value)) return structuredClone(value ?? {});
+  return Object.fromEntries(value.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const argument = item as { referenceKey?: unknown; value?: unknown };
+    return typeof argument.referenceKey === "string"
+      ? [[argument.referenceKey, structuredClone(argument.value)]]
+      : [];
+  }));
 }
 
-function getRootKind(activity: ActivityCatalogItem | undefined) {
+export function findCompositionActivity(activities: ActivityCatalogItem[], kind: CreateWorkflowKind) {
+  return activities.find(activity => getCompositionKind(activity) === kind);
+}
+
+function getCompositionKind(activity: ActivityCatalogItem | undefined) {
   if (!activity) {
     return null;
   }

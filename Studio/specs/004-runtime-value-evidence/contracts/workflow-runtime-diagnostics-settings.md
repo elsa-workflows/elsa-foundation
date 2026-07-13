@@ -30,7 +30,7 @@ Unknown subjects are invalid.
 
 ## GET Runtime Diagnostics Settings
 
-`GET /_elsa/workflow-management/runtime-diagnostics/settings`
+`GET /runtime/workflows/diagnostics/settings`
 
 Returns the requested setting, the effective setting, host-policy caps, and UI permission hints.
 
@@ -75,7 +75,7 @@ Returns the requested setting, the effective setting, host-policy caps, and UI p
 
 ## PUT Runtime Diagnostics Settings
 
-`PUT /_elsa/workflow-management/runtime-diagnostics/settings`
+`PUT /runtime/workflows/diagnostics/settings`
 
 Requests a new Studio-managed runtime diagnostics setting.
 

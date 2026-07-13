@@ -1,7 +1,14 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
-import { promoteDraft, publishVersion, startWorkflowDraftTestRun } from "../api/workflows";
+import { promoteDraft } from "../api/workflowDesign";
+import {
+  preflightPublication,
+  publishVersion,
+  startWorkflowDraftTestRun,
+  type PublicationIntent,
+  type PublicationPreflight
+} from "../api/publishing";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
 import { createDraftSnapshotId, getDraftSignature, isRejectedTestRun } from "./editorHelpers";
 import type { WorkflowEditorOperation, WorkflowTestRunState } from "./editorTypes";
@@ -41,6 +48,11 @@ export function useWorkflowOperations({
   setActiveRightPanelId,
   setInspectorCollapsed
 }: WorkflowOperationsParams) {
+  const [publicationReview, setPublicationReview] = useState<{
+    versionId: string;
+    intent: PublicationIntent;
+    preflight: PublicationPreflight;
+  } | null>(null);
   const exportJson = useCallback(() => {
     if (!draft) return;
     const name = details?.definition.name;
@@ -61,7 +73,7 @@ export function useWorkflowOperations({
     }
   }, [draft, busy, saveDraft, setOperation, setStatus]);
 
-  const promoteAndPublish = useCallback(async () => {
+  const preparePublication = useCallback(async () => {
     if (!draft || busy) return;
     setOperation("promoting");
     setStatus("Saving...");
@@ -72,9 +84,48 @@ export function useWorkflowOperations({
       await saveDraft(draft, "Saved");
       setStatus("Promoting...");
       const promoted = await promoteDraft(context, draft.id);
-      const published = await publishVersion(context, promoted.versionId);
+      setOperation("publicationPreflight");
+      setStatus("Checking publication changes...");
+      const intent: PublicationIntent = {};
+      const preflight = await preflightPublication(context, promoted.versionId, intent);
+      setPublicationReview({ versionId: promoted.versionId, intent, preflight });
+      setStatus("");
+    } catch (e) {
+      setStatus("");
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOperation("idle");
+    }
+  }, [draft, busy, context, saveDraft, setOperation, setStatus, setError]);
+
+  const reviewPublication = useCallback(async (intent: PublicationIntent) => {
+    if (!publicationReview) return;
+    setOperation("publicationPreflight");
+    setError("");
+    try {
+      const preflight = await preflightPublication(context, publicationReview.versionId, intent);
+      setPublicationReview({ ...publicationReview, intent, preflight });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOperation("idle");
+    }
+  }, [context, publicationReview, setError, setOperation]);
+
+  const confirmPublication = useCallback(async () => {
+    if (!publicationReview || !publicationReview.preflight.canActivate) return;
+    if (publicationReview.intent.action === "sideBySide" && !publicationReview.intent.slotName?.trim()) {
+      setError("Enter a meaningful slot name for side-by-side publication.");
+      return;
+    }
+    setOperation("publishing");
+    setError("");
+    setStatus("Publishing...");
+    try {
+      const published = await publishVersion(context, publicationReview.versionId, publicationReview.intent);
       setPublishedArtifact(published.artifactId);
-      setStatus(`Published ${published.artifactVersion}`);
+      setPublicationReview(null);
+      setStatus(`Published to ${published.slotName}`);
       await reload();
     } catch (e) {
       setStatus("");
@@ -82,7 +133,12 @@ export function useWorkflowOperations({
     } finally {
       setOperation("idle");
     }
-  }, [draft, busy, context, saveDraft, reload, setPublishedArtifact, setOperation, setStatus, setError]);
+  }, [context, publicationReview, reload, setError, setOperation, setPublishedArtifact, setStatus]);
+
+  const cancelPublication = useCallback(() => {
+    setPublicationReview(null);
+    setStatus("Publication cancelled; the promoted version remains available.");
+  }, [setStatus]);
 
   const run = useCallback(async () => {
     if (!draft?.state.rootActivity || busy) return;
@@ -114,5 +170,5 @@ export function useWorkflowOperations({
     }
   }, [draft, busy, context, clearTestRun, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
-  return { exportJson, save, promoteAndPublish, run };
+  return { exportJson, save, preparePublication, publicationReview, reviewPublication, confirmPublication, cancelPublication, run };
 }

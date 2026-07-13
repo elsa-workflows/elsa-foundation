@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { ActivityCatalogItem } from "../workflowTypes";
 import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
 import { parseWorkflowMetadataSuggestion } from "./editorHelpers";
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 
-export function CreateWorkflowDialog({ draft, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
+export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
+  catalog: ActivityCatalogItem[];
   creating: boolean;
   ai: StudioAiContributionApi;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
@@ -152,8 +154,9 @@ export function CreateWorkflowDialog({ draft, creating, ai, suggestMetadataActio
           <fieldset className="wf-form-field wf-root-field">
             <legend>Root activity</legend>
             <WorkflowRootRadioCards
-              value={draft.rootKind}
-              onChange={rootKind => onChange({ ...draft, rootKind, rootActivityVersionId: null })}
+              catalog={catalog}
+              value={draft.rootActivityVersionId}
+              onChange={rootActivityVersionId => onChange({ ...draft, rootActivityVersionId })}
             />
           </fieldset>
           <div className="wf-dialog-actions">

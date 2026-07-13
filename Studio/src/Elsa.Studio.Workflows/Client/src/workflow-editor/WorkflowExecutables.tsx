@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, Trash2, X } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { deleteExecutable, listExecutables, restoreExecutable, runExecutable } from "../api/workflows";
+import { listExecutables, runExecutable } from "../api/runtime";
+import { listPublicationSlots, restorePublicationSlot, unpublishSlot, type PublicationSlot } from "../api/publishing";
 import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -11,7 +12,6 @@ import type { ExecutableRunState } from "./editorTypes";
 import {
   compareExecutablesByPublishedDate,
   dispatchAiAction,
-  executableBelongsToDefinition,
   executableMatchesDefinitionFilter,
   findAiAction,
   formatExecutableRoot,
@@ -89,35 +89,6 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
       setError("");
       setLastRun(null);
       setStatus(`Sent ${executable.artifactId} to Weaver`);
-    }
-  };
-
-  // Table-level delete targets the artifact as a whole (every definition's references); the
-  // definition-scoped variant lives on the editor's artifacts panel, which passes its definitionId.
-  const remove = async (executable: WorkflowExecutableSummary) => {
-    if (!(await getDialogs().confirm({ message: `Delete executable ${executable.artifactId}? This retires all of its source references; the artifact can no longer be run.`, confirmLabel: "Delete", tone: "danger" }))) return;
-    setStatus("");
-    setLastRun(null);
-    setError("");
-    try {
-      await deleteExecutable(context, executable.artifactId);
-      setStatus(`Deleted ${executable.artifactId}`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const restore = async (executable: WorkflowExecutableSummary) => {
-    setStatus("");
-    setLastRun(null);
-    setError("");
-    try {
-      await restoreExecutable(context, executable.artifactId);
-      setStatus(`Restored ${executable.artifactId}`);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -246,11 +217,7 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
                     {explainExecutableAction ? (
                       <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
                     ) : null}
-                    {retired ? (
-                      <button type="button" aria-label={`Restore executable ${executable.artifactId}`} onClick={() => void restore(executable)}><RotateCcw size={13} /> Restore</button>
-                    ) : (
-                      <button type="button" aria-label={`Delete executable ${executable.artifactId}`} onClick={() => void remove(executable)}><Trash2 size={13} /> Delete</button>
-                    )}
+                    {retired ? <span className="wf-muted">Retained for inspection</span> : null}
                   </span>
                 </div>
                 {expanded ? (
@@ -303,18 +270,25 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
   const [status, setStatus] = useState("");
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [artifacts, setArtifacts] = useState<WorkflowExecutableSummary[]>([]);
+  const [slots, setSlots] = useState<PublicationSlot[]>([]);
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
 
   const load = useCallback(async () => {
     setState("loading");
     setError("");
     try {
-      const executables = await listExecutables(context);
-      setArtifacts(executables.filter(executable => executableBelongsToDefinition(executable, definitionId)).sort(compareExecutablesByPublishedDate));
+      const [executables, publicationSlots] = await Promise.all([
+        listExecutables(context, { scope: "all", includeRetired: true }),
+        listPublicationSlots(context, definitionId)
+      ]);
+      const publicationArtifactIds = new Set(publicationSlots.flatMap(slot => slot.publication?.artifactId ? [slot.publication.artifactId] : []));
+      setArtifacts(executables.filter(executable => publicationArtifactIds.has(executable.artifactId)).sort(compareExecutablesByPublishedDate));
+      setSlots(publicationSlots);
       setState("ready");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setArtifacts([]);
+      setSlots([]);
       setState("failed");
     }
   }, [context, definitionId]);
@@ -346,16 +320,27 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
     }
   };
 
-  // This panel is definition-scoped, so the delete is too: only THIS definition's references are
-  // retired. A behaviorally identical artifact shared with another definition stays runnable there.
-  const remove = async (artifact: WorkflowExecutableSummary) => {
-    if (!(await getDialogs().confirm({ message: `Delete executable ${artifact.artifactId} for this workflow? This retires this definition's references to it.`, confirmLabel: "Delete", tone: "danger" }))) return;
+  const unpublish = async (slot: PublicationSlot) => {
+    if (!(await getDialogs().confirm({ message: `Unpublish slot ${slot.slotName}? Existing workflow runs keep their pinned executable, but this slot will stop starting new runs.`, confirmLabel: "Unpublish", tone: "danger" }))) return;
     setStatus("");
     setLastRun(null);
     setError("");
     try {
-      await deleteExecutable(context, artifact.artifactId, definitionId);
-      setStatus(`Deleted ${artifact.artifactId}`);
+      await unpublishSlot(context, definitionId, slot.slotName);
+      setStatus(`Unpublished ${slot.slotName}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const restore = async (slot: PublicationSlot) => {
+    setStatus("");
+    setLastRun(null);
+    setError("");
+    try {
+      await restorePublicationSlot(context, definitionId, slot.slotName);
+      setStatus(`Restored ${slot.slotName}`);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -389,6 +374,26 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
       {state === "failed" || error ? <div className="wf-alert compact"><AlertCircle size={14} /> {error}</div> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} compact /> : null}
       {state === "loading" ? <p className="wf-muted">Loading artifacts...</p> : null}
+      {state === "ready" && slots.length > 0 ? (
+        <div className="wf-artifact-list" role="list" aria-label="Publication slots">
+          {slots.map(slot => (
+            <article className="wf-artifact-card" role="listitem" key={slot.slotName}>
+              <div className="wf-artifact-card-heading">
+                <strong>Slot {slot.slotName}</strong>
+                <span className="wf-chip">{slot.status ?? "empty"}</span>
+              </div>
+              {slot.publication ? <p><code>{slot.publication.artifactId}</code></p> : <p className="wf-muted">No active publication</p>}
+              <div className="wf-row-actions">
+                {slot.status === "retired" ? (
+                  <button type="button" aria-label={`Restore publication slot ${slot.slotName}`} onClick={() => void restore(slot)}><RotateCcw size={13} /> Restore</button>
+                ) : slot.publication ? (
+                  <button type="button" aria-label={`Unpublish publication slot ${slot.slotName}`} onClick={() => void unpublish(slot)}>Unpublish</button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
       {state === "ready" && artifacts.length === 0 ? <p className="wf-muted">No published artifacts for this workflow yet.</p> : null}
       {state === "ready" && artifacts.length > 0 ? (
         <div className="wf-artifact-list" role="list" aria-label="Workflow artifacts">
@@ -419,7 +424,6 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
                 <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
                 <button type="button" onClick={() => void run(artifact)}><Play size={13} /> Run</button>
                 {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
-                <button type="button" aria-label={`Delete executable ${artifact.artifactId} for this workflow`} onClick={() => void remove(artifact)}><Trash2 size={13} /> Delete</button>
               </div>
             </article>
           ))}

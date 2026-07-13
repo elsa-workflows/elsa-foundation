@@ -4,10 +4,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { VariablesEditor, WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
+import { clearApiCapabilityCache } from "../api/capabilities";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  clearApiCapabilityCache();
   if (active) {
     flushSync(() => active!.root.unmount());
     active.container.remove();
@@ -167,16 +169,23 @@ describe("properties view", () => {
     expect(container.querySelector("select[aria-label='Output storage driver']")).toBeNull();
   });
 
-  it("requests only descriptors exposed by the Foundation workflow-management API", () => {
-    const getJson = vi.fn().mockResolvedValue({ descriptors: [] });
-    const context = { baseUrl: "", http: { getJson } } as never;
+  it("requests variable types only through the Expressions capability", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities"
+      ? { capabilities: [{
+          id: "elsa.api.expressions",
+          contractVersion: "1",
+          links: [{ rel: "variable-types", href: "expressions/variable-types" }]
+        }] }
+      : { items: [] });
+    const context = { baseUrl: "test://properties", http: { getJson } } as never;
 
     render(
       <WorkflowPropertiesView details={details()} draft={draft()} context={context} onStateChange={vi.fn()} onDefinitionMetaChange={vi.fn()} />
     );
 
-    expect(getJson).toHaveBeenCalledTimes(1);
-    expect(getJson).toHaveBeenCalledWith("/_elsa/workflow-management/descriptors/variables");
+    await vi.waitFor(() => expect(getJson).toHaveBeenCalledTimes(2));
+    expect(getJson).toHaveBeenNthCalledWith(1, "/capabilities");
+    expect(getJson).toHaveBeenNthCalledWith(2, "/expressions/variable-types");
   });
 
   it("commits a name edit through the metadata handler on blur", () => {

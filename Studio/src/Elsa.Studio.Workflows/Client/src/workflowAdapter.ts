@@ -366,6 +366,17 @@ export function getChildSlots(activity: ActivityNode, catalog?: ActivityCatalogL
 }
 
 export function readStructureDesignFacet(activity: ActivityCatalogItem | null | undefined): StructureDesignFacet | null {
+  if (activity?.containerStructure && activity.authoringTemplate?.structure) {
+    const payload = readStructureDesignFacetPayload(activity.containerStructure);
+    if (payload) {
+      return {
+        kind: activity.authoringTemplate.structure.kind,
+        schemaVersion: activity.authoringTemplate.structure.schemaVersion,
+        payload
+      };
+    }
+  }
+
   for (const facet of activity?.designFacets ?? []) {
     if (!isRecord(facet)) continue;
     const kind = typeof facet.kind === "string" ? facet.kind : "";
@@ -729,13 +740,16 @@ export function updateLayout(layout: DesignMetadataRecord[], nodes: Node[]) {
 }
 
 export function createActivityNode(activity: ActivityCatalogItem, nodeId: string): ActivityNode {
-  return {
-    nodeId,
-    activityVersionId: activity.activityVersionId,
-    inputs: [],
-    outputs: [],
-    structure: createStructureForActivity(activity)
-  };
+  const template = activity.authoringTemplate ? structuredClone(activity.authoringTemplate) : null;
+  return template
+    ? { ...template, nodeId, activityVersionId: activity.activityVersionId, structure: createStructureForActivity(activity) }
+    : {
+        nodeId,
+        activityVersionId: activity.activityVersionId,
+        inputs: [],
+        outputs: [],
+        structure: createStructureForActivity(activity)
+      };
 }
 
 export function normalizeActivityStructures(root: ActivityNode | null | undefined, catalog: ActivityCatalogLookup): ActivityNode | null {

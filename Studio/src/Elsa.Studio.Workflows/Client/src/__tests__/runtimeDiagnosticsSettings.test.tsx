@@ -5,12 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { saveRuntimeDiagnosticsSettings } from "../api/workflows";
+import { clearApiCapabilityCache } from "../api/capabilities";
 import { RuntimeDiagnosticsSettingsPage } from "../RuntimeDiagnosticsSettingsPage";
 import type { RuntimeDiagnosticsSettingsView } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
 
 afterEach(() => {
+  clearApiCapabilityCache();
   if (active) {
     flushSync(() => active!.root.unmount());
     active.container.remove();
@@ -51,7 +53,7 @@ describe("RuntimeDiagnosticsSettingsPage", () => {
       subjectOverrides: { activityOutputs: "Off" }
     });
 
-    expect(putJson).toHaveBeenCalledWith("/_elsa/workflow-management/runtime-diagnostics/settings", {
+    expect(putJson).toHaveBeenCalledWith("/runtime/workflows/diagnostics/settings", {
       scope: "host-default",
       defaultLevel: "Metadata",
       subjectOverrides: { activityOutputs: "Off" }
@@ -93,9 +95,17 @@ function stubContext(
   putJson: (url: string, body: unknown) => Promise<unknown> = async () => settings
 ): StudioEndpointContext {
   return {
-    baseUrl: "",
+    baseUrl: `test://runtime-diagnostics-${Math.random()}`,
     http: {
-      getJson: vi.fn(async () => settings),
+      getJson: vi.fn(async (url: string) => url === "/capabilities"
+        ? {
+            capabilities: [{
+              id: "elsa.api.runtime",
+              contractVersion: "1",
+              links: [{ rel: "runtime-diagnostics", href: "runtime/workflows/diagnostics/settings" }]
+            }]
+          }
+        : settings),
       putJson,
       requestJson: vi.fn(),
       postJson: vi.fn(),

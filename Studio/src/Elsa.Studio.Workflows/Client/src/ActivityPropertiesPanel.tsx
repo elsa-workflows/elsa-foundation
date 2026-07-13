@@ -17,7 +17,7 @@ import type {
 } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ScopedVariableAnalysisStatus } from "./api/workflows";
+import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import {
   describeCollectionType,
   describeDictionaryType,

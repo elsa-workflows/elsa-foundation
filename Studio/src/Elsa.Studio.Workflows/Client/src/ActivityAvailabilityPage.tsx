@@ -6,7 +6,7 @@ import {
   useActivityAvailabilitySettings,
   useSaveActivityAvailabilitySettings,
   useWorkflowActivities
-} from "./api/workflows";
+} from "./api/activityDesign";
 import {
   computeEffectiveAvailability,
   createAvailabilityDraft,

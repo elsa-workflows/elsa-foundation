@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, DatabaseZap, Save, ShieldCheck } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/workflows";
+import { useRuntimeDiagnosticsSettings, useSaveRuntimeDiagnosticsSettings } from "./api/runtime";
 import type {
   RuntimeDiagnosticsEvidenceLevel,
   RuntimeDiagnosticsSettingsView,

@@ -7,7 +7,7 @@ import {
   type StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
 import { readInputValue, readWrappedInput } from "./activityProperties";
-import { getActivityInputOptions } from "./api/workflows";
+import { getActivityInputOptions } from "./api/workflowDesign";
 import type { ActivityNode, WorkflowDefinitionState } from "./workflowTypes";
 
 export type ActivityInputOptionsStatus = "idle" | "loading" | "ready" | "error";

@@ -47,6 +47,7 @@ import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { InspectorPanel } from "./InspectorPanel";
 import { SlotEmptyState } from "./SlotEmptyState";
+import type { PublicationIntent, PublicationPreflight } from "../api/publishing";
 
 export function WorkflowEditor({
   context,
@@ -306,7 +307,16 @@ export function WorkflowEditor({
   }, [paletteGroups]);
 
   // Async toolbar commands (export / save / promote+publish / test run) live in a dedicated hook.
-  const { exportJson, save, promoteAndPublish, run } = useWorkflowOperations({
+  const {
+    exportJson,
+    save,
+    preparePublication,
+    publicationReview,
+    reviewPublication,
+    confirmPublication,
+    cancelPublication,
+    run
+  } = useWorkflowOperations({
     context,
     draft,
     details,
@@ -614,7 +624,7 @@ export function WorkflowEditor({
           ) : null}
           <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
           <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
-          <button type="button" disabled={busy} onClick={() => void promoteAndPublish()}><GitBranch size={15} /> Promote</button>
+          <button type="button" disabled={busy} onClick={() => void preparePublication()}><GitBranch size={15} /> Promote &amp; publish</button>
           {renderedTestRun ? (
             <TestRunStatus
               testRun={renderedTestRun}
@@ -635,6 +645,17 @@ export function WorkflowEditor({
       </div>
 
       {error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+
+      {publicationReview ? (
+        <PublicationReviewDialog
+          preflight={publicationReview.preflight}
+          reviewedIntent={publicationReview.intent}
+          busy={busy}
+          onReview={reviewPublication}
+          onPublish={confirmPublication}
+          onCancel={cancelPublication}
+        />
+      ) : null}
 
       <div className={editorBodyClassName} style={editorBodyStyle}>
         <aside className="wf-palette" aria-label="Activities panel">
@@ -821,5 +842,61 @@ export function WorkflowEditor({
         </aside>
       </div>
     </section>
+  );
+}
+
+export function PublicationReviewDialog({ preflight, reviewedIntent, busy, onReview, onPublish, onCancel }: {
+  preflight: PublicationPreflight;
+  reviewedIntent: PublicationIntent;
+  busy: boolean;
+  onReview(intent: PublicationIntent): Promise<void>;
+  onPublish(): Promise<void>;
+  onCancel(): void;
+}) {
+  const reviewedAction = reviewedIntent.action ?? preflight.resolvedAction;
+  const [action, setAction] = useState<"replace" | "sideBySide">(reviewedAction);
+  const [slotName, setSlotName] = useState(reviewedIntent.slotName ?? preflight.slotName);
+  const intent: PublicationIntent = action === "sideBySide"
+    ? { action, slotName: slotName.trim() }
+    : { action: "replace", slotName: slotName.trim() || preflight.slotName };
+  const reviewIsCurrent = action === reviewedAction
+    && (intent.slotName ?? "") === (reviewedIntent.slotName ?? preflight.slotName);
+  const changes = preflight.triggers ?? preflight.changes ?? [];
+  const slotIsValid = action !== "sideBySide" || Boolean(slotName.trim());
+
+  return (
+    <div className="wf-dialog-backdrop" role="presentation">
+      <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="publication-review-title">
+        <h3 id="publication-review-title">Review publication</h3>
+        <p>
+          The {preflight.policySource} policy resolved to <strong>{preflight.resolvedAction === "replace" ? "replacement" : "side-by-side"}</strong>
+          {" "}in slot <strong>{preflight.slotName}</strong>.
+        </p>
+        <fieldset className="wf-form-field">
+          <legend>Publication behavior</legend>
+          <label><input type="radio" name="publication-action" checked={action === "replace"} onChange={() => setAction("replace")} /> Replace authority in this slot</label>
+          <label><input type="radio" name="publication-action" checked={action === "sideBySide"} onChange={() => setAction("sideBySide")} /> Publish side by side</label>
+        </fieldset>
+        <label className="wf-form-field">
+          <span>{action === "sideBySide" ? "Named slot" : "Slot"}</span>
+          <input aria-label="Publication slot" value={slotName} onChange={event => setSlotName(event.target.value)} required={action === "sideBySide"} />
+          {action === "sideBySide" && !slotName.trim() ? <small role="alert">A meaningful slot name is required for side-by-side publication.</small> : null}
+        </label>
+        <div aria-label="Trigger changes">
+          <h4>Trigger changes</h4>
+          {changes.length ? (
+            <ul>{changes.map(change => <li key={`${change.change}-${change.key}`}>{change.change}: {change.key} ({change.cardinality})</li>)}</ul>
+          ) : <p>No trigger changes.</p>}
+          {preflight.conflicts?.length ? (
+            <ul>{preflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`} role="alert">Conflict with slot {conflict.slotName}: {conflict.key}</li>)}</ul>
+          ) : null}
+        </div>
+        <div className="wf-dialog-actions">
+          <button type="button" onClick={onCancel} disabled={busy}>Cancel</button>
+          {!reviewIsCurrent ? <button type="button" onClick={() => void onReview(intent)} disabled={busy || !slotIsValid}>Review changes</button> : null}
+          <button type="button" onClick={() => void onPublish()} disabled={busy || !slotIsValid || !reviewIsCurrent || !preflight.canActivate}>Publish</button>
+        </div>
+      </section>
+    </div>
   );
 }

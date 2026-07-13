@@ -353,7 +353,7 @@ describe("studio registry", () => {
     })));
     const client = createEndpointContext("https://foundation.example/").http;
 
-    const request = client.getJson("/_elsa/workflow-management/definitions");
+    const request = client.getJson("/design/workflows/definitions");
     const expectation = expect(request).rejects.toThrow("backend API is responding");
     await vi.advanceTimersByTimeAsync(10000);
 

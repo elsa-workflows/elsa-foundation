@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, Play, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { getDefinition, getExecutable, listActivities, runExecutable } from "../api/workflows";
+import { getDefinition } from "../api/workflowDesign";
+import { listActivities } from "../api/activityDesign";
+import { getExecutable, runExecutable } from "../api/runtime";
 import type {
   ActivityCatalogItem,
   DesignMetadataRecord,

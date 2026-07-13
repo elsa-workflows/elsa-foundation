@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionDetails } from "../workflowTypes";
-import { updateDefinitionMetadata } from "../api/workflows";
+import { updateDefinitionMetadata } from "../api/workflowDesign";
 
 interface DefinitionMetadataParams {
   context: StudioEndpointContext;

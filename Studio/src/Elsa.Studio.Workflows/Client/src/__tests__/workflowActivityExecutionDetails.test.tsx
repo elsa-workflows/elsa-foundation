@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getActivityExecutionInspection } from "../api/workflows";
+import { getActivityExecutionInspection } from "../api/runtime";
 import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
@@ -22,8 +22,8 @@ import type {
 } from "../workflowTypes";
 import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
-vi.mock("../api/workflows", async importOriginal => ({
-  ...(await importOriginal<typeof import("../api/workflows")>()),
+vi.mock("../api/runtime", async importOriginal => ({
+  ...(await importOriginal<typeof import("../api/runtime")>()),
   getActivityExecutionInspection: vi.fn()
 }));
 

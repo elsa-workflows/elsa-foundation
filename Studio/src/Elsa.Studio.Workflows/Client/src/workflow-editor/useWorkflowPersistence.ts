@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
-import { updateDraft } from "../api/workflows";
+import { updateDraft } from "../api/workflowDesign";
 import { autosaveDelayMs } from "./constants";
 import { getDraftSignature } from "./editorHelpers";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
