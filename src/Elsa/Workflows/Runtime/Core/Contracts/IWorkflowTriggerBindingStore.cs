@@ -19,6 +19,34 @@ public interface IWorkflowTriggerBindingStore
     /// <summary>Upserts a single trigger binding, keyed by its <see cref="WorkflowTriggerBinding.TriggerBindingId"/>.</summary>
     ValueTask<WorkflowTriggerBinding> SaveAsync(WorkflowTriggerBinding binding, CancellationToken cancellationToken = default);
 
+    /// <summary>Atomically replaces one publication's prepared bindings without exposing them to serving queries.</summary>
+    ValueTask PreparePublicationAsync(
+        string publicationId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped preparation."));
+
+    /// <summary>Returns every prepared or active binding owned by one publication.</summary>
+    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> ListByPublicationAsync(
+        string publicationId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyCollection<WorkflowTriggerBinding>>(
+            new NotSupportedException("This trigger-binding store does not support publication-scoped queries."));
+
+    /// <summary>
+    /// Makes one prepared publication visible and, when supplied, removes only the replaced publication from
+    /// serving visibility. Rows are retained until publication-scoped cleanup.
+    /// </summary>
+    ValueTask ActivatePublicationAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped activation."));
+
+    /// <summary>Deletes every binding owned by one publication without affecting shared artifacts or other slots.</summary>
+    ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This trigger-binding store does not support publication-scoped deletion."));
+
     /// <summary>
     /// Removes every binding owned by the given artifact. Returns the number of bindings removed. Used on
     /// republish to clear a prior version's triggers before the current version's triggers are written.

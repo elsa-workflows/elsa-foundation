@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Resolvers;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -170,8 +171,10 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeExecutionIdGenerator, ShortRuntimeExecutionIdGenerator>();
         services.TryAddSingleton<IWorkflowStartDispatcher, WorkflowStartDispatcher>();
 
-        // Reference GC (ADR 0040): the two-query sweep that drops expired/retired references then unreferenced
-        // artifacts. Registered as the sweep service; a host schedules it periodically (see the sweeper feature).
+        // Reference GC (ADR 0040): retained execution roots and creation grace are runtime safety policy. A host may
+        // configure the policy and schedule the collector through the separate sweeper feature.
+        services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
+        services.TryAddSingleton<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
         services.TryAddSingleton<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
 
         return services;

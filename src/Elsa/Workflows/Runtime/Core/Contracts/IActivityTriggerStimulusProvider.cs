@@ -34,6 +34,12 @@ public interface IActivityTriggerStimulusProvider
     string ProviderId => GetType().FullName ?? GetType().Name;
 
     /// <summary>
+    /// Declares whether several authoritative publications may receive the same normalized stimulus.
+    /// Existing providers default to <see cref="TriggerCardinality.FanOut"/> for source and binary compatibility.
+    /// </summary>
+    TriggerCardinality Cardinality => TriggerCardinality.FanOut;
+
+    /// <summary>
     /// Returns <see cref="ActivityTriggerStimulusResult.Recognized"/> carrying the stimulus identities for
     /// <paramref name="node"/> if this provider owns its activity type (zero or more descriptors); otherwise
     /// <see cref="ActivityTriggerStimulusResult.NotRecognized"/>.

@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,6 @@ internal sealed class List(IRequestSender requestSender, ILogger<List> logger) :
     public override void Configure()
     {
         Get(RouteConstants.Definitions);
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
     }
 }

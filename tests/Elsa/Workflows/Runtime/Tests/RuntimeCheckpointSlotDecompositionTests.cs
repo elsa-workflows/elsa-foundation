@@ -80,6 +80,7 @@ public sealed class RuntimeCheckpointSlotDecompositionTests : RuntimePipelineTes
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutable());
         await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewActivityStateForStatus(ActivityExecutionStatus.Running));
         var dispatcher = provider.GetRequiredService<IRuntimeExecutionPipelineDispatcher>();

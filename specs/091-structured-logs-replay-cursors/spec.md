@@ -1,7 +1,7 @@
 # Feature Specification: Durable Structured Logs Replay Cursors
 
-**Tracking**: [Elsa issue #635](https://github.com/elsa-workflows/elsa-foundation/issues/635)  
-**Parent**: [Zero-EF Persistence #629](https://github.com/elsa-workflows/elsa-foundation/issues/629)  
+**Tracking**: [Elsa issue #635](https://github.com/elsa-workflows/elsa-foundation/issues/635)
+**Parent**: [Zero-EF Persistence #629](https://github.com/elsa-workflows/elsa-foundation/issues/629)
 **Status**: Ratified and verified (2026-07-12).
 
 ## Goal

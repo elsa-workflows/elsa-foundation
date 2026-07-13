@@ -66,6 +66,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Expressions (evaluator + descriptor providers) | [`src/Elsa/Expressions/EXTENSION_POINTS.md`](src/Elsa/Expressions/EXTENSION_POINTS.md) |
+| Expressions API (descriptor projections and capability declaration) | [`src/Elsa/Expressions/Api/EXTENSION_POINTS.md`](src/Elsa/Expressions/Api/EXTENSION_POINTS.md) |
 | JavaScript expressions (pre/post-processors) | [`src/Elsa/Expressions/JavaScript/EXTENSION_POINTS.md`](src/Elsa/Expressions/JavaScript/EXTENSION_POINTS.md) |
 | JavaScript rendering (declaration contributors) | [`src/Elsa/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md`](src/Elsa/Expressions/JavaScript/Rendering/EXTENSION_POINTS.md) |
 | Liquid expressions (rendering lifecycle) | [`src/Elsa/Expressions/Liquid/EXTENSION_POINTS.md`](src/Elsa/Expressions/Liquid/EXTENSION_POINTS.md) |
@@ -81,6 +82,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | FastEndpoints (secure-by-construction endpoint bases, per-shell API security, endpoint configurators/filters) | [`src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md`](src/Elsa/Api/FastEndpoints/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`src/Elsa/Api/Capabilities/EXTENSION_POINTS.md`](src/Elsa/Api/Capabilities/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
 
@@ -125,6 +127,7 @@ not automatic constitution violations.
 | Activities design — JSON reconciliation source contribution | [`src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
 | Activities design — persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Activities design — Groundwork persistence commands + lookup | [`src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
+| Activities design API — catalog and availability services | [`src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md`](src/Elsa/Activities/Design/Api/EXTENSION_POINTS.md) |
 
 ### Workflows
 
@@ -135,8 +138,11 @@ not automatic constitution violations.
 | Workflows design — reconciliation sources | [`src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Reconciliation/EXTENSION_POINTS.md) |
 | Workflows design — persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/EFCore/EXTENSION_POINTS.md) |
 | Workflows design — Groundwork persistence commands + diff engine | [`src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Design/Persistence/Groundwork/EXTENSION_POINTS.md) |
-| Workflows publishing — executable compiler, transient executable store, test-run store | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| Workflows publishing — policy, slot authority, preflight, projection reconciliation, compiler, and persistence stores | [`src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
+| Workflows publishing core — authority and projection contracts | [`src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/Elsa/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
 | Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md) |
+| Workflows runtime API — executable inspection and diagnostics services | [`src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
+| Workflows runtime distributed Groundwork persistence | [`src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/EXTENSION_POINTS.md) |
 | Workflows runtime — HTTP endpoint behaviour | [`src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/Elsa/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 

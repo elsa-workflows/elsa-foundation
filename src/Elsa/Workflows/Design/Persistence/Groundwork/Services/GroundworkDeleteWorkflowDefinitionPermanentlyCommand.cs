@@ -10,6 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.Groundwork.Services;
 public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
     IDocumentStore store,
     IPayloadSerializer payloadSerializer,
+    IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionDraftStore draftStore,
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionVersionLayoutStore layoutStore)
@@ -17,6 +18,11 @@ public sealed class GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
 {
     public async Task Execute(string definitionId, CancellationToken cancellationToken = default)
     {
+        var definition = await definitionStore.FindByIdAsync(definitionId, cancellationToken)
+            ?? throw new ArgumentException($"Workflow definition '{definitionId}' was not found.");
+        if (definition.DeletedAt is null)
+            throw new InvalidOperationException("A workflow definition must be soft-deleted before permanent deletion.");
+
         var deletes = new List<DeleteDocumentRequest>();
         var drafts = await draftStore.ListByWorkflowDefinitionIdAsync(definitionId, cancellationToken);
         if (drafts.Count > 0)

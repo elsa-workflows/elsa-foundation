@@ -10,14 +10,14 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// contributed on the trigger indexer's pre-write <see cref="IWorkflowTriggerIndexValidator"/> seam. For each
 /// HTTP-endpoint binding about to be written it looks up the existing claimants of the same stimulus identity
 /// (<c>(StimulusType, StimulusHash)</c> = <c>(template, method)</c>) and throws
-/// <see cref="EndpointRoutingConflictException"/> when a DIFFERENT workflow definition already owns it — failing
-/// the second, conflicting publish with the durable index untouched.
+/// <see cref="EndpointRoutingConflictException"/> when another authoritative slot owns it — failing the
+/// conflicting publication with the durable index untouched.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Two exemptions keep legitimate publishes flowing: bindings owned by the artifact being republished are
-/// ignored (delete-and-resave is about to supersede them), and same-<c>DefinitionId</c> claimants are allowed
-/// (another version/artifact of the same definition, or a duplicate node — not a cross-definition conflict).
+/// Publication-scoped validation excludes only the publication being replaced in the candidate's own slot.
+/// Sharing an artifact or definition is not an exemption across explicit slots. The legacy artifact-scoped
+/// indexing path retains its artifact/same-definition compatibility exemptions.
 /// </para>
 /// <para>
 /// The constraint is deliberately HTTP-specific and lives in this module: for most stimulus types (e.g. two
@@ -38,12 +38,29 @@ public sealed class HttpEndpointRoutingUniquenessValidator(IWorkflowTriggerBindi
                 continue;
 
             var claimants = await bindingStore.ListByStimulusAsync(binding.StimulusType, binding.StimulusHash, cancellationToken);
-            var conflicting = claimants.Any(existing =>
-                !StringComparer.Ordinal.Equals(existing.ArtifactId, snapshot.ArtifactId) &&
-                !StringComparer.Ordinal.Equals(existing.DefinitionId, binding.DefinitionId));
+            var conflicting = claimants.FirstOrDefault(existing => IsConflict(binding, snapshot.ArtifactId, existing));
 
-            if (conflicting)
-                throw EndpointRoutingConflictException.ForBinding(binding);
+            if (conflicting is not null)
+                throw EndpointRoutingConflictException.ForBindings(binding, conflicting);
         }
+    }
+
+    private static bool IsConflict(
+        WorkflowTriggerBinding candidate,
+        string candidateArtifactId,
+        WorkflowTriggerBinding existing)
+    {
+        // Publication-scoped replacement excludes only the authority in the candidate's own slot. Sharing an
+        // artifact or definition across two explicit slots is not an Exclusive-claim exemption (ADR 0043).
+        if (candidate.PublicationId is not null)
+        {
+            if (StringComparer.Ordinal.Equals(existing.PublicationId, candidate.PublicationId))
+                return false;
+            return !StringComparer.Ordinal.Equals(existing.SlotId, candidate.SlotId);
+        }
+
+        // Compatibility path for the legacy artifact-scoped indexer.
+        return !StringComparer.Ordinal.Equals(existing.ArtifactId, candidateArtifactId) &&
+               !StringComparer.Ordinal.Equals(existing.DefinitionId, candidate.DefinitionId);
     }
 }

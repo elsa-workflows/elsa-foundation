@@ -159,7 +159,7 @@ New work should move toward this rule:
 - Reports: current findings and unfinished work.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
-at specs/091-structured-logs-replay-cursors/plan.md
+For additional context about technologies, project structure, shell commands, contracts, and
+validation scenarios for the active work unit, read
+`specs/092-domain-owned-apis/plan.md`.
 <!-- SPECKIT END -->

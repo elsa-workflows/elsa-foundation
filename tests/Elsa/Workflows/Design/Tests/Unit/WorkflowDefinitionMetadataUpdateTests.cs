@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// Covers the persistence path behind <c>PATCH /_elsa/workflow-management/definitions/{id}</c>:
+/// Covers the persistence path behind <c>PATCH /design/workflows/definitions/{definitionId}</c>:
 /// load the <c>WorkflowDefinition</c>, mutate Name/Description, and persist via the reused
 /// <see cref="ISaveWorkflowDefinitionCommand"/> — mirroring the API handler.
 /// </summary>

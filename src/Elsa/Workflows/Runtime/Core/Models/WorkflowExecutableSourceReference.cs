@@ -10,7 +10,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <remarks>
 /// Everything that is not behavior lives here: source identity (which may dangle across environments), the
 /// artifact-version label, publish/creation timestamps, the reference scope and optional expiry, retirement
-/// facts, and the embedded <b>Layout Sidecar</b> (<see cref="Layout"/>). The layout is a verbatim publish-time
+/// facts, publication/slot provenance for Published references, and the embedded <b>Layout Sidecar</b>
+/// (<see cref="Layout"/>). TestRun references remain publication- and slot-less. The layout is a verbatim publish-time
 /// copy of the definition version's graph geometry (ADR 0035 discipline: opaque, never canonicalized) and
 /// NEVER contributes to the artifact hash — visual arrangement is not behavior (ADR 0039).
 /// </remarks>
@@ -29,7 +30,9 @@ public sealed record WorkflowExecutableSourceReference(
     DateTimeOffset? ExpiresAt = null,
     DateTimeOffset? DeletedAt = null,
     string? DeletedReason = null,
-    IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null)
+    IReadOnlyList<WorkflowExecutableLayoutRecord>? Layout = null,
+    string? PublicationId = null,
+    string? SlotId = null)
 {
     /// <summary>The publish-time layout sidecar copied from the definition version's layout store; may be empty.</summary>
     public IReadOnlyList<WorkflowExecutableLayoutRecord> Layout { get; init; } = Layout ?? [];

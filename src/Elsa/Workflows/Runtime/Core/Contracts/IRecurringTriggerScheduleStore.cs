@@ -30,6 +30,31 @@ public interface IRecurringTriggerScheduleStore
     /// <summary>Upserts a schedule (keyed by <see cref="RecurringTriggerSchedule.ScheduleId"/>) and returns the stored schedule.</summary>
     ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default);
 
+    /// <summary>Atomically replaces one publication's prepared schedules without exposing them to the pump.</summary>
+    ValueTask PreparePublicationAsync(
+        string publicationId,
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped preparation."));
+
+    /// <summary>Returns every prepared or active schedule owned by one publication.</summary>
+    ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+        string publicationId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<IReadOnlyCollection<RecurringTriggerSchedule>>(
+            new NotSupportedException("This recurring-schedule store does not support publication-scoped queries."));
+
+    /// <summary>Activates one publication and deactivates only the explicitly replaced publication.</summary>
+    ValueTask ActivatePublicationAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped activation."));
+
+    /// <summary>Deletes schedules owned by one publication without affecting another publication of the artifact.</summary>
+    ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException(new NotSupportedException("This recurring-schedule store does not support publication-scoped deletion."));
+
     /// <summary>Returns due schedules (NextOccurrence &lt;= <paramref name="asOf"/>), ordered by next occurrence then id, capped by <paramref name="limit"/>.</summary>
     ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default);
 

@@ -19,4 +19,14 @@ public interface IWorkflowTriggerIndexer
     /// <exception cref="ArgumentNullException"><paramref name="executable"/> is <see langword="null"/>.</exception>
     /// <exception cref="WorkflowTriggerPreflightException">Trigger preflight fails before index mutation.</exception>
     ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> IndexAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Extracts and validates a publication-scoped projection, then persists it in prepared (non-serving) state.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        WorkflowExecutable executable,
+        string publicationId,
+        string slotId,
+        CancellationToken cancellationToken = default) =>
+        IndexAsync(executable, cancellationToken);
 }

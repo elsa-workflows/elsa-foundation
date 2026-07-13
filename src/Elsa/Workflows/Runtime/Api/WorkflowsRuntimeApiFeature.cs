@@ -4,6 +4,10 @@ using Elsa.Api.FastEndpoints;
 using Elsa.Mediator.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Workflows.Runtime.Api.Services;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Workflows.Runtime.Api.Capabilities;
 
 namespace Elsa.Workflows.Runtime.Api;
 
@@ -14,7 +18,8 @@ namespace Elsa.Workflows.Runtime.Api;
 [ShellFeature(
     name: "WorkflowsRuntimeApi",
     DisplayName = "Workflows Runtime API",
-    Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts."
+    Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
+    DependsOn = new object[] { "ApiCapabilities" }
 )]
 public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
 {
@@ -26,8 +31,11 @@ public class WorkflowsRuntimeApiFeature : FastEndpointsFeatureBase
         // but a non-HTTP host (worker, test harness, another module) can compose the same runtime via
         // AddWorkflowRuntime() without this API feature. See RuntimeCoreServiceCollectionExtensions.
         services.AddWorkflowRuntime();
+        services.TryAddScoped<WorkflowExecutableInspector>();
 
         // API-only wiring: the FastEndpoints request handlers this feature's endpoints dispatch through.
         services.AddRequestHandlersFrom(GetType().Assembly);
+        services.AddApiCapability(RuntimeApiCapabilities.StaticDeclaration);
+        services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
     }
 }

@@ -38,6 +38,9 @@ public static class GroundworkWorkflowsDesignStoreRegistration
         services.RemoveAll<IWorkflowDefinitionDraftStore>();
         services.AddScoped<IWorkflowDefinitionDraftStore, GroundworkWorkflowDefinitionDraftStore>();
 
+        services.RemoveAll<IWorkflowDefinitionListProjectionStore>();
+        services.AddScoped<IWorkflowDefinitionListProjectionStore, GroundworkWorkflowDefinitionListProjectionStore>();
+
         services.RemoveAll<IWorkflowDefinitionVersionLayoutStore>();
         services.AddScoped<IWorkflowDefinitionVersionLayoutStore, GroundworkWorkflowDefinitionVersionLayoutStore>();
 

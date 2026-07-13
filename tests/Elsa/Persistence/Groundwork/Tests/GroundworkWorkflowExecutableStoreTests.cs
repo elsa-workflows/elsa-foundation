@@ -3,6 +3,11 @@ using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Queries;
+using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
+using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 using Xunit;
 
 namespace Elsa.Persistence.Groundwork.Tests;
@@ -99,6 +104,182 @@ public sealed class GroundworkWorkflowExecutableStoreTests
         Assert.Null(await store.FindAsync("artifact-1"));
         Assert.Empty(await store.ListAsync());
         Assert.False(await store.DeleteAsync("artifact-1"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Root_Write_Leases_And_Deletion_Guards_Are_Mutually_Exclusive(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var firstLease = await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-1", now.AddMinutes(1), now);
+        var secondLease = await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-2", now.AddMinutes(1), now);
+
+        Assert.NotNull(firstLease);
+        Assert.NotNull(secondLease);
+        Assert.True(await store.RenewRootWriteLeaseAsync(firstLease!, now.AddMinutes(2), now));
+        Assert.True(await store.RenewRootWriteLeaseAsync(firstLease!, now.AddMinutes(3), now));
+        Assert.Null(await store.TryBeginDeletionAsync("artifact-1", "gc-1", now.AddMinutes(1), now));
+
+        await store.ReleaseRootWriteLeaseAsync(firstLease!);
+        Assert.Null(await store.TryBeginDeletionAsync("artifact-1", "gc-1", now.AddMinutes(1), now));
+        await store.ReleaseRootWriteLeaseAsync(secondLease!);
+
+        var guard = await store.TryBeginDeletionAsync("artifact-1", "gc-1", now.AddMinutes(1), now);
+        Assert.NotNull(guard);
+        Assert.Null(await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-3", now.AddMinutes(1), now));
+        Assert.True(await store.CancelDeletionAsync(guard!));
+        Assert.NotNull(await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-3", now.AddMinutes(1), now));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Expired_And_Stale_Guards_Cannot_Mutate_Current_Ownership(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var expiredLease = (await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddSeconds(1), now))!;
+        var currentLease = (await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddMinutes(2), now.AddSeconds(2)))!;
+
+        Assert.NotEqual(expiredLease.ConcurrencyToken, currentLease.ConcurrencyToken);
+        Assert.False(await store.RenewRootWriteLeaseAsync(expiredLease, now.AddMinutes(3), now.AddSeconds(2)));
+        await store.ReleaseRootWriteLeaseAsync(expiredLease);
+        Assert.Null(await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now.AddSeconds(2)));
+
+        await store.ReleaseRootWriteLeaseAsync(currentLease);
+        var expiredGuard = (await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddSeconds(3), now.AddSeconds(2)))!;
+        var replacementLease = await store.TryAcquireRootWriteLeaseAsync("artifact-1", "replacement", now.AddMinutes(1), now.AddSeconds(4));
+
+        Assert.NotNull(replacementLease);
+        Assert.False(await store.CancelDeletionAsync(expiredGuard));
+        Assert.False(await store.DeleteAsync(expiredGuard, now.AddSeconds(4)));
+        Assert.NotNull(await store.FindAsync("artifact-1"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Duplicate_Owner_Ids_Do_Not_Bypass_Fencing_To_Extend_Expiry(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var lease = (await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddSeconds(1), now))!;
+        var duplicateLease = (await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddMinutes(1), now))!;
+        Assert.Equal(lease.ConcurrencyToken, duplicateLease.ConcurrencyToken);
+
+        var guard = await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddSeconds(3), now.AddSeconds(2));
+        Assert.NotNull(guard);
+        var duplicateGuard = (await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now.AddSeconds(2)))!;
+        Assert.Equal(guard!.ConcurrencyToken, duplicateGuard.ConcurrencyToken);
+
+        Assert.NotNull(await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-2", now.AddMinutes(1), now.AddSeconds(4)));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Guarded_Delete_Requires_The_Current_Unexpired_Guard(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var guard = (await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now))!;
+        var forged = guard with { ConcurrencyToken = "stale" };
+
+        Assert.False(await store.DeleteAsync(forged, now));
+        Assert.NotNull(await store.FindAsync("artifact-1"));
+        Assert.True(await store.DeleteAsync(guard, now));
+        Assert.Null(await store.FindAsync("artifact-1"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Concurrent_Root_Lease_And_Deletion_Guard_Have_Exactly_One_Winner(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        var synchronizedStore = new FirstTwoExecutableLoadsBarrierDocumentStore(fixture.DocumentStore);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(synchronizedStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        await store.SaveAsync(Executable("artifact-1"));
+        var leaseTask = store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddMinutes(1), now).AsTask();
+        var guardTask = store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now).AsTask();
+        await Task.WhenAll(leaseTask, guardTask);
+        var lease = await leaseTask;
+        var guard = await guardTask;
+
+        Assert.NotEqual(lease is null, guard is null);
+        if (guard is not null)
+            Assert.True(await store.DeleteAsync(guard, now));
+        else
+            Assert.NotNull(await store.FindAsync("artifact-1"));
+    }
+
+    [Theory]
+    [InlineData("sqlite")]
+    [InlineData("memory")]
+    public async Task Missing_Artifact_Never_Authorizes_A_Root_Or_Deletion(string provider)
+    {
+        await using var fixture = CreateStore(provider);
+        IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Null(await store.TryAcquireRootWriteLeaseAsync("missing", "writer", now.AddMinutes(1), now));
+        Assert.Null(await store.TryBeginDeletionAsync("missing", "gc", now.AddMinutes(1), now));
+    }
+
+    [Fact]
+    public async Task Retention_Guards_Survive_Restart_And_Remain_Usable()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"gw-executable-guard-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={dbPath}";
+        var now = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+        WorkflowExecutableRootWriteLease lease;
+        WorkflowExecutableDeletionGuard guard;
+
+        try
+        {
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+                await store.SaveAsync(Executable("artifact-1"));
+                lease = (await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer", now.AddMinutes(1), now))!;
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+                Assert.Null(await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now));
+                await store.ReleaseRootWriteLeaseAsync(lease);
+                guard = (await store.TryBeginDeletionAsync("artifact-1", "gc", now.AddMinutes(1), now))!;
+            }
+
+            await using (var fixture = GroundworkDocumentStoreFixture.CreateSqlite(connectionString))
+            {
+                IWorkflowExecutableStore store = new GroundworkWorkflowExecutableStore(fixture.DocumentStore, GroundworkTestSerialization.Serializer);
+                Assert.Null(await store.TryAcquireRootWriteLeaseAsync("artifact-1", "writer-2", now.AddMinutes(1), now));
+                Assert.True(await store.DeleteAsync(guard, now));
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbPath))
+                File.Delete(dbPath);
+        }
     }
 
     [Theory]
@@ -282,4 +463,56 @@ public sealed class GroundworkWorkflowExecutableStoreTests
 
     private static GroundworkDocumentStoreFixture CreateStore(string provider) =>
         GroundworkDocumentStoreFixture.Create(provider);
+
+    /// <summary>
+    /// Forces the two competing transitions to read the same document version before either CAS write,
+    /// so the test exercises the provider's actual conflict-and-retry path rather than merely scheduling
+    /// the operations concurrently.
+    /// </summary>
+    private sealed class FirstTwoExecutableLoadsBarrierDocumentStore(IDocumentStore inner) : IDocumentStore
+    {
+        private readonly TaskCompletionSource _bothLoaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _relevantLoadCount;
+
+        public TransactionBoundary TransactionBoundary => inner.TransactionBoundary;
+        public DocumentStoreAccess Access => inner.Access;
+
+        public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(request, cancellationToken);
+
+        public async Task<DocumentEnvelope?> LoadAsync(string documentKind, string id, CancellationToken cancellationToken = default)
+        {
+            var envelope = await inner.LoadAsync(documentKind, id, cancellationToken);
+            if (documentKind != ElsaRuntimeStorageManifest.WorkflowExecutableDocumentKind || id != "artifact-1")
+                return envelope;
+
+            var loadNumber = Interlocked.Increment(ref _relevantLoadCount);
+            if (loadNumber <= 2)
+            {
+                if (loadNumber == 2)
+                    _bothLoaded.TrySetResult();
+                await _bothLoaded.Task.WaitAsync(cancellationToken);
+            }
+
+            return envelope;
+        }
+
+        public Task<DocumentStoreWriteResult> DeleteAsync(DeleteDocumentRequest request, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<DocumentEnvelope>> QueryAsync(DocumentStoreQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentQueryResult> QueryAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryAsync(query, cancellationToken);
+
+        public Task<DocumentEnvelope?> FirstOrDefaultAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.FirstOrDefaultAsync(query, cancellationToken);
+
+        public Task<bool> AnyAsync(PortableDocumentQuery query, CancellationToken cancellationToken = default) =>
+            inner.AnyAsync(query, cancellationToken);
+
+        public Task<IDocumentUnitOfWork> BeginAsync(DocumentCommitScope scope, CancellationToken cancellationToken = default) =>
+            inner.BeginAsync(scope, cancellationToken);
+    }
 }

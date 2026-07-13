@@ -37,6 +37,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
     public async Task AddWorkflowRuntime_DrivesADrainEndToEnd_WithoutTheApiFeature()
     {
         using var provider = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutable());
         await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState(WorkflowExecutionStatus.Running));
         await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewActivityStateForStatus(ActivityExecutionStatus.Running));
         await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(NewCancelWorkItem());

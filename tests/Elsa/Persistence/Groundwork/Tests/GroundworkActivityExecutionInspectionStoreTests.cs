@@ -118,7 +118,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
         var projection = Projection("wf-1", "ae-1", sequence: 1);
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -363,7 +364,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
 
     private static RuntimeCheckpointCommit InspectionCommit(ActivityExecutionInspectionProjection projection) =>
         new(

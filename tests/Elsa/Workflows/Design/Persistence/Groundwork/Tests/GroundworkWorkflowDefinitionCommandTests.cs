@@ -153,7 +153,9 @@ public class GroundworkWorkflowDefinitionCommandTests
     {
         var saveDefinition = new GroundworkSaveWorkflowDefinitionCommand(_store, _clock);
         var createDraft = CreateCommand();
-        await saveDefinition.Execute(new WorkflowDefinition { Id = "definition-1", Name = "Delete me" }, CancellationToken.None);
+        await saveDefinition.Execute(
+            new WorkflowDefinition { Id = "definition-1", Name = "Delete me", DeletedAt = _clock.UtcNow },
+            CancellationToken.None);
         var draftId = await createDraft.Execute("definition-1", EmptyState(), cancellationToken: CancellationToken.None);
         var versionStore = VersionStore();
         var promote = PromoteCommand();
@@ -164,6 +166,7 @@ public class GroundworkWorkflowDefinitionCommandTests
         var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
             _store,
             Payloads,
+            new GroundworkWorkflowDefinitionStore(_store),
             DraftStore(),
             versionStore,
             VersionLayoutStore());
@@ -176,6 +179,27 @@ public class GroundworkWorkflowDefinitionCommandTests
         Assert.NotEqual(draftId, secondDraftId);
         Assert.Null(await versionStore.FindByIdAsync(versionId));
         Assert.Null(await VersionLayoutStore().FindByVersionIdAsync(versionId));
+    }
+
+    [Fact]
+    public async Task DeleteWorkflowDefinitionPermanently_rejects_an_active_definition()
+    {
+        var definitions = new GroundworkWorkflowDefinitionStore(_store);
+        await new GroundworkSaveWorkflowDefinitionCommand(_store, _clock).Execute(
+            new WorkflowDefinition { Id = "definition-active", Name = "Keep me" },
+            CancellationToken.None);
+        var delete = new GroundworkDeleteWorkflowDefinitionPermanentlyCommand(
+            _store,
+            Payloads,
+            definitions,
+            DraftStore(),
+            VersionStore(),
+            VersionLayoutStore());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            delete.Execute("definition-active", CancellationToken.None));
+
+        Assert.NotNull(await definitions.FindByIdAsync("definition-active"));
     }
 
     [Fact]

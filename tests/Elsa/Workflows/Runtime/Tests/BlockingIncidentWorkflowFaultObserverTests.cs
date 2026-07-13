@@ -82,7 +82,10 @@ public sealed class BlockingIncidentWorkflowFaultObserverTests
             _now = now;
             WorkflowStore = new InMemoryWorkflowExecutionStateStore();
             IncidentStore = new InMemoryIncidentStateStore();
-            var commitStore = new InMemoryRuntimeCheckpointCommitStore(WorkflowStore, null, null, null, IncidentStore);
+            var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+                WorkflowStore,
+                incidentStateStore: IncidentStore,
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
             var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), commitStore);
             Observer = new BlockingIncidentWorkflowFaultObserver(IncidentStore, WorkflowStore, committer, new FixedTimeProvider(now));
             Envelope = NewEnvelope();

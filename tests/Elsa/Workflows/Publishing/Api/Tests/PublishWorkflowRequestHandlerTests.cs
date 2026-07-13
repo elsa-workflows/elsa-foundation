@@ -15,11 +15,15 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Handlers;
+using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Api.Services;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +45,11 @@ public sealed class PublishWorkflowRequestHandlerTests
     private readonly ActivityDefinitionVersion _sequenceActivity = ActivityVersion("activity-sequence", typeof(SequenceActivity).FullName!);
     private readonly ActivityDefinitionVersion _flowchartActivity = ActivityVersion("activity-flowchart", typeof(FlowchartActivity).FullName!);
     private readonly IActivityStructureService _activityStructureService = ActivityStructureService();
+    private readonly InMemoryWorkflowTriggerBindingStore _bindingStore = new();
+    private readonly InMemoryPublicationSlotStore _slotStore = new();
+    private readonly InMemoryPublicationRecordStore _publicationStore = new();
+    private readonly InMemoryPublicationPolicyStore _policyStore = new();
+    private readonly InMemoryPublicationProjectionIntentStore _intentStore = new();
 
     [Fact]
     public async Task PublishesRootActivityIntoExecutableArtifact()
@@ -62,10 +71,26 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task SameBehaviorFromTwoDefinitionVersionsYieldsOneArtifactAndTwoReferences()
+    public async Task RepublishingIdenticalArtifactKeepsExistingPublicationAuthority()
     {
-        // Acceptance 1 (ADR 0038): publishing the same behavior from two different definition versions resolves to
-        // ONE content-addressed artifact and appends TWO source references pointing at it.
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("one"))));
+
+        var first = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var second = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        Assert.True(first.WasCreated);
+        Assert.False(second.WasCreated);
+        Assert.Equal(first.PublicationId, second.PublicationId);
+        Assert.Equal(first.SourceReferenceId, second.SourceReferenceId);
+        Assert.Equal(PublicationStatusView.Active, second.Status);
+        Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+    }
+
+    [Fact]
+    public async Task SameBehaviorFromTwoDefinitionsYieldsOneArtifactAndTwoIndependentReferences()
+    {
+        // Each definition owns an independent default slot even when both publications reuse one content-addressed
+        // artifact. Neither definition's publication replaces the other definition's authority.
         var firstVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-A", versionId: "version-A", version: "1.0.0");
         var secondVersion = WorkflowVersion(Node("write-one", Text("one")), definitionId: "definition-B", versionId: "version-B", version: "3.7.0");
 
@@ -90,30 +115,95 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     [Fact]
-    public async Task RepublishingIdenticalVersionIsIdempotentOnArtifactAndAppendsReference()
+    public async Task PublishingToOccupiedDefaultSlotReplacesItsLiveAuthority()
     {
-        // Acceptance 2 (ADR 0038): republishing an identical version resolves to the same artifact (idempotent, not
-        // overwritten) and appends another reference.
-        var version = WorkflowVersion(Node("write-one", Text("one")));
-        var handler = Handler(version);
+        var firstVersion = WorkflowVersion(Node("write-one", Text("one")), "definition-1", "version-1", "1.0.0");
+        var secondVersion = WorkflowVersion(Node("write-two", Text("two")), "definition-1", "version-2", "2.0.0");
 
-        var first = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var first = await Handler(firstVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
         var storedFirst = await _store.FindAsync(first.ArtifactId);
-        var second = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var second = await Handler(secondVersion).Handle(new PublishWorkflow("version-2"), CancellationToken.None);
         var storedSecond = await _store.FindAsync(second.ArtifactId);
 
-        Assert.Equal(first.ArtifactId, second.ArtifactId);
-        Assert.Single(await _store.ListAsync());
-        // Idempotent: the stored artifact instance is not replaced on republish.
-        Assert.Same(storedFirst, storedSecond);
-        Assert.Equal(2, (await _referenceStore.ListByArtifactAsync(first.ArtifactId)).Count);
+        Assert.NotEqual(first.ArtifactId, second.ArtifactId);
+        Assert.NotNull(storedFirst);
+        Assert.NotNull(storedSecond);
+
+        var liveReferences = await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true);
+        var retiredReference = await _referenceStore.FindAsync(first.SourceReferenceId!);
+
+        Assert.Collection(liveReferences, reference => Assert.Equal(second.SourceReferenceId, reference.SourceReferenceId));
+        Assert.NotNull(retiredReference?.DeletedAt);
         Assert.NotEqual(first.SourceReferenceId, second.SourceReferenceId);
     }
 
     [Fact]
-    public async Task AppendedReferenceCarriesLayoutRecordsCopiedFromDefinitionVersion()
+    public async Task ExplicitNamedSlotKeepsDefaultAndNamedAuthoritiesLiveSideBySide()
     {
-        // Acceptance 3 (ADR 0039): the appended reference embeds the layout sidecar copied verbatim from the
+        var defaultVersion = WorkflowVersion(Node("write-default", Text("default")), "definition-1", "version-1", "1.0.0");
+        var namedVersion = WorkflowVersion(Node("write-blue", Text("blue")), "definition-1", "version-2", "2.0.0");
+
+        var defaultPublication = await Handler(defaultVersion).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        var namedPublication = await Handler(namedVersion).Handle(NamedPublish("version-2", "blue"), CancellationToken.None);
+
+        var liveReferences = await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true);
+
+        Assert.Equal(2, liveReferences.Count);
+        Assert.Contains(liveReferences, reference => reference.SourceReferenceId == defaultPublication.SourceReferenceId);
+        Assert.Contains(liveReferences, reference => reference.SourceReferenceId == namedPublication.SourceReferenceId);
+    }
+
+    [Fact]
+    public async Task PublishDoesNotWriteSourceReferenceWhileDeletionGuardOwnsArtifact()
+    {
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var handler = Handler(version);
+        var first = await handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        await _referenceStore.RetireAsync(first.SourceReferenceId!, DateTimeOffset.UtcNow, "test-setup");
+        var now = DateTimeOffset.UtcNow;
+        var deletionGuard = await _store.TryBeginDeletionAsync(first.ArtifactId, "gc-test", now.AddMinutes(1), now);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            handler.Handle(new PublishWorkflow("version-1"), CancellationToken.None));
+
+        Assert.NotNull(deletionGuard);
+        Assert.Equal(first.ArtifactId, exception.ArtifactId);
+        Assert.Single(await _referenceStore.ListByArtifactAsync(first.ArtifactId));
+        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+    }
+
+    [Fact]
+    public async Task UnpublishingSlotRetiresAuthorityWithoutDeletingItsArtifact()
+    {
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var published = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        await InvokeSlotLifecycleHandlerAsync("Unpublish", "definition-1", "default");
+
+        var reference = await _referenceStore.FindAsync(published.SourceReferenceId!);
+        Assert.NotNull(reference?.DeletedAt);
+        Assert.Empty(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        Assert.NotNull(await _store.FindAsync(published.ArtifactId));
+    }
+
+    [Fact]
+    public async Task RestoringUnpublishedSlotReestablishesAuthorityAfterLifecycleValidation()
+    {
+        var version = WorkflowVersion(Node("write-one", Text("one")));
+        var published = await Handler(version).Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+        await InvokeSlotLifecycleHandlerAsync("Unpublish", "definition-1", "default");
+
+        await InvokeSlotLifecycleHandlerAsync("Restore", "definition-1", "default");
+
+        var liveReference = Assert.Single(await _referenceStore.ListAsync(WorkflowExecutableReferenceScope.Published, liveOnly: true));
+        Assert.Equal(published.ArtifactId, liveReference.ArtifactId);
+        Assert.NotNull(await _store.FindAsync(published.ArtifactId));
+    }
+
+    [Fact]
+    public async Task PublishedReferenceCarriesLayoutRecordsCopiedFromDefinitionVersion()
+    {
+        // Acceptance 3 (ADR 0039): the publication reference embeds the layout sidecar copied verbatim from the
         // definition version's layout store.
         var version = WorkflowVersion(Node("write-one", Text("one")));
         var additional = JsonSerializer.SerializeToElement(new { color = "blue" });
@@ -335,6 +425,57 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _referenceStore = new();
 
+    private static PublishWorkflow NamedPublish(string versionId, string slotName)
+    {
+        var request = new PublishWorkflow(versionId);
+        var slotProperty = typeof(PublishWorkflow).GetProperty("SlotName");
+        var actionProperty = typeof(PublishWorkflow).GetProperty("Action");
+
+        Assert.NotNull(slotProperty);
+        Assert.NotNull(actionProperty);
+
+        slotProperty.SetValue(request, slotName);
+        var actionType = Nullable.GetUnderlyingType(actionProperty.PropertyType) ?? actionProperty.PropertyType;
+        actionProperty.SetValue(request, Enum.Parse(actionType, "PublishSideBySide"));
+        return request;
+    }
+
+    private async Task InvokeSlotLifecycleHandlerAsync(string operation, string definitionId, string slotName)
+    {
+        var assembly = typeof(PublishWorkflowRequestHandler).Assembly;
+        var handlerType = assembly.GetType($"Elsa.Workflows.Publishing.Api.Handlers.{operation}PublicationSlotRequestHandler");
+        var requestType = assembly.GetType($"Elsa.Workflows.Publishing.Api.Requests.{operation}PublicationSlot");
+
+        Assert.NotNull(handlerType);
+        Assert.NotNull(requestType);
+
+        var request = Activator.CreateInstance(requestType, definitionId, slotName);
+        Assert.NotNull(request);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IWorkflowExecutableStore>(_store);
+        services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(_referenceStore);
+        services.AddSingleton<IWorkflowTriggerBindingStore>(_bindingStore);
+        services.AddSingleton<IPublicationSlotStore>(_slotStore);
+        services.AddSingleton<IPublicationRecordStore>(_publicationStore);
+        services.AddSingleton<IPublicationPolicyStore>(_policyStore);
+        services.AddSingleton<IPublicationProjectionIntentStore>(_intentStore);
+        services.AddSingleton<IWorkflowExecutableRootWriteLeaseManager>(TestRootWriteLeases.Create(_store));
+        var extractor = new WorkflowTriggerBindingExtractor([]);
+        services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);
+        services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(extractor, _bindingStore));
+        new WorkflowsPublishingApiFeature().ConfigureServices(services);
+
+        await using var provider = services.BuildServiceProvider();
+        var handler = ActivatorUtilities.CreateInstance(provider, handlerType);
+        var handleMethod = handlerType.GetMethod("Handle", [requestType, typeof(CancellationToken)]);
+        Assert.NotNull(handleMethod);
+
+        var invocation = handleMethod.Invoke(handler, [request, CancellationToken.None]);
+        var task = Assert.IsAssignableFrom<Task>(invocation);
+        await task;
+    }
+
     private PublishWorkflowRequestHandler Handler(WorkflowDefinitionVersion workflowVersion) =>
         Handler(workflowVersion, _writeLineActivity);
 
@@ -344,8 +485,17 @@ public sealed class PublishWorkflowRequestHandlerTests
     private PublishWorkflowRequestHandler Handler(
         WorkflowDefinitionVersion workflowVersion,
         WorkflowDefinitionVersionLayout? layout,
-        params ActivityDefinitionVersion[] activityVersions) =>
-        new(
+        params ActivityDefinitionVersion[] activityVersions)
+    {
+        var extractor = new WorkflowTriggerBindingExtractor([]);
+        IWorkflowTriggerIndexer indexer = new WorkflowTriggerIndexer(extractor, _bindingStore);
+        var reconciler = new PublicationProjectionReconciler(
+            _intentStore,
+            _store,
+            indexer,
+            _bindingStore,
+            TimeProvider.System);
+        return new(
             TestCompiler.Create(
                 new FakeVersionStore(workflowVersion),
                 new FakeActivityVersionStore(activityVersions.ToList()),
@@ -353,10 +503,18 @@ public sealed class PublishWorkflowRequestHandlerTests
                 TestWellKnownTypeRegistry.Create()),
             _store,
             _referenceStore,
-            new WorkflowTriggerIndexer(
-                new WorkflowTriggerBindingExtractor([]),
-                new InMemoryWorkflowTriggerBindingStore()),
-            new FakeLayoutStore(layout));
+            extractor,
+            _bindingStore,
+            new FakeLayoutStore(layout),
+            TestRootWriteLeases.Create(_store),
+            _policyStore,
+            new PublicationPolicyResolver(),
+            _slotStore,
+            _publicationStore,
+            new PublicationPreflightService(),
+            new PublicationActivator(_slotStore, _publicationStore, reconciler, TimeProvider.System),
+            TimeProvider.System);
+    }
 
     private static WorkflowDefinitionVersion WorkflowVersion(ActivityNode? rootActivity) =>
         WorkflowVersion(rootActivity, "definition-1", "version-1", "1.0.0");

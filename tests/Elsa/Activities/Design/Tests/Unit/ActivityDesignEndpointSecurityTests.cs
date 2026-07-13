@@ -27,6 +27,7 @@ public sealed class ActivityDesignEndpointSecurityTests
     [InlineData("Availability.GetSettings")]
     [InlineData("Availability.ListDiagnostics")]
     [InlineData("Availability.SaveSettings")]
+    [InlineData("Catalog.List")]
     [InlineData("Definitions.Add")]
     [InlineData("Definitions.Get")]
     [InlineData("Definitions.List")]
@@ -59,6 +60,7 @@ public sealed class ActivityDesignEndpointSecurityTests
             "Availability.GetSettings",
             "Availability.ListDiagnostics",
             "Availability.SaveSettings",
+            "Catalog.List",
             "Definitions.Add",
             "Definitions.Get",
             "Definitions.List",

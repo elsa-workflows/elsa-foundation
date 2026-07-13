@@ -95,7 +95,8 @@ public sealed class GroundworkRuntimeCheckpointWriterTests
         new GroundworkBookmarkStateStore(store, GroundworkTestSerialization.Serializer),
         new GroundworkDurableValueStateStore(store, GroundworkTestSerialization.Serializer),
         new GroundworkIncidentStateStore(store, GroundworkTestSerialization.Serializer),
-        new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer));
+        new GroundworkExecutionLivenessStateStore(store, GroundworkTestSerialization.Serializer),
+        PassThroughRootWriteLeaseManager.Instance);
 
     private static RuntimeCheckpointCommit BuildCommit(string commitId, string bookmarkNode = "node-bm-1")
     {

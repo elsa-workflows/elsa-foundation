@@ -1,7 +1,9 @@
 using Elsa.Persistence.Groundwork.Serialization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Groundwork.Core.Transactions;
 using Groundwork.Documents.Store;
+using Groundwork.Documents.UnitOfWork;
 
 namespace Elsa.Persistence.Groundwork.Stores;
 
@@ -29,6 +31,8 @@ namespace Elsa.Persistence.Groundwork.Stores;
 public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store, IGroundworkRuntimeDocumentSerializer serializer)
     : GroundworkDocumentStore(store, serializer, ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind), IRecurringTriggerScheduleStore
 {
+    private const string ProjectionKind = "recurringSchedules";
+
     public async ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(schedule);
@@ -39,6 +43,84 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         // durable-timer store's existing-wins rule, a recurring schedule has no one-shot deadline to protect.
         await SaveDocumentAsync(schedule.ScheduleId, ToEnvelope(schedule), cancellationToken);
         return schedule;
+    }
+
+    public async ValueTask PreparePublicationAsync(
+        string publicationId,
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentNullException.ThrowIfNull(schedules);
+        ValidatePublicationSchedules(publicationId, schedules);
+
+        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        await CommitAtomicallyAsync(
+            existing.Select(schedule => schedule.ScheduleId),
+            schedules.Select(schedule => schedule with { IsActive = false }),
+            new PublicationProjectionState(ProjectionKind, publicationId, IsActive: false),
+            deleteProjectionStateId: null,
+            cancellationToken);
+    }
+
+    public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+        string publicationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        var schedules = await QueryDocumentsAsync<RecurringTriggerScheduleEnvelope, RecurringTriggerSchedule>(
+            ElsaRuntimeStorageManifest.ByCollectionIndex,
+            ElsaRuntimeStorageManifest.RecurringTriggerScheduleDocumentKind,
+            envelope => envelope.Schedule,
+            cancellationToken);
+        return schedules
+            .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+            .ToArray();
+    }
+
+    public async ValueTask ActivatePublicationAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        if (replacedPublicationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+
+        var candidateState = await LoadProjectionStateAsync(publicationId, cancellationToken);
+        if (candidateState is null)
+            throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
+
+        var candidate = await ListByPublicationAsync(publicationId, cancellationToken);
+        var replaced = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+            ? []
+            : await ListByPublicationAsync(replacedPublicationId, cancellationToken);
+        var updates = candidate.Select(schedule => schedule with { IsActive = true })
+            .Concat(replaced.Select(schedule => schedule with { IsActive = false }))
+            .ToArray();
+        var replacedState = replacedPublicationId is null || StringComparer.Ordinal.Equals(publicationId, replacedPublicationId)
+            ? null
+            : await LoadProjectionStateAsync(replacedPublicationId, cancellationToken);
+
+        await CommitAtomicallyAsync(
+            [],
+            updates,
+            candidateState with { IsActive = true },
+            deleteProjectionStateId: null,
+            cancellationToken,
+            replacedState is null ? null : replacedState with { IsActive = false });
+    }
+
+    public async ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        var existing = await ListByPublicationAsync(publicationId, cancellationToken);
+        await CommitAtomicallyAsync(
+            existing.Select(schedule => schedule.ScheduleId),
+            [],
+            projectionState: null,
+            ProjectionStateId(publicationId),
+            cancellationToken);
     }
 
     public async ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
@@ -54,7 +136,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
             cancellationToken);
 
         return schedules
-            .Where(schedule => schedule.NextOccurrence <= asOf)
+            .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)
             .OrderBy(schedule => schedule.NextOccurrence)
             .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
             .Take(limit)
@@ -77,7 +159,7 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
         // Read-check-write compare-and-swap. Single-node hosts get an at-most-once claim from this; the W20
         // clustered store makes the same check atomic via the provider's concurrency token.
         var current = await LoadScheduleAsync(scheduleId, cancellationToken);
-        if (current is null || current.NextOccurrence != expectedNextOccurrence)
+        if (current is null || !current.IsActive || current.NextOccurrence != expectedNextOccurrence)
             return false;
 
         var advanced = current with { NextOccurrence = newNextOccurrence };
@@ -121,4 +203,82 @@ public sealed class GroundworkRecurringTriggerScheduleStore(IDocumentStore store
     // provider-wide scan; ArtifactId is lifted to the top level so the by-artifact replace path can query it
     // without a nested index path, mirroring the other list-capable bridges.
     private sealed record RecurringTriggerScheduleEnvelope(string Collection, string ArtifactId, RecurringTriggerSchedule Schedule);
+
+    private static void ValidatePublicationSchedules(
+        string publicationId,
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules)
+    {
+        foreach (var schedule in schedules)
+        {
+            ArgumentNullException.ThrowIfNull(schedule);
+            if (!StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to publication '{publicationId}'.", nameof(schedules));
+            ArgumentException.ThrowIfNullOrWhiteSpace(schedule.SlotId);
+        }
+    }
+
+    private async ValueTask<PublicationProjectionState?> LoadProjectionStateAsync(
+        string publicationId,
+        CancellationToken cancellationToken)
+    {
+        var envelope = await Store.LoadAsync(
+            ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
+            ProjectionStateId(publicationId),
+            cancellationToken);
+        return envelope is null ? null : Serializer.Deserialize<PublicationProjectionState>(envelope);
+    }
+
+    private async ValueTask CommitAtomicallyAsync(
+        IEnumerable<string> deleteIds,
+        IEnumerable<RecurringTriggerSchedule> upserts,
+        PublicationProjectionState? projectionState,
+        string? deleteProjectionStateId,
+        CancellationToken cancellationToken,
+        PublicationProjectionState? secondaryProjectionState = null)
+    {
+        await using var unitOfWork = await Store.BeginAsync(
+            DocumentCommitScope.Of(DocumentKind, ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind),
+            cancellationToken);
+        foreach (var id in deleteIds)
+            await unitOfWork.DeleteAsync(new DeleteDocumentRequest(DocumentKind, id), cancellationToken);
+        if (deleteProjectionStateId is not null)
+            await unitOfWork.DeleteAsync(
+                new DeleteDocumentRequest(ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind, deleteProjectionStateId),
+                cancellationToken);
+        foreach (var schedule in upserts)
+        {
+            var (schemaVersion, content) = Serializer.Serialize(DocumentKind, ToEnvelope(schedule));
+            await unitOfWork.SaveAsync(
+                new SaveDocumentRequest(DocumentKind, schedule.ScheduleId, schemaVersion, content),
+                cancellationToken);
+        }
+        if (projectionState is not null)
+            await SaveProjectionStateAsync(unitOfWork, projectionState, cancellationToken);
+        if (secondaryProjectionState is not null)
+            await SaveProjectionStateAsync(unitOfWork, secondaryProjectionState, cancellationToken);
+
+        await unitOfWork.CommitAsync(cancellationToken);
+    }
+
+    private async ValueTask SaveProjectionStateAsync(
+        IDocumentUnitOfWork unitOfWork,
+        PublicationProjectionState state,
+        CancellationToken cancellationToken)
+    {
+        var (schemaVersion, content) = Serializer.Serialize(
+            ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
+            state);
+        await unitOfWork.SaveAsync(
+            new SaveDocumentRequest(
+                ElsaRuntimeStorageManifest.PublicationProjectionStateDocumentKind,
+                ProjectionStateId(state.PublicationId),
+                schemaVersion,
+                content),
+            cancellationToken);
+    }
+
+    private static string ProjectionStateId(string publicationId) =>
+        $"{ProjectionKind}:{publicationId.Length}:{publicationId}";
+
+    private sealed record PublicationProjectionState(string ProjectionKind, string PublicationId, bool IsActive);
 }

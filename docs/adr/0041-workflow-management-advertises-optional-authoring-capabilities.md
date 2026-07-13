@@ -1,6 +1,20 @@
 # Workflow Management Advertises Optional Authoring Capabilities
 
-Status: accepted (2026-07-11)
+Status: superseded (2026-07-13)
+
+## Supersession
+
+This decision was superseded by the domain-owned management API design in
+[`specs/092-domain-owned-apis`](../../specs/092-domain-owned-apis/spec.md). The host-owned workflow-management
+facade and its boolean capability response were removed before release.
+
+The replacement is the authenticated, shell-scoped `GET /capabilities` contract owned by
+`Elsa.Api.Capabilities`. Active domain API features explicitly declare stable capability IDs, major contract
+versions, and canonical relative links; operationally conditional links are contributed through typed Sources.
+The document remains permission-neutral, and each domain endpoint enforces its own action-scoped permission.
+
+The original context, decision, and consequences below are retained as the historical record of the short-lived
+approach that motivated the global capability contract.
 
 ## Context
 

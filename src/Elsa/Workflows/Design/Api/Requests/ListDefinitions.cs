@@ -8,7 +8,8 @@ public sealed record ListDefinitions(
     string? Name,
     string? SearchTerm,
     string? Description,
-    bool? TenantAgnostic
+    bool? TenantAgnostic,
+    string? State = null
 )
 
-: IRequest<IEnumerable<WorkflowDefinitionView>>;
+: IRequest<WorkflowDefinitionListView>;

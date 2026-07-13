@@ -29,18 +29,21 @@ public class GroundworkAddWorkflowDefinitionCommandTests
             State = new WorkflowDefinitionState([], null, [], [], null, null),
         };
 
-        await command.Execute(definition, draft, CancellationToken.None);
+        var layout = new[] { new DesignMetadataRecord("node-1", 10, 20, 100, 80) };
+        await command.Execute(definition, draft, layout, CancellationToken.None);
 
         var definitionStore = new GroundworkWorkflowDefinitionStore(store);
         var draftStore = new GroundworkWorkflowDefinitionDraftStore(store, Payloads);
 
         var readDefinition = await definitionStore.FindByIdAsync("def-1");
         var readDraft = await draftStore.FindByWorkflowDefinitionIdAsync("def-1");
+        var readLayout = await draftStore.FindLayoutByDraftIdAsync("draft-1");
 
         Assert.NotNull(readDefinition);
         Assert.Equal("Onboarding", readDefinition!.Name);
         Assert.NotNull(readDraft);
         Assert.Equal("draft-1", readDraft!.Id);
+        Assert.Equal(layout, readLayout);
     }
 
     private sealed class FakeSystemClock : ISystemClock

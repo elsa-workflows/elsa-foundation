@@ -78,6 +78,25 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task TestRunDoesNotWriteSourceReferenceWhileDeletionGuardOwnsArtifact()
+    {
+        var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
+        var first = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        var existingReference = Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
+        await _sourceReferenceStore.RetireAsync(existingReference.SourceReferenceId, DateTimeOffset.UtcNow, "test-setup");
+        var now = DateTimeOffset.UtcNow;
+        var deletionGuard = await _executableStore.TryBeginDeletionAsync(first.ArtifactId!, "gc-test", now.AddMinutes(1), now);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() =>
+            handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None));
+
+        Assert.NotNull(deletionGuard);
+        Assert.Equal(first.ArtifactId, exception.ArtifactId);
+        Assert.Single(await _sourceReferenceStore.ListByArtifactAsync(first.ArtifactId!));
+        Assert.Empty(await _sourceReferenceStore.ListAsync(WorkflowExecutableReferenceScope.TestRun, liveOnly: true));
+    }
+
+    [Fact]
     public async Task RejectsDraftSnapshotCompileFailureWithSnapshotIdentity()
     {
         var handler = DraftSnapshotHandler();
@@ -375,6 +394,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             new EmptyWorkflowDefinitionVersionLayoutStore(),
             _testRunStore,
             dispatcher ?? Dispatcher(),
+            TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System);
 
     private StartWorkflowTestRunRequestHandler DraftSnapshotHandler(IWorkflowStartDispatcher? dispatcher = null) =>
@@ -389,6 +409,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
             new EmptyWorkflowDefinitionVersionLayoutStore(),
             _testRunStore,
             dispatcher ?? Dispatcher(),
+            TestRootWriteLeases.Create(_executableStore),
             TimeProvider.System);
 
     private WorkflowStartDispatcher Dispatcher() =>

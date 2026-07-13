@@ -11,6 +11,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Workflows.Publishing.Api.Capabilities;
 
 namespace Elsa.Workflows.Publishing.Api;
 
@@ -29,7 +31,7 @@ namespace Elsa.Workflows.Publishing.Api;
     name: "WorkflowsPublishingApi",
     DisplayName = "Workflows Publishing API",
     Description = "Bridge endpoints that construct a live activity from a persisted catalog row (the construction seam).",
-    DependsOn = new object[] { "WorkflowsRuntimeTriggers" }
+    DependsOn = new object[] { "WorkflowsRuntimeTriggers", "ApiCapabilities" }
 )]
 public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 {
@@ -41,6 +43,15 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
 
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        services.TryAddSingleton<IPublicationSlotStore, InMemoryPublicationSlotStore>();
+        services.TryAddSingleton<IPublicationRecordStore, InMemoryPublicationRecordStore>();
+        services.TryAddSingleton<IPublicationPolicyStore, InMemoryPublicationPolicyStore>();
+        services.TryAddSingleton<IPublicationProjectionIntentStore, InMemoryPublicationProjectionIntentStore>();
+        services.TryAddSingleton<IPublicationPolicyResolver, PublicationPolicyResolver>();
+        services.TryAddSingleton<IPublicationProjectionPreparer, PublicationProjectionReconciler>();
+        services.TryAddSingleton<IPublicationPreflightService, PublicationPreflightService>();
+        services.TryAddSingleton<IPublicationActivator, PublicationActivator>();
+        services.TryAddScoped<WorkflowPublicationPreflightReader>();
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
         // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
@@ -52,11 +63,9 @@ public class WorkflowsPublishingApiFeature : FastEndpointsFeatureBase
         services.TryAddScoped<ActivityTreeProjector>();
         services.TryAddScoped<ExecutableNodeCompiler>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();
-        // Read-only projection of the artifact + reference stores into the executables list/detail views the
-        // Studio Executable Inspector consumes (#598 P1). Self-contained: depends only on the two runtime stores.
-        services.TryAddScoped<WorkflowExecutableInspector>();
         services.TryAddSingleton<IWorkflowTestRunStore, InMemoryWorkflowTestRunStore>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddRequestHandlersFrom(assembly);
+        services.AddApiCapability(PublishingApiCapabilities.StaticDeclaration);
     }
 }
