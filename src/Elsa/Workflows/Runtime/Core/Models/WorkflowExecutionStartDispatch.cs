@@ -14,7 +14,8 @@ public sealed class WorkflowExecutionStartDispatchRequest
         IReadOnlyDictionary<string, object?>? variables = null,
         IReadOnlyDictionary<string, object?>? inputs = null,
         JsonElement? stimulusInput = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedBy);
@@ -37,6 +38,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
         Inputs = SnapshotValues(inputs);
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
+        RunKind = runKind;
     }
 
     public string ArtifactId { get; }
@@ -75,6 +77,12 @@ public sealed class WorkflowExecutionStartDispatchRequest
     /// </summary>
     public string? TriggerNodeId { get; }
 
+    /// <summary>
+    /// The explicit durable classification to pin to this execution. Background Weaver callers use
+    /// <see cref="WorkflowRunKind.BackgroundWeaverRun"/> through this typed start-dispatch API.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; }
+
     private static IReadOnlyDictionary<string, object?> SnapshotValues(IReadOnlyDictionary<string, object?>? values) =>
         (values ?? new Dictionary<string, object?>()).ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
 }
@@ -88,7 +96,8 @@ public sealed class WorkflowExecutionStartCommandPayload
         IReadOnlyDictionary<string, JsonElement>? variables = null,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
-        string? triggerNodeId = null)
+        string? triggerNodeId = null,
+        WorkflowRunKind runKind = WorkflowRunKind.Unknown)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(requestedArtifactId);
@@ -99,6 +108,7 @@ public sealed class WorkflowExecutionStartCommandPayload
         Inputs = SnapshotElements(inputs);
         StimulusInput = stimulusInput?.Clone();
         TriggerNodeId = triggerNodeId;
+        RunKind = runKind;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -128,6 +138,12 @@ public sealed class WorkflowExecutionStartCommandPayload
     /// starts.
     /// </summary>
     public string? TriggerNodeId { get; }
+
+    /// <summary>
+    /// The run classification captured at dispatch. Missing values in legacy serialized commands use
+    /// <see cref="WorkflowRunKind.Unknown"/>.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; }
 
     public static IReadOnlyDictionary<string, JsonElement> ToJsonValues(IReadOnlyDictionary<string, object?> values) =>
         values.ToDictionary(

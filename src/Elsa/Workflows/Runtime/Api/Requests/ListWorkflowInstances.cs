@@ -12,5 +12,6 @@ public sealed record ListWorkflowInstances(
     string? WorkflowExecutionId = null,
     string? ArtifactId = null,
     DateTimeOffset? From = null,
-    DateTimeOffset? To = null)
+    DateTimeOffset? To = null,
+    string? RunKind = null)
     : IRequest<WorkflowInstanceListView>;

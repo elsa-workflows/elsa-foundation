@@ -60,6 +60,24 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_PinsExplicitRunKindInStartPayload()
+    {
+        var store = new InMemoryWorkflowExecutableStore();
+        await store.SaveAsync(NewExecutable());
+        var agentProvider = new RecordingAgentProvider();
+        var dispatcher = NewDispatcher(store, agentProvider);
+
+        await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(
+            "artifact-1",
+            "weaver-background",
+            runKind: WorkflowRunKind.BackgroundWeaverRun));
+
+        var envelope = Assert.Single(agentProvider.Agent.Envelopes);
+        var payload = envelope.Command.Payload!.Value.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        Assert.Equal(WorkflowRunKind.BackgroundWeaverRun, payload.RunKind);
+    }
+
+    [Fact]
     public async Task DispatchAsync_RejectsUnknownArtifactBeforeAgentActivation()
     {
         var store = new InMemoryWorkflowExecutableStore();

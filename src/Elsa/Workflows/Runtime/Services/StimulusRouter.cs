@@ -152,7 +152,8 @@ public sealed class StimulusRouter : IStimulusRouter
                 idempotencyKey: startIdempotencyKey,
                 metadata: dispatchMetadata,
                 stimulusInput: request.Input,
-                triggerNodeId: binding.ExecutableNodeId);
+                triggerNodeId: binding.ExecutableNodeId,
+                runKind: WorkflowRunKind.PublishedRun);
 
             // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —

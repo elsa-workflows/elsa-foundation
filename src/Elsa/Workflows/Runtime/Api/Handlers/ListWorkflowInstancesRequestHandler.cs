@@ -25,6 +25,14 @@ public sealed class ListWorkflowInstancesRequestHandler(
         if (!string.IsNullOrWhiteSpace(request.Status))
             query = query.Where(state => string.Equals(state.Status.ToString(), request.Status, StringComparison.OrdinalIgnoreCase));
 
+        if (!string.IsNullOrWhiteSpace(request.RunKind))
+        {
+            if (!Enum.TryParse<WorkflowRunKind>(request.RunKind, ignoreCase: true, out var runKind) || !Enum.IsDefined(runKind))
+                throw new ArgumentException($"The workflow run kind '{request.RunKind}' is invalid.", nameof(request.RunKind));
+
+            query = query.Where(state => state.RunKind == runKind);
+        }
+
         if (!string.IsNullOrWhiteSpace(request.DefinitionId))
             query = query.Where(state => string.Equals(state.PinnedExecutable.DefinitionId, request.DefinitionId, StringComparison.Ordinal));
 

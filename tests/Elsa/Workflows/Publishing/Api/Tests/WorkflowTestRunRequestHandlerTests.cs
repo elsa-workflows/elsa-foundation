@@ -52,6 +52,23 @@ public sealed class WorkflowTestRunRequestHandlerTests
     }
 
     [Fact]
+    public async Task ClassifiesVersionAndDraftSnapshotDispatchesAsTestRuns()
+    {
+        var versionDispatcher = new CapturingStartDispatcher(Dispatcher());
+        var draftDispatcher = new CapturingStartDispatcher(Dispatcher());
+
+        await Handler(WorkflowVersion(Node("write-one", Text("hello"))), versionDispatcher)
+            .Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
+        await DraftSnapshotHandler(draftDispatcher).Handle(new StartWorkflowDraftTestRun(
+            DefinitionId: "definition-1",
+            SnapshotId: "snapshot-1",
+            State: new WorkflowDefinitionState([], Node("write-one", Text("hello")), [], [], null, null)), CancellationToken.None);
+
+        Assert.Equal(WorkflowRunKind.TestRun, Assert.Single(versionDispatcher.Requests).RunKind);
+        Assert.Equal(WorkflowRunKind.TestRun, Assert.Single(draftDispatcher.Requests).RunKind);
+    }
+
+    [Fact]
     public async Task StartsDraftSnapshotTransientWorkflowTestRunWithoutDurableDefinitionVersion()
     {
         var dispatcher = Dispatcher();
@@ -479,6 +496,21 @@ public sealed class WorkflowTestRunRequestHandlerTests
         public Task<WorkflowDefinitionVersion?> FindLatestVersionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<WorkflowDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<bool> ExistsAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class CapturingStartDispatcher(IWorkflowStartDispatcher inner) : IWorkflowStartDispatcher
+    {
+        public List<WorkflowExecutionStartDispatchRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
+            WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return inner.DispatchAsync(request, requiredScope, dispatchOptions, cancellationToken);
+        }
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

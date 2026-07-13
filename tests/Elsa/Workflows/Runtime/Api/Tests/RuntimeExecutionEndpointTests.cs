@@ -1,4 +1,6 @@
+using System.Reflection;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Workflows.Runtime.Api.Requests;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
@@ -16,5 +18,6 @@ public sealed class RuntimeExecutionEndpointTests
         Assert.Contains(PermissionNames.WorkflowRuntimeExecute, endpoint.Definition.AllowedPermissions!);
         Assert.Contains(PermissionNames.All, endpoint.Definition.AllowedPermissions!);
         Assert.Null(endpoint.Definition.AnonymousVerbs);
+        Assert.Null(typeof(ExecuteWorkflow).GetProperty("RunKind", BindingFlags.Public | BindingFlags.Instance));
     }
 }

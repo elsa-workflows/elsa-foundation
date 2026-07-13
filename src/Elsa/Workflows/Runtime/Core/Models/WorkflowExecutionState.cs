@@ -15,7 +15,22 @@ public sealed record WorkflowExecutionState(
     string? CorrelationId,
     string? ParentWorkflowExecutionId,
     string? TenantId,
-    IReadOnlyDictionary<string, string> SystemMetadata);
+    IReadOnlyDictionary<string, string> SystemMetadata)
+{
+    /// <summary>
+    /// The durable classification pinned when this execution starts. States written before run-kind tracking
+    /// deserialize to <see cref="WorkflowRunKind.Unknown"/> and remain distinguishable as legacy history.
+    /// </summary>
+    public WorkflowRunKind RunKind { get; init; } = WorkflowRunKind.Unknown;
+}
+
+public enum WorkflowRunKind
+{
+    Unknown = 0,
+    TestRun = 1,
+    PublishedRun = 2,
+    BackgroundWeaverRun = 3
+}
 
 public enum WorkflowExecutionStatus
 {
