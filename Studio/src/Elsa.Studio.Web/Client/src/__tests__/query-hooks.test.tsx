@@ -93,7 +93,6 @@ describe("module management query hooks", () => {
   });
 });
 
-
 function stubApi(options: { hostGetJson?: (url: string) => Promise<unknown> }): ElsaStudioModuleApi {
   const hostRegistryRead = options.hostGetJson ?? (async () => studioRegistry());
   // The Server tab now reads the backend registry through the Studio management bridge on api.host (#246), so both the

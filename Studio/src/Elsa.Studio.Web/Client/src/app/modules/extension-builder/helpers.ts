@@ -22,7 +22,7 @@ import type { EditorTab, ProjectDraft, TemplateApplicationDraft } from "./types"
 // anything else falls through to the generic error message the module already used.
 export function describeExtensionBuilderError(error: unknown): string {
   const bridgeFailure = readManagementBridgeFailure(error);
-  if (bridgeFailure) return `Backend management is ${bridgeFailure.kind}: ${bridgeFailure.detail}`;
+  if (bridgeFailure) return `Privileged host management is ${bridgeFailure.kind}: ${bridgeFailure.detail}`;
   if (isPermissionDenied(error)) {
     return "You do not have permission to perform this Extension Builder action. This requires the extension-builder.read permission for reads and extension-builder.manage for changes.";
   }

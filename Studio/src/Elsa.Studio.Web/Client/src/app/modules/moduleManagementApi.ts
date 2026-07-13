@@ -261,14 +261,14 @@ export function labelForBackendRegistryStatus(status: BackendRegistryUnavailable
 
 function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): string {
   switch (status) {
-    case "unconfigured": return "Backend management is not configured on the Studio host.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Server module management.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
-    case "unreachable": return "The backend management surface could not be reached.";
-    case "degraded": return "The backend management surface is degraded.";
+    case "unreachable": return "The privileged host-management surface could not be reached.";
+    case "degraded": return "The privileged host-management surface is degraded.";
     // A Studio authorization failure (403): the signed-in user lacks the module-management.read permission. This is
     // "Studio denied you", not a backend problem.
     case "forbidden": return "You do not have permission to read module management. This requires the module-management.read permission.";
-    default: return "Backend management status is unknown.";
+    default: return "Privileged host-management status is unknown.";
   }
 }
 

@@ -15,15 +15,6 @@ export interface WrappedActivityInputValue {
   memoryReference?: unknown;
 }
 
-export const defaultExpressionDescriptors: StudioExpressionDescriptor[] = [
-  { type: "Literal", displayName: "Literal" },
-  { type: "JavaScript", displayName: "JavaScript" },
-  { type: "Liquid", displayName: "Liquid" },
-  { type: "Object", displayName: "Object" },
-  { type: "Variable", displayName: "Variable" },
-  { type: "Input", displayName: "Input" }
-];
-
 export function camelize(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : value;
@@ -61,6 +52,74 @@ export function withSyntax(previous: WrappedActivityInputValue, syntax: string):
       value: previous.expression.value
     }
   };
+}
+
+export function withExpression(previous: WrappedActivityInputValue, syntax: string, value: unknown): WrappedActivityInputValue {
+  return {
+    ...previous,
+    expression: { type: syntax, value }
+  };
+}
+
+export interface ExpressionModeTransition {
+  requiresConfirmation: boolean;
+  nextValue: unknown;
+}
+
+/** Plans a syntax change without mutating the Activity Property Value. */
+export function planExpressionModeTransition(
+  sourceMode: StudioExpressionDescriptor["editingMode"],
+  targetMode: StudioExpressionDescriptor["editingMode"],
+  propertyTypeName: string,
+  currentValue: unknown,
+  targetDefaultValue: unknown
+): ExpressionModeTransition {
+  if (isEmptyExpressionValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: targetDefaultValue };
+  }
+
+  if (sourceMode === "text" && targetMode === "text") {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (sourceMode === "literal" && targetMode === "text" && isPrimitiveValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: String(currentValue) };
+  }
+
+  if (sourceMode === "text" && targetMode === "literal" && isStringType(propertyTypeName)) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (sourceMode === targetMode && (sourceMode === "literal" || sourceMode === "text")) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  return { requiresConfirmation: true, nextValue: targetDefaultValue };
+}
+
+export function isEmptyExpressionValue(value: unknown): boolean {
+  if (value == null || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null) && Object.keys(value).length === 0;
+}
+
+export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
+  if (descriptor.defaultValue != null) return descriptor.defaultValue;
+  if (describeDictionaryType(descriptor.typeName)) return {};
+  if (describeCollectionType(descriptor.typeName)) return [];
+  const typeName = descriptor.typeName.trim().toLowerCase();
+  return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
+}
+
+function isPrimitiveValue(value: unknown): boolean {
+  return ["string", "number", "boolean", "bigint"].includes(typeof value);
+}
+
+function isStringType(typeName: string): boolean {
+  const normalized = typeName.split(",", 1)[0]?.trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
 }
 
 export function writeInputValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor, value: unknown): ActivityNode {
@@ -107,6 +166,33 @@ const collectionTypeNames = new Set([
   "icollection", "ireadonlycollection", "ilist", "ireadonlylist", "list",
   "collection", "ienumerable", "iset", "hashset", "sortedset", "observablecollection", "array"
 ]);
+
+const dictionaryTypeNames = new Set([
+  "system.collections.generic.idictionary",
+  "system.collections.generic.ireadonlydictionary",
+  "system.collections.generic.dictionary",
+  "system.collections.generic.sorteddictionary",
+  "system.collections.concurrent.concurrentdictionary",
+  "system.collections.immutable.immutabledictionary",
+  "system.collections.immutable.immutablesorteddictionary"
+]);
+
+export interface DictionaryTypeInfo {
+  valueTypeName: string;
+}
+
+/** Recognize only the supported CLR dictionary families when their key type is known to be string. */
+export function describeDictionaryType(typeName: string): DictionaryTypeInfo | null {
+  const core = stripAssemblyQualifier(typeName?.trim() ?? "");
+  const backtick = core.indexOf("`");
+  if (backtick < 0 || core.slice(backtick + 1).match(/^2(?:\[|$)/) == null) return null;
+  const family = core.slice(0, backtick).toLowerCase();
+  if (!dictionaryTypeNames.has(family)) return null;
+
+  const arguments_ = parseRawGenericArguments(core.slice(backtick));
+  if (arguments_.length !== 2 || !isClrStringType(arguments_[0])) return null;
+  return { valueTypeName: arguments_[1] };
+}
 
 export interface CollectionTypeInfo {
   /** The element type name when it can be recovered from `typeName`, otherwise null (render text rows). */
@@ -302,4 +388,21 @@ function splitTopLevel(text: string): string[] {
   }
   parts.push(text.slice(start));
   return parts.map(part => part.trim()).filter(Boolean);
+}
+
+function parseRawGenericArguments(genericPart: string): string[] {
+  const open = genericPart.indexOf("[");
+  if (open < 0) return [];
+  const inner = innerBracketContent(genericPart, open);
+  if (inner == null) return [];
+  return splitTopLevel(inner).map(argument => {
+    const trimmed = argument.trim();
+    const unwrapped = trimmed.startsWith("[") ? innerBracketContent(trimmed, 0) : trimmed;
+    return stripAssemblyQualifier(unwrapped ?? trimmed);
+  });
+}
+
+function isClrStringType(typeName: string): boolean {
+  const normalized = stripAssemblyQualifier(typeName).trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
 }

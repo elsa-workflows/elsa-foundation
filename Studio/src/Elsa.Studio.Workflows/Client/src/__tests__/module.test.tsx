@@ -85,6 +85,11 @@ describe("workflows module", () => {
       expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
       expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
     ]);
+    expect(api.expressionEditors.list()).toEqual([
+      expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
+    ]);
   });
 
   it("renders active definition actions and soft-deletes with confirmation", async () => {
@@ -697,8 +702,8 @@ describe("workflows module", () => {
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
@@ -743,8 +748,8 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-property-row > .wf-syntax-picker:not(.inline)")).toBeNull();
 
     await click(container.querySelector(".wf-syntax-picker-trigger"));
-    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
-    expect(container.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
 
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
     await click(buttonByLabel(container, "Open expanded Text editor"));
@@ -781,8 +786,8 @@ describe("workflows module", () => {
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
@@ -875,7 +880,7 @@ describe("workflows module", () => {
       const url = String(input);
       if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
       if (url.includes("/descriptors/activities")) return response({ items: [writeLinesDescriptor()] });
-      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal" }] });
+      if (url.includes("/descriptors/expression-descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal", editingMode: "literal" }] });
       if (url.includes("/activities")) return response({ activities: [
         activity({ activityVersionId: "write-lines-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines", category: "Primitives", displayName: "Write Lines" })
       ] });
@@ -1682,8 +1687,8 @@ describe("workflows module", () => {
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (url.includes("/descriptors/activities")) return response({ items: [writeLineDescriptor()] });
       if (url.includes("/descriptors/expression-descriptors")) return response({ items: [
-        { type: "Literal", displayName: "Literal" },
-        { type: "JavaScript", displayName: "JavaScript" }
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
       ] });
       if (url.includes("/activities")) return response({ activities: [
         activity({
@@ -2219,6 +2224,7 @@ function testApi(): ElsaStudioModuleApi {
     navigation,
     routes,
     propertyEditors: registry(),
+    expressionEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },

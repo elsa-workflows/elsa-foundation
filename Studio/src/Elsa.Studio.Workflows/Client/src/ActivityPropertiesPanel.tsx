@@ -1,5 +1,6 @@
-import { type DragEvent, useEffect, useId, useState } from "react";
-import { ChevronDown, ChevronUp, GripVertical, Maximize2, Plus, Trash2, X } from "lucide-react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { Maximize2, X } from "lucide-react";
+import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
   StudioActivityCustomProperties,
@@ -10,36 +11,40 @@ import type {
   StudioExpressionEditorContribution,
   StudioExpressionEditorContext,
   StudioExpressionEditorDiagnostic,
-  StudioExpressionDescriptor
+  StudioExpressionEditorProps,
+  StudioExpressionDescriptor,
+  StudioExpressionEditingMode
 } from "@elsa-workflows/studio-sdk";
-import type { ActivityNode, VariableReference, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
+import type { ActivityNode, VisibleVariableView, WorkflowDefinitionState } from "./workflowTypes";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ScopedVariableAnalysisStatus } from "./api/workflows";
-import { makeVariableReference, readVariableReference, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import {
-  defaultCollectionItem,
-  defaultExpressionDescriptors,
   describeCollectionType,
+  describeDictionaryType,
   formatTypeName,
   getLiteralEditorValue,
+  getLiteralDefaultValue,
   isRepeaterOptOut,
-  makeCollectionElementDescriptor,
-  moveCollectionItem,
+  planExpressionModeTransition,
   readWrappedInput,
-  toLiteralCollection,
   withLiteralValue,
-  withSyntax,
+  withExpression,
   writeInputValue
 } from "./activityProperties";
 import { readOptionsProvider, useActivityInputOptions } from "./activityInputOptions";
+import {
+  readWorkflowInputs,
+  WorkflowReferenceAuthoringProvider
+} from "./workflowReferenceAuthoring";
+import { CollectionValueEditor } from "./CollectionValueEditor";
+import { DictionaryValueEditor } from "./DictionaryValueEditor";
+import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 
 const inlineSyntaxEditorIds = new Set([
   "studio.property.singleline",
   "studio.property.text-fallback",
   "studio.property.checkbox"
 ]);
-const variableSyntax = "Variable";
-
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
   workflowState?: WorkflowDefinitionState;
@@ -48,11 +53,15 @@ export interface ActivityPropertiesPanelProps {
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
+  expressionDescriptorStatus: "loading" | "ready" | "failed";
+  onRetryDescriptors?: () => void;
   descriptorStatus: "loading" | "ready" | "failed";
   // Variables visible from this activity's scope (nearest-scope first) for the Variable picker, plus
   // the analysis status so the picker can explain an absent backend endpoint instead of showing empty.
   visibleVariables: VisibleVariableView[];
   scopeStatus: ScopedVariableAnalysisStatus;
+  scopeRetry?: () => void;
+  dictionarySessionScope?: string;
   onChange(activity: ActivityNode): void;
 }
 
@@ -64,11 +73,20 @@ export function ActivityPropertiesPanel({
   editors,
   expressionEditors,
   expressionDescriptors,
+  expressionDescriptorStatus,
+  onRetryDescriptors,
   descriptorStatus,
   visibleVariables,
   scopeStatus,
+  scopeRetry,
+  dictionarySessionScope,
   onChange
 }: ActivityPropertiesPanelProps) {
+  const generatedDictionarySessionScope = useId();
+  const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
+
+  useEffect(() => () => clearDictionaryEditorSessionScope(effectiveDictionarySessionScope), [effectiveDictionarySessionScope]);
+
   if (descriptorStatus === "loading") {
     return <p className="wf-muted">Loading activity properties...</p>;
   }
@@ -84,11 +102,21 @@ export function ActivityPropertiesPanel({
   }
 
   const groups = groupInputs(inputs, readPropertyGroupMetadata(descriptor.customProperties));
-  const syntaxDescriptors = expressionDescriptors.length > 0 ? expressionDescriptors : defaultExpressionDescriptors;
-
   return (
+    <WorkflowReferenceAuthoringProvider
+      workflowState={workflowState}
+      workflowInputs={readWorkflowInputs(workflowState.inputs)}
+      visibleVariables={visibleVariables}
+      status={scopeStatus}
+      retry={scopeRetry}
+    >
     <div className="wf-properties">
       <span className="wf-section-label">Properties</span>
+      <ExpressionDescriptorStatus
+        status={expressionDescriptorStatus}
+        hasSnapshot={expressionDescriptors.length > 0}
+        onRetry={onRetryDescriptors}
+      />
       {groups.map(group => (
         <section key={group.category} className="wf-property-group">
           {groups.length > 1 || group.configured || group.category !== "General" ? <h4>{group.label}</h4> : null}
@@ -99,17 +127,45 @@ export function ActivityPropertiesPanel({
               activityDescriptor={descriptor}
               endpointContext={context}
               workflowState={workflowState}
+              dictionarySessionScope={effectiveDictionarySessionScope}
               input={input}
               editors={editors}
               expressionEditors={expressionEditors}
-              expressionDescriptors={syntaxDescriptors}
-              visibleVariables={visibleVariables}
-              scopeStatus={scopeStatus}
+              expressionDescriptors={expressionDescriptors}
               onChange={onChange}
             />
           ))}
         </section>
       ))}
+    </div>
+    </WorkflowReferenceAuthoringProvider>
+  );
+}
+
+function ExpressionDescriptorStatus({
+  status,
+  hasSnapshot,
+  onRetry
+}: {
+  status: "loading" | "ready" | "failed";
+  hasSnapshot: boolean;
+  onRetry?: () => void;
+}) {
+  if (status === "loading") {
+    return <p className="wf-muted" role="status">{hasSnapshot
+      ? "Refreshing expression types... Using the last loaded metadata."
+      : "Loading expression types..."}</p>;
+  }
+  if (status === "ready" && !hasSnapshot) {
+    return <p className="wf-muted" role="status">No expression types are available.</p>;
+  }
+  if (status !== "failed") return null;
+  return (
+    <div className="wf-property-options-error" role="alert">
+      <span>{hasSnapshot
+        ? "Expression types could not be refreshed. Using the last loaded metadata."
+        : "Expression types could not be loaded."}</span>
+      {onRetry ? <button type="button" className="wf-expression-descriptors-retry" onClick={onRetry}>Retry</button> : null}
     </div>
   );
 }
@@ -121,24 +177,22 @@ function PropertyRow({
   activityDescriptor,
   endpointContext,
   workflowState,
+  dictionarySessionScope,
   input,
   editors,
   expressionEditors,
   expressionDescriptors,
-  visibleVariables,
-  scopeStatus,
   onChange
 }: {
   activity: ActivityNode;
   activityDescriptor: StudioActivityDescriptor;
   endpointContext: StudioEndpointContext;
   workflowState: WorkflowDefinitionState;
+  dictionarySessionScope: string;
   input: StudioActivityInputDescriptor;
   editors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
-  visibleVariables: VisibleVariableView[];
-  scopeStatus: ScopedVariableAnalysisStatus;
   onChange(activity: ActivityNode): void;
 }) {
   const readOnly = input.isReadOnly === true;
@@ -154,91 +208,209 @@ function PropertyRow({
   const EditorComponent = editor?.component;
   const wrapped = input.isWrapped !== false ? readWrappedInput(activity, input) : null;
   const syntax = wrapped?.expression.type ?? "Literal";
+  const expressionDescriptor = expressionDescriptors.find(descriptor => descriptor.type === syntax);
+  const editingMode = expressionDescriptor?.editingMode;
   const value = getLiteralEditorValue(activity, input);
-  // Collection-typed literals get structured authoring: a collection-scoped editor (e.g. a multi-select
-  // for option sets) owns the whole value when one claims it; otherwise a repeater of per-element editors.
-  // The repeater authors collection literals under both the "Literal" syntax (freshly added inputs) and
-  // the "Object" syntax — how they come back from the backend, which needs Object to JSON-deserialize the
-  // list into ICollection<T> (see toWireArgument in activityInputWire).
-  const lowerSyntax = syntax.toLowerCase();
-  const isStructuredLiteralSyntax = lowerSyntax === "literal" || lowerSyntax === "object";
-  const collectionType = wrapped && isStructuredLiteralSyntax && !isRepeaterOptOut(input)
-    ? describeCollectionType(input.typeName)
+  const dictionaryType = wrapped && !isRepeaterOptOut(effectiveInput) && (editingMode === "literal" || syntax === "Object")
+    ? describeDictionaryType(effectiveInput.typeName)
     : null;
-  const collectionScopedEditor = collectionType
-    ? resolveEditor(editors, effectiveInput, { ...context, scope: "collection" })
-    : undefined;
-  const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped ? {
+  const collectionType = wrapped && editingMode === "literal" && !isRepeaterOptOut(effectiveInput)
+    ? describeCollectionType(effectiveInput.typeName)
+    : null;
+  const makeExpressionContext = (targetSyntax: string): StudioExpressionEditorContext => ({
     activity,
-    descriptor: input,
+    descriptor: effectiveInput,
     expressionDescriptors,
     readOnly,
     surface: "inline",
-    syntax
-  } : null;
-  const inlineExpressionEditor = inlineExpressionContext ? resolveExpressionEditor(expressionEditors, inlineExpressionContext) : null;
+    syntax: targetSyntax
+  });
+  const inlineExpressionContext: StudioExpressionEditorContext | null = wrapped ? makeExpressionContext(syntax) : null;
+  const currentRequiresAdmission = editingMode === "structured" || editingMode === "reference";
+  const admittedExpressionEditor = inlineExpressionContext && currentRequiresAdmission
+    ? resolveAdmittedExpressionEditor(expressionEditors, inlineExpressionContext)
+    : null;
+  const inlineExpressionEditor = inlineExpressionContext
+    ? currentRequiresAdmission ? admittedExpressionEditor : resolveExpressionEditor(expressionEditors, inlineExpressionContext)
+    : null;
   const InlineExpressionEditorComponent = inlineExpressionEditor?.surfaces.inline;
-  const inlineDiagnostics = inlineExpressionEditor && inlineExpressionContext
-    ? getExpressionEditorDiagnostics(inlineExpressionEditor, inlineExpressionContext, value)
+  const inlineDiagnosticProvider = inlineExpressionContext
+    ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
+    : null;
+  const inlineDiagnostics = inlineDiagnosticProvider && inlineExpressionContext
+    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, value)
     : [];
   // A collection renders a multi-row repeater, not a single-line field, so the inline text chrome (the
   // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
   // it would stretch down the whole list and cover the per-row reorder controls. Such inputs still get a
   // syntax picker, but the block one above the list. `uiHint: "singleline"` is common on list inputs, so
   // gating on the collection itself (not the hint) is what keeps the two features from colliding.
-  const isCollectionEditor = collectionType != null;
-  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && isSingleLineTextInput(input, editor?.id));
-  const useToggleLayout = editor?.id === "studio.property.checkbox" && lowerSyntax === "literal";
-  const canExpandEditor = Boolean(wrapped && !isCollectionEditor && isExpandableTextInput(input, editor?.id));
+  const structuredCollectionType = editingMode === "structured" && admittedExpressionEditor && !isRepeaterOptOut(effectiveInput)
+    ? describeCollectionType(effectiveInput.typeName)
+    : null;
+  const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
+  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
+    editingMode === "text" || editingMode === "structured" || isSingleLineTextInput(input, editor?.id)
+  ));
+  const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
+  const canExpandEditor = Boolean(wrapped && (
+    dictionaryType != null ||
+    editingMode === "text" ||
+    (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
+    (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
+  ));
   const [expanded, setExpanded] = useState(false);
+  const [focusRequested, setFocusRequested] = useState(false);
+  const [pendingTransition, setPendingTransition] = useState<{
+    descriptor: StudioExpressionDescriptor;
+    nextValue: unknown;
+  } | null>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const cancelTransitionRef = useRef<HTMLButtonElement>(null);
+  const transitionDescriptionId = useId();
+
+  useEffect(() => {
+    if (!focusRequested) return;
+    const frame = requestAnimationFrame(() => {
+      const editor = rowRef.current?.querySelector<HTMLElement>(
+        "input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable='true']"
+      );
+      editor?.focus();
+      setFocusRequested(false);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequested]);
+
+  useEffect(() => {
+    if (!pendingTransition) return;
+    const frame = requestAnimationFrame(() => cancelTransitionRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [pendingTransition]);
 
   const setRaw = (nextValue: unknown) => {
     const next = wrapped ? withLiteralValue(wrapped, nextValue) : nextValue;
     onChange(writeInputValue(activity, input, next));
   };
 
-  const setSyntax = (nextSyntax: string) => {
+  const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
+    if (descriptor.editingMode === "literal" || descriptor.editingMode === "text") return null;
+    const targetContext = makeExpressionContext(descriptor.type);
+    const candidates = expressionEditors.filter(editor => editor.supports(targetContext));
+    if (!candidates.some(editor => !!editor.surfaces.inline)) {
+      return `${descriptor.displayName || descriptor.type} requires an inline editor Contribution.`;
+    }
+    if (!candidates.some(editor => !!editor.surfaces.inline && !!editor.createDefaultValue)) {
+      return `${descriptor.displayName || descriptor.type} requires a default value factory.`;
+    }
+    return null;
+  };
+
+  const getTargetDefaultValue = (descriptor: StudioExpressionDescriptor): unknown => {
+    if (descriptor.editingMode === "literal") return getLiteralDefaultValue(input);
+    const targetContext = makeExpressionContext(descriptor.type);
+    const provider = descriptor.editingMode === "structured" || descriptor.editingMode === "reference"
+      ? resolveAdmittedExpressionEditor(expressionEditors, targetContext)
+      : resolveExpressionDefaultProvider(expressionEditors, targetContext);
+    if (provider?.createDefaultValue) return provider.createDefaultValue(targetContext);
+    if (descriptor.editingMode === "text") return "";
+    return null;
+  };
+
+  const applyTransition = (descriptor: StudioExpressionDescriptor, nextValue: unknown) => {
     if (!wrapped) return;
-    onChange(writeInputValue(activity, input, withSyntax(wrapped, nextSyntax)));
+    setPendingTransition(null);
+    setFocusRequested(true);
+    onChange(writeInputValue(activity, input, withExpression(wrapped, descriptor.type, nextValue)));
+  };
+
+  const cancelTransition = () => {
+    setPendingTransition(null);
+    requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.focus());
+  };
+
+  const closeExpanded = () => {
+    setExpanded(false);
+    requestAnimationFrame(() => rowRef.current?.querySelector<HTMLButtonElement>(
+      ".wf-dictionary-open-expanded, .wf-property-expand-row, .wf-expression-expand-button"
+    )?.focus());
+  };
+
+  const setSyntax = (nextSyntax: string) => {
+    if (!wrapped || nextSyntax === syntax) return;
+    const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
+    if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
+    const transition = planExpressionModeTransition(
+      editingMode ?? "structured",
+      nextDescriptor.editingMode,
+      input.typeName,
+      value,
+      getTargetDefaultValue(nextDescriptor)
+    );
+    if (transition.requiresConfirmation) {
+      setExpanded(false);
+      setPendingTransition({ descriptor: nextDescriptor, nextValue: transition.nextValue });
+      return;
+    }
+    applyTransition(nextDescriptor, transition.nextValue);
   };
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
   const collectionEditor = collectionType
-    ? collectionScopedEditor
-      ? renderEditor(collectionScopedEditor.component, effectiveInput, value, editorDisabled, { ...context, scope: "collection" }, setRaw)
-      : (
-        <CollectionLiteralEditor
-          input={effectiveInput}
-          elementTypeName={collectionType.elementTypeName}
-          value={value}
-          editors={editors}
-          context={context}
-          disabled={editorDisabled}
-          onChange={setRaw}
-        />
-      )
+    ? (
+      <CollectionValueEditor
+        input={effectiveInput}
+        elementTypeName={collectionType.elementTypeName}
+        value={value}
+        editors={editors}
+        context={context}
+        disabled={editorDisabled}
+        onChange={setRaw}
+      />
+    )
     : null;
-  const valueEditor = syntax === variableSyntax && wrapped ? (
-    <VariablePicker
+  const dictionaryEditor = dictionaryType ? (
+    <DictionaryValueEditor
+      key={expanded ? "dictionary-inline-expanded" : "dictionary-inline-collapsed"}
+      input={effectiveInput}
+      sessionScopeKey={dictionarySessionScope}
+      valueTypeName={dictionaryType.valueTypeName}
       value={value}
-      visibleVariables={visibleVariables}
-      scopeStatus={scopeStatus}
-      disabled={readOnly}
+      editors={editors}
+      context={context}
+      disabled={editorDisabled}
+      onOpenExpanded={() => setExpanded(true)}
       onChange={setRaw}
     />
-  ) : collectionEditor ?? (InlineExpressionEditorComponent && inlineExpressionContext ? (
+  ) : null;
+  const contributedExpressionEditor = InlineExpressionEditorComponent && inlineExpressionContext ? (
     <InlineExpressionEditorComponent
-      descriptor={input}
+      descriptor={effectiveInput}
       syntax={syntax}
       value={value}
-      disabled={readOnly}
+      disabled={editingMode === "structured" ? editorDisabled : readOnly}
+      initialFocus={focusRequested && !expanded}
       context={inlineExpressionContext}
       onChange={setRaw}
     />
-  ) : renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw));
+  ) : null;
+  const valueEditor = editingMode === "text" && inlineExpressionContext ? (
+    contributedExpressionEditor ?? (
+      <GenericTextExpressionEditor
+        descriptor={effectiveInput}
+        syntax={syntax}
+        value={value}
+        disabled={readOnly}
+        initialFocus={focusRequested && !expanded}
+        context={inlineExpressionContext}
+        onChange={setRaw}
+      />
+    )
+  ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
+    ? renderEditor(EditorComponent, effectiveInput, value, editorDisabled, context, setRaw)
+    : <UnavailableExpressionEditor syntax={syntax} />);
 
   return (
-    <div className="wf-property-row">
+    <div ref={rowRef} className="wf-property-row">
       <div className="wf-property-row-header">
         <label>{input.displayName || input.name}</label>
         <span>{formatTypeName(input.typeName)}</span>
@@ -249,6 +421,7 @@ function PropertyRow({
           label={`${input.displayName || input.name} expression syntax`}
           value={syntax}
           descriptors={expressionDescriptors}
+          getUnavailableReason={getUnavailableReason}
           disabled={readOnly}
           onChange={setSyntax}
         />
@@ -263,6 +436,7 @@ function PropertyRow({
             label={`${input.displayName || input.name} expression syntax`}
             value={syntax}
             descriptors={expressionDescriptors}
+            getUnavailableReason={getUnavailableReason}
             disabled={readOnly}
             variant="inline"
             onChange={setSyntax}
@@ -285,7 +459,39 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
-      {canExpandEditor && !useInlineSyntaxPicker ? (
+      {pendingTransition ? (
+        <div
+          className="wf-expression-transition-confirmation"
+          role="alertdialog"
+          aria-label="Confirm expression type change"
+          aria-describedby={transitionDescriptionId}
+          onKeyDown={event => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            cancelTransition();
+          }}
+        >
+          <p id={transitionDescriptionId}>
+            Switching to {pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => applyTransition(pendingTransition.descriptor, pendingTransition.nextValue)}
+            >
+              Replace value
+            </button>
+            <button
+              ref={cancelTransitionRef}
+              type="button"
+              onClick={cancelTransition}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {canExpandEditor && !useInlineSyntaxPicker && !dictionaryType ? (
         <button
           type="button"
           className="wf-property-expand-row"
@@ -310,159 +516,35 @@ function PropertyRow({
       {expanded ? (
         <ExpandedPropertyEditor
           input={input}
+          dictionarySessionScope={dictionarySessionScope}
           value={value}
           syntax={syntax}
+          editingMode={editingMode}
           descriptors={expressionDescriptors}
+          getUnavailableReason={getUnavailableReason}
           activity={activity}
+          propertyEditors={editors}
           expressionEditors={expressionEditors}
           disabled={readOnly}
           onChange={setRaw}
           onSyntaxChange={setSyntax}
-          onClose={() => setExpanded(false)}
+          onClose={closeExpanded}
         />
       ) : null}
     </div>
   );
 }
 
-// Repeater for collection-typed literals: each row reuses the registered element editor (text, checkbox,
-// dropdown, …) resolved in "element" scope, with add / reorder / remove controls around it.
-function collectionItemClassName(index: number, dragIndex: number | null, overIndex: number | null) {
-  return [
-    "wf-collection-item",
-    dragIndex === index ? "dragging" : "",
-    dragIndex !== null && dragIndex !== index && overIndex === index ? "drop-target" : ""
-  ].filter(Boolean).join(" ");
-}
-
-function CollectionLiteralEditor({
-  input,
-  elementTypeName,
-  value,
-  editors,
-  context,
-  disabled,
-  onChange
-}: {
-  input: StudioActivityInputDescriptor;
-  elementTypeName: string | null;
-  value: unknown;
-  editors: StudioActivityPropertyEditorContribution[];
-  context: StudioActivityPropertyEditorContext;
-  disabled: boolean;
-  onChange(value: unknown): void;
-}) {
-  const items = toLiteralCollection(value);
-  const elementDescriptor = makeCollectionElementDescriptor(input, elementTypeName);
-  const elementContext: StudioActivityPropertyEditorContext = { ...context, scope: "element" };
-  const ElementComponent = resolveEditor(editors, elementDescriptor, elementContext)?.component;
-  const label = input.displayName || input.name;
-  const replaceAt = (index: number, next: unknown) =>
-    onChange(items.map((current, position) => (position === index ? next : current)));
-
-  // Drag-to-reorder. Only the grip handle is draggable (so it never competes with text selection in the
-  // row editors); the rows are drop zones. The list reorders atomically on drop via the shared
-  // moveCollectionItem helper — index keys stay valid because items don't shift mid-gesture.
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [overIndex, setOverIndex] = useState<number | null>(null);
-  const resetDrag = () => {
-    setDragIndex(null);
-    setOverIndex(null);
-  };
-  const handleDragStart = (index: number) => (event: DragEvent) => {
-    setDragIndex(index);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(index));
-  };
-  const handleDragOver = (index: number) => (event: DragEvent) => {
-    if (dragIndex === null) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (overIndex !== index) setOverIndex(index);
-  };
-  const handleDrop = (index: number) => (event: DragEvent) => {
-    event.preventDefault();
-    if (dragIndex !== null && dragIndex !== index) onChange(moveCollectionItem(items, dragIndex, index));
-    resetDrag();
-  };
-
-  return (
-    <div className="wf-collection-editor">
-      {items.length === 0 ? (
-        <p className="wf-collection-empty">No items yet.</p>
-      ) : (
-        <ul className="wf-collection-items">
-          {items.map((item, index) => (
-            <li
-              key={index}
-              className={collectionItemClassName(index, dragIndex, overIndex)}
-              onDragOver={handleDragOver(index)}
-              onDrop={handleDrop(index)}
-            >
-              <span
-                className="wf-collection-item-handle"
-                draggable={!disabled}
-                aria-label={`Drag ${label} item ${index + 1} to reorder`}
-                title="Drag to reorder"
-                onDragStart={handleDragStart(index)}
-                onDragEnd={resetDrag}
-              >
-                <GripVertical size={13} aria-hidden="true" />
-              </span>
-              <div className="wf-collection-item-editor">
-                {renderEditor(ElementComponent, elementDescriptor, item, disabled, elementContext, next => replaceAt(index, next))}
-              </div>
-              <div className="wf-collection-item-actions">
-                <button
-                  type="button"
-                  className="wf-collection-item-button"
-                  aria-label={`Move ${label} item ${index + 1} up`}
-                  disabled={disabled || index === 0}
-                  onClick={() => onChange(moveCollectionItem(items, index, index - 1))}
-                >
-                  <ChevronUp size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="wf-collection-item-button"
-                  aria-label={`Move ${label} item ${index + 1} down`}
-                  disabled={disabled || index === items.length - 1}
-                  onClick={() => onChange(moveCollectionItem(items, index, index + 1))}
-                >
-                  <ChevronDown size={13} />
-                </button>
-                <button
-                  type="button"
-                  className="wf-collection-item-button danger"
-                  aria-label={`Remove ${label} item ${index + 1}`}
-                  disabled={disabled}
-                  onClick={() => onChange(items.filter((_, position) => position !== index))}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <button
-        type="button"
-        className="wf-collection-add"
-        disabled={disabled}
-        onClick={() => onChange([...items, defaultCollectionItem(elementTypeName)])}
-      >
-        <Plus size={13} /> Add item
-      </button>
-    </div>
-  );
-}
-
 function ExpandedPropertyEditor({
   input,
+  dictionarySessionScope,
   value,
   syntax,
+  editingMode,
   descriptors,
+  getUnavailableReason,
   activity,
+  propertyEditors,
   expressionEditors,
   disabled,
   onChange,
@@ -470,10 +552,14 @@ function ExpandedPropertyEditor({
   onClose
 }: {
   input: StudioActivityInputDescriptor;
+  dictionarySessionScope: string;
   value: unknown;
   syntax: string;
+  editingMode: StudioExpressionEditingMode | undefined;
   descriptors: StudioExpressionDescriptor[];
+  getUnavailableReason(descriptor: StudioExpressionDescriptor): string | null;
   activity: ActivityNode;
+  propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   disabled: boolean;
   onChange(value: unknown): void;
@@ -481,6 +567,10 @@ function ExpandedPropertyEditor({
   onClose(): void;
 }) {
   const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  const fallbackEditorRef = useRef<HTMLTextAreaElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const displayName = input.displayName || input.name;
   const expressionContext: StudioExpressionEditorContext = {
     activity,
@@ -492,21 +582,75 @@ function ExpandedPropertyEditor({
   };
   const expressionEditor = resolveExpressionEditor(expressionEditors, expressionContext);
   const ExpressionEditorComponent = expressionEditor?.surfaces.expanded;
-  const diagnostics = expressionEditor ? getExpressionEditorDiagnostics(expressionEditor, expressionContext, value) : [];
-  const fallbackHint = !ExpressionEditorComponent ? getExpressionEditorFallbackHint(expressionEditors, expressionContext) : null;
+  const diagnosticProvider = resolveExpressionDiagnosticProvider(expressionEditors, expressionContext);
+  const diagnostics = diagnosticProvider ? getExpressionEditorDiagnostics(diagnosticProvider, expressionContext, value) : [];
+  const useTextFallback = editingMode === "text";
+  const dictionaryType = (editingMode === "literal" || syntax === "Object") && !isRepeaterOptOut(input)
+    ? describeDictionaryType(input.typeName)
+    : null;
+  const fallbackHint = useTextFallback && !ExpressionEditorComponent
+    ? getExpressionEditorFallbackHint(expressionEditors, expressionContext)
+    : null;
 
   useEffect(() => {
+    if (!ExpressionEditorComponent) fallbackEditorRef.current?.focus();
+  }, [ExpressionEditorComponent, syntax]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusableSelector = [
+      "button:not(:disabled)",
+      "input:not(:disabled)",
+      "textarea:not(:disabled)",
+      "select:not(:disabled)",
+      "[href]",
+      "[tabindex]:not([tabindex='-1'])"
+    ].join(",");
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
+        .filter(element => element.offsetParent !== null || element === document.activeElement);
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   return (
     <div className="wf-property-editor-backdrop">
-      <section className="wf-property-editor-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <section
+        ref={dialogRef}
+        className="wf-property-editor-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
         <header>
           <div>
             <span>Property editor</span>
@@ -522,22 +666,36 @@ function ExpandedPropertyEditor({
               label={`${displayName} expression syntax`}
               value={syntax}
               descriptors={descriptors}
+              getUnavailableReason={getUnavailableReason}
               disabled={disabled}
               onChange={onSyntaxChange}
             />
             <span>{formatTypeName(input.typeName)}</span>
           </div>
           {input.description ? <p>{input.description}</p> : null}
-          {ExpressionEditorComponent ? (
+          {dictionaryType ? (
+            <DictionaryValueEditor
+              input={input}
+              sessionScopeKey={dictionarySessionScope}
+              valueTypeName={dictionaryType.valueTypeName}
+              value={value}
+              editors={propertyEditors}
+              context={{ activity, expressionDescriptors: descriptors, readOnly: disabled }}
+              disabled={disabled}
+              variant="expanded"
+              onChange={onChange}
+            />
+          ) : ExpressionEditorComponent ? (
             <ExpressionEditorComponent
               descriptor={input}
               syntax={syntax}
               value={value}
               disabled={disabled}
+              initialFocus
               context={expressionContext}
               onChange={onChange}
             />
-          ) : (
+          ) : useTextFallback || editingMode === "literal" ? (
             <>
               {fallbackHint ? (
                 <p className="wf-expression-editor-hint">
@@ -549,9 +707,12 @@ function ExpandedPropertyEditor({
                 value={value == null ? "" : String(value)}
                 disabled={disabled}
                 spellCheck={false}
+                ref={fallbackEditorRef}
                 onChange={event => onChange(event.target.value)}
               />
             </>
+          ) : (
+            <UnavailableExpressionEditor syntax={syntax} />
           )}
           {renderExpressionDiagnostics(diagnostics)}
         </div>
@@ -585,10 +746,41 @@ function renderEditor(
   );
 }
 
-function SyntaxPicker({
+function GenericTextExpressionEditor({ descriptor, syntax, value, disabled, initialFocus, onChange }: StudioExpressionEditorProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialFocus) inputRef.current?.focus();
+  }, [initialFocus, syntax]);
+
+  return (
+    <input
+      type="text"
+      aria-label={`${descriptor.displayName || descriptor.name} expression`}
+      value={value == null ? "" : String(value)}
+      disabled={disabled}
+      ref={inputRef}
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      onChange={event => onChange(event.target.value)}
+    />
+  );
+}
+
+function UnavailableExpressionEditor({ syntax }: { syntax: string }) {
+  return (
+    <p className="wf-expression-editor-hint" role="status">
+      No editor is available for {syntax}. The current value is preserved and read-only.
+    </p>
+  );
+}
+
+export function SyntaxPicker({
   label,
   value,
   descriptors,
+  getUnavailableReason = () => null,
   disabled,
   variant = "block",
   onChange
@@ -596,24 +788,111 @@ function SyntaxPicker({
   label: string;
   value: string;
   descriptors: StudioExpressionDescriptor[];
+  getUnavailableReason?(descriptor: StudioExpressionDescriptor): string | null;
   disabled: boolean;
   variant?: "block" | "inline";
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const listboxId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = descriptors.find(descriptor => descriptor.type === value);
+  const selectedIndex = Math.max(0, descriptors.findIndex(descriptor => descriptor.type === value));
+  const unavailableReasons = descriptors.map(getUnavailableReason);
+  const availableIndices = descriptors.flatMap((_, index) => unavailableReasons[index] ? [] : [index]);
   const className = [
     "wf-syntax-picker-trigger",
     variant === "inline" ? "inline" : "",
     open ? "open" : ""
   ].filter(Boolean).join(" ");
 
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      if (activeIndex >= 0) optionRefs.current[activeIndex]?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeIndex, open]);
+
+  const openPicker = (index = selectedIndex) => {
+    setActiveIndex(unavailableReasons[index] ? availableIndices[0] ?? -1 : index);
+    setOpen(true);
+  };
+
+  const closePicker = (restoreFocus: boolean) => {
+    setOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
+
+  const focusOption = (index: number, direction: 1 | -1) => {
+    if (availableIndices.length === 0) return;
+    let nextIndex = (index + descriptors.length) % descriptors.length;
+    while (unavailableReasons[nextIndex]) {
+      nextIndex = (nextIndex + direction + descriptors.length) % descriptors.length;
+    }
+    setActiveIndex(nextIndex);
+    optionRefs.current[nextIndex]?.focus();
+  };
+
+  const selectOption = (index: number) => {
+    const descriptor = descriptors[index];
+    if (!descriptor || unavailableReasons[index]) return;
+    onChange(descriptor.type);
+    closePicker(true);
+  };
+
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (open && event.key === "Escape") {
+      event.preventDefault();
+      closePicker(true);
+      return;
+    }
+    if (open && event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp" || event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      const index = event.key === "Home"
+        ? availableIndices[0] ?? -1
+        : event.key === "End"
+          ? availableIndices.at(-1) ?? -1
+          : selectedIndex;
+      openPicker(index);
+    }
+  };
+
+  const handleListboxKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const focusedIndex = Math.max(0, optionRefs.current.findIndex(option => option === event.target));
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusOption(focusedIndex + 1, 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOption(focusedIndex - 1, -1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      if (availableIndices[0] != null) focusOption(availableIndices[0], 1);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      if (availableIndices.at(-1) != null) focusOption(availableIndices.at(-1)!, -1);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectOption(focusedIndex);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closePicker(true);
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  };
+
   return (
-    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"} onBlur={event => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }}>
+    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"}>
       <button
+        ref={triggerRef}
         type="button"
         className={className}
         aria-label={label}
@@ -621,109 +900,46 @@ function SyntaxPicker({
         aria-expanded={open}
         aria-controls={listboxId}
         disabled={disabled}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => open ? closePicker(false) : openPicker()}
+        onKeyDown={handleTriggerKeyDown}
       >
         <span>{selected?.displayName || selected?.type || value}</span>
       </button>
-      {open ? (
-        <div id={listboxId} role="listbox" className="wf-syntax-picker-menu" aria-label={label}>
-          {descriptors.map(descriptor => {
+      <AnchoredPopover
+        anchorRef={triggerRef}
+        open={open}
+        className="wf-syntax-picker-menu"
+        minWidth={variant === "inline" ? 176 : 0}
+        maxHeight={210}
+        onDismiss={reason => closePicker(reason !== "anchor-hidden")}
+      >
+        <div id={listboxId} role="listbox" aria-label={label} onKeyDown={handleListboxKeyDown}>
+          {descriptors.map((descriptor, index) => {
             const optionLabel = descriptor.displayName || descriptor.type;
             const selectedOption = descriptor.type === value;
+            const unavailableReason = unavailableReasons[index];
             return (
               <button
+                ref={element => { optionRefs.current[index] = element; }}
                 type="button"
                 role="option"
                 aria-selected={selectedOption}
+                aria-disabled={unavailableReason ? true : undefined}
+                disabled={!!unavailableReason}
+                title={unavailableReason ?? undefined}
+                tabIndex={-1}
                 key={descriptor.type}
                 className={selectedOption ? "selected" : ""}
-                onClick={() => {
-                  onChange(descriptor.type);
-                  setOpen(false);
-                }}
+                onFocus={() => setActiveIndex(index)}
+                onClick={() => selectOption(index)}
               >
-                {optionLabel}
+                <span>{optionLabel}</span>
+                {unavailableReason ? <small>{unavailableReason}</small> : null}
               </button>
             );
           })}
         </div>
-      ) : null}
-    </div>
-  );
-}
-
-// Encodes/decodes a picker option as "scopeId::referenceKey" so the same reference key in different
-// declaring scopes stays distinct.
-const variableOptionSeparator = "::";
-
-function normalizeScopeId(scopeId: string | null | undefined): string {
-  return !scopeId || scopeId === WORKFLOW_SCOPE_ID ? WORKFLOW_SCOPE_ID : scopeId;
-}
-
-function variableOptionKey(referenceKey: string, scopeId: string | null | undefined): string {
-  return `${normalizeScopeId(scopeId)}${variableOptionSeparator}${referenceKey}`;
-}
-
-function parseVariableOptionKey(key: string): { scopeId: string; referenceKey: string } | null {
-  const index = key.indexOf(variableOptionSeparator);
-  if (index < 0) return null;
-  const referenceKey = key.slice(index + variableOptionSeparator.length);
-  return referenceKey ? { scopeId: key.slice(0, index), referenceKey } : null;
-}
-
-// Scope-aware variable picker for inputs whose expression syntax is "Variable". Lists only the
-// variables visible from the selected activity (nearest-scope first, supplied by the backend design
-// analysis) and writes a structured VariableReference. An out-of-scope existing reference is shown as
-// a distinct, repairable option rather than silently dropped (ADR-0027 repair surface).
-function VariablePicker({ value, visibleVariables, scopeStatus, disabled, onChange }: {
-  value: unknown;
-  visibleVariables: VisibleVariableView[];
-  scopeStatus: ScopedVariableAnalysisStatus;
-  disabled?: boolean;
-  onChange(value: VariableReference): void;
-}) {
-  const parsed = readVariableReference(value);
-  // After switching syntax to "Variable" the previous literal value is preserved (a bare string).
-  // Only treat the value as an existing reference when it is structured or matches a visible variable,
-  // so arbitrary leftover literal text is not surfaced as a phantom "(not visible)" option.
-  const valueIsStructured = (!!value && typeof value === "object") || (typeof value === "string" && value.trim().startsWith("{"));
-  const current = parsed && (valueIsStructured || visibleVariables.some(variable => variable.referenceKey === parsed.referenceKey))
-    ? parsed
-    : null;
-  const currentKey = current ? variableOptionKey(current.referenceKey, current.declaringScopeId) : "";
-  const currentIsVisible = !!current && visibleVariables.some(
-    variable => variable.referenceKey === current.referenceKey && variable.scopeId === normalizeScopeId(current.declaringScopeId)
-  );
-
-  return (
-    <div className="wf-variable-picker">
-      <select
-        aria-label="Variable reference"
-        value={currentKey}
-        disabled={disabled}
-        onChange={event => {
-          const parsed = parseVariableOptionKey(event.target.value);
-          if (parsed) onChange(makeVariableReference(parsed.referenceKey, parsed.scopeId));
-        }}
-      >
-        <option value="">Select a variable…</option>
-        {current && !currentIsVisible ? (
-          <option value={currentKey}>{current.referenceKey} (not visible from this scope)</option>
-        ) : null}
-        {visibleVariables.map(variable => {
-          const optionKey = variableOptionKey(variable.referenceKey, variable.scopeId);
-          return (
-            <option key={optionKey} value={optionKey}>
-              {variable.name}{variable.isWorkflowScope ? " · workflow" : " · container"}
-            </option>
-          );
-        })}
-      </select>
-      {scopeStatus === "unavailable" ? (
-        <p className="wf-variable-picker-note">Variable scope information is unavailable (pending backend support). Existing references are preserved.</p>
-      ) : scopeStatus === "ready" && visibleVariables.length === 0 ? (
-        <p className="wf-variable-picker-note">No variables are visible here. Declare one on the workflow or a container scope.</p>
-      ) : null}
+      </AnchoredPopover>
     </div>
   );
 }
@@ -745,6 +961,33 @@ function resolveExpressionEditor(
   return [...editors]
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
     .find(editor => !!editor.surfaces[context.surface] && editor.supports(context));
+}
+
+function resolveAdmittedExpressionEditor(
+  editors: StudioExpressionEditorContribution[],
+  context: StudioExpressionEditorContext
+) {
+  return [...editors]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
+    .find(editor => !!editor.surfaces.inline && !!editor.createDefaultValue && editor.supports(context));
+}
+
+function resolveExpressionDefaultProvider(
+  editors: StudioExpressionEditorContribution[],
+  context: StudioExpressionEditorContext
+) {
+  return [...editors]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
+    .find(editor => !!editor.createDefaultValue && editor.supports(context));
+}
+
+function resolveExpressionDiagnosticProvider(
+  editors: StudioExpressionEditorContribution[],
+  context: StudioExpressionEditorContext
+) {
+  return [...editors]
+    .sort((left, right) => (left.order ?? 500) - (right.order ?? 500))
+    .find(editor => !!editor.diagnostics && editor.supports(context));
 }
 
 function getExpressionEditorDiagnostics(

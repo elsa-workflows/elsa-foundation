@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { StudioButton } from "../forms/Button";
 import { StudioSearchInput } from "../forms/SearchInput";
+import { StudioActionNotice } from "../feedback/ActionNotice";
 import { StatusPill } from "../feedback/StatusPill";
 import { StudioListContainer, StudioListRow } from "../list/ListRow";
 import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
@@ -13,6 +14,7 @@ let cleanup: (() => void) | null = null;
 afterEach(() => {
   cleanup?.();
   cleanup = null;
+  vi.useRealTimers();
 });
 
 function mount(node: React.ReactElement): HTMLElement {
@@ -104,6 +106,139 @@ describe("StatusPill", () => {
   it("defaults to the neutral tone", () => {
     const host = mount(<StatusPill>Tag</StatusPill>);
     expect(host.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("neutral");
+  });
+});
+
+describe("StudioActionNotice", () => {
+  it("announces its message politely and provides accessible action and dismiss controls", () => {
+    const host = mount(
+      <StudioActionNotice message="Entry removed" actionLabel="Undo" onAction={() => undefined} />
+    );
+    const notice = host.querySelector<HTMLElement>(".studio-action-notice")!;
+
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.getAttribute("aria-live")).toBe("polite");
+    expect(notice.getAttribute("aria-atomic")).toBe("true");
+    expect(notice.textContent).toContain("Entry removed");
+    expect(host.querySelector<HTMLButtonElement>(".studio-action-notice-action")?.textContent).toBe("Undo");
+    expect(host.querySelector<HTMLButtonElement>(".studio-action-notice-dismiss")?.getAttribute("aria-label"))
+      .toBe("Dismiss notification");
+  });
+
+  it("runs its optional action and dismisses the notice", () => {
+    const onAction = vi.fn();
+    const onDismiss = vi.fn();
+    const host = mount(
+      <StudioActionNotice message="Entry removed" actionLabel="Undo" onAction={onAction} onDismiss={onDismiss} />
+    );
+
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>(".studio-action-notice-action")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("supports explicit dismissal", () => {
+    const onDismiss = vi.fn();
+    const host = mount(<StudioActionNotice message="JSON copied" onDismiss={onDismiss} />);
+
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>(".studio-action-notice-dismiss")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("dismisses automatically after its configured lifetime", () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const host = mount(<StudioActionNotice durationMs={1_000} message="Entry removed" onDismiss={onDismiss} />);
+
+    flushSync(() => vi.advanceTimersByTime(999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(onDismiss).toHaveBeenCalledOnce();
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("uses an eight-second lifetime by default", () => {
+    vi.useFakeTimers();
+    const host = mount(<StudioActionNotice message="Entry removed" />);
+
+    flushSync(() => vi.advanceTimersByTime(7_999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("pauses its remaining lifetime while hovered", () => {
+    vi.useFakeTimers();
+    const host = mount(<StudioActionNotice durationMs={1_000} message="Entry removed" />);
+    const notice = host.querySelector<HTMLElement>(".studio-action-notice")!;
+
+    flushSync(() => vi.advanceTimersByTime(400));
+    flushSync(() => notice.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    flushSync(() => vi.advanceTimersByTime(1_000));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+
+    flushSync(() => notice.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
+    flushSync(() => vi.advanceTimersByTime(599));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("pauses its remaining lifetime while focus is inside", () => {
+    vi.useFakeTimers();
+    const host = mount(
+      <StudioActionNotice durationMs={1_000} message="Entry removed" actionLabel="Undo" onAction={() => undefined} />
+    );
+    const action = host.querySelector<HTMLButtonElement>(".studio-action-notice-action")!;
+
+    flushSync(() => vi.advanceTimersByTime(250));
+    flushSync(() => action.focus());
+    flushSync(() => vi.advanceTimersByTime(1_000));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+
+    flushSync(() => action.blur());
+    flushSync(() => vi.advanceTimersByTime(749));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
+  });
+
+  it("replaces its content and restarts its lifetime when the message changes", () => {
+    vi.useFakeTimers();
+
+    function ReplacementHarness() {
+      const [message, setMessage] = useState("First entry removed");
+      return (
+        <>
+          <button type="button" onClick={() => setMessage("Second entry removed")}>Replace</button>
+          <StudioActionNotice durationMs={1_000} message={message} />
+        </>
+      );
+    }
+
+    const host = mount(<ReplacementHarness />);
+    flushSync(() => vi.advanceTimersByTime(800));
+    flushSync(() => {
+      host.querySelector<HTMLButtonElement>("button")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(host.textContent).not.toContain("First entry removed");
+    expect(host.textContent).toContain("Second entry removed");
+    flushSync(() => vi.advanceTimersByTime(999));
+    expect(host.querySelector(".studio-action-notice")).not.toBeNull();
+    flushSync(() => vi.advanceTimersByTime(1));
+    expect(host.querySelector(".studio-action-notice")).toBeNull();
   });
 });
 

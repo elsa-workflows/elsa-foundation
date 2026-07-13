@@ -3,6 +3,7 @@ import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";
 import { ActivityAvailabilityPage } from "./ActivityAvailabilityPage";
 import { RuntimeDiagnosticsSettingsPage } from "./RuntimeDiagnosticsSettingsPage";
+import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
 import {
   WorkflowExecutableInspectorPage,
   WorkflowExecutablesPage,
@@ -11,6 +12,8 @@ import {
   WorkflowManagementPage
 } from "./workflow-editor/pages";
 import "./styles.css";
+import { registerVariableReferenceContribution } from "./variableReferenceContribution";
+import { registerInputReferenceContribution } from "./inputReferenceContribution";
 
 // Re-exported for the test suite (src/__tests__/module.test.tsx), which imports these connect-end
 // helpers directly alongside register().
@@ -21,6 +24,9 @@ export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./work
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  registerVariableReferenceContribution(api.expressionEditors);
+  api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
+  registerInputReferenceContribution(api.expressionEditors);
   api.featureAreas.add({
     id: "workflows",
     title: "Workflows",

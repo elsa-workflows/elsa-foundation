@@ -3,7 +3,7 @@ import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-work
 import { register } from "../module";
 
 describe("secrets module", () => {
-  it("registers feature area and secret picker editor", () => {
+  it("registers a Secrets-owned Secret Reference Contribution", () => {
     const api = stubApi();
 
     register(api);
@@ -11,10 +11,24 @@ describe("secrets module", () => {
     expect(api.featureAreas.list()).toEqual([
       expect.objectContaining({ id: "secrets", title: "Secrets", navGroup: "Security", ownedPaths: ["/security/secrets", "/secrets"] })
     ]);
-    expect(api.propertyEditors.list()).toEqual([
-      expect.objectContaining({ id: "secret-picker" })
+    expect(api.propertyEditors.list()).toEqual([]);
+    expect(api.expressionEditors.list()).toEqual([
+      expect.objectContaining({
+        id: "elsa.secret-reference-editor",
+        surfaces: expect.objectContaining({ inline: expect.any(Function) }),
+        createDefaultValue: expect.any(Function)
+      })
     ]);
-    expect(api.propertyEditors.list()[0].supports({ name: "token", typeName: "String", uiHint: "secret-picker" }, { activity: {}, expressionDescriptors: [] })).toBe(true);
+    const contribution = api.expressionEditors.list()[0];
+    const context = {
+      syntax: "Secret",
+      surface: "inline" as const,
+      descriptor: { name: "token", typeName: "System.String" },
+      activity: {},
+      expressionDescriptors: [{ type: "Secret", displayName: "Secret", editingMode: "reference" as const }]
+    };
+    expect(contribution.supports(context)).toBe(true);
+    expect(contribution.createDefaultValue?.(context)).toBeNull();
   });
 });
 
@@ -32,7 +46,8 @@ function stubApi(): ElsaStudioModuleApi {
       }
     },
     featureAreas: registry(),
-    propertyEditors: registry()
+    propertyEditors: registry(),
+    expressionEditors: registry()
   };
 }
 

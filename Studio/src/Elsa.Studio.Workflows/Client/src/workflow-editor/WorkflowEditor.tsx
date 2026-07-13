@@ -121,8 +121,10 @@ export function WorkflowEditor({
     activityDescriptors,
     availabilityDiagnostics,
     expressionDescriptors,
+    expressionDescriptorStatus,
     descriptorStatus,
-    reload
+    reload,
+    reloadExpressionDescriptors
   } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError });
   // Debounced name/description save; edits are optimistic and flushed on unmount.
   const { updateDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
@@ -521,7 +523,9 @@ export function WorkflowEditor({
           propertyEditors={propertyEditors}
           expressionEditors={expressionEditors}
           expressionDescriptors={expressionDescriptors}
+          expressionDescriptorStatus={expressionDescriptorStatus}
           descriptorStatus={descriptorStatus}
+          onRetryExpressionDescriptors={() => { void reloadExpressionDescriptors(); }}
           scopedVariableAnalysis={scopedVariableAnalysis}
           onSelectedActivityChange={updateSelectedActivity}
           onEnterSlot={enterSlotScope}

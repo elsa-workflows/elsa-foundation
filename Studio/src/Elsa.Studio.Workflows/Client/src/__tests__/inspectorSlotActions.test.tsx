@@ -91,7 +91,9 @@ function panelElement(slots: ChildSlot[], handlers: PanelHandlers = {}, override
       propertyEditors={[]}
       expressionEditors={[]}
       expressionDescriptors={[]}
+      expressionDescriptorStatus="ready"
       descriptorStatus="ready"
+      onRetryExpressionDescriptors={() => undefined}
       scopedVariableAnalysis={{ visibleVariables: [], shadowingWarnings: [], status: "unavailable" }}
       onSelectedActivityChange={vi.fn()}
       onEnterSlot={handlers.onEnterSlot ?? vi.fn()}

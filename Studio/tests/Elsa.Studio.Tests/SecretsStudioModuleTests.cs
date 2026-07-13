@@ -21,7 +21,8 @@ public sealed class SecretsStudioModuleTests
         Assert.StartsWith("/_content/Elsa.Studio.Secrets/studio/modules/secrets/module.js", module.Entry, StringComparison.Ordinal);
         Assert.Contains(module.Styles, x => x.StartsWith("/_content/Elsa.Studio.Secrets/studio/modules/secrets/module.css", StringComparison.Ordinal));
         Assert.Contains("routes", module.Capabilities);
-        Assert.Contains("property-editors", module.Capabilities);
+        Assert.Contains("expression-editors", module.Capabilities);
+        Assert.DoesNotContain("property-editors", module.Capabilities);
         Assert.Contains(response.Diagnostics, x => x.ModuleId == "Elsa.Studio.Secrets" && x.Status == StudioModuleDiagnosticStatuses.Available);
     }
 

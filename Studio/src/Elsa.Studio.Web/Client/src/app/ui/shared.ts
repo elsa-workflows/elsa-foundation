@@ -12,6 +12,7 @@
  */
 export * from "./data-grid/DataGrid";
 export * from "./feedback/FeedbackStates";
+export * from "./feedback/ActionNotice";
 export * from "./feedback/StatusChip";
 export * from "./feedback/StatusPill";
 export * from "./forms/Button";
@@ -22,4 +23,5 @@ export * from "./inspector/Inspector";
 export * from "./layout/Tabs";
 export * from "./layout/Toolbar";
 export * from "./list/ListRow";
+export * from "./overlay/AnchoredPopover";
 export * from "./stat/StatTile";

@@ -543,6 +543,24 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("explains how to configure optional privileged host management on the Server tab", async () => {
+    const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(null, "unconfigured"));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ bridgeRegistryGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    flushSync(() => {
+      serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(container.textContent).toContain("Privileged host management is optional");
+    expect(container.textContent).toContain("Studio:BackendBaseUrl");
+    expect(container.textContent).toContain("Studio:BackendModuleManagementApiKey");
+    expect(activeGridPanel(container)).toBeNull();
+
+    await unmount();
+  });
+
   it("keeps the Studio tab working when the backend management bridge is down", async () => {
     // The bridge throws (Studio-origin failure). The Studio tab still renders its own registry read.
     const { container, unmount } = await renderModuleManagementPage(stubApi({

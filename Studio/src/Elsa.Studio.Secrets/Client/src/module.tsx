@@ -5,11 +5,7 @@ import { SecretsPage } from "./SecretsPage";
 import { SecretPickerEditor } from "./SecretPickerEditor";
 import "./styles.css";
 
-let moduleApi: ElsaStudioModuleApi;
-
 export function register(api: ElsaStudioModuleApi) {
-  moduleApi = api;
-
   api.featureAreas.add({
     id: "secrets",
     title: "Secrets",
@@ -40,11 +36,14 @@ export function register(api: ElsaStudioModuleApi) {
     ]
   });
 
-  api.propertyEditors.add({
-    id: "secret-picker",
-    order: 30,
-    supports: descriptor => descriptor.uiHint === "secret-picker" || descriptor.defaultSyntax === "Secret",
-    component: props => <SecretPickerEditor {...props} endpointContext={moduleApi.backend} />
+  api.expressionEditors.add({
+    id: "elsa.secret-reference-editor",
+    order: 100,
+    supports: context => context.syntax === "Secret",
+    surfaces: {
+      inline: props => <SecretPickerEditor {...props} endpointContext={api.backend} />
+    },
+    createDefaultValue: () => null,
   });
 }
 

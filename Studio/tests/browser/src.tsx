@@ -1,0 +1,127 @@
+import React, { useState } from "react";
+import { createRoot } from "react-dom/client";
+import { ActivityPropertiesPanel } from "../../src/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import type { StudioActivityDescriptor, StudioExpressionDescriptor } from "@elsa-workflows/studio-sdk";
+import type { ActivityNode } from "../../src/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import "../../src/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import "../../src/Elsa.Studio.Workflows/Client/src/styles.css";
+import "./fixture.css";
+
+const searchParams = new URLSearchParams(window.location.search);
+const scrollingFixture = searchParams.get("mode") === "scroll";
+const dictionaryFixture = searchParams.get("mode") === "dictionary";
+
+const expressionDescriptors: StudioExpressionDescriptor[] = [
+  { type: "Input", displayName: "Input", editingMode: "reference" },
+  { type: "JavaScript", displayName: "JavaScript", editingMode: "text" },
+  { type: "Liquid", displayName: "Liquid", editingMode: "text" },
+  { type: "Literal", displayName: "Literal", editingMode: "literal" },
+  { type: "Object", displayName: "Object", editingMode: "structured" },
+  { type: "Secret", displayName: "Secret", editingMode: "reference" },
+  { type: "Variable", displayName: "Variable", editingMode: "reference" }
+];
+
+const descriptor: StudioActivityDescriptor = {
+  typeName: "Elsa.Activities.Http.Activities.HttpEndpoint",
+  displayName: "HTTP Endpoint",
+  inputs: [{
+    name: "Path",
+    typeName: "System.String",
+    displayName: "Path",
+    description: "The route handled by this endpoint.",
+    order: 0,
+    category: "General",
+    isBrowsable: true,
+    uiHint: "singleline",
+    isWrapped: true,
+    defaultSyntax: "Literal"
+  }],
+  outputs: [],
+  ports: []
+};
+
+const dictionaryDescriptor: StudioActivityDescriptor = {
+  typeName: "Elsa.Activities.Http.Activities.HttpRequest",
+  displayName: "HTTP Request",
+  inputs: [{
+    name: "Headers",
+    typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]",
+    displayName: "Headers",
+    description: "Headers sent with the request.",
+    order: 0,
+    category: "General",
+    isBrowsable: true,
+    isWrapped: true,
+    defaultSyntax: "Literal",
+    uiSpecifications: {
+      dictionary: {
+        keyLabel: "Header name",
+        valueLabel: "Header value",
+        keyPlaceholder: "Content-Type",
+        valuePlaceholder: "application/json",
+        keyComparison: "ordinalIgnoreCase"
+      }
+    }
+  }],
+  outputs: [],
+  ports: []
+};
+
+function Fixture() {
+  const [activity, setActivity] = useState<ActivityNode>({
+    nodeId: "http-endpoint-1",
+    activityVersionId: "http-endpoint-v1",
+    inputs: [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
+    outputs: [],
+    structure: null,
+    ...(dictionaryFixture ? {
+      headers: {
+        typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]",
+        expression: {
+          type: "Literal",
+          value: {
+            Accept: "application/json",
+            "X-Correlation-Id": "{{ correlationId }}",
+            "Cache-Control": "no-cache",
+            "User-Agent": "Elsa Studio",
+            "X-Region": "eu-west",
+            "X-Trace": "enabled"
+          }
+        }
+      }
+    } : {})
+  });
+
+  const activeDescriptor = dictionaryFixture ? dictionaryDescriptor : descriptor;
+
+  return (
+    <main className="wf-editor browser-fixture">
+      <div className="browser-fixture-copy">
+        <h1>Workflow designer</h1>
+        <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
+      </div>
+      <aside className={`wf-inspector browser-inspector${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
+        <h2>{dictionaryFixture ? "HTTP Request" : "HTTP Endpoint"}</h2>
+        <div className="browser-inspector-spacer" aria-hidden="true" />
+        <ActivityPropertiesPanel
+          activity={activity}
+          descriptor={activeDescriptor}
+          editors={[]}
+          expressionEditors={[]}
+          expressionDescriptors={expressionDescriptors}
+          expressionDescriptorStatus="ready"
+          descriptorStatus="ready"
+          visibleVariables={[]}
+          scopeStatus="ready"
+          onChange={setActivity}
+        />
+        {scrollingFixture ? <div className="browser-inspector-tail" aria-hidden="true" /> : null}
+      </aside>
+    </main>
+  );
+}
+
+const theme = searchParams.get("theme");
+document.documentElement.dataset.theme = theme === "black-glass" ? "black-glass" : "harbor";
+document.documentElement.dataset.themeMode = theme === "black-glass" ? "dark" : "light";
+createRoot(document.getElementById("root")!).render(<Fixture />);

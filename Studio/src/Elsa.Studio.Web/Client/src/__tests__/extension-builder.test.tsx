@@ -68,10 +68,15 @@ describe("extension builder page", () => {
         : {}
     }));
 
-    await waitForText(container, "Backend management is unavailable");
+    await waitForText(container, "optional privileged host-management integration");
 
     // The explicit reason is named and actions are gated: no create/attach affordances, no doomed workspace reads.
     expect(container.textContent?.toLowerCase()).toContain(expected.toLowerCase());
+    expect(container.textContent?.toLowerCase()).toContain("privileged host-management");
+    if (status === "unconfigured") {
+      expect(container.textContent).toContain("Studio:BackendBaseUrl");
+      expect(container.textContent).toContain("Studio:BackendModuleManagementApiKey");
+    }
     expect(container.textContent).not.toContain("Create workspace");
     expect(container.textContent).not.toContain("Attach server-local");
     expect(container.querySelector(".extension-builder-solution-card")).toBeNull();
@@ -81,7 +86,7 @@ describe("extension builder page", () => {
     // Retry re-runs the bridge read.
     await clickButton(container, "Retry");
     await flushPromises();
-    expect(container.textContent).toContain("Backend management is unavailable");
+    expect(container.textContent).toContain("optional privileged host-management integration");
 
     await unmount();
   });
@@ -103,7 +108,7 @@ describe("extension builder page", () => {
 
     expect(container.textContent).toContain("extension-builder.read");
     // Not conflated with the backend-management-unavailable surface or its retry affordance.
-    expect(container.textContent).not.toContain("Backend management is unavailable");
+    expect(container.textContent).not.toContain("optional privileged host-management integration");
     expect(container.textContent).not.toContain("Retry");
     expect(container.textContent).not.toContain("Create workspace");
     // No workspace-surface bridge read was issued.
@@ -162,7 +167,7 @@ describe("extension builder page", () => {
 
     // The third poll succeeded: the build leaves the running state and no bridge tracker error was surfaced.
     await waitFor(() => buttonContaining(container, "Building…") === undefined, "Expected the build to complete.");
-    expect(container.textContent).not.toContain("Backend management is degraded");
+    expect(container.textContent).not.toContain("Privileged host management is degraded");
 
     // Polling ended with the completed build; no stray retry remains scheduled.
     await advancePollTime(10_000);
@@ -201,7 +206,7 @@ describe("extension builder page", () => {
     await waitFor(() => buildReads >= 4, "Expected the 2s and 5s backoff retries.");
 
     // The third consecutive failure stops polling and names the backend-management state…
-    await waitForText(container, "Backend management is unreachable: The backend management surface could not be reached.");
+    await waitForText(container, "Privileged host management is unreachable: The backend management surface could not be reached.");
     // …while the build stays rendered as running: the manual refresh affordance is the retry.
     expect(buttonContaining(container, "Building…")).toBeDefined();
 
@@ -231,7 +236,7 @@ describe("extension builder page", () => {
 
     await clickTab(container, "Promote");
     await clickButton(container, "Promote build");
-    await waitForText(container, "Backend management is unreachable");
+    await waitForText(container, "Privileged host management is unreachable");
 
     // The tracker error carries the bridge's may-still-have-completed detail…
     expect(container.textContent).toContain("may still have completed");
@@ -250,7 +255,7 @@ describe("extension builder page", () => {
       }
     }));
 
-    await waitForText(container, "Backend management is unavailable");
+    await waitForText(container, "optional privileged host-management integration");
 
     // The surface names the reported state's detail and gates all actions.
     expect(container.textContent).toContain("could not be reached");
@@ -274,10 +279,10 @@ describe("extension builder page", () => {
 
     failSourceControlReads = true;
     await openSolution(container);
-    await waitForText(container, "Backend management is degraded: The backend management relay timed out.");
+    await waitForText(container, "Privileged host management is degraded: The backend management relay timed out.");
 
     // A mid-session failure is a tracker error inside the workspace — the page does not flip to unavailable.
-    expect(container.textContent).not.toContain("Backend management is unavailable");
+    expect(container.textContent).not.toContain("optional privileged host-management integration");
     expect(container.querySelector(".extension-builder-solution-card")).toBeNull(); // still inside the workspace
 
     await unmount();
@@ -1456,11 +1461,11 @@ function bridgeStatusResult(status: string, detail: string) {
 
 function defaultBridgeDetail(status: string) {
   switch (status) {
-    case "unconfigured": return "Backend management is not configured on the Studio host.";
-    case "unreachable": return "The backend management surface could not be reached.";
+    case "unconfigured": return "Privileged host management is not configured on the Studio host. Set Studio:BackendBaseUrl and Studio:BackendModuleManagementApiKey to enable Extension Builder.";
+    case "unreachable": return "The privileged host-management surface could not be reached.";
     case "unauthorized": return "The backend rejected the Studio management credential.";
-    case "degraded": return "The backend management surface is degraded.";
-    default: return "Backend management status is unknown.";
+    case "degraded": return "The privileged host-management surface is degraded.";
+    default: return "Privileged host-management status is unknown.";
   }
 }
 

@@ -52,6 +52,8 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         var status = await GetStatusAsync(client);
 
         Assert.Equal(StudioBackendManagementStatus.Unconfigured, status.Status);
+        Assert.Contains(StudioBackendManagementOptions.BackendBaseUrlConfigurationKey, status.Detail);
+        Assert.Contains(StudioBackendManagementOptions.ManagementApiKeyConfigurationKey, status.Detail);
         // Fail closed: no outbound backend request may be issued.
         Assert.Empty(backend.Requests);
     }

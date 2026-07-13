@@ -352,6 +352,46 @@
   align-self: flex-start;
 }
 
+.secret-picker-editor > label {
+  color: var(--secrets-text-muted);
+  font-size: var(--secrets-label-size);
+  font-weight: 600;
+}
+
+.secret-picker-status,
+.secret-picker-metadata {
+  margin: 0;
+  color: var(--secrets-text-muted);
+  font-size: var(--secrets-label-size);
+}
+
+.secret-picker-status:empty {
+  display: none;
+}
+
+.secret-picker-status.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--secrets-danger-fg);
+}
+
+.secret-picker-status button {
+  border: 1px solid var(--secrets-border);
+  border-radius: var(--secrets-radius);
+  background: var(--secrets-surface);
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--secrets-text);
+  font: inherit;
+}
+
+.secret-picker-status button:focus-visible {
+  outline: 2px solid var(--secrets-focus);
+  outline-offset: 1px;
+}
+
 .secrets-redaction,
 .secrets-status,
 .secrets-alert {

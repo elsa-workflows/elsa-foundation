@@ -443,8 +443,19 @@ export interface StudioActivityInputOptionsProviderDescriptor {
   dependsOn: string[];
 }
 
+export type StudioDictionaryKeyComparison = "ordinal" | "ordinalIgnoreCase";
+
+export interface StudioActivityInputDictionarySpecifications {
+  keyComparison?: StudioDictionaryKeyComparison;
+  keyLabel?: string;
+  valueLabel?: string;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
+}
+
 /** Known input-editor metadata plus an open bag for module-specific specifications. */
 export interface StudioActivityInputUISpecifications extends Record<string, unknown> {
+  dictionary?: StudioActivityInputDictionarySpecifications;
   options?: StudioActivityInputOption[];
   optionsProvider?: StudioActivityInputOptionsProviderDescriptor;
 }
@@ -514,10 +525,13 @@ export interface StudioActivityDescriptor {
   isTerminal?: boolean;
 }
 
+export type StudioExpressionEditingMode = "literal" | "text" | "structured" | "reference";
+
 export interface StudioExpressionDescriptor {
   type: string;
   displayName?: string | null;
   description?: string | null;
+  editingMode: StudioExpressionEditingMode;
 }
 
 /**
@@ -566,6 +580,7 @@ export interface StudioExpressionEditorProps {
   syntax: string;
   value: unknown;
   disabled?: boolean;
+  initialFocus?: boolean;
   context: StudioExpressionEditorContext;
   onChange(value: unknown): void;
 }
@@ -589,6 +604,8 @@ export interface StudioExpressionEditorContribution {
   order?: number;
   supports(context: StudioExpressionEditorContext): boolean;
   surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+  /** Creates a valid empty value when authoring switches to this expression syntax. */
+  createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   diagnostics?(context: StudioExpressionEditorContext, value: unknown): StudioExpressionEditorDiagnostic[];
   metadata?: StudioExpressionEditorMetadata;
 }

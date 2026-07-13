@@ -50,6 +50,7 @@ declare module "@elsa-workflows/studio-sdk" {
   export interface StudioExpressionDescriptor {
     type: string;
     displayName?: string | null;
+    editingMode: "literal" | "text" | "structured" | "reference";
   }
 
   export interface StudioActivityPropertyEditorContext {
@@ -71,6 +72,35 @@ declare module "@elsa-workflows/studio-sdk" {
     order?: number;
     supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
     component: ComponentType<StudioActivityPropertyEditorProps>;
+  }
+
+  export type StudioExpressionEditorSurface = "inline" | "expanded";
+
+  export interface StudioExpressionEditorContext {
+    syntax: string;
+    surface: StudioExpressionEditorSurface;
+    descriptor: StudioActivityInputDescriptor;
+    activity: unknown;
+    expressionDescriptors: StudioExpressionDescriptor[];
+    readOnly?: boolean;
+  }
+
+  export interface StudioExpressionEditorProps {
+    descriptor: StudioActivityInputDescriptor;
+    syntax: string;
+    value: unknown;
+    disabled?: boolean;
+    initialFocus?: boolean;
+    context: StudioExpressionEditorContext;
+    onChange(value: unknown): void;
+  }
+
+  export interface StudioExpressionEditorContribution {
+    id: string;
+    order?: number;
+    supports(context: StudioExpressionEditorContext): boolean;
+    surfaces: Partial<Record<StudioExpressionEditorSurface, ComponentType<StudioExpressionEditorProps>>>;
+    createDefaultValue?(context: StudioExpressionEditorContext): unknown;
   }
 
   export interface StudioConfirmOptions {
@@ -106,6 +136,7 @@ declare module "@elsa-workflows/studio-sdk" {
     readonly backend: StudioEndpointContext;
     readonly featureAreas: StudioContributionRegistry<StudioFeatureAreaContribution>;
     readonly propertyEditors: StudioContributionRegistry<StudioActivityPropertyEditorContribution>;
+    readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
     readonly dialogs: StudioDialogApi;
   }
 }

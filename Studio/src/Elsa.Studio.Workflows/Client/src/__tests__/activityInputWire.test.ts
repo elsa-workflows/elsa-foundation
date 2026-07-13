@@ -25,6 +25,21 @@ describe("activity input wire adapter", () => {
     ]);
   });
 
+  it("round-trips a workflow Input expression as a structured stable-key reference", () => {
+    const reference = { referenceKey: "customer-id" };
+    const state = stateOf(writeLine("write-one", { text: wrapped(reference, "Input") }));
+
+    const wire = canonicalizeStateForWire(state);
+    expect(wire.rootActivity?.inputs).toEqual([
+      { referenceKey: "Text", value: { value: reference, expressionType: "Input" } }
+    ]);
+
+    const expanded = expandStateFromWire(wire).rootActivity as ActivityNode & {
+      text: { expression: { type: string; value: unknown } };
+    };
+    expect(expanded.text.expression).toEqual({ type: "Input", value: reference });
+  });
+
   it("serializes non-string literal values for the string-typed backend contract", () => {
     const state = stateOf(writeLine("write-one", { count: wrapped(42, "Literal"), enabled: wrapped(true, "Literal") }));
 

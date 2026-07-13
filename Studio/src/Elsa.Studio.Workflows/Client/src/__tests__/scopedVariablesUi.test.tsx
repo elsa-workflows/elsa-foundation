@@ -2,8 +2,10 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { VariablesEditor } from "../WorkflowPropertiesView";
+import { variableReferenceContribution } from "../variableReferenceContribution";
 import type { ActivityNode, VisibleVariableView } from "../workflowTypes";
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -25,12 +27,6 @@ function render(ui: React.ReactElement) {
   return container;
 }
 
-function setSelectValue(select: HTMLSelectElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
-  setter.call(select, value);
-  flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
-}
-
 function setInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   setter.call(input, value);
@@ -46,12 +42,12 @@ const visibleVariables: VisibleVariableView[] = [
   { referenceKey: "k2", name: "Inner", scopeId: "node-c", isWorkflowScope: false }
 ];
 
-const descriptor = {
+const descriptor: StudioActivityDescriptor = {
   typeName: "MyActivity",
-  inputs: [{ name: "Source", typeName: "System.Object", isWrapped: true, defaultSyntax: "Variable" }],
+  inputs: [{ name: "Source", displayName: "Source", typeName: "System.Int32", isWrapped: true, defaultSyntax: "Variable" }],
   outputs: [],
   ports: []
-} as never;
+};
 
 function variableActivity(reference: unknown): ActivityNode {
   return {
@@ -64,30 +60,148 @@ function variableActivity(reference: unknown): ActivityNode {
 }
 
 describe("variable picker", () => {
-  it("lists only the variables visible from the activity's scope, grouped by scope", () => {
+  function renderPicker(options: {
+    reference?: unknown;
+    variables?: VisibleVariableView[];
+    typeName?: string;
+    status?: "loading" | "ready" | "unavailable" | "error";
+    retry?: () => void;
+    onChange?: ReturnType<typeof vi.fn>;
+  } = {}) {
+    const onChange = options.onChange ?? vi.fn();
     const container = render(
       <ActivityPropertiesPanel
-        activity={variableActivity({ referenceKey: "k1", declaringScopeId: "workflow" })}
-        descriptor={descriptor}
+        workflowState={{
+          variables: [
+            { referenceKey: "k1", name: "Count", type: { alias: "Int32", collectionKind: "Single" }, storageDriverType: null, default: null },
+            { referenceKey: "k3", name: "Message", type: { alias: "String", collectionKind: "Single" }, storageDriverType: null, default: null },
+            { referenceKey: "k4", name: "Sales order", type: { alias: "Contoso.Sales.Order", collectionKind: "Single" }, storageDriverType: null, default: null },
+            { referenceKey: "k5", name: "Shipping order", type: { alias: "Fabrikam.Shipping.Order", collectionKind: "Single" }, storageDriverType: null, default: null }
+          ],
+          rootActivity: {
+            nodeId: "node-c",
+            activityVersionId: "container-v1",
+            inputs: [],
+            outputs: [],
+            structure: {
+              kind: "elsa.sequence.structure",
+              schemaVersion: "1.0.0",
+              payload: {
+                variables: [
+                  { referenceKey: "k2", name: "Inner", type: { alias: "Int32", collectionKind: "Single" }, storageDriverType: null, default: null }
+                ],
+                activities: []
+              }
+            }
+          }
+        }}
+        activity={variableActivity(options.reference ?? { referenceKey: "k1", declaringScopeId: "workflow" })}
+        descriptor={options.typeName ? {
+          ...descriptor,
+          inputs: [{ ...descriptor.inputs[0], typeName: options.typeName }]
+        } : descriptor}
         editors={[]}
-        expressionEditors={[]}
-        expressionDescriptors={[]}
+        expressionEditors={[variableReferenceContribution]}
+        expressionDescriptors={[{ type: "Variable", displayName: "Variable", editingMode: "reference" }]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
-        visibleVariables={visibleVariables}
-        scopeStatus="ready"
-        onChange={vi.fn()}
+        visibleVariables={options.variables ?? [
+          visibleVariables[0],
+          { referenceKey: "k3", name: "Message", scopeId: "workflow", isWorkflowScope: true }
+        ]}
+        scopeStatus={options.status ?? "ready"}
+        scopeRetry={options.retry}
+        onChange={onChange}
       />
     );
+    return { container, onChange };
+  }
 
-    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
-    expect(select).not.toBeNull();
-    expect(select.value).toBe("workflow::k1");
-    const optionText = [...select.options].map(option => option.textContent);
-    expect(optionText).toContain("Count · workflow");
-    expect(optionText).toContain("Inner · container");
+  it("uses the registered Contribution to rank compatible Variables before disabled incompatible Variables", () => {
+    const { container } = renderPicker();
+    const groups = [...container.querySelectorAll("optgroup")];
+    expect(groups.map(group => group.label)).toEqual(["Compatible variables", "Other variables"]);
+    expect(groups[0].textContent).toContain("Count");
+    const incompatible = groups[1].querySelector("option");
+    expect(incompatible?.textContent).toContain("Message");
+    expect(incompatible?.textContent).toContain("String");
+    expect(incompatible?.disabled).toBe(true);
   });
 
-  it("writes a structured VariableReference when retargeting to another scope", () => {
+  it("keeps distinct fully-qualified aliases incompatible even when their short names match", () => {
+    const { container } = renderPicker({
+      typeName: "Contoso.Sales.Order",
+      variables: [
+        { referenceKey: "k4", name: "Sales order", scopeId: "workflow", isWorkflowScope: true },
+        { referenceKey: "k5", name: "Shipping order", scopeId: "workflow", isWorkflowScope: true }
+      ]
+    });
+    const options = [...container.querySelectorAll<HTMLOptionElement>("optgroup option")];
+
+    expect(options.find(option => option.textContent?.includes("Sales order"))?.disabled).toBe(false);
+    expect(options.find(option => option.textContent?.includes("Shipping order"))?.disabled).toBe(true);
+  });
+
+  it("writes a structured scope-aware reference when a compatible Variable is selected", () => {
+    const variables = [
+      { referenceKey: "k2", name: "Inner", scopeId: "node-c", isWorkflowScope: false },
+      visibleVariables[0]
+    ];
+    const { container, onChange } = renderPicker({ reference: null, variables });
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
+
+    select.value = "node-c::k2";
+    flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      source: expect.objectContaining({
+        expression: { type: "Variable", value: { referenceKey: "k2", declaringScopeId: "node-c" } }
+      })
+    }));
+  });
+
+  it("preserves an unresolved reference as a selected repair option", () => {
+    const { container, onChange } = renderPicker({
+      reference: { referenceKey: "missing", declaringScopeId: "old-scope" }
+    });
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
+
+    expect(select.value).toBe("old-scope::missing");
+    expect(select.selectedOptions[0].textContent).toContain("not visible from this scope");
+    expect(select.selectedOptions[0].disabled).toBe(true);
+    expect(select.disabled).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+
+    select.value = "workflow::k1";
+    flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
+      source: expect.objectContaining({
+        expression: { type: "Variable", value: { referenceKey: "k1", declaringScopeId: "workflow" } }
+      })
+    }));
+  });
+
+  it("disables changes while loading without erasing the current reference", () => {
+    const { container } = renderPicker({ status: "loading", variables: [] });
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
+
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe("workflow::k1");
+    expect(container.textContent).toContain("Loading visible variables");
+  });
+
+  it("preserves the current reference and offers Retry after analysis fails", () => {
+    const retry = vi.fn();
+    const { container, onChange } = renderPicker({ status: "error", variables: [], retry });
+
+    expect(container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")?.value).toBe("workflow::k1");
+    expect(container.textContent).toContain("Variable scope information could not be loaded");
+    clickButton([...container.querySelectorAll("button")].find(button => button.textContent === "Retry")!);
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("preserves an existing Variable reference as read-only until its Contribution is available", () => {
     const onChange = vi.fn();
     const container = render(
       <ActivityPropertiesPanel
@@ -96,6 +210,7 @@ describe("variable picker", () => {
         editors={[]}
         expressionEditors={[]}
         expressionDescriptors={[]}
+        expressionDescriptorStatus="ready"
         descriptorStatus="ready"
         visibleVariables={visibleVariables}
         scopeStatus="ready"
@@ -103,70 +218,9 @@ describe("variable picker", () => {
       />
     );
 
-    setSelectValue(container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!, "node-c::k2");
-
-    expect(onChange).toHaveBeenCalledTimes(1);
-    const updated = onChange.mock.calls[0][0] as ActivityNode;
-    const expression = (updated.source as { expression: { type: string; value: unknown } }).expression;
-    expect(expression.type).toBe("Variable");
-    expect(expression.value).toEqual({ referenceKey: "k2", declaringScopeId: "node-c" });
-  });
-
-  it("surfaces an out-of-scope existing reference as a repairable option (invalid-reference repair)", () => {
-    const container = render(
-      <ActivityPropertiesPanel
-        activity={variableActivity({ referenceKey: "ghost", declaringScopeId: "removed-scope" })}
-        descriptor={descriptor}
-        editors={[]}
-        expressionEditors={[]}
-        expressionDescriptors={[]}
-        descriptorStatus="ready"
-        visibleVariables={visibleVariables}
-        scopeStatus="ready"
-        onChange={vi.fn()}
-      />
-    );
-
-    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
-    expect([...select.options].map(option => option.textContent)).toContain("ghost (not visible from this scope)");
-  });
-
-  it("does not surface a leftover literal value as a phantom reference after switching to Variable syntax", () => {
-    const container = render(
-      <ActivityPropertiesPanel
-        activity={variableActivity("some literal text")}
-        descriptor={descriptor}
-        editors={[]}
-        expressionEditors={[]}
-        expressionDescriptors={[]}
-        descriptorStatus="ready"
-        visibleVariables={visibleVariables}
-        scopeStatus="ready"
-        onChange={vi.fn()}
-      />
-    );
-
-    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable reference']")!;
-    expect(select.value).toBe("");
-    expect([...select.options].some(option => option.textContent?.includes("not visible"))).toBe(false);
-  });
-
-  it("explains an unavailable analysis endpoint instead of showing an empty list", () => {
-    const container = render(
-      <ActivityPropertiesPanel
-        activity={variableActivity({ referenceKey: "k1", declaringScopeId: "workflow" })}
-        descriptor={descriptor}
-        editors={[]}
-        expressionEditors={[]}
-        expressionDescriptors={[]}
-        descriptorStatus="ready"
-        visibleVariables={[]}
-        scopeStatus="unavailable"
-        onChange={vi.fn()}
-      />
-    );
-
-    expect(container.textContent).toContain("Variable scope information is unavailable");
+    expect(container.textContent).toContain("current value is preserved and read-only");
+    expect(container.querySelector("select[aria-label='Variable reference']")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 
