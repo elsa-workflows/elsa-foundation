@@ -2341,99 +2341,62 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("renders workflow instance canvas from Runtime executable structure", async () => {
+  it("renders a published workflow run canvas from its pinned Runtime executable graph", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
       disconnect() {}
     });
-    const writeLineNode = {
-      nodeId: "nested-write-line",
-      activityVersionId: "write-line-v1",
-      inputs: [],
-      outputs: [],
-      structure: null
-    };
-    const forEachNode = {
-      nodeId: "foreach-1",
-      activityVersionId: "foreach-v1",
-      inputs: [],
-      outputs: [],
-      structure: {
-        kind: "elsa.foreach.structure",
-        schemaVersion: "1.0.0",
-        payload: { body: writeLineNode }
-      }
-    };
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
         return response(workflowInstanceDetails({
-          instance: workflowInstance({ status: "Failed", activityCount: 2 }),
+          instance: workflowInstance({ sourceReferenceId: "reference-published", activityCount: 2 }),
           activities: [
             activityExecution({
-              activityExecutionId: "foreach-execution",
-              executableNodeId: "foreach-1",
-              authoredActivityId: "foreach-1",
-              activityType: "Elsa.Activities.ControlFlow.Activities.ForEach",
-              status: "Running",
-              completedAt: null
+              activityExecutionId: "root-execution",
+              executableNodeId: "exec-root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart"
             }),
-            activityExecution({
-              activityExecutionId: "nested-write-execution",
-              executableNodeId: "nested-write-line",
-              authoredActivityId: "nested-write-line",
-              activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
-              status: "Failed",
-              subStatus: "Faulted"
-            })
+            activityExecution()
           ]
         }));
       }
 
       if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) {
         return response(executableDetail({
-          definition: {
-            id: "definition-1",
-            name: "Loops",
-            description: "Loops over values.",
-            createdAt: "2026-06-18T01:00:00Z",
-            lastModifiedAt: "2026-06-18T01:10:00Z"
-          },
-          state: {
-            variables: [],
-            rootActivity: flowchartRoot([forEachNode]),
-            inputs: [],
-            outputs: []
-          },
-          layout: [
-            { nodeId: "foreach-1", x: 180, y: 120 },
-            { nodeId: "nested-write-line", x: 200, y: 140 }
-          ]
+          rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          rootActivity: executableWireNode({
+            executableNodeId: "exec-root",
+            authoredActivityId: "root",
+            activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            structureKind: "elsa.flowchart.structure",
+            childSlots: [{ name: "Flowchart.Activities", activities: [executableWireNode()] }]
+          }),
+          chosenReference: {
+            sourceReferenceId: "reference-published",
+            selection: "requested",
+            layout: [{ nodeId: "write-line-1", x: 180, y: 120 }]
+          }
         }));
       }
 
       if (url.startsWith("https://server.example/design/activities/catalog")) {
         return response({ activities: [
           activity({
-            activityVersionId: "flowchart-v1",
+            activityVersionId: "activity-flowchart-v1",
             activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
             category: "Flowchart",
-            displayName: "Flowchart"
-          }),
-          activity({
-            activityVersionId: "foreach-v1",
-            activityTypeKey: "Elsa.Activities.ControlFlow.Activities.ForEach",
-            category: "Control Flow",
-            displayName: "For Each",
+            displayName: "Flowchart",
             designFacets: [{
-              kind: "elsa.foreach.structure",
+              kind: "elsa.flowchart.structure",
               schemaVersion: "1.0.0",
               payload: {
-                mode: "sequence",
-                supportsScopedVariables: false,
-                slots: [{ name: "Body", property: "body", displayName: "Body", cardinality: "single" }],
-                initialPayload: { body: null }
+                mode: "flowchart",
+                supportsScopedVariables: true,
+                slots: [{ name: "Flowchart.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+                initialPayload: { activities: [], connections: [], startNodeId: null }
               }
             }]
           }),
@@ -2452,9 +2415,17 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
 
     await waitForText(container, "Pinned Runtime executable");
+    const canvasHeader = container.querySelector(".wf-instance-canvas-shell > header");
+    expect(canvasHeader?.textContent).toContain("Pinned Runtime executable");
+    expect(canvasHeader?.querySelector("small")?.textContent).toBe("1.0.0");
     const canvasText = () => container.querySelector(".wf-instance-canvas")?.textContent ?? "";
-    expect(canvasText()).toContain("Elsa.Activities.Sequence.Activities.Sequence");
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
+    expect(canvasText()).toContain("Write Line");
+    expect(canvasText()).not.toContain("No workflow activities are available");
+    expect(container.textContent).toContain("Flowchart");
+    expect(container.textContent).toContain("WriteLine");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-published"
+    );
 
     await unmount();
   });

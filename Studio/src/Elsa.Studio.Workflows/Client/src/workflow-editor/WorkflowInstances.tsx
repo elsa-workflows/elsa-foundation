@@ -4,24 +4,23 @@ import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight
 import type { StudioAiContributionApi, StudioAiPromptActionContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
-import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowExecutableNode, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, DiagnosticSnapshotArrayNode, DiagnosticSnapshotNode, DiagnosticSnapshotObjectNode, DiagnosticSnapshotPayloadReferenceNode, DiagnosticSnapshotUnknownNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import {
   applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
-  createActivityNode,
   getActivityDesignerSupport,
   getChildSlots,
   latestActivityExecution,
   planSlotNavigation,
   resolveScope,
-  replaceSlotActivities,
   slotCrumbLabel,
   type ChildSlot,
   type ScopeFrame,
   type WorkflowEdgeData,
   type WorkflowNodeData
 } from "../workflowAdapter";
+import { buildExecutableActivityGraph } from "../executableGraph";
 import { formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -519,28 +518,9 @@ export function projectPinnedExecutable(
       createdAt: timestamp,
       lastModifiedAt: timestamp
     },
-    state: { rootActivity: projectExecutableNode(executable.rootActivity, catalog) },
+    state: { rootActivity: buildExecutableActivityGraph(executable.rootActivity, catalog).root },
     layout: executable.chosenReference?.layout ?? []
   };
-}
-
-function projectExecutableNode(node: WorkflowExecutableNode, catalog: ActivityCatalogItem[]): ActivityNode {
-  const descriptor = catalog.find(candidate =>
-    candidate.activityTypeKey === node.activityType && candidate.version === node.activityTypeVersion);
-  let projected: ActivityNode = descriptor
-    ? createActivityNode(descriptor, node.authoredActivityId)
-    : { nodeId: node.authoredActivityId, activityVersionId: node.activityType, inputs: [], outputs: [] };
-
-  for (const executableSlot of node.childSlots) {
-    const slot = getChildSlots(projected, catalog).find(candidate =>
-      candidate.id === executableSlot.name || candidate.label === executableSlot.name);
-    if (!slot) continue;
-    projected = replaceSlotActivities(
-      projected,
-      slot,
-      executableSlot.activities.map(child => projectExecutableNode(child, catalog)));
-  }
-  return projected;
 }
 
 function WorkflowInstanceCanvas({
