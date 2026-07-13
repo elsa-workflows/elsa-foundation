@@ -1624,6 +1624,7 @@ describe("workflows module", () => {
     await waitForText(container, "Add activity");
     await click(buttonByText(container, "Add activity"));
     await click(optionByText(container, "Write Line"));
+    await click(buttonByText(container, "Write Line"));
     await click(buttonByText(container, "Run"));
     await waitForText(container, "Test run dispatched");
 
@@ -1639,10 +1640,15 @@ describe("workflows module", () => {
       structure: {
         kind: "elsa.flowchart.structure",
         payload: {
-          activities: [expect.objectContaining({ activityVersionId: "write-line-v1" })]
+          activities: [
+            expect.objectContaining({ activityVersionId: "write-line-v1" }),
+            expect.objectContaining({ activityVersionId: "write-line-v1" })
+          ]
         }
       }
     });
+    expect(requestBody.state.rootActivity.structure.payload.startNodeId)
+      .toBe(requestBody.state.rootActivity.structure.payload.activities[0].nodeId);
     expect(calls.some(call => call.method === "POST" && urlPath(call.url) === "/_elsa/publishing/workflows/drafts/test-runs")).toBe(false);
     expect(calls.some(call => call.url.includes("/drafts/draft-1/promote") && call.method === "POST")).toBe(false);
     expect(calls.some(call => call.url.includes("/versions/") && call.method === "POST")).toBe(false);

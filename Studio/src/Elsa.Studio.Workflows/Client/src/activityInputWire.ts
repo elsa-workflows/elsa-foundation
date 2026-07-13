@@ -1,5 +1,6 @@
 import { generateId, readArgumentType, readStringField, referenceKeyKeys } from "./workflowProperties";
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "./workflowTypes";
+import { normalizeFlowchartStartNode } from "./flowchartStartNode";
 
 /**
  * Bridges the Studio's in-memory model and the backend's canonical wire contract.
@@ -83,7 +84,8 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
     changed = true;
   }
 
-  return changed ? { ...transformed, structure: { ...structure, payload: nextPayload } } : transformed;
+  const mapped = changed ? { ...transformed, structure: { ...structure, payload: nextPayload } } : transformed;
+  return normalizeFlowchartStartNode(mapped);
 }
 
 function mapArgumentRecords(
