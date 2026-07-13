@@ -73,13 +73,25 @@ mkdir -p "$server_output_dir" "$content_root" "$baseline_dir" "$fake_bin"
 : >"$server_dll"
 printf '{}\n' >"$content_root/appsettings.json"
 printf '{}\n' >"$content_root/shells.json"
-sqlite3 "$baseline_dir/elsa-groundwork-runtime.db" 'VACUUM;'
+: >"$baseline_dir/elsa-groundwork-runtime.db"
 
 cat >"$fake_server" <<'PY'
 import http.server
 import os
 import subprocess
 import sys
+
+
+boot_number = 1
+counter_path = os.environ.get("FAKE_BOOT_COUNTER_FILE")
+if counter_path:
+    try:
+        with open(counter_path) as stream:
+            boot_number = int(stream.read()) + 1
+    except FileNotFoundError:
+        pass
+    with open(counter_path, "w") as stream:
+        stream.write(str(boot_number))
 
 
 if os.environ.get("FAKE_STUBBORN_CHILD_PID_FILE"):
@@ -103,7 +115,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             content_type = "application/json"
             status = 200
         elif self.path == "/workflows/http/hello-world":
-            body = b"Hello World!"
+            body = (b"Unexpected response"
+                    if os.environ.get("FAKE_FAIL_WORKFLOW_ON_BOOT") == str(boot_number)
+                    else b"Hello World!")
             content_type = "text/plain"
             status = 200
         else:
@@ -250,16 +264,62 @@ run_case "output closure hash changes with sibling" 0 'Cold-start report' \
   --artifacts-dir "$hash_b_artifacts" --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" \
   --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
   --expected-status 200 --expected-body 'Hello World!' --boots 1 \
-  --startup-timeout-seconds 7 --shutdown-timeout-seconds 3
+  --startup-timeout-seconds 7 --shutdown-timeout-seconds 3 \
+  --enforce-ready-p95-ms 100000 --enforce-first-request-p95-ms 100000
 if ! python3 - "$hash_a_artifacts/report.json" "$hash_b_artifacts/report.json" <<'PY'
 import json, pathlib, sys
 first, second = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:])
 assert first["provenance"]["serverOutputSha256"] != second["provenance"]["serverOutputSha256"]
 assert second["request"]["startupTimeoutSeconds"] == 7
 assert second["request"]["shutdownTimeoutSeconds"] == 3
+assert second["request"]["livenessPath"] == "/health/live"
+assert second["budgets"]["shellReadyP95Ms"]["configuredMs"] == 100000
+assert second["budgets"]["shellReadyP95Ms"]["passed"] is True
+assert second["budgets"]["firstRequestP95Ms"]["configuredMs"] == 100000
+assert second["budgets"]["firstRequestP95Ms"]["passed"] is True
+assert second["budgets"]["passed"] is True
+assert second["outcome"] == {"status": "passed", "failure": None}
 PY
 then
   printf 'FAIL: successful report did not preserve output-closure hash and timeout provenance.\n' >&2
+  failures=$((failures + 1))
+fi
+
+two_boot_counter="$temporary_directory/two-boot-counter"
+two_boot_artifacts="$temporary_directory/two-boot-artifacts"
+export FAKE_BOOT_COUNTER_FILE="$two_boot_counter"
+export FAKE_FAIL_WORKFLOW_ON_BOOT=2
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "later boot failure preserves prior rows" 1 'Boot 2 workflow validation failed' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$two_boot_artifacts" --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" \
+  --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
+  --expected-status 200 --expected-body 'Hello World!' --boots 2 \
+  --enforce-ready-p95-ms 100000 --enforce-first-request-p95-ms 100000
+unset FAKE_BOOT_COUNTER_FILE FAKE_FAIL_WORKFLOW_ON_BOOT
+if ! python3 - "$hash_b_artifacts/report.json" "$two_boot_artifacts/report.json" <<'PY'
+import json, pathlib, sys
+
+success, failure = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:])
+assert set(failure) == set(success)
+assert set(failure["provenance"]) == set(success["provenance"])
+assert set(failure["request"]) == set(success["request"])
+assert failure["request"]["boots"] == 2
+assert failure["request"]["livenessPath"] == "/health/live"
+assert len(failure["boots"]) == 2
+assert set(failure["boots"][0]) == set(failure["boots"][1])
+assert failure["boots"][0]["status"] == "passed"
+assert failure["boots"][1]["status"] == "workflow_validation_failed"
+assert failure["boots"][1]["first_request_ms"] is None
+assert failure["budgets"]["shellReadyP95Ms"]["configuredMs"] == 100000
+assert failure["budgets"]["firstRequestP95Ms"]["configuredMs"] == 100000
+assert failure["budgets"]["passed"] is None
+assert failure["outcome"]["status"] == "failed"
+assert failure["outcome"]["failure"]["boot"] == 2
+assert failure["outcome"]["failure"]["category"] == "workflow_validation_failed"
+PY
+then
+  printf 'FAIL: later-boot failure report did not preserve prior rows and the stable report schema.\n' >&2
   failures=$((failures + 1))
 fi
 
@@ -326,6 +386,22 @@ run_case "ready budget failure" 1 'p95.*exceeds.*budget|budget.*failed' \
   --boots 1 --enforce-ready-p95-ms 0 \
   --output-json "$temporary_directory/result.json" \
   --output-markdown "$temporary_directory/result.md"
+if ! python3 - "$temporary_directory/result.json" <<'PY'
+import json, pathlib, sys
+
+report = json.loads(pathlib.Path(sys.argv[1]).read_text())
+budget = report["budgets"]["shellReadyP95Ms"]
+assert budget["configuredMs"] == 0
+assert budget["actualMs"] > 0
+assert budget["passed"] is False
+assert report["budgets"]["passed"] is False
+assert report["outcome"]["status"] == "failed"
+assert report["outcome"]["failure"]["category"] == "budget_failed"
+PY
+then
+  printf 'FAIL: budget failure report did not retain configured, actual, and failed budget state.\n' >&2
+  failures=$((failures + 1))
+fi
 
 export FAKE_READY_BODY='{"status":"starting","shell":"default","code":"shell_activation_pending"}'
 export FAKE_SERVER_PORT="$(free_port)"

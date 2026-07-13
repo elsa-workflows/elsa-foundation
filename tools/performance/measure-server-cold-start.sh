@@ -323,20 +323,115 @@ server_hash="$(hash_paths "$server_output_dir")"
 expected_body_file="$artifacts_dir/expected-body"
 printf '%s' "$expected_body" >"$expected_body_file"
 
-fail_boot() {
-  local boot="$1" category="$2" message="$3" log_file="$4"
-  python3 - "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" "$server_hash" \
-    "$content_hash" "$baseline_hash" "$boot" "$category" "$log_file" "$message" "$boots" \
-    "$base_url" "$liveness_path" "$readiness_path" "$workflow_path" "$startup_timeout_seconds" \
-    "$shutdown_timeout_seconds" <<'PY'
-import datetime, json, pathlib, sys
+write_report() {
+  local failure_boot="${1:-}" failure_category="${2:-}" failure_message="${3:-}" failure_log="${4:-}"
+  python3 - "$results_tsv" "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" \
+    "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
+    "$base_url" "$liveness_path" "$readiness_path" "$workflow_path" "$boots" \
+    "$startup_timeout_seconds" "$shutdown_timeout_seconds" "$ready_budget_ms" "$workflow_budget_ms" \
+    "$failure_boot" "$failure_category" "$failure_message" "$failure_log" <<'PY'
+import csv, datetime, json, math, pathlib, sys
 
-json_path, markdown_path, repository_head, dotnet, server_hash, content_hash, baseline_hash, boot, category, log_path, message, requested_boots, base_url, liveness_path, readiness_path, workflow_path, startup_timeout, shutdown_timeout = sys.argv[1:]
+(tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash,
+ content_hash, baseline_hash, base_url, liveness_path, readiness_path, workflow_path,
+ requested_boots, startup_timeout, shutdown_timeout, ready_budget, workflow_budget,
+ failure_boot, failure_category, failure_message, failure_log) = sys.argv[1:]
+
+metric_keys = (
+    "listening_ms",
+    "activation_ms",
+    "shell_ready_ms",
+    "first_request_ms",
+    "first_success_ms",
+    "shutdown_ms",
+)
+rows = []
+with open(tsv, newline="") as stream:
+    for row in csv.DictReader(stream, delimiter="\t"):
+        rows.append({
+            "boot": int(row["boot"]),
+            **{key: float(row[key]) for key in metric_keys},
+            "status": row["status"],
+            "log_path": row["log_path"] or None,
+            "logPath": row["log_path"] or None,
+        })
+
+if failure_category:
+    rows.append({
+        "boot": int(failure_boot),
+        **{key: None for key in metric_keys},
+        "status": failure_category,
+        "log_path": failure_log,
+        "logPath": failure_log,
+    })
+
+def percentile(values, fraction):
+    ordered = sorted(values)
+    return ordered[max(0, math.ceil(len(ordered) * fraction) - 1)]
+
+def aggregate(key):
+    values = [row[key] for row in rows if row[key] is not None]
+    if not values:
+        return {"p50Ms": None, "p95Ms": None, "minMs": None, "maxMs": None}
+    return {
+        "p50Ms": percentile(values, .50),
+        "p95Ms": percentile(values, .95),
+        "minMs": min(values),
+        "maxMs": max(values),
+    }
+
+aggregates = {key: aggregate(key) for key in metric_keys}
+execution_complete = not failure_category
+
+def budget(configured, actual):
+    configured_ms = float(configured) if configured else None
+    passed = None
+    if configured_ms is not None and actual is not None and execution_complete:
+        passed = actual <= configured_ms
+    return {"configuredMs": configured_ms, "actualMs": actual, "passed": passed}
+
+budgets = {
+    "shellReadyP95Ms": budget(ready_budget, aggregates["shell_ready_ms"]["p95Ms"]),
+    "firstRequestP95Ms": budget(workflow_budget, aggregates["first_request_ms"]["p95Ms"]),
+}
+configured_results = [item["passed"] for item in budgets.values() if item["configuredMs"] is not None]
+budgets["passed"] = (
+    all(configured_results)
+    if execution_complete and configured_results and all(value is not None for value in configured_results)
+    else None
+)
+
+budget_failures = []
+if budgets["shellReadyP95Ms"]["passed"] is False:
+    budget_failures.append(
+        f"ready p95 {aggregates['shell_ready_ms']['p95Ms']:.3f} ms exceeds budget {float(ready_budget):.3f} ms")
+if budgets["firstRequestP95Ms"]["passed"] is False:
+    budget_failures.append(
+        f"workflow p95 {aggregates['first_request_ms']['p95Ms']:.3f} ms exceeds budget {float(workflow_budget):.3f} ms")
+
+failure = None
+if failure_category:
+    failure = {
+        "boot": int(failure_boot),
+        "category": failure_category,
+        "message": failure_message,
+        "logPath": failure_log,
+    }
+elif budget_failures:
+    failure = {
+        "boot": None,
+        "category": "budget_failed",
+        "message": "; ".join(budget_failures),
+        "logPath": None,
+    }
+
 report = {
     "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "provenance": {
         "repositoryHeadAtMeasurement": repository_head,
         "dotnetVersion": dotnet,
+        "dotnetRuntimes": runtimes,
+        "machine": machine,
         "serverOutputSha256": server_hash,
         "contentSha256": content_hash,
         "baselineSha256": baseline_hash,
@@ -351,16 +446,56 @@ report = {
         "startupTimeoutSeconds": int(startup_timeout),
         "shutdownTimeoutSeconds": int(shutdown_timeout),
     },
-    "boots": [{"boot": int(boot), "status": category, "logPath": log_path}],
-    "aggregates": {},
+    "boots": rows,
+    "aggregates": aggregates,
+    "budgets": budgets,
+    "outcome": {"status": "failed" if failure else "passed", "failure": failure},
 }
 pathlib.Path(json_path).write_text(json.dumps(report, indent=2) + "\n")
-pathlib.Path(markdown_path).write_text(
-    "# Elsa server cold-start report\n\n"
-    f"Boot {boot} failed with `{category}`. {message}\n\n"
-    f"Retained log: `{log_path}`\n\n"
-    f"Startup timeout: `{startup_timeout}` seconds; shutdown timeout: `{shutdown_timeout}` seconds.\n")
+
+lines = [
+    "# Elsa server cold-start report", "",
+    f"- Boots: {sum(row['status'] == 'passed' for row in rows)}",
+    f"- Requested boots: {requested_boots}",
+    f"- Startup timeout: `{startup_timeout}` seconds",
+    f"- Shutdown timeout: `{shutdown_timeout}` seconds",
+    f"- Repository HEAD at measurement (not binary attribution): `{repository_head}`",
+    f"- .NET SDK: `{dotnet}`",
+    f"- Server output closure SHA-256: `{server_hash}`",
+    f"- Content SHA-256: `{content_hash}`",
+    f"- Baseline SHA-256: `{baseline_hash}`",
+    f"- Machine: `{machine}`", "",
+    "| Milestone | p50 (ms) | p95 (ms) | min (ms) | max (ms) |",
+    "|---|---:|---:|---:|---:|",
+]
+labels = (
+    ("listening_ms", "Listening"),
+    ("activation_ms", "Activation"),
+    ("shell_ready_ms", "Shell ready"),
+    ("first_request_ms", "First workflow request"),
+    ("first_success_ms", "First success"),
+    ("shutdown_ms", "Shutdown"),
+)
+for key, label in labels:
+    item = aggregates[key]
+    cells = [item[name] for name in ("p50Ms", "p95Ms", "minMs", "maxMs")]
+    rendered = ["n/a" if value is None else f"{value:.3f}" for value in cells]
+    lines.append(f"| {label} | {' | '.join(rendered)} |")
+if failure:
+    lines.extend(["", f"Failure: `{failure['category']}`. {failure['message']}"])
+    if failure["logPath"]:
+        lines.extend(["", f"Retained log: `{failure['logPath']}`"])
+pathlib.Path(markdown_path).write_text("\n".join(lines) + "\n")
+
+if budget_failures:
+    print("Budget failed: " + "; ".join(budget_failures), file=sys.stderr)
+    raise SystemExit(1)
 PY
+}
+
+fail_boot() {
+  local boot="$1" category="$2" message="$3" log_file="$4"
+  write_report "$boot" "$category" "$message" "$log_file" || true
   printf 'ERROR: %s; retained log: %s; partial report: %s\n' "$message" "$log_file" "$output_json" >&2
   exit 1
 }
@@ -469,65 +604,9 @@ PY
 
 done
 
-python3 - "$results_tsv" "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" \
-  "$dotnet_runtimes" "$machine" "$server_hash" "$content_hash" "$baseline_hash" \
-  "$base_url" "$readiness_path" "$workflow_path" "$startup_timeout_seconds" "$shutdown_timeout_seconds" \
-  "$ready_budget_ms" "$workflow_budget_ms" <<'PY'
-import csv, datetime, json, math, pathlib, sys
-
-tsv, json_path, markdown_path, repository_head, dotnet, runtimes, machine, server_hash, content_hash, baseline_hash, base_url, readiness_path, workflow_path, startup_timeout, shutdown_timeout, ready_budget, workflow_budget = sys.argv[1:]
-with open(tsv, newline='') as stream:
-    rows = []
-    for row in csv.DictReader(stream, delimiter='\t'):
-        rows.append({
-            key: int(value) if key == "boot" else float(value) if key.endswith("_ms") else value or None
-            for key, value in row.items()
-        })
-
-def percentile(values, fraction):
-    ordered = sorted(values)
-    return ordered[max(0, math.ceil(len(ordered) * fraction) - 1)]
-
-def aggregate(key):
-    values = [row[key] for row in rows]
-    return {"p50Ms": percentile(values, .50), "p95Ms": percentile(values, .95), "minMs": min(values), "maxMs": max(values)}
-
-milestones = ("listening_ms", "activation_ms", "shell_ready_ms", "first_request_ms", "first_success_ms")
-aggregates = {key: aggregate(key) for key in (*milestones, "shutdown_ms")}
-report = {
-    "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "provenance": {"repositoryHeadAtMeasurement": repository_head, "dotnetVersion": dotnet, "dotnetRuntimes": runtimes, "machine": machine, "serverOutputSha256": server_hash, "contentSha256": content_hash, "baselineSha256": baseline_hash, "environment": "Production"},
-    "request": {
-        "baseUrl": base_url,
-        "readinessPath": readiness_path,
-        "workflowPath": workflow_path,
-        "boots": len(rows),
-        "startupTimeoutSeconds": int(startup_timeout),
-        "shutdownTimeoutSeconds": int(shutdown_timeout),
-    },
-    "boots": rows,
-    "aggregates": aggregates,
-}
-pathlib.Path(json_path).write_text(json.dumps(report, indent=2) + "\n")
-lines = [
-    "# Elsa server cold-start report", "",
-    f"- Boots: {len(rows)}", f"- Startup timeout: `{startup_timeout}` seconds", f"- Shutdown timeout: `{shutdown_timeout}` seconds", f"- Repository HEAD at measurement (not binary attribution): `{repository_head}`", f"- .NET SDK: `{dotnet}`", f"- Server output closure SHA-256: `{server_hash}`", f"- Content SHA-256: `{content_hash}`", f"- Baseline SHA-256: `{baseline_hash}`", f"- Machine: `{machine}`", "",
-    "| Milestone | p50 (ms) | p95 (ms) | min (ms) | max (ms) |", "|---|---:|---:|---:|---:|",
-]
-for key, label in (("listening_ms", "Listening"), ("activation_ms", "Activation"), ("shell_ready_ms", "Shell ready"), ("first_request_ms", "First workflow request"), ("first_success_ms", "First success"), ("shutdown_ms", "Shutdown")):
-    item = aggregates[key]
-    lines.append(f"| {label} | {item['p50Ms']:.3f} | {item['p95Ms']:.3f} | {item['minMs']:.3f} | {item['maxMs']:.3f} |")
-pathlib.Path(markdown_path).write_text("\n".join(lines) + "\n")
-
-failed = []
-if ready_budget and aggregates["shell_ready_ms"]["p95Ms"] > float(ready_budget):
-    failed.append(f"ready p95 {aggregates['shell_ready_ms']['p95Ms']:.3f} ms exceeds budget {float(ready_budget):.3f} ms")
-if workflow_budget and aggregates["first_request_ms"]["p95Ms"] > float(workflow_budget):
-    failed.append(f"workflow p95 {aggregates['first_request_ms']['p95Ms']:.3f} ms exceeds budget {float(workflow_budget):.3f} ms")
-if failed:
-    print("Budget failed: " + "; ".join(failed), file=sys.stderr)
-    raise SystemExit(1)
-PY
+if ! write_report; then
+  exit 1
+fi
 
 if [[ "$retain_success_artifacts" != true ]]; then
   for ((boot=1; boot<=boots; boot++)); do
