@@ -4,8 +4,10 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
+using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
+using Elsa.Expressions.Api.Requests;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Models;
@@ -48,6 +50,19 @@ public sealed class DomainManagementApiCompositionTests
         await host.AssertJourneyAsync(HttpMethod.Get, "/expressions/descriptors");
         await host.AssertJourneyAsync(HttpMethod.Post, "/publishing/workflows/version-1/publish", new { });
         await host.AssertJourneyAsync(HttpMethod.Get, "/runtime/workflows/executables");
+
+        var expressions = await host.Client.GetFromJsonAsync<ExpressionDescriptorsResponse>("/expressions/descriptors");
+        Assert.NotNull(expressions);
+        Assert.Equal(new[] { "Input", "Literal", "Object", "Variable" }, expressions.Items.Select(x => x.Type));
+        Assert.Equal(
+            new[]
+            {
+                ExpressionEditingModeView.Reference,
+                ExpressionEditingModeView.Literal,
+                ExpressionEditingModeView.Structured,
+                ExpressionEditingModeView.Reference
+            },
+            expressions.Items.Select(x => x.EditingMode));
 
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
@@ -111,6 +126,7 @@ public sealed class DomainManagementApiCompositionTests
 
             if (includeExpressions)
             {
+                new ExpressionsFeature().ConfigureServices(builder.Services);
                 new ExpressionsApiFeature().ConfigureServices(builder.Services);
                 assemblies.Add(typeof(ExpressionsApiFeature).Assembly);
                 endpointTypes.Add("Elsa.Expressions.Api.Endpoints.ListExpressionDescriptors");
@@ -148,15 +164,17 @@ public sealed class DomainManagementApiCompositionTests
         }
     }
 
-    private sealed class JourneyRequestSender : IRequestSender
+    private sealed class JourneyRequestSender(IServiceProvider services) : IRequestSender
     {
         public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
+            if (request is ListExpressionDescriptors expressionDescriptors)
+                return HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
+
             object response = typeof(T) switch
             {
                 var type when type == typeof(WorkflowDefinitionListView) => new WorkflowDefinitionListView([]),
                 var type when type == typeof(ActivityAuthoringCatalogView) => new ActivityAuthoringCatalogView([]),
-                var type when type == typeof(ExpressionDescriptorsResponse) => new ExpressionDescriptorsResponse([]),
                 var type when type == typeof(PublishedWorkflowView) => new PublishedWorkflowView(
                     "publication-1", "definition-1", "version-1", "version-1", "artifact-1", "default",
                     PublicationStatusView.Active, "reference-1", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch,
@@ -167,6 +185,14 @@ public sealed class DomainManagementApiCompositionTests
             };
 
             return Task.FromResult((T)response);
+        }
+
+        private async Task<T> HandleExpressionDescriptors<T>(
+            ListExpressionDescriptors request,
+            CancellationToken cancellationToken) where T : notnull
+        {
+            var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
+            return (T)(object)await handler.Handle(request, cancellationToken);
         }
     }
 }
