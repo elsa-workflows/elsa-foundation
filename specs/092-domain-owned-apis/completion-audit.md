@@ -9,10 +9,13 @@ record durable architectural decisions, and this audit records implementation an
 Coordinated implementation revisions:
 
 - Foundation implementation baseline: `753b8987`
+- Foundation current-main integration revision: `40c2307b`
 - Studio implementation revision: `fbf49fc0`
+- Studio coordinated spec-renumbering revision: `aa01db32`
 
-The Foundation completion-audit commit follows the implementation baseline and changes only spec 092
-completion evidence/task state.
+The work unit moved from spec 091 to spec 092 when current `main` assigned spec 091 to structured-log
+replay cursors. The Foundation completion-audit commits follow the implementation baseline and record
+completion evidence, current-main integration, and final generated-map state.
 
 ## Functional requirement evidence
 
@@ -50,7 +53,8 @@ Every identifier from FR-001 through FR-074 is covered exactly once by the conti
 Foundation:
 
 - Full solution tests pass after adding the new domain test projects to `Elsa.Server.slnx`.
-- Full solution build passes with zero errors; one existing `NU1510` package-pruning warning remains.
+- Full solution build passes with zero errors; current Groundwork deprecation warnings and the existing
+  `NU1510` package-pruning warning remain non-blocking.
 - Publishing API: 140 tests pass after public status/action/source/trigger normalization.
 - Workflow Design API: 52 tests pass; Runtime: 830 tests pass; Architecture: 87 tests pass.
 - Zero-legacy facade search returns no matches.
