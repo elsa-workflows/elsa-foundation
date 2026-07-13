@@ -136,7 +136,7 @@
 
 - [x] T035 [P] Update startup-task extension documentation and operator diagnostics in `src/Elsa/Tasks/EXTENSION_POINTS.md` and `specs/091-lazy-shell-activation/contracts/shell-readiness.md`
 - [x] T036 Run the full `Elsa.Server.slnx` build and all affected solution test lanes with zero unexpected warnings or failures
-- [ ] T037 Run up to five self-review/fix iterations across the implementation files listed in `specs/091-lazy-shell-activation/plan.md`, covering correctness, cancellation, lifecycle races, metric cardinality, data safety, shell isolation, script cleanup, and acceptance completeness
+- [x] T037 Run up to five self-review/fix iterations across the implementation files listed in `specs/091-lazy-shell-activation/plan.md`, covering correctness, cancellation, lifecycle races, metric cardinality, data safety, shell isolation, script cleanup, and acceptance completeness
 - [ ] T038 Update every completed checkbox in `specs/091-lazy-shell-activation/tasks.md`, re-run `speckit-analyze`, and resolve all critical/high findings
 - [ ] T039 Push `codex/624-shell-readiness`, open a PR with `Closes #624`, link validation/evidence, converge required automated reviews and CI, then merge without bypassing protections
 

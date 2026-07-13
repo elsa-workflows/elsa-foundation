@@ -69,7 +69,7 @@
 - [ ] T022 Run the final 200-request warm lane and verify first-after-ready ≤750 ms p95 and warm ≤50 ms p95
 - [ ] T023 Update raw provenance, results, residual costs, and follow-up recommendations in `docs/reports/shell-activation-performance-2026-07.md`
 - [x] T024 Run every affected solution test lane plus full `Elsa.Server.slnx` build
-- [ ] T025 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
+- [x] T025 Run up to five formal review/fix iterations across specs 091/092, resolving all critical/high findings
 - [ ] T026 Complete both task lists, run `speckit-analyze`, and resolve all critical/high cross-artifact findings
 - [ ] T027 Push the branch, open one PR with `Closes #624` and `Closes #625`, converge required automated reviews and CI, and merge without bypassing protections
 - [ ] T028 Audit main, both issue states, and the merged benchmark/documentation artifacts
