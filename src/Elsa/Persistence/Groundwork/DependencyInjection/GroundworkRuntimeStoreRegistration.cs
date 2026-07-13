@@ -1,6 +1,8 @@
 using Elsa.Persistence.Groundwork.Serialization;
+using Elsa.Persistence.Groundwork.Querying;
 using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Groundwork.Documents.Store;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -32,7 +34,10 @@ public static class GroundworkRuntimeStoreRegistration
         services.AddSingleton<IActivityExecutionInspectionStore>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
         services.AddSingleton<IActivityExecutionInspectionWriter>(serviceProvider => serviceProvider.GetRequiredService<GroundworkActivityExecutionInspectionStore>());
         services.RemoveAll<IWorkflowExecutionStateStore>();
-        services.AddSingleton<IWorkflowExecutionStateStore, GroundworkWorkflowExecutionStateStore>();
+        services.AddSingleton<IWorkflowExecutionStateStore>(serviceProvider => new GroundworkWorkflowExecutionStateStore(
+            serviceProvider.GetRequiredService<IDocumentStore>(),
+            serviceProvider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>(),
+            serviceProvider.GetService<IGroundworkWorkflowExecutionStatePageQuery>()));
         services.RemoveAll<IDurableValueStateStore>();
         services.AddSingleton<IDurableValueStateStore, GroundworkDurableValueStateStore>();
         services.RemoveAll<ISchedulerStateStore>();
@@ -58,6 +63,7 @@ public static class GroundworkRuntimeStoreRegistration
         services.TryAddSingleton<IGroundworkRuntimeDocumentSerializer, GroundworkRuntimeDocumentSerializer>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV1ToV2Upcaster>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutionStateDocumentV2ToV3Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, WorkflowTriggerBindingDocumentV1ToV2Upcaster>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IGroundworkRuntimeDocumentUpcaster, RecurringTriggerScheduleDocumentV1ToV2Upcaster>());

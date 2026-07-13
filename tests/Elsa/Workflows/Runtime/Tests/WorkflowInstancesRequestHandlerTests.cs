@@ -3,6 +3,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using FastEndpoints;
@@ -54,6 +55,19 @@ public sealed class WorkflowInstancesRequestHandlerTests
     }
 
     [Fact]
+    public async Task ListWorkflowInstances_uses_the_bounded_store_query_instead_of_materializing_all_states()
+    {
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var store = new BoundedQueryOnlyWorkflowExecutionStateStore(_workflowStore);
+        var handler = new ListWorkflowInstancesRequestHandler(store, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(new ListWorkflowInstances(null, null, null, 10), CancellationToken.None);
+
+        Assert.Equal("wf-1", Assert.Single(result.Items).WorkflowExecutionId);
+        Assert.True(store.QueryPageCalled);
+    }
+
+    [Fact]
     public async Task ListWorkflowInstances_FiltersAndProjectsDurableRunKind()
     {
         await _workflowStore.SaveAsync(Workflow("wf-test", WorkflowExecutionStatus.Completed, "definition-1", runKind: WorkflowRunKind.TestRun));
@@ -96,6 +110,49 @@ public sealed class WorkflowInstancesRequestHandlerTests
         Assert.False(second.HasNext);
         Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
         Assert.Equal(4, second.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_preserves_omitted_and_changed_take_cursor_semantics()
+    {
+        await SeedWorkflowInstancesAsync(40);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
+        var nextWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, first.NextCursor), CancellationToken.None);
+        var previousWithOmittedTake = await handler.Handle(new ListWorkflowInstances(null, null, null, null, second.PreviousCursor), CancellationToken.None);
+
+        Assert.Equal(25, nextWithOmittedTake.Count);
+        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previousWithOmittedTake.Items.Select(x => x.WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_accepts_legacy_five_part_cursors()
+    {
+        await SeedWorkflowInstancesAsync(30);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var legacyCursor = RemoveCursorScope(first.NextCursor!);
+
+        var next = await handler.Handle(new ListWorkflowInstances(null, null, null, null, legacyCursor), CancellationToken.None);
+
+        Assert.Equal(25, next.Count);
+        Assert.Equal("wf-002", next.Items.First().WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_rejects_a_cursor_reused_with_different_filters()
+    {
+        await SeedWorkflowInstancesAsync(3);
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var first = await handler.Handle(new ListWorkflowInstances(null, "definition-1", null, 1), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => handler.Handle(
+            new ListWorkflowInstances(null, "definition-2", null, 1, first.NextCursor),
+            CancellationToken.None));
+
+        Assert.Equal("Cursor", exception.ParamName);
     }
 
     [Fact]
@@ -329,6 +386,44 @@ public sealed class WorkflowInstancesRequestHandlerTests
                     "publication-1",
                     "slot-default")
         };
+
+    private static string RemoveCursorScope(string cursor)
+    {
+        var base64 = cursor.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
+        var parts = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(base64)).Split('|');
+        var legacy = string.Join('|', parts.Take(5));
+        return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(legacy))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    private sealed class BoundedQueryOnlyWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    {
+        public bool QueryPageCalled { get; private set; }
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default)
+        {
+            QueryPageCalled = true;
+            return inner.QueryPageAsync(query, cancellationToken);
+        }
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The list handler must not materialize the complete state store.");
+
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(workflowExecutionId, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
 
     private static ActivityExecutionState Activity(
         string workflowExecutionId,

@@ -21,157 +21,109 @@ public sealed class ListWorkflowInstancesRequestHandler(
 
     public async Task<WorkflowInstanceListView> Handle(ListWorkflowInstances request, CancellationToken cancellationToken)
     {
-        var states = await workflowExecutionStateStore.ListAsync(cancellationToken);
-        var query = states.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(request.Status))
-            query = query.Where(state => string.Equals(state.Status.ToString(), request.Status, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(request.RunKind))
-        {
-            if (!Enum.TryParse<WorkflowRunKind>(request.RunKind, ignoreCase: true, out var runKind) || !Enum.IsDefined(runKind))
-                throw new ArgumentException($"The workflow run kind '{request.RunKind}' is invalid.", nameof(request.RunKind));
-
-            query = query.Where(state => state.RunKind == runKind);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.DefinitionId))
-            query = query.Where(state => string.Equals(
-                state.PinnedSource?.DefinitionId ?? state.PinnedExecutable.DefinitionId,
-                request.DefinitionId,
-                StringComparison.Ordinal));
-
-        if (!string.IsNullOrWhiteSpace(request.CorrelationId))
-            query = query.Where(state => string.Equals(state.CorrelationId, request.CorrelationId, StringComparison.Ordinal));
-
-        if (!string.IsNullOrWhiteSpace(request.WorkflowExecutionId))
-            query = query.Where(state => string.Equals(state.WorkflowExecutionId, request.WorkflowExecutionId, StringComparison.Ordinal));
-
-        if (!string.IsNullOrWhiteSpace(request.ArtifactId))
-            query = query.Where(state => string.Equals(state.PinnedExecutable.ArtifactId, request.ArtifactId, StringComparison.Ordinal));
-
-        if (request.From is { } from)
-            query = query.Where(state => GetSortTimestamp(state) >= from);
-
-        if (request.To is { } to)
-            query = query.Where(state => GetSortTimestamp(state) <= to);
-
         var (defaultTake, maxTake) = request.PagingContract == WorkflowInstanceListPagingContract.LegacyArray
             ? (LegacyDefaultTake, LegacyMaxTake)
             : (PagedDefaultTake, PagedMaxTake);
         var take = Math.Clamp(request.Take ?? defaultTake, 1, maxTake);
-        var filteredStates = query
-            .OrderByDescending(GetSortTimestamp)
-            .ThenBy(state => state.WorkflowExecutionId, StringComparer.Ordinal)
-            .ToArray();
-        var pageCandidates = ApplyCursor(filteredStates, request.Cursor, maxTake);
-        var orderedStates = pageCandidates.Take(take).ToArray();
 
-        var summaryTasks = orderedStates.Select(async state =>
+        var hasValidStatus = TryParseStatus(request.Status, out var status);
+
+        WorkflowRunKind? runKind = null;
+        if (!string.IsNullOrWhiteSpace(request.RunKind))
+        {
+            if (!Enum.TryParse<WorkflowRunKind>(request.RunKind, ignoreCase: true, out var parsedRunKind) || !Enum.IsDefined(parsedRunKind))
+                throw new ArgumentException($"The workflow run kind '{request.RunKind}' is invalid.", nameof(request.RunKind));
+            runKind = parsedRunKind;
+        }
+
+        if (!hasValidStatus)
+            return Empty();
+
+        var query = new WorkflowExecutionStatePageQuery(
+            take,
+            DefinitionId: EmptyToNull(request.DefinitionId),
+            Status: status,
+            RunKind: runKind,
+            From: request.From,
+            To: request.To,
+            CorrelationId: EmptyToNull(request.CorrelationId),
+            WorkflowExecutionId: EmptyToNull(request.WorkflowExecutionId),
+            ArtifactId: EmptyToNull(request.ArtifactId));
+        if (!string.IsNullOrWhiteSpace(request.Cursor))
+            query = query with { Cursor = DecodeCursor(request.Cursor, maxTake, query.Scope()) };
+
+        var page = await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken);
+        var summaryTasks = page.Items.Select(async state =>
         {
             var activityCount = (await activityExecutionStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
             var incidentCount = (await incidentStateStore.ListAsync(state.WorkflowExecutionId, cancellationToken)).Count;
             return WorkflowInstanceSummaryView.From(state, activityCount, incidentCount);
         });
         var items = await Task.WhenAll(summaryTasks);
-        var first = orderedStates.FirstOrDefault();
-        var last = orderedStates.LastOrDefault();
-        var firstIndex = first is null ? -1 : Array.FindIndex(filteredStates, state => state.WorkflowExecutionId == first.WorkflowExecutionId);
-        var lastIndex = last is null ? -1 : Array.FindIndex(filteredStates, state => state.WorkflowExecutionId == last.WorkflowExecutionId);
-        var hasPrevious = firstIndex > 0;
-        var hasNext = lastIndex >= 0 && lastIndex < filteredStates.Length - 1;
 
-        return new WorkflowInstanceListView(
+        return new(
             items,
-            hasPrevious ? EncodeCursor(first!, CursorDirection.Previous, take) : null,
-            hasNext ? EncodeCursor(last!, CursorDirection.Next, take) : null,
-            hasPrevious,
-            hasNext,
+            page.PreviousCursor is { } previous ? EncodeCursor(previous) : null,
+            page.NextCursor is { } next ? EncodeCursor(next) : null,
+            page.HasPrevious,
+            page.HasNext,
             items.Length,
-            filteredStates.Length);
+            page.TotalCount >= int.MaxValue ? int.MaxValue : (int)page.TotalCount);
     }
 
-    private static IReadOnlyCollection<WorkflowExecutionState> ApplyCursor(
-        IReadOnlyCollection<WorkflowExecutionState> orderedStates,
-        string? cursor,
-        int maxTake)
+    private static WorkflowInstanceListView Empty() => new([], null, null, false, false, 0, 0);
+
+    private static bool TryParseStatus(string? value, out WorkflowExecutionStatus? status)
     {
-        if (string.IsNullOrWhiteSpace(cursor))
-            return orderedStates;
-
-        var anchor = DecodeCursor(cursor, maxTake);
-        var relative = orderedStates.Where(state => anchor.Direction == CursorDirection.Next
-            ? IsAfter(anchor, state)
-            : IsBefore(anchor, state)).ToArray();
-        return anchor.Direction == CursorDirection.Next
-            ? relative
-            : relative.TakeLast(anchor.PageSize).ToArray();
+        status = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+        if (!Enum.TryParse<WorkflowExecutionStatus>(value, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            return false;
+        status = parsed;
+        return true;
     }
 
-    private static bool IsAfter(CursorAnchor anchor, WorkflowExecutionState candidate) =>
-        Compare(candidate, anchor.Timestamp, anchor.WorkflowExecutionId) > 0;
+    private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static bool IsBefore(CursorAnchor anchor, WorkflowExecutionState candidate) =>
-        Compare(candidate, anchor.Timestamp, anchor.WorkflowExecutionId) < 0;
-
-    private static int Compare(WorkflowExecutionState candidate, DateTimeOffset timestamp, string workflowExecutionId)
-    {
-        var timestampComparison = timestamp.CompareTo(GetSortTimestamp(candidate));
-        return timestampComparison != 0
-            ? timestampComparison
-            : StringComparer.Ordinal.Compare(candidate.WorkflowExecutionId, workflowExecutionId);
-    }
-
-    private static string EncodeCursor(WorkflowExecutionState state, CursorDirection direction, int pageSize)
+    private static string EncodeCursor(WorkflowExecutionStatePageCursor cursor)
     {
         var value = string.Join('|',
             "v1",
-            direction == CursorDirection.Next ? "n" : "p",
-            GetSortTimestamp(state).UtcTicks.ToString(CultureInfo.InvariantCulture),
-            Convert.ToBase64String(Encoding.UTF8.GetBytes(state.WorkflowExecutionId)),
-            pageSize.ToString(CultureInfo.InvariantCulture));
+            cursor.Direction == WorkflowExecutionStatePageDirection.Next ? "n" : "p",
+            cursor.SortTimestamp.UtcTicks.ToString(CultureInfo.InvariantCulture),
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(cursor.WorkflowExecutionId)),
+            cursor.PageSize.ToString(CultureInfo.InvariantCulture),
+            cursor.Scope);
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
     }
 
-    private static CursorAnchor DecodeCursor(string cursor, int maxTake)
+    private static WorkflowExecutionStatePageCursor DecodeCursor(string cursor, int maxTake, string queryScope)
     {
         try
         {
             var base64 = cursor.Replace('-', '+').Replace('_', '/');
             base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
             var parts = Encoding.UTF8.GetString(Convert.FromBase64String(base64)).Split('|');
-            if (parts is not ["v1", "n" or "p", var ticksText, var executionIdText, var pageSizeText] ||
-                !long.TryParse(ticksText, NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ||
-                !int.TryParse(pageSizeText, NumberStyles.None, CultureInfo.InvariantCulture, out var pageSize))
+            if (parts.Length is not (5 or 6) || parts[0] != "v1" || parts[1] is not ("n" or "p") ||
+                !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ||
+                !int.TryParse(parts[4], NumberStyles.None, CultureInfo.InvariantCulture, out var pageSize))
                 throw new FormatException();
 
-            return new CursorAnchor(
+            var scope = parts.Length == 6 ? parts[5] : queryScope;
+            return new(
                 new DateTimeOffset(ticks, TimeSpan.Zero),
-                Encoding.UTF8.GetString(Convert.FromBase64String(executionIdText)),
-                parts[1] == "n" ? CursorDirection.Next : CursorDirection.Previous,
-                Math.Clamp(pageSize, 1, maxTake));
+                Encoding.UTF8.GetString(Convert.FromBase64String(parts[3])),
+                parts[1] == "n" ? WorkflowExecutionStatePageDirection.Next : WorkflowExecutionStatePageDirection.Previous,
+                Math.Clamp(pageSize, 1, maxTake),
+                scope);
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {
             throw new ArgumentException("The workflow instance cursor is invalid.", nameof(cursor), exception);
         }
-    }
-
-    private static DateTimeOffset GetSortTimestamp(WorkflowExecutionState state) =>
-        state.UpdatedAt ?? state.CompletedAt ?? state.StartedAt ?? state.CreatedAt;
-
-    private sealed record CursorAnchor(
-        DateTimeOffset Timestamp,
-        string WorkflowExecutionId,
-        CursorDirection Direction,
-        int PageSize);
-
-    private enum CursorDirection
-    {
-        Previous,
-        Next
     }
 }

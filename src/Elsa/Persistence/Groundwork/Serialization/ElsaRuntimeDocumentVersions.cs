@@ -32,7 +32,7 @@ public static class ElsaRuntimeDocumentVersions
         [ElsaRuntimeStorageManifest.WorkflowExecutableSourceReferenceDocumentKind] = 2,
         [ElsaRuntimeStorageManifest.ActivityExecutionStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ActivityExecutionInspectionDocumentKind] = 1,
-        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 2,
+        [ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind] = 3,
         [ElsaRuntimeStorageManifest.DurableValueStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.SchedulerStateDocumentKind] = 1,
         [ElsaRuntimeStorageManifest.ExecutionLivenessStateDocumentKind] = 1,
