@@ -4,6 +4,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Persistence.Groundwork.Sqlite;
 using Elsa.Persistence.Groundwork.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Groundwork.Documents.Store;
@@ -47,6 +48,7 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         services.TryAddSingleton<IRuntimePostCommitOutboxStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.AddSingleton<IDocumentStore>(new InMemoryDocumentStore(ElsaRuntimeStorageManifest.Create()));
+        services.AddWorkflowRuntime();
 
         services.AddGroundworkRuntimeStores();
 
@@ -70,10 +72,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     }
 
     // Constitution §2.23.1: the versioned-document serialization services must be registered as their
-    // sealed defaults, and the upcaster registry must construct cleanly when no upcasters are contributed
-    // (the state today — every kind is at version 1, so there are no historical versions to upcast).
+    // sealed defaults, and the complete production upcaster chain must be contributed.
     [Fact]
-    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Empty_Upcaster_Registry()
+    public void AddGroundworkRuntimeStores_Registers_Default_Serializer_And_Upcaster_Registry()
     {
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
@@ -97,20 +98,29 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Assert.IsType<GroundworkRuntimeDocumentSerializer>(provider.GetRequiredService<IGroundworkRuntimeDocumentSerializer>());
         Assert.IsType<GroundworkRuntimeDocumentUpcasterRegistry>(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
 
-        // With no contributed upcasters the enumerable is empty, yet the registry still constructs (its
-        // eager validation over an empty set is a no-op).
-        Assert.Empty(provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>());
+        var upcasterTypes = provider.GetRequiredService<IEnumerable<IGroundworkRuntimeDocumentUpcaster>>()
+            .Select(x => x.GetType())
+            .ToHashSet();
+        Assert.True(upcasterTypes.SetEquals(
+            [
+                typeof(WorkflowExecutableDocumentV1ToV2Upcaster),
+                typeof(WorkflowExecutableSourceReferenceDocumentV1ToV2Upcaster),
+                typeof(WorkflowTriggerBindingDocumentV1ToV2Upcaster),
+                typeof(RecurringTriggerScheduleDocumentV1ToV2Upcaster)
+            ]));
         Assert.NotNull(provider.GetRequiredService<IGroundworkRuntimeDocumentUpcasterRegistry>());
     }
 
     [Fact]
     public async Task Sqlite_Feature_Wires_DocumentStore_And_Bridge()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
         services.TryAddSingleton<IBookmarkStateStore, InMemoryBookmarkStateStore>();
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        services.AddWorkflowRuntime();
 
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -134,8 +144,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
            // resolving thread), and the store is fully usable only after the startup initializer has run.
     public async Task Sqlite_Store_Throws_Before_Init_Then_Is_Usable_After()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -156,8 +167,9 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
     [Fact] // Running the startup step twice is a no-op: the store is materialized once and the singleton is stable.
     public async Task Sqlite_Store_Initialization_Is_Idempotent()
     {
+        await using var database = new TemporarySqliteDatabase();
         var services = new ServiceCollection();
-        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = "Data Source=:memory:" }.ConfigureServices(services);
+        new SqliteGroundworkRuntimePersistenceShellFeature { ConnectionString = database.ConnectionString }.ConfigureServices(services);
 
         await using var provider = services.BuildServiceProvider();
 
@@ -218,4 +230,17 @@ public sealed class GroundworkRuntimePersistenceRegistrationTests
         Metadata: new Dictionary<string, string>(),
         CreatedAt: DateTimeOffset.UnixEpoch,
         ExpiresAt: null);
+
+    private sealed class TemporarySqliteDatabase : IAsyncDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-groundwork-registration-{Guid.NewGuid():N}.db");
+
+        public string ConnectionString => $"Data Source={_path}";
+
+        public ValueTask DisposeAsync()
+        {
+            File.Delete(_path);
+            return ValueTask.CompletedTask;
+        }
+    }
 }

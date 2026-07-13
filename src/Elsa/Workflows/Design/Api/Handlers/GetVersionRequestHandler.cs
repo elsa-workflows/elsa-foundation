@@ -12,6 +12,9 @@ public sealed class GetVersionRequestHandler(
 {
     public async Task<WorkflowDefinitionVersionDetailsView> Handle(GetVersion request, CancellationToken cancellationToken)
     {
+        if (request.VersionId.StartsWith("draft:", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Synthetic draft identifiers are not persisted workflow definition versions.", nameof(request));
+
         var result = await store.GetWithDefinitionAsync(request.VersionId, cancellationToken);
         var layout = await layoutStore.FindByVersionIdAsync(request.VersionId, cancellationToken);
         return result.ToDetailsView(layout?.Records);

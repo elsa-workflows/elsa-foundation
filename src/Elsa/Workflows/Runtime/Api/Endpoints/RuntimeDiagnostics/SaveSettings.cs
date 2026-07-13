@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Commands;
 using Elsa.Workflows.Runtime.Api.Constants;
@@ -13,6 +14,6 @@ internal sealed class SaveSettings(ICommandSender commandSender, ILogger<SaveSet
     public override void Configure()
     {
         Put(RouteConstants.RuntimeDiagnosticsSettings);
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeManage);
     }
 }

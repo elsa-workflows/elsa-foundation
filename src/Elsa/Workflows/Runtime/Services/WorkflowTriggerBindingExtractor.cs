@@ -32,31 +32,72 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
 
     public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable)
     {
+        try
+        {
+            return Evaluate(executable).Bindings;
+        }
+        catch (WorkflowTriggerPreflightException exception) when (
+            exception.Facet == "ProviderRecognition" && exception.ProviderIds.Count == 0)
+        {
+            throw new WorkflowTriggerExtractionException(exception.ArtifactId, exception.ExecutableNodeId, exception.Message);
+        }
+    }
+
+    public WorkflowTriggerPreflightOutcome Evaluate(WorkflowExecutable executable)
+    {
         ArgumentNullException.ThrowIfNull(executable);
 
         var identity = executable.Identity;
         var now = _timeProvider.GetUtcNow();
-        var bindings = new List<WorkflowTriggerBinding>();
+        var outcomes = new List<WorkflowTriggerNodePreflightOutcome>();
 
         foreach (var node in Flatten(executable.RootActivity))
         {
             if (!IsTrigger(node))
                 continue;
 
-            var result = Describe(node);
-            if (!result.IsRecognized)
-                throw new WorkflowTriggerExtractionException(
-                    identity.ArtifactId,
-                    node.ExecutableNodeId,
-                    $"Node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}') is marked as a start-trigger, " +
-                    "but no registered trigger stimulus provider could describe its stimulus. A published trigger that " +
-                    "cannot be indexed is refused so it never silently fails to fire.");
-
-            // A recognized node with zero descriptors declares itself a non-start (spec 089 D:
-            // CanStartWorkflow = false) — no bindings, no publish failure. Only an unrecognized node fails.
-            foreach (var descriptor in result.Descriptors)
+            var claims = new List<(string ProviderId, TriggerCardinality Cardinality, ActivityTriggerStimulusResult Result)>();
+            foreach (var provider in _providers)
             {
-                bindings.Add(new WorkflowTriggerBinding(
+                var providerId = provider.ProviderId;
+                var providerType = provider.GetType().FullName ?? provider.GetType().Name;
+                ActivityTriggerStimulusResult describedResult;
+                try
+                {
+                    describedResult = provider.Describe(node);
+                }
+                catch (Exception exception) when (exception is ArgumentException or FormatException or InvalidOperationException)
+                {
+                    if (string.IsNullOrWhiteSpace(providerId))
+                        throw Failure(identity.ArtifactId, node, [], "ProviderIdentity",
+                            $"Trigger provider type '{providerType}' has a blank provider id and failed while describing node '{node.ExecutableNodeId}'.", exception);
+
+                    throw Failure(identity.ArtifactId, node, [providerId], "ProviderRecognition",
+                        $"Trigger provider '{providerId}' could not describe node '{node.ExecutableNodeId}'.", exception);
+                }
+
+                if (describedResult.IsRecognized)
+                {
+                    if (string.IsNullOrWhiteSpace(providerId))
+                        throw Failure(identity.ArtifactId, node, [], "ProviderIdentity",
+                            $"Trigger provider type '{providerType}' recognizes node '{node.ExecutableNodeId}' but has a blank provider id.");
+
+                    claims.Add((providerId, provider.Cardinality, describedResult));
+                }
+            }
+
+            if (claims.Count == 0)
+                throw Failure(identity.ArtifactId, node, [], "ProviderRecognition",
+                    $"No trigger stimulus provider recognizes node '{node.ExecutableNodeId}' (activity type '{node.ActivityType}').");
+
+            var providerIds = claims.Select(x => x.ProviderId).Order(StringComparer.Ordinal).ToArray();
+            if (claims.Count != 1)
+                throw Failure(identity.ArtifactId, node, providerIds, "ProviderRecognition",
+                    $"Several trigger stimulus providers recognize node '{node.ExecutableNodeId}': {string.Join(", ", providerIds)}.");
+
+            var (recognizingProviderId, cardinality, claimResult) = claims[0];
+            var bindings = claimResult.Descriptors.Select(descriptor =>
+                new WorkflowTriggerBinding(
                     TriggerBindingId: WorkflowTriggerBinding.BuildId(identity.ArtifactId, node.ExecutableNodeId, descriptor.StimulusHash),
                     ArtifactId: identity.ArtifactId,
                     DefinitionId: identity.DefinitionId,
@@ -67,26 +108,25 @@ public sealed class WorkflowTriggerBindingExtractor : IWorkflowTriggerBindingExt
                     StimulusHash: descriptor.StimulusHash,
                     CorrelationScope: descriptor.CorrelationScope,
                     Metadata: descriptor.Metadata,
-                    CreatedAt: now));
-            }
+                    CreatedAt: now,
+                    Cardinality: cardinality)).ToArray();
+
+            var duplicateBindingId = bindings.GroupBy(x => x.TriggerBindingId, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1)?.Key;
+            if (duplicateBindingId is not null)
+                throw Failure(identity.ArtifactId, node, [recognizingProviderId], "BindingIdentity",
+                    $"Trigger provider '{recognizingProviderId}' produced duplicate binding id '{duplicateBindingId}'.");
+
+            var status = bindings.Length == 0
+                ? WorkflowTriggerPreflightStatus.IntentionallyNonStarting
+                : WorkflowTriggerPreflightStatus.Registered;
+            outcomes.Add(new WorkflowTriggerNodePreflightOutcome(node.ExecutableNodeId, node.ActivityType, recognizingProviderId, status, bindings));
         }
 
-        return bindings;
+        return new WorkflowTriggerPreflightOutcome(identity, outcomes);
     }
 
-    private ActivityTriggerStimulusResult Describe(ExecutableNode node)
-    {
-        // First provider that owns the activity type wins — even if it produces zero descriptors (a recognized
-        // non-start). Only when NO provider recognizes the node do we fall through to NotRecognized (→ publish fails).
-        foreach (var provider in _providers)
-        {
-            var result = provider.Describe(node);
-            if (result.IsRecognized)
-                return result;
-        }
-
-        return ActivityTriggerStimulusResult.NotRecognized;
-    }
+    private static WorkflowTriggerPreflightException Failure(string artifactId, ExecutableNode node, IReadOnlyCollection<string> providerIds, string facet, string message, Exception? innerException = null) =>
+        new(artifactId, node.ExecutableNodeId, node.ActivityType, providerIds, facet, message, innerException);
 
     private static bool IsTrigger(ExecutableNode node) =>
         node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) &&

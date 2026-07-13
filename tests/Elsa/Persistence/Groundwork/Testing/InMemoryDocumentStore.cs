@@ -3,6 +3,7 @@ using System.Text.Json;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -25,6 +26,8 @@ public sealed class InMemoryDocumentStore(StorageManifest manifest) : IDocumentS
 {
     private readonly ConcurrentDictionary<(string Kind, string Id), DocumentEnvelope> _docs = new();
     private readonly Lock _gate = new();
+
+    public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
 
     public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default)
     {

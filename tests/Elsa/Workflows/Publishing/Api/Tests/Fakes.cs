@@ -9,6 +9,10 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
+using Elsa.Workflows.Runtime.Configuration;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
@@ -51,6 +55,17 @@ internal static class TestCompiler
                 activityStructureService,
                 wellKnownTypeRegistry,
                 new Elsa.Workflows.Publishing.Api.Services.RuntimeInputBindingCompiler(wellKnownTypeRegistry)));
+}
+
+internal static class TestRootWriteLeases
+{
+    public static IWorkflowExecutableRootWriteLeaseManager Create(
+        IWorkflowExecutableStore executableStore,
+        TimeProvider? timeProvider = null) =>
+        new WorkflowExecutableRootWriteLeaseManager(
+            executableStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
+            timeProvider ?? TimeProvider.System);
 }
 
 /// <summary>A bare <see cref="IActivity"/> with one concrete-declared property, for projection assertions.</summary>

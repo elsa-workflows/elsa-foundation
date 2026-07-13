@@ -19,7 +19,7 @@ Most of this package needs no DI registration: the activities are resolved by th
 ## Cross-references
 
 - HTTP endpoint behaviour contracts (route resolution, authorization, fault mapping) + the route-table freshness seams: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../../Workflows/Runtime/Http/EXTENSION_POINTS.md).
-- Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter` — the ambient-services seam the sink rides): [`Elsa.Workflows.Runtime.Core/EXTENSION_POINTS.md`](../../Workflows/Runtime/Core/EXTENSION_POINTS.md).
+- Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter` — the ambient-services seam the sink rides): [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../Workflows/Runtime/EXTENSION_POINTS.md).
 - HTTP content factories / downloadable content: [`Elsa.Http/EXTENSION_POINTS.md`](../../Http/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2 + §2.22.1.

@@ -333,7 +333,10 @@ public sealed class RuntimeCancellationContractTests
             _timeProvider = new FixedTimeProvider(now);
             _persistencePolicy = persistencePolicy ?? new ImmediateRuntimeCheckpointPersistencePolicy();
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
-                _workflowStore, _activityStore, null, null, null, null, null, _inspectionStore);
+                _workflowStore,
+                _activityStore,
+                activityExecutionInspectionWriter: _inspectionStore,
+                rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
         }
 
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }

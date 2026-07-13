@@ -2,6 +2,7 @@ using System.Diagnostics;
 using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Documents.Scoping;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Hosting;
@@ -58,25 +59,26 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
                     return;
                 }
 
-                SqliteDocumentStoreHandle? handle = null;
+                SqliteDocumentStore? store = null;
                 if (!rematerializeOnStartup)
-                    handle = await TryOpenFromExactHistoryAsync(cancellationToken);
+                    store = await TryOpenFromExactHistoryAsync(cancellationToken);
 
-                if (handle is not null)
+                if (store is not null)
                 {
                     outcome = SqliteGroundworkTelemetry.HistoryHitOutcome;
                 }
                 else
                 {
-                    handle = await SqliteDocumentStoreFactory.CreateAsync(
+                    store = await SqliteDocumentStoreFactory.CreateAsync(
                         connectionString,
                         manifest,
                         provider,
+                        DocumentStoreAccess.Global,
                         cancellationToken: cancellationToken);
                     outcome = SqliteGroundworkTelemetry.MaterializedOutcome;
                 }
 
-                holder.Set(handle.Store, handle);
+                holder.Set(store);
             }
             finally
             {
@@ -106,56 +108,44 @@ public sealed class SqliteGroundworkDocumentStoreInitializer(
         }
     }
 
-    private async Task<SqliteDocumentStoreHandle?> TryOpenFromExactHistoryAsync(CancellationToken cancellationToken)
+    private async Task<SqliteDocumentStore?> TryOpenFromExactHistoryAsync(CancellationToken cancellationToken)
     {
-        var connection = new SqliteConnection(connectionString);
-        try
-        {
-            await connection.OpenAsync(cancellationToken);
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
 
-            await using var tableCommand = connection.CreateCommand();
-            tableCommand.CommandText = """
-                SELECT 1
-                FROM sqlite_master
-                WHERE type = 'table' AND name = 'groundwork_schema_history'
-                LIMIT 1;
-                """;
-            if (await tableCommand.ExecuteScalarAsync(cancellationToken) is null)
-            {
-                await connection.DisposeAsync();
-                return null;
-            }
+        await using var tableCommand = connection.CreateCommand();
+        tableCommand.CommandText = """
+            SELECT 1
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'groundwork_schema_history'
+            LIMIT 1;
+            """;
+        if (await tableCommand.ExecuteScalarAsync(cancellationToken) is null)
+            return null;
 
-            await using var historyCommand = connection.CreateCommand();
-            historyCommand.CommandText = """
-                SELECT CASE
-                    WHEN manifest_id = $manifestId
-                     AND manifest_version = $manifestVersion
-                     AND provider_name = $providerName
-                     AND provider_version = $providerVersion
-                    THEN 1 ELSE 0 END
-                FROM groundwork_schema_history
-                ORDER BY applied_utc DESC, rowid DESC
-                LIMIT 1;
-                """;
-            historyCommand.Parameters.AddWithValue("$manifestId", manifest.Identity.Value);
-            historyCommand.Parameters.AddWithValue("$manifestVersion", manifest.Version.Value);
-            historyCommand.Parameters.AddWithValue("$providerName", provider.Name);
-            historyCommand.Parameters.AddWithValue("$providerVersion", provider.Version);
+        await using var historyCommand = connection.CreateCommand();
+        historyCommand.CommandText = """
+            SELECT CASE
+                WHEN manifest_id = $manifestId
+                 AND manifest_version = $manifestVersion
+                 AND provider_name = $providerName
+                 AND provider_version = $providerVersion
+                THEN 1 ELSE 0 END
+            FROM groundwork_schema_history
+            ORDER BY applied_utc DESC, rowid DESC
+            LIMIT 1;
+            """;
+        historyCommand.Parameters.AddWithValue("$manifestId", manifest.Identity.Value);
+        historyCommand.Parameters.AddWithValue("$manifestVersion", manifest.Version.Value);
+        historyCommand.Parameters.AddWithValue("$providerName", provider.Name);
+        historyCommand.Parameters.AddWithValue("$providerVersion", provider.Version);
 
-            if (Convert.ToInt64(await historyCommand.ExecuteScalarAsync(cancellationToken)) != 1)
-            {
-                await connection.DisposeAsync();
-                return null;
-            }
+        if (Convert.ToInt64(await historyCommand.ExecuteScalarAsync(cancellationToken)) != 1)
+            return null;
 
-            var store = new SqliteDocumentStore(connection, manifest);
-            return new SqliteDocumentStoreHandle(connection, store);
-        }
-        catch
-        {
-            await connection.DisposeAsync();
-            throw;
-        }
+        return new SqliteDocumentStore(
+            connectionString,
+            manifest,
+            DocumentStoreAccess.Global);
     }
 }

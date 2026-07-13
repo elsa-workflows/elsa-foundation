@@ -5,11 +5,13 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Reconciliation.Core.Models;
+using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -70,6 +72,43 @@ public sealed class ClrAssemblyScannerTests
             ("PUT", "\"PUT\""),
             ("HEAD", "\"HEAD\""),
             ("DELETE", "\"DELETE\""));
+    }
+
+    public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
+    {
+        { typeof(TriggerFixtureActivity), "59F976C4B1CFBE75E153788F17FE0F8CAAB31E39DC4B91C0D28D603A2ECBFC03" },
+        { typeof(HttpEndpoint), "89251E344255527968493DC31C6F5CF7207A2836B53165DE73915260E469C12A" }
+    };
+
+    [Theory]
+    [MemberData(nameof(StableTriggerCatalogHashes))]
+    public void TriggerAnnotation_PreservesSameVersionActionCatalogHash(Type activityType, string expectedHash)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+        var identityGenerator = new GuidIdentityGenerator();
+        var definition = new ActivityDefinitionFactory(identityGenerator).Create(
+            model.ActivityTypeKey,
+            model.Category ?? string.Empty,
+            model.DisplayName,
+            model.Description,
+            "stable-definition-id");
+        var descriptorPayload = JsonSerializer.SerializeToElement(model.Descriptor, model.Descriptor.GetType());
+        var version = new ActivityDefinitionVersionFactory(identityGenerator, new DefaultActivityDefinitionHasher()).Create(
+            definition,
+            model.Version,
+            model.DescriptorType,
+            descriptorPayload,
+            "CLR",
+            activityType.Assembly.GetName().Name!,
+            model.Inputs,
+            model.Outputs,
+            model.DesignFacets,
+            model.ExecutionType,
+            "stable-version-id");
+
+        Assert.Equal(ActivityExecutionType.Action, version.ExecutionType);
+        Assert.True(expectedHash == version.Hash, $"Expected hash '{expectedHash}', actual hash '{version.Hash}'.");
     }
 
     [Fact]

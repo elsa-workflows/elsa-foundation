@@ -6,7 +6,7 @@
 > program (finding **E3-2**).
 > **Knowledge role:** worked reference. Canonical short definitions live in
 > [`docs/glossary/elsa.md`](glossary/elsa.md); the extension-point contracts live in
-> [`src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/Core/EXTENSION_POINTS.md).
+> [`src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md`](../src/Elsa/Workflows/Runtime/EXTENSION_POINTS.md).
 > **See also:** [`docs/runtime-durable-resumption.md`](runtime-durable-resumption.md) — the durable
 > resumption spine (W2) this unit piggybacks on.
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Http.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -18,6 +19,12 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     private readonly HttpEndpointTriggerStimulusProvider _provider = new();
 
     [Fact]
+    public void ProviderId_IsExplicitAndStable()
+    {
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
+    }
+
+    [Fact]
     public void Describe_UnauthoredCanStartWorkflow_IsRecognizedButYieldsNoDescriptors()
     {
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
@@ -27,6 +34,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         var result = _provider.Describe(NodeWith(bindings, authorCanStartWorkflow: false));
 
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
         Assert.True(result.IsRecognized);
         Assert.Empty(result.Descriptors);
     }
@@ -40,6 +48,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         Assert.Equal(HttpEndpointRouting.StimulusType, descriptor.StimulusType);
         Assert.Equal(HttpEndpointStimulus.Hash("orders/webhook", "GET"), descriptor.StimulusHash);
+        Assert.Equal(TriggerCardinality.Exclusive, ((IActivityTriggerStimulusProvider)_provider).Cardinality);
         Assert.Equal("orders/webhook", descriptor.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
         Assert.Equal("get", descriptor.Metadata[HttpEndpointRouting.MethodMetadataKey]);
     }
@@ -81,6 +90,19 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
                 Assert.Equal(HttpEndpointStimulus.Hash("orders/{id}", "GET"), second.StimulusHash);
                 Assert.Equal("get", second.Metadata[HttpEndpointRouting.MethodMetadataKey]);
             });
+    }
+
+    [Fact]
+    public void Describe_DuplicateAndCaseVariantMethods_YieldOneBindingPerNormalizedMethod()
+    {
+        var node = EndpointNode(path: "orders/{id}", methods: ["GET", "get", "POST", "post"]);
+
+        var descriptors = _provider.Describe(node).Descriptors;
+
+        Assert.Equal(2, descriptors.Count);
+        Assert.Equal(
+            [HttpEndpointStimulus.Hash("orders/{id}", "GET"), HttpEndpointStimulus.Hash("orders/{id}", "POST")],
+            descriptors.Select(x => x.StimulusHash));
     }
 
     [Fact]
@@ -283,6 +305,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
 
         var result = _provider.Describe(NodeWith(bindings));
 
+        Assert.Equal("Elsa.HttpEndpoint", ((IActivityTriggerStimulusProvider)_provider).ProviderId);
         Assert.True(result.IsRecognized);
         Assert.Empty(result.Descriptors);
     }

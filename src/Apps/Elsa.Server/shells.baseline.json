@@ -13,6 +13,8 @@
           "ModularityApi": {},
           "Events": {},
           "Expressions": {},
+          "ExpressionsApi": {},
+          "ApiCapabilities": {},
           "Secrets": {},
           "SecretsApi": {},
           "WorkflowsDesignPersistenceEFCoreSqlite": {},

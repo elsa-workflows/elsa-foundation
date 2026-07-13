@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -13,6 +14,6 @@ internal sealed class ListInstances(IRequestSender requestSender, ILogger<ListIn
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("instances"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeRead);
     }
 }

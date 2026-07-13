@@ -426,6 +426,44 @@ public sealed class CachingWorkflowExecutableStoreTests
     }
 
     [Fact]
+    public async Task RetentionTransitionsDelegateAndGuardedDeleteInvalidatesResidentArtifact()
+    {
+        var executable = NewExecutable("artifact-retention");
+        var provider = new InMemoryWorkflowExecutableStore();
+        var cache = NewCache(provider);
+        var now = DateTimeOffset.UnixEpoch;
+        var expiresAt = now.AddMinutes(1);
+        await cache.SaveAsync(executable);
+        Assert.Same(executable, await cache.FindAsync(executable.Identity.ArtifactId));
+
+        var lease = await cache.TryAcquireRootWriteLeaseAsync(
+            executable.Identity.ArtifactId,
+            "lease-1",
+            expiresAt,
+            now);
+        Assert.NotNull(lease);
+        Assert.True(await cache.RenewRootWriteLeaseAsync(lease!, expiresAt.AddMinutes(1), now));
+        await cache.ReleaseRootWriteLeaseAsync(lease);
+
+        var cancelledGuard = await cache.TryBeginDeletionAsync(
+            executable.Identity.ArtifactId,
+            "delete-cancelled",
+            expiresAt,
+            now);
+        Assert.NotNull(cancelledGuard);
+        Assert.True(await cache.CancelDeletionAsync(cancelledGuard!));
+        var deletionGuard = await cache.TryBeginDeletionAsync(
+            executable.Identity.ArtifactId,
+            "delete-final",
+            expiresAt,
+            now);
+        Assert.NotNull(deletionGuard);
+
+        Assert.True(await cache.DeleteAsync(deletionGuard!, now));
+        Assert.Null(await cache.FindAsync(executable.Identity.ArtifactId));
+    }
+
+    [Fact]
     public async Task Telemetry_UsesOnlyStableInstrumentsAndBoundedTags()
     {
         var found = NewExecutable("artifact-found");
@@ -494,7 +532,7 @@ public sealed class CachingWorkflowExecutableStoreTests
         Assert.Same(expected, result);
     }
 
-    private static CachingWorkflowExecutableStore NewCache(ControllableStore provider, int capacity = 256) =>
+    private static CachingWorkflowExecutableStore NewCache(IWorkflowExecutableStore provider, int capacity = 256) =>
         new(provider, new WorkflowExecutableCacheOptions { Enabled = true, Capacity = capacity });
 
     private static WorkflowExecutable NewExecutable(string artifactId, string nodeSuffix = "root")
@@ -566,6 +604,45 @@ public sealed class CachingWorkflowExecutableStoreTests
             return DeleteHandler?.Invoke(artifactId, cancellationToken)
                    ?? ValueTask.FromResult(_executables.TryRemove(artifactId, out _));
         }
+
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
+            string artifactId,
+            string leaseId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableRootWriteLease?>(null);
+
+        public ValueTask<bool> RenewRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask ReleaseRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
+            string artifactId,
+            string operationId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableDeletionGuard?>(null);
+
+        public ValueTask<bool> CancelDeletionAsync(
+            WorkflowExecutableDeletionGuard guard,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask<bool> DeleteAsync(
+            WorkflowExecutableDeletionGuard guard,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
 
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
         {

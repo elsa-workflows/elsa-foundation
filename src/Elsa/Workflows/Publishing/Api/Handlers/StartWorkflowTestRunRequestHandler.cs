@@ -29,6 +29,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowDefinitionVersionLayoutStore layoutStore,
     IWorkflowTestRunStore testRunStore,
     IWorkflowStartDispatcher startDispatcher,
+    IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager,
     TimeProvider timeProvider)
     : IRequestHandler<StartWorkflowTestRun, WorkflowTestRunView>,
       IRequestHandler<StartWorkflowDraftTestRun, WorkflowTestRunView>
@@ -47,8 +48,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
         IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
         IWorkflowDefinitionVersionLayoutStore layoutStore,
         IWorkflowTestRunStore testRunStore,
-        IWorkflowStartDispatcher startDispatcher)
-        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, TimeProvider.System)
+        IWorkflowStartDispatcher startDispatcher,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
+        : this(compiler, executableStore, sourceReferenceStore, layoutStore, testRunStore, startDispatcher, rootWriteLeaseManager, TimeProvider.System)
     {
     }
 
@@ -158,7 +160,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
         // Append the expiring TestRun Source Reference the dispatch gates on. Scope/expiry are reference facts now.
         var reference = await BuildTestRunReferenceAsync(executable, compileRequest.Source, now, expiresAt, cancellationToken);
-        await sourceReferenceStore.SaveAsync(reference, cancellationToken);
+        await rootWriteLeaseManager.ExecuteAsync(
+            executable.Identity.ArtifactId,
+            $"test-run:{testRunId}",
+            ct => sourceReferenceStore.SaveAsync(reference, ct),
+            cancellationToken);
 
         if (draftSnapshot is not null)
             await testRunStore.SaveDraftSnapshotAsync(draftSnapshot, cancellationToken);

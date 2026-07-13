@@ -3,6 +3,7 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Constants;
 using Elsa.Workflows.Design.Api.Requests;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Api.FastEndpoints.Constants;
 using Microsoft.Extensions.Logging;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Versions;
@@ -12,6 +13,6 @@ internal sealed class List(IRequestSender requestSender, ILogger<List> logger) :
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("definitions/{definitionId}/versions"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowDesignRead);
     }
 }

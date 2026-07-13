@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Api.Constants;
 using Elsa.Activities.Design.Api.Requests;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,6 @@ internal sealed class ListDiagnostics(IRequestSender requestSender, ILogger<List
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("availability/diagnostics"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.ActivityDesignRead);
     }
 }

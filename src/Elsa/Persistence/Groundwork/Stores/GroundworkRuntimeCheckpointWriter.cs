@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 
@@ -27,6 +28,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly IDocumentStore _commitLedger;
     private readonly IGroundworkRuntimeDocumentSerializer _serializer;
+    private readonly IWorkflowExecutableRootWriteLeaseManager _rootWriteLeaseManager;
 
     public GroundworkRuntimeCheckpointWriter(
         IDocumentStore commitLedger,
@@ -37,7 +39,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IExecutionLivenessStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
         : this(
             commitLedger,
             serializer,
@@ -48,7 +51,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             bookmarkStateStore,
             durableValueStateStore,
             incidentStateStore,
-            operationalStateStore)
+            operationalStateStore,
+            rootWriteLeaseManager)
     {
     }
 
@@ -62,7 +66,8 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         IBookmarkStateStore bookmarkStateStore,
         IDurableValueStateStore durableValueStateStore,
         IIncidentStateStore incidentStateStore,
-        IExecutionLivenessStateStore operationalStateStore)
+        IExecutionLivenessStateStore operationalStateStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
     {
         ArgumentNullException.ThrowIfNull(commitLedger);
         ArgumentNullException.ThrowIfNull(serializer);
@@ -74,8 +79,10 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         ArgumentNullException.ThrowIfNull(durableValueStateStore);
         ArgumentNullException.ThrowIfNull(incidentStateStore);
         ArgumentNullException.ThrowIfNull(operationalStateStore);
+        ArgumentNullException.ThrowIfNull(rootWriteLeaseManager);
         _commitLedger = commitLedger;
         _serializer = serializer;
+        _rootWriteLeaseManager = rootWriteLeaseManager;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -100,7 +107,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
             ValidateIncidentStateChanges(commit);
             ValidateOperationalStateChanges(commit);
 
-            await ApplyAtomicallyAsync(commit, cancellationToken);
+            await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, ApplyAtomicallyAsync, cancellationToken);
 
             return new RuntimeCheckpointCommitStoreResult(OutboxIds(commit));
         }
@@ -108,6 +115,24 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         {
             _writeGate.Release();
         }
+    }
+
+    private async ValueTask ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
+        RuntimeCheckpointCommit commit,
+        Func<RuntimeCheckpointCommit, CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.WorkflowExecution is not { } workflowExecutionChange)
+        {
+            await write(commit, cancellationToken);
+            return;
+        }
+
+        await _rootWriteLeaseManager.ExecuteAsync(
+            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            $"checkpoint:{commit.CommitId}",
+            ct => write(commit, ct),
+            cancellationToken);
     }
 
     private static IReadOnlyCollection<string> OutboxIds(RuntimeCheckpointCommit commit) =>
@@ -137,7 +162,7 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
         try
         {
             await using var unitOfWork = await _commitLedger.BeginAsync(RuntimeCheckpointCommitScope(), cancellationToken);
-            var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, unitOfWork);
+            var transactionalStore = new DocumentUnitOfWorkStore(_commitLedger.TransactionBoundary, _commitLedger.Access, unitOfWork);
             var stores = GroundworkApplyStores.Create(transactionalStore, _serializer);
             await ApplyWorkflowExecutionStateChangeAsync(stores.WorkflowExecutionStateStore, commit.StateChanges.WorkflowExecution, cancellationToken);
             await ApplySchedulerStateChangeAsync(stores.SchedulerStateStore, commit.StateChanges.Scheduler, cancellationToken);
@@ -431,9 +456,11 @@ public sealed class GroundworkRuntimeCheckpointWriter : IRuntimeCheckpointCommit
 
     private sealed class DocumentUnitOfWorkStore(
         TransactionBoundary transactionBoundary,
+        DocumentStoreAccess access,
         IDocumentUnitOfWork unitOfWork) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => transactionBoundary;
+        public DocumentStoreAccess Access => access;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             unitOfWork.SaveAsync(request, cancellationToken);

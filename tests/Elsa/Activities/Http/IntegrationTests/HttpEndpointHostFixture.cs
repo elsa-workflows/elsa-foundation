@@ -258,6 +258,66 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
+    /// Prepares, but does not expose, a publication-scoped HTTP trigger. This is the serving-projection phase used
+    /// by publication slots: the executable is durable and its binding exists, but the binding remains inactive
+    /// until <see cref="ActivatePublishedHttpTriggerAsync"/> switches authority.
+    /// </summary>
+    public async Task PreparePublishedHttpTriggerAsync(
+        string publicationId,
+        string slotId,
+        string artifactId,
+        string path,
+        string resultValueId,
+        params string[] methods)
+    {
+        var executable = NewHttpEndpointExecutable(artifactId, path, resultValueId, methods);
+        await Services.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>()
+            .PreparePublicationAsync(executable, publicationId, slotId);
+    }
+
+    /// <summary>
+    /// Switches publication-scoped trigger authority and notifies the real Runtime HTTP observer. The observer
+    /// resolves the complete active binding set and atomically replaces the live route table.
+    /// </summary>
+    public async Task ActivatePublishedHttpTriggerAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        string artifactId)
+    {
+        var store = Services.GetRequiredService<IWorkflowTriggerBindingStore>();
+        await store.ActivatePublicationAsync(publicationId, replacedPublicationId);
+        var bindings = await store.ListByPublicationAsync(publicationId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, bindings);
+    }
+
+    /// <summary>Removes a prepared projection so a subsequent activation exercises the real missing-candidate failure.</summary>
+    public async Task RemovePreparedPublishedHttpTriggerAsync(string publicationId) =>
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByPublicationAsync(publicationId);
+
+    /// <summary>
+    /// Retires an artifact-scoped start projection while retaining its executable and any waiting bookmarks. Used
+    /// to prove that an already-started execution remains pinned to and resumable from the old artifact.
+    /// </summary>
+    public async Task RetireArtifactTriggerAsync(string artifactId)
+    {
+        await Services.GetRequiredService<IWorkflowTriggerBindingStore>().DeleteByArtifactAsync(artifactId);
+        await NotifyPublicationAuthorityChangedAsync(artifactId, []);
+    }
+
+    private async Task NotifyPublicationAuthorityChangedAsync(
+        string artifactId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings)
+    {
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings)
+        {
+            RequiresProjectionRefresh = true
+        };
+        foreach (var observer in Services.GetServices<IWorkflowTriggerIndexObserver>())
+            await observer.OnTriggersIndexedAsync(snapshot);
+    }
+
+    /// <summary>
     /// Publishes a workflow whose single node is a <b>mid-flow</b> <see cref="HttpEndpoint"/> on
     /// <paramref name="path"/>/<paramref name="method"/> with <see cref="HttpEndpoint.CanStartWorkflow"/> = false
     /// (spec 089 D). Because the node can never start a workflow it is NOT a trigger node and is not indexed — the

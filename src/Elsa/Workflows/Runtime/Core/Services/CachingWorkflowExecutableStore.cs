@@ -48,6 +48,52 @@ public sealed class CachingWorkflowExecutableStore : IWorkflowExecutableStore
         return deleted;
     }
 
+    public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
+        string artifactId,
+        string leaseId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default) =>
+        _inner.TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now, cancellationToken);
+
+    public ValueTask<bool> RenewRootWriteLeaseAsync(
+        WorkflowExecutableRootWriteLease lease,
+        DateTimeOffset expiresAt,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default) =>
+        _inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
+
+    public ValueTask ReleaseRootWriteLeaseAsync(
+        WorkflowExecutableRootWriteLease lease,
+        CancellationToken cancellationToken = default) =>
+        _inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+
+    public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
+        string artifactId,
+        string operationId,
+        DateTimeOffset expiresAt,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default) =>
+        _inner.TryBeginDeletionAsync(artifactId, operationId, expiresAt, now, cancellationToken);
+
+    public ValueTask<bool> CancelDeletionAsync(
+        WorkflowExecutableDeletionGuard guard,
+        CancellationToken cancellationToken = default) =>
+        _inner.CancelDeletionAsync(guard, cancellationToken);
+
+    public async ValueTask<bool> DeleteAsync(
+        WorkflowExecutableDeletionGuard guard,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(guard);
+
+        var deleted = await _inner.DeleteAsync(guard, now, cancellationToken);
+        if (deleted)
+            InvalidateAndEvict(guard.ArtifactId, WorkflowExecutableCacheTelemetry.DeleteReason);
+        return deleted;
+    }
+
     public async ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);

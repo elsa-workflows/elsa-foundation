@@ -6,6 +6,7 @@ using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Microsoft.Data.Sqlite;
@@ -259,10 +260,11 @@ public sealed class SqliteGroundworkInitializationTests
 
     private static async Task MaterializeAsync(string databasePath, StorageManifest manifest, ProviderIdentity provider)
     {
-        await using var handle = await SqliteDocumentStoreFactory.CreateAsync(
+        _ = await SqliteDocumentStoreFactory.CreateAsync(
             $"Data Source={databasePath}",
             manifest,
-            provider);
+            provider,
+            DocumentStoreAccess.Global);
     }
 
     private static async Task InitializeAndAssertProjectionAsync(string databasePath, StorageManifest manifest, ProviderIdentity provider)
@@ -313,7 +315,7 @@ public sealed class SqliteGroundworkInitializationTests
                 StorageIntent.PortableDocument(),
                 LifecyclePolicy.Mutable,
                 IdentityPolicy.StringId(),
-                TenancyPolicy.None,
+                TenancyPolicy.Global,
                 ConcurrencyPolicy.Optimistic(),
                 SerializationPolicy.Json(),
                 [KeywordIndex()],

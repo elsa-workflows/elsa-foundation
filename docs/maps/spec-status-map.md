@@ -112,3 +112,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [088-layout-metadata-opaque-jsonelement](../../specs/088-layout-metadata-opaque-jsonelement/spec.md) | Layout Metadata Bag Becomes Opaque JsonElement | Draft | - | 0 | 0 | out of scope |
 | [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Draft | - | 9 | 0 | deferred, out of scope |
 | [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | - |
+| [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Draft | - | 23 | 0 | - |
+| [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | - |
+| [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
+| [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |

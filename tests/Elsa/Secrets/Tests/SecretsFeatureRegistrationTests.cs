@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
@@ -22,7 +23,10 @@ public sealed class SecretsFeatureRegistrationTests
         Assert.IsType<InMemorySecretRepository>(provider.GetRequiredService<ISecretRepository>());
         Assert.Contains(provider.GetServices<ISecretStore>(), x => x is EncryptedSecretStore);
         Assert.Contains(provider.GetServices<ISecretStore>(), x => x is ConfigurationSecretStore);
-        Assert.Contains(provider.GetServices<IExpressionDescriptorProvider>(), x => x.GetDescriptors().Any(d => d.TypeName == "Secret"));
+        var secretDescriptor = provider.GetServices<IExpressionDescriptorProvider>()
+            .SelectMany(x => x.GetDescriptors())
+            .Single(x => x.TypeName == "Secret");
+        Assert.Equal(ExpressionEditingMode.Reference, secretDescriptor.EditingMode);
     }
 
     [Fact]

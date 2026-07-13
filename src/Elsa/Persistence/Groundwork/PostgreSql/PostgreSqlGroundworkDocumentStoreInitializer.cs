@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
+using Groundwork.Documents.Scoping;
 using Groundwork.PostgreSql.Documents;
 using Microsoft.Extensions.Hosting;
 
@@ -35,7 +36,12 @@ public sealed class PostgreSqlGroundworkDocumentStoreInitializer(
         if (holder.IsInitialized)
             return;
 
-        var handle = await PostgreSqlDocumentStoreFactory.CreateAsync(connectionString, manifest, provider, cancellationToken: cancellationToken);
-        holder.Set(handle.Store, handle);
+        var store = await PostgreSqlDocumentStoreFactory.CreateAsync(
+            connectionString,
+            manifest,
+            provider,
+            DocumentStoreAccess.Global,
+            cancellationToken: cancellationToken);
+        holder.Set(store);
     }
 }

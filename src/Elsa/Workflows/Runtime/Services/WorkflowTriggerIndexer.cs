@@ -46,14 +46,8 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
         ArgumentNullException.ThrowIfNull(executable);
 
         // Extract first: an unroutable trigger throws here, before any write, so a bad publish fails cleanly.
-        var bindings = _extractor.Extract(executable);
-        var snapshot = new WorkflowTriggerIndexSnapshot(executable.Identity.ArtifactId, bindings);
-
-        // Validate BEFORE any write (issue #592 item 2): a constraint violation must fail the publish with the
-        // store untouched — a post-write throw would leave the conflicting bindings durable, poisoning every
-        // later publish and startup that reads the index. Exceptions propagate and fail the publish.
-        foreach (var validator in _validators)
-            await validator.ValidateAsync(snapshot, cancellationToken);
+        var bindings = _extractor.Evaluate(executable).Bindings;
+        var snapshot = await ValidateAsync(executable.Identity.ArtifactId, bindings, cancellationToken);
 
         await _store.DeleteByArtifactAsync(executable.Identity.ArtifactId, cancellationToken);
 
@@ -65,5 +59,49 @@ public sealed class WorkflowTriggerIndexer : IWorkflowTriggerIndexer
             await observer.OnTriggersIndexedAsync(snapshot, cancellationToken);
 
         return bindings;
+    }
+
+    public async ValueTask<IReadOnlyCollection<WorkflowTriggerBinding>> PreparePublicationAsync(
+        WorkflowExecutable executable,
+        string publicationId,
+        string slotId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(slotId);
+
+        var bindings = _extractor.Evaluate(executable).Bindings
+            .Select(binding => binding with
+            {
+                TriggerBindingId = WorkflowTriggerBinding.BuildId(
+                    publicationId,
+                    binding.ArtifactId,
+                    binding.ExecutableNodeId,
+                    binding.StimulusHash),
+                PublicationId = publicationId,
+                SlotId = slotId,
+                IsActive = false
+            })
+            .ToArray();
+
+        await ValidateAsync(executable.Identity.ArtifactId, bindings, cancellationToken);
+        await _store.PreparePublicationAsync(publicationId, bindings, cancellationToken);
+        return bindings;
+    }
+
+    private async ValueTask<WorkflowTriggerIndexSnapshot> ValidateAsync(
+        string artifactId,
+        IReadOnlyCollection<WorkflowTriggerBinding> bindings,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = new WorkflowTriggerIndexSnapshot(artifactId, bindings);
+
+        // Validate BEFORE any write (issue #592 item 2): a constraint violation must fail the publish with the
+        // store untouched — a post-write throw would leave the conflicting bindings durable, poisoning every
+        // later publish and startup that reads the index. Exceptions propagate and fail the publish.
+        foreach (var validator in _validators)
+            await validator.ValidateAsync(snapshot, cancellationToken);
+        return snapshot;
     }
 }

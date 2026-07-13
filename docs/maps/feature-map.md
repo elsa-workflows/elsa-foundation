@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 82
+- Discovered feature classes: 85
 
 ## Features
 
@@ -72,6 +72,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | TasksFeature | direct IShellFeature | Elsa.Tasks | IShellFeature | [TasksFeature.cs](../../src/Elsa/Tasks/TasksFeature.cs) |
 | WorkflowDesignValidationsFeature | direct IShellFeature | Elsa.Workflows.Design.Validations | IShellFeature | [WorkflowDesignValidationsFeature.cs](../../src/Elsa/Workflows/Design/Validations/WorkflowDesignValidationsFeature.cs) |
 | WorkflowsDesignReconciliationFeature | direct IShellFeature | Elsa.Workflows.Design.Reconciliation | IShellFeature | [WorkflowsDesignReconciliationFeature.cs](../../src/Elsa/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs) |
+| WorkflowsRuntimeCheckpointPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature, IPostConfigureShellServices | [WorkflowsRuntimeCheckpointPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Api/Coalescing/WorkflowsRuntimeCheckpointPersistenceFeature.cs) |
 | WorkflowsRuntimeDistributedFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed | IShellFeature | [WorkflowsRuntimeDistributedFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/WorkflowsRuntimeDistributedFeature.cs) |
 | WorkflowsRuntimeDistributedGroundworkPersistenceFeature | direct IShellFeature | Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork | IShellFeature | [WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs](../../src/Elsa/Workflows/Runtime/Distributed/Persistence/Groundwork/WorkflowsRuntimeDistributedGroundworkPersistenceFeature.cs) |
 | WorkflowsRuntimeHttpFeature | direct IShellFeature | Elsa.Workflows.Runtime.Http | IShellFeature | [WorkflowsRuntimeHttpFeature.cs](../../src/Elsa/Workflows/Runtime/Http/WorkflowsRuntimeHttpFeature.cs) |
@@ -82,7 +83,9 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Tracing | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../src/Elsa/Workflows/Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
 | WorkflowsRuntimeTriggersFeature | direct IShellFeature | Elsa.Workflows.Runtime.Api | IShellFeature | [WorkflowsRuntimeTriggersFeature.cs](../../src/Elsa/Workflows/Runtime/Api/WorkflowsRuntimeTriggersFeature.cs) |
 | ActivitiesDesignApiFeature | FastEndpoints feature | Elsa.Activities.Design.Api | FastEndpointsFeatureBase | [ActivitiesDesignApiFeature.cs](../../src/Elsa/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
+| ApiCapabilitiesFeature | FastEndpoints feature | Elsa.Api.Capabilities | FastEndpointsFeatureBase | [ApiCapabilitiesFeature.cs](../../src/Elsa/Api/Capabilities/ApiCapabilitiesFeature.cs) |
 | AspNetCoreIdentityFeature | FastEndpoints feature | Elsa.Foundation.Identity.AspNetCoreIdentity | FastEndpointsFeatureBase | [AspNetCoreIdentityFeature.cs](../../src/Elsa/Foundation/Identity/AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
+| ExpressionsApiFeature | FastEndpoints feature | Elsa.Expressions.Api | FastEndpointsFeatureBase | [ExpressionsApiFeature.cs](../../src/Elsa/Expressions/Api/ExpressionsApiFeature.cs) |
 | FoundationAgentApiFeature | FastEndpoints feature | Elsa.Agent.Api | FastEndpointsFeatureBase | [FoundationAgentApiFeature.cs](../../src/Elsa/Agent/Api/FoundationAgentApiFeature.cs) |
 | FoundationIdentityApiFeature | FastEndpoints feature | Elsa.Foundation.Identity.Api | FastEndpointsFeatureBase | [FoundationIdentityApiFeature.cs](../../src/Elsa/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |
 | JavaScriptActivitiesEndpointsFeature | FastEndpoints feature | Elsa.Workflows.Runtime.JavaScript | FastEndpointsFeatureBase | [JavaScriptActivitiesEndpointsFeature.cs](../../src/Elsa/Workflows/Runtime/JavaScript/JavaScriptActivitiesEndpointsFeature.cs) |

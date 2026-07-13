@@ -9,14 +9,21 @@ namespace Elsa.Workflows.Design.Persistence.EFCore.Commands;
 
 public sealed class AddWorkflowDefinition(IIdentityGenerator identityGenerator, IDbContextFactory<WorkflowsDesignDbContext> factory) : IAddWorkflowDefinitionCommand
 {
-    public async Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellationToken)
+    public Task Execute(WorkflowDefinition workflowDefinition, WorkflowDefinitionDraft draft, CancellationToken cancellationToken) =>
+        Execute(workflowDefinition, draft, [], cancellationToken);
+
+    public async Task Execute(
+        WorkflowDefinition workflowDefinition,
+        WorkflowDefinitionDraft draft,
+        IReadOnlyCollection<DesignMetadataRecord> layout,
+        CancellationToken cancellationToken)
     {
         await using var dbContext = await factory.CreateDbContextAsync(cancellationToken);
 
         // Create the empty layout sibling alongside the draft (mirrors SubmitWorkflowDefinition) so
         // the draft has a layout row from origin — otherwise a later layout submit has no row to
         // upsert into on providers that require one.
-        var draftLayout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draft.Id);
+        var draftLayout = WorkflowDefinitionDraftLayout.CreateFor(identityGenerator, draft.Id, layout);
 
         await dbContext.WorkflowDefinitions.AddAsync(workflowDefinition, cancellationToken);
         await dbContext.WorkflowDefinitionDrafts.AddAsync(draft, cancellationToken);

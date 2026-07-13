@@ -1,4 +1,5 @@
 using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Api.FastEndpoints.Constants;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Constants;
 using Elsa.Workflows.Runtime.Api.Models;
@@ -13,7 +14,7 @@ internal sealed class GetInstance(IRequestSender requestSender, ILogger<GetInsta
     public override void Configure()
     {
         Get(RouteConstants.GetRoute("instances/{workflowExecutionId}"));
-        ConfigurePermissions();
+        ConfigurePermissions(PermissionNames.WorkflowRuntimeRead);
     }
 
     public override async Task HandleAsync(GetWorkflowInstance req, CancellationToken ct)

@@ -13,6 +13,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
 {
     private readonly object _syncRoot = new();
     private readonly Dictionary<string, RecurringTriggerSchedule> _schedules = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _preparedPublications = new(StringComparer.Ordinal);
 
     public ValueTask<RecurringTriggerSchedule> SaveAsync(RecurringTriggerSchedule schedule, CancellationToken cancellationToken = default)
     {
@@ -28,6 +29,83 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
     }
 
+    public ValueTask PreparePublicationAsync(
+        string publicationId,
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        ArgumentNullException.ThrowIfNull(schedules);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidatePublicationSchedules(publicationId, schedules);
+
+        lock (_syncRoot)
+        {
+            RemoveByPublication(publicationId);
+            foreach (var schedule in schedules)
+            {
+                var prepared = schedule with { IsActive = false };
+                _schedules[prepared.ScheduleId] = prepared;
+            }
+            _preparedPublications.Add(publicationId);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListByPublicationAsync(
+        string publicationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            var matches = _schedules.Values
+                .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                .ToArray();
+            return ValueTask.FromResult<IReadOnlyCollection<RecurringTriggerSchedule>>(matches);
+        }
+    }
+
+    public ValueTask ActivatePublicationAsync(
+        string publicationId,
+        string? replacedPublicationId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        if (replacedPublicationId is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(replacedPublicationId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            if (!_preparedPublications.Contains(publicationId))
+                throw new InvalidOperationException($"Publication '{publicationId}' has no prepared recurring-schedule projection.");
+
+            SetPublicationActivity(publicationId, true);
+            if (replacedPublicationId is not null && !StringComparer.Ordinal.Equals(replacedPublicationId, publicationId))
+                SetPublicationActivity(replacedPublicationId, false);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask DeleteByPublicationAsync(string publicationId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_syncRoot)
+        {
+            RemoveByPublication(publicationId);
+            _preparedPublications.Remove(publicationId);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
     public ValueTask<IReadOnlyCollection<RecurringTriggerSchedule>> ListDueAsync(DateTimeOffset asOf, int limit, CancellationToken cancellationToken = default)
     {
         if (limit <= 0)
@@ -37,7 +115,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         lock (_syncRoot)
         {
             var due = _schedules.Values
-                .Where(schedule => schedule.NextOccurrence <= asOf)
+                .Where(schedule => schedule.IsActive && schedule.NextOccurrence <= asOf)
                 .OrderBy(schedule => schedule.NextOccurrence)
                 .ThenBy(schedule => schedule.ScheduleId, StringComparer.Ordinal)
                 .Take(limit)
@@ -68,7 +146,7 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         {
             // Compare-and-swap: claim the occurrence only if no other worker (or an earlier sweep) already moved
             // the cursor. This is the single-node realization of the W20 cluster-safe claim contract.
-            if (!_schedules.TryGetValue(scheduleId, out var schedule) || schedule.NextOccurrence != expectedNextOccurrence)
+            if (!_schedules.TryGetValue(scheduleId, out var schedule) || !schedule.IsActive || schedule.NextOccurrence != expectedNextOccurrence)
                 return new ValueTask<bool>(false);
 
             _schedules[scheduleId] = schedule with { NextOccurrence = newNextOccurrence };
@@ -106,5 +184,35 @@ public sealed class InMemoryRecurringTriggerScheduleStore : IRecurringTriggerSch
         }
 
         return ValueTask.CompletedTask;
+    }
+
+    private static void ValidatePublicationSchedules(
+        string publicationId,
+        IReadOnlyCollection<RecurringTriggerSchedule> schedules)
+    {
+        foreach (var schedule in schedules)
+        {
+            ArgumentNullException.ThrowIfNull(schedule);
+            if (!StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                throw new ArgumentException($"Schedule '{schedule.ScheduleId}' does not belong to publication '{publicationId}'.", nameof(schedules));
+            ArgumentException.ThrowIfNullOrWhiteSpace(schedule.SlotId);
+        }
+    }
+
+    private void SetPublicationActivity(string publicationId, bool isActive)
+    {
+        foreach (var schedule in _schedules.Values
+                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                     .ToArray())
+            _schedules[schedule.ScheduleId] = schedule with { IsActive = isActive };
+    }
+
+    private void RemoveByPublication(string publicationId)
+    {
+        foreach (var scheduleId in _schedules.Values
+                     .Where(schedule => StringComparer.Ordinal.Equals(schedule.PublicationId, publicationId))
+                     .Select(schedule => schedule.ScheduleId)
+                     .ToArray())
+            _schedules.Remove(scheduleId);
     }
 }

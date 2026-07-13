@@ -47,11 +47,14 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
         lock (_gate)
             _subscribers.Add(subscriber);
 
-        return Enumerate(subscriber, cancellationToken);
+        var cancellationRegistration = cancellationToken.Register(() => Remove(subscriber));
+
+        return Enumerate(subscriber, cancellationRegistration, cancellationToken);
     }
 
     private async IAsyncEnumerable<StructuredLogStreamItem> Enumerate(
         Subscriber subscriber,
+        CancellationTokenRegistration cancellationRegistration,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         try
@@ -61,9 +64,15 @@ public sealed class InMemoryStructuredLogLiveFeed : IStructuredLogLiveFeed, IStr
         }
         finally
         {
-            lock (_gate)
-                _subscribers.Remove(subscriber);
+            await cancellationRegistration.DisposeAsync();
+            Remove(subscriber);
         }
+    }
+
+    private void Remove(Subscriber subscriber)
+    {
+        lock (_gate)
+            _subscribers.Remove(subscriber);
     }
 
     /// <summary>

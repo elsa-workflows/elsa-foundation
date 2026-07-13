@@ -10,10 +10,9 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Identity &amp; replace-on-republish.</b> The identity is <see cref="ScheduleId"/>, built deterministically
-/// from (artifactId, executableNodeId) — the same shape as a <c>WorkflowTriggerBinding</c> id — so republishing
-/// an artifact deletes its prior schedules (scoped by <see cref="ArtifactId"/>) and rewrites the current set,
-/// exactly mirroring the trigger index it is populated alongside.
+/// <b>Identity &amp; replacement.</b> Legacy artifact-scoped indexing derives <see cref="ScheduleId"/> from
+/// (artifactId, executableNodeId). Publication preparation additionally includes publication ID so explicit
+/// named slots may share an artifact without collapsing their independent schedule lifecycles.
 /// </para>
 /// <para>
 /// <b>Missed-occurrence policy.</b> <see cref="NextOccurrence"/> is the single mutable cursor. On each fire the
@@ -44,7 +43,10 @@ public sealed record RecurringTriggerSchedule(
     RecurringScheduleKind Kind,
     string Expression,
     DateTimeOffset NextOccurrence,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    string? PublicationId = null,
+    string? SlotId = null,
+    bool IsActive = true)
 {
     /// <summary>
     /// Builds the deterministic, collision-free schedule id for a trigger node in an artifact, using the same
@@ -56,6 +58,13 @@ public sealed record RecurringTriggerSchedule(
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
         return $"{Escape(artifactId)}:{Escape(executableNodeId)}";
+    }
+
+    /// <summary>Builds a publication-scoped schedule id so named slots may share one artifact safely.</summary>
+    public static string BuildId(string publicationId, string artifactId, string executableNodeId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        return $"{Escape(publicationId)}:{BuildId(artifactId, executableNodeId)}";
     }
 
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");

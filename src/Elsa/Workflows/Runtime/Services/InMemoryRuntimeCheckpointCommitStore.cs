@@ -18,6 +18,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IIncidentStateStore? _incidentStateStore;
     private readonly IExecutionLivenessStateStore? _operationalStateStore;
     private readonly ISchedulerStateStore? _schedulerStateStore;
+    private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
 
     /// <summary>
     /// Creates the in-memory commit store. RT-8: the seven telescoping constructors collapsed into this single primary
@@ -33,7 +34,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IIncidentStateStore? incidentStateStore = null,
         IExecutionLivenessStateStore? operationalStateStore = null,
         ISchedulerStateStore? schedulerStateStore = null,
-        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null)
+        IActivityExecutionInspectionWriter? activityExecutionInspectionWriter = null,
+        IWorkflowExecutableRootWriteLeaseManager? rootWriteLeaseManager = null)
     {
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _activityExecutionStateStore = activityExecutionStateStore;
@@ -43,6 +45,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _incidentStateStore = incidentStateStore;
         _operationalStateStore = operationalStateStore;
         _schedulerStateStore = schedulerStateStore;
+        _rootWriteLeaseManager = rootWriteLeaseManager;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -70,33 +73,36 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             ValidateDurableValueStateChanges(commit);
             ValidateIncidentStateChanges(commit);
             ValidateOperationalStateChanges(commit);
-            await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, cancellationToken);
-            await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, cancellationToken);
-            await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, cancellationToken);
-            await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, cancellationToken);
-            await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, cancellationToken);
-            await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, cancellationToken);
-            await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, cancellationToken);
-            await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, cancellationToken);
-
-            try
+            await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
             {
-                // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
-                // are serialized by the write gate), so an exception here is a genuine partial-persistence
-                // risk — the projections above have been applied but the commit record/outbox may not be
-                // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
-                lock (_syncRoot)
+                await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
+                await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
+                await ApplyActivityExecutionStateChangesAsync(commit.StateChanges.ActivityExecutions, ct);
+                await ApplyActivityExecutionInspectionChangesAsync(commit.StateChanges.ActivityExecutionInspections, ct);
+                await ApplyBookmarkStateChangesAsync(commit.StateChanges.Bookmarks, ct);
+                await ApplyDurableValueStateChangesAsync(commit.StateChanges.DurableValues, ct);
+                await ApplyIncidentStateChangesAsync(commit.StateChanges.Incidents, ct);
+                await ApplyOperationalStateChangesAsync(commit.StateChanges.Operational, ct);
+
+                try
                 {
-                    foreach (var item in pendingOutboxItems)
-                        SavePendingOutboxItem(item);
+                    // #386: all outbox validation is front-loaded in ValidatePendingOutboxItems (and commits
+                    // are serialized by the write gate), so an exception here is a genuine partial-persistence
+                    // risk — the projections above have been applied but the commit record/outbox may not be
+                    // durably recorded. Only that condition warrants the inconsistent-durability wrapper.
+                    lock (_syncRoot)
+                    {
+                        foreach (var item in pendingOutboxItems)
+                            SavePendingOutboxItem(item);
 
-                    _commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                        _commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(commit, decision, pendingOutboxItems.Select(item => item.OutboxItemId).ToArray()));
+                    }
                 }
-            }
-            catch (Exception exception)
-            {
-                throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
-            }
+                catch (Exception exception)
+                {
+                    throw new RuntimeCheckpointInconsistentDurabilityException(commit.CommitId, exception);
+                }
+            }, cancellationToken);
 
             return new RuntimeCheckpointCommitStoreResult(pendingOutboxItems.Select(item => item.OutboxItemId).ToArray());
         }
@@ -104,6 +110,27 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             _writeGate.Release();
         }
+    }
+
+    private async ValueTask ExecuteWithWorkflowExecutionRootWriteLeaseAsync(
+        RuntimeCheckpointCommit commit,
+        Func<CancellationToken, ValueTask> write,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowExecutionStateStore is null || commit.StateChanges.WorkflowExecution is not { } workflowExecutionChange)
+        {
+            await write(cancellationToken);
+            return;
+        }
+
+        if (_rootWriteLeaseManager is null)
+            throw new InvalidOperationException("A workflow executable root-write lease manager is required before workflow execution state can be persisted.");
+
+        await _rootWriteLeaseManager.ExecuteAsync(
+            workflowExecutionChange.State.PinnedExecutable.ArtifactId,
+            $"checkpoint:{commit.CommitId}",
+            write,
+            cancellationToken);
     }
 
     public IReadOnlyCollection<RuntimeCheckpointCommitRecord> ListCommits()

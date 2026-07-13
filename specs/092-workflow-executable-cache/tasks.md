@@ -44,7 +44,7 @@
 ### Tests
 
 - [x] T012 [US2] Add deterministic LRU promotion/capacity-one eviction tests and confirm they fail before implementation
-- [x] T013 [US2] Add provider-authoritative successful/failed save and delete race tests plus list-does-not-populate tests and confirm they fail before implementation
+- [x] T013 [US2] Add provider-authoritative successful/failed save and delete race tests, retention lease/deletion-guard pass-through coverage, plus list-does-not-populate tests and confirm they fail before implementation
 - [x] T014 [US2] Add Groundwork DI wrapping, disabled-mode, and recreated-provider empty-cache tests and confirm they fail before registration changes
 
 ### Implementation

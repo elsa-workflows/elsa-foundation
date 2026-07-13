@@ -139,6 +139,28 @@ public sealed class RecurringTriggerPumpTaskTests
         Assert.Equal(2, router.Requests.Count);
     }
 
+    [Fact]
+    public async Task DueSchedules_SwitchOnlyWhenPublicationAuthorityChanges()
+    {
+        var store = new InMemoryRecurringTriggerScheduleStore();
+        var oldSchedule = PublicationSchedule("old", "publication-old");
+        var candidateSchedule = PublicationSchedule("new", "publication-new");
+
+        await store.PreparePublicationAsync("publication-old", [oldSchedule]);
+        await store.PreparePublicationAsync("publication-new", [candidateSchedule]);
+        Assert.Empty(await store.ListDueAsync(Now, 10));
+
+        await store.ActivatePublicationAsync("publication-old", replacedPublicationId: null);
+        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+
+        await store.ActivatePublicationAsync("publication-new", "publication-old");
+        Assert.Equal("publication-new", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+
+        // Compensation restores the retired projection and makes the failed candidate invisible again.
+        await store.ActivatePublicationAsync("publication-old", "publication-new");
+        Assert.Equal("publication-old", Assert.Single(await store.ListDueAsync(Now, 10)).PublicationId);
+    }
+
     private static (RecurringTriggerPumpTask Pump, MutableTimeProvider Clock) CreatePump(
         IRecurringTriggerScheduleStore store,
         FakeRouter router,
@@ -169,6 +191,15 @@ public sealed class RecurringTriggerPumpTaskTests
         Expression: expression,
         NextOccurrence: next,
         CreatedAt: Now);
+
+    private static RecurringTriggerSchedule PublicationSchedule(string id, string publicationId) =>
+        Schedule(id, Now.AddMinutes(-1)) with
+        {
+            ScheduleId = RecurringTriggerSchedule.BuildId(publicationId, "artifact-1", $"node-{id}"),
+            PublicationId = publicationId,
+            SlotId = "slot-default",
+            IsActive = false
+        };
 
     private sealed class FakeRouter : IStimulusRouter
     {

@@ -69,7 +69,7 @@ public static class IdentityStorageManifest
         StorageIntent.PortableDocument(),
         LifecyclePolicy.Mutable,
         IdentityPolicy.StringId(),
-        TenancyPolicy.None,
+        TenancyPolicy.Global,
         ConcurrencyPolicy.Optimistic(),
         SerializationPolicy.Json(),
         indexes,

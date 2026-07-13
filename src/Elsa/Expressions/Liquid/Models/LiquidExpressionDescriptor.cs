@@ -1,4 +1,5 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Liquid.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
@@ -20,6 +21,8 @@ public sealed class LiquidExpressionDescriptor : IExpressionDescriptor
     public Func<IServiceProvider, IExpressionHandler> HandlerFactory => ActivatorUtilities.GetServiceOrCreateInstance<LiquidExpressionHandler>;
 
     public string DisplayName => TypeName;
+
+    public ExpressionEditingMode EditingMode => ExpressionEditingMode.Text;
 
     public IDictionary<string, object> Properties { get; }
 

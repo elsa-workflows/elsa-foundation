@@ -17,7 +17,11 @@ public sealed record WorkflowTriggerBinding(
     string StimulusHash,
     string? CorrelationScope,
     IReadOnlyDictionary<string, string> Metadata,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    string? PublicationId = null,
+    string? SlotId = null,
+    TriggerCardinality Cardinality = TriggerCardinality.FanOut,
+    bool IsActive = true)
 {
     /// <summary>
     /// Builds the deterministic, collision-free binding id for a single trigger stimulus on a node in an
@@ -35,5 +39,22 @@ public sealed record WorkflowTriggerBinding(
         return $"{Escape(artifactId)}:{Escape(executableNodeId)}:{Escape(stimulusHash)}";
     }
 
+    /// <summary>Builds a publication-scoped binding id so named slots may share one artifact safely.</summary>
+    public static string BuildId(string publicationId, string artifactId, string executableNodeId, string stimulusHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicationId);
+        return $"{Escape(publicationId)}:{BuildId(artifactId, executableNodeId, stimulusHash)}";
+    }
+
     private static string Escape(string value) => value.Replace("%", "%25").Replace(":", "%3A");
+}
+
+/// <summary>Declares whether multiple authoritative publications may receive one stimulus.</summary>
+public enum TriggerCardinality
+{
+    /// <summary>At most one authoritative publication in the shell may claim the stimulus.</summary>
+    Exclusive,
+
+    /// <summary>Multiple authoritative publications may intentionally receive the stimulus.</summary>
+    FanOut
 }

@@ -1,7 +1,10 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using Elsa.Workflows.Runtime.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -11,6 +14,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     private readonly DateTimeOffset _now = new(2026, 7, 10, 12, 0, 0, TimeSpan.Zero);
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
+    private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
 
     [Fact]
     public async Task Sweep_RemovesExpiredReferencesThenTheirNowUnreferencedArtifacts_ButKeepsArtifactsWithALiveReference()
@@ -74,12 +78,70 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.NotNull(await _executableStore.FindAsync("artifact-1"));
     }
 
+    [Theory]
+    [InlineData(WorkflowExecutionStatus.Pending)]
+    [InlineData(WorkflowExecutionStatus.Running)]
+    [InlineData(WorkflowExecutionStatus.Suspended)]
+    [InlineData(WorkflowExecutionStatus.Completed)]
+    [InlineData(WorkflowExecutionStatus.Faulted)]
+    [InlineData(WorkflowExecutionStatus.Cancelled)]
+    public async Task Sweep_KeepsArtifactPinnedByAnyRetainedExecutionStatus(WorkflowExecutionStatus status)
+    {
+        var artifactId = $"artifact-{status}";
+        await _executableStore.SaveAsync(Executable(artifactId));
+        await _workflowExecutionStateStore.SaveAsync(Execution($"execution-{status}", artifactId, status));
+
+        var result = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync(artifactId));
+    }
+
+    [Fact]
+    public async Task Sweep_CollectsArtifactOnlyAfterItsFinalRetainedExecutionRootIsRemoved()
+    {
+        await _executableStore.SaveAsync(Executable("artifact-1"));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-1", "artifact-1", WorkflowExecutionStatus.Completed));
+
+        var protectedSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(0, protectedSweep.DeletedArtifactCount);
+        Assert.NotNull(await _executableStore.FindAsync("artifact-1"));
+
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-1"));
+
+        var collectibleSweep = await NewGarbageCollector().SweepAsync(_now);
+
+        Assert.Equal(1, collectibleSweep.DeletedArtifactCount);
+        Assert.Null(await _executableStore.FindAsync("artifact-1"));
+    }
+
     private WorkflowExecutableReferenceGarbageCollector NewGarbageCollector() =>
         new(
             _executableStore,
             _sourceReferenceStore,
+            _workflowExecutionStateStore,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
             TimeProvider.System,
             NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+
+    private WorkflowExecutionState Execution(
+        string workflowExecutionId,
+        string artifactId,
+        WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: workflowExecutionId,
+            PinnedExecutable: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:test"),
+            Status: status,
+            SubStatus: null,
+            CreatedAt: _now,
+            StartedAt: _now,
+            UpdatedAt: _now,
+            CompletedAt: status.IsTerminal() ? _now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
 
     private WorkflowExecutableSourceReference Reference(
         string sourceReferenceId,

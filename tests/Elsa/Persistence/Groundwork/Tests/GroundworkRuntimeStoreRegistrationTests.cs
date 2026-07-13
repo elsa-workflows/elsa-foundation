@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Microsoft.Extensions.DependencyInjection;
@@ -225,6 +226,7 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
     {
         private int _loadCount;
 
+        public DocumentStoreAccess Access => inner.Access;
         public int LoadCount => Volatile.Read(ref _loadCount);
 
         public void ResetLoadCount() => Interlocked.Exchange(ref _loadCount, 0);
@@ -265,6 +267,45 @@ public sealed class GroundworkRuntimeStoreRegistrationTests
             ValueTask.CompletedTask;
 
         public ValueTask<bool> DeleteAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
+            string artifactId,
+            string leaseId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableRootWriteLease?>(null);
+
+        public ValueTask<bool> RenewRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask ReleaseRootWriteLeaseAsync(
+            WorkflowExecutableRootWriteLease lease,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
+            string artifactId,
+            string operationId,
+            DateTimeOffset expiresAt,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutableDeletionGuard?>(null);
+
+        public ValueTask<bool> CancelDeletionAsync(
+            WorkflowExecutableDeletionGuard guard,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
+
+        public ValueTask<bool> DeleteAsync(
+            WorkflowExecutableDeletionGuard guard,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(false);
 
         public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>

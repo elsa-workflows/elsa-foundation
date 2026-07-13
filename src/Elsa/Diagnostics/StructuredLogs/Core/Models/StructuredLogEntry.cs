@@ -8,8 +8,15 @@ namespace Elsa.Diagnostics.StructuredLogs.Core.Models;
 /// </summary>
 public sealed record StructuredLogEntry
 {
-    /// <summary>Monotonic per-host ordering id assigned by the store on append.</summary>
+    /// <summary>
+    /// Display/logical metadata assigned in-process. Concurrent writers may produce equal values; durable
+    /// replay, ordering and de-duplication must use <see cref="ReplayCursor"/> instead.
+    /// </summary>
     public long Sequence { get; init; }
+
+    /// <summary>The authoritative committed replay position. Null until a store append commits.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public StructuredLogReplayCursor? ReplayCursor { get; init; }
 
     /// <summary>When the event was emitted.</summary>
     public DateTimeOffset Timestamp { get; init; }

@@ -77,7 +77,7 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **FR-005**: A caller cancelling its wait MUST NOT cancel or poison a shared provider load for other callers.
 - **FR-006**: Null, failed, and cancelled provider loads MUST NOT be retained as cache entries or permanent in-flight entries.
 - **FR-007**: The cache MUST enforce a configurable positive capacity using deterministic least-recently-used eviction and MUST have a documented bounded default.
-- **FR-008**: Successful save and delete operations MUST invalidate the cached value so the provider's idempotent-save result remains authoritative. Failed mutations MUST leave the prior cache state unchanged.
+- **FR-008**: Successful save and unconditional-delete operations MUST invalidate the cached value so the provider's idempotent-save result remains authoritative. A guarded delete MUST invalidate only when the provider reports that deletion succeeded. Failed mutations MUST leave the prior cache state unchanged.
 - **FR-009**: List operations MUST delegate to the provider and MUST NOT implicitly populate the cache.
 - **FR-010**: Resident cache entries MUST be limited to the runtime service-provider/shell lifetime so restart and shell replacement begin empty; cancellation/backpressure for provider loads that ignore host lifetime is tracked separately as lifecycle hardening.
 - **FR-011**: Durable-provider composition MUST allow caching to be enabled or disabled and capacity to be configured without replacing source-reference resolution.
@@ -85,6 +85,7 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 - **FR-013**: Existing in-memory and custom store implementations MUST remain usable without mandatory wrapping.
 - **FR-014**: Provider-neutral tests MUST cover save/find/delete, concurrency, cancellation, null/failure retry, eviction, listing, disabled behavior, and telemetry; provider-backed tests MUST cover registration and restart behavior.
 - **FR-015**: The combined spec 091/092 reference lane MUST satisfy first-after-ready p95 ≤750 ms and 200-request warm p95 ≤50 ms without restoring unconditional Groundwork rematerialization.
+- **FR-016**: Root-write lease and deletion-guard acquisition, renewal, release, and cancellation operations MUST delegate directly to the provider so cache decoration preserves the executable-retention safety contract.
 
 ### Key Entities
 
@@ -99,7 +100,7 @@ As an operator, I can enable, disable, size, and observe the cache using bounded
 
 - **SC-001**: Repeated and concurrent lookup of one durable artifact performs exactly one provider load while resident.
 - **SC-002**: The number of resident cache entries never exceeds configured capacity, and least-recently-used behavior is deterministic under test.
-- **SC-003**: Delete, provider restart, null, failure, and cancellation tests never return stale or permanently suppressed results.
+- **SC-003**: Unconditional and guarded delete, provider restart, null, failure, and cancellation tests never return stale or permanently suppressed results; lease and deletion-guard transitions retain provider behavior through the decorator.
 - **SC-004**: Every cache path emits the required bounded telemetry and no artifact/workflow identifier appears as a metric dimension.
 - **SC-005**: On the frozen reference lane, the first workflow request after readiness is ≤750 ms p95 and 200 warm requests are ≤50 ms p95.
 - **SC-006**: Existing runtime, provider, workflow HTTP, shell lifecycle/isolation, and architecture suites pass without removed coverage.

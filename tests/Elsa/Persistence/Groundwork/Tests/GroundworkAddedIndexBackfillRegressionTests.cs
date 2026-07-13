@@ -3,6 +3,7 @@ using Groundwork.Core.Indexing;
 using Groundwork.Core.Intents;
 using Groundwork.Core.Manifests;
 using Groundwork.Core.Queries;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 using Xunit;
@@ -35,35 +36,34 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
         try
         {
             // Phase 1: manifest WITHOUT the by-stimulus index. Write a document carrying a stimulusHash field.
-            await using (var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, ManifestWithoutIndex(), Provider))
-            {
-                await handle.Store.SaveAsync(
-                    new SaveDocumentRequest(Kind, "doc-1", "1.0.0", """{"stimulusHash":"hash-order","name":"pre-existing"}"""),
-                    CancellationToken.None);
-            }
+            var firstStore = await SqliteDocumentStoreFactory.CreateAsync(
+                connectionString, ManifestWithoutIndex(), Provider, DocumentStoreAccess.Global);
+            await firstStore.SaveAsync(
+                new SaveDocumentRequest(Kind, "doc-1", "1.0.0", """{"stimulusHash":"hash-order","name":"pre-existing"}"""),
+                CancellationToken.None);
 
             // Phase 2: reopen the SAME database with a manifest that ADDS the by-stimulus index, then query it.
-            await using (var handle = await SqliteDocumentStoreFactory.CreateAsync(connectionString, ManifestWithIndex(), Provider))
-            {
-                // A freshly written document is always visible through the new index (control).
-                await handle.Store.SaveAsync(
-                    new SaveDocumentRequest(Kind, "doc-2", "1.0.0", """{"stimulusHash":"hash-order","name":"post-index"}"""),
-                    CancellationToken.None);
+            var secondStore = await SqliteDocumentStoreFactory.CreateAsync(
+                connectionString, ManifestWithIndex(), Provider, DocumentStoreAccess.Global);
 
-                var results = await handle.Store.QueryAsync(new DocumentStoreQuery(Kind, ByStimulus, "hash-order"), CancellationToken.None);
-                var ids = results.Select(e => e.Id).OrderBy(x => x).ToArray();
+            // A freshly written document is always visible through the new index (control).
+            await secondStore.SaveAsync(
+                new SaveDocumentRequest(Kind, "doc-2", "1.0.0", """{"stimulusHash":"hash-order","name":"post-index"}"""),
+                CancellationToken.None);
 
-                output.WriteLine($"Documents visible via added index for 'hash-order': [{string.Join(", ", ids)}]");
+            var results = await secondStore.QueryAsync(new DocumentStoreQuery(Kind, ByStimulus, "hash-order"), CancellationToken.None);
+            var ids = results.Select(e => e.Id).OrderBy(x => x).ToArray();
 
-                // REGRESSION GUARD (Groundwork preview.16, PR #21): adding an index across a manifest version
-                // bump now backfills the index's physicalized projection for documents that were written BEFORE
-                // the index was declared. So BOTH the pre-existing document (doc-1, written under the no-index
-                // manifest) AND the post-index document (doc-2) are visible through the new index — no re-save
-                // required. Prior to preview.16 only doc-2 was returned; this test guarded that gap as a probe.
-                // Backfill runs inside the materialization transaction (RelationalMaterializerBase), sharing
-                // single-field index semantics with save-time via RelationalIndexValues.TryGetIndexValue.
-                Assert.Equal(new[] { "doc-1", "doc-2" }, ids);
-            }
+            output.WriteLine($"Documents visible via added index for 'hash-order': [{string.Join(", ", ids)}]");
+
+            // REGRESSION GUARD (Groundwork preview.16, PR #21): adding an index across a manifest version
+            // bump now backfills the index's physicalized projection for documents that were written BEFORE
+            // the index was declared. So BOTH the pre-existing document (doc-1, written under the no-index
+            // manifest) AND the post-index document (doc-2) are visible through the new index — no re-save
+            // required. Prior to preview.16 only doc-2 was returned; this test guarded that gap as a probe.
+            // Backfill runs inside the materialization transaction (RelationalMaterializerBase), sharing
+            // single-field index semantics with save-time via RelationalIndexValues.TryGetIndexValue.
+            Assert.Equal(new[] { "doc-1", "doc-2" }, ids);
         }
         finally
         {
@@ -92,7 +92,7 @@ public sealed class GroundworkAddedIndexBackfillRegressionTests(ITestOutputHelpe
                 StorageIntent.PortableDocument(),
                 LifecyclePolicy.Mutable,
                 IdentityPolicy.StringId(),
-                TenancyPolicy.None,
+                TenancyPolicy.Global,
                 ConcurrencyPolicy.Optimistic(),
                 SerializationPolicy.Json(),
                 indexes,

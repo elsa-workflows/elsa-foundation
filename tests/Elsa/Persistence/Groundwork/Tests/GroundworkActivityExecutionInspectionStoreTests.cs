@@ -6,6 +6,7 @@ using Elsa.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Core.Models;
 using Groundwork.Core.Queries;
 using Groundwork.Core.Transactions;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Documents.UnitOfWork;
 using Xunit;
@@ -117,7 +118,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
         var projection = Projection("wf-1", "ae-1", sequence: 1);
         var commit = new RuntimeCheckpointCommit(
             CommitId: "commit-1",
@@ -362,7 +364,8 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
             new GroundworkBookmarkStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkDurableValueStateStore(documentStore, GroundworkTestSerialization.Serializer),
             new GroundworkIncidentStateStore(documentStore, GroundworkTestSerialization.Serializer),
-            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer));
+            new GroundworkExecutionLivenessStateStore(documentStore, GroundworkTestSerialization.Serializer),
+            PassThroughRootWriteLeaseManager.Instance);
 
     private static RuntimeCheckpointCommit InspectionCommit(ActivityExecutionInspectionProjection projection) =>
         new(
@@ -396,6 +399,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class ThrowingDocumentStore(Exception exception) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => TransactionBoundary.CrossUnitAtomic;
+        public DocumentStoreAccess Access { get; } = DocumentStoreAccess.Global;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             throw exception;
@@ -425,6 +429,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class BeginFailingDocumentStore(InMemoryDocumentStore innerStore, Exception exception) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => innerStore.TransactionBoundary;
+        public DocumentStoreAccess Access => innerStore.Access;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             innerStore.SaveAsync(request, cancellationToken);
@@ -454,6 +459,7 @@ public sealed class GroundworkActivityExecutionInspectionStoreTests
     private sealed class CommitMarkerFailingDocumentStore(InMemoryDocumentStore innerStore) : IDocumentStore
     {
         public TransactionBoundary TransactionBoundary => innerStore.TransactionBoundary;
+        public DocumentStoreAccess Access => innerStore.Access;
 
         public Task<DocumentStoreWriteResult> SaveAsync(SaveDocumentRequest request, CancellationToken cancellationToken = default) =>
             innerStore.SaveAsync(request, cancellationToken);

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
 using Xunit;
@@ -9,6 +10,53 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class WorkflowTriggerIndexerTests
 {
+    [Fact]
+    public async Task PublicationScopedBindingsPreserveIndependentAuthoritiesThatShareAnArtifact()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:shared")]),
+            store);
+        var executable = Executable("artifact-shared", "sha256:v1", TriggerNode("node-event", "Elsa.Event"));
+
+        await indexer.PreparePublicationAsync(executable, "publication-default-v1", "slot-default");
+        await indexer.PreparePublicationAsync(executable, "publication-blue", "slot-blue");
+
+        Assert.Empty(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
+        var defaultBinding = Assert.Single(await store.ListByPublicationAsync("publication-default-v1"));
+        var blueBinding = Assert.Single(await store.ListByPublicationAsync("publication-blue"));
+        Assert.Equal("publication-default-v1", defaultBinding.PublicationId);
+        Assert.Equal("slot-default", defaultBinding.SlotId);
+        Assert.Equal("publication-blue", blueBinding.PublicationId);
+        Assert.Equal("slot-blue", blueBinding.SlotId);
+        Assert.NotEqual(defaultBinding.TriggerBindingId, blueBinding.TriggerBindingId);
+
+        await store.ActivatePublicationAsync("publication-default-v1", replacedPublicationId: null);
+        await store.ActivatePublicationAsync("publication-blue", replacedPublicationId: null);
+
+        Assert.Equal(
+            ["publication-blue", "publication-default-v1"],
+            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+                .Select(binding => binding.PublicationId)
+                .Order(StringComparer.Ordinal));
+
+        await indexer.PreparePublicationAsync(executable, "publication-default-v2", "slot-default");
+        await store.ActivatePublicationAsync("publication-default-v2", replacedPublicationId: "publication-default-v1");
+
+        Assert.Equal(
+            ["publication-blue", "publication-default-v2"],
+            (await store.ListByStimulusAsync("Event", "sha256:event:shared"))
+                .Select(binding => binding.PublicationId)
+                .Order(StringComparer.Ordinal));
+
+        await store.DeleteByPublicationAsync("publication-default-v1");
+        await store.DeleteByPublicationAsync("publication-default-v2");
+
+        var survivingBinding = Assert.Single(await store.ListByStimulusAsync("Event", "sha256:event:shared"));
+        Assert.Equal("publication-blue", survivingBinding.PublicationId);
+        Assert.Equal("slot-blue", survivingBinding.SlotId);
+    }
+
     [Fact]
     public async Task Index_WritesExtractedBindings()
     {
@@ -127,6 +175,56 @@ public sealed class WorkflowTriggerIndexerTests
         Assert.Equal("node-old", binding.ExecutableNodeId);
     }
 
+    [Fact]
+    public async Task Index_InvalidLaterNode_LeavesEverySeededBindingUntouched()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(StaleBinding("artifact-1", "node-old-1"));
+        await store.SaveAsync(StaleBinding("artifact-1", "node-old-2"));
+        var indexer = new WorkflowTriggerIndexer(
+            new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:new")]),
+            store);
+        var executable = Executable(
+            "artifact-1",
+            "sha256:v2",
+            ActionNode(
+                "root",
+                "Elsa.Sequence",
+                TriggerNode("node-invalid", "Elsa.Unknown"),
+                TriggerNode("node-valid", "Elsa.Event")));
+
+        var exception = await Assert.ThrowsAsync<WorkflowTriggerPreflightException>(() => indexer.IndexAsync(executable).AsTask());
+
+        Assert.Equal("node-invalid", exception.ExecutableNodeId);
+        var bindings = await store.ListByArtifactAsync("artifact-1");
+        Assert.Equal(["node-old-1", "node-old-2"], bindings.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Index_UsesCompletedPreflightBindingSet_AndValidatorFailurePreservesSeededBindings()
+    {
+        var store = new InMemoryWorkflowTriggerBindingStore();
+        await store.SaveAsync(StaleBinding("artifact-1", "node-old-1"));
+        await store.SaveAsync(StaleBinding("artifact-1", "node-old-2"));
+        var outcome = PreflightOutcome(
+            Binding("node-new-1", "sha256:new:1"),
+            Binding("node-new-2", "sha256:new:2"));
+        var extractor = new PreflightOnlyExtractor(outcome);
+        var validator = new RecordingThrowingValidator();
+        var indexer = new WorkflowTriggerIndexer(extractor, store, validators: [validator]);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            indexer.IndexAsync(Executable("artifact-1", "sha256:v2", TriggerNode("node-new-1", "Elsa.Event"))).AsTask());
+
+        Assert.Equal("validator boom", exception.Message);
+        var validated = Assert.Single(validator.Snapshots);
+        Assert.Equal(["node-new-1", "node-new-2"], validated.Bindings.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
+        var stored = await store.ListByArtifactAsync("artifact-1");
+        Assert.Equal(["node-old-1", "node-old-2"], stored.Select(x => x.ExecutableNodeId).Order(StringComparer.Ordinal));
+        Assert.Equal(1, extractor.EvaluateCallCount);
+        Assert.Equal(0, extractor.ExtractCallCount);
+    }
+
     private static WorkflowExecutable Executable(string artifactId, string hash, ExecutableNode root) =>
         new(
             identity: new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", hash),
@@ -149,9 +247,47 @@ public sealed class WorkflowTriggerIndexerTests
             Metadata: new Dictionary<string, string>(),
             CreatedAt: DateTimeOffset.UnixEpoch);
 
+    private static WorkflowTriggerBinding Binding(string nodeId, string stimulusHash) =>
+        new(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId("artifact-1", nodeId, stimulusHash),
+            ArtifactId: "artifact-1",
+            DefinitionId: "definition-1",
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:v2",
+            ExecutableNodeId: nodeId,
+            StimulusType: "Event",
+            StimulusHash: stimulusHash,
+            CorrelationScope: null,
+            Metadata: new Dictionary<string, string>(),
+            CreatedAt: DateTimeOffset.UnixEpoch);
+
+    private static WorkflowTriggerPreflightOutcome PreflightOutcome(params WorkflowTriggerBinding[] bindings)
+    {
+        var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:v2");
+        var nodeOutcomes = bindings
+            .GroupBy(x => x.ExecutableNodeId, StringComparer.Ordinal)
+            .Select(x => new WorkflowTriggerNodePreflightOutcome(
+                x.Key,
+                "Elsa.Event",
+                "provider.event",
+                WorkflowTriggerPreflightStatus.Registered,
+                x.ToArray()))
+            .ToArray();
+        return new WorkflowTriggerPreflightOutcome(identity, nodeOutcomes);
+    }
+
     private static ExecutableNode TriggerNode(string nodeId, string activityType)
+        => Node(nodeId, activityType, TriggerNodeMetadata.TriggerExecutionType);
+
+    private static ExecutableNode ActionNode(string nodeId, string activityType, params ExecutableNode[] children)
+        => Node(nodeId, activityType, "Action", children);
+
+    private static ExecutableNode Node(string nodeId, string activityType, string executionType, params ExecutableNode[] children)
     {
         using var document = JsonDocument.Parse("""{"type":"test"}""");
+        var childSlots = children.Length == 0
+            ? Array.Empty<ExecutableChildSlot>()
+            : [new ExecutableChildSlot("Body", children)];
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
@@ -161,7 +297,8 @@ public sealed class WorkflowTriggerIndexerTests
             descriptorPayload: document.RootElement.Clone(),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
-            metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = TriggerNodeMetadata.TriggerExecutionType });
+            metadata: new Dictionary<string, string> { [TriggerNodeMetadata.ExecutionTypeKey] = executionType },
+            childSlots: childSlots);
     }
 
     private sealed class FakeProvider(string activityType, string stimulusType, string stimulusHash) : IActivityTriggerStimulusProvider
@@ -206,5 +343,34 @@ public sealed class WorkflowTriggerIndexerTests
     {
         public ValueTask ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("validator boom");
+    }
+
+    private sealed class RecordingThrowingValidator : IWorkflowTriggerIndexValidator
+    {
+        public List<WorkflowTriggerIndexSnapshot> Snapshots { get; } = new();
+
+        public ValueTask ValidateAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            Snapshots.Add(snapshot);
+            throw new InvalidOperationException("validator boom");
+        }
+    }
+
+    private sealed class PreflightOnlyExtractor(WorkflowTriggerPreflightOutcome outcome) : IWorkflowTriggerBindingExtractor
+    {
+        public int EvaluateCallCount { get; private set; }
+        public int ExtractCallCount { get; private set; }
+
+        public WorkflowTriggerPreflightOutcome Evaluate(WorkflowExecutable executable)
+        {
+            EvaluateCallCount++;
+            return outcome;
+        }
+
+        public IReadOnlyCollection<WorkflowTriggerBinding> Extract(WorkflowExecutable executable)
+        {
+            ExtractCallCount++;
+            throw new InvalidOperationException("The indexer used the legacy extraction path instead of the completed preflight outcome.");
+        }
     }
 }

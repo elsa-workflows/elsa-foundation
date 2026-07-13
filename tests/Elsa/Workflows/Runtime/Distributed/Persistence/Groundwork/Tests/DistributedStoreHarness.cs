@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork;
 using Elsa.Workflows.Runtime.Distributed.Persistence.Groundwork.Stores;
 using Elsa.Workflows.Runtime.Distributed.Services;
 using Groundwork.Core.Capabilities;
+using Groundwork.Documents.Scoping;
 using Groundwork.Documents.Store;
 using Groundwork.Sqlite.Documents;
 
@@ -37,9 +38,13 @@ internal sealed class DistributedStoreHarness(
             case GroundworkMemory:
                 return FromDocumentStore(new InMemoryDocumentStore(DistributedGroundworkStorageManifest.Create()));
             case GroundworkSqlite:
-                var handle = await SqliteDocumentStoreFactory.CreateAsync(
-                    "Data Source=:memory:", DistributedGroundworkStorageManifest.Create(), SqliteProvider);
-                return FromDocumentStore(handle.Store, handle);
+                var database = new TemporarySqliteDatabase();
+                var store = await SqliteDocumentStoreFactory.CreateAsync(
+                    database.ConnectionString,
+                    DistributedGroundworkStorageManifest.Create(),
+                    SqliteProvider,
+                    DocumentStoreAccess.Global);
+                return FromDocumentStore(store, database);
             default:
                 throw new ArgumentOutOfRangeException(nameof(provider), provider, null);
         }
@@ -71,5 +76,18 @@ internal sealed class DistributedStoreHarness(
     {
         if (owner is not null)
             await owner.DisposeAsync();
+    }
+
+    private sealed class TemporarySqliteDatabase : IAsyncDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"elsa-distributed-{Guid.NewGuid():N}.db");
+
+        public string ConnectionString => $"Data Source={_path}";
+
+        public ValueTask DisposeAsync()
+        {
+            File.Delete(_path);
+            return ValueTask.CompletedTask;
+        }
     }
 }
