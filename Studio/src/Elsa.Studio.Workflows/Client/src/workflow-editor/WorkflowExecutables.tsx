@@ -425,6 +425,7 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
                 <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
                 <button
                   type="button"
+                  aria-label={`Run executable ${artifact.artifactId}`}
                   disabled={Boolean(executableRun.runningArtifactId)}
                   onClick={() => void executableRun.request(artifact)}
                 >
