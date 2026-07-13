@@ -2,6 +2,8 @@ using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -26,11 +28,17 @@ public static class SqliteGroundworkDocumentStoreRegistration
     {
         services.RemoveAll<IDocumentStore>();
         services.AddSingleton<GroundworkDocumentStoreHolder>();
+        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
+        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new SqliteWorkflowExecutionStatePageQuery(
+            connectionString,
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
         services.AddSingleton(sp => new SqliteGroundworkDocumentStoreInitializer(
             connectionString,
             manifest,
             provider,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>()));
         services.AddHostedService(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<SqliteGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
@@ -41,7 +49,6 @@ public static class SqliteGroundworkDocumentStoreRegistration
             IsExplicit: true,
             Source: $"{nameof(SqliteGroundworkDocumentStoreRegistration)}.{nameof(AddSqliteGroundworkDocumentStore)}"));
         services.AddSingleton<IDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-
         return services;
     }
 }

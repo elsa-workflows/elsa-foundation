@@ -41,6 +41,203 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.DoesNotContain(dependencies, dependency => dependency?.Contains("Design", StringComparison.Ordinal) == true);
     }
 
+    [Fact]
+    public void Source_kind_is_canonical_and_source_type_is_a_version_one_compatibility_alias()
+    {
+        var responseType = typeof(Models.ExecutableSourceReferenceView);
+        var canonical = responseType.GetProperty(nameof(Models.ExecutableSourceReferenceView.SourceKind));
+        var compatibilityAlias = responseType.GetProperty("SourceType");
+
+        Assert.NotNull(canonical);
+        Assert.NotNull(compatibilityAlias);
+        var versionOneConstructor = Assert.Single(
+            responseType.GetConstructors(),
+            constructor => constructor.GetParameters().Any(parameter => parameter.Name == "SourceType"));
+        var versionOneParameters = versionOneConstructor.GetParameters();
+        Assert.Equal(
+            [
+                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
+                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
+                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
+            ],
+            versionOneParameters.Select(parameter => parameter.Name));
+        Assert.Equal(
+            [
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
+                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
+            ],
+            versionOneParameters.Select(parameter => parameter.ParameterType));
+        Assert.NotNull(compatibilityAlias!.SetMethod);
+        Assert.True(compatibilityAlias.SetMethod!.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(System.Runtime.CompilerServices.IsExternalInit)));
+        var obsolete = Assert.Single(compatibilityAlias!.GetCustomAttributes<ObsoleteAttribute>());
+        Assert.False(obsolete.IsError);
+        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
+
+        var view = Models.ExecutableSourceReferenceView.From(
+            Reference("reference-contract", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
+            _now);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.Equal("WorkflowDefinitionVersion", json.GetProperty("sourceKind").GetString());
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_constructor_promotes_source_type_when_source_kind_is_absent()
+    {
+        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
+
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+#pragma warning disable CS0618 // The obsolete property is the compatibility contract under test.
+        Assert.Equal(view.SourceKind, view.SourceType);
+#pragma warning restore CS0618
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_source_type_initializer_promotes_the_canonical_source_kind()
+    {
+#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
+        var view = new Models.ExecutableSourceReferenceView(
+            SourceReferenceId: "reference-init",
+            ArtifactId: "artifact-init",
+            Scope: "Published",
+            SourceKind: null,
+            SourceId: "definition-version-init",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-init",
+            DefinitionVersionId: "definition-version-init",
+            ArtifactVersion: "1.0.0",
+            PublicationId: null,
+            SlotId: null,
+            CreatedAt: _now,
+            PublishedAt: _now,
+            ExpiresAt: null,
+            DeletedAt: null,
+            DeletedReason: null,
+            Live: true)
+        {
+            SourceType = "WorkflowDefinitionVersion"
+        };
+#pragma warning restore CS0618
+
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_alias_rejects_values_that_diverge_from_source_kind()
+    {
+        Assert.Throws<ArgumentException>(() => CreateVersionOneView("LegacySource", "CanonicalSource"));
+        var canonical = Models.ExecutableSourceReferenceView.From(
+            Reference("reference-divergent", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
+            _now);
+
+#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
+        Assert.Throws<ArgumentException>(() => canonical with { SourceType = "LegacySource" });
+#pragma warning restore CS0618
+    }
+
+    [Fact]
+    public void Version_one_json_promotes_source_type_when_source_kind_is_absent()
+    {
+        const string payload = """
+                               {
+                                 "sourceReferenceId": "reference-json-v1",
+                                 "artifactId": "artifact-json-v1",
+                                 "scope": "Published",
+                                 "sourceType": "WorkflowDefinitionVersion",
+                                 "definitionId": "definition-json-v1",
+                                 "definitionVersionId": "definition-version-json-v1",
+                                 "artifactVersion": "1.0.0",
+                                 "createdAt": "2026-07-13T12:00:00+00:00",
+                                 "live": true
+                               }
+                               """;
+
+        var view = JsonSerializer.Deserialize<Models.ExecutableSourceReferenceView>(
+            payload,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(view);
+        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
+        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
+    }
+
+    [Fact]
+    public void Version_one_deconstruction_preserves_the_exact_contract_and_equal_aliases()
+    {
+        var responseType = typeof(Models.ExecutableSourceReferenceView);
+        var deconstruct = Assert.Single(
+            responseType.GetMethods(BindingFlags.Public | BindingFlags.Instance),
+            method => method.Name == "Deconstruct" && method.GetParameters().Length == 18);
+        var parameters = deconstruct.GetParameters();
+        Assert.Equal(
+            [
+                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
+                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
+                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
+            ],
+            parameters.Select(parameter => parameter.Name));
+        Assert.Equal(
+            [
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
+                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
+            ],
+            parameters.Select(parameter => parameter.ParameterType.GetElementType()));
+        Assert.All(parameters, parameter => Assert.True(parameter.IsOut));
+        var obsolete = Assert.Single(deconstruct.GetCustomAttributes<ObsoleteAttribute>());
+        Assert.False(obsolete.IsError);
+        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
+
+        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
+#pragma warning disable CS0618 // The obsolete v1 deconstructor is the source compatibility contract under test.
+        var (
+            sourceReferenceId,
+            artifactId,
+            scope,
+            sourceType,
+            sourceKind,
+            sourceId,
+            sourceVersion,
+            definitionId,
+            definitionVersionId,
+            artifactVersion,
+            publicationId,
+            slotId,
+            createdAt,
+            publishedAt,
+            expiresAt,
+            deletedAt,
+            deletedReason,
+            live) = view;
+#pragma warning restore CS0618
+
+        Assert.Equal("reference-v1", sourceReferenceId);
+        Assert.Equal("artifact-v1", artifactId);
+        Assert.Equal("Published", scope);
+        Assert.Equal("WorkflowDefinitionVersion", sourceType);
+        Assert.Equal(sourceKind, sourceType);
+        Assert.Equal("definition-version-v1", sourceId);
+        Assert.Equal("1.0.0", sourceVersion);
+        Assert.Equal("definition-v1", definitionId);
+        Assert.Equal("definition-version-v1", definitionVersionId);
+        Assert.Equal("1.0.0", artifactVersion);
+        Assert.Null(publicationId);
+        Assert.Null(slotId);
+        Assert.Equal(_now, createdAt);
+        Assert.Equal(_now, publishedAt);
+        Assert.Null(expiresAt);
+        Assert.Null(deletedAt);
+        Assert.Null(deletedReason);
+        Assert.True(live);
+    }
+
     [Theory]
     [InlineData("runtime/workflows/executables")]
     [InlineData("runtime/workflows/executables/{artifactId}")]
@@ -274,6 +471,31 @@ public sealed class WorkflowExecutableInspectorTests
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
             new Dictionary<string, string>());
+
+    private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
+    {
+#pragma warning disable CS0618 // The obsolete v1 constructor is the compatibility contract under test.
+        return new Models.ExecutableSourceReferenceView(
+            SourceReferenceId: "reference-v1",
+            ArtifactId: "artifact-v1",
+            Scope: "Published",
+            SourceType: sourceType,
+            SourceKind: sourceKind,
+            SourceId: "definition-version-v1",
+            SourceVersion: "1.0.0",
+            DefinitionId: "definition-v1",
+            DefinitionVersionId: "definition-version-v1",
+            ArtifactVersion: "1.0.0",
+            PublicationId: null,
+            SlotId: null,
+            CreatedAt: _now,
+            PublishedAt: _now,
+            ExpiresAt: null,
+            DeletedAt: null,
+            DeletedReason: null,
+            Live: true);
+#pragma warning restore CS0618
+    }
 
     private Task<WorkflowExecutable> ActivateAsync(params WorkflowExecutableSourceReference[] references) =>
         ActivateAsync(null, references);

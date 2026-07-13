@@ -2,6 +2,8 @@ using CShells.Lifecycle;
 using Groundwork.Core.Capabilities;
 using Groundwork.Core.Manifests;
 using Groundwork.Documents.Store;
+using Elsa.Persistence.Groundwork.Querying;
+using Elsa.Persistence.Groundwork.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -26,11 +28,17 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
     {
         services.RemoveAll<IDocumentStore>();
         services.AddSingleton<GroundworkDocumentStoreHolder>();
+        services.RemoveAll<IGroundworkWorkflowExecutionStatePageQuery>();
+        services.AddSingleton<IGroundworkWorkflowExecutionStatePageQuery>(sp => new PostgreSqlWorkflowExecutionStatePageQuery(
+            connectionString,
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkRuntimeDocumentSerializer>()));
         services.AddSingleton(sp => new PostgreSqlGroundworkDocumentStoreInitializer(
             connectionString,
             manifest,
             provider,
-            sp.GetRequiredService<GroundworkDocumentStoreHolder>()));
+            sp.GetRequiredService<GroundworkDocumentStoreHolder>(),
+            sp.GetRequiredService<IGroundworkWorkflowExecutionStatePageQuery>()));
         services.AddHostedService(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<PostgreSqlGroundworkDocumentStoreInitializer>());
         services.AddSingleton(new ShellInitializerRegistration(
@@ -41,7 +49,6 @@ public static class PostgreSqlGroundworkDocumentStoreRegistration
             IsExplicit: true,
             Source: $"{nameof(PostgreSqlGroundworkDocumentStoreRegistration)}.{nameof(AddPostgreSqlGroundworkDocumentStore)}"));
         services.AddSingleton<IDocumentStore>(sp => sp.GetRequiredService<GroundworkDocumentStoreHolder>().Store);
-
         return services;
     }
 }

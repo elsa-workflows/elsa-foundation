@@ -1,6 +1,11 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Elsa.Api.FastEndpoints.Constants;
+using Elsa.Expressions.Api.Handlers;
+using Elsa.Expressions.Api.Models;
+using Elsa.Expressions.Api.Requests;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Models;
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -33,6 +38,40 @@ public sealed class ExpressionDescriptorEndpointTests
 
         AssertProperties(item, "Type", "DisplayName", "Description", "EditingMode");
         Assert.Equal(new[] { "Literal", "Text", "Structured", "Reference" }, Enum.GetNames(item.GetProperty("EditingMode")!.PropertyType));
+    }
+
+    [Fact]
+    public async Task Expression_descriptor_response_includes_intrinsic_authoring_modes_without_runtime_descriptors()
+    {
+        var handler = new ListExpressionDescriptorsRequestHandler(new StubExpressionDescriptorRegistry([]));
+
+        var response = await handler.Handle(new ListExpressionDescriptors(), CancellationToken.None);
+
+        Assert.Collection(
+            response.Items,
+            item => Assert.Equal(new ExpressionDescriptorView("Input", "Input", null, ExpressionEditingModeView.Reference), item),
+            item => Assert.Equal(new ExpressionDescriptorView("Literal", "Literal", null, ExpressionEditingModeView.Literal), item),
+            item => Assert.Equal(new ExpressionDescriptorView("Object", "Object", null, ExpressionEditingModeView.Structured), item));
+    }
+
+    [Fact]
+    public async Task Intrinsic_authoring_modes_win_contributed_type_collisions_and_each_type_is_emitted_once()
+    {
+        var descriptors = new IExpressionDescriptor[]
+        {
+            Descriptor("Literal", "Contributed Literal", ExpressionEditingMode.Reference),
+            Descriptor("Custom", "Custom first", ExpressionEditingMode.Text),
+            Descriptor("Custom", "Custom second", ExpressionEditingMode.Reference)
+        };
+        var handler = new ListExpressionDescriptorsRequestHandler(new StubExpressionDescriptorRegistry(descriptors));
+
+        var response = await handler.Handle(new ListExpressionDescriptors(), CancellationToken.None);
+
+        Assert.Equal(new[] { "Custom", "Input", "Literal", "Object" }, response.Items.Select(x => x.Type));
+        Assert.Equal("Custom first", response.Items.Single(x => x.Type == "Custom").DisplayName);
+        Assert.Equal(
+            new ExpressionDescriptorView("Literal", "Literal", null, ExpressionEditingModeView.Literal),
+            response.Items.Single(x => x.Type == "Literal"));
     }
 
     [Fact]
@@ -122,8 +161,26 @@ public sealed class ExpressionDescriptorEndpointTests
     private static void AssertProperties(Type type, params string[] names) =>
         Assert.All(names, name => Assert.NotNull(type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance)));
 
+    private static ExpressionDescriptor Descriptor(string type, string displayName, ExpressionEditingMode editingMode) =>
+        new(type, editingMode) { DisplayName = displayName };
+
     private class NoopProxy : DispatchProxy
     {
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => throw new NotSupportedException();
+    }
+
+    private sealed class StubExpressionDescriptorRegistry(IEnumerable<IExpressionDescriptor> descriptors) : IExpressionDescriptorRegistry
+    {
+        private readonly List<IExpressionDescriptor> _descriptors = [.. descriptors];
+
+        public void Add(IExpressionDescriptor descriptor) => _descriptors.Add(descriptor);
+
+        public void AddRange(IEnumerable<IExpressionDescriptor> descriptors) => _descriptors.AddRange(descriptors);
+
+        public IEnumerable<IExpressionDescriptor> ListAll() => _descriptors;
+
+        public IExpressionDescriptor? Find(Func<IExpressionDescriptor, bool> predicate) => _descriptors.FirstOrDefault(predicate);
+
+        public IExpressionDescriptor? Find(string type) => _descriptors.FirstOrDefault(x => x.TypeName == type);
     }
 }

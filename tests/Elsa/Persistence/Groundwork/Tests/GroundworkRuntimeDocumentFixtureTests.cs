@@ -17,9 +17,9 @@ namespace Elsa.Persistence.Groundwork.Tests;
 public sealed class GroundworkRuntimeDocumentFixtureTests
 {
     [Fact]
-    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v2() =>
+    public void Workflow_execution_state_shape_is_explicitly_versioned_at_v3() =>
         Assert.Equal(
-            2,
+            3,
             Elsa.Persistence.Groundwork.Serialization.ElsaRuntimeDocumentVersions.CurrentFor(
                 ElsaRuntimeStorageManifest.WorkflowExecutionStateDocumentKind));
 
