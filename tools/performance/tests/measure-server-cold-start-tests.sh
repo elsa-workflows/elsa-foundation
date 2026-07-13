@@ -63,12 +63,13 @@ with socket.socket() as sock:
 PY
 }
 
-server_dll="$temporary_directory/Elsa.Server.dll"
+server_output_dir="$temporary_directory/server-output"
+server_dll="$server_output_dir/Elsa.Server.dll"
 content_root="$temporary_directory/content-root"
 baseline_dir="$temporary_directory/baseline"
 fake_bin="$temporary_directory/bin"
 fake_server="$temporary_directory/fake-server.py"
-mkdir -p "$content_root" "$baseline_dir" "$fake_bin"
+mkdir -p "$server_output_dir" "$content_root" "$baseline_dir" "$fake_bin"
 : >"$server_dll"
 printf '{}\n' >"$content_root/appsettings.json"
 printf '{}\n' >"$content_root/shells.json"
@@ -77,6 +78,20 @@ sqlite3 "$baseline_dir/elsa-groundwork-runtime.db" 'VACUUM;'
 cat >"$fake_server" <<'PY'
 import http.server
 import os
+import subprocess
+import sys
+
+
+if os.environ.get("FAKE_STUBBORN_CHILD_PID_FILE"):
+    subprocess.Popen([
+        sys.executable,
+        "-c",
+        "import os,pathlib,signal,sys,time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); "
+        "time.sleep(300)",
+        os.environ["FAKE_STUBBORN_CHILD_PID_FILE"],
+    ])
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -218,6 +233,91 @@ run_case "existing artifacts directory" 2 'already exists|choose a new path' \
 
 export PATH="$fake_bin:$PATH"
 export FAKE_SERVER_SCRIPT="$fake_server"
+
+hash_a_artifacts="$temporary_directory/hash-a-artifacts"
+hash_b_artifacts="$temporary_directory/hash-b-artifacts"
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "successful report provenance" 0 'Cold-start report' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$hash_a_artifacts" --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" \
+  --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
+  --expected-status 200 --expected-body 'Hello World!' --boots 1 \
+  --startup-timeout-seconds 7 --shutdown-timeout-seconds 3
+printf 'sibling-output-v2\n' >"$server_output_dir/Sibling.Output.dll"
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "output closure hash changes with sibling" 0 'Cold-start report' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$hash_b_artifacts" --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" \
+  --readiness-path /health/ready --workflow-path /workflows/http/hello-world \
+  --expected-status 200 --expected-body 'Hello World!' --boots 1 \
+  --startup-timeout-seconds 7 --shutdown-timeout-seconds 3
+if ! python3 - "$hash_a_artifacts/report.json" "$hash_b_artifacts/report.json" <<'PY'
+import json, pathlib, sys
+first, second = (json.loads(pathlib.Path(path).read_text()) for path in sys.argv[1:])
+assert first["provenance"]["serverOutputSha256"] != second["provenance"]["serverOutputSha256"]
+assert second["request"]["startupTimeoutSeconds"] == 7
+assert second["request"]["shutdownTimeoutSeconds"] == 3
+PY
+then
+  printf 'FAIL: successful report did not preserve output-closure hash and timeout provenance.\n' >&2
+  failures=$((failures + 1))
+fi
+
+launch_marker="$temporary_directory/pre-session.marker"
+launch_output="$temporary_directory/pre-session.output"
+pre_session_failures="$failures"
+export _ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS=10
+export _ELSA_PERF_TEST_PRE_SESSION_MARKER="$launch_marker"
+export FAKE_SERVER_PORT="$(free_port)"
+set +e
+bash "$subject" \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --artifacts-dir "$temporary_directory/pre-session-artifacts" \
+  --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" --readiness-path /health/ready \
+  --workflow-path /workflows/http/hello-world --expected-status 200 --expected-body 'Hello World!' --boots 1 \
+  --startup-timeout-seconds 1 --shutdown-timeout-seconds 1 >"$launch_output" 2>&1 &
+launch_harness_pid=$!
+set -e
+for _ in {1..200}; do
+  [[ -f "$launch_marker" ]] && break
+  sleep 0.01
+done
+if [[ ! -f "$launch_marker" ]]; then
+  printf 'FAIL: pre-session launch fixture did not publish its PID.\n' >&2
+  kill -KILL "$launch_harness_pid" 2>/dev/null || true
+  wait "$launch_harness_pid" 2>/dev/null || true
+  failures=$((failures + 1))
+else
+  launch_child_pid="$(cat "$launch_marker")"
+  kill -TERM "$launch_harness_pid" 2>/dev/null || true
+  for _ in {1..300}; do
+    kill -0 "$launch_harness_pid" 2>/dev/null || break
+    sleep 0.01
+  done
+  if kill -0 "$launch_harness_pid" 2>/dev/null; then
+    printf 'FAIL: benchmark did not terminate during the pre-session launch window.\n' >&2
+    kill -KILL "$launch_harness_pid" 2>/dev/null || true
+    failures=$((failures + 1))
+  fi
+  set +e
+  wait "$launch_harness_pid"
+  launch_status=$?
+  set -e
+  if [[ "$launch_status" -ne 143 ]]; then
+    printf 'FAIL: pre-session SIGTERM returned %s; expected 143.\n' "$launch_status" >&2
+    failures=$((failures + 1))
+  fi
+  if kill -0 "$launch_child_pid" 2>/dev/null; then
+    printf 'FAIL: benchmark leaked pre-session child PID %s.\n' "$launch_child_pid" >&2
+    kill -KILL "$launch_child_pid" 2>/dev/null || true
+    failures=$((failures + 1))
+  fi
+fi
+unset _ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS _ELSA_PERF_TEST_PRE_SESSION_MARKER
+if [[ "$failures" -eq "$pre_session_failures" ]]; then
+  printf 'PASS: pre-session SIGTERM is bounded and leak-free\n'
+fi
+
 export FAKE_SERVER_PORT="$(free_port)"
 run_case "ready budget failure" 1 'p95.*exceeds.*budget|budget.*failed' \
   --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
@@ -237,6 +337,33 @@ run_case "malformed readiness body" 1 'malformed or unexpected readiness' \
   --output-markdown "$temporary_directory/readiness-failure.md"
 unset FAKE_READY_BODY
 
+stubborn_child_pid_file="$temporary_directory/stubborn-child.pid"
+export FAKE_STUBBORN_CHILD_PID_FILE="$stubborn_child_pid_file"
+export FAKE_SERVER_PORT="$(free_port)"
+run_case "stubborn descendant is killed" 1 'process group.*did not shut down cleanly|shutdown_failed' \
+  --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
+  --base-url "http://127.0.0.1:$FAKE_SERVER_PORT" --readiness-path /health/ready \
+  --workflow-path /workflows/http/hello-world --expected-status 200 --expected-body 'Hello World!' --boots 1 \
+  --shutdown-timeout-seconds 1 \
+  --output-json "$temporary_directory/stubborn-child-failure.json" \
+  --output-markdown "$temporary_directory/stubborn-child-failure.md"
+unset FAKE_STUBBORN_CHILD_PID_FILE
+if [[ ! -f "$stubborn_child_pid_file" ]]; then
+  printf 'FAIL: stubborn descendant fixture did not publish its PID.\n' >&2
+  failures=$((failures + 1))
+else
+  stubborn_child_pid="$(cat "$stubborn_child_pid_file")"
+  for _ in {1..100}; do
+    kill -0 "$stubborn_child_pid" 2>/dev/null || break
+    sleep 0.01
+  done
+  if kill -0 "$stubborn_child_pid" 2>/dev/null; then
+    printf 'FAIL: benchmark leaked stubborn descendant PID %s.\n' "$stubborn_child_pid" >&2
+    kill -KILL "$stubborn_child_pid" 2>/dev/null || true
+    failures=$((failures + 1))
+  fi
+fi
+
 export FAKE_SERVER_PORT="$(free_port)"
 run_case "trailing newline body mismatch" 1 'workflow validation failed' \
   --server-dll "$server_dll" --content-root "$content_root" --baseline-dir "$baseline_dir" \
@@ -249,6 +376,9 @@ report = json.loads(pathlib.Path(sys.argv[1]).read_text())
 sample = report["boots"][0]
 assert sample["status"] == "workflow_validation_failed"
 assert pathlib.Path(sample["logPath"]).is_file()
+assert "serverOutputSha256" in report["provenance"]
+assert report["request"]["startupTimeoutSeconds"] == 120
+assert report["request"]["shutdownTimeoutSeconds"] == 30
 PY
 then
   printf 'FAIL: forced failure report did not retain the stable status and log path.\n' >&2

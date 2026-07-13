@@ -182,19 +182,52 @@ results_tsv="$artifacts_dir/boots.tsv"
 printf 'boot\tlistening_ms\tactivation_ms\tshell_ready_ms\tfirst_request_ms\tfirst_success_ms\tshutdown_ms\tstatus\tlog_path\n' >"$results_tsv"
 
 server_pid=""
-cleanup_process() {
-  if [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null; then
-    kill -TERM -- "-$server_pid" 2>/dev/null || true
-    for ((attempt=0; attempt<shutdown_timeout_seconds*20; attempt++)); do
-      kill -0 "$server_pid" 2>/dev/null || break
-      sleep 0.1
-    done
-    kill -KILL -- "-$server_pid" 2>/dev/null || true
-    wait "$server_pid" 2>/dev/null || true
-  fi
-  server_pid=""
+server_session_ready=false
+process_group_alive() {
+  [[ -n "$server_pid" ]] && kill -0 -- "-$server_pid" 2>/dev/null
 }
-trap cleanup_process EXIT INT TERM
+
+process_leader_alive() {
+  [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null
+}
+
+server_process_alive() {
+  if [[ "$server_session_ready" == true ]]; then
+    process_group_alive
+  else
+    process_leader_alive
+  fi
+}
+
+signal_server_process() {
+  local signal="$1"
+  [[ -n "$server_pid" ]] || return 0
+
+  if [[ "$server_session_ready" == true ]]; then
+    kill "-$signal" -- "-$server_pid" 2>/dev/null || true
+  else
+    kill "-$signal" "$server_pid" 2>/dev/null || true
+  fi
+}
+
+cleanup_process() {
+  if server_process_alive; then
+    signal_server_process TERM
+    for ((attempt=0; attempt<shutdown_timeout_seconds*20; attempt++)); do
+      server_process_alive || break
+      sleep 0.05
+    done
+    if server_process_alive; then
+      signal_server_process KILL
+    fi
+  fi
+  [[ -n "$server_pid" ]] && wait "$server_pid" 2>/dev/null || true
+  server_pid=""
+  server_session_ready=false
+}
+trap cleanup_process EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 now_ns() {
   python3 - <<'PY'
@@ -285,31 +318,38 @@ machine="$(uname -a)"
 repository_head="$(git -C "$(dirname "${BASH_SOURCE[0]}")/../.." rev-parse HEAD 2>/dev/null || printf unknown)"
 baseline_hash="$(hash_paths "$baseline_dir")"
 content_hash="$(hash_paths "$content_root")"
-server_hash_inputs=("$server_dll")
-server_stem="${server_dll%.dll}"
-for suffix in .deps.json .runtimeconfig.json; do
-  [[ -f "$server_stem$suffix" ]] && server_hash_inputs+=("$server_stem$suffix")
-done
-server_hash="$(hash_paths "${server_hash_inputs[@]}")"
+server_output_dir="$(dirname "$server_dll")"
+server_hash="$(hash_paths "$server_output_dir")"
 expected_body_file="$artifacts_dir/expected-body"
 printf '%s' "$expected_body" >"$expected_body_file"
 
 fail_boot() {
   local boot="$1" category="$2" message="$3" log_file="$4"
   python3 - "$output_json" "$output_markdown" "$repository_head" "$dotnet_version" "$server_hash" \
-    "$content_hash" "$baseline_hash" "$boot" "$category" "$log_file" "$message" <<'PY'
+    "$content_hash" "$baseline_hash" "$boot" "$category" "$log_file" "$message" "$boots" \
+    "$base_url" "$liveness_path" "$readiness_path" "$workflow_path" "$startup_timeout_seconds" \
+    "$shutdown_timeout_seconds" <<'PY'
 import datetime, json, pathlib, sys
 
-json_path, markdown_path, repository_head, dotnet, server_hash, content_hash, baseline_hash, boot, category, log_path, message = sys.argv[1:]
+json_path, markdown_path, repository_head, dotnet, server_hash, content_hash, baseline_hash, boot, category, log_path, message, requested_boots, base_url, liveness_path, readiness_path, workflow_path, startup_timeout, shutdown_timeout = sys.argv[1:]
 report = {
     "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     "provenance": {
         "repositoryHeadAtMeasurement": repository_head,
         "dotnetVersion": dotnet,
-        "serverSha256": server_hash,
+        "serverOutputSha256": server_hash,
         "contentSha256": content_hash,
         "baselineSha256": baseline_hash,
         "environment": "Production",
+    },
+    "request": {
+        "baseUrl": base_url,
+        "livenessPath": liveness_path,
+        "readinessPath": readiness_path,
+        "workflowPath": workflow_path,
+        "boots": int(requested_boots),
+        "startupTimeoutSeconds": int(startup_timeout),
+        "shutdownTimeoutSeconds": int(shutdown_timeout),
     },
     "boots": [{"boot": int(boot), "status": category, "logPath": log_path}],
     "aggregates": {},
@@ -318,7 +358,8 @@ pathlib.Path(json_path).write_text(json.dumps(report, indent=2) + "\n")
 pathlib.Path(markdown_path).write_text(
     "# Elsa server cold-start report\n\n"
     f"Boot {boot} failed with `{category}`. {message}\n\n"
-    f"Retained log: `{log_path}`\n")
+    f"Retained log: `{log_path}`\n\n"
+    f"Startup timeout: `{startup_timeout}` seconds; shutdown timeout: `{shutdown_timeout}` seconds.\n")
 PY
   printf 'ERROR: %s; retained log: %s; partial report: %s\n' "$message" "$log_file" "$output_json" >&2
   exit 1
@@ -334,20 +375,49 @@ for ((boot=1; boot<=boots; boot++)); do
   live_body="$run_dir/live.body"
   ready_body="$run_dir/ready.body"
   workflow_body="$run_dir/workflow.body"
+  session_ready_file="$run_dir/session.ready"
 
   started_ns="$(now_ns)"
+  launch_interrupted_status=""
+  trap 'launch_interrupted_status=130' INT
+  trap 'launch_interrupted_status=143' TERM
   (
     cd "$work_dir"
-    exec python3 - "$base_url" "$server_dll" <<'PY'
-import os, sys
+    exec python3 - "$base_url" "$server_dll" "$session_ready_file" <<'PY'
+import os, pathlib, sys, time
+test_delay = os.environ.get("_ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS")
+test_marker = os.environ.get("_ELSA_PERF_TEST_PRE_SESSION_MARKER")
+if test_marker:
+    pathlib.Path(test_marker).write_text(str(os.getpid()))
+if test_delay:
+    time.sleep(float(test_delay))
 os.setsid()
+pathlib.Path(sys.argv[3]).touch()
 environment = os.environ.copy()
+environment.pop("_ELSA_PERF_TEST_PRE_SESSION_DELAY_SECONDS", None)
+environment.pop("_ELSA_PERF_TEST_PRE_SESSION_MARKER", None)
 environment["ASPNETCORE_URLS"] = sys.argv[1]
 environment["DOTNET_ENVIRONMENT"] = "Production"
 os.execvpe("dotnet", ["dotnet", sys.argv[2]], environment)
 PY
   ) >"$log_file" 2>&1 &
   server_pid=$!
+  for ((attempt=0; attempt<startup_timeout_seconds*20; attempt++)); do
+    [[ -f "$session_ready_file" ]] && break
+    process_leader_alive || break
+    sleep 0.05
+  done
+  if [[ -f "$session_ready_file" ]]; then
+    server_session_ready=true
+  fi
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  if [[ -n "$launch_interrupted_status" ]]; then
+    exit "$launch_interrupted_status"
+  fi
+  if [[ "$server_session_ready" != true ]]; then
+    fail_boot "$boot" "launch_failed" "Boot $boot did not establish an isolated server process group" "$log_file"
+  fi
   deadline_ns=$((started_ns + startup_timeout_seconds * 1000000000))
 
   if ! wait_for_tcp "$deadline_ns"; then
@@ -376,21 +446,19 @@ PY
   fi
 
   shutdown_started_ns="$(now_ns)"
-  kill -TERM -- "-$server_pid" 2>/dev/null || true
+  signal_server_process TERM
   for ((attempt=0; attempt<shutdown_timeout_seconds*20; attempt++)); do
-    kill -0 "$server_pid" 2>/dev/null || break
+    process_group_alive || break
     sleep 0.05
   done
-  forced_shutdown=false
-  if kill -0 "$server_pid" 2>/dev/null; then
-    forced_shutdown=true
+  if process_group_alive; then
+    signal_server_process KILL
+    wait "$server_pid" 2>/dev/null || true
+    fail_boot "$boot" "shutdown_failed" "Boot $boot process group did not shut down cleanly" "$log_file"
   fi
-  kill -KILL -- "-$server_pid" 2>/dev/null || true
   wait "$server_pid" 2>/dev/null || true
-  if [[ "$forced_shutdown" == true ]]; then
-    fail_boot "$boot" "shutdown_failed" "Boot $boot did not shut down cleanly" "$log_file"
-  fi
   server_pid=""
+  server_session_ready=false
   shutdown_ns="$(now_ns)"
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\tpassed\t\n' \
@@ -428,7 +496,7 @@ milestones = ("listening_ms", "activation_ms", "shell_ready_ms", "first_request_
 aggregates = {key: aggregate(key) for key in (*milestones, "shutdown_ms")}
 report = {
     "generatedAtUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    "provenance": {"repositoryHeadAtMeasurement": repository_head, "dotnetVersion": dotnet, "dotnetRuntimes": runtimes, "machine": machine, "serverSha256": server_hash, "contentSha256": content_hash, "baselineSha256": baseline_hash, "environment": "Production"},
+    "provenance": {"repositoryHeadAtMeasurement": repository_head, "dotnetVersion": dotnet, "dotnetRuntimes": runtimes, "machine": machine, "serverOutputSha256": server_hash, "contentSha256": content_hash, "baselineSha256": baseline_hash, "environment": "Production"},
     "request": {
         "baseUrl": base_url,
         "readinessPath": readiness_path,
@@ -443,7 +511,7 @@ report = {
 pathlib.Path(json_path).write_text(json.dumps(report, indent=2) + "\n")
 lines = [
     "# Elsa server cold-start report", "",
-    f"- Boots: {len(rows)}", f"- Repository HEAD at measurement (not binary attribution): `{repository_head}`", f"- .NET SDK: `{dotnet}`", f"- Server SHA-256: `{server_hash}`", f"- Content SHA-256: `{content_hash}`", f"- Baseline SHA-256: `{baseline_hash}`", f"- Machine: `{machine}`", "",
+    f"- Boots: {len(rows)}", f"- Startup timeout: `{startup_timeout}` seconds", f"- Shutdown timeout: `{shutdown_timeout}` seconds", f"- Repository HEAD at measurement (not binary attribution): `{repository_head}`", f"- .NET SDK: `{dotnet}`", f"- Server output closure SHA-256: `{server_hash}`", f"- Content SHA-256: `{content_hash}`", f"- Baseline SHA-256: `{baseline_hash}`", f"- Machine: `{machine}`", "",
     "| Milestone | p50 (ms) | p95 (ms) | min (ms) | max (ms) |", "|---|---:|---:|---:|---:|",
 ]
 for key, label in (("listening_ms", "Listening"), ("activation_ms", "Activation"), ("shell_ready_ms", "Shell ready"), ("first_request_ms", "First workflow request"), ("first_success_ms", "First success"), ("shutdown_ms", "Shutdown")):
