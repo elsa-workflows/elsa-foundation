@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { listExecutables, runExecutable } from "../api/runtime";
+import { listExecutables } from "../api/runtime";
 import { listPublicationSlots, restorePublicationSlot, unpublishSlot, type PublicationSlot } from "../api/publishing";
 import type { WorkflowExecutableListScope, WorkflowExecutableSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -9,15 +9,15 @@ import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { ExecutableReferenceList, ExecutableRunStatusLine, CopyValueButton } from "./executableShared";
 import { getDialogs } from "./dialogs";
 import type { ExecutableRunState } from "./editorTypes";
+import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 import {
   compareExecutablesByPublishedDate,
   dispatchAiAction,
   executableMatchesDefinitionFilter,
   findAiAction,
   formatExecutableRoot,
-  formatExecutableRunError,
-  formatExecutableSourceKind,
-  readExecutableRunWorkflowExecutionId
+  formatExecutableSourceKind
 } from "./editorHelpers";
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
@@ -51,6 +51,10 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
     [executables]
   );
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
+  const executableRun = useExecutableWorkflowRun({
+    context,
+    ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
+  });
 
   const load = useCallback(async () => {
     setState("loading");
@@ -67,20 +71,6 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
   useEffect(() => {
     void load();
   }, [load]);
-
-  const run = async (executable: WorkflowExecutableSummary) => {
-    setStatus("");
-    setLastRun(null);
-    setError("");
-    try {
-      const result = await runExecutable(context, executable.artifactId);
-      const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
-      setLastRun({ artifactId: executable.artifactId, workflowExecutionId });
-      setStatus(`Started ${executable.artifactId}`);
-    } catch (e) {
-      setError(formatExecutableRunError(e));
-    }
-  };
 
   const explain = (executable: WorkflowExecutableSummary) => {
     if (!explainExecutableAction) return;
@@ -115,6 +105,13 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
 
   return (
     <>
+      {executableRun.pending ? (
+        <WorkflowRunInputDialog
+          inputs={executableRun.pending.inputs}
+          onSubmit={values => { void executableRun.confirm(values); }}
+          onCancel={executableRun.cancel}
+        />
+      ) : null}
       <div className="wf-toolbar">
         <button type="button" onClick={() => void load()}>Refresh</button>
         <label className="wf-toolbar-field">
@@ -213,7 +210,13 @@ export function WorkflowExecutables({ context, ai, definitionFilter, onDefinitio
                   <span>{formatDate(executable.publishedAt ?? executable.createdAt)}</span>
                   <span className="wf-row-actions">
                     <button type="button" aria-label={`Inspect executable ${executable.artifactId}`} onClick={() => openExecutableInspector(executable.artifactId)}><ScanSearch size={13} /> Inspect</button>
-                    <button type="button" onClick={() => void run(executable)}><Play size={13} /> Run</button>
+                    <button
+                      type="button"
+                      disabled={Boolean(executableRun.runningArtifactId)}
+                      onClick={() => void executableRun.request(executable)}
+                    >
+                      <Play size={13} /> {executableRun.runningArtifactId === executable.artifactId ? "Running..." : "Run"}
+                    </button>
                     {explainExecutableAction ? (
                       <button type="button" onClick={() => explain(executable)}><Sparkles size={13} /> Explain</button>
                     ) : null}
@@ -272,6 +275,10 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
   const [artifacts, setArtifacts] = useState<WorkflowExecutableSummary[]>([]);
   const [slots, setSlots] = useState<PublicationSlot[]>([]);
   const explainExecutableAction = findAiAction(ai, "weaver.workflows.explain-executable");
+  const executableRun = useExecutableWorkflowRun({
+    context,
+    ...createExecutableWorkflowRunFeedback({ setStatus, setLastRun, setError })
+  });
 
   const load = useCallback(async () => {
     setState("loading");
@@ -296,19 +303,6 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
   useEffect(() => {
     void load();
   }, [load, publishedArtifactId]);
-
-  const run = async (artifact: WorkflowExecutableSummary) => {
-    setStatus("");
-    setLastRun(null);
-    setError("");
-    try {
-      const result = await runExecutable(context, artifact.artifactId);
-      setLastRun({ artifactId: artifact.artifactId, workflowExecutionId: readExecutableRunWorkflowExecutionId(result) });
-      setStatus(`Started ${artifact.artifactId}`);
-    } catch (e) {
-      setError(formatExecutableRunError(e));
-    }
-  };
 
   const explain = (artifact: WorkflowExecutableSummary) => {
     if (!explainExecutableAction) return;
@@ -366,6 +360,13 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
 
   return (
     <div className="wf-artifacts-panel">
+      {executableRun.pending ? (
+        <WorkflowRunInputDialog
+          inputs={executableRun.pending.inputs}
+          onSubmit={values => { void executableRun.confirm(values); }}
+          onCancel={executableRun.cancel}
+        />
+      ) : null}
       <div className="wf-artifacts-toolbar">
         <span>{artifacts.length} artifact{artifacts.length === 1 ? "" : "s"}</span>
         <button type="button" onClick={() => void load()}><RotateCcw size={13} /> Refresh</button>
@@ -422,7 +423,14 @@ export function WorkflowArtifactsPanel({ context, ai, definitionId, publishedArt
               </dl>
               <div className="wf-row-actions">
                 <button type="button" aria-label={`Inspect executable ${artifact.artifactId}`} onClick={() => openExecutableInspector(artifact.artifactId)}><ScanSearch size={13} /> Inspect</button>
-                <button type="button" onClick={() => void run(artifact)}><Play size={13} /> Run</button>
+                <button
+                  type="button"
+                  aria-label={`Run executable ${artifact.artifactId}`}
+                  disabled={Boolean(executableRun.runningArtifactId)}
+                  onClick={() => void executableRun.request(artifact)}
+                >
+                  <Play size={13} /> {executableRun.runningArtifactId === artifact.artifactId ? "Running..." : "Run"}
+                </button>
                 {explainExecutableAction ? <button type="button" onClick={() => explain(artifact)}><Sparkles size={13} /> Explain</button> : null}
               </div>
             </article>

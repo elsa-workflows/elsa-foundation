@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2,
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
-import { getExecutable, runExecutable } from "../api/runtime";
+import { getExecutable } from "../api/runtime";
 import type {
   ActivityCatalogItem,
   DesignMetadataRecord,
@@ -38,13 +38,13 @@ import {
   createDraftSnapshotId,
   dispatchAiAction,
   findAiAction,
-  formatExecutableRunError,
   formatExecutableSourceKind,
-  formatReferenceScope,
-  readExecutableRunWorkflowExecutionId
+  formatReferenceScope
 } from "./editorHelpers";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { maxInspectorWidth, minInspectorWidth } from "./constants";
+import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { createExecutableWorkflowRunFeedback, useExecutableWorkflowRun } from "./useExecutableWorkflowRun";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -76,7 +76,6 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
   const [sourceDefinition, setSourceDefinition] = useState<SourceDefinitionState>({ status: "idle" });
   const [runStatus, setRunStatus] = useState("");
   const [runError, setRunError] = useState("");
-  const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -123,6 +122,10 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
   }, [load]);
 
   const chosenReference = useMemo(() => findChosenReference(data?.detail ?? null), [data]);
+  const executableRun = useExecutableWorkflowRun({
+    context,
+    ...createExecutableWorkflowRunFeedback({ setStatus: setRunStatus, setLastRun, setError: setRunError })
+  });
 
   // The source definition is looked up for the drift caption and the Open-source-definition gate.
   // A missing definition is a supported state (the artifact traveled without its source), not an error.
@@ -152,24 +155,6 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
     () => data ? buildExecutableActivityGraph(data.detail.rootActivity, data.activityCatalog) : null,
     [data]
   );
-
-  const run = async () => {
-    if (!data || running) return;
-    setRunning(true);
-    setRunStatus("");
-    setRunError("");
-    setLastRun(null);
-    try {
-      const result = await runExecutable(context, data.detail.artifactId);
-      const workflowExecutionId = readExecutableRunWorkflowExecutionId(result);
-      setLastRun({ artifactId: data.detail.artifactId, workflowExecutionId });
-      setRunStatus(`Started ${data.detail.artifactId}`);
-    } catch (e) {
-      setRunError(formatExecutableRunError(e));
-    } finally {
-      setRunning(false);
-    }
-  };
 
   const explain = () => {
     if (!data || !explainAction) return;
@@ -211,10 +196,28 @@ export function WorkflowExecutableInspectorWorkbench({ context, ai, artifactId, 
 
   return (
     <>
+      {executableRun.pending ? (
+        <WorkflowRunInputDialog
+          inputs={executableRun.pending.inputs}
+          onSubmit={values => { void executableRun.confirm(values); }}
+          onCancel={executableRun.cancel}
+        />
+      ) : null}
       <div className="wf-toolbar">
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Executables</button>
         <button type="button" onClick={() => void load()}><RotateCcw size={14} /> Refresh</button>
-        {data ? <button type="button" disabled={running} onClick={() => void run()}><Play size={14} /> {running ? "Running..." : "Run"}</button> : null}
+        {data ? (
+          <button
+            type="button"
+            disabled={Boolean(executableRun.runningArtifactId)}
+            onClick={() => void executableRun.request({
+              artifactId: data.detail.artifactId,
+              definitionVersionId: chosenReference?.definitionVersionId
+            })}
+          >
+            <Play size={14} /> {executableRun.runningArtifactId ? "Running..." : "Run"}
+          </button>
+        ) : null}
         {data && explainAction ? (
           <button type="button" onClick={explain}><Sparkles size={13} /> Explain</button>
         ) : null}

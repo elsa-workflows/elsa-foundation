@@ -8,6 +8,7 @@ import type {
   WorkflowExecutableListScope,
   WorkflowExecutableRunResponse,
   WorkflowExecutableSummary,
+  WorkflowExecutionInputs,
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
@@ -102,13 +103,17 @@ export async function getExecutableProvenance(context: StudioEndpointContext, ar
   return context.http.getJson<unknown>(path);
 }
 
-export async function runExecutable(context: StudioEndpointContext, artifactId: string) {
+export async function runExecutable(
+  context: StudioEndpointContext,
+  artifactId: string,
+  inputs: WorkflowExecutionInputs = {}
+) {
   const path = await resolveCapabilityLink(
     context,
     capabilityIds.runtime,
     "workflow-execute",
     { artifactId });
-  return context.http.postJson<WorkflowExecutableRunResponse>(path, {});
+  return context.http.postJson<WorkflowExecutableRunResponse>(path, { inputs });
 }
 
 export interface ListWorkflowInstancesRequest {
