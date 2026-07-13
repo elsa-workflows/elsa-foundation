@@ -111,7 +111,7 @@ Cache behavior and safety:
 - concurrent misses for one ID share a provider load, while cancelling one waiter does not cancel the shared load;
 - deterministic least-recently-used eviction keeps resident entries within the configured capacity;
 - save/delete invalidate rather than admitting the caller's object, preserving the provider's idempotent-save authority;
-- cache state is shell/provider-local and starts empty after replacement or process restart;
+- cache state is shell/provider-local and starts empty after replacement or process restart; SQLite enables it by default, while PostgreSQL/distributed features require explicit opt-in because invalidation is process-local;
 - metrics expose only bounded hit/miss, eviction-reason, and provider-load outcome/duration dimensions.
 
 ## Operator knobs and rollback
@@ -119,13 +119,13 @@ Cache behavior and safety:
 - `Elsa:Readiness:WarmDefaultShell=false` restores request-triggered lazy activation; readiness stays observational and returns unavailable until another request activates the shell.
 - `Elsa:Readiness:DefaultShellName` selects the single shell observed and prepared by the root host. Other shells remain lazy and isolated.
 - `GroundworkRuntimePersistenceSqlite:RematerializeOnStartup=true` forces the prior full materialization/backfill path for repair or verification. The default `false` trusts an exact manifest/provider history tuple and opens the existing store directly.
-- Durable Groundwork runtime and unified SQLite/PostgreSQL features expose `CacheWorkflowExecutables` (default `true`) and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell/provider). Set the former to `false` for immediate rollback to direct provider reads; capacity must be positive only while enabled.
+- Durable Groundwork runtime and unified features expose `CacheWorkflowExecutables` and `WorkflowExecutableCacheCapacity` (default `256` artifacts per shell/provider). SQLite features default caching to `true`; PostgreSQL/distributed and legacy direct registrations default to direct reads until a host explicitly accepts immutable-artifact retention or supplies cross-node invalidation. Set caching to `false` for immediate rollback; capacity must be positive only while enabled.
 - Missing schema history, or a changed manifest/provider identity or version, always falls back to full materialization regardless of the repair setting.
 
 ## Subsequent recommendations
 
 1. Keep the final 20-boot first-after-ready and 200-request warm lanes as the merge gate; do not infer success from cache unit tests alone.
-2. Add weighted/byte-aware admission only if production heap evidence shows entry count is an inadequate bound. Executable graphs do not currently expose a trustworthy size estimate.
-3. Benchmark route matching at representative high route counts before replacing the current precompiled immutable snapshot. The existing route layer is already cached and persistence-free on requests.
+2. [Issue #636](https://github.com/elsa-workflows/elsa-foundation/issues/636) owns distinct-key load backpressure, cache-lifetime cancellation, distributed invalidation, gauges, and heap evidence before considering PostgreSQL default-on or weighted admission.
+3. [Issue #637](https://github.com/elsa-workflows/elsa-foundation/issues/637) owns route matching at representative high route counts before replacing the current precompiled immutable snapshot. The existing route layer is already cached and persistence-free on requests.
 4. Keep the cache process-local. A distributed executable-object cache would reintroduce serialization and coordination without evidence of a cross-node bottleneck.
 5. Revisit negative caching only with an explicit short expiry and publication invalidation contract; retaining not-found results indefinitely would hide newly durable artifacts.
