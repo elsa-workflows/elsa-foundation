@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Expressions.Core.csproj" />
     <ProjectReference Include="..\..\Api\FastEndpoints\Elsa.Api.FastEndpoints.csproj" />
+    <ProjectReference Include="..\..\Mediator\Core\Elsa.Mediator.Core.csproj" />
   </ItemGroup>
 
 </Project>

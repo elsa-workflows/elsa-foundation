@@ -133,7 +133,7 @@
 - [ ] T056 [US4] Reject synthetic draft identifiers and isolate direct version ingestion behind explicit authorization in `src/Elsa/Workflows/Design/Api/Endpoints/Versions/`
 - [ ] T057 [US4] Move scoped-variable analysis and activity input-option resolution from the facade into `src/Elsa/Workflows/Design/Api/Endpoints/Authoring/`
 - [X] T058 [US4] Implement the unified normalized authoring catalog in `src/Elsa/Activities/Design/Api/Endpoints/Catalog/` and retain canonical availability endpoints
-- [ ] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
+- [X] T059 [US4] Implement `ExpressionsApiFeature`, descriptor endpoints, models, and route constants in `src/Elsa/Expressions/Api/`
 - [ ] T060 [US4] Move `WorkflowExecutableInspector` and its views from Publishing into `src/Elsa/Workflows/Runtime/Api/` and add read-only provenance endpoints
 - [ ] T061 [US4] Move runtime diagnostics settings to `/runtime/workflows/diagnostics/settings` in `src/Elsa/Workflows/Runtime/Api/Constants/RouteConstants.cs`
 - [ ] T062 [US4] Add/update registration tests and endpoint security sweeps for all touched features in their `tests/Elsa/**/Api/Tests/` projects, asserting each endpoint applies its canonical action-scoped permission from `PermissionNames`
