@@ -1,7 +1,13 @@
+using Elsa.Api.FastEndpoints.Abstractions;
+using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Handlers;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Services;
+using FastEndpoints;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -30,13 +36,101 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
         var result = await handler.Handle(new ListWorkflowInstances("Running", "definition-1", "correlation-1", 10), CancellationToken.None);
 
-        var summary = Assert.Single(result);
+        var summary = Assert.Single(result.Items);
         Assert.Equal("wf-new", summary.WorkflowExecutionId);
         Assert.Equal("Running", summary.Status);
         Assert.Equal("definition-1", summary.DefinitionId);
         Assert.Equal("correlation-1", summary.CorrelationId);
         Assert.Equal(2, summary.ActivityCount);
         Assert.Equal(1, summary.IncidentCount);
+        Assert.Equal(1, result.Count);
+        Assert.Equal(1, result.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_NavigatesStableCursorPagesAcrossEqualTimestamps()
+    {
+        var timestamp = Now(-1);
+        foreach (var id in new[] { "wf-d", "wf-b", "wf-a", "wf-c" })
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Completed, "definition-1", updatedAt: timestamp));
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var first = await handler.Handle(new ListWorkflowInstances(null, null, null, 2), CancellationToken.None);
+        var second = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, first.NextCursor), CancellationToken.None);
+        var previous = await handler.Handle(new ListWorkflowInstances(null, null, null, 2, second.PreviousCursor), CancellationToken.None);
+
+        Assert.Equal(["wf-a", "wf-b"], first.Items.Select(x => x.WorkflowExecutionId));
+        Assert.False(first.HasPrevious);
+        Assert.True(first.HasNext);
+        Assert.Equal(["wf-c", "wf-d"], second.Items.Select(x => x.WorkflowExecutionId));
+        Assert.True(second.HasPrevious);
+        Assert.False(second.HasNext);
+        Assert.Equal(first.Items.Select(x => x.WorkflowExecutionId), previous.Items.Select(x => x.WorkflowExecutionId));
+        Assert.Equal(4, second.TotalCount);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_ClampsPageSizeAtBothBounds()
+    {
+        for (var index = 0; index < 105; index++)
+            await _workflowStore.SaveAsync(Workflow($"wf-{index:D3}", WorkflowExecutionStatus.Completed, "definition-1", updatedAt: Now(-index)));
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var maximum = await handler.Handle(new ListWorkflowInstances(null, null, null, 500), CancellationToken.None);
+        var minimum = await handler.Handle(new ListWorkflowInstances(null, null, null, 0), CancellationToken.None);
+
+        Assert.Equal(100, maximum.Count);
+        Assert.True(maximum.HasNext);
+        Assert.Single(minimum.Items);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_FiltersByOperationalIdentifiersAndTimeRange()
+    {
+        await _workflowStore.SaveAsync(Workflow("match", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
+        await _workflowStore.SaveAsync(Workflow("wrong-execution", WorkflowExecutionStatus.Running, "definition-1", "correlation-1", Now(-5)));
+        await _workflowStore.SaveAsync(Workflow("wrong-definition", WorkflowExecutionStatus.Running, "definition-2", "correlation-1", Now(-5)));
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var result = await handler.Handle(new ListWorkflowInstances(
+            "Running",
+            "definition-1",
+            "correlation-1",
+            10,
+            WorkflowExecutionId: "match",
+            ArtifactId: "artifact-definition-1",
+            From: Now(-6),
+            To: Now(-4)), CancellationToken.None);
+
+        Assert.Equal("match", Assert.Single(result.Items).WorkflowExecutionId);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_RejectsMalformedCursor()
+    {
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            handler.Handle(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
+
+        Assert.Equal("cursor", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task ListWorkflowInstances_MapsMalformedCursorToBadRequestAtHttpBoundary()
+    {
+        var handler = new ListWorkflowInstancesRequestHandler(_workflowStore, _activityStore, _incidentStore);
+        var sender = new StubRequestSender((request, cancellationToken) => handler.Handle(request, cancellationToken));
+        var endpoint = Factory.Create<TestListInstancesEndpoint>(
+            context => context.Response.Body = new MemoryStream(),
+            sender,
+            NullLogger<TestListInstancesEndpoint>.Instance);
+
+        var exception = await Assert.ThrowsAsync<ValidationFailureException>(() =>
+            endpoint.HandleAsync(new ListWorkflowInstances(null, null, null, 10, "not-a-cursor"), CancellationToken.None));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, exception.StatusCode);
+        Assert.Contains("cursor is invalid", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -145,4 +239,26 @@ public sealed class WorkflowInstancesRequestHandlerTests
 
     private static DateTimeOffset Now(int minutes) =>
         new DateTimeOffset(2026, 6, 24, 12, 0, 0, TimeSpan.Zero) + TimeSpan.FromMinutes(minutes);
+
+    private sealed class StubRequestSender(
+        Func<ListWorkflowInstances, CancellationToken, Task<WorkflowInstanceListView>> send) : IRequestSender
+    {
+        public Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
+        {
+            if (request is ListWorkflowInstances listWorkflowInstances && typeof(T) == typeof(WorkflowInstanceListView))
+                return (Task<T>)(object)send(listWorkflowInstances, cancellationToken);
+
+            throw new InvalidOperationException($"Unexpected request type '{request.GetType()}'.");
+        }
+    }
+
+    private sealed class TestListInstancesEndpoint(
+        IRequestSender requestSender,
+        Microsoft.Extensions.Logging.ILogger<TestListInstancesEndpoint> logger)
+        : ElsaRequestHandlerEndpoint<ListWorkflowInstances, WorkflowInstanceListView>(requestSender, logger)
+    {
+        public override void Configure()
+        {
+        }
+    }
 }
