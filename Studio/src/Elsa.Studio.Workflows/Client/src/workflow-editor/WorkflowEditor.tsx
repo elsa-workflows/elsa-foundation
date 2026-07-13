@@ -28,6 +28,7 @@ import {
   groupActivityPalette
 } from "./editorHelpers";
 import { nodeTypes, edgeTypes, ConnectMenu } from "./graph";
+import { workflowCanvasAriaLabelConfig } from "./workflowAccessibility";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
@@ -756,6 +757,7 @@ export function WorkflowEditor({
                 multiSelectionKeyCode={["Shift", "Meta", "Control"]}
                 deleteKeyCode={isUnsupportedDesigner ? null : ["Backspace", "Delete"]}
                 panActivationKeyCode={null}
+                ariaLabelConfig={workflowCanvasAriaLabelConfig}
                 defaultEdgeOptions={{ type: "workflow" }}
               >
                 <Background gap={18} size={1} />

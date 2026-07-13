@@ -53,6 +53,7 @@ import type { WorkflowEdgeActions } from "./contexts";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import { planActivityDrop } from "./addActivityRouting";
 import type { ScopeFrame } from "../workflowAdapter";
+import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
 const rootScopeViewportKey = "root";
 
@@ -133,6 +134,9 @@ export function useWorkflowCanvas({
   } | null>(null);
   const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
+  const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  selectedNodeIdRef.current = selectedNodeId;
   const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
   const canCreateActivityFromPort = canAddActivitiesToCanvas
     && !isUnsupportedDesigner
@@ -161,9 +165,46 @@ export function useWorkflowCanvas({
         ? buildCanvas(scope, catalog, draft?.layout ?? [])
         : { nodes: [], edges: [] };
     pendingViewportNodeIdsRef.current = canvas.nodes.map(node => node.id);
-    setNodes(canvas.nodes);
+    setNodes(canvas.nodes.map(node => ({ ...node, selected: node.id === selectedNodeIdRef.current })));
     setEdges(canvas.edges as WorkflowEdge[]);
   }, [catalog, draft?.layout, isUnsupportedDesigner, scope, scopeOwner, scopeViewportKey]);
+
+  // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
+  // document's selected node id. Keep both projections aligned so Enter/Space has the same result as a
+  // pointer click and the accessible pressed state always describes what the inspector is showing.
+  useEffect(() => {
+    setNodes(current => {
+      let changed = false;
+      const next = current.map(node => {
+        const selected = node.id === selectedNodeId;
+        if (!!node.selected === selected) return node;
+        changed = true;
+        return { ...node, selected };
+      });
+      return changed ? next : current;
+    });
+  }, [selectedNodeId]);
+
+  const focusCanvasNode = useCallback((nodeId: string) => {
+    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])
+      .find(candidate => candidate.dataset.id === nodeId);
+    if (!element) return false;
+    element.focus({ preventScroll: true });
+    return true;
+  }, []);
+
+  const queueCanvasNodeFocus = useCallback((nodeId: string) => {
+    pendingFocusNodeIdRef.current = nodeId;
+    window.requestAnimationFrame(() => {
+      if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
+      pendingFocusNodeIdRef.current = null;
+    });
+  }, [focusCanvasNode]);
+
+  useEffect(() => {
+    const nodeId = pendingFocusNodeIdRef.current;
+    if (nodeId) queueCanvasNodeFocus(nodeId);
+  }, [nodes, queueCanvasNodeFocus]);
 
   useEffect(() => {
     if (!reactFlowInstance) return;
@@ -194,8 +235,8 @@ export function useWorkflowCanvas({
         ]
       : layout, []);
 
-  // Returns the created ActivityNode when the drop landed in the current scope's slot (so callers can
-  // chain navigation, e.g. descending into a just-assigned container); null for every other outcome.
+  // Returns the created ActivityNode when it became the root or landed in the current scope's slot (so
+  // callers can restore focus or chain navigation); null for wrapping and rejected/stale outcomes.
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
       return null;
@@ -211,7 +252,7 @@ export function useWorkflowCanvas({
         ({ draft: current }) => current ? { ...current, state: { ...current.state, rootActivity: next } } : null,
         next.nodeId
       );
-      return null;
+      return next;
     }
 
     if (plan.kind === "leafError") {
@@ -361,7 +402,8 @@ export function useWorkflowCanvas({
     setEdges(nextEdges);
     select(placed.node.id);
     commitCanvas(nextNodes, nextEdges, [placed.activityNode]);
-  }, [commitCanvas, createCanvasActivity, edges, nodes, select]);
+    queueCanvasNodeFocus(placed.node.id);
+  }, [commitCanvas, createCanvasActivity, edges, nodes, queueCanvasNodeFocus, select]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
     if (!canAddActivitiesToCanvas) return false;
@@ -468,7 +510,8 @@ export function useWorkflowCanvas({
   const onPaletteClick = (activity: ActivityCatalogItem) => {
     if (suppressPaletteClickRef.current) return;
     if (!canAddActivitiesToCanvas) return;
-    addActivity(activity);
+    const added = addActivity(activity);
+    if (added) queueCanvasNodeFocus(added.nodeId);
   };
 
   const onCanvasDragOver = (event: React.DragEvent) => {
@@ -539,6 +582,13 @@ export function useWorkflowCanvas({
       : changes;
     if (allowedChanges.length === 0) return;
     setNodes(current => applyNodeChanges(allowedChanges, current));
+    const selectionChanges = allowedChanges.filter(change => change.type === "select");
+    const selectedChange = selectionChanges.find(change => change.selected);
+    if (selectedChange && selectedChange.id !== selectedNodeId) {
+      select(selectedChange.id);
+    } else if (!selectedChange && selectedNodeId && selectionChanges.some(change => change.id === selectedNodeId && !change.selected)) {
+      select(null);
+    }
   };
   const onEdgesChange = (changes: EdgeChange[]) => {
     if (isUnsupportedDesigner) return;
@@ -630,7 +680,12 @@ export function useWorkflowCanvas({
     const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
     setEdges(nextEdges);
-    if (selectedNodeId && deletedIds.has(selectedNodeId)) select(null);
+    if (selectedNodeId && deletedIds.has(selectedNodeId)) {
+      const deletedIndex = nodes.findIndex(node => node.id === selectedNodeId);
+      const nextFocus = nextNodes[Math.min(Math.max(deletedIndex, 0), nextNodes.length - 1)];
+      select(nextFocus?.id ?? null);
+      if (nextFocus) queueCanvasNodeFocus(nextFocus.id);
+    }
     commitCanvas(nextNodes, nextEdges);
   };
 
@@ -641,14 +696,24 @@ export function useWorkflowCanvas({
     const nextEdges = edges.filter(edge => !deletedIds.has(edge.id));
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);
+    const nextFocus = deletedEdges[0]?.source;
+    if (nextFocus) {
+      select(nextFocus);
+      queueCanvasNodeFocus(nextFocus);
+    }
   };
 
   const deleteEdge = useCallback((edgeId: string) => {
     if (isUnsupportedDesigner) return;
+    const deletedEdge = edges.find(edge => edge.id === edgeId);
     const nextEdges = edges.filter(edge => edge.id !== edgeId);
     setEdges(nextEdges);
     commitCanvas(nodes, nextEdges);
-  }, [commitCanvas, edges, isUnsupportedDesigner, nodes]);
+    if (deletedEdge) {
+      select(deletedEdge.source);
+      queueCanvasNodeFocus(deletedEdge.source);
+    }
+  }, [commitCanvas, edges, isUnsupportedDesigner, nodes, queueCanvasNodeFocus, select]);
 
   const requestInsertActivity = useCallback((edgeId: string, clientX: number, clientY: number) => {
     if (!isFlowchartDesigner) return;
@@ -668,6 +733,7 @@ export function useWorkflowCanvas({
       setNodes(nextNodes);
       select(placed.node.id);
       commitCanvas(nextNodes, edges, [placed.activityNode]);
+      queueCanvasNodeFocus(placed.node.id);
       return;
     }
 
@@ -686,6 +752,7 @@ export function useWorkflowCanvas({
       setEdges(nextEdges);
       select(placed.node.id);
       commitCanvas(nextNodes, nextEdges, [placed.activityNode]);
+      queueCanvasNodeFocus(placed.node.id);
       return;
     }
 
@@ -699,9 +766,11 @@ export function useWorkflowCanvas({
     requestInsertActivity
   }), [deleteEdge, highlightedEdgeId, requestInsertActivity]);
 
+  const accessibleCanvas = useMemo(() => decorateWorkflowCanvasElements(nodes, edges), [edges, nodes]);
+
   return {
-    nodes,
-    edges,
+    nodes: accessibleCanvas.nodes,
+    edges: accessibleCanvas.edges,
     canvasRef,
     setReactFlowInstance,
     canCreateActivityFromPort,
